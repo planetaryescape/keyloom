@@ -493,8 +493,27 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 - **Rows:** "Drop F16" adds a `dropFunction` op with a generated reason ("Replaced by F17 on key 7 of Layer 0"); "Put F16 somewhere first" enters place mode, and the next key clicked gets the binding F16 came from. Both land in one change set, so undo is one step.
 - **Layer keys:** when a layer key is the only way to a layer, Drop is not offered, because no `dropFunction` licenses an unreachable layer. The rest of that layer's keys are summarised as one line, since they return once the layer key is kept.
 - **Chain:** putting F16 on a key displaces what was there, which raises the same question for that key.
-||||||| parent of 149036b (docs: rung 12 decisions, blueprint updates and the S12, S13 and S18 runbooks)
+||||||| parent of 3c0062a (docs: S19 and S20 results, D-120..D-124, eval reports; provider line under the chat header)
 
+
+### D-120: The provider comes from `--provider`, then `KEYLOOM_PROVIDER`, then `<data dir>/config.json`, then the first provider with a credential. (Claude, rung 10)
+- **Why a file:** keyloom had no config mechanism (`agent.model` in the blueprint was only a comment in `src/agent/anthropic-model.ts`). A JSON file beside the database, with `agent.provider`, `agent.model` and `agent.effort`, is the smallest thing that fits and needs no new table or command. Keys never go in it (03).
+- **Default order:** `ANTHROPIC_API_KEY`, then `OPENROUTER_API_KEY`, then a signed-in `codex` (asked last, because it runs a process).
+- **Not built:** changing the provider from the web app. It shows the active provider and model and lists the three ways to set one up; the chapter's "lets BK change them" waits for a request.
+
+### D-121: OpenRouter gets the Anthropic fallback beta removed and nothing else. (Claude, from S19)
+- **Evidence:** OpenRouter returned 400 `Invalid input: expected array, received string` for `fallbacks: "default"`; `cache_control`, thinking, effort and streaming were accepted ([../research/spikes/S19.md](../research/spikes/S19.md)).
+
+### D-122: Codex runs with its own `HOME` and `CODEX_HOME`, with only `auth.json` linked in, and with the account's apps, shell, plugins and sub-agents turned off. (Claude, from S20)
+- **Evidence:** BK's global instructions reached a `--ignore-user-config` run until `HOME` was replaced, and the ChatGPT account's connected apps were in the tool list until `features.apps` was off ([../research/spikes/S20.md](../research/spikes/S20.md)).
+- **Kept on:** `features.code_mode_host`. Codex defers MCP tools behind code mode, so keyloom's tools can't be called without it. Code mode has no file, network or `require` access.
+
+### D-123: Codex's MCP server uses the official `@modelcontextprotocol/sdk` in stateless mode, not a hand-written one. (Claude, rung 10)
+- **Why:** the SDK's streamable HTTP server runs inside a `bun build --compile` binary, so there was no reason to maintain a protocol implementation. It adds a dependency of about 56 MB of `node_modules` in development; the compiled binary was 67 MB.
+- **Option rejected:** about 100 lines of JSON-RPC over `Bun.serve`, which would have avoided the dependency and taken on protocol drift.
+
+### D-124: A Codex conversation is replayed to Codex as text, because the run is `--ephemeral`. (Claude, rung 10)
+- **Why:** Codex's session files would hold BK's layout and priorities under `~/.codex`, outside keyloom. The cost is that each turn resends the earlier messages, with tool results cut to 2,000 characters.
 
 ### D-130: The `keyloom-zmk` module is vendored at `firmware/zmk/keyloom-zmk/`, embedded in the binary as text and written beside every ZMK build; its serial port comes from an overlay passed as `EXTRA_DTC_OVERLAY_FILE`. (Claude, building rung 12)
 - **Embedded:** `src/firmware/zmk/module.ts` imports the six files with `with { type: "text" }`, as `image.ts` does the Dockerfile, so a released keyloom needs no checkout. `writeModule` replaces `<work folder>/keyloom-zmk` on every build, so a file from another version is never built. A test compares the embedded text with the folder on disk.
