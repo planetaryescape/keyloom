@@ -16,10 +16,10 @@ export type PinnedPriority = {
 /** 07: above this many moved functions the cost is muscle memory BK should choose knowingly. */
 export const LARGE_RELEARN_THRESHOLD = 6;
 
-const slotKey = (s: Slot) => `${s.layerId}:${s.position}`;
+export const slotKey = (s: Slot) => `${s.layerId}:${s.position}`;
 
 /** "Layer 0, key 30": key numbers are one-based, as the editor shows them. */
-const slotText = (doc: Layout, s: Slot) => `${doc.layers.find((l) => l.id === s.layerId)?.name ?? s.layerId}, key ${s.position + 1}`;
+export const slotText = (doc: Layout, s: Slot) => `${doc.layers.find((l) => l.id === s.layerId)?.name ?? s.layerId}, key ${s.position + 1}`;
 
 /**
  * `moved_pinned`: the change alters a slot a priority pins, or takes a pinned function out of a slot

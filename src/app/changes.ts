@@ -23,7 +23,7 @@ export type ChangeSetView = Omit<ChangeSetRow, "validation"> & { validation: Val
 
 const toView = (row: ChangeSetRow): ChangeSetView => ({ ...row, validation: ValidationResultSchema.parse(row.validation) });
 
-const NO_DIFF: ValidationResult["diff"] = { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] };
+const NO_DIFF: ValidationResult["diff"] = { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] };
 
 function baseDocument(app: App, view: LayoutView, baseRevisionId: string): Layout {
   if (baseRevisionId === view.revision.id) return view.document;

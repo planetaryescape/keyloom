@@ -142,7 +142,7 @@ export class FakeEditor implements EditorBackend {
     for (const other of this.proposals.values()) {
       if (other.group === proposal.group && other.id !== proposal.id && other.status === "proposed") other.status = "superseded";
     }
-    return { revisionId: revision.id, changeSetId: proposal.id, validation: { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] } } };
+    return { revisionId: revision.id, changeSetId: proposal.id, validation: { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] } } };
   }
 
   async undo(_ref: string, request: UndoRequest): Promise<UndoResponse> {
@@ -230,7 +230,7 @@ export class FakeEditor implements EditorBackend {
       ok: errors.length === 0,
       errors,
       warnings,
-      diff: { changed, displaced: [], dropped: [], relearnCount: changed.length, reminders: [] },
+      diff: { changed, displaced: [], dropped: [], relearnCount: changed.length, retuned: [], reminders: [] },
     };
   }
 

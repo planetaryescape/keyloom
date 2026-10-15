@@ -35,5 +35,20 @@ export const ChangeOpSchema = z.discriminatedUnion("op", [
 ]);
 export type ChangeOp = z.infer<typeof ChangeOpSchema>;
 
+// What the agent writes down with a proposal so that applying it can remember why (08, D-023). It is
+// the words only: the subject (which keys) comes from the validator's diff at apply time.
+export const DecisionDraftSchema = z.object({
+  goal: z.string().trim().min(1).max(300).describe("The frustration or goal this answers, in BK's words where he gave them."),
+  choice: z.string().trim().min(1).max(300).describe('What was chosen, such as "Command-Shift on key 60, with Backspace moved to key 12".'),
+  reason: z.string().trim().min(1).max(500).describe("Why this choice and not another, so BK can judge it months later."),
+  scope: z
+    .object({
+      apps: z.array(z.string().trim().min(1)).max(10).describe("Apps it matters in; empty if none were named."),
+      habits: z.array(z.string().trim().min(1)).max(10).describe('Habits it serves, such as "Command-Shift shortcuts with the left hand".'),
+    })
+    .describe("Where and how it applies."),
+});
+export type DecisionDraft = z.infer<typeof DecisionDraftSchema>;
+
 /** Why apply-ops couldn't apply an op: the op names something the document doesn't have. */
 export type OpError = { index: number; code: "unknown_ref" | "schema"; message: string };

@@ -5,15 +5,17 @@ import { applyOps } from "../layout/apply-ops.ts";
 import { type ChangeOp, ChangeOpSchema, type Slot } from "../layout/change.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { type Layout, LayoutSchema } from "../layout/schema.ts";
+import { type DecisionFact, contradictsDecision, touchedDecisions } from "./decision-rules.ts";
+import { homerowSameHandMods, retunedSlots } from "./hold-tap-rules.ts";
 import type { Issue, ValidationResult } from "./result.ts";
 import { type PinnedPriority, largeRelearn, movedPinned } from "./priority-rules.ts";
 import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
 import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex } from "./rules.ts";
 import { type SelectionScope, outsideSelection } from "./selection-rules.ts";
 
-const NO_DIFF: ValidationResult["diff"] = { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] };
+const NO_DIFF: ValidationResult["diff"] = { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] };
 
-const failed = (errors: Issue[]): Evaluation => ({ result: { ok: false, errors, warnings: [], diff: NO_DIFF }, after: null });
+const failed = (errors: Issue[]): Evaluation => ({ result: { ok: false, errors, warnings: [], diff: NO_DIFF }, after: null, touched: [] });
 
 const issueKey = (i: Issue) => JSON.stringify([i.code, i.message, i.slots ?? []]);
 
@@ -30,11 +32,15 @@ function changedSlots(before: Layout, after: Layout): Slot[] {
   return out;
 }
 
-/** The result, and the document the ops produce when it parses (null when it doesn't). Apply saves exactly this document. */
-export type Evaluation = { result: ValidationResult; after: Layout | null };
+/**
+ * The result, and the document the ops produce when it parses (null when it doesn't). Apply saves
+ * exactly this document. `touched` is every active choice decision the change touches, including
+ * ones too settled to raise a reminder, because apply supersedes all of them (08).
+ */
+export type Evaluation = { result: ValidationResult; after: Layout | null; touched: { decisionId: string; slots: Slot[] }[] };
 
-/** What the layout alone can't tell the validator: priorities BK has stated (08). The browser's own check passes none. */
-export type EvaluationContext = { pinned?: readonly PinnedPriority[]; selection?: SelectionScope };
+/** What the layout alone can't tell the validator: priorities BK has stated and decisions kept (08). The browser's own check passes none. */
+export type EvaluationContext = { pinned?: readonly PinnedPriority[]; decisions?: readonly DecisionFact[]; selection?: SelectionScope };
 
 export const validate = (board: BoardDefinition, before: Layout, ops: readonly ChangeOp[], context: EvaluationContext = {}): ValidationResult =>
   evaluate(board, before, ops, context).result;
@@ -84,20 +90,34 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   warnings.push(...movedPinned(before, changed, beforeHomes, afterHomes, context.pinned ?? []), ...largeRelearn(relearnCount));
   if (context.selection) warnings.push(...outsideSelection(before, changed, context.selection));
 
+  // Only a hazard this change adds is news; a layout imported with home-row mods already rolling into each other isn't nagged on every edit.
+  const knownRolls = new Set(homerowSameHandMods(board, before).map(issueKey));
+  warnings.push(...homerowSameHandMods(board, after).filter((i) => !knownRolls.has(issueKey(i))));
+
+  const retuned = retunedSlots(before, after, changed);
+  const afterLayerIds = new Set(after.layers.map((l) => l.id));
+  const touched = touchedDecisions(context.decisions ?? [], {
+    changed, retuned, beforeHomes, afterHomes,
+    removedLayerIds: new Set(before.layers.map((l) => l.id).filter((id) => !afterLayerIds.has(id))),
+  });
+  const remembered = contradictsDecision(before, touched);
+  warnings.push(...remembered.warnings);
+
   return {
     result: {
       ok: errors.length === 0,
       errors,
       warnings,
-      // reminders need decisions (rung 6).
       diff: {
-        ...NO_DIFF,
         changed,
         displaced: displacedFunctions(before, after, changed, beforeHomes, afterHomes),
         dropped: lost.dropped,
         relearnCount,
+        retuned,
+        reminders: remembered.reminders,
       },
     },
     after,
+    touched: touched.map((t) => ({ decisionId: t.fact.decisionId, slots: t.slots })),
   };
 }

@@ -8,6 +8,7 @@ import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
+import { holdTapOptions } from "./hold-tap-rules.ts";
 import { functionHomes, lostFunctions, reachableLayers, trappedLayers } from "./reachability.ts";
 
 const issue = (code: string, message: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, slots } : { code, message });
@@ -166,6 +167,7 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...unknownRefs(board, doc),
   ...firmwareSupport(board, doc),
   ...qmkHoldTap(doc),
+  ...holdTapOptions(board, doc),
   ...layerLimit(doc),
   ...layerUnreachable(doc),
   ...layerTrap(doc),

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ChatEvent, ChatOutcome, ConversationDetail, PriorityCard, ProposalCard } from "../../src/api/http.ts";
 import { EMPTY, fromConversation, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn, type Transcript } from "../../src/web/chat/transcript.ts";
 
-const validation: ProposalCard["validation"] = { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] } };
+const validation: ProposalCard["validation"] = { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] } };
 const card = (id: string, status: ProposalCard["status"] = "proposed"): ProposalCard => ({
   changeSetId: id, proposalGroup: null, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, status, validation, ops: [],
 });

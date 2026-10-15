@@ -30,7 +30,7 @@ describe("validate: result shape and the diff", () => {
     const r = validate(tinyBoard, tiny(), [set("base", 0, key("Q"))]);
     expect(r).toEqual({
       ok: true, errors: [], warnings: [],
-      diff: { changed: [at("base", 0)], displaced: [{ function: "key:A", from: at("base", 0), to: at("nav", 0) }], dropped: [], relearnCount: 1, reminders: [] },
+      diff: { changed: [at("base", 0)], displaced: [{ function: "key:A", from: at("base", 0), to: at("nav", 0) }], dropped: [], relearnCount: 1, retuned: [], reminders: [] },
     });
     expect(ValidationResultSchema.safeParse(r).success).toBe(true);
   });
