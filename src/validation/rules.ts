@@ -1,12 +1,14 @@
 // The rung 2 error rules (07#errors). Each takes a whole document so the same rule can run on
 // the layout before and after a change; validate.ts reports only what the change made worse.
-// Reachability rules (function_lost, layer_unreachable, layer_trap) and the warnings arrive in rung 3.
+// Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Layout, Mod } from "../layout/schema.ts";
+import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
+import { functionHomes, lostFunctions, reachableLayers, trappedLayers } from "./reachability.ts";
 
 const issue = (code: string, message: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, slots } : { code, message });
 
@@ -142,6 +144,21 @@ export function layerLimit(doc: Layout): Issue[] {
   return [issue("layer_limit", `${doc.layers.length} layers, but the limit is ${limit}${eightBit ? " because LAYER_STATE_8BIT is set" : ""}`)];
 }
 
+/** `layer_unreachable`: a layer nobody can get to is every function on it lost. */
+export function layerUnreachable(doc: Layout): Issue[] {
+  const base = doc.layers[0]?.id;
+  const reachable = reachableLayers(doc);
+  return doc.layers
+    .filter((l) => !reachable.has(l.id))
+    .map((l) => issue("layer_unreachable", `layer "${l.id}" can't be reached from the base layer "${base}": nothing switches to it`));
+}
+
+/** `layer_trap`: see `trappedLayers` for the reading of "leads back". */
+export function layerTrap(doc: Layout): Issue[] {
+  return trappedLayers(doc).map(({ layerId, entered }) =>
+    issue("layer_trap", `layer "${layerId}" is entered with toggle or to but has no key that leads back to the base layer`, entered.flatMap((e) => (e.slot ? [e.slot] : []))));
+}
+
 /** The rules that look at one document; the relational ones below also need the document before. */
 export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...duplicateIds(doc),
@@ -150,6 +167,8 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...firmwareSupport(board, doc),
   ...qmkHoldTap(doc),
   ...layerLimit(doc),
+  ...layerUnreachable(doc),
+  ...layerTrap(doc),
 ];
 
 const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b.firmware, b.source, b.label]);
@@ -188,4 +207,52 @@ export function passthroughLayerIndex(before: Layout, after: Layout): Issue[] {
   if (!moved) return [];
   const where = pinned.map((p) => `${p.file} ${p.anchor}`).join(", ");
   return [issue("passthrough_layer_index", `this change removes or reorders layers, but ${where} refers to layers by number and would point at the wrong ones`)];
+}
+
+const slotText = (s: Slot) => `layer "${s.layerId}", position ${s.position}`;
+
+/**
+ * `function_lost`: every function reachable before must be reachable after, unless a `dropFunction`
+ * op names it (D-020). `dropped` is the licensed losses with the op's reason, for the diff.
+ */
+export function functionLost(before: Layout, after: Layout, ops: readonly ChangeOp[]): { errors: Issue[]; dropped: { function: string; reason: string }[] } {
+  const reasons = new Map<string, string>();
+  for (const op of ops) if (op.op === "dropFunction") reasons.set(op.function, op.reason);
+  const errors: Issue[] = [];
+  const dropped: { function: string; reason: string }[] = [];
+  for (const lost of lostFunctions(functionHomes(before), functionHomes(after))) {
+    const reason = reasons.get(lost.function);
+    if (reason !== undefined) dropped.push({ function: lost.function, reason });
+    else {
+      const where = lost.was.length ? ` (was at ${lost.was.map(slotText).join("; ")})` : "";
+      errors.push(issue("function_lost", `${lost.function} is reachable before this change and not after${where}; keep it somewhere or add a dropFunction op`, lost.was));
+    }
+  }
+  return { errors, dropped };
+}
+
+/** Letters that double in common English words (07), so a delay or second meaning on them breaks "class". */
+const DOUBLING_LETTERS = new Set("lseotfprmcndgbz".toUpperCase());
+
+/**
+ * `doubled_letter_tapdance`. Tap dance isn't in the IR (D-019, 05): a `TD(DANCE_n)` key is native and
+ * its behaviour lives in a passthrough block. So this reads the dance's single-tap case out of that
+ * block; a dance whose single tap types a doubling letter gets a second meaning on a double tap, which
+ * is what delays and breaks "class". Reported only when the key's slot is new in the warning set, so
+ * an imported dance doesn't nag on every edit.
+ */
+export function doubledLetterTapdance(doc: Layout): Issue[] {
+  const out: Issue[] = [];
+  for (const { binding: b, slot, where } of bindingsOf(doc)) {
+    const n = b.kind === "native" ? /^TD\(DANCE_(\d+)\)$/.exec(b.source)?.[1] : undefined;
+    if (n === undefined) continue;
+    const source = doc.passthrough.map((p) => p.source).join("\n");
+    const start = new RegExp(`void dance_${n}_finished\\([^)]*\\)\\s*\\{`).exec(source);
+    const body = start ? (source.slice(start.index + start[0].length).split(/\nvoid\b/)[0] ?? "") : "";
+    const letter = /case\s+SINGLE_TAP:\s*(?:register|tap)_code(?:16)?\(\s*KC_([A-Z])\s*\)/.exec(body)?.[1];
+    if (letter && DOUBLING_LETTERS.has(letter)) {
+      out.push(issue("doubled_letter_tapdance", `${where}: a tap dance on ${letter}, which doubles in common words ("class"); a second tap meaning something else makes typing it twice unreliable`, slotOf(slot)));
+    }
+  }
+  return out;
 }

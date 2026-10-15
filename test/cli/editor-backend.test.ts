@@ -5,9 +5,10 @@ import { appEditorBackend } from "../../src/cli/editor-backend.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { EditorError } from "../../src/server/editor-backend.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
+import { setKey } from "../helpers/ops.ts";
 import { tempDir } from "../helpers/tmp.ts";
 
-const F17: ChangeOp[] = [{ op: "setBinding", at: { layerId: "layer-0", position: 6 }, binding: { kind: "key", code: "F17" } }];
+const F17: ChangeOp[] = setKey(6, "F17");
 // QMK can't tap a modified key from a mod-tap (07 qmk_modtap_basic).
 const MODDED_TAP: ChangeOp[] = [{
   op: "setBinding",

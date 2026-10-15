@@ -8,6 +8,7 @@ import { KEYCODES, isKeyCode } from "../../src/layout/keycodes.ts";
 import { type Binding, LayoutSchema, ModSchema } from "../../src/layout/schema.ts";
 import { evaluate, validate } from "../../src/validation/validate.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
+import { addReachableLayer, dropFunctions } from "../helpers/ops.ts";
 
 const board = (await moonlander()).definition;
 const { layout } = await importOryxSource(FIXTURE_DIR, board);
@@ -19,11 +20,12 @@ describe("validate on BK's Moonlander import", () => {
   test("the import itself raises nothing, so any edit starts from a clean layout", () => {
     const r = validate(board, layout, [set("layer-0", 6, { kind: "key", code: "F16" })]);
     expect(r).toMatchObject({ ok: true, errors: [], warnings: [] });
+    expect(validate(board, layout, [])).toMatchObject({ ok: true, errors: [], warnings: [] });
     expect(r.diff.changed).toEqual([]);
   });
 
   test("F16 to F17 on layer 0 position 6 changes that slot only", () => {
-    const r = validate(board, layout, [set("layer-0", 6, { kind: "key", code: "F17" })]);
+    const r = validate(board, layout, [...dropFunctions(["key:F16"]), set("layer-0", 6, { kind: "key", code: "F17" })]);
     expect(r.ok).toBe(true);
     expect(r.diff.changed).toEqual([at("layer-0", 6)]);
   });
@@ -31,23 +33,25 @@ describe("validate on BK's Moonlander import", () => {
   test("an Oryx tap-dance key can be replaced by a plain key, but not by other source", () => {
     const td = layout.layers[0]?.bindings[34];
     expect(td).toMatchObject({ kind: "native", source: "TD(DANCE_0)" });
-    expect(validate(board, layout, [set("layer-0", 34, { kind: "key", code: "A" })]).ok).toBe(true);
-    const r = validate(board, layout, [set("layer-0", 34, { kind: "native", firmware: "qmk", source: "TD(DANCE_7)", label: "TD7" })]);
+    expect(validate(board, layout, [...dropFunctions(["native:qmk:TD(DANCE_0)"]), set("layer-0", 34, { kind: "key", code: "A" })]).ok).toBe(true);
+    const r = validate(board, layout, [...dropFunctions(["native:qmk:TD(DANCE_0)"]), set("layer-0", 34, { kind: "native", firmware: "qmk", source: "TD(DANCE_7)", label: "TD7" })]);
     expect(codes(r.errors)).toEqual(["native_edit"]);
   });
 
   test("the importer's passthrough pins layer order and the 8-bit layer state caps the count", () => {
     expect(codes(validate(board, layout, [{ op: "removeLayer", layerId: "layer-5" }]).errors)).toContain("passthrough_layer_index");
-    const add = (id: string, after: string): ChangeOp => ({ op: "addLayer", layer: { id, name: id }, afterLayerId: after });
-    expect(validate(board, layout, [add("layer-6", "layer-5"), add("layer-7", "layer-6")]).ok).toBe(true); // 8 layers
-    const nine = validate(board, layout, [add("layer-6", "layer-5"), add("layer-7", "layer-6"), add("layer-8", "layer-7")]);
+    const add = addReachableLayer;
+    expect(validate(board, layout, [...add("layer-6", "layer-5"), ...add("layer-7", "layer-6")]).ok).toBe(true); // 8 layers
+    const nine = validate(board, layout, [...add("layer-6", "layer-5"), ...add("layer-7", "layer-6"), ...add("layer-8", "layer-7")]);
     expect(codes(nine.errors)).toEqual(["layer_limit"]);
-    expect(codes(validate(board, layout, [add("layer-6", "layer-0")]).errors)).toEqual(["passthrough_layer_index"]);
+    // Inserting shifts every layer number after it, so the native LT(5, KC_4) now points one layer up and
+    // layer-5 loses the only key that reached it: the validator sees both halves of the harm.
+    expect(codes(validate(board, layout, add("layer-6", "layer-0")).errors).sort()).toEqual(["function_lost", "layer_unreachable", "passthrough_layer_index"]);
   });
 
   test("a mod-tap with a modified tap is refused", () => {
     const bad: Binding = { kind: "holdTap", tap: { code: "A", mods: ["LSFT"] }, hold: { mods: ["LGUI"] }, profileId: "mod-tap" };
-    expect(codes(validate(board, layout, [set("layer-0", 6, bad)]).errors)).toEqual(["qmk_modtap_basic"]);
+    expect(codes(validate(board, layout, [...dropFunctions(["key:F16"]), set("layer-0", 6, bad)]).errors)).toEqual(["qmk_modtap_basic"]);
   });
 });
 

@@ -4,6 +4,7 @@ import type { ChangeOp } from "../../src/layout/change.ts";
 import type { Binding, Layer, Layout } from "../../src/layout/schema.ts";
 import { ValidationResultSchema } from "../../src/validation/result.ts";
 import { evaluate, validate } from "../../src/validation/validate.ts";
+import { addReachableLayer, dropFunctions } from "../helpers/ops.ts";
 import { T, key, tiny, tinyBoard } from "../helpers/tiny.ts";
 
 const at = (layerId: string, position: number) => ({ layerId, position });
@@ -25,11 +26,11 @@ const withLayers = (n: number, over: Partial<Layout> = {}): Layout =>
   });
 
 describe("validate: result shape and the diff", () => {
-  test("a valid change is ok, with the changed slot and nothing from rung 3", () => {
+  test("a valid change is ok, with the changed slot and where A went (nav repeats it)", () => {
     const r = validate(tinyBoard, tiny(), [set("base", 0, key("Q"))]);
     expect(r).toEqual({
       ok: true, errors: [], warnings: [],
-      diff: { changed: [at("base", 0)], displaced: [], dropped: [], relearnCount: 0, reminders: [] },
+      diff: { changed: [at("base", 0)], displaced: [{ function: "key:A", from: at("base", 0), to: at("nav", 0) }], dropped: [], relearnCount: 1, reminders: [] },
     });
     expect(ValidationResultSchema.safeParse(r).success).toBe(true);
   });
@@ -51,7 +52,7 @@ describe("validate: result shape and the diff", () => {
 
   test("renaming or adding layers changes no slot", () => {
     expect(validate(tinyBoard, tiny(), [{ op: "renameLayer", layerId: "num", name: "X" }]).diff.changed).toEqual([]);
-    const added = validate(tinyBoard, tiny(), [{ op: "addLayer", layer: { id: "fn", name: "Fn" }, afterLayerId: "nav" }]);
+    const added = validate(tinyBoard, tiny(), addReachableLayer("fn", "nav"));
     expect(added.ok).toBe(true);
     expect(added.diff.changed).toEqual([]);
   });
@@ -95,7 +96,7 @@ describe("validate: binding_count", () => {
   test("a layer added to a layout whose layers are the wrong length is the wrong length too", () => {
     const wide = tiny();
     wide.layers[0]?.bindings.push(T); // layer "base" has 5 keys on a 4-key board
-    const errors = errorsOf([{ op: "addLayer", layer: { id: "fn", name: "Fn" }, afterLayerId: "nav" }], wide);
+    const errors = errorsOf(addReachableLayer("fn", "nav"), wide);
     expect(codes(errors)).toEqual(["binding_count"]);
     expect(errors[0]?.message).toContain('"fn"');
   });
@@ -187,27 +188,27 @@ describe("validate: QMK hold-taps", () => {
 
 describe("validate: passthrough_layer_index", () => {
   const pinned = (refersToLayerIndices: boolean) => tiny({ passthrough: [{ firmware: "qmk", file: "keymap.c", anchor: "rgb", source: "x", refersToLayerIndices }] });
-  const add = (after: string, id = "fn"): ChangeOp => ({ op: "addLayer", layer: { id, name: "Fn" }, afterLayerId: after });
+  const add = (after: string, id = "fn"): ChangeOp[] => addReachableLayer(id, after);
 
   test("adding at the end is allowed; inserting before an existing layer is not", () => {
-    expect(errorsOf([add("nav")], pinned(true))).toEqual([]);
-    expect(codes(errorsOf([add("base")], pinned(true)))).toEqual(["passthrough_layer_index"]);
+    expect(errorsOf(add("nav"), pinned(true))).toEqual([]);
+    expect(codes(errorsOf(add("base"), pinned(true)))).toEqual(["passthrough_layer_index"]);
   });
 
   test("removing a layer is not allowed, even the last one", () => {
-    expect(codes(errorsOf([{ op: "removeLayer", layerId: "nav" }], pinned(true)))).toEqual(["passthrough_layer_index"]);
+    expect(codes(errorsOf([...dropFunctions(["layer:momentary:nav"]), { op: "removeLayer", layerId: "nav" }, { op: "removeCombo", comboId: "go-nav" }], pinned(true)))).toEqual(["passthrough_layer_index"]);
   });
 
   test("moving a layer by removing and re-adding it is caught by the result, not the op names", () => {
-    const ops: ChangeOp[] = [{ op: "removeLayer", layerId: "num" }, { op: "addLayer", layer: { id: "num", name: "Numbers" }, afterLayerId: "nav" }];
+    const ops: ChangeOp[] = [...dropFunctions(["key:N1", "key:N2", "key:N4"]), { op: "removeLayer", layerId: "num" }, { op: "addLayer", layer: { id: "num", name: "Numbers" }, afterLayerId: "nav" }];
     expect(codes(errorsOf(ops, pinned(true)))).toEqual(["passthrough_layer_index"]);
     // Added then removed again leaves the order alone.
-    expect(errorsOf([add("nav"), { op: "removeLayer", layerId: "fn" }], pinned(true))).toEqual([]);
+    expect(errorsOf([...add("nav"), { op: "removeLayer", layerId: "fn" }, { op: "removeCombo", comboId: "go-fn" }], pinned(true))).toEqual([]);
   });
 
   test("a layout whose passthrough doesn't use layer numbers may reorder", () => {
-    expect(errorsOf([add("base")], pinned(false))).toEqual([]);
-    expect(errorsOf([add("base")], tiny())).toEqual([]);
+    expect(errorsOf(add("base"), pinned(false))).toEqual([]);
+    expect(errorsOf(add("base"), tiny())).toEqual([]);
   });
 
   test("renaming a layer is not reordering", () => {
@@ -224,13 +225,13 @@ describe("validate: layer_limit", () => {
   });
 
   test("8 when LAYER_STATE_8BIT is set, however the importer wrote the value", () => {
-    const add = (after: string): ChangeOp => ({ op: "addLayer", layer: { id: "extra", name: "E" }, afterLayerId: after });
+    const add = (after: string): ChangeOp[] => addReachableLayer("extra", after);
     const eight = (value: boolean | number | string) => withLayers(8, { settings: [{ firmware: "qmk", key: "LAYER_STATE_8BIT", value }] });
-    expect(codes(errorsOf([add("l7")], eight(true)))).toEqual(["layer_limit"]);
-    expect(codes(errorsOf([add("l7")], eight(1)))).toEqual(["layer_limit"]);
-    expect(errorsOf([add("l6")], withLayers(7, { settings: [{ firmware: "qmk", key: "LAYER_STATE_8BIT", value: true }] }))).toEqual([]);
+    expect(codes(errorsOf(add("l7"), eight(true)))).toEqual(["layer_limit"]);
+    expect(codes(errorsOf(add("l7"), eight(1)))).toEqual(["layer_limit"]);
+    expect(errorsOf(add("l6"), withLayers(7, { settings: [{ firmware: "qmk", key: "LAYER_STATE_8BIT", value: true }] }))).toEqual([]);
     // Written out as off, it caps nothing.
-    expect(errorsOf([add("l7")], eight(false))).toEqual([]);
+    expect(errorsOf(add("l7"), eight(false))).toEqual([]);
   });
 
   test("setting LAYER_STATE_8BIT on a layout that already has more than 8 layers is the change that breaks it", () => {
@@ -252,9 +253,12 @@ describe("validate: native_edit", () => {
     return l;
   };
 
+  // Replacing the native key drops its function, which function_lost wants said out loud.
+  const LOSE_TD = dropFunctions(["native:qmk:TD(DANCE_0)"]);
+
   test("a native key can be replaced whole by a modelled binding", () => {
-    expect(errorsOf([set("base", 3, key("F17"))], withNative())).toEqual([]);
-    expect(errorsOf([set("base", 3, T)], withNative())).toEqual([]);
+    expect(errorsOf([...LOSE_TD, set("base", 3, key("F17"))], withNative())).toEqual([]);
+    expect(errorsOf([...LOSE_TD, set("base", 3, T)], withNative())).toEqual([]);
   });
 
   test("it can't be replaced by native source keyloom never imported, even at the same slot", () => {
@@ -268,7 +272,7 @@ describe("validate: native_edit", () => {
   });
 
   test("native bindings can be moved, swapped and copied", () => {
-    expect(errorsOf([{ op: "moveBinding", from: at("base", 3), to: at("num", 0) }], withNative())).toEqual([]);
+    expect(errorsOf([...dropFunctions(["key:N1"]), { op: "moveBinding", from: at("base", 3), to: at("num", 0) }], withNative())).toEqual([]);
     expect(errorsOf([{ op: "swapBindings", a: at("base", 3), b: at("base", 0) }], withNative())).toEqual([]);
     expect(errorsOf([set("num", 2, native("TD(DANCE_0)"))], withNative())).toEqual([]);
   });
@@ -283,7 +287,7 @@ describe("validate: problems that were already there", () => {
   test("do not block an unrelated edit, and are shown as warnings", () => {
     const broken = tiny();
     (broken.layers[0] as Layer).bindings[0] = { kind: "layer", action: "to", layerId: "ghost" };
-    const r = validate(tinyBoard, broken, [set("num", 0, key("Q"))]);
+    const r = validate(tinyBoard, broken, [...dropFunctions(["key:N1"]), set("num", 0, key("Q"))]);
     expect(r.ok).toBe(true);
     expect(r.warnings).toHaveLength(1);
     expect(r.warnings[0]).toMatchObject({ code: "unknown_ref", slots: [at("base", 0)] });
