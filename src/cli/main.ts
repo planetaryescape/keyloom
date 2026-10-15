@@ -3,8 +3,9 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
-  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, selectLayers, showBoard, UsageError, ValidationFailedError,
+  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runToolchainChecks, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
+import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
@@ -187,14 +188,19 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       });
     });
 
+  registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp });
+
   program
     .command("doctor")
-    .description("check the database (toolchain checks come with builds)")
-    .action(() => {
-      const checks = runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string });
+    .description("check the database, Docker, zapp and the pinned firmware checkouts")
+    .action(async () => {
+      const checks = [
+        ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),
+        ...(await runToolchainChecks()),
+      ];
       print(io, format(), {
         json: { ok: checks.every((c) => c.ok), checks },
-        table: checks.map((c) => `${c.ok ? "ok  " : "FAIL"}  ${c.name}: ${c.detail}`).join("\n"),
+        table: checks.map((c) => `${c.ok ? (c.warn ? "warn" : "ok  ") : "FAIL"}  ${c.name}: ${c.detail}`).join("\n"),
       });
       if (checks.some((c) => !c.ok)) state.exitCode = EXIT.bug;
     });

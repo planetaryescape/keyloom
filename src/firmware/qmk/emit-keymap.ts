@@ -5,7 +5,7 @@ import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { GenerateError } from "./generate-error.ts";
 
 /** Positions grouped by the board's named rows, when those rows partition 0..keyCount-1 in order; otherwise `null`. */
-function rowGroups(board: BoardDefinition): number[][] | null {
+export function rowGroups(board: BoardDefinition): number[][] | null {
   const rows = Object.values(board.rows).filter((r) => r.length > 0).map((r) => [...r].sort((a, b) => a - b));
   rows.sort((a, b) => (a[0] as number) - (b[0] as number));
   const flat = rows.flat();
