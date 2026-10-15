@@ -6,6 +6,7 @@ import { type ChangeOp, ChangeOpSchema, type Slot } from "../layout/change.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { type Layout, LayoutSchema } from "../layout/schema.ts";
 import type { Issue, ValidationResult } from "./result.ts";
+import { type PinnedPriority, largeRelearn, movedPinned } from "./priority-rules.ts";
 import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
 import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex } from "./rules.ts";
 
@@ -31,10 +32,13 @@ function changedSlots(before: Layout, after: Layout): Slot[] {
 /** The result, and the document the ops produce when it parses (null when it doesn't). Apply saves exactly this document. */
 export type Evaluation = { result: ValidationResult; after: Layout | null };
 
-export const validate = (board: BoardDefinition, before: Layout, ops: readonly ChangeOp[]): ValidationResult =>
-  evaluate(board, before, ops).result;
+/** What the layout alone can't tell the validator: priorities BK has stated (08). The browser's own check passes none. */
+export type EvaluationContext = { pinned?: readonly PinnedPriority[] };
 
-export function evaluate(board: BoardDefinition, before: Layout, ops: readonly ChangeOp[]): Evaluation {
+export const validate = (board: BoardDefinition, before: Layout, ops: readonly ChangeOp[], context: EvaluationContext = {}): ValidationResult =>
+  evaluate(board, before, ops, context).result;
+
+export function evaluate(board: BoardDefinition, before: Layout, ops: readonly ChangeOp[], context: EvaluationContext = {}): Evaluation {
   // Apply the parsed ops, not the callers' objects: zod strips unknown fields, and an unstripped
   // extra field on a binding would otherwise be saved into the document.
   const clean: ChangeOp[] = [];
@@ -75,6 +79,8 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   const changed = changedSlots(before, after);
   const beforeHomes = functionHomes(before, reachableLayers(before));
   const afterHomes = functionHomes(after, reachableLayers(after));
+  const relearnCount = relearned(beforeHomes, afterHomes);
+  warnings.push(...movedPinned(before, changed, beforeHomes, afterHomes, context.pinned ?? []), ...largeRelearn(relearnCount));
 
   return {
     result: {
@@ -87,7 +93,7 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
         changed,
         displaced: displacedFunctions(before, after, changed, beforeHomes, afterHomes),
         dropped: lost.dropped,
-        relearnCount: relearned(beforeHomes, afterHomes),
+        relearnCount,
       },
     },
     after,

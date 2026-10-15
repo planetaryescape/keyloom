@@ -4,10 +4,10 @@ import { EMPTY, fromConversation, isStreaming, lastUser, transcriptReducer, type
 
 const validation: ProposalCard["validation"] = { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] } };
 const card = (id: string, status: ProposalCard["status"] = "proposed"): ProposalCard => ({
-  changeSetId: id, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, status, validation, ops: [],
+  changeSetId: id, proposalGroup: null, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, status, validation, ops: [],
 });
 const outcome = (over: Partial<ChatOutcome> = {}): ChatOutcome => ({
-  conversationId: "c1", messageIds: ["m1"], status: "complete", text: "", proposals: [], model: "m", effort: "medium",
+  conversationId: "c1", messageIds: ["m1"], status: "complete", text: "", proposals: [], priorities: [], model: "m", effort: "medium",
   usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, ...over,
 });
 
@@ -106,6 +106,7 @@ describe("fromConversation", () => {
       { id: "m2", role: "assistant", text: "hello", toolCalls: ["get_layout"], selection: null, createdAt: 2 },
     ],
     proposals: [card("p1", "applied")],
+    priorities: [],
   };
 
   test("stored messages become finished turns, with the proposals on the last reply", () => {

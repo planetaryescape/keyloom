@@ -22,9 +22,12 @@ export type { ChangeSetSource, ChangeSetStatus } from "../persistence/change-set
 export type { LayoutRow, RevisionRow } from "../persistence/layouts.ts";
 export { logsDir } from "../persistence/paths.ts";
 export {
-  type ChatEvent, type ChatOutcome, type ConversationView, type DisplayMessage, type ProposalCard, type SendMessageInput,
+  type ChatEvent, type ChatOutcome, type ConversationView, type DisplayMessage, type PriorityCard, type ProposalCard, type SendMessageInput,
   listConversationSummaries, sendMessage, showConversation,
 } from "./conversations.ts";
+export {
+  type DecisionRow, type DecisionStatus, editDecision, listDecisions, recordPriority, retireDecision, retirePriority, showDecision,
+} from "./decisions.ts";
 export { defaultAgentModel } from "./chat-model.ts";
 export type { AgentModel } from "../agent/model.ts";
 export type { ConversationRow } from "../persistence/conversations.ts";

@@ -6,9 +6,10 @@ import { checkToken } from "./guard.ts";
 
 const LAYOUTS = "/api/layouts/";
 const CONVERSATIONS = "/api/conversations/";
+const PRIORITIES = "/api/priorities/";
 const HEARTBEAT_MS = 5_000;
 
-type Match = { kind: "send"; ref: string } | { kind: "list"; ref: string } | { kind: "get"; id: string };
+type Match = { kind: "send"; ref: string } | { kind: "list"; ref: string } | { kind: "get"; id: string } | { kind: "retire"; id: string };
 
 function decode(raw: string): string | null {
   if (raw.length === 0 || raw.includes("/")) return null;
@@ -33,6 +34,11 @@ function match(method: string, pathname: string): Match | "wrong-method" | null 
     const id = decode(pathname.slice(CONVERSATIONS.length));
     if (id === null) return null;
     return method === "GET" ? { kind: "get", id } : "wrong-method";
+  }
+  if (pathname.startsWith(PRIORITIES)) {
+    const id = decode(pathname.slice(PRIORITIES.length));
+    if (id === null) return null;
+    return method === "DELETE" ? { kind: "retire", id } : "wrong-method";
   }
   return null;
 }
@@ -62,6 +68,10 @@ export async function handleChatRoute(request: Request, pathname: string, backen
       const conversations = await backend.list(found.ref);
       if (conversations === null) return errorResponse(404, "not_found", `no layout "${found.ref}"`);
       return Response.json(ConversationListResponseSchema.parse({ conversations }));
+    }
+    if (found.kind === "retire") {
+      if (!(await backend.retirePriority(found.id))) return errorResponse(404, "not_found", `no priority "${found.id}"`);
+      return new Response(null, { status: 204 });
     }
     if (found.kind === "get") {
       const detail = await backend.get(found.id);

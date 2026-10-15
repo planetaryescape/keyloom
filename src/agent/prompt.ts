@@ -4,6 +4,7 @@
 import type { Board } from "../boards/load.ts";
 import { bindingLabel } from "../layout/render-grid.ts";
 import type { Layout } from "../layout/schema.ts";
+import type { PriorityFact } from "./ports.ts";
 import type { Selection } from "./selection.ts";
 import system from "./prompts/system.md" with { type: "text" };
 
@@ -43,8 +44,29 @@ export function firmwareCapabilities(firmware: Layout["firmware"]): string {
   return ["# What this firmware can express", ...common, ...(firmware === "qmk" ? qmk : zmk)].join("\n");
 }
 
-export function assembleSystemPrompt(board: Board, firmware: Layout["firmware"]): string {
-  return [system.trim(), boardContext(board), firmwareCapabilities(firmware)].join("\n\n");
+const PRIORITY_LABEL: Record<PriorityFact["priorityKind"], string> = {
+  pinned: "pinned: must not move",
+  rarely_used: "rarely used: can give up its place",
+  frequent: "used often: keep it easy to reach",
+  willing_to_relearn: "willing to relearn: can move",
+};
+
+/** What BK has told keyloom matters (08). Keys are named as the editor names them ("key 29 on Layer 0"), so the agent repeats them right. */
+export function prioritiesContext(priorities: readonly PriorityFact[], document: Layout): string {
+  const header = "# What BK has told you matters";
+  if (priorities.length === 0) return `${header}\nNothing recorded yet. Ask before you guess what must stay put or what he barely uses.`;
+  const lines = priorities.map((p) => {
+    const about = [
+      ...(p.subject.functions ?? []),
+      ...(p.subject.slots ?? []).map((s) => `key ${s.position + 1} on ${document.layers.find((l) => l.id === s.layerId)?.name ?? s.layerId}`),
+    ].join(", ");
+    return `- [${PRIORITY_LABEL[p.priorityKind]}] ${about}. He said: "${p.statement}"${p.reason === "stated by BK" ? "" : ` (${p.reason})`}`;
+  });
+  return [header, "These are recorded already; do not record them again.", ...lines].join("\n");
+}
+
+export function assembleSystemPrompt(board: Board, document: Layout, priorities: readonly PriorityFact[] = []): string {
+  return [system.trim(), boardContext(board), firmwareCapabilities(document.firmware), prioritiesContext(priorities, document)].join("\n\n");
 }
 
 /** "Selected: layer-0 positions 29, 30, 31 (A, S/⌥, D)": each user message carries the selection made when it was sent (D-012). */

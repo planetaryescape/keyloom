@@ -11,6 +11,8 @@ export interface ChatBackend {
   send(ref: string, request: ChatRequest, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void>;
   list(ref: string): Promise<ConversationSummary[] | null>;
   get(id: string): Promise<ConversationDetail | null>;
+  /** Retires a priority from its chip; false when there is no such priority. */
+  retirePriority(id: string): Promise<boolean>;
 }
 
 /** A failure the browser should see as-is: the status and code go into ApiErrorBody (or an `error` event). */

@@ -8,6 +8,7 @@ import {
   type ConversationRow, type Selection, findConversation, insertConversation, insertMessage, listConversations, listMessages,
 } from "../persistence/conversations.ts";
 import { type ChangeSetRow, listConversationChangeSets } from "../persistence/change-sets.ts";
+import { type DecisionRow, type Subject, listConversationPriorities } from "../persistence/decisions.ts";
 import { appendLog } from "../persistence/log.ts";
 import { transact } from "../persistence/transaction.ts";
 import type { ValidationResult } from "../validation/result.ts";
@@ -21,6 +22,8 @@ import { selectLayers } from "./render.ts";
 
 export type ProposalCard = {
   changeSetId: string;
+  /** Alternatives from one `propose_changes` call share a group (03). */
+  proposalGroup: string | null;
   title: string;
   explanation: string;
   tradeoffs: { gains: string[]; costs: string[] };
@@ -29,11 +32,24 @@ export type ProposalCard = {
   ops: ChangeSetRow["ops"];
 };
 
+/** A priority BK stated, as the chat shows it: a chip with a remove button. */
+export type PriorityCard = {
+  id: string;
+  priorityKind: NonNullable<DecisionRow["priorityKind"]>;
+  statement: string;
+  reason: string;
+  subject: Subject;
+  /** BK's messages it came from (08), so a reopened conversation can show the chip under the right reply. */
+  sourceMessageIds: string[];
+  createdAt: number;
+};
+
 export type ChatEvent =
   | { type: "start"; conversationId: string; messageId: string }
   | { type: "text"; delta: string }
   | { type: "tool"; name: string }
   | { type: "proposal"; proposal: ProposalCard }
+  | { type: "priority"; priority: PriorityCard }
   | { type: "done"; outcome: ChatOutcome };
 
 export type ChatOutcome = {
@@ -43,6 +59,7 @@ export type ChatOutcome = {
   status: TurnStatus;
   text: string;
   proposals: ProposalCard[];
+  priorities: PriorityCard[];
   model: string;
   effort: string;
   usage: Usage;
@@ -67,12 +84,23 @@ const answering = new Set<string>();
 
 const toCard = (row: ChangeSetRow): ProposalCard => ({
   changeSetId: row.id,
+  proposalGroup: row.proposalGroup,
   title: row.title ?? row.explanation.slice(0, 80),
   explanation: row.explanation,
   tradeoffs: row.tradeoffs,
   status: row.status,
   validation: ValidationResultSchema.parse(row.validation),
   ops: row.ops,
+});
+
+const toPriorityCard = (row: DecisionRow): PriorityCard => ({
+  id: row.id,
+  priorityKind: row.priorityKind ?? "pinned",
+  statement: row.goal,
+  reason: row.reason,
+  subject: row.subject,
+  sourceMessageIds: row.sourceMessageIds,
+  createdAt: row.createdAt,
 });
 
 function resolveSelection(app: App, ref: string, input: SendMessageInput["selection"]): Selection | undefined {
@@ -125,7 +153,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
     try {
       outcome = await runAgentTurn({
         model,
-        ports: createAgentPorts(app, view.layout.id, conversation.id),
+        ports: createAgentPorts(app, view.layout.id, conversation.id, [userMessage.id]),
         history,
         ...(input.maxIterations === undefined ? {} : { maxIterations: input.maxIterations }),
         ...(input.signal ? { signal: input.signal } : {}),
@@ -136,6 +164,10 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
             if (p.changeSetId === null) return;
             const row = listConversationChangeSets(app.db, conversation.id).find((c) => c.id === p.changeSetId);
             if (row) input.onEvent?.({ type: "proposal", proposal: toCard(row) });
+          },
+          onPriority: (p) => {
+            const row = listConversationPriorities(app.db, conversation.id).find((d) => d.id === p.id);
+            if (row) input.onEvent?.({ type: "priority", priority: toPriorityCard(row) });
           },
         },
       });
@@ -152,6 +184,8 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
     const messageIds = [userMessage.id, ...stored.map((m) => m.id)];
     const ids = new Set(outcome.proposals.flatMap((p) => (p.changeSetId ? [p.changeSetId] : [])));
     const proposals = listConversationChangeSets(app.db, conversation.id).filter((c) => ids.has(c.id)).map(toCard);
+    const priorityIds = new Set(outcome.priorities.map((p) => p.id));
+    const priorities = listConversationPriorities(app.db, conversation.id).filter((d) => priorityIds.has(d.id)).map(toPriorityCard);
 
     logTurn(app, { ...logBase, messageIds }, started, {
       usage: outcome.usage,
@@ -161,10 +195,11 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
       toolCalls: outcome.toolCalls,
       validationFailures: outcome.validationFailures,
       proposals: proposals.map((p) => p.changeSetId),
+      priorities: priorities.map((p) => p.id),
     });
 
     const result: ChatOutcome = {
-      conversationId: conversation.id, messageIds, status: outcome.status, text: outcome.text, proposals,
+      conversationId: conversation.id, messageIds, status: outcome.status, text: outcome.text, proposals, priorities,
       model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
     };
     input.onEvent?.({ type: "done", outcome: result });
@@ -188,7 +223,7 @@ export type DisplayMessage = {
   createdAt: number;
 };
 
-export type ConversationView = { conversation: ConversationRow; messages: DisplayMessage[]; proposals: ProposalCard[] };
+export type ConversationView = { conversation: ConversationRow; messages: DisplayMessage[]; proposals: ProposalCard[]; priorities: PriorityCard[] };
 
 /** The conversation as the chat panel shows it: tool results are plumbing, so a message that is only results is left out. */
 export function showConversation(app: App, id: string): ConversationView {
@@ -201,5 +236,8 @@ export function showConversation(app: App, id: string): ConversationView {
     if (text === "" && toolCalls.length === 0) continue;
     messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt });
   }
-  return { conversation, messages, proposals: listConversationChangeSets(app.db, id).map(toCard) };
+  return {
+    conversation, messages, proposals: listConversationChangeSets(app.db, id).map(toCard),
+    priorities: listConversationPriorities(app.db, id).map(toPriorityCard),
+  };
 }

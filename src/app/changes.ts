@@ -13,6 +13,7 @@ import { transact } from "../persistence/transaction.ts";
 import { type ValidationResult, ValidationResultSchema } from "../validation/result.ts";
 import { type Evaluation, evaluate } from "../validation/validate.ts";
 import type { App } from "./context.ts";
+import { pinnedFor } from "./decisions.ts";
 import { NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 
@@ -53,14 +54,14 @@ export function checkChange(app: App, ref: string, input: { baseRevisionId?: str
       return { ok: false, errors: [error], warnings: [], diff: NO_DIFF };
     }
   }
-  return evaluate(view.board.definition, view.document, input.ops).result;
+  return evaluate(view.board.definition, view.document, input.ops, { pinned: pinnedFor(app, view.layout.id) }).result;
 }
 
 /** Re-validates against the head and returns the document to save; throws unless the ops are valid and not stale. */
 function resolveAgainstHead(app: App, view: LayoutView, baseRevisionId: string, ops: ChangeOp[]): { result: ValidationResult; after: Layout } {
   const conflicts = conflictsWithHead(app, view, baseRevisionId, ops);
   if (conflicts.length > 0) throw new StaleBaseError(staleMessage(baseRevisionId, conflicts), conflicts.map((c) => c.label));
-  const evaluation: Evaluation = evaluate(view.board.definition, view.document, ops);
+  const evaluation: Evaluation = evaluate(view.board.definition, view.document, ops, { pinned: pinnedFor(app, view.layout.id) });
   if (!evaluation.result.ok || !evaluation.after) {
     const { errors } = evaluation.result;
     throw new ValidationFailedError(`${errors.length} validation error${errors.length === 1 ? "" : "s"}: ${errors[0]?.message ?? "invalid"}`, evaluation.result);

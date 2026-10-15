@@ -114,6 +114,7 @@ describe("chat routes", () => {
       },
       list: async () => [],
       get: async () => null,
+      retirePriority: async () => false,
     };
     const server = Bun.serve({
       port: 0,
@@ -132,5 +133,39 @@ describe("chat routes", () => {
     expect((await call(`/api/conversations/x`, {}, null)).status).toBe(401);
     expect((await call(`/api/layouts/${layoutId}`)).status).toBe(404); // handled by startServer, not here
     expect((await call(`/api/layouts`)).status).toBe(404);
+  });
+});
+
+describe("priority chips over the wire", () => {
+  const record = { priorityKind: "pinned", statement: "keep Backspace where it is", subject: { functions: ["key:BACKSPACE"] } };
+
+  test("a recorded priority streams as a priority event, comes back with the conversation, and DELETE retires it", async () => {
+    const { call, layoutId } = await serve([
+      { blocks: [{ tool: "record_priority", input: record }] },
+      { blocks: [{ text: "Noted." }] },
+    ]);
+    const evs = await events(await call(`/api/layouts/${layoutId}/chat`, post("keep Backspace")));
+    expect(evs.map((e) => e.type)).toEqual(["start", "tool", "priority", "text", "text", "done"]);
+    const chip = evs.find((e) => e.type === "priority");
+    if (chip?.type !== "priority") throw new Error("no chip");
+    expect(chip.priority).toMatchObject({ priorityKind: "pinned", statement: "keep Backspace where it is", subject: { functions: ["key:BACKSPACE"] } });
+    const start = evs[0];
+    if (start?.type !== "start") throw new Error("no start");
+
+    const detail = ConversationDetailSchema.parse(await (await call(`/api/conversations/${start.conversationId}`)).json());
+    expect(detail.priorities.map((p) => p.id)).toEqual([chip.priority.id]);
+    expect(detail.priorities[0]?.sourceMessageIds).toEqual([start.messageId]);
+
+    expect((await call(`/api/priorities/${chip.priority.id}`, { method: "DELETE" })).status).toBe(204);
+    const after = ConversationDetailSchema.parse(await (await call(`/api/conversations/${start.conversationId}`)).json());
+    expect(after.priorities).toEqual([]);
+    expect((await call(`/api/priorities/${chip.priority.id}`, { method: "DELETE" })).status).toBe(204);
+    expect((await call("/api/priorities/dec_missing", { method: "DELETE" })).status).toBe(404);
+  });
+
+  test("DELETE needs the token and refuses other methods", async () => {
+    const { call } = await serve([]);
+    expect((await call("/api/priorities/dec_x", { method: "DELETE" }, null)).status).toBe(401);
+    expect((await call("/api/priorities/dec_x", { method: "GET" })).status).toBe(405);
   });
 });

@@ -109,7 +109,12 @@ export class FakeChat implements ChatBackend {
       conversation: { ...found.summary, layoutId: found.layoutId },
       messages: found.messages,
       proposals: found.proposals.map(({ id: changeSetId, card }) => ({ ...card, status: this.editor.proposalStatus(changeSetId) ?? card.status })),
+      priorities: [],
     };
+  }
+
+  async retirePriority(): Promise<boolean> {
+    return false;
   }
 
   async send(ref: string, request: ChatRequest, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void> {
@@ -163,7 +168,7 @@ export class FakeChat implements ChatBackend {
         const group = `grp_${++this.counter}`;
         for (const alternative of ALTERNATIVES) {
           const stored = this.editor.storeProposal(alternative.ops, alternative.explanation, group);
-          const card = this.card(stored, alternative);
+          const card = this.card(stored, alternative, group);
           cards.push(card);
           conversation.proposals.push({ id: stored.id, card });
           emit({ type: "proposal", proposal: card });
@@ -180,6 +185,7 @@ export class FakeChat implements ChatBackend {
       status: "complete",
       text,
       proposals: cards,
+      priorities: [],
       model: "fake-model",
       effort: "medium",
       usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
@@ -200,11 +206,12 @@ export class FakeChat implements ChatBackend {
     return conversation;
   }
 
-  private card(stored: StoredProposal, alternative: (typeof ALTERNATIVES)[number]): ProposalCard {
+  private card(stored: StoredProposal, alternative: (typeof ALTERNATIVES)[number], group: string | null): ProposalCard {
     const { board, document } = this.editor.detail();
     const evaluation = evaluate(board, document, stored.ops);
     return {
       changeSetId: stored.id,
+      proposalGroup: group,
       title: alternative.title,
       explanation: alternative.explanation,
       tradeoffs: alternative.tradeoffs,

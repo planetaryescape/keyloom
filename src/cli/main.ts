@@ -7,6 +7,7 @@ import {
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, registerChatCommands } from "./commands/chat.ts";
+import { registerDecisionCommands } from "./commands/decisions.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
@@ -165,6 +166,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
 
   registerChangeCommands(program, { io, format, withApp });
   registerChatCommands(program, { io, format, withApp }, chat);
+  registerDecisionCommands(program, { io, format, withApp });
 
   program
     .command("serve")

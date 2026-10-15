@@ -30,6 +30,7 @@ const outcomeJson = (o: ChatOutcome) => ({
   status: o.status,
   text: o.text,
   proposals: o.proposals.map(proposalJson),
+  priorities: o.priorities.map((p) => ({ id: p.id, priority_kind: p.priorityKind, statement: p.statement, subject: p.subject })),
   model: o.model,
   effort: o.effort,
   usage: {
@@ -107,6 +108,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
           last = outcome;
           if (!machine) {
             if (streamed) ctx.io.out("\n");
+            for (const p of outcome.priorities) ctx.io.err(`remembered ${p.id} (${p.priorityKind}): ${p.statement}\n`);
             for (const p of outcome.proposals) ctx.io.out(`\n${proposalText(p)}\n`);
             const notice = NOTICE[outcome.status];
             if (notice) ctx.io.err(`${notice}\n`);

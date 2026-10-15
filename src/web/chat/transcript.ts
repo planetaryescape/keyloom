@@ -1,7 +1,7 @@
 // What the chat panel shows, as a pure reducer over the stream's frames. Keeping it free of React
 // and fetch lets the streaming rules (partial text, a dropped connection, superseded siblings) be
 // tested directly.
-import type { ChatEvent, ChatOutcome, ChatSelection, ConversationDetail, ProposalCard } from "../../api/http.ts";
+import type { ChatEvent, ChatOutcome, ChatSelection, ConversationDetail, PriorityCard, ProposalCard } from "../../api/http.ts";
 import { toolActivity } from "./activity.ts";
 
 export type UserTurn = { kind: "user"; id: string; text: string; selection: ChatSelection | null };
@@ -12,6 +12,8 @@ export type AssistantTurn = {
   /** The tool the agent is running right now, in words; cleared once text or a proposal follows. */
   activity: string | null;
   proposals: ProposalCard[];
+  /** What BK said that keyloom remembered during this reply, as chips he can remove (08). */
+  priorities: PriorityCard[];
   phase: "streaming" | "done" | "failed" | "stopped";
   failure: { code: string; message: string } | null;
   /** How the model ended the reply: anything but "complete" means the reply is incomplete. */
@@ -31,10 +33,11 @@ export type Action =
   | { type: "retry"; assistantId: string }
   | { type: "loaded"; detail: ConversationDetail }
   | { type: "applied"; changeSetId: string }
+  | { type: "priorityRemoved"; id: string }
   | { type: "reset" };
 
 const streamingAssistant = (assistantId: string): AssistantTurn => ({
-  kind: "assistant", id: assistantId, text: "", activity: null, proposals: [], phase: "streaming", failure: null, ending: null,
+  kind: "assistant", id: assistantId, text: "", activity: null, proposals: [], priorities: [], phase: "streaming", failure: null, ending: null,
 });
 
 function updateLast(state: Transcript, change: (turn: AssistantTurn) => AssistantTurn): Transcript {
@@ -48,6 +51,10 @@ function withProposal(proposals: readonly ProposalCard[], card: ProposalCard): P
   return proposals.some((p) => p.changeSetId === card.changeSetId) ? [...proposals] : [...proposals, card];
 }
 
+function withPriority(priorities: readonly PriorityCard[], card: PriorityCard): PriorityCard[] {
+  return priorities.some((p) => p.id === card.id) ? [...priorities] : [...priorities, card];
+}
+
 function onEvent(state: Transcript, event: ChatEvent): Transcript {
   switch (event.type) {
     case "start":
@@ -58,12 +65,15 @@ function onEvent(state: Transcript, event: ChatEvent): Transcript {
       return updateLast(state, (turn) => ({ ...turn, activity: toolActivity(event.name) }));
     case "proposal":
       return updateLast(state, (turn) => ({ ...turn, activity: null, proposals: withProposal(turn.proposals, event.proposal) }));
+    case "priority":
+      return updateLast(state, (turn) => ({ ...turn, priorities: withPriority(turn.priorities, event.priority) }));
     case "done":
       return updateLast({ ...state, conversationId: event.outcome.conversationId }, (turn) => ({
         ...turn,
         // The streamed text is what the person watched; the outcome's is the fallback if none streamed.
         text: turn.text === "" ? event.outcome.text : turn.text,
         proposals: event.outcome.proposals.reduce(withProposal, turn.proposals),
+        priorities: event.outcome.priorities.reduce(withPriority, turn.priorities),
         activity: null,
         phase: "done",
         ending: event.outcome.status,
@@ -113,6 +123,13 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
           };
         }),
       };
+    case "priorityRemoved":
+      return {
+        ...state,
+        turns: state.turns.map((turn) =>
+          turn.kind === "assistant" ? { ...turn, priorities: turn.priorities.filter((p) => p.id !== action.id) } : turn,
+        ),
+      };
     case "reset":
       return EMPTY;
   }
@@ -129,6 +146,17 @@ export function fromConversation(detail: ConversationDetail): Transcript {
   const target = turns[last];
   if (target !== undefined && target.kind === "assistant") turns[last] = { ...target, proposals: detail.proposals };
   else if (detail.proposals.length > 0) turns.push({ ...streamingAssistant(`${detail.conversation.id}:proposals`), phase: "done", ending: "complete", proposals: detail.proposals });
+  // A chip sits under the first reply after the message it came from, where it appeared live.
+  for (const card of detail.priorities) {
+    if (!turns.some((turn) => turn.kind === "assistant")) {
+      turns.push({ ...streamingAssistant(`${detail.conversation.id}:priorities`), phase: "done", ending: "complete" });
+    }
+    const from = turns.findIndex((turn) => turn.kind === "user" && card.sourceMessageIds.includes(turn.id));
+    const after = from < 0 ? -1 : turns.findIndex((turn, i) => i > from && turn.kind === "assistant");
+    const index = after >= 0 ? after : turns.findLastIndex((turn) => turn.kind === "assistant");
+    const turn = turns[index];
+    if (turn?.kind === "assistant") turns[index] = { ...turn, priorities: withPriority(turn.priorities, card) };
+  }
   return { conversationId: detail.conversation.id, turns };
 }
 

@@ -1,7 +1,7 @@
 // The server's chat interface over the app's conversation use cases (rung 3). The one place that
 // knows both the server's wire shapes and the app's errors.
 import {
-  type AgentModel, type App, BusyError, ModelError, NotFoundError, UsageError, listConversationSummaries, sendMessage, showConversation,
+  type AgentModel, type App, BusyError, ModelError, NotFoundError, UsageError, listConversationSummaries, retirePriority, sendMessage, showConversation,
 } from "../app/index.ts";
 import { type ChatBackend, ChatError } from "../server/chat-backend.ts";
 
@@ -48,10 +48,20 @@ export function appChatBackend(app: App, opts: { model?: AgentModel } = {}): Cha
           conversation: { id: v.conversation.id, layoutId: v.conversation.layoutId, title: v.conversation.title, createdAt: v.conversation.createdAt },
           messages: v.messages,
           proposals: v.proposals,
+          priorities: v.priorities,
         };
       } catch (err) {
         if (err instanceof NotFoundError) return null;
         throw err;
+      }
+    },
+    async retirePriority(id) {
+      try {
+        retirePriority(app, id);
+        return true;
+      } catch (err) {
+        if (err instanceof NotFoundError) return false;
+        throw toChatError(err);
       }
     },
   };

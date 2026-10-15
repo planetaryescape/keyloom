@@ -2,7 +2,7 @@
 // geometry schemas are imported from their owning modules, not redefined here.
 import { z } from "zod";
 import { BoardDefinitionSchema, GeometrySchema } from "../boards/schema.ts";
-import { ChangeOpSchema } from "../layout/change.ts";
+import { ChangeOpSchema, SlotSchema } from "../layout/change.ts";
 import { LayoutSchema } from "../layout/schema.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 
@@ -144,6 +144,8 @@ export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
 export const ProposalCardSchema = z.object({
   changeSetId: z.string().min(1),
+  // The alternatives from one propose_changes call share a group, so the panel can compare them. Null for a lone change set.
+  proposalGroup: z.string().nullable(),
   title: z.string().min(1),
   explanation: z.string(),
   tradeoffs: z.object({ gains: z.array(z.string()), costs: z.array(z.string()) }),
@@ -152,6 +154,21 @@ export const ProposalCardSchema = z.object({
   ops: z.array(ChangeOpSchema),
 });
 export type ProposalCard = z.infer<typeof ProposalCardSchema>;
+
+// A priority BK stated (rung 4, 08): shown as a chip with a remove button.
+//   DELETE /api/priorities/:id            -> 204   (404 not_found; the decision is retired, not erased)
+export const PriorityCardSchema = z.object({
+  id: z.string().min(1),
+  priorityKind: z.enum(["pinned", "rarely_used", "frequent", "willing_to_relearn"]),
+  // BK's words as he said them.
+  statement: z.string().min(1),
+  reason: z.string(),
+  subject: z.object({ slots: z.array(SlotSchema).optional(), functions: z.array(z.string().min(1)).optional() }),
+  // Ids of his messages it came from, so a reopened conversation shows the chip under the right reply.
+  sourceMessageIds: z.array(z.string()),
+  createdAt: z.number().finite(),
+});
+export type PriorityCard = z.infer<typeof PriorityCardSchema>;
 
 export const ChatUsageSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
@@ -168,6 +185,7 @@ export const ChatOutcomeSchema = z.object({
   status: z.enum(["complete", "refused", "truncated", "context_full", "iteration_limit"]),
   text: z.string(),
   proposals: z.array(ProposalCardSchema),
+  priorities: z.array(PriorityCardSchema),
   model: z.string(),
   effort: z.string(),
   usage: ChatUsageSchema,
@@ -181,6 +199,8 @@ export const ChatEventSchema = z.discriminatedUnion("type", [
   // A tool the agent is running ("get_layout", "propose_changes"), for a progress line.
   z.object({ type: z.literal("tool"), name: z.string().min(1) }),
   z.object({ type: z.literal("proposal"), proposal: ProposalCardSchema }),
+  // A priority the agent just recorded from what BK said (rung 4).
+  z.object({ type: z.literal("priority"), priority: PriorityCardSchema }),
   z.object({ type: z.literal("done"), outcome: ChatOutcomeSchema }),
   z.object({ type: z.literal("error"), code: z.string().min(1), message: z.string().min(1) }),
 ]);
@@ -210,6 +230,7 @@ export const ConversationDetailSchema = z.object({
   conversation: ConversationSummarySchema.extend({ layoutId: z.string().min(1) }),
   messages: z.array(ChatMessageSchema),
   proposals: z.array(ProposalCardSchema),
+  priorities: z.array(PriorityCardSchema),
 });
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
 

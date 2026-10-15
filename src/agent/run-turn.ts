@@ -3,7 +3,7 @@
 // belong to the caller; this module only reports what happened.
 import type { AgentModel, ModelMessage, ModelTool, Usage } from "./model.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
-import type { AgentPorts, ProposalResult } from "./ports.ts";
+import type { AgentPorts, ProposalResult, RecordedPriority } from "./ports.ts";
 import { type ToolCallTrace, TurnRecorder, type ValidationFailureTrace } from "./recorder.ts";
 import { createTools } from "./tools/index.ts";
 
@@ -22,6 +22,8 @@ export type AgentCallbacks = {
   onText?: (delta: string) => void;
   onToolCall?: (name: string) => void;
   onProposal?: (proposal: ProposalResult) => void;
+  /** A priority BK stated that was stored by this call; not called again for one already known. */
+  onPriority?: (priority: RecordedPriority) => void;
 };
 
 export type TurnOutcome = {
@@ -32,6 +34,7 @@ export type TurnOutcome = {
   /** The text of the last assistant message kept. */
   text: string;
   proposals: ProposalResult[];
+  priorities: RecordedPriority[];
   usage: Usage;
   iterations: number;
   toolCalls: ToolCallTrace[];
@@ -108,10 +111,17 @@ export async function runAgentTurn(input: {
   const { model, ports, callbacks = {} } = input;
   const recorder = new TurnRecorder();
   const proposals: ProposalResult[] = [];
+  const priorities: RecordedPriority[] = [];
   const tools = instrument(
-    createTools(ports, recorder, (p) => {
-      proposals.push(p);
-      callbacks.onProposal?.(p);
+    createTools(ports, recorder, {
+      onProposal: (p) => {
+        proposals.push(p);
+        callbacks.onProposal?.(p);
+      },
+      onPriority: (p) => {
+        priorities.push(p);
+        callbacks.onPriority?.(p);
+      },
     }),
     recorder,
     callbacks.onToolCall,
@@ -119,7 +129,7 @@ export async function runAgentTurn(input: {
 
   const snapshot = ports.snapshot();
   const result = await model.run({
-    system: assembleSystemPrompt(snapshot.board, snapshot.document.firmware),
+    system: assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities()),
     messages: mergeConsecutiveUsers(input.history),
     tools,
     maxIterations: input.maxIterations ?? DEFAULT_MAX_ITERATIONS,
@@ -135,6 +145,7 @@ export async function runAgentTurn(input: {
     messages,
     text: messages.at(-1)?.role === "assistant" ? textOf(messages.at(-1)) : "",
     proposals,
+    priorities,
     usage: result.usage,
     iterations: result.iterations,
     toolCalls: recorder.toolCalls,
