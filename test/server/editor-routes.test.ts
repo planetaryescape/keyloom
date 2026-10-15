@@ -5,6 +5,7 @@ import {
   BuildSchema,
   CheckResponseSchema,
   FlashSchema,
+  ParseBindingResponseSchema,
   UndoResponseSchema,
 } from "../../src/api/http.ts";
 import { EditorError, type EditorBackend } from "../../src/server/editor-backend.ts";
