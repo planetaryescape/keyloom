@@ -104,7 +104,8 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
       };
     case "macro": {
       const index = ctx.macros.findIndex((macro) => macro.id === binding.macroId);
-      return { kind: "macro", tap: index < 0 ? "M?" : `M${index}`, hold: "macro" };
+      // The play mark on the cap says it is a macro, so no second word competes for the width.
+      return { kind: "macro", tap: index < 0 ? "M?" : `M${index}` };
     }
     case "native": {
       // A kept hold-tap is labelled "tap/hold" ("Enter/OSL2"); two short halves fit a cap where the whole would not.

@@ -286,10 +286,13 @@
   vertical-align: middle;
 }
 
+/* One row that is exactly the space left: a panel taller than the window scrolls inside itself, and can
+   neither grow the row nor, through the board's size, feed back into the stage it is measured from. */
 .workbench {
   display: grid;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr) var(--side-width);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* The stage: the board takes all of it, and everything else floats over its edges. */
@@ -298,6 +301,7 @@
   display: flex;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: var(--color-panel);
 }
 
@@ -442,6 +446,7 @@
 .side {
   display: flex;
   min-height: 0;
+  overflow: hidden;
   flex-direction: column;
   border-left: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -677,7 +682,7 @@
     right: 0;
     bottom: 40px;
     left: 0;
-    height: min(52dvh, 480px);
+    height: min(58dvh, 520px);
     border-top: 1px solid var(--color-border-strong);
     border-left: 0;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -702,7 +707,35 @@
     bottom: var(--space-7);
   }
 
-  .layout-trigger-board {
+  .layout-trigger-board,
+  .brand-name {
+    display: none;
+  }
+
+  .app-header {
+    gap: var(--space-2);
+    padding-inline: var(--space-3);
+  }
+
+  .layout-trigger {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  .menu {
+    min-width: 0;
+  }
+
+  .header-end {
+    flex: none;
+    gap: var(--space-1);
+  }
+
+  .release-status {
+    display: none;
+  }
+
+  .key-panel .panel-now {
     display: none;
   }
 

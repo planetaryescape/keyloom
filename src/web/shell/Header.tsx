@@ -121,7 +121,7 @@ export function Header({ layouts, selectedId, onSelect, release }: HeaderProps) 
         <span className="brand-mark" aria-hidden="true">
           <Keyboard size={16} />
         </span>
-        keyloom
+        <span className="brand-name">keyloom</span>
       </div>
       {layouts === undefined || selectedId === undefined || onSelect === undefined ? null : (
         <LayoutMenu layouts={layouts} selectedId={selectedId} onSelect={onSelect} />
