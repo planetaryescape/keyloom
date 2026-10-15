@@ -93,7 +93,7 @@ keyloom boards geometry boards/foostan/corne
 
 It fetches one file from GitHub at your pinned commit and writes `geometry.json` beside `board.json`. For QMK it reads the `layouts` entry named by `build.layoutMacro`, from `build.layoutFile` when you set it, and else from `keyboards/<qmkTarget>/keyboard.json`. For ZMK it reads the `zmk,physical-layout` node in `build.physicalLayout`.
 
-The keys come out in the firmware's binding order. Position 0 is the first key the firmware's keymap lists. That order matters for everything that follows.
+The keys come out in the firmware's order. For QMK that is the order of the keys in the layout macro. For ZMK it is the order of the `keys` in the `zmk,physical-layout` node, which is also the order a `.keymap` lists its bindings in. Position 0 is the first of them. That order matters for everything that follows.
 
 If this fails, the message says what is wrong. The usual causes are a wrong path, a wrong `layoutMacro`, or a `keyCount` that differs from the file.
 
@@ -105,16 +105,16 @@ keyloom's agent and validator need to know which hand and finger each key belong
 keyloom serve --board-dev foostan/corne
 ```
 
-It prints a link. Open it. Each key shows its position number, counted from 0. Those are the numbers `board.json` uses.
+It prints a link with a `?t=` token on the end. Open that exact link; the bare address shows "This page needs keyloom's link". If port 4477 is taken (another `keyloom serve` is running), add `--port 4478`. Each key shows its position number, counted from 0. Those are the numbers `board.json` uses.
 
 Hover or select a key to see what `board.json` says about it. The page reads `board.json` again when you press **Reload board.json**, so edit the file and reload to check your work. The panel counts how many positions each fact covers.
 
 Fill in these four fields. Every position from 0 to `keyCount - 1` must appear exactly once in `hands`, once in `fingers` and once in `rows`.
 
 - `hands` has `left` and `right`, each a list of positions.
-- `fingers` maps every position to a name. Use `left-pinky`, `left-ring`, `left-middle`, `left-index`, `left-thumb`, and the same with `right-`.
+- `fingers` maps every position to a name. Use `left-pinky`, `left-ring`, `left-middle`, `left-index`, `left-thumb`, and the same with `right-`. Give each key to the finger that normally presses it. On a column-staggered split, the index finger usually takes the two inner columns, and on a 6-column board the pinky takes the two outer columns.
 - `rows` maps a row name to its positions. Use names like `number`, `top`, `home`, `bottom`, `thumb`.
-- `mirror` maps each left-hand position to the right-hand key at the mirrored spot. It lets keyloom answer "do that on the other hand too". Every left position needs an entry, or `boards check` warns.
+- `mirror` maps each left-hand position to the right-hand key at the mirrored spot: same row, same distance from the outer edge. Thumb keys pair the same way, outermost with outermost and innermost with innermost. It lets keyloom answer "do that on the other hand too". Every left position needs an entry, or `boards check` warns.
 
 The overlay keeps going without a `board.json`, so you can open it before step 2 is done.
 
@@ -143,7 +143,7 @@ Put only `boards/<vendor>/<board>/` in the PR. Do not change any other file.
 The PR description must say all of this:
 
 - The keyloom version, from `keyloom --version`.
-- That you built the firmware with keyloom and flashed it to your own board, and that the board then typed correctly.
+- That you built the firmware with keyloom and flashed it to your own board, and that the board then typed correctly. If you built it but can't flash it (you don't have the board to hand), say so plainly. The PR then waits until someone who owns the board flashes it and confirms.
 - Which board and revision you own, and which firmware tree and commit you pinned.
 - Which layout you imported. Say if it was a stock keymap or your own.
 - The output of `keyloom boards check`.
@@ -181,10 +181,10 @@ Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds 
 
 ### ZMK: `zmk-west-docker`
 
-- `board` is the `west build -b` board, such as `nice_nano_v2`.
+- `board` is the `west build -b` board, such as `nice_nano_v2`. A shield whose `.zmk.yml` says `requires: [pro_micro]` fits any Pro Micro–compatible controller; the nice!nano v2 is one.
 - `targets` has one entry per half. `shield` is the `-DSHIELD` value, such as `corne_left`. `id` is a short name, such as `left`.
 - `keymapName` is the shield name without `_left` or `_right`. keyloom writes `config/<keymapName>.keymap` and `config/<keymapName>.conf`.
-- `physicalLayout` is the file in the ZMK tree that holds the `zmk,physical-layout` node. Look in `app/dts/layouts/` for your board, such as `app/dts/layouts/foostan/corne/6column.dtsi`. Boards with several layouts, such as 5-column and 6-column, have several files. Pick the one that matches the `keymap` your keyboard's shield uses, and whose key count equals `keyCount`.
+- `physicalLayout` is the file in the ZMK tree that holds the `zmk,physical-layout` node. Look in `app/dts/layouts/` for your board, such as `app/dts/layouts/foostan/corne/6column.dtsi`. Boards with several layouts, such as 5-column and 6-column, have several files. To find which one your shield uses, open the shield's `.dtsi` under `app/boards/shields/<shield>/` and look for `chosen { zmk,physical-layout = &...; }`; the file that defines that label is the one. Its key count must equal `keyCount`.
 - Each flash step has a `target` that names a build target. `volume` is the label of the boot drive. A nice!nano shows up as `NICENANO`. `enter` is how to put that half into its bootloader. For a nice!nano that is a double tap on the reset button.
 
 keyloom builds in the Docker image with `west`. The first build downloads Zephyr and ZMK's modules into `~/.cache/keyloom/build/<board>`, so it takes several minutes. Later builds reuse them. The Docker image's Zephyr must match your pinned ZMK. Use the `stable` image for a stable ZMK release.
@@ -199,6 +199,8 @@ keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/config
 # QMK: a folder with keymap.c, such as keyboards/crkbd/keymaps/default
 keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/keymap-folder
 ```
+
+A ZMK import without a `.conf` next to the `.keymap` prints "no .conf beside the .keymap; no settings imported". That is fine for a test layout.
 
 The importer reads the `importers` you named. Use `qmk-keymap` for QMK and `zmk-keymap` for ZMK. Oryx exports (`oryx-source`) and Layout Editor exports (`zmk-layout-editor-keymap`) go through the same readers.
 
@@ -220,7 +222,7 @@ Build it. This needs Docker to be running:
 keyloom --data-dir /tmp/keyloom-test build <layout>
 ```
 
-It prints the artifact's path. A ZMK build makes a `.zip` that holds one UF2 per half. A QMK build makes a `.bin`, `.hex` or `.uf2`.
+It prints the build ID, the artifact's path and the log's path (as JSON when the output isn't a terminal, with `artifact_path` and `log_path`). A ZMK build makes a `.zip` that holds one UF2 per half. A QMK build makes a `.bin`, `.hex` or `.uf2`.
 
 Flash it. This overwrites the firmware on your keyboard. Keep a copy of your current layout first.
 

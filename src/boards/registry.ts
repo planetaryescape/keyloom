@@ -15,7 +15,9 @@ for (const e of readBoards()) {
     }
     boards.set(board.definition.id, board);
   } catch (err) {
-    console.error(`keyloom: skipping boards/${e.dir}: ${(err as Error).message}. Run: keyloom boards check boards/${e.dir}`);
+    // A folder with only board.json is a contributor between steps 2 and 3; point at the step that finishes it.
+    const next = e.board !== "" && e.geometry === "" ? `keyloom boards geometry boards/${e.dir}` : `keyloom boards check boards/${e.dir}`;
+    console.error(`keyloom: skipping boards/${e.dir} for now: ${(err as Error).message}. Next: ${next}`);
   }
 }
 
