@@ -4,7 +4,24 @@ import { KEYCODES, type KeyCodeInfo } from "./keycodes.ts";
 import type { Binding, Layer, Macro, Mod } from "./schema.ts";
 
 /** Structural, so this module needs nothing from src/boards. */
-export type GridKey = { x: number; y: number; w: number; h: number };
+export type GridKey = { x: number; y: number; w: number; h: number; r?: number; rx?: number; ry?: number };
+
+/**
+ * Where a rotated key actually sits: its box moved so its centre is the rotated centre. A text grid
+ * can't draw rotation, and the Glove80's thumb keys share one unrotated x and y, fanned out only by
+ * `r` around (rx, ry). Positive r turns clockwise, as in the geometry files and CSS.
+ */
+export function placedKey(key: GridKey): GridKey {
+  if (!key.r) return key;
+  const t = (key.r * Math.PI) / 180;
+  const ox = key.rx ?? key.x;
+  const oy = key.ry ?? key.y;
+  const dx = key.x + key.w / 2 - ox;
+  const dy = key.y + key.h / 2 - oy;
+  const cx = ox + dx * Math.cos(t) - dy * Math.sin(t);
+  const cy = oy + dx * Math.sin(t) + dy * Math.cos(t);
+  return { x: cx - key.w / 2, y: cy - key.h / 2, w: key.w, h: key.h };
+}
 
 export type GridContext = {
   layers: readonly Pick<Layer, "id" | "name">[];
@@ -90,7 +107,8 @@ function fit(text: string, cells: number): string {
  * Splits keys into rows. The Moonlander and similar boards stagger columns by up to 0.4u, so a
  * row is a chain of keys whose y values are less than half a unit apart.
  */
-export function rowsOf(geometry: readonly GridKey[]): number[][] {
+export function rowsOf(keys: readonly GridKey[]): number[][] {
+  const geometry = keys.map(placedKey);
   const order = geometry.map((_, i) => i).sort((a, b) => (geometry[a] as GridKey).y - (geometry[b] as GridKey).y || a - b);
   const rows: number[][] = [];
   let lastY = Number.NEGATIVE_INFINITY;
@@ -111,13 +129,15 @@ export function renderCells(geometry: readonly GridKey[], labels: readonly strin
   if (labels.length !== geometry.length) {
     throw new Error(`${labels.length} labels for ${geometry.length} keys`);
   }
+  const placed = geometry.map(placedKey);
   return rowsOf(geometry).map((row) => {
     let line = "";
     for (const i of row) {
-      const key = geometry[i] as GridKey;
-      const start = Math.round(key.x * unit);
+      const key = placed[i] as GridKey;
       const cell = fit(labels[i] as string, Math.max(1, Math.round(key.w * unit) - 1));
-      if (width(line) > start) throw new Error(`keys overlap at position ${i}`);
+      // Keys turned toward each other (a thumb fan) can land closer than a cell apart; nudge the
+      // later one right rather than drop it, since every key must appear.
+      const start = Math.max(Math.round(key.x * unit), line === "" ? 0 : width(line) + 1);
       line += " ".repeat(start - width(line)) + cell;
     }
     return line.trimEnd();
