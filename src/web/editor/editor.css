@@ -672,3 +672,62 @@
     flex: 1;
   }
 }
+
+/* Repeat on selection: the editor's card, with one row per key the change reaches. */
+.card.repeat {
+  gap: var(--space-3);
+}
+
+.repeat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.repeat-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+}
+
+.repeat-head p {
+  margin: var(--space-1) 0 0;
+}
+
+.repeat-rows {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.repeat-rows li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-page);
+}
+
+.repeat-rows li[data-kind="change"] {
+  border-left: 3px solid var(--color-accent);
+}
+
+.repeat-key {
+  font-weight: var(--weight-semibold);
+}
+
+.repeat-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.repeat-change strong {
+  color: var(--color-accent);
+}

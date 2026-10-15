@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
+import type { Binding } from "../layout/schema.ts";
 import type { ApplyResponse, ChatSelection, LayoutDetail, ProposalCard } from "../api/http.ts";
 import { describeKey, type KeyDescription } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
@@ -10,11 +11,14 @@ import { layerName } from "./chat/proposal-facts.ts";
 import { arrowsOn, marksOn, otherMarkedLayers, previewProposal } from "./chat/preview.ts";
 import { BindingEditor, type DraftState } from "./editor/BindingEditor.tsx";
 import { withBinding } from "./editor/draft.ts";
+import { RepeatPanel } from "./editor/RepeatPanel.tsx";
+import type { LastChange } from "./editor/repeat-plan.ts";
 import { RevisionBar } from "./history/RevisionBar.tsx";
 import { Inspector } from "./inspector/Inspector.tsx";
 import { Legend } from "./inspector/Legend.tsx";
 import { Keyboard, type KeyboardHandle } from "./keyboard/Keyboard.tsx";
 import { LayerTabs } from "./keyboard/LayerTabs.tsx";
+import { SelectionBar } from "./keyboard/SelectionBar.tsx";
 import { Notice, type NoticeState } from "./shell/Notice.tsx";
 
 interface ViewerProps {
@@ -50,6 +54,9 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
   const [chatSelection, setChatSelection] = useState<ChatSelection | null>(null);
   const [hoveredProposal, setHoveredProposal] = useState<ProposalCard | null>(null);
   const [pinnedProposal, setPinnedProposal] = useState<ProposalCard | null>(null);
+  // The editor's last applied change, and whether the panel that repeats it on the selection is open.
+  const [lastChange, setLastChange] = useState<LastChange | null>(null);
+  const [repeating, setRepeating] = useState(false);
   const stage = useRef<HTMLElement>(null);
   const keyboard = useRef<KeyboardHandle>(null);
   const editorBox = useRef<HTMLDivElement>(null);
@@ -147,6 +154,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     setNotice(null);
     setBlocked(false);
     setDraft(CLEAN);
+    setRepeating(false);
     setEditing({ layerId: layer.id, position, focus: true });
   }
 
@@ -200,13 +208,24 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     setNotice({ kind: "success", message: "Applied", detail: card.title });
   }
 
-  async function onApplied(summary: string) {
+  async function onApplied(summary: string, change: { before: Binding; after: Binding }) {
     if (editing === null) return;
     const { layerId: appliedLayer, position } = editing;
+    setLastChange({ layerId: appliedLayer, position, ...change });
     await onChanged();
     setApplied({ layerId: appliedLayer, position });
     setNotice({ kind: "success", message: "Applied", detail: summary });
     closeEditor(true);
+  }
+
+  async function onRepeated(summary: string, firstPosition: number) {
+    await onChanged();
+    if (chatSelection !== null) {
+      setLayerId(chatSelection.layerId);
+      setApplied({ layerId: chatSelection.layerId, position: firstPosition });
+    }
+    setNotice({ kind: "success", message: "Applied", detail: summary });
+    setRepeating(false);
   }
 
   // The layout moved on (another tab, the CLI): nothing was written, so say so and show the latest.
@@ -217,6 +236,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
       detail: "Your change was not applied. The latest version is showing, so you can make it again.",
     });
     closeEditor(true);
+    setRepeating(false);
     void onChanged().catch(() => {});
   }
 
@@ -264,6 +284,16 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
               <RevisionBar revision={revision} busy={undoing} blockedReason={undoBlock} onUndo={() => void undo()} />
             )}
           </div>
+          <SelectionBar
+            count={chatSelection?.positions.length ?? 0}
+            layerName={chatSelection === null ? layer.name : layerName(layout, chatSelection.layerId)}
+            onClear={() => {
+              setChatSelection(null);
+              setRepeating(false);
+            }}
+            onRepeat={lastChange === null ? null : () => setRepeating((open) => !open)}
+            repeatBlocked={editing !== null ? "Close the key you are editing first" : null}
+          />
           <Keyboard
             handle={keyboard}
             keys={keys}
@@ -305,6 +335,22 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
               }}
               onClose={() => closeEditor(true)}
               onApplied={onApplied}
+              onStale={onStale}
+            />
+          </div>
+        ) : repeating && chatSelection !== null && lastChange !== null ? (
+          <div ref={editorBox}>
+            <RepeatPanel
+              key={`${revision.id}:${chatSelection.layerId}:${chatSelection.positions.join(",")}`}
+              token={token}
+              layoutRef={layoutRef}
+              layout={layout}
+              revisionId={revision.id}
+              layerId={chatSelection.layerId}
+              positions={chatSelection.positions}
+              last={lastChange}
+              onClose={() => setRepeating(false)}
+              onApplied={onRepeated}
               onStale={onStale}
             />
           </div>

@@ -38,8 +38,8 @@ interface Props {
   blocked: boolean;
   onDraft: (state: DraftState) => void;
   onClose: () => void;
-  /** Resolves once the new layout is on screen. */
-  onApplied: (summary: string) => Promise<void>;
+  /** Resolves once the new layout is on screen. `change` is what the key was and became, for "repeat on selection". */
+  onApplied: (summary: string, change: { before: Binding; after: Binding }) => Promise<void>;
   /** The layout moved on under this editor; the parent reloads and closes it. */
   onStale: () => void;
 }
@@ -127,7 +127,7 @@ export function BindingEditor({
   const replacesNative = original.kind === "native" && binding !== null && binding.kind !== "native";
 
   async function apply() {
-    if (!canApply || binding === null || summary === null) return;
+    if (!canApply || binding === null || summary === null || original === undefined) return;
     if (replacesNative && !confirmingNative) {
       setConfirmingNative(true);
       return;
@@ -140,7 +140,7 @@ export function BindingEditor({
         ops: [{ op: "setBinding", at: slot, binding }],
         summary,
       });
-      await onApplied(summary);
+      await onApplied(summary, { before: original, after: binding });
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale")) {
         onStale();
