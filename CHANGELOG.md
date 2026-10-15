@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0](https://github.com/planetaryescape/keyloom/compare/v0.6.0...v0.7.0) (2026-10-15)
+
+
+### Features
+
+* mirror and repeat transforms for bulk edits, and a mirror-map check on every board ([4b07ed0](https://github.com/planetaryescape/keyloom/commit/4b07ed0edea8c6b907bcc983df995cef7d530183))
+* mirror_keys tool, selection header with key and position numbers, outside_selection warning ([8c53dda](https://github.com/planetaryescape/keyloom/commit/8c53dda64de1d3af15c91479f129b098efd832cd))
+* selection bar and repeat last change on selection in the editor ([9b2e993](https://github.com/planetaryescape/keyloom/commit/9b2e993fb8728295e032b2f8c882f7dde7489109))
+
+
+### Bug Fixes
+
+* shorten the repeat panel's note, test what the model is told about mirrors ([741f4a0](https://github.com/planetaryescape/keyloom/commit/741f4a01c01542844d8c526ca35bd084177e0d09))
+* write one r in front of an all-right-hand modifier set (rHyp) ([af86c45](https://github.com/planetaryescape/keyloom/commit/af86c456ca86e2eb70541390de3f2ea28f0d818a))
+
 ## [0.6.0](https://github.com/planetaryescape/keyloom/compare/v0.5.0...v0.6.0) (2026-10-15)
 
 
