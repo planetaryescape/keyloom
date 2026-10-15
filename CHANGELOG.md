@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/planetaryescape/keyloom/compare/v0.9.0...v0.10.0) (2026-10-15)
+
+
+### Features
+
+* keyloom flash --wait gives a key-press flash up to an hour, and the instruction says how long ([21ffe07](https://github.com/planetaryescape/keyloom/commit/21ffe077e3aa3de37fcd08aa7f148f5e34eb1a34))
+
+
+### Bug Fixes
+
+* give ZMK behaviours kept as written a readable key-cap (Enter/OSL2, OS⇧, magic/L5) ([4613b35](https://github.com/planetaryescape/keyloom/commit/4613b35624431ca72dfe91595456ffa511b3be15))
+
 ## [0.9.0](https://github.com/planetaryescape/keyloom/compare/v0.8.0...v0.9.0) (2026-10-15)
 
 
