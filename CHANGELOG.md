@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.21.0](https://github.com/planetaryescape/keyloom/compare/v0.20.1...v0.21.0) (2026-10-15)
+
+
+### Features
+
+* apply to kanata with verify, the setup doctor, Disable remapping and sync states ([5a2107f](https://github.com/planetaryescape/keyloom/commit/5a2107f2677741a7dcddbd73bf4ebfb30702dea4))
+* generate keyloom.kbd and safe.kbd from a MacBook layout, with validator rules ([be1ab81](https://github.com/planetaryescape/keyloom/commit/be1ab81f2ed4a4214ad55232a022d3b65114a6a3))
+* import Karabiner rules as the MacBook's starting layout ([4e5f7a9](https://github.com/planetaryescape/keyloom/commit/4e5f7a9f705546db78f58f37b9d0aa46e01fe745))
+* kanata firmware family, the MacBook board and kanata key names ([1c33c1b](https://github.com/planetaryescape/keyloom/commit/1c33c1b2f9aaa8bbbe96d3ec1a79c59c2c5ef443))
+* map a QMK or ZMK layout onto the MacBook with placement proposals ([8710d10](https://github.com/planetaryescape/keyloom/commit/8710d1005f3e59ab2cfeb726f700216bb492aadd))
+
 ## [0.20.1](https://github.com/planetaryescape/keyloom/compare/v0.20.0...v0.20.1) (2026-10-15)
 
 
