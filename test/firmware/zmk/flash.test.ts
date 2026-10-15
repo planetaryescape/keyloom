@@ -1,7 +1,7 @@
 // Flashing is only ever tested against a temporary directory standing in for /Volumes. A real flash
 // is BK's done-check, never a test (and test/helpers/no-real-flash.ts makes sure of it).
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { FlashState } from "../../../src/firmware/toolchain/flash-state.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
@@ -131,6 +131,21 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(r.state).toBe("failed");
     expect(r.error).toContain("Copying to");
     expect(r.error).toContain("The right half was not flashed");
+  });
+
+  test("a drive keyloom may not write to says how to allow it", async () => {
+    const s = await setup();
+    mkdirSync(join(s.root, RIGHT), { recursive: true });
+    chmodSync(join(s.root, RIGHT), 0o555);
+    try {
+      const r = await s.flash();
+      expect(r.state).toBe("failed");
+      expect(r.error).toContain("EACCES");
+      expect(r.error).toContain("The right half was not flashed. keyloom wasn't allowed to write to the drive.");
+      expect(r.error).toContain("Files & Folders");
+    } finally {
+      chmodSync(join(s.root, RIGHT), 0o755);
+    }
   });
 
   test("a copy that errors because the bootloader took the drive away mid-write counts as written", async () => {

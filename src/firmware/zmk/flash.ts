@@ -138,7 +138,12 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     } catch (err) {
       // A bootloader that reboots as soon as the last block lands can take the drive away mid-close, which
       // shows up as a copy error; the drive being gone is still the bootloader's "written".
-      if (await input.findVolume(step.volume)) return fail(`Copying to ${target} failed: ${(err as Error).message}. The ${step.label} was not flashed.`);
+      if (await input.findVolume(step.volume)) {
+        // macOS refuses a write to a removable drive from an app without Removable Volumes access, and the raw EACCES doesn't say so.
+        const code = (err as NodeJS.ErrnoException).code;
+        const denied = code === "EACCES" || code === "EPERM" ? ` keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.` : "";
+        return fail(`Copying to ${target} failed: ${(err as Error).message}. The ${step.label} was not flashed.${denied}`);
+      }
       say(`keyloom: copy ended with "${(err as Error).message}", and ${step.volume} has unmounted, so the write is taken as done`);
     }
 
