@@ -59,3 +59,4 @@ MoErgo's Dockerfile pre-builds four refs and ran out of space on BK's 99%-full D
 | Q12 | Is Docker an acceptable hard requirement for building? | Open; blueprint assumes yes ([01](01-architecture.md#firmware-toolchains)) |
 | Q13 | v1 tested on macOS only? | Open; blueprint assumes macOS, with Linux expected to work but untested |
 | Q14 | Public GitHub repo from rung 1, or private until the car? | **Answered 2026-10-15:** public from rung 1. BK authorised creating `planetaryescape/keyloom` |
+| Q15 | Is it acceptable that the generated keycode table carries identifiers, HID usages and short labels taken from QMK's GPL data files (D-047)? | Open; blueprint assumes yes, because these are interoperability facts and no QMK code or prose is copied |

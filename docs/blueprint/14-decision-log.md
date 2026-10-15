@@ -210,3 +210,9 @@ Change a decision only by adding a new entry that replaces the old one.
   - The pure validator runs in the browser for instant preview (01). Rust would need a WASM build or a server round trip per edit.
   - One zod schema serves the CLI, the server, the browser and the agent's tools. Rust would need generated types across a language boundary.
 - **Not a factor:** reusing ZSA's Zapp crates. Zapp is MIT plus the Commons Clause (`zsa/zapp@a1be758` `LICENSE.md`), so linking it would encumber MIT keyloom. keyloom calls the `zapp` binary in either language (D-043).
+
+### D-047: The generated keycode table holds only interoperability facts from GPL QMK files. (Claude, in the blueprint; Q15 for BK)
+- **What's taken:** `scripts/gen-keycodes.ts` reads QMK's `data/constants/keycodes/*.hjson` (no header, so the repo's GPL-2.0-or-later applies) and `tmk_core/protocol/report.h` (GPL header) at `qmk/qmk_firmware@7a1bbf3`. From them, `src/layout/keycodes.ts` keeps only keycode identifiers and aliases, HID usage numbers and short key labels. ZMK's names come from its MIT headers.
+- **Why it's acceptable:** identifiers and usage numbers are the interface both firmwares and the USB HID spec define. keyloom has to use them to generate source those firmwares compile. No QMK code or prose is copied, and the GPL files are read at generation time, not shipped.
+- **Option rejected:** ZMK's `docs/src/data/hid.js`, which is CC-BY-NC-SA-4.0 (D-044, corrected).
+- **Revisit:** if BK wants a stricter line, write the labels by hand and take only identifiers and usage numbers from QMK.
