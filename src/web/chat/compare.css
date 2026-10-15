@@ -14,6 +14,7 @@
   border-radius: var(--radius-md);
   background: var(--color-page);
   font-size: var(--text-sm);
+  overflow: hidden;
 }
 
 .compare caption {
@@ -112,6 +113,7 @@
   font: inherit;
   font-weight: var(--weight-semibold);
   text-align: left;
+  text-wrap: balance;
 }
 
 button.compare-title {

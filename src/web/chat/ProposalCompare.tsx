@@ -43,36 +43,36 @@ export function ProposalCompare({ group, layout, pinnedId, onPreview, onPin }: P
             >
               <th scope="row">
                 <div className="compare-cell">
-                <span className="compare-head">
-                  <span className="compare-number" aria-hidden="true">{row.number}</span>
-                  {open ? (
-                    <button
-                      type="button"
-                      className="compare-title"
-                      aria-pressed={pinnedId === row.changeSetId}
-                      onClick={() => onPin(proposal)}
-                      onFocus={() => onPreview(proposal)}
-                      onBlur={() => onPreview(null)}
-                    >
-                      <span className="sr-only">Option {row.number}: </span>
-                      {row.title}
-                    </button>
-                  ) : (
-                    <span className="compare-title">
-                      <span className="sr-only">Option {row.number}: </span>
-                      {row.title}
-                    </span>
-                  )}
-                  {row.status === "applied" ? <CircleCheck size={14} className="compare-state" aria-label="Applied" role="img" /> : null}
-                  {row.status === "superseded" ? <CircleSlash size={14} className="compare-state" aria-label="Superseded" role="img" /> : null}
-                </span>
-                <span className="compare-summary">{row.summary}</span>
-                {row.movesPinned ? (
-                  <span className="compare-pinned">
-                    <TriangleAlert size={12} aria-hidden="true" />
-                    Moves a key you asked to keep
+                  <span className="compare-head">
+                    <span className="compare-number" aria-hidden="true">{row.number}</span>
+                    {open ? (
+                      <button
+                        type="button"
+                        className="compare-title"
+                        aria-pressed={pinnedId === row.changeSetId}
+                        onClick={() => onPin(proposal)}
+                        onFocus={() => onPreview(proposal)}
+                        onBlur={() => onPreview(null)}
+                      >
+                        <span className="sr-only">Option {row.number}: </span>
+                        {row.title}
+                      </button>
+                    ) : (
+                      <span className="compare-title">
+                        <span className="sr-only">Option {row.number}: </span>
+                        {row.title}
+                      </span>
+                    )}
+                    {row.status === "applied" ? <CircleCheck size={14} className="compare-state" aria-label="Applied" role="img" /> : null}
+                    {row.status === "superseded" ? <CircleSlash size={14} className="compare-state" aria-label="Superseded" role="img" /> : null}
                   </span>
-                ) : null}
+                  <span className="compare-summary">{row.summary}</span>
+                  {row.movesPinned ? (
+                    <span className="compare-pinned">
+                      <TriangleAlert size={12} aria-hidden="true" />
+                      Moves a key you asked to keep
+                    </span>
+                  ) : null}
                 </div>
               </th>
               <td className="compare-num" data-zero={row.relearn === 0}>{row.relearn}</td>
