@@ -46,9 +46,9 @@ export type RunSyncOptions = SyncSetup & {
   waitTimeoutMs?: number;
 };
 
-const STEP_WORDS: Record<string, string> = {
+const STEP_WORDS = {
   building: "building", restarting: "restarting the keyboard into its bootloader", writing: "writing the firmware", verifying: "waiting for the keyboard to come back", needs_hand: "waiting for you",
-};
+} as const;
 
 /**
  * One sync of a layout, and a wait for its end. Throws BuildFailedError (exit 7) when the build fails and FlashFailedError (exit 8) when
@@ -67,7 +67,7 @@ export async function runSync(app: App, ref: string, opts: RunSyncOptions = {}):
     if (result.kind === "queued") throw new UsageError("a sync is already running in this process; wait for it");
     const poll = setInterval(() => {
       const row = findSync(app.db, result.sync.id);
-      if (row && (row.status === "building" || row.status === "flashing")) opts.onStep?.(STEP_WORDS[row.step] ?? row.step);
+      if (row && (row.status === "building" || row.status === "flashing")) opts.onStep?.(STEP_WORDS[row.step as keyof typeof STEP_WORDS] ?? row.step);
     }, 500);
     let done: SyncRow;
     try {

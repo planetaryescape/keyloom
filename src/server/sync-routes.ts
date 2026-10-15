@@ -92,16 +92,21 @@ export async function handleSyncRoute(request: Request, pathname: string, backen
     if (found === "status") return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.status() }));
     const json = await readJson(request);
     if (json instanceof Response) return json;
-    const schema = found === "now" ? SyncNowRequestSchema : found === "auto" ? AutoSyncRequestSchema : PauseRequestSchema;
-    const parsed = schema.safeParse(json);
-    if (!parsed.success) return errorResponse(400, "schema", parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "));
-    if (found === "now") return Response.json(SyncNowResponseSchema.parse(await backend.syncNow((parsed.data as { layoutId: string }).layoutId)), { status: 202 });
-    if (found === "auto") {
-      const d = parsed.data as { boardId: string; enabled: boolean };
-      return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.setAutoSync(d.boardId, d.enabled) }));
+    const bad = (issues: Array<{ path: PropertyKey[]; message: string }>) =>
+      errorResponse(400, "schema", issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "));
+    if (found === "now") {
+      const parsed = SyncNowRequestSchema.safeParse(json);
+      if (!parsed.success) return bad(parsed.error.issues);
+      return Response.json(SyncNowResponseSchema.parse(await backend.syncNow(parsed.data.layoutId)), { status: 202 });
     }
-    const d = parsed.data as { boardId: string; paused: boolean };
-    return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.setPaused(d.boardId, d.paused) }));
+    if (found === "auto") {
+      const parsed = AutoSyncRequestSchema.safeParse(json);
+      if (!parsed.success) return bad(parsed.error.issues);
+      return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.setAutoSync(parsed.data.boardId, parsed.data.enabled) }));
+    }
+    const parsed = PauseRequestSchema.safeParse(json);
+    if (!parsed.success) return bad(parsed.error.issues);
+    return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.setPaused(parsed.data.boardId, parsed.data.paused) }));
   } catch (err) {
     if (err instanceof SyncError) return errorResponse(err.status, err.code, err.message);
     console.error("keyloom: sync request failed", err);

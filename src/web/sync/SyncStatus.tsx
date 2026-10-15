@@ -5,9 +5,9 @@ import type { SyncApi } from "./useSync.ts";
 import { autoSyncLine, syncLine, type SyncLine, type SyncTone } from "./words.ts";
 import "./sync.css";
 
-const ICON: Record<SyncTone, typeof CircleCheck> = {
+const ICON = {
   success: CircleCheck, busy: LoaderCircle, neutral: RefreshCw, warning: TriangleAlert, error: CircleAlert,
-};
+} satisfies Record<SyncTone, typeof CircleCheck>;
 
 function icon(board: BoardSync, line: SyncLine) {
   if (board.state.kind === "not_connected") return Unplug;
