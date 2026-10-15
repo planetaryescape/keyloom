@@ -134,3 +134,16 @@ describe("a selection, a mirror and a proposal through the agent", () => {
     expect(first?.selection).toEqual({ layerId: c.layerId, positions: c.selection });
   });
 });
+
+describe("what the model is told", () => {
+  test("the board context lists the mirror pairs and the system prompt names the tool", async () => {
+    const c = await glove80HomeRow();
+    const fake = fakeAnthropic([{ blocks: [{ text: "ok" }] }]);
+    await sendMessage(c.app, c.layoutId, { message: "hi", model: anthropicModel(fake.client) });
+    const system = fake.requests[0]?.body.system as string | Array<{ text: string }>;
+    const text = typeof system === "string" ? system : system.map((b) => b.text).join("\n");
+    expect(text).toContain("0<->9");
+    expect(text).toContain("mirror_keys");
+    expect(text).toContain("outside_selection");
+  });
+});

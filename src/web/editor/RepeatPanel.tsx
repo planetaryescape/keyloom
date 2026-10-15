@@ -100,7 +100,7 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
 
       <footer className="editor-foot">
         <div className="editor-foot-note" aria-live="polite">
-          {applyError !== null ? <p className="blocked" role="alert">{applyError}</p> : <p className="muted">Nothing is saved until you apply. It undoes as one change.</p>}
+          {applyError !== null ? <p className="blocked" role="alert">{applyError}</p> : <p className="muted">Nothing is saved until you apply.</p>}
         </div>
         <button type="button" className="button" onClick={onClose} disabled={applying}>Cancel</button>
         <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()}>
