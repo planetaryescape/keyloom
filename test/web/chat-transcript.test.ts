@@ -4,7 +4,7 @@ import { EMPTY, fromConversation, isStreaming, lastUser, transcriptReducer, type
 
 const validation: ProposalCard["validation"] = { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] } };
 const card = (id: string, status: ProposalCard["status"] = "proposed"): ProposalCard => ({
-  changeSetId: id, proposalGroup: null, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, status, validation, ops: [],
+  changeSetId: id, proposalGroup: null, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, decisionDraft: null, status, validation, ops: [],
 });
 const outcome = (over: Partial<ChatOutcome> = {}): ChatOutcome => ({
   conversationId: "c1", messageIds: ["m1"], status: "complete", text: "", proposals: [], priorities: [], model: "m", effort: "medium",

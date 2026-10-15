@@ -3,6 +3,7 @@ import { type AgentModel, type ModelMessage } from "../agent/model.ts";
 import { classifyModelError } from "../agent/anthropic-model.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
 import { typedText, userMessageText } from "../agent/prompt.ts";
+import type { DecisionDraft } from "../layout/change.ts";
 import type { Usage } from "../agent/model.ts";
 import {
   type ConversationRow, type Selection, findConversation, insertConversation, insertMessage, listConversations, listMessages,
@@ -27,6 +28,8 @@ export type ProposalCard = {
   title: string;
   explanation: string;
   tradeoffs: { gains: string[]; costs: string[] };
+  /** What will be remembered if BK applies this (08); null for a change set that carries no reason. */
+  decisionDraft: DecisionDraft | null;
   status: ChangeSetRow["status"];
   validation: ValidationResult;
   ops: ChangeSetRow["ops"];
@@ -88,6 +91,7 @@ const toCard = (row: ChangeSetRow): ProposalCard => ({
   title: row.title ?? row.explanation.slice(0, 80),
   explanation: row.explanation,
   tradeoffs: row.tradeoffs,
+  decisionDraft: row.decisionDraft === null ? null : { goal: row.decisionDraft.goal, choice: row.decisionDraft.choice, reason: row.decisionDraft.reason, scope: row.decisionDraft.scope },
   status: row.status,
   validation: ValidationResultSchema.parse(row.validation),
   ops: row.ops,

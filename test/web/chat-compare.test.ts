@@ -17,7 +17,7 @@ const base = (position: number) => ({ layerId: "layer-0", position });
 
 /** A card for ops against BK's real layout, with the validator's real answer. */
 function card(id: string, group: string | null, ops: ChangeOp[], over: Partial<ProposalCard> = {}): ProposalCard {
-  return { changeSetId: id, proposalGroup: group, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, status: "proposed", validation: validate(board.definition, head, ops), ops, ...over };
+  return { changeSetId: id, proposalGroup: group, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, decisionDraft: null, status: "proposed", validation: validate(board.definition, head, ops), ops, ...over };
 }
 
 const onTab = card("tab", "g1", [{ op: "setBinding", at: base(42), binding: cmdShift }]);

@@ -9,7 +9,7 @@ import { loadFixture } from "../server/fixture.ts";
 const { board, document: head } = await loadFixture();
 
 function proposal(ops: ChangeOp[]): ProposalCard {
-  return { changeSetId: "cs", proposalGroup: null, title: "t", explanation: "e", tradeoffs: { gains: [], costs: [] }, status: "proposed", validation: evaluate(board, head, ops).result, ops };
+  return { changeSetId: "cs", proposalGroup: null, title: "t", explanation: "e", tradeoffs: { gains: [], costs: [] }, decisionDraft: null, status: "proposed", validation: evaluate(board, head, ops).result, ops };
 }
 const optionOn = (layerId: string, position: number): ChangeOp => ({ op: "setBinding", at: { layerId, position }, binding: { kind: "modifier", mods: ["LALT"] } });
 

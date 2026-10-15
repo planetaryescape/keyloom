@@ -215,6 +215,7 @@ export class FakeChat implements ChatBackend {
       title: alternative.title,
       explanation: alternative.explanation,
       tradeoffs: alternative.tradeoffs,
+      decisionDraft: null,
       status: "proposed",
       validation: evaluation.result,
       ops: stored.ops,

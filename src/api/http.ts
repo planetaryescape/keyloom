@@ -2,7 +2,7 @@
 // geometry schemas are imported from their owning modules, not redefined here.
 import { z } from "zod";
 import { BoardDefinitionSchema, GeometrySchema } from "../boards/schema.ts";
-import { ChangeOpSchema, SlotSchema } from "../layout/change.ts";
+import { ChangeOpSchema, DecisionDraftSchema, SlotSchema } from "../layout/change.ts";
 import { LayoutSchema } from "../layout/schema.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 
@@ -149,6 +149,8 @@ export const ProposalCardSchema = z.object({
   title: z.string().min(1),
   explanation: z.string(),
   tradeoffs: z.object({ gains: z.array(z.string()), costs: z.array(z.string()) }),
+  // What keyloom will remember if this is applied (rung 6, 08); null when the change set carries no reason.
+  decisionDraft: DecisionDraftSchema.nullable(),
   status: z.enum(["proposed", "applied", "rejected", "superseded"]),
   validation: ValidationResultSchema,
   ops: z.array(ChangeOpSchema),
