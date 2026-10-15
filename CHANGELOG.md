@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.13.0](https://github.com/planetaryescape/keyloom/compare/v0.12.0...v0.13.0) (2026-10-15)
+
+
+### Features
+
+* a key panel beside a board that fills the stage, with one picker and slots for tap and hold ([06d5193](https://github.com/planetaryescape/keyloom/commit/06d5193fb346029d0fdf79cd0ec538ea864a0b9e))
+* decisions, spacing guard and non-text contrast tests for the key panel ([4cb1064](https://github.com/planetaryescape/keyloom/commit/4cb10642c163ff497be2572a5e3a477976fe675d))
+* parse a typed QMK or ZMK expression into a binding for the editor's Any field ([9f5048b](https://github.com/planetaryescape/keyloom/commit/9f5048bb826224bfc1c45c463da62f61a9ae0961))
+
+
+### Bug Fixes
+
+* keep the phone header on screen, give the sheet room for the picker, drop the macro word from its cap ([1725afb](https://github.com/planetaryescape/keyloom/commit/1725afb3082a1cc666e4d439729cac83fb7adfee))
+* Linux serial ports list in a stable order, and the module's serial prefix check builds under GCC ([693a3e0](https://github.com/planetaryescape/keyloom/commit/693a3e0aa8d1b5e6918ec16eb77ff1baecc36fc0))
+* the macro swatch in the summary has no second word either ([af2eccd](https://github.com/planetaryescape/keyloom/commit/af2eccd8026db54ce7b92c475b281e5ffc1df77b))
+
 ## [0.12.0](https://github.com/planetaryescape/keyloom/compare/v0.11.0...v0.12.0) (2026-10-15)
 
 
