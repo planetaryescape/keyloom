@@ -62,7 +62,7 @@ describe("the Glove80 board", () => {
     expect(rev.source).toEqual({ repo: "https://github.com/moergo-sc/zmk", ref: "v26.09", sha: "ce69e85f585c724142aae37ddf8a7e019ff19e93" });
     expect(rev.build).toMatchObject({ kind: "zmk-moergo-template", template: { sha: "34888be8c9d9a3d5b168a502b8b191ba43b4a1f3" } });
     expect(rev.detect).toEqual({ usbProductId: "0x27db" });
-    expect((rev.flash as { steps: Array<{ volume: string }> }).steps.map((s) => s.volume)).toEqual(["GLV80RHBOOT", "GLV80LHBOOT"]);
+    expect((rev.flash as unknown as { steps: Array<{ volume: string }> }).steps.map((s) => s.volume)).toEqual(["GLV80RHBOOT", "GLV80LHBOOT"]);
   });
 
   test("every position has a hand, a finger and a mirror, and the thumb keys are the rotated ones", async () => {

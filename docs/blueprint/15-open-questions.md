@@ -41,6 +41,18 @@ Zapp 1.0.2 rejects a non-DFU file before it looks for a device (exit 1). With a 
 
 MoErgo's Dockerfile pre-builds four refs and ran out of space on BK's 99%-full Docker disk. keyloom's single-ref image (`infra/glove80/Dockerfile`) builds in 163 s at 5.22 GB, and firmware builds then take 16–20 s each. See [../research/spikes/S7.md](../research/spikes/S7.md).
 
+### S6 result, partial (2026-10-15)
+
+The Layout Editor export itself is still pending from BK, so (a) and (b) were run on the template's default keymap and a hand-written Layout-Editor-shaped keymap. (a) `tree-sitter-devicetree` 0.15.0 parses both with no error nodes. (b) keymaps keyloom writes from them compile unmodified against `moergo-sc/zmk` `v26.09` through the template's Docker route, 15 s per build. That includes a hold-tap profile, macros, combos, a built-in override and Kconfig settings. What stays open is whether the Layout Editor's own output has anything the parser or the importer doesn't expect. See [../research/spikes/S6.md](../research/spikes/S6.md).
+
+### S8 result, partial (2026-10-15)
+
+The combined `glove80.uf2` holds two images at the same addresses with different family IDs (`0x9807b007` and `0x9808b007`), which is how a UF2 bootloader skips blocks that aren't its own. Not run on a keyboard: nothing was flashed. See [../research/spikes/S8.md](../research/spikes/S8.md).
+
+### S10 result, devicetree half (2026-10-15)
+
+`web-tree-sitter` loads `tree-sitter-devicetree.wasm` inside a `bun build --compile` binary: the compiled `keyloom import --board moergo/glove80` and `generate` ran on the macOS arm64 binary with no extra flags. See [../research/spikes/S10.md](../research/spikes/S10.md).
+
 ## Product questions for BK
 
 | # | Question | Status |

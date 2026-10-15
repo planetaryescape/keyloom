@@ -216,3 +216,9 @@ Change a decision only by adding a new entry that replaces the old one.
 - **Why it's acceptable:** identifiers and usage numbers are the interface both firmwares and the USB HID spec define. keyloom has to use them to generate source those firmwares compile. No QMK code or prose is copied, and the GPL files are read at generation time, not shipped.
 - **Option rejected:** ZMK's `docs/src/data/hid.js`, which is CC-BY-NC-SA-4.0 (D-044, corrected).
 - **Revisit:** if BK wants a stricter line, write the labels by hand and take only identifiers and usage numbers from QMK.
+
+### D-048: The ZMK importer doesn't follow `#include`, and a combo with no `layers` is on every layer. (Claude, building rung 5)
+- **Changes 06's import step 1.** The blueprint had `#include`s of ZMK's `dt-bindings` headers resolved against the pinned checkout. The importer instead expands only the file's own object-like `#define`s (`#define HYPER LC(LS(LG(LALT)))`, `#define LOWER 1`) and reads key names from the keycode table, which D-044 already generates from the same `keys.h`. Following includes would make `keyloom import` depend on a firmware checkout that doesn't exist before the first build. A key name outside the table becomes a `native` binding, as it would anyway.
+- **Corrects an assumption.** ZMK's own docs for older versions say a combo with no `layers` is on layer 0 only. `app/src/combo.c` at `moergo-sc/zmk` `ce69e85` and upstream `4dd95d7` treats an empty layer mask as active everywhere (`combo_active_on_layer`, line 151). `layers = <(-1)>` does not compile on this fork (`BIT(-1)` is not a load-time constant; seen in the first real build, 2026-10-15). So a combo on every layer is written with no `layers`, and `<(-1)>` is read as "all" but never written.
+- **Revisit:** when the pin moves to a ZMK that supports `<(-1)>`.
+

@@ -14,14 +14,14 @@ BK's current Glove80 layout lives in MoErgo's Layout Editor at my.glove80.com. I
 
 `keyloom import --board moergo/glove80 <file.keymap>`:
 
-1. Run the C preprocessor step keyloom needs. `#include`s of ZMK's `dt-bindings` headers are resolved against the pinned fork's `app/include/`, and `#define`s are expanded. The include tree comes from the pinned checkout ([01](01-architecture.md#firmware-toolchains)), not from the network.
+1. Expand the file's own `#define`s. Object-like ones such as `#define HYPER LC(LS(LG(LALT)))` and `#define LOWER 1` are expanded where a binding uses them; function-like ones are not, so a binding that uses one stays native. `#include`s are not followed: key names come from the keycode table, which is generated from the same `keys.h` (D-048). Every `#define` is also kept verbatim so native bindings that use it still compile.
 2. Parse with the tree-sitter devicetree grammar through `web-tree-sitter` (WASM, so it runs in bun without native modules). keymap-drawer uses the same grammar for the same job ([../research/prior-art.md](../research/prior-art.md)). Only the approach is borrowed, not keymap-drawer's code: it's Python, and it reduces bindings to display labels, dropping the parameters keyloom needs.
 3. Map nodes to the IR ([02](02-layout-model.md)):
    - `keymap` → `layers`, one per child node. `bindings` become positions in order. `display-name` or the node name becomes the layer name.
    - `&kp X` → `key`. Modifier functions such as `LG(LS(A))` → `key` with `mods`. `&kp LALT` → `modifier`.
    - `zmk,behavior-hold-tap` nodes → `HoldTapProfile` (flavor, `tapping-term-ms`, `quick-tap-ms`, `require-prior-idle-ms`, `hold-trigger-key-positions`, `hold-trigger-on-release` and the rest, kept under their ZMK names). Each use, like `&hrm LGUI F`, becomes a `holdTap` binding referencing that profile. The built-ins `&mt` and `&lt` map to built-in profiles.
    - `&mo`, `&tog`, `&to`, `&sl` → `layer` with `momentary`, `toggle`, `to` and `oneShot`. `&trans` → `transparent`. `&none` → `none`.
-   - `zmk,behavior-macro` → `Macro`. `zmk,combos` children → `Combo`, with `key-positions`, `bindings`, `timeout-ms` and `layers`.
+   - `zmk,behavior-macro` → `Macro`. `zmk,combos` children → `Combo`, with `key-positions`, `bindings`, `timeout-ms` and `layers`. A combo with no `layers` is on every layer (D-048). A hold-tap, macro or combo with a property keyloom has no field for (`wait-ms`, `slow-release`, a non-`&kp` hold) is kept verbatim as a `Passthrough` block, and its uses are `native`.
    - Anything else, such as tap dances, mod-morphs, sticky keys with options, RGB, Bluetooth and MoErgo's magic-layer behaviours, becomes a `native` binding with the source text as written. Behaviour definitions keyloom doesn't model become `Passthrough` blocks (D-024).
 4. Report what was imported: layer count, binding counts by kind, and every `native` and `Passthrough` item, so BK can see what keyloom treats as opaque.
 
@@ -43,7 +43,7 @@ keyloom keeps a build workspace per board at `$XDG_CACHE_HOME/keyloom/build/moer
 - keyloom copies it to `$XDG_DATA_HOME/keyloom/artifacts/<build id>.uf2`, stores the full log at `logs/<build id>.log`, and records the build in `builds` ([02](02-layout-model.md#database)).
 - **Failure handling.** If Docker isn't running, keyloom fails before starting with "Docker isn't running. Start Docker Desktop and run `keyloom build` again." A failed compile shows the last 40 lines of the log and the log path. If the error names a line in `glove80.keymap`, keyloom maps it back to the layer and position.
 
-keyloom builds with its own lean image, `infra/glove80/Dockerfile`, not the template's. The template's Dockerfile pre-builds four refs and ran out of space on BK's Docker disk. keyloom's image pre-builds only the pinned ref: the first image build takes 163 s at 5.22 GB, and each firmware build then takes 16–20 s (S7, [../research/spikes/S7.md](../research/spikes/S7.md)). `keyloom doctor` warns when Docker's VM has less than 15G free.
+keyloom builds with its own lean image, `infra/glove80/Dockerfile`, not the template's. The Dockerfile is embedded in the binary and its base image is pinned by digest; the image tag names the firmware ref and a hash of the Dockerfile, so changing either builds a new image. The template's Dockerfile pre-builds four refs and ran out of space on BK's Docker disk. keyloom's image pre-builds only the pinned ref: the first image build takes 163 s at 5.22 GB, and each firmware build then takes 16–20 s (S7, [../research/spikes/S7.md](../research/spikes/S7.md)). `keyloom doctor` warns when Docker's VM has less than 15G free.
 
 Rejected: building in MoErgo's cloud Layout Editor, because it needs an account, has unpublished build limits, and takes the build off BK's machine (D-028). Rejected: GitHub Actions in a user config repo, because it needs a repo and a push for every change and takes minutes per round trip.
 
@@ -55,7 +55,9 @@ Each half has a UF2 bootloader that appears as a USB drive: `GLV80RHBOOT` for th
 
 1. Tell BK how to enter the bootloader on the right half. With the half off and USB connected, hold `I + PgDn` (default layout) and switch it on; a slowly pulsing red LED confirms it. On a running layout, `Magic + '` does the same. Instructions come from the board definition, so other boards can supply their own.
 2. Wait for `/Volumes/GLV80RHBOOT` (macOS) or a mounted volume with that label (Linux, via `lsblk -o LABEL,MOUNTPOINT`). Poll every 500 ms for up to 120 s, and show progress in the web app and CLI.
-3. Copy the UF2 to the volume, then `fsync`. Success is the volume disappearing within 30 s, because the bootloader unmounts itself after a good write. A copy error, or a volume that stays mounted, fails the flash with the log.
+3. Copy the UF2 to the volume, then `fsync`. Success is the volume disappearing within 30 s, because the bootloader unmounts itself after a good write. A volume that stays mounted fails the flash with the log, and so does a copy error while the volume is still there. A copy error after the volume has gone is taken as written, since a bootloader that reboots on the last block can take the drive away mid-close.
+
+The mount root is a parameter (`--volumes-root`, default `/Volumes` on macOS), and every test passes a temporary directory: the test preload refuses to resolve the real root.
 4. Repeat for the left half with `GLV80LHBOOT` (`Magic + E`, or `Magic + Esc` on running firmware).
 5. Record the flash in `flashes`.
 
