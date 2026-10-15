@@ -3,13 +3,14 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
-  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeOverrides, selectLayers, showBoard, UsageError, ValidationFailedError,
+  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, parseProvider, registerChatCommands } from "./commands/chat.ts";
 import { registerDecisionCommands } from "./commands/decisions.ts";
 import { registerEmulateCommand } from "./commands/emulate.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
+import { registerSyncCommands } from "./commands/sync.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
@@ -24,8 +25,8 @@ const stdIo = (): Io => ({
 
 type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: boolean };
 
-/** `handsFree` replaces how USB, raw HID and serial ports are read; tests pass fakes. */
-export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides): Command {
+/** `handsFree` replaces how USB, raw HID and serial ports are read, and `syncDeps` how `sync` builds and flashes; tests pass fakes. */
+export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
     .version(pkg.version, "-V, --version", "print the keyloom version")
@@ -183,7 +184,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       if (!Number.isInteger(port) || port < 1 || port > 65535) throw new UsageError(`--port must be 1-65535, got "${opts.port}"`);
       const start = (app: App | undefined) => {
         try {
-          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, ...(provider ? { provider } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
+          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, ...(provider ? { provider } : {}), ...(handsFree ? { handsFree } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
         } catch (err) {
           if ((err as { code?: string }).code === "EADDRINUSE") throw new UsageError(`port ${port} is in use; pass --port`);
           throw err;
@@ -199,6 +200,11 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
           process.once("SIGTERM", stop);
         });
         running.stop();
+        if (running.drain) {
+          const slow = setTimeout(() => io.err("Finishing a keyboard sync that is writing; don't unplug the keyboard.\n"), 1000);
+          await running.drain();
+          clearTimeout(slow);
+        }
       };
       if (opts.boardDev !== undefined) {
         // Fails now, with the fix, rather than on the first request.
@@ -210,6 +216,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     });
 
   registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}) });
+  registerSyncCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) });
   registerEmulateCommand(program, { io, format, quiet: () => globals().quiet === true, withApp });
 
   program
@@ -236,9 +243,9 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 });
 
 /** Runs the CLI and returns the exit code; never throws. */
-export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides): Promise<number> {
+export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
-  const program = buildProgram(io, state, chat, handsFree);
+  const program = buildProgram(io, state, chat, handsFree, syncDeps);
   let jsonErrors = false;
   try {
     await program.parseAsync(argv, { from: "user" });

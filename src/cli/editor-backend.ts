@@ -45,13 +45,18 @@ async function orNull<T>(fn: () => Promise<T>): Promise<T | null> {
 }
 
 /** `flash` carries what a flash needs beyond the build: tests point `volumesRoot` at a temporary directory and shorten the wait. */
-export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs"> = {}): EditorBackend {
+export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs"> = {}, onApplied?: () => void): EditorBackend {
+  // Keyboard sync wakes at once on an Apply instead of at its next look; it would see the new head either way (it reads the database).
+  const applied = <T>(value: T): T => {
+    onApplied?.();
+    return value;
+  };
   return {
     check: (ref, request) => translate(() => checkChange(app, ref, request)),
     parseBinding: (ref, request) => translate(() => parseBindingExpression(app, ref, request)),
-    apply: (ref, request) => translate(() => applyOps(app, ref, request)),
-    applyChangeSet: (changeSetId) => translate(() => applyChange(app, changeSetId)),
-    undo: (ref, request) => translate(() => ({ revisionId: undo(app, ref, request).revision.id })),
+    apply: (ref, request) => translate(() => applied(applyOps(app, ref, request))),
+    applyChangeSet: (changeSetId) => translate(() => applied(applyChange(app, changeSetId))),
+    undo: (ref, request) => translate(() => applied({ revisionId: undo(app, ref, request).revision.id })),
     startBuild: (ref, request) =>
       translate(async () =>
         toBuild(await startBuild(app, ref, {

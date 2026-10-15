@@ -9,6 +9,8 @@ import type { EditorBackend } from "./editor-backend.ts";
 import { MAX_BODY_BYTES, handleEditorRoute, isEditorPath } from "./editor-routes.ts";
 import { checkHost, checkToken } from "./guard.ts";
 import type { LayoutSource } from "./layout-source.ts";
+import type { SyncBackend } from "./sync-backend.ts";
+import { handleSyncRoute } from "./sync-routes.ts";
 import { loadWebAssets } from "./web-assets.ts";
 import { LayoutDetailSchema, LayoutListResponseSchema } from "../api/http.ts";
 
@@ -21,6 +23,8 @@ export interface ServerOptions {
   chat?: ChatBackend;
   /** The rung 6 decisions side. Without it the decisions routes fall through to a 404. */
   decisions?: DecisionsBackend;
+  /** The rung 13 keyboard sync side. Without it the sync routes and /api/events fall through to a 404. */
+  sync?: SyncBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
   boardDev?: () => Promise<BoardDevView>;
   token?: string;
@@ -31,6 +35,8 @@ export interface RunningServer {
   url: string;
   token: string;
   stop: () => void;
+  /** Resolves when background work the server started (a flash in progress) has finished; awaited after stop() so the database outlives it. */
+  drain?: () => Promise<void>;
 }
 
 const BOARD_DEV_PATH = "/api/board-dev";
@@ -39,7 +45,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, decisions, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, sync, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -59,6 +65,10 @@ export function startServer({ port, source, editor, chat, decisions, boardDev, t
       if (decisions !== undefined) {
         const decisionResponse = await handleDecisionRoute(request, url.pathname, decisions, sessionToken);
         if (decisionResponse !== null) return decisionResponse;
+      }
+      if (sync !== undefined) {
+        const syncResponse = await handleSyncRoute(request, url.pathname, sync, sessionToken);
+        if (syncResponse !== null) return syncResponse;
       }
       if (url.pathname === LIST_PATH || url.pathname === BOARD_DEV_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);

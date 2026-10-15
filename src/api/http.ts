@@ -343,3 +343,88 @@ export const OutcomeAnswerSchema = z.union([
   z.object({ dismiss: z.literal(true) }),
 ]);
 export type OutcomeAnswer = z.infer<typeof OutcomeAnswerSchema>;
+
+// Keyboard sync (rung 13, 17): where each keyboard stands against its layout's head, and what turns that into a flash.
+//   GET  /api/sync                       -> SyncStatusResponse
+//   POST /api/sync        SyncNowRequest -> SyncNowResponse   (202; 400 usage when the board can't be synced right now, with the reason)
+//   POST /api/sync/auto   AutoSyncRequest -> SyncStatusResponse (400 usage when auto-sync can't be on yet)
+//   POST /api/sync/pause  PauseRequest   -> SyncStatusResponse
+//   GET  /api/events                     -> text/event-stream of SyncEvent; the first frame is the current state
+// A state is the same word the CLI prints: in_sync, syncing, behind, needs_hand, not_connected, not_keyloom.
+export const SyncStateSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("in_sync") }),
+  z.object({
+    kind: z.literal("syncing"),
+    step: z.enum(["building", "restarting", "writing", "verifying"]),
+    syncId: z.string().min(1),
+    startedAt: z.number().finite(),
+    trigger: z.enum(["auto", "manual"]),
+  }),
+  z.object({
+    kind: z.literal("behind"),
+    // Revisions between what the keyboard runs and the head; null when keyloom can't count them.
+    changes: z.number().int().nonnegative().nullable(),
+    why: z.enum(["waiting", "auto_off", "paused", "unproven", "failed", "unknown_build", "changed_since"]),
+    error: z.string().nullable(),
+  }),
+  z.object({ kind: z.literal("needs_hand"), instruction: z.string(), reason: z.string() }),
+  z.object({ kind: z.literal("not_connected") }),
+  z.object({ kind: z.literal("not_keyloom"), detail: z.string() }),
+]);
+export type SyncState = z.infer<typeof SyncStateSchema>;
+
+export const SyncRunSchema = z.object({
+  id: z.string().min(1),
+  trigger: z.enum(["auto", "manual"]),
+  status: z.enum(["building", "flashing", "succeeded", "failed", "cancelled"]),
+  step: z.string(),
+  revisionId: z.string().min(1),
+  failure: z.string().nullable(),
+  error: z.string().nullable(),
+  startedAt: z.number().finite(),
+  finishedAt: z.number().finite().nullable(),
+  timings: z.object({
+    waitMs: z.number().nullable(),
+    buildMs: z.number().nullable(),
+    flashMs: z.number().nullable(),
+    totalMs: z.number().nullable(),
+  }),
+});
+
+export const BoardSyncSchema = z.object({
+  boardId: z.string().min(1),
+  boardName: z.string().min(1),
+  layoutId: z.string().min(1),
+  layoutName: z.string().min(1),
+  headRevisionId: z.string().min(1),
+  otherLayouts: z.number().int().nonnegative(),
+  state: SyncStateSchema,
+  auto: z.object({
+    on: z.boolean(),
+    choice: z.boolean().nullable(),
+    paused: z.boolean(),
+    proven: z.boolean(),
+    provenAt: z.number().nullable(),
+    dueAt: z.number().nullable(),
+  }),
+  last: SyncRunSchema.nullable(),
+});
+export type BoardSync = z.infer<typeof BoardSyncSchema>;
+
+export const SyncStatusResponseSchema = z.object({ boards: z.array(BoardSyncSchema) });
+export type SyncStatusResponse = z.infer<typeof SyncStatusResponseSchema>;
+
+export const SyncNowRequestSchema = z.object({ layoutId: z.string().min(1) });
+export type SyncNowRequest = z.infer<typeof SyncNowRequestSchema>;
+
+export const SyncNowResponseSchema = z.object({
+  result: z.enum(["started", "already_running", "in_sync", "queued"]),
+  boards: z.array(BoardSyncSchema),
+});
+export type SyncNowResponse = z.infer<typeof SyncNowResponseSchema>;
+
+export const AutoSyncRequestSchema = z.object({ boardId: z.string().min(1), enabled: z.boolean() });
+export const PauseRequestSchema = z.object({ boardId: z.string().min(1), paused: z.boolean() });
+
+export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema) });
+export type SyncEvent = z.infer<typeof SyncEventSchema>;
