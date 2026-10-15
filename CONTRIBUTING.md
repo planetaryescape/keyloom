@@ -281,6 +281,17 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.steps[].label` | `uf2-drives` | What to call this part, such as `left half`. |
 | `revisions[].flash.steps[].enter` | `uf2-drives` | How to put it into its bootloader. keyloom shows it while it waits. |
 | `revisions[].flash.steps[].target` | `zmk-west-docker` | The build target whose UF2 this step writes. |
+| `revisions[].flash.handsFree` | `uf2-drives`, optional | Present when the ZMK build carries keyloom's module, so a flash after the first needs no keypress (D-095). |
+| `revisions[].flash.handsFree.trigger` | `handsFree` | `cdc-1200`: closing a half's USB serial port at 1200 baud restarts that half into its bootloader. |
+| `revisions[].flash.handsFree.usbVendorId` | `handsFree`, optional | The board's USB vendor ID while it runs, such as `0x16c0`. |
+| `revisions[].flash.handsFree.halves` | `handsFree` | One entry per half. Exactly one is the central. |
+| `revisions[].flash.handsFree.halves[].role` | `handsFree` | `central` or `peripheral`. |
+| `revisions[].flash.handsFree.halves[].step` | `handsFree` | The `label` of the flash step that writes this half. |
+| `revisions[].flash.handsFree.halves[].marker` | `handsFree` | `L` or `R`: the letter after the build ID in the half's USB serial number. Unique per half. |
+| `revisions[].flash.handsFree.halves[].usbProductId` | `handsFree`, optional | The half's USB product ID while it runs. Without it any port with this letter is taken to be the half. |
+| `revisions[].flash.handsFree.halves[].relay` | `handsFree`, optional | A peripheral the central can restart over the split link when it has no serial port of its own. |
+| `revisions[].flash.handsFree.serialMarker` | `handsFree` | `usb-sn-template` if the board already fills `CONFIG_USB_DEVICE_SN` with the chip ID (the Glove80), else `usb-sn-override`. |
+| `revisions[].flash.handsFree.serialTail` | `handsFree` | What follows `keyloom/<12>-<L\|R>` in the serial template, starting with `:` and ending in the 16 characters the chip ID replaces. |
 | `revisions[].flash.instructions` | `manual` | What to tell the person: which tool flashes the file, and how to enter the bootloader. |
 | `revisions[].detect` | all | `null`, or an object that names the USB device. |
 | `revisions[].detect.usbProductId` | all | The board's USB product ID, such as `0x1969`. keyloom uses it to tell hardware revisions apart. |
