@@ -75,7 +75,10 @@ describe("withLock", () => {
         order.push(`${name} out`);
       }, { timeoutMs: 5000, pollMs: 20 });
     await Promise.all([hold("a", 150), hold("b", 10)]);
-    expect(order).toEqual(["a in", "a out", "b in", "b out"]);
+    // Either may win the race for mkdir; what matters is that the second starts only after the first ends.
+    const first = order[0]?.split(" ")[0];
+    const second = first === "a" ? "b" : "a";
+    expect(order).toEqual([`${first} in`, `${first} out`, `${second} in`, `${second} out`]);
   });
 
   test("a lock left by a dead process is taken over; one held by a live process is waited on, then times out", async () => {
