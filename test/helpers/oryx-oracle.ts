@@ -1,7 +1,7 @@
 // Oryx's own decoding of BK's layout (oryx-graphql.json) as an independent oracle: Oryx, not
 // keyloom, decided what each key's tap and hold are. Descriptors are compared as strings.
 import { fromQmk, fromQmkShifted } from "../../src/layout/keycodes.ts";
-import type { Binding, Layout, Mod } from "../../src/layout/schema.ts";
+import type { Binding, Layout, Mod, SlotAction } from "../../src/layout/schema.ts";
 
 type OryxAction = {
   code: string;
@@ -46,7 +46,11 @@ function keyText(code: string, mods: Mod[]): string | undefined {
 /** What Oryx says a key does, in the same notation as `irDescriptor`. */
 export function oracleDescriptor(k: OryxKey): string {
   const { tap, hold } = k;
-  if (k.doubleTap || k.tapHold) return "native";
+  if (k.doubleTap || k.tapHold) {
+    // Oryx's four slots are keyloom's tap, hold, doubleTap and tapThenHold (Oryx calls the last "tapHold").
+    const slot = (name: string, a: OryxAction) => (a ? [`${name}=${keyText(a.code, modsOf(a.modifiers)) ?? "?"}`] : []);
+    return `tapDance:${[...slot("tap", tap), ...slot("hold", hold), ...slot("doubleTap", k.doubleTap), ...slot("tapThenHold", k.tapHold)].join(";")}`;
+  }
   if (tap?.macro) {
     const first = tap.macro.keys[0];
     return `macro:${first ? keyText(first.code, modsOf(first.modifiers)) : "?"}`;
@@ -93,6 +97,12 @@ export function irDescriptor(b: Binding, layout: Layout): string {
     case "macro": {
       const step = layout.macros.find((m) => m.id === b.macroId)?.steps[0];
       return step && step.op === "tap" && step.code ? `macro:${step.code}${step.mods?.length ? `+${modsText(step.mods)}` : ""}` : "macro:?";
+    }
+    case "tapDance": {
+      const td = layout.tapDances.find((t) => t.id === b.tapDanceId);
+      const slot = (name: string, a: SlotAction | undefined) =>
+        a?.kind === "key" ? [`${name}=${a.code}${a.mods?.length ? `+${modsText(a.mods)}` : ""}`] : a ? [`${name}=?`] : [];
+      return `tapDance:${td ? [...slot("tap", td.tap), ...slot("hold", td.hold), ...slot("doubleTap", td.doubleTap), ...slot("tapThenHold", td.tapThenHold)].join(";") : "?"}`;
     }
     case "transparent":
       return "transparent";

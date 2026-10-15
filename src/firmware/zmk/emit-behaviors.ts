@@ -1,6 +1,7 @@
 // Hold-tap profiles, macros and combos -> devicetree nodes (06). Each function returns lines with no
 // indentation; the caller indents them to where they sit.
-import type { Combo, HoldTapProfile, Macro } from "../../layout/schema.ts";
+import type { Combo, HoldTapProfile, Macro, SlotAction, TapDance } from "../../layout/schema.ts";
+import { textKeys } from "../../layout/text-keys.ts";
 import type { OptionValue } from "./props.ts";
 import { BUILTIN_OPTIONS, BUILTIN_PROFILES } from "./builtins.ts";
 import { type EmitContext, bindingToDts, labelOf } from "./emit-binding.ts";
@@ -70,6 +71,16 @@ export function renderMacro(m: Macro): string[] {
       cells.push(`&macro_wait_time ${s.ms}`);
       continue;
     }
+    if (s.op === "text") {
+      // ZMK has no "type this string", so each character is a tap, shifted where the character needs it.
+      const typed = textKeys(s.text);
+      if (!typed.ok) throw new GenerateError(`macro "${m.id}": "${typed.char}" can't be typed by a text step; keyloom types US-layout letters, digits and punctuation`);
+      for (const k of typed.keys) {
+        cells.push(`${mode === "tap" ? "" : "&macro_tap "}&kp ${keyExprText({ code: k.code, ...(k.shift ? { mods: ["LSFT" as const] } : {}) })}`);
+        mode = "tap";
+      }
+      continue;
+    }
     if (s.code === undefined && (s.mods?.length ?? 0) === 0) throw new GenerateError(`macro "${m.id}" has a ${s.op} step with no key`);
     const switchTo = s.op !== mode ? `&macro_${s.op} ` : "";
     mode = s.op;
@@ -108,6 +119,65 @@ export function renderCombo(c: Combo, ctx: EmitContext): string[] {
     `    key-positions = <${c.positions.join(" ")}>;`,
     ...(layers === undefined ? [] : [`    layers = <${layers}>;`]),
     `    bindings = <${output}>;`,
+    "};",
+  ];
+}
+
+/** The behaviour and parameter a tap dance slot is invoked with, such as `&kp` and `LC(A)`. */
+function invocation(a: SlotAction, ctx: EmitContext): { behavior: string; param: string } {
+  const text = bindingToDts(a, ctx);
+  const [behavior, ...rest] = text.split(/\s+/);
+  // A macro takes no parameter; a hold-tap passes one to every behaviour it calls, which the macro ignores.
+  return { behavior: behavior as string, param: rest.length === 0 ? "0" : rest.join(" ") };
+}
+
+const DEFAULT_TERM_MS = 200;
+
+/**
+ * A tap dance's nodes: a `&td`-style behaviour whose first position is the tap, and whose second is the
+ * double-tap, with a generated hold-tap in a position that also has a hold (16: ZMK has no tap-then-hold,
+ * so it is a hold-tap in the second position). Hold-taps are tap-preferred, which is what QMK's tap dance
+ * does: held past the term with nothing pressed in between is a hold, anything else is a tap.
+ */
+export function renderTapDance(td: TapDance, ctx: EmitContext): string[] {
+  const label = labelOf(td.id);
+  const term = td.termMs ?? DEFAULT_TERM_MS;
+  const nodes: string[][] = [];
+  const holdTap = (suffix: string, name: string, hold: SlotAction, tap: SlotAction | undefined): string => {
+    const h = invocation(hold, ctx);
+    const t = tap ? invocation(tap, ctx) : { behavior: "&none", param: "0" };
+    const nodeLabel = `${label}_${suffix}`;
+    nodes.push([
+      `${nodeLabel}: ${nodeLabel} {`,
+      '    compatible = "zmk,behavior-hold-tap";',
+      `    display-name = ${quote(name)};`,
+      "    #binding-cells = <2>;",
+      '    flavor = "tap-preferred";',
+      `    tapping-term-ms = <${term}>;`,
+      `    bindings = <${h.behavior}>, <${t.behavior}>;`,
+      "};",
+    ]);
+    return `&${nodeLabel} ${h.param} ${t.param}`;
+  };
+  let first: string;
+  let second: string | undefined;
+  try {
+    first = td.hold ? holdTap("hold", `${td.name} (tap, hold)`, td.hold, td.tap) : bindingToDts(td.tap, ctx);
+    if (td.tapThenHold) second = holdTap("tap_hold", `${td.name} (double-tap, hold)`, td.tapThenHold, td.doubleTap);
+    else if (td.doubleTap) second = bindingToDts(td.doubleTap, ctx);
+  } catch (err) {
+    if (err instanceof GenerateError) throw new GenerateError(`tap dance "${td.name}": ${err.message}`);
+    throw err;
+  }
+  const bindings = second === undefined ? [first] : [first, second];
+  return [
+    ...nodes.flatMap((n) => [...n, ""]),
+    `${label}: ${label} {`,
+    '    compatible = "zmk,behavior-tap-dance";',
+    `    display-name = ${quote(td.name)};`,
+    "    #binding-cells = <0>;",
+    `    tapping-term-ms = <${term}>;`,
+    ...bindings.map((b, i) => `    ${i === 0 ? "bindings = " : "           "}<${b}>${i === bindings.length - 1 ? ";" : ","}`),
     "};",
   ];
 }

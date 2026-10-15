@@ -18,6 +18,8 @@ export type MapContext = {
   macroIds: ReadonlyMap<string, string>;
   /** Keymap-level `#define NAME body` custom keycodes. */
   customKeycodes: ReadonlySet<string>;
+  /** `DANCE_n` name to the id of the TapDance it was imported as. */
+  tapDanceIds?: ReadonlyMap<string, string>;
 };
 
 export type Mapped = {
@@ -195,6 +197,9 @@ export function mapKey(expr: Expr, position: number, ctx: MapContext): Mapped {
     const mods = modsOf(a);
     return native(expr, "one-shot modifiers aren't modelled", nativeLabel(expr, mods));
   }
-  if (name === "TD") return native(expr, "tap dance isn't modelled");
+  if (name === "TD") {
+    const tapDanceId = a?.kind === "id" ? ctx.tapDanceIds?.get(a.name) : undefined;
+    return tapDanceId ? { binding: { kind: "tapDance", tapDanceId } } : native(expr, "tap dance code keyloom couldn't read");
+  }
   return native(expr, `${name}() isn't modelled`);
 }

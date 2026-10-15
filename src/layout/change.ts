@@ -2,7 +2,7 @@
 // validator all speak this one vocabulary; src/layout/apply-ops.ts applies it.
 import { z } from "zod";
 import {
-  BindingSchema, ComboSchema, FirmwareSettingSchema, HoldTapProfileSchema, LayerSchema, MacroSchema,
+  BindingSchema, ComboSchema, FirmwareSettingSchema, HoldTapProfileSchema, LayerSchema, MacroSchema, TapDanceSchema,
 } from "./schema.ts";
 
 export const SlotSchema = z.object({
@@ -26,6 +26,8 @@ export const ChangeOpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("renameLayer"), layerId: z.string().min(1), name: z.string().min(1) }),
   z.object({ op: z.literal("upsertMacro"), macro: MacroSchema }),
   z.object({ op: z.literal("removeMacro"), macroId: z.string().min(1) }),
+  z.object({ op: z.literal("upsertTapDance"), tapDance: TapDanceSchema }),
+  z.object({ op: z.literal("removeTapDance"), tapDanceId: z.string().min(1) }),
   z.object({ op: z.literal("upsertCombo"), combo: ComboSchema }),
   z.object({ op: z.literal("removeCombo"), comboId: z.string().min(1) }),
   z.object({ op: z.literal("upsertHoldTapProfile"), profile: HoldTapProfileSchema }),

@@ -5,6 +5,7 @@ import { deepEqual } from "../../src/layout/equal.ts";
 import { applyOps } from "../../src/layout/apply-ops.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { KEYCODES, isKeyCode } from "../../src/layout/keycodes.ts";
+import { bindingFunctions } from "../../src/layout/functions.ts";
 import { type Binding, LayoutSchema, ModSchema } from "../../src/layout/schema.ts";
 import { evaluate, validate } from "../../src/validation/validate.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
@@ -30,11 +31,25 @@ describe("validate on BK's Moonlander import", () => {
     expect(r.diff.changed).toEqual([at("layer-0", 6)]);
   });
 
-  test("an Oryx tap-dance key can be replaced by a plain key, but not by other source", () => {
+  test("an Oryx tap-dance key is a tap dance whose slots are functions, found elsewhere on layer 1", () => {
     const td = layout.layers[0]?.bindings[34];
-    expect(td).toMatchObject({ kind: "native", source: "TD(DANCE_0)" });
-    expect(validate(board, layout, [...dropFunctions(["native:qmk:TD(DANCE_0)"]), set("layer-0", 34, { kind: "key", code: "A" })]).ok).toBe(true);
-    const r = validate(board, layout, [...dropFunctions(["native:qmk:TD(DANCE_0)"]), set("layer-0", 34, { kind: "native", firmware: "qmk", source: "TD(DANCE_7)", label: "TD7" })]);
+    expect(td).toEqual({ kind: "tapDance", tapDanceId: "dance-0" });
+    expect(bindingFunctions(td as Binding, layout.tapDances)).toEqual(["key:SPACE+LCTL+LSFT+LALT+LGUI", "key:LEFT_BRACKET"]);
+    // Hyper+Space and [ are also on layer 1, so nothing is lost by replacing the dance.
+    expect(validate(board, layout, [set("layer-0", 34, { kind: "key", code: "A" })]).ok).toBe(true);
+    // Without those copies the dance's slots would be the only ones: take them away and the loss shows.
+    const stripped = [set("layer-1", 34, { kind: "none" }), set("layer-1", 46, { kind: "none" })];
+    const lost = validate(board, layout, [...stripped, set("layer-0", 34, { kind: "key", code: "A" })]);
+    expect(codes(lost.errors)).toContain("function_lost");
+  });
+
+  test("a native key can be replaced by a plain key, but not by other source", () => {
+    expect(layout.layers[0]?.bindings[7]).toMatchObject({ kind: "native", source: "DUAL_FUNC_0" });
+    const mouse = layout.layers[3]?.bindings[30];
+    expect(mouse).toMatchObject({ kind: "native", source: "KC_MS_BTN2" });
+    const drop = dropFunctions(["native:qmk:KC_MS_BTN2"]);
+    expect(validate(board, layout, [...drop, set("layer-3", 30, { kind: "key", code: "A" })]).ok).toBe(true);
+    const r = validate(board, layout, [...drop, set("layer-3", 30, { kind: "native", firmware: "qmk", source: "KC_MS_BTN9", label: "Btn9" })]);
     expect(codes(r.errors)).toEqual(["native_edit"]);
   });
 

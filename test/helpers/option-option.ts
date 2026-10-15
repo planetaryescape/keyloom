@@ -15,7 +15,7 @@ export function optionOnlyOnS(doc: Layout): Layout {
     layers: doc.layers.map((layer) => ({
       ...layer,
       bindings: layer.bindings.map((b, position) => {
-        const hasAlt = bindingFunctions(b).includes("mod:LALT") || (b.kind === "key" && b.mods?.includes("LALT")) || (b.kind === "holdTap" && "mods" in b.hold && b.hold.mods.includes("LALT"));
+        const hasAlt = bindingFunctions(b, doc.tapDances).includes("mod:LALT") || (b.kind === "key" && b.mods?.includes("LALT")) || (b.kind === "holdTap" && "mods" in b.hold && b.hold.mods.includes("LALT"));
         return hasAlt && !(layer.id === "layer-0" && position === S_POSITION) ? ({ kind: "none" } as const) : b;
       }),
     })),

@@ -3,7 +3,7 @@
 import { keyCodeLabel } from "./keycodes.ts";
 import { profileWords } from "./option-words.ts";
 import { type Legend, bindingLegend } from "./legend.ts";
-import type { Binding, Layout, MacroStep, Mod } from "./schema.ts";
+import type { Binding, Layout, MacroStep, Mod, SlotAction } from "./schema.ts";
 
 export type Field = { label: string; value: string; code?: boolean };
 
@@ -66,8 +66,19 @@ function outputWords(code: string | undefined, mods: readonly Mod[] | undefined)
 
 function stepWords(step: MacroStep): string {
   if (step.op === "waitMs") return `Wait ${step.ms} ms`;
+  if (step.op === "text") return `Type "${step.text}"`;
   const verb = { tap: "Tap", press: "Press", release: "Release" }[step.op];
   return `${verb} ${outputWords(step.code, step.mods)}`;
+}
+
+/** One tap dance slot in words: "Caps Lock", "Left Shift", "Layer 1 while held", "macro Copy". */
+function slotWords(a: SlotAction, layout: Layout): string {
+  switch (a.kind) {
+    case "key": return outputWords(a.code, a.mods);
+    case "modifier": return modsWords(a.mods);
+    case "layer": return `${{ momentary: "hold", toggle: "toggle", to: "go to", oneShot: "one-shot" }[a.action]} ${layerName(layout, a.layerId)}`;
+    case "macro": return `macro ${layout.macros.find((m) => m.id === a.macroId)?.name ?? a.macroId}`;
+  }
 }
 
 const layerName = (layout: Layout, layerId: string): string =>
@@ -131,6 +142,25 @@ function describeBinding(binding: Binding, layout: Layout): Omit<KeyDescription,
         steps: macro?.steps.map(stepWords) ?? [],
       };
     }
+    case "tapDance": {
+      const td = layout.tapDances.find((candidate) => candidate.id === binding.tapDanceId);
+      if (!td) return { ...base, headline: `Runs tap dance ${binding.tapDanceId}, which the layout doesn't have` };
+      const slots: Array<[string, SlotAction | undefined]> = [
+        ["Tapped", td.tap], ["Held", td.hold], ["Double-tapped", td.doubleTap], ["Tapped, then held", td.tapThenHold],
+      ];
+      const filled = slots.flatMap(([label, a]) => (a ? [{ label, value: slotWords(a, layout) }] : []));
+      const sentence = filled.map((f) => `${f.label.toLowerCase()}: ${f.value}`).join("; ");
+      return {
+        ...base,
+        headline: `Tap dance ${td.name}. ${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}`,
+        fields: [...filled, ...(td.termMs === undefined ? [] : [{ label: "Term", value: `${td.termMs} ms` }])],
+        // A layer slot lets the viewer open the layer, the way a layer key does.
+        ...(() => {
+          const layer = [td.hold, td.doubleTap, td.tapThenHold, td.tap].find((a) => a?.kind === "layer");
+          return layer?.kind === "layer" ? { targetLayerId: layer.layerId } : {};
+        })(),
+      };
+    }
     case "native":
       return {
         ...base,
@@ -179,7 +209,7 @@ export function describeKey(layout: Layout, layerIndex: number, keyIndex: number
   const layer = layout.layers[layerIndex];
   const binding = layer?.bindings[keyIndex];
   if (layer === undefined || binding === undefined) return null;
-  const ctx = { layers: layout.layers, macros: layout.macros };
+  const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances };
   const combos = combosAt(layout, layerIndex, keyIndex);
   if (binding.kind !== "transparent") {
     return { ...describeBinding(binding, layout), legend: bindingLegend(binding, ctx), combos };

@@ -1,7 +1,7 @@
 // Deterministic answers about a layout that the tools return, so the model never has to find
 // "where is Option" by reading grids (03#tools). Pure: it reads a document and a board definition.
 import type { BoardDefinition } from "../boards/schema.ts";
-import { bindingFunctions } from "../layout/functions.ts";
+import { bindingFunctions, tapDanceSlots } from "../layout/functions.ts";
 import { isKeyCode } from "../layout/keycodes.ts";
 import { type GridContext, bindingLabel } from "../layout/render-grid.ts";
 import { type Binding, type Layout, type Mod, ModSchema } from "../layout/schema.ts";
@@ -19,7 +19,7 @@ export type Occurrence = {
   position: number;
   label: string;
   /** `plain` when the binding produces only this function; `tap` or `hold` for the halves of a hold-tap. */
-  role: "plain" | "tap" | "hold";
+  role: "plain" | "tap" | "hold" | "double-tap" | "tap-then-hold";
   binding: Binding;
 };
 
@@ -36,15 +36,23 @@ export function normalizeFunction(input: string): string | null {
   return null;
 }
 
+function roleOf(binding: Binding, at: number, doc: Layout): Occurrence["role"] {
+  if (binding.kind === "holdTap") return at === 0 ? "tap" : "hold";
+  if (binding.kind !== "tapDance") return "plain";
+  const td = doc.tapDances.find((t) => t.id === binding.tapDanceId);
+  const slot = td ? tapDanceSlots(td)[at]?.[0] : undefined;
+  return slot === "doubleTap" ? "double-tap" : slot === "tapThenHold" ? "tap-then-hold" : slot === "hold" ? "hold" : "tap";
+}
+
 export function findOccurrences(doc: Layout, fn: string): Occurrence[] {
-  const ctx: GridContext = { layers: doc.layers, macros: doc.macros };
+  const ctx: GridContext = { layers: doc.layers, macros: doc.macros, tapDances: doc.tapDances };
   const out: Occurrence[] = [];
   for (const layer of doc.layers) {
     for (const [position, binding] of layer.bindings.entries()) {
-      const fns = bindingFunctions(binding);
+      const fns = bindingFunctions(binding, doc.tapDances);
       const at = fns.indexOf(fn);
       if (at < 0) continue;
-      const role = binding.kind === "holdTap" ? (at === 0 ? "tap" : "hold") : "plain";
+      const role = roleOf(binding, at, doc);
       out.push({ layerId: layer.id, layerName: layer.name, position, label: bindingLabel(binding, ctx), role, binding });
     }
   }
@@ -54,7 +62,7 @@ export function findOccurrences(doc: Layout, fn: string): Occurrence[] {
 /** How a layer is reached: the base layer is always active, every other one needs a key that switches to it. */
 export function layerAccess(doc: Layout, board: BoardDefinition, layerId: string): string[] {
   if (doc.layers[0]?.id === layerId) return ["base layer, always active"];
-  const ctx: GridContext = { layers: doc.layers, macros: doc.macros };
+  const ctx: GridContext = { layers: doc.layers, macros: doc.macros, tapDances: doc.tapDances };
   const out: string[] = [];
   const where = (from: string, position: number) => `${from}:${position} (${handOf(board, position)} ${fingerOf(board, position)})`;
   for (const layer of doc.layers) {

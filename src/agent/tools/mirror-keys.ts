@@ -25,7 +25,7 @@ export const mirrorKeysTool = (ports: AgentPorts) =>
       if (bad !== undefined) throw new Error(`position ${bad} is not on this board (0-${board.definition.keyCount - 1})`);
 
       const plan = planMirror(document, board.definition, wanted.id, positions);
-      const ctx = { layers: document.layers, macros: document.macros };
+      const ctx = { layers: document.layers, macros: document.macros, tapDances: document.tapDances };
       const name = (p: number) => {
         const b = wanted.bindings[p];
         return `key ${p + 1} (position ${p}, ${handOf(board.definition, p)} ${fingerOf(board.definition, p)}${b ? `, ${bindingLabel(b, ctx)}` : ""})`;

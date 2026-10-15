@@ -7,6 +7,7 @@ import { keyCodeLabel } from "../../layout/keycodes.ts";
 
 export type LayerAction = Extract<Binding, { kind: "layer" }>["action"];
 export type NativeBinding = Extract<Binding, { kind: "native" }>;
+export type TapDanceBinding = Extract<Binding, { kind: "tapDance" }>;
 export type KeyChoice = { code: string | null; mods: Mod[] };
 
 export type Draft = {
@@ -23,6 +24,8 @@ export type Draft = {
   macroId: string | null;
   /** Kept so a native key can be left alone; keyloom can't build one. */
   native: NativeBinding | null;
+  /** Kept so a tap dance key can be left alone until the key panel (rung 11) edits its slots. */
+  tapDance: TapDanceBinding | null;
 };
 
 // Left side first, then right, the order the toggles are drawn in.
@@ -54,6 +57,7 @@ export function draftFromBinding(binding: Binding, layout: Layout, currentLayerI
     layerId: otherLayer,
     macroId: layout.macros[0]?.id ?? null,
     native: null,
+    tapDance: null,
   };
   switch (binding.kind) {
     case "key":
@@ -86,6 +90,9 @@ export function draftFromBinding(binding: Binding, layout: Layout, currentLayerI
       break;
     case "native":
       draft.native = binding;
+      break;
+    case "tapDance":
+      draft.tapDance = binding;
       break;
     case "transparent":
     case "none":
@@ -138,6 +145,7 @@ export function incompleteReason(draft: Draft, layout: Layout): string | null {
           : "Pick a macro."
         : null;
     case "native":
+    case "tapDance":
     case "transparent":
     case "none":
       return null;
@@ -171,6 +179,8 @@ export function bindingFromDraft(draft: Draft, layout: Layout): Binding | null {
       return { kind: "macro", macroId: draft.macroId as string };
     case "native":
       return draft.native;
+    case "tapDance":
+      return draft.tapDance;
     case "transparent":
       return { kind: "transparent" };
     case "none":
@@ -228,6 +238,10 @@ export function bindingSummary(binding: Binding, layout: Layout): string {
       return `${ACTION_WORD[binding.action]} ${layerName(binding.layerId)}`;
     case "macro":
       return `Macro ${layout.macros.find((macro) => macro.id === binding.macroId)?.name ?? binding.macroId}`;
+    case "tapDance": {
+      const td = layout.tapDances.find((t) => t.id === binding.tapDanceId);
+      return td ? `Tap dance ${td.name}` : "Tap dance";
+    }
     case "native":
       return binding.label;
     case "transparent":

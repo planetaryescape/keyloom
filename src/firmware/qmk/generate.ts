@@ -7,6 +7,7 @@ import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { renderCombos } from "./emit-combos.ts";
 import { renderKeymaps } from "./emit-keymap.ts";
 import { macroCase, macroNames } from "./emit-macros.ts";
+import { danceEnumName, renderTapDances } from "./emit-tap-dance.ts";
 import { tappingCallbacks } from "./emit-tapping.ts";
 import { qmkRevision } from "./board-config.ts";
 import { GenerateError } from "./generate-error.ts";
@@ -88,10 +89,16 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   const ctx: EmitContext = {
     layerIndex: new Map(layout.layers.map((l, i) => [l.id, i])),
     macroNames: macroNames(layout.macros),
+    tapDanceNames: new Map(layout.tapDances.map((t, i) => [t.id, danceEnumName(i)])),
   };
   const zsa = board.vendor === "ZSA";
 
   const keymapC = passthroughIn(layout, "keymap.c");
+  // Oryx tap dance code that couldn't be read stays as written, and it already owns DANCE_n and tap_dance_actions[].
+  if (layout.tapDances.length > 0 && keymapC.some((p) => p.anchor.startsWith("tap-dance"))) {
+    throw new GenerateError("keymap.c keeps tap dance code from Oryx that keyloom couldn't read, so keyloom can't add tap dances beside it");
+  }
+  const dances = renderTapDances(layout.tapDances, layout.macros, ctx);
   const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes");
   const cases = keymapC.filter((p) => p.anchor.startsWith("process_record_user:"));
   const rest = keymapC.filter((p) => !before.includes(p) && !cases.includes(p));
@@ -102,7 +109,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   const passthroughC = keymapC.map((p) => p.source).join("\n");
 
   const combos = renderCombos(layout, ctx, passthroughC);
-  const tapping = tappingCallbacks(layout, (b) => bindingToC(b, ctx));
+  const tapping = tappingCallbacks(layout, (b) => bindingToC(b, ctx), (id) => `TD(${ctx.tapDanceNames.get(id)})`);
 
   // Custom keycodes: ZSA's own RGB_SLD comes first, as Oryx writes it, then one per macro.
   const names = layout.macros.map((m) => ctx.macroNames.get(m.id) as string);
@@ -113,11 +120,13 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     c.push("#define MOON_LED_LEVEL LED_LEVEL", "#ifndef ZSA_SAFE_RANGE", "#define ZSA_SAFE_RANGE SAFE_RANGE", "#endif");
   }
   if (enumEntries.length > 0) c.push("", `enum custom_keycodes {\n${enumEntries.map((e) => `  ${e},`).join("\n")}\n};`);
+  if (dances) c.push("", dances.codes);
   for (const p of before) c.push("", p.source);
   c.push("", renderKeymaps(layout, board, rev.build.layoutMacro, ctx));
   for (const p of beforeCombos) c.push("", p.source);
   if (combos.source) c.push("", combos.source);
   for (const p of afterCombos) c.push("", p.source);
+  if (dances) c.push("", dances.code);
   if (tapping.functions.length > 0) c.push("", ...tapping.functions.flatMap((f, i) => (i === 0 ? [f] : ["", f])));
 
   const macroCases = layout.macros.map((m) => macroCase(ctx.macroNames.get(m.id) as string, m));
@@ -152,7 +161,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     { path: "config.h", content: `${h.join("\n")}\n` },
   ];
 
-  const rules = rulesMk(layout, combos.count, marker !== undefined);
+  const rules = rulesMk(layout, combos.count, layout.tapDances.length > 0, marker !== undefined);
   if (rules) files.push({ path: "rules.mk", content: rules });
 
   const keymapJson = passthroughIn(layout, "keymap.json")[0]?.source ?? (rev.build.modules ? `${JSON.stringify({ modules: rev.build.modules }, null, 4)}\n` : undefined);
@@ -161,6 +170,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   return { keymapName: KEYMAP_NAME, files, ...(marker !== undefined ? { requiredSymbols: [WRAPPER_SYMBOL] } : {}) };
 }
 
+const TAP_DANCE_YES = /^\s*TAP_DANCE_ENABLE\s*[:?]?=\s*yes\b/m;
 const COMBO_YES = /^\s*COMBO_ENABLE\s*[:?]?=\s*yes\b/m;
 
 /**
@@ -168,12 +178,18 @@ const COMBO_YES = /^\s*COMBO_ENABLE\s*[:?]?=\s*yes\b/m;
  * are on: with COMBO_ENABLE and no key_combos[] the link fails, and with combos and no COMBO_ENABLE
  * they are silently dead. make takes the last assignment, so a correction is appended.
  */
-function rulesMk(layout: Layout, comboCount: number, handsFree: boolean): string | undefined {
+function rulesMk(layout: Layout, comboCount: number, hasTapDances: boolean, handsFree: boolean): string | undefined {
   const source = passthroughIn(layout, "rules.mk")[0]?.source;
   let text = source === undefined ? "" : source.endsWith("\n") || source === "" ? source : `${source}\n`;
   const on = COMBO_YES.test(text);
   if (comboCount > 0 && !on) text += "COMBO_ENABLE = yes\n";
   if (comboCount === 0 && on) text += "# keyloom: the layout has no combos, and COMBO_ENABLE needs a key_combos[]\nCOMBO_ENABLE = no\n";
+  // Same trap as combos: TAP_DANCE_ENABLE without tap_dance_actions[] doesn't link, and TD() keys do nothing without it.
+  // Oryx code kept as passthrough supplies its own tap_dance_actions[], so that case is left alone.
+  const keepsOryxDances = layout.passthrough.some((p) => p.firmware === "qmk" && p.file === "keymap.c" && p.anchor.startsWith("tap-dance"));
+  const dancesOn = TAP_DANCE_YES.test(text);
+  if (hasTapDances && !dancesOn) text += "TAP_DANCE_ENABLE = yes\n";
+  if (!hasTapDances && !keepsOryxDances && dancesOn) text += "# keyloom: the layout has no tap dances, and TAP_DANCE_ENABLE needs a tap_dance_actions[]\nTAP_DANCE_ENABLE = no\n";
   if (handsFree) text += `# keyloom: route raw_hid_receive through the bootloader command (handsfree.ts)\n${WRAP_LINK_FLAG}\n${NO_LTO}\n`;
   return text === "" ? undefined : text;
 }

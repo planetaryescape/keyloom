@@ -40,6 +40,8 @@ function touchesOf(op: ChangeOp, base: Layout): Touch[] {
     case "renameLayer": return [nameTouch(op.layerId)];
     case "upsertMacro": return [itemTouch("macro", op.macro.id, (d) => d.macros.find((m) => m.id === op.macro.id))];
     case "removeMacro": return [itemTouch("macro", op.macroId, (d) => d.macros.find((m) => m.id === op.macroId))];
+    case "upsertTapDance": return [itemTouch("tap dance", op.tapDance.id, (d) => d.tapDances.find((t) => t.id === op.tapDance.id))];
+    case "removeTapDance": return [itemTouch("tap dance", op.tapDanceId, (d) => d.tapDances.find((t) => t.id === op.tapDanceId))];
     case "upsertCombo": return [itemTouch("combo", op.combo.id, (d) => d.combos.find((c) => c.id === op.combo.id))];
     case "removeCombo": return [itemTouch("combo", op.comboId, (d) => d.combos.find((c) => c.id === op.comboId))];
     case "upsertHoldTapProfile":

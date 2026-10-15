@@ -14,6 +14,8 @@ export function opLine(op: ChangeOp): string {
     case "renameLayer": return `rename layer ${op.layerId} to "${op.name}"`;
     case "upsertMacro": return `set macro ${op.macro.id}`;
     case "removeMacro": return `remove macro ${op.macroId}`;
+    case "upsertTapDance": return `set tap dance ${op.tapDance.id}`;
+    case "removeTapDance": return `remove tap dance ${op.tapDanceId}`;
     case "upsertCombo": return `set combo ${op.combo.id}`;
     case "removeCombo": return `remove combo ${op.comboId}`;
     case "upsertHoldTapProfile": return `set hold-tap profile ${op.profile.id}`;

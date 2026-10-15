@@ -9,6 +9,8 @@ import { type MapContext, PROFILE_HOME_ROW, PROFILE_LAYER_TAP, PROFILE_MOD_TAP, 
 import type { Expr } from "./c-parse.ts";
 import { PASSTHROUGH_DEFINES, parseDefines, settingsFrom, tapHoldOptions } from "./config-h.ts";
 import { type ParsedKeymap, parseKeymapC } from "./keymap-c.ts";
+import { macroNames } from "./emit-macros.ts";
+import { importTapDances } from "./import-tap-dance.ts";
 import { macroFor, parseMacroCase } from "./send-string.ts";
 import { ImportError, type SourceFiles, readOryxSource } from "./source.ts";
 
@@ -40,7 +42,7 @@ function canon(e: Expr): string {
 }
 
 const emptyCounts = (): ImportReport["bindings"] => ({
-  key: 0, modifier: 0, holdTap: 0, layer: 0, macro: 0, transparent: 0, none: 0, native: 0,
+  key: 0, modifier: 0, holdTap: 0, layer: 0, macro: 0, tapDance: 0, transparent: 0, none: 0, native: 0,
 });
 
 const PROFILE_NAMES: Array<[string, string]> = [
@@ -74,6 +76,9 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     macroIds,
     customKeycodes: new Set(parsed.customKeycodes.keys()),
   };
+  const danceRead = importTapDances(parsed.chunks, { layerIds, macros, macroNames: macroNames(macros), keyCtx: ctx });
+  warnings.push(...danceRead.warnings);
+  const tapDanceCtx: MapContext = { ...ctx, tapDanceIds: new Map(danceRead.tapDances.map((t, i) => [`DANCE_${i}`, t.id])) };
 
   const counts = emptyCounts();
   const native: NativeItem[] = [];
@@ -82,7 +87,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     id: layerIds[li] as string,
     name: `Layer ${li}`,
     bindings: args.map((expr, position) => {
-      const mapped = mapKey(expr, position, ctx);
+      const mapped = mapKey(expr, position, tapDanceCtx);
       counts[mapped.binding.kind]++;
       if (mapped.profileId) profilesUsed.add(mapped.profileId);
       if (mapped.binding.kind === "native") {
@@ -100,10 +105,10 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     id, name, firmware: "qmk", options: { ...profileOptions },
   }));
 
-  const combos = importCombos(parsed, parsed.layers[0] ?? [], ctx, warnings);
+  const combos = importCombos(parsed, parsed.layers[0] ?? [], tapDanceCtx, warnings);
 
   const passthrough: Passthrough[] = [
-    ...parsed.chunks.map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),
+    ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),
     ...parsed.cases
       .filter((c) => !consumedCases.has(c.label))
       .map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: `process_record_user:${c.label}`, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),
@@ -118,6 +123,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     firmware: "qmk",
     layers,
     macros,
+    tapDances: danceRead.tapDances,
     combos,
     holdTapProfiles,
     settings,
@@ -133,6 +139,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
       keysPerLayer: board.keyCount,
       bindings: counts,
       macros: macros.map((m) => m.name),
+      tapDances: danceRead.tapDances.map((t) => t.name),
       combos: combos.length,
       settings: settings.length,
       profiles: holdTapProfiles.map((p) => p.id),

@@ -17,6 +17,7 @@ const file = (l: Layout, name: string) => gen(l).files.find((f) => f.path === na
 const ctx = {
   layerIndex: new Map([["layer-0", 0], ["layer-1", 1], ["layer-20", 20]]),
   macroNames: new Map([["m", "ST_MACRO_7"]]),
+  tapDanceNames: new Map([["td", "DANCE_0"]]),
 };
 const c = (b: Binding) => bindingToC(b, ctx);
 
@@ -214,8 +215,8 @@ describe("combos", () => {
 
   test("COMBO_ENABLE follows the combos: added when missing, switched off when the last combo goes", () => {
     const noRules = { ...layout, passthrough: layout.passthrough.filter((p) => p.file !== "rules.mk") };
-    expect(file(withCombos([combo({})], noRules), "rules.mk")).toBe("COMBO_ENABLE = yes\n");
-    expect(file(withCombos([], noRules), "rules.mk")).toBe("");
+    expect(file(withCombos([combo({})], noRules), "rules.mk")).toBe("COMBO_ENABLE = yes\nTAP_DANCE_ENABLE = yes\n");
+    expect(file(withCombos([], noRules), "rules.mk")).toBe("TAP_DANCE_ENABLE = yes\n");
     const none = file(withCombos([]), "rules.mk");
     expect(none.startsWith(layout.passthrough.find((p) => p.file === "rules.mk")?.source as string)).toBe(true);
     expect(none.trimEnd().endsWith("COMBO_ENABLE = no")).toBe(true);

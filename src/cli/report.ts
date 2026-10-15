@@ -8,7 +8,7 @@ export function importTable(o: ImportOutcome): string {
     o.layoutId,
     `imported "${o.name}" for ${r.boardId}: ${r.layers} layers x ${r.keysPerLayer} keys (revision ${o.revisionId})`,
     `bindings: ${kinds}`,
-    `macros: ${r.macros.join(", ") || "none"}; combos: ${r.combos}; settings: ${r.settings}; profiles: ${r.profiles.join(", ") || "none"}`,
+    `macros: ${r.macros.join(", ") || "none"}; tap dances: ${r.tapDances.join(", ") || "none"}; combos: ${r.combos}; settings: ${r.settings}; profiles: ${r.profiles.join(", ") || "none"}`,
   ];
 
   const groups = new Map<string, { label: string; reason: string; at: string[] }>();

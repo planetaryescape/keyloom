@@ -21,6 +21,7 @@ export function tiny(over: Partial<Layout> = {}): Layout {
       { id: "nav", name: "Nav", bindings: [key("A"), key("B"), T, key("D")] },
     ],
     macros: [{ id: "m1", name: "Macro", steps: [{ op: "tap", code: "A" }] }],
+    tapDances: [],
     combos: [{ id: "go-nav", name: "Nav", positions: [0, 1], layerIds: "all", output: { kind: "layer", action: "momentary", layerId: "nav" } }],
     holdTapProfiles: [{ id: "p", name: "P", firmware: "qmk", options: {} }],
     settings: [],

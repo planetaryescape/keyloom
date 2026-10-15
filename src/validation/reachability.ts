@@ -1,7 +1,7 @@
 // The layer graph and the function sets built on it (07#reachability). Pure analysis over one
 // document; the rules in rules.ts compare the answers for the layout before and after a change.
 import type { Slot } from "../layout/change.ts";
-import { bindingFunctions } from "../layout/functions.ts";
+import { bindingFunctions, tapDanceSlots } from "../layout/functions.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
 
 export type LayerAction = "momentary" | "toggle" | "to" | "oneShot";
@@ -74,11 +74,24 @@ function zmkLayerTarget(source: string, doc: Layout, depth = 0): { layerId: stri
   return undefined;
 }
 
-/** The layer a binding switches to, if it does. A layer-tap's hold is a momentary layer (its tap is a plain key). */
-export function layerTarget(b: Binding, doc: Layout): { layerId: string; action: LayerAction } | undefined {
+type LayerTarget = { layerId: string; action: LayerAction };
+
+/** Every layer a binding switches to. A tap dance can switch to one per slot; the other kinds switch to at most one. */
+export function layerTargets(b: Binding, doc: Layout): LayerTarget[] {
+  if (b.kind === "tapDance") {
+    const td = doc.tapDances.find((t) => t.id === b.tapDanceId);
+    return td ? tapDanceSlots(td).flatMap(([, a]) => (a.kind === "layer" ? [{ layerId: a.layerId, action: a.action }] : [])) : [];
+  }
+  const one = layerTarget(b, doc);
+  return one ? [one] : [];
+}
+
+/** The layer a binding switches to, if it does; a tap dance's first. A layer-tap's hold is a momentary layer (its tap is a plain key). */
+export function layerTarget(b: Binding, doc: Layout): LayerTarget | undefined {
   if (b.kind === "layer") return { layerId: b.layerId, action: b.action };
   if (b.kind === "holdTap" && "layerId" in b.hold) return { layerId: b.hold.layerId, action: "momentary" };
   if (b.kind === "native") return nativeLayerTarget(b, doc);
+  if (b.kind === "tapDance") return layerTargets(b, doc)[0];
   return undefined;
 }
 
@@ -97,14 +110,16 @@ export function layerGraph(doc: Layout): LayerEdge[] {
   const edges: LayerEdge[] = [];
   for (const layer of doc.layers) {
     for (const [position, b] of layer.bindings.entries()) {
-      const t = layerTarget(b, doc);
-      if (t && known.has(t.layerId)) edges.push({ from: layer.id, to: t.layerId, action: t.action, slot: { layerId: layer.id, position } });
+      for (const t of layerTargets(b, doc)) {
+        if (known.has(t.layerId)) edges.push({ from: layer.id, to: t.layerId, action: t.action, slot: { layerId: layer.id, position } });
+      }
     }
   }
   for (const combo of doc.combos) {
-    const t = layerTarget(combo.output, doc);
-    if (!t || !known.has(t.layerId)) continue;
-    for (const from of comboLayers(doc, combo.layerIds)) edges.push({ from, to: t.layerId, action: t.action, comboId: combo.id });
+    for (const t of layerTargets(combo.output, doc)) {
+      if (!known.has(t.layerId)) continue;
+      for (const from of comboLayers(doc, combo.layerIds)) edges.push({ from, to: t.layerId, action: t.action, comboId: combo.id });
+    }
   }
   return edges;
 }
@@ -163,10 +178,10 @@ export function functionHomes(doc: Layout, reachable: Set<string> = reachableLay
   };
   for (const layer of doc.layers) {
     if (!reachable.has(layer.id)) continue;
-    for (const [position, b] of layer.bindings.entries()) for (const fn of bindingFunctions(b)) add(fn, { layerId: layer.id, position });
+    for (const [position, b] of layer.bindings.entries()) for (const fn of bindingFunctions(b, doc.tapDances)) add(fn, { layerId: layer.id, position });
   }
   for (const combo of doc.combos) {
-    if (comboLayers(doc, combo.layerIds).some((id) => reachable.has(id))) for (const fn of bindingFunctions(combo.output)) add(fn);
+    if (comboLayers(doc, combo.layerIds).some((id) => reachable.has(id))) for (const fn of bindingFunctions(combo.output, doc.tapDances)) add(fn);
   }
   return homes;
 }
@@ -202,8 +217,8 @@ export function displacedFunctions(before: Layout, after: Layout, changed: Slot[
     const was = before.layers.find((l) => l.id === from.layerId)?.bindings[from.position];
     const now = after.layers.find((l) => l.id === from.layerId)?.bindings[from.position];
     if (!was) continue;
-    const kept = now ? bindingFunctions(now) : [];
-    for (const fn of bindingFunctions(was)) {
+    const kept = now ? bindingFunctions(now, after.tapDances) : [];
+    for (const fn of bindingFunctions(was, before.tapDances)) {
       if (kept.includes(fn) || !beforeHomes.has(fn)) continue;
       const homes = (afterHomes.get(fn) ?? []).filter((s) => slotKey(s) !== slotKey(from));
       out.push({ function: fn, from, to: homes.find((s) => changedKeys.has(slotKey(s))) ?? homes[0] ?? null });
@@ -226,8 +241,8 @@ export function trappedLayers(doc: Layout, edges: LayerEdge[] = layerGraph(doc),
   const base = baseId(doc);
   const exits = new Map<string, { layerId: string; action: LayerAction }[]>();
   const note = (layerId: string, b: Binding | undefined) => {
-    const t = b && layerTarget(b, doc);
-    if (t) exits.set(layerId, [...(exits.get(layerId) ?? []), t]);
+    const targets = b ? layerTargets(b, doc) : [];
+    if (targets.length > 0) exits.set(layerId, [...(exits.get(layerId) ?? []), ...targets]);
   };
   for (const [index, layer] of doc.layers.entries()) {
     for (let position = 0; position < layer.bindings.length; position++) note(layer.id, resolveBinding(doc, index, position));

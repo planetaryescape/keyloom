@@ -64,7 +64,7 @@ describe("mirrorBinding", () => {
 
 const layoutWith = (profiles: Layout["holdTapProfiles"]): Layout => ({
   schemaVersion: 1, boardId: "x/y", firmware: "zmk", layers: [{ id: "layer-0", name: "L0", bindings: [] }],
-  macros: [], combos: [], holdTapProfiles: profiles, settings: [], passthrough: [],
+  macros: [], tapDances: [], combos: [], holdTapProfiles: profiles, settings: [], passthrough: [],
 });
 const partners = new Map([[0, 5], [1, 4], [2, 3], [5, 0], [4, 1], [3, 2]]);
 const left = { id: "hrm-left", name: "Home row left", firmware: "zmk" as const, options: { flavor: "balanced", "tapping-term-ms": 200, "hold-trigger-key-positions": [3, 4, 5] } };

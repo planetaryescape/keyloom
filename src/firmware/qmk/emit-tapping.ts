@@ -24,6 +24,8 @@ export function tappingCallbacks(
   layout: Layout,
   /** The keymap expression for a binding; callbacks match keys by it. */
   exprOf: (b: Binding) => string,
+  /** The keycode a tap dance has, `TD(DANCE_0)`; QMK asks get_tapping_term for it while the dance waits for another tap. */
+  danceExpr: (tapDanceId: string) => string,
 ): Tapping {
   const profiles = new Map<string, HoldTapProfile>(layout.holdTapProfiles.filter((p) => p.firmware === "qmk").map((p) => [p.id, p]));
   const globals = new Map(layout.settings.filter((s) => s.firmware === "qmk").map((s) => [s.key, s.value]));
@@ -57,6 +59,13 @@ export function tappingCallbacks(
         overrides.set(key, byExpr);
       }
     }
+  }
+
+  for (const td of layout.tapDances) {
+    if (td.termMs === undefined) continue;
+    const byExpr = overrides.get("TAPPING_TERM") ?? new Map<string, boolean | number>();
+    byExpr.set(danceExpr(td.id), td.termMs);
+    overrides.set("TAPPING_TERM", byExpr);
   }
 
   const out: Tapping = { defines: [], functions: [] };

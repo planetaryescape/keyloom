@@ -3,6 +3,7 @@
 // round-trips; steps it can't read (press/release) are still valid C and import as native.
 import { type KeyCode, isKeyCode, qmkName } from "../../layout/keycodes.ts";
 import type { Macro, MacroStep, Mod } from "../../layout/schema.ts";
+import { textKeys } from "../../layout/text-keys.ts";
 import { GenerateError } from "./generate-error.ts";
 
 const MOD_ORDER: readonly Mod[] = ["LCTL", "LSFT", "LALT", "LGUI", "RCTL", "RSFT", "RALT", "RGUI"];
@@ -24,8 +25,17 @@ function xName(code: string): string {
 const xMod = (m: Mod): string => xName(MOD_KEY[m]);
 const sorted = (mods: readonly Mod[] | undefined): Mod[] => MOD_ORDER.filter((m) => mods?.includes(m));
 
+/** A C string literal for text SEND_STRING types. It escapes only what a literal needs; the shifts are SEND_STRING's own. */
+export function textLiteral(text: string): string {
+  const typed = textKeys(text);
+  if (!typed.ok) throw new GenerateError(`"${typed.char}" can't be typed by a text step; keyloom types US-layout letters, digits and punctuation`);
+  const escaped = [...text].map((ch) => ({ "\\": "\\\\", '"': '\\"', "\n": "\\n", "\t": "\\t" })[ch] ?? ch).join("");
+  return `"${escaped}"`;
+}
+
 function stepToC(step: MacroStep): string {
   if (step.op === "waitMs") return `SS_DELAY(${step.ms})`;
+  if (step.op === "text") return textLiteral(step.text);
   const mods = sorted(step.mods);
   if (!step.code && mods.length === 0) throw new GenerateError(`a ${step.op} step needs a key or modifiers`);
   if (step.op === "tap") {
@@ -40,15 +50,19 @@ function stepToC(step: MacroStep): string {
   return (step.op === "press" ? parts : parts.reverse()).join(" ");
 }
 
-/** The `case` block for one macro, written the way Oryx writes it. */
-export function macroCase(cName: string, macro: Macro): string {
-  let body: string;
+/** The argument of SEND_STRING that types the macro. */
+export function macroBody(macro: Macro): string {
   try {
-    body = macro.steps.map(stepToC).join(" ");
+    return macro.steps.map(stepToC).join(" ");
   } catch (err) {
     if (err instanceof GenerateError) throw new GenerateError(`macro "${macro.name}": ${err.message}`);
     throw err;
   }
+}
+
+/** The `case` block for one macro, written the way Oryx writes it. */
+export function macroCase(cName: string, macro: Macro): string {
+  const body = macroBody(macro);
   return `    case ${cName}:\n    if (record->event.pressed) {\n      SEND_STRING(${body});\n    }\n    break;`;
 }
 

@@ -42,6 +42,7 @@ export const BindingSchema = z.discriminatedUnion("kind", [
     layerId: z.string().min(1),
   }),
   z.object({ kind: z.literal("macro"), macroId: z.string().min(1) }),
+  z.object({ kind: z.literal("tapDance"), tapDanceId: z.string().min(1) }),
   z.object({ kind: z.literal("transparent") }),
   z.object({ kind: z.literal("none") }),
   // Escape hatch for anything keyloom doesn't model (D-024).
@@ -54,6 +55,32 @@ export const BindingSchema = z.discriminatedUnion("kind", [
 ]);
 export type Binding = z.infer<typeof BindingSchema>;
 
+// What one slot of a tap dance does (16#tap-dance-is-a-key-with-a-double-tap-slot, D-093). Nothing nests:
+// a slot can't be a hold-tap or another tap dance, so the firmware's state machine stays flat.
+export const SlotActionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("key"), code: KeyCodeNameSchema, mods: mods.optional() }),
+  z.object({ kind: z.literal("modifier"), mods }),
+  z.object({
+    kind: z.literal("layer"),
+    action: z.enum(["momentary", "toggle", "to", "oneShot"]),
+    layerId: z.string().min(1),
+  }),
+  z.object({ kind: z.literal("macro"), macroId: z.string().min(1) }),
+]);
+export type SlotAction = z.infer<typeof SlotActionSchema>;
+
+export const TapDanceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  tap: SlotActionSchema,
+  hold: SlotActionSchema.optional(),
+  doubleTap: SlotActionSchema.optional(),
+  tapThenHold: SlotActionSchema.optional(),
+  // Falls back to the firmware's tapping term.
+  termMs: z.number().int().positive().optional(),
+});
+export type TapDance = z.infer<typeof TapDanceSchema>;
+
 export const LayerSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
   name: z.string().min(1),
@@ -64,6 +91,8 @@ export type Layer = z.infer<typeof LayerSchema>;
 export const MacroStepSchema = z.union([
   z.object({ op: z.enum(["tap", "press", "release"]), code: KeyCodeNameSchema.optional(), mods: mods.optional() }),
   z.object({ op: z.literal("waitMs"), ms: z.number().int().nonnegative() }),
+  // Typed as written; the generators add Shift where a character needs it.
+  z.object({ op: z.literal("text"), text: z.string().min(1) }),
 ]);
 export type MacroStep = z.infer<typeof MacroStepSchema>;
 
@@ -115,6 +144,8 @@ export const LayoutSchema = z.object({
   firmware: FirmwareSchema,
   layers: z.array(LayerSchema).min(1),
   macros: z.array(MacroSchema),
+  // Documents stored before rung 14 have no tapDances; reading one gives [] and the next save writes it.
+  tapDances: z.array(TapDanceSchema).default([]),
   combos: z.array(ComboSchema),
   holdTapProfiles: z.array(HoldTapProfileSchema),
   settings: z.array(FirmwareSettingSchema),

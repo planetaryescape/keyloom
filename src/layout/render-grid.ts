@@ -1,7 +1,7 @@
 // Plain-text grids of a layout, placed by the board's physical rows (10-cli.md). Pure, so the
 // CLI and, later, the agent's get_layout tool print the same text.
 import { KEYCODES, type KeyCodeInfo } from "./keycodes.ts";
-import type { Binding, Layer, Macro, Mod } from "./schema.ts";
+import type { Binding, Layer, Macro, Mod, SlotAction, TapDance } from "./schema.ts";
 
 /** Structural, so this module needs nothing from src/boards. */
 export type GridKey = { x: number; y: number; w: number; h: number; r?: number; rx?: number; ry?: number };
@@ -26,6 +26,8 @@ export function placedKey(key: GridKey): GridKey {
 export type GridContext = {
   layers: readonly Pick<Layer, "id" | "name">[];
   macros: readonly Pick<Macro, "id">[];
+  /** Needed to number a tap dance key; without it one reads "TD?". */
+  tapDances?: readonly TapDance[];
 };
 
 const MOD_SYMBOL: Record<Mod, string> = {
@@ -67,6 +69,34 @@ function layerRef(id: string, ctx: GridContext): string {
   return i < 0 ? id : String(i);
 }
 
+const LAYER_PREFIX = { momentary: "MO", toggle: "TG", to: "TO", oneShot: "OSL" } as const;
+
+/** Short text for what one tap dance slot does. */
+export function slotLabel(a: SlotAction, ctx: GridContext): string {
+  switch (a.kind) {
+    case "key": return tapText(a.code, a.mods);
+    case "modifier": return modsText(a.mods);
+    case "layer": return `${LAYER_PREFIX[a.action]}${layerRef(a.layerId, ctx)}`;
+    case "macro": {
+      const i = ctx.macros.findIndex((m) => m.id === a.macroId);
+      return i < 0 ? "M?" : `M${i}`;
+    }
+  }
+}
+
+/** One line per tap dance, for under the grids: `TD0  Esc tap, Caps Lock double-tap`. */
+export function tapDanceLegend(tapDances: readonly TapDance[], ctx: GridContext): string[] {
+  return tapDances.map((td, i) => {
+    const slots = [
+      `${slotLabel(td.tap, ctx)} tap`,
+      td.hold ? `${slotLabel(td.hold, ctx)} hold` : "",
+      td.doubleTap ? `${slotLabel(td.doubleTap, ctx)} double-tap` : "",
+      td.tapThenHold ? `${slotLabel(td.tapThenHold, ctx)} tap then hold` : "",
+    ].filter((t) => t !== "");
+    return `TD${i}  ${td.name}: ${slots.join(", ")}${td.termMs === undefined ? "" : `, term ${td.termMs} ms`}`;
+  });
+}
+
 /** Short cell text for a binding. Full detail is in the JSON form. */
 export function bindingLabel(b: Binding, ctx: GridContext): string {
   switch (b.kind) {
@@ -80,8 +110,11 @@ export function bindingLabel(b: Binding, ctx: GridContext): string {
       return `${tap}/${hold}`;
     }
     case "layer": {
-      const prefix = { momentary: "MO", toggle: "TG", to: "TO", oneShot: "OSL" }[b.action];
-      return `${prefix}${layerRef(b.layerId, ctx)}`;
+      return `${LAYER_PREFIX[b.action]}${layerRef(b.layerId, ctx)}`;
+    }
+    case "tapDance": {
+      const i = ctx.tapDances?.findIndex((t) => t.id === b.tapDanceId) ?? -1;
+      return i < 0 ? "TD?" : `TD${i}`;
     }
     case "macro": {
       const i = ctx.macros.findIndex((m) => m.id === b.macroId);
@@ -162,13 +195,14 @@ const layerHeading = (layer: Pick<Layer, "id" | "name">, index: number): string 
 /** Every layer, or one when `onlyLayerId` is given, each under a heading. */
 export function renderLayout(
   geometry: readonly GridKey[],
-  layout: { layers: readonly Layer[]; macros: readonly Pick<Macro, "id">[] },
+  layout: { layers: readonly Layer[]; macros: readonly Pick<Macro, "id">[]; tapDances?: readonly TapDance[] },
   opts: GridOptions & { onlyLayerId?: string } = {},
 ): string {
-  const ctx: GridContext = { layers: layout.layers, macros: layout.macros };
+  const ctx: GridContext = { layers: layout.layers, macros: layout.macros, ...(layout.tapDances ? { tapDances: layout.tapDances } : {}) };
   return layout.layers
     .map((layer, i) => ({ layer, i }))
     .filter(({ layer }) => opts.onlyLayerId === undefined || layer.id === opts.onlyLayerId)
     .map(({ layer, i }) => [layerHeading(layer, i), ...renderLayerGrid(geometry, layer, ctx, opts)].join("\n"))
+    .concat(layout.tapDances?.length ? [["Tap dances:", ...tapDanceLegend(layout.tapDances, ctx).map((l) => `  ${l}`)].join("\n")] : [])
     .join("\n\n");
 }

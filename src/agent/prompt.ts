@@ -120,7 +120,7 @@ export function assembleSystemPrompt(
 export function userMessageText(text: string, selection: Selection | undefined, document: Layout): string {
   if (!selection) return text;
   const layer = document.layers.find((l) => l.id === selection.layerId);
-  const ctx = { layers: document.layers, macros: document.macros };
+  const ctx = { layers: document.layers, macros: document.macros, tapDances: document.tapDances };
   const keys = selection.positions.map((p) => {
     const binding = layer?.bindings[p];
     return `key ${p + 1} (position ${p}) ${binding ? bindingLabel(binding, ctx) : "?"}`;

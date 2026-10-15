@@ -68,11 +68,16 @@ describe("BK's real Oryx export", () => {
     expect(layout.layers[0]?.bindings[71]).toEqual({ kind: "layer", action: "oneShot", layerId: "layer-1" }); // OSL(1)
   });
 
-  test("DUAL_FUNC_0 and TD() are native with their source kept", () => {
+  test("DUAL_FUNC_0 is native with its source kept, and TD() are tap dances", () => {
     const base = layout.layers[0]?.bindings;
+    // DF0 is not a tap dance: its hold is layer_move(5), a switch that stays, which no hold-tap or slot action means.
     expect(base?.[7]).toMatchObject({ kind: "native", firmware: "qmk", source: "DUAL_FUNC_0" });
-    expect(base?.[34]).toMatchObject({ kind: "native", source: "TD(DANCE_0)" });
-    expect(base?.[35]).toMatchObject({ kind: "native", source: "TD(DANCE_1)" });
+    expect(base?.[34]).toEqual({ kind: "tapDance", tapDanceId: "dance-0" });
+    expect(base?.[35]).toEqual({ kind: "tapDance", tapDanceId: "dance-1" });
+    expect(layout.tapDances).toEqual([
+      { id: "dance-0", name: "Tap dance 0", tap: { kind: "key", code: "SPACE", mods: ["LCTL", "LSFT", "LALT", "LGUI"] }, doubleTap: { kind: "key", code: "LEFT_BRACKET" } },
+      { id: "dance-1", name: "Tap dance 1", tap: { kind: "key", code: "SPACE", mods: ["LALT"] }, doubleTap: { kind: "key", code: "RIGHT_BRACKET" } },
+    ]);
     expect(base?.[57]).toMatchObject({ kind: "native", source: "OSM(MOD_LSFT)" });
   });
 
@@ -137,8 +142,9 @@ describe("BK's real Oryx export", () => {
     expect(flag("keymap.c:rgb")).toBe(true); // ledmap[], case 1:, set_layer_color(1)
     expect(flag("keymap.c:define:DUAL_FUNC_0")).toBe(true); // LT(5, KC_4)
     expect(flag("keymap.c:process_record_user:DUAL_FUNC_0")).toBe(true); // layer_move(5)
-    expect(flag("keymap.c:tap-dance")).toBe(false);
-    expect(flag("keymap.c:tap-dance-codes")).toBe(false);
+    // The tap dance code is modelled, so it is not also kept as source.
+    expect(byAnchor.has("keymap.c:tap-dance")).toBe(false);
+    expect(byAnchor.has("keymap.c:tap-dance-codes")).toBe(false);
     expect(flag("keymap.c:chordal-hold-layout")).toBe(false);
     expect(flag("keymap.c:process_record_user:RGB_SLD")).toBe(false);
     expect(flag("config.h:define:SERIAL_NUMBER")).toBe(false);
@@ -151,11 +157,6 @@ describe("BK's real Oryx export", () => {
   });
 
   test("passthrough source is verbatim", () => {
-    const dance = layout.passthrough.find((p) => p.anchor === "tap-dance");
-    expect(dance?.source.startsWith("typedef struct {")).toBe(true);
-    expect(dance?.source.endsWith("};")).toBe(true);
-    const codes = layout.passthrough.find((p) => p.anchor === "tap-dance-codes");
-    expect(codes?.source).toBe("enum tap_dance_codes {\n  DANCE_0,\n  DANCE_1,\n};");
     const chordal = layout.passthrough.find((p) => p.anchor === "chordal-hold-layout");
     expect(chordal?.source).toContain("PROGMEM");
     expect(chordal?.source).toMatch(/\);$/);
@@ -220,7 +221,7 @@ describe("agreement with Oryx's own decoding (GraphQL oracle)", () => {
     expect(mismatches).toEqual([]);
   });
 
-  test("the keys outside the model (DUAL_FUNC_0, TD) match Oryx's decoding of the code kept as source", async () => {
+  test("DUAL_FUNC_0, outside the model, matches Oryx's decoding of the code kept as source", async () => {
     const oracle = await loadOracle();
     const at = (position: number) => oracle[0]?.keys[oryxOrder.indexOf(position)];
     // DUAL_FUNC_0: Oryx shows tap F5 / hold TO(5); the kept case sends F5 on tap and layer_move(5) on hold.
@@ -229,13 +230,16 @@ describe("agreement with Oryx's own decoding (GraphQL oracle)", () => {
     const duel = layout.passthrough.find((p) => p.anchor === "process_record_user:DUAL_FUNC_0")?.source ?? "";
     expect(duel).toContain("register_code16(KC_F5)");
     expect(duel).toContain("layer_move(5)");
+  });
+
+  test("Oryx's decoding of the two tap dances is the model's tap and double-tap slots", async () => {
+    const oracle = await loadOracle();
+    const at = (position: number) => oracle[0]?.keys[oryxOrder.indexOf(position)];
     // TD(DANCE_0): Oryx shows tap Hyper+Space / double tap [; TD(DANCE_1): Alt+Space / ].
     expect(at(34)?.doubleTap?.code).toBe("KC_LBRC");
     expect(at(35)?.doubleTap?.code).toBe("KC_RBRC");
-    const dance = layout.passthrough.find((p) => p.anchor === "tap-dance")?.source ?? "";
-    expect(dance).toContain("case SINGLE_TAP: register_code16(LALT(LCTL(LGUI(LSFT(KC_SPACE)))))");
-    expect(dance).toContain("case DOUBLE_TAP: register_code16(KC_LBRC)");
-    expect(dance).toContain("case DOUBLE_TAP: register_code16(KC_RBRC)");
+    expect(at(34)?.hold).toBeNull();
+    expect(at(34)?.tapHold).toBeNull();
   });
 });
 
@@ -345,11 +349,18 @@ describe("tolerance and failure", () => {
 
   test("a macro outside Oryx's pattern stays native and its case stays in passthrough", async () => {
     const files = await base();
-    const keymapC = files.keymapC.replace("SEND_STRING(SS_LGUI(SS_LSFT(SS_TAP(X_4))));", 'SEND_STRING("hello");');
+    const keymapC = files.keymapC.replace("SEND_STRING(SS_LGUI(SS_LSFT(SS_TAP(X_4))));", 'SEND_STRING(SS_DOWN(X_A));');
     const r = await importQmkSource({ ...files, keymapC }, board.definition);
     expect(r.layout.macros.map((m) => m.name)).toEqual(["ST_MACRO_1", "ST_MACRO_2", "ST_MACRO_3"]);
     expect(r.layout.layers[0]?.bindings[56]).toMatchObject({ kind: "native", source: "ST_MACRO_0" });
-    expect(r.layout.passthrough.some((p) => p.anchor === "process_record_user:ST_MACRO_0" && p.source.includes('"hello"'))).toBe(true);
+    expect(r.layout.passthrough.some((p) => p.anchor === "process_record_user:ST_MACRO_0" && p.source.includes("SS_DOWN(X_A)"))).toBe(true);
+  });
+
+  test("a macro that types a string imports as a text step", async () => {
+    const files = await base();
+    const keymapC = files.keymapC.replace("SEND_STRING(SS_LGUI(SS_LSFT(SS_TAP(X_4))));", 'SEND_STRING("Hi \\"you\\"\\n" SS_DELAY(50) SS_TAP(X_A));');
+    const r = await importQmkSource({ ...files, keymapC }, board.definition);
+    expect(r.layout.macros[0]?.steps).toEqual([{ op: "text", text: 'Hi "you"\n' }, { op: "waitMs", ms: 50 }, { op: "tap", code: "A" }]);
   });
 
   test("a combo whose key is on no base-layer position is reported and skipped", async () => {
@@ -373,7 +384,8 @@ describe("tolerance and failure", () => {
     const keymapC = files.keymapC.replace("enum custom_keycodes", "// mäkro naïve 日本語\nenum custom_keycodes");
     const r = await importQmkSource({ ...files, keymapC }, board.definition);
     expect(r.layout.passthrough.find((p) => p.anchor === "chordal-hold-layout")?.source.startsWith("const char chordal_hold_layout")).toBe(true);
-    expect(r.layout.passthrough.find((p) => p.anchor === "tap-dance-codes")?.source.startsWith("enum tap_dance_codes")).toBe(true);
+    expect(r.layout.passthrough.find((p) => p.anchor === "rgb")?.source.length).toBeGreaterThan(100);
+    expect(r.layout.tapDances).toHaveLength(2);
   });
 
   test("an unreferenced custom #define is not kept", async () => {

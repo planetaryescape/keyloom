@@ -7,7 +7,7 @@ import type { Layout, Passthrough } from "../../layout/schema.ts";
 import { BUILTIN_PROFILES } from "./builtins.ts";
 import { settingLine } from "./conf.ts";
 import { type EmitContext, labelOf } from "./emit-binding.ts";
-import { comboNodeName, renderBuiltinOverride, renderCombo, renderMacro, renderProfile } from "./emit-behaviors.ts";
+import { comboNodeName, renderBuiltinOverride, renderCombo, renderMacro, renderProfile, renderTapDance } from "./emit-behaviors.ts";
 import { renderLayers } from "./emit-keymap.ts";
 import { handsFreeConf } from "./handsfree.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
@@ -64,6 +64,12 @@ function checkLabels(layout: Layout): void {
   };
   for (const p of layout.holdTapProfiles) if (!BUILTIN_PROFILES.has(p.id)) claim(p.id, "the hold-tap");
   for (const m of layout.macros) claim(m.id, "the macro");
+  for (const t of layout.tapDances) {
+    claim(t.id, "the tap dance");
+    // The hold-taps written for its hold slots take names from the same label.
+    if (t.hold) claim(`${t.id}_hold`, "its hold-tap");
+    if (t.tapThenHold) claim(`${t.id}_tap_hold`, "its hold-tap");
+  }
 }
 
 export function generateZmkSource(input: GenerateInput): GeneratedSource {
@@ -88,6 +94,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     layerIndex: new Map(layout.layers.map((l, i) => [l.id, i])),
     profileLabels: new Map(layout.holdTapProfiles.map((p) => [p.id, labelOf(p.id)])),
     macroLabels: new Map(layout.macros.map((m) => [m.id, labelOf(m.id)])),
+    tapDanceLabels: new Map(layout.tapDances.map((t) => [t.id, labelOf(t.id)])),
   };
 
   const kept = (section: (typeof SECTIONS)[number]) => layout.passthrough.filter((p) => p.file === KEYMAP_FILE && sectionOf(p) === section);
@@ -100,6 +107,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
 
   const behaviors = container("behaviors", [], [
     ...layout.holdTapProfiles.filter((p) => !BUILTIN_PROFILES.has(p.id)).map((p) => renderProfile(p, layerHold.has(p.id))),
+    ...layout.tapDances.map((t) => renderTapDance(t, ctx)),
     ...sources("behavior"),
   ]);
   const macros = container("macros", [], [...layout.macros.map(renderMacro), ...sources("macro")]);

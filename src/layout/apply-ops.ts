@@ -92,6 +92,8 @@ function applyOp(doc: Layout, op: ChangeOp): void {
     }
     case "upsertMacro": return upsert(doc.macros, op.macro);
     case "removeMacro": return remove(doc.macros, op.macroId, "macro");
+    case "upsertTapDance": return upsert(doc.tapDances, op.tapDance);
+    case "removeTapDance": return remove(doc.tapDances, op.tapDanceId, "tap dance");
     case "upsertCombo": return upsert(doc.combos, op.combo);
     case "removeCombo": return remove(doc.combos, op.comboId, "combo");
     case "upsertHoldTapProfile": return upsert(doc.holdTapProfiles, op.profile);

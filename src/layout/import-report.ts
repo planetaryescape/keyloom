@@ -12,6 +12,7 @@ export type ImportReport = {
   /** Bindings across all layers, by kind. */
   bindings: Record<Binding["kind"], number>;
   macros: string[];
+  tapDances: string[];
   combos: number;
   settings: number;
   profiles: string[];

@@ -20,7 +20,7 @@ function pickLayers(snapshot: LayoutSnapshot, wanted: string[] | undefined): Lay
 
 /** Position numbers beside labels, by the board's named rows, because a model counts badly in a 72-item array. */
 function positionTable(snapshot: LayoutSnapshot, layer: Layer): string {
-  const ctx = { layers: snapshot.document.layers, macros: snapshot.document.macros };
+  const ctx = { layers: snapshot.document.layers, macros: snapshot.document.macros, tapDances: snapshot.document.tapDances };
   return Object.entries(snapshot.board.definition.rows)
     .map(([row, positions]) => `${row}: ${positions.map((p) => `${p}=${cell(layer, p, ctx)}`).join(" ")}`)
     .join("\n");
@@ -57,7 +57,7 @@ export const getLayoutTool = (ports: AgentPorts) =>
     inputSchema: InputSchema,
     run: ({ layers }) => {
       const snapshot = ports.snapshot();
-      const ctx = { layers: snapshot.document.layers, macros: snapshot.document.macros };
+      const ctx = { layers: snapshot.document.layers, macros: snapshot.document.macros, tapDances: snapshot.document.tapDances };
       const chosen = pickLayers(snapshot, layers);
       const sections = chosen.map((layer) => {
         const index = snapshot.document.layers.indexOf(layer);

@@ -32,7 +32,7 @@ type Kept = { section: Section; file: string; anchor: string; source: string };
 const LAYER_REF = /&(mo|tog|to|sl|lt)\s/;
 
 const emptyCounts = (): ImportReport["bindings"] => ({
-  key: 0, modifier: 0, holdTap: 0, layer: 0, macro: 0, transparent: 0, none: 0, native: 0,
+  key: 0, modifier: 0, holdTap: 0, layer: 0, macro: 0, tapDance: 0, transparent: 0, none: 0, native: 0,
 });
 
 export async function importZmkSource(path: string, board: BoardDefinition): Promise<ZmkImportResult> {
@@ -199,6 +199,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
     firmware: "zmk",
     layers,
     macros,
+    tapDances: [],
     combos,
     holdTapProfiles,
     settings: conf.settings,
@@ -214,6 +215,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
       keysPerLayer: board.keyCount,
       bindings: counts,
       macros: macros.map((m) => m.name),
+      tapDances: [],
       combos: combos.length,
       settings: conf.settings.length,
       profiles: holdTapProfiles.map((p) => p.id),

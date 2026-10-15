@@ -9,6 +9,8 @@ export type EmitContext = {
   layerIndex: ReadonlyMap<string, number>;
   /** Macro ID to the `ST_MACRO_n` name its case in process_record_user uses. */
   macroNames: ReadonlyMap<string, string>;
+  /** Tap dance ID to the `DANCE_n` name its entry in tap_dance_actions[] has. */
+  tapDanceNames: ReadonlyMap<string, string>;
 };
 
 export const MOD_ORDER: readonly Mod[] = ["LCTL", "LSFT", "LALT", "LGUI", "RCTL", "RSFT", "RALT", "RGUI"];
@@ -90,6 +92,11 @@ export function bindingToC(b: Binding, ctx: EmitContext): string {
       const name = ctx.macroNames.get(b.macroId);
       if (!name) throw new GenerateError(`macro "${b.macroId}" doesn't exist`);
       return name;
+    }
+    case "tapDance": {
+      const name = ctx.tapDanceNames.get(b.tapDanceId);
+      if (!name) throw new GenerateError(`tap dance "${b.tapDanceId}" doesn't exist`);
+      return `TD(${name})`;
     }
     case "native":
       if (b.firmware !== "qmk") throw new GenerateError(`a ${b.firmware} native binding (${b.source}) can't go in QMK source`);

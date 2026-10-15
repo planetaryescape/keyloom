@@ -58,7 +58,7 @@ export function canDrop(lost: LostFunction, layout: Layout, result: ValidationRe
 export function placeableBinding(layout: Layout, lost: LostFunction): Binding | null {
   for (const slot of lost.was) {
     const binding = layout.layers.find((layer) => layer.id === slot.layerId)?.bindings[slot.position];
-    if (binding !== undefined && bindingFunctions(binding).includes(lost.function)) return binding;
+    if (binding !== undefined && bindingFunctions(binding, layout.tapDances).includes(lost.function)) return binding;
   }
   return null;
 }

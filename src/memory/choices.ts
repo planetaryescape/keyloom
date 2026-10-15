@@ -26,7 +26,7 @@ export function subjectOf(after: Layout, slots: readonly Slot[]): Subject {
   const functions = new Set<string>();
   for (const slot of slots) {
     const binding = after.layers.find((l) => l.id === slot.layerId)?.bindings[slot.position];
-    if (binding) for (const fn of bindingFunctions(binding)) functions.add(fn);
+    if (binding) for (const fn of bindingFunctions(binding, after.tapDances)) functions.add(fn);
   }
   return { slots: [...slots], functions: [...functions] };
 }

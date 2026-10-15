@@ -42,6 +42,7 @@ export function mirrorBinding(source: Binding, target: Binding, targetHand: Hand
       return settle({ kind: "modifier", mods: modsForHand(source.mods, targetHand) }, target);
     case "layer":
     case "macro":
+    case "tapDance":
     case "transparent":
     case "none":
     case "native":

@@ -13,7 +13,7 @@ export const dropFunctions = (fns: string[]): ChangeOp[] => fns.map((function_) 
 
 export function setKey(position: number, code: string, layerId = "layer-0"): ChangeOp[] {
   const old = layout.layers.find((l) => l.id === layerId)?.bindings[position];
-  const lost = [...(old ? bindingFunctions(old) : []), ...EARLIER_EDITS.map((c) => `key:${c}`)];
+  const lost = [...(old ? bindingFunctions(old, layout.tapDances) : []), ...EARLIER_EDITS.map((c) => `key:${c}`)];
   return [...dropFunctions(lost), { op: "setBinding", at: { layerId, position }, binding: { kind: "key", code } }];
 }
 

@@ -22,6 +22,25 @@ function parseItems(text: string): Item[] | undefined {
   };
   skipSpace();
   while (i < text.length) {
+    if (text[i] === '"') {
+      // A string literal is typed as written (macro text steps); only the escapes SEND_STRING needs are read.
+      let literal = "";
+      for (i++; ; i++) {
+        const ch = text[i];
+        if (ch === undefined) return undefined;
+        if (ch === '"') break;
+        if (ch === "\\") {
+          const next = text[++i];
+          const decoded = next === "n" ? "\n" : next === "t" ? "\t" : next === "\\" || next === '"' ? next : undefined;
+          if (decoded === undefined) return undefined;
+          literal += decoded;
+        } else literal += ch;
+      }
+      i++;
+      items.push({ name: "STRING", arg: literal, children: [] });
+      skipSpace();
+      continue;
+    }
     const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i));
     if (!m) return undefined;
     const name = m[0];
@@ -53,7 +72,10 @@ function emit(items: Item[], mods: Mod[]): MacroStep[] | undefined {
   const steps: MacroStep[] = [];
   for (const item of items) {
     const wrap = WRAP_MODS.get(item.name);
-    if (item.name === "SS_TAP") {
+    if (item.name === "STRING") {
+      if (mods.length > 0 || item.arg === "") return undefined;
+      steps.push({ op: "text", text: item.arg });
+    } else if (item.name === "SS_TAP") {
       const code = codeOf(item.arg);
       if (!code) return undefined;
       const sorted = MOD_ORDER.filter((m) => mods.includes(m));

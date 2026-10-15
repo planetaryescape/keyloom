@@ -2,7 +2,7 @@
 // draws keys share it. The names come from the same places the terminal grid uses (shortKeyLabel,
 // modsText); this module only adds the two things a cap can do that a terminal cell can't: use
 // symbols for the keys that have one, and split a binding into a tap legend and a hold legend.
-import { type GridContext, modsText, shortKeyLabel } from "./render-grid.ts";
+import { type GridContext, modsText, shortKeyLabel, slotLabel } from "./render-grid.ts";
 import type { Binding, Mod } from "./schema.ts";
 
 export type Legend = {
@@ -113,6 +113,24 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
       if (binding.label.length > 5 && tap !== undefined && tap !== "" && hold !== undefined && hold !== "" && more.length === 0) return { kind: "native", tap, hold };
       return { kind: "native", tap: shortNative(binding.label) };
     }
+<<<<<<< HEAD
+||||||| parent of 939e964 (feat: tap dance model, QMK and ZMK generators, and the Oryx tap dance importer)
+    case "native":
+      return { kind: "native", tap: binding.label };
+=======
+    case "tapDance": {
+      const td = ctx.tapDances?.find((t) => t.id === binding.tapDanceId);
+      if (!td) return { kind: "tapDance", tap: "TD?" };
+      const extra = [
+        td.hold ? slotLabel(td.hold, ctx) : "",
+        td.doubleTap ? `2×${slotLabel(td.doubleTap, ctx)}` : "",
+        td.tapThenHold ? `2×hold ${slotLabel(td.tapThenHold, ctx)}` : "",
+      ].filter((t) => t !== "");
+      return { kind: "tapDance", tap: slotLabel(td.tap, ctx), ...(extra.length ? { hold: extra.join(" ") } : {}) };
+    }
+    case "native":
+      return { kind: "native", tap: binding.label };
+>>>>>>> 939e964 (feat: tap dance model, QMK and ZMK generators, and the Oryx tap dance importer)
     case "transparent":
       return { kind: "transparent", tap: "" };
     case "none":

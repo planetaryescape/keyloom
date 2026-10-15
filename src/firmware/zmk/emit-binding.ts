@@ -8,6 +8,8 @@ export type EmitContext = {
   /** Profile id to the devicetree label its uses are written with. */
   profileLabels: ReadonlyMap<string, string>;
   macroLabels: ReadonlyMap<string, string>;
+  /** Tap dance ID to the label of its `zmk,behavior-tap-dance` node. */
+  tapDanceLabels: ReadonlyMap<string, string>;
 };
 
 const LAYER_BEHAVIOR = { momentary: "mo", toggle: "tog", to: "to", oneShot: "sl" } as const;
@@ -46,6 +48,11 @@ export function bindingToDts(b: Binding, ctx: EmitContext): string {
     case "macro": {
       const label = ctx.macroLabels.get(b.macroId);
       if (!label) throw new GenerateError(`it uses the macro "${b.macroId}", which doesn't exist`);
+      return `&${label}`;
+    }
+    case "tapDance": {
+      const label = ctx.tapDanceLabels.get(b.tapDanceId);
+      if (!label) throw new GenerateError(`it uses the tap dance "${b.tapDanceId}", which doesn't exist`);
       return `&${label}`;
     }
     case "transparent":

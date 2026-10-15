@@ -30,7 +30,7 @@ function unusedKey(layout: Layout): Binding {
 /** A key the person could put a kept function on: one that holds nothing, else the first plain key. */
 function somewhereElse(layout: Layout, slot: Slot): Slot {
   const layer = layout.layers[0];
-  const empty = layer?.bindings.findIndex((b, i) => i !== slot.position && bindingFunctions(b).length === 0) ?? -1;
+  const empty = layer?.bindings.findIndex((b, i) => i !== slot.position && bindingFunctions(b, layout.tapDances).length === 0) ?? -1;
   const plain = layer?.bindings.findIndex((b, i) => i !== slot.position && b.kind === "key") ?? -1;
   return { layerId: slot.layerId, position: empty >= 0 ? empty : plain };
 }
@@ -99,8 +99,8 @@ describe("the F16 to F17 walk-through on BK's Moonlander", () => {
     const placed: Placement[] = [{ function: "key:F16", slot: target, binding: binding as Binding }];
     const next = validate(board, layout, editorOps(slot, f17, placed, new Map()));
     // What was on the target is now the lost function, so the same question comes round again.
-    expect(lostFunctionsIn(next).map((l) => l.function)).toEqual(bindingFunctions(displaced));
-    const drops = new Map(bindingFunctions(displaced).map((fn) => [fn, "Replaced by F16"]));
+    expect(lostFunctionsIn(next).map((l) => l.function)).toEqual(bindingFunctions(displaced, layout.tapDances));
+    const drops = new Map(bindingFunctions(displaced, layout.tapDances).map((fn) => [fn, "Replaced by F16"]));
     expect(validate(board, layout, editorOps(slot, f17, placed, drops)).ok).toBe(true);
   });
 
