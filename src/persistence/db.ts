@@ -35,14 +35,24 @@ function enableWal(db: Database): void {
 
 export function migrate(db: Database): void {
   db.run("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL)");
-  for (const m of MIGRATIONS) {
-    // The applied check is inside the write transaction, so two processes starting together
-    // can't both run the same migration.
-    db.transaction(() => {
-      const applied = db.query("SELECT 1 FROM schema_migrations WHERE version = ?").get(m.version);
-      if (applied) return;
-      db.exec(m.sql);
-      db.query("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)").run(m.version, m.name, Date.now());
-    }).immediate();
+  // Rebuilding a table (SQLite can't add a foreign key in place) means dropping a table other
+  // tables reference, which needs foreign keys off, and the pragma is a no-op inside a transaction.
+  // The check below stands in for the enforcement while it is off.
+  db.run("PRAGMA foreign_keys = OFF");
+  try {
+    for (const m of MIGRATIONS) {
+      // The applied check is inside the write transaction, so two processes starting together
+      // can't both run the same migration.
+      db.transaction(() => {
+        const applied = db.query("SELECT 1 FROM schema_migrations WHERE version = ?").get(m.version);
+        if (applied) return;
+        db.exec(m.sql);
+        const broken = db.query("PRAGMA foreign_key_check").all();
+        if (broken.length > 0) throw new Error(`migration ${m.name} left ${broken.length} foreign key violations`);
+        db.query("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)").run(m.version, m.name, Date.now());
+      }).immediate();
+    }
+  } finally {
+    db.run("PRAGMA foreign_keys = ON");
   }
 }
