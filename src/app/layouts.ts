@@ -1,12 +1,12 @@
 // Use cases for layouts: import, list, get (01#modules).
-import { getBoard } from "../boards/registry.ts";
-import { BoardNotFoundError, type Board } from "../boards/load.ts";
+import type { Board } from "../boards/load.ts";
 import { ImportError, type ImportReport, importOryxSource } from "../firmware/qmk/import.ts";
 import type { Layout } from "../layout/schema.ts";
 import {
   NameTakenError, type LayoutRow, type RevisionRow, createLayout, findLayoutRow, findRevision, listLayoutRows,
 } from "../persistence/layouts.ts";
 import type { App } from "./context.ts";
+import { showBoard } from "./boards.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
 
 export type ImportInput = {
@@ -24,17 +24,8 @@ const IMPORTERS = new Map<string, (path: string, board: Board) => ReturnType<typ
   ["oryx-source", (path, board) => importOryxSource(path, board.definition)],
 ]);
 
-function resolveBoard(id: string): Board {
-  try {
-    return getBoard(id);
-  } catch (err) {
-    if (err instanceof BoardNotFoundError) throw new NotFoundError(err.message);
-    throw err;
-  }
-}
-
 export async function importLayout(app: App, input: ImportInput): Promise<ImportOutcome> {
-  const board = resolveBoard(input.board);
+  const board = showBoard(input.board);
   const importer = board.definition.importers.map((id) => IMPORTERS.get(id)).find((f) => f !== undefined);
   if (!importer) throw new UsageError(`board ${board.definition.id} has no importer keyloom can run (${board.definition.importers.join(", ")})`);
 
@@ -85,5 +76,5 @@ export function getLayout(app: App, ref: string, revisionId?: string): LayoutVie
   if (!layout) throw new NotFoundError(`no layout "${ref}"`);
   const found = findRevision(app.db, layout.id, revisionId ?? layout.headRevisionId);
   if (!found) throw new NotFoundError(`layout ${layout.name} has no revision "${revisionId}"`);
-  return { layout, revision: found.revision, document: found.layout, board: resolveBoard(layout.boardId) };
+  return { layout, revision: found.revision, document: found.layout, board: showBoard(layout.boardId) };
 }

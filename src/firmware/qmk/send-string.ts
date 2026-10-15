@@ -57,7 +57,7 @@ function emit(items: Item[], mods: Mod[]): MacroStep[] | undefined {
       const code = codeOf(item.arg);
       if (!code) return undefined;
       const sorted = MOD_ORDER.filter((m) => mods.includes(m));
-      steps.push({ op: "tap", code, ...(sorted.length ? { mods: sorted } : {}) });
+      steps.push(sorted.length ? { op: "tap", code, mods: sorted } : { op: "tap", code });
     } else if (item.name === "SS_DELAY" && mods.length === 0) {
       const ms = Number(item.arg);
       if (!Number.isInteger(ms) || ms < 0) return undefined;

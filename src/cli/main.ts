@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
-  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, showBoard, ValidationFailedError,
+  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, selectLayers, showBoard, ValidationFailedError,
 } from "../app/index.ts";
 import { EXIT, classify } from "./errors.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
@@ -88,14 +88,13 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .action(async (ref: string, opts: { layer?: string; rev?: string }) => {
       const view = await withApp((app) => getLayout(app, ref, opts.rev));
       const grids = renderLayoutText(view, opts.layer);
-      const only = opts.layer === undefined ? view.document.layers : view.document.layers.filter((l, i) => [l.id, l.name, String(i)].includes(opts.layer as string));
       print(io, format(), {
         json: {
           layout_id: view.layout.id,
           name: view.layout.name,
           board_id: view.layout.boardId,
           revision_id: view.revision.id,
-          layout: { ...view.document, layers: only },
+          layout: { ...view.document, layers: selectLayers(view, opts.layer) },
         },
         ids: [view.layout.id],
         table: `${view.layout.id}  ${view.layout.name}  ${view.layout.boardId}  ${view.revision.id}\n\n${grids}`,

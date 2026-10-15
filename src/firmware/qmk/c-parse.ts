@@ -93,12 +93,10 @@ export function findInitializer(root: Node, name: string): Node | undefined {
   return undefined;
 }
 
-export function findFunction(root: Node, name: string): Node | undefined {
-  return root.namedChildren.find(
-    (c) => c.type === "function_definition" && declaredName(c.childForFieldName("declarator")?.childForFieldName("declarator") ?? null) === name,
-  );
-}
-
 export function functionName(node: Node): string | undefined {
   return declaredName(node.childForFieldName("declarator")?.childForFieldName("declarator") ?? null);
+}
+
+export function findFunction(root: Node, name: string): Node | undefined {
+  return root.namedChildren.find((c) => c.type === "function_definition" && functionName(c) === name);
 }

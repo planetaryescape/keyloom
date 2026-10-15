@@ -14,12 +14,13 @@ export function readBoards(): EmbeddedBoard[] {
       if (!board.isDirectory()) continue;
       const dir = join(root, vendor.name, board.name);
       const skillFile = join(dir, "SKILL.md");
-      out.push({
+      const entry: EmbeddedBoard = {
         dir: `${vendor.name}/${board.name}`,
         board: readFileSync(join(dir, "board.json"), "utf8"),
         geometry: readFileSync(join(dir, "geometry.json"), "utf8"),
-        ...(existsSync(skillFile) ? { skill: readFileSync(skillFile, "utf8") } : {}),
-      });
+      };
+      if (existsSync(skillFile)) entry.skill = readFileSync(skillFile, "utf8");
+      out.push(entry);
     }
   }
   return out.sort((a, b) => a.dir.localeCompare(b.dir));
