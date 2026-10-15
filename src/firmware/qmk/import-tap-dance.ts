@@ -65,9 +65,8 @@ function statements(body: string): string[] {
   return rest === "" ? out : [...out, rest];
 }
 
-const LAYER_CALLS: Record<string, Extract<SlotAction, { kind: "layer" }>["action"]> = {
-  layer_on: "momentary", layer_invert: "toggle", layer_move: "to",
-};
+// Maps, not objects: names come from the file being imported, and `constructor` must not resolve to something on Object.prototype.
+const LAYER_CALLS = new Map<string, Extract<SlotAction, { kind: "layer" }>["action"]>([["layer_on", "momentary"], ["layer_invert", "toggle"], ["layer_move", "to"]]);
 
 function slotFrom(statement: string, ctx: MapContext, layerIds: readonly string[], macros: readonly Macro[]): SlotAction | undefined {
   const m = /^(\w+)\s*\(([\s\S]*)\)$/.exec(statement);
@@ -79,7 +78,7 @@ function slotFrom(statement: string, ctx: MapContext, layerIds: readonly string[
     if (b?.kind === "key") return { kind: "key", code: b.code, ...(b.mods?.length ? { mods: b.mods } : {}) };
     return b?.kind === "modifier" ? { kind: "modifier", mods: b.mods } : undefined;
   }
-  const layerAction = LAYER_CALLS[fn];
+  const layerAction = LAYER_CALLS.get(fn);
   const layerArg = /^\s*(\d+)\s*$/.exec(arg)?.[1];
   if (layerAction && layerArg !== undefined) {
     const layerId = layerIds[Number(layerArg)];
@@ -107,9 +106,9 @@ function macroBodySafe(macro: Macro): string | undefined {
   }
 }
 
-const STATE_SLOT: Record<string, "tap" | "hold" | "doubleTap" | "tapThenHold"> = {
-  SINGLE_TAP: "tap", SINGLE_HOLD: "hold", DOUBLE_TAP: "doubleTap", DOUBLE_HOLD: "tapThenHold",
-};
+const STATE_SLOT = new Map<string, "tap" | "hold" | "doubleTap" | "tapThenHold">([
+  ["SINGLE_TAP", "tap"], ["SINGLE_HOLD", "hold"], ["DOUBLE_TAP", "doubleTap"], ["DOUBLE_HOLD", "tapThenHold"],
+]);
 
 function readDance(finished: string, n: number, ctx: MapContext, layerIds: readonly string[], macros: readonly Macro[]): TapDance | undefined {
   const switchBody = braceBody(finished, new RegExp(`switch\\s*\\(\\s*dance_state\\[${n}\\]\\.step\\s*\\)\\s*\\{`));
@@ -117,7 +116,7 @@ function readDance(finished: string, n: number, ctx: MapContext, layerIds: reado
   const slots: Partial<Record<"tap" | "hold" | "doubleTap" | "tapThenHold", SlotAction>> = {};
   const labels = [...switchBody.matchAll(/case\s+(\w+)\s*:/g)];
   for (const [i, label] of labels.entries()) {
-    const slot = STATE_SLOT[label[1] as string];
+    const slot = STATE_SLOT.get(label[1] as string);
     if (!slot) continue; // DOUBLE_SINGLE_TAP is derived from the tap; the comparison below checks it is what the generator writes
     const end = labels[i + 1]?.index ?? switchBody.length;
     const body = switchBody.slice((label.index as number) + label[0].length, end).replace(/\bbreak\s*;\s*$/, "").trim();

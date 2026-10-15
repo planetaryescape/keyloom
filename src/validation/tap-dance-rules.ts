@@ -1,7 +1,7 @@
 // Tap dance and macro-text rules (16#tap-dance-is-a-key-with-a-double-tap-slot). A tap dance is a
 // key with several slots, and each slot is a function (02), so reachability already counts them; these
 // rules cover what only a tap dance can get wrong.
-import { bindingFunctions, slotFunction, tapDanceSlots } from "../layout/functions.ts";
+import { slotFunction, tapDanceSlots } from "../layout/functions.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode } from "../layout/keycodes.ts";
 import { textKeys } from "../layout/text-keys.ts";
@@ -131,9 +131,3 @@ export function tapDanceWarnings(doc: Layout): Issue[] {
   }
   return out;
 }
-
-/** Functions of a binding, for callers that already hold the document. */
-export const functionsAt = (doc: Layout, slot: Slot): string[] => {
-  const b = doc.layers.find((l) => l.id === slot.layerId)?.bindings[slot.position];
-  return b ? bindingFunctions(b, doc.tapDances) : [];
-};
