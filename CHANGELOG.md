@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.1](https://github.com/planetaryescape/keyloom/compare/v0.20.0...v0.20.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* draw the Moonlander's thumb clusters and red keys like the real board ([fe28971](https://github.com/planetaryescape/keyloom/commit/fe28971c7d255d90fed01befd4c1d6dcf48791f7))
+
 ## [0.20.0](https://github.com/planetaryescape/keyloom/compare/v0.19.1...v0.20.0) (2026-10-15)
 
 
