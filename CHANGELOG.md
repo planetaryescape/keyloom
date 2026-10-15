@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/planetaryescape/keyloom/compare/v0.3.0...v0.4.0) (2026-10-15)
+
+
+### Features
+
+* add the moergo/glove80 board, a ZMK importer and a keymap generator ([ae2d2aa](https://github.com/planetaryescape/keyloom/commit/ae2d2aa709d7eef9b7df3d2be78e9da6f55d12c6))
+* build the Glove80 firmware in Docker and run it through the same use cases as the Moonlander ([5e3ad7a](https://github.com/planetaryescape/keyloom/commit/5e3ad7ad8b1b5e226eb4cbc29195d7eb55281e33))
+* flash a Glove80 by copying the UF2 to each half's boot drive ([503a8c5](https://github.com/planetaryescape/keyloom/commit/503a8c54ff1c975c02b0fe12c3fb8b9579f4b79c))
+
+
+### Bug Fixes
+
+* don't ask to confirm replacing a native binding the proposal only moves, and name natives by their source ([9e989c1](https://github.com/planetaryescape/keyloom/commit/9e989c12ff4f9332ae2ac4cefc7b0fbc77027eff))
+* follow ZMK layer behaviours kept as written, so the Glove80 template's Lower and Magic layers count as reachable ([d084282](https://github.com/planetaryescape/keyloom/commit/d0842821f2406745e7345346e57026e0d070a20a))
+* keep legends upright on steeply rotated keys such as the Glove80 thumbs ([64bf6b6](https://github.com/planetaryescape/keyloom/commit/64bf6b666631be30c72a4e81550475a86b87f4a5))
+* place rotated keys by their real centre in the text grid so the Glove80 renders ([31bbc42](https://github.com/planetaryescape/keyloom/commit/31bbc4201916d1a048094b8ab3a9157b95848e34))
+
 ## [0.3.0](https://github.com/planetaryescape/keyloom/compare/v0.2.0...v0.3.0) (2026-10-15)
 
 
