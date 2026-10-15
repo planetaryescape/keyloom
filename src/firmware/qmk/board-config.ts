@@ -10,6 +10,8 @@ export type QmkBoardRevision = {
   build: QmkDockerBuild;
   /** Zapp for ZSA boards, UF2 drives for RP2040 boards, `manual` for anything else (04). */
   flash: FlashRecipe;
+  /** The USB product ID the running firmware reports (`0x1969`), when the board declares one. */
+  usbProductId: string | null;
 };
 
 export class BoardConfigError extends Error {
@@ -24,5 +26,5 @@ export function qmkRevision(board: BoardDefinition, revisionId?: string): QmkBoa
   }
   if (!rev.qmkTarget) throw new BoardConfigError(`${board.id} ${rev.id} has no qmkTarget`);
   if (rev.build.kind !== "qmk-docker") throw new BoardConfigError(`${board.id} ${rev.id} build: a QMK board builds with qmk-docker, not ${rev.build.kind}`);
-  return { id: rev.id, qmkTarget: rev.qmkTarget, source: rev.source, build: rev.build, flash: rev.flash };
+  return { id: rev.id, qmkTarget: rev.qmkTarget, source: rev.source, build: rev.build, flash: rev.flash, usbProductId: rev.detect?.usbProductId.toLowerCase() ?? null };
 }

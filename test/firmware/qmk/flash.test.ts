@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { dfuProblem, readDfuSuffix } from "../../../src/firmware/qmk/dfu.ts";
-import { type FlashState, flashWithZapp } from "../../../src/firmware/qmk/flash.ts";
+import { HANDS_FREE_INSTRUCTION, RESET_INSTRUCTION, type FlashState, flashWithZapp } from "../../../src/firmware/qmk/flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { dfuImage, fakeBinDir } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
@@ -113,5 +113,95 @@ describe("flashWithZapp (fake zapp)", () => {
     const gone = await calls.flash({ artifactPath: join(calls.dir, "missing.bin") });
     expect(gone.error).toContain("doesn't exist");
     expect(await Bun.file(join(calls.dir, "zapp.calls")).exists()).toBe(false);
+  });
+});
+
+describe("flashWithZapp, hands-free", () => {
+  // A zapp that, like the real one, flashes only once the keyboard is in its bootloader, which the test marks by creating a file.
+  const waitsForBootloader = (flag: string) => `echo "Firmware loaded: STM32 DFU (80 bytes)"; while [ ! -f "${flag}" ]; do sleep 0.05; done; echo "Flashing"; sleep 0.1; exit 0`;
+
+  test("the keyboard is restarted once zapp is waiting, and the person is told there is nothing to press", async () => {
+    const dir = tempDir();
+    const flag = join(dir, "in-bootloader");
+    const s = await setup(waitsForBootloader(flag));
+    let order: string[] = [];
+    const r = await s.flash({
+      enterBootloader: async () => {
+        order.push("enter");
+        await Bun.write(flag, "");
+        return { ok: true };
+      },
+    });
+    expect(r).toMatchObject({ state: "succeeded" });
+    expect(s.states[0]).toEqual(["waiting_for_bootloader", HANDS_FREE_INSTRUCTION]);
+    expect(order).toEqual(["enter"]);
+    expect(s.states.map(([st]) => st)).toEqual(["waiting_for_bootloader", "writing", "succeeded"]);
+  });
+
+  test("when the keyboard can't be restarted, the person gets the usual instruction with the reason, and the flash still works", async () => {
+    const dir = tempDir();
+    const flag = join(dir, "in-bootloader");
+    const s = await setup(waitsForBootloader(flag));
+    setTimeout(() => Bun.write(flag, ""), 500); // the person presses the reset key
+    const r = await s.flash({ enterBootloader: async () => ({ ok: false, reason: "the Moonlander is running firmware keyloom didn't build" }) });
+    expect(r.state).toBe("succeeded");
+    const waiting = s.states.filter(([st]) => st === "waiting_for_bootloader").map(([, i]) => i);
+    expect(waiting[0]).toBe(HANDS_FREE_INSTRUCTION);
+    expect(waiting[1]).toContain("didn't build");
+    expect(waiting[1]).toContain(RESET_INSTRUCTION);
+    s.log.close();
+    expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("couldn't restart the keyboard itself");
+  });
+
+  test("a restart that throws falls back to the usual instruction instead of failing the flash", async () => {
+    const dir = tempDir();
+    const flag = join(dir, "in-bootloader");
+    const s = await setup(waitsForBootloader(flag));
+    setTimeout(() => Bun.write(flag, ""), 300);
+    const r = await s.flash({
+      enterBootloader: async () => {
+        throw new Error("IOKit exploded");
+      },
+    });
+    expect(r.state).toBe("succeeded");
+    expect(s.states.some(([, i]) => i === RESET_INSTRUCTION)).toBe(true);
+  });
+
+  test("a keyboard restarted into its bootloader that zapp never writes to is reported as stranded there", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const r = await s.flash({ bootloaderWaitMs: 400, enterBootloader: async () => ({ ok: true }) });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("restarted the keyboard into its bootloader");
+    expect(r.error).toContain("unplugged and plugged in again");
+  });
+
+  test("a failed restart does not add that warning, because the keyboard was never moved", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const r = await s.flash({ bootloaderWaitMs: 400, enterBootloader: async () => ({ ok: false, reason: "no raw HID" }) });
+    expect(r.error).not.toContain("plugged in again");
+  });
+
+  test("after zapp succeeds the flash is verified, and the verdict goes in the log", async () => {
+    const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
+    const r = await s.flash({ verify: async () => ({ ok: true, message: "Verified: the keyboard is running build bld_X." }) });
+    expect(r).toMatchObject({ state: "succeeded", error: null });
+    expect(s.states.map(([st]) => st)).toEqual(["waiting_for_bootloader", "writing", "writing", "succeeded"]);
+    s.log.close();
+    expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("keyloom: Verified: the keyboard is running build bld_X.");
+  });
+
+  test("a keyboard that doesn't come back as the new build makes the flash fail, with the reason", async () => {
+    const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
+    const r = await s.flash({ verify: async () => ({ ok: false, error: "zapp finished, but the Moonlander didn't come back" }) });
+    expect(r).toMatchObject({ state: "failed", error: "zapp finished, but the Moonlander didn't come back" });
+    expect(s.states.at(-1)?.[0]).toBe("failed");
+  });
+
+  test("a flash zapp reports as failed is not verified", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exit 2');
+    let verified = false;
+    const r = await s.flash({ verify: async () => ((verified = true), { ok: true, message: "Verified: x" }) });
+    expect(r.state).toBe("failed");
+    expect(verified).toBe(false);
   });
 });

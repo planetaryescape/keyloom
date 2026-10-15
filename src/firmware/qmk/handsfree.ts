@@ -1,16 +1,14 @@
 // What keyloom adds to a ZSA keyboard's firmware so it can be flashed without a keypress (D-070):
 // a build marker in the USB serial number, and a raw-HID command that jumps to the bootloader.
-// The firmware side (emitted into the keymap) and the host side (src/firmware/toolchain/hid.ts)
+// The firmware side (emitted into the keymap) and the host side (handsfree-flash.ts)
 // both read their constants from here so they cannot drift apart.
+import { RAW_HID_REPORT_SIZE } from "../toolchain/hid.ts";
 
-/** First byte of the packet. Oryx's commands are 0x00-0x0C and 0xFE, and VIA's are 0x01-0x0F and 0xFF, so this is unclaimed. */
+/** First byte of the packet. Oryx's commands are 0x00-0x0C and 0xFE, and VIA's are 0x01-0x15 and 0xFF (quantum/via.h), so this is unclaimed. */
 export const BOOTLOADER_COMMAND = 0xe7;
 /** Eight bytes that must follow the command byte; a stray or buggy packet will not match by accident. */
 export const BOOTLOADER_MAGIC = "KLBOOTLD";
-/** ZSA's raw HID endpoint: 32-byte reports, no report ID (RAW_EPSIZE in modules/zsa/oryx/oryx.h). */
-export const RAW_HID_REPORT_SIZE = 32;
-export const RAW_HID_USAGE_PAGE = 0xff60;
-export const RAW_HID_USAGE = 0x61;
+export { RAW_HID_REPORT_SIZE } from "../toolchain/hid.ts";
 
 /** ZSA's USB vendor ID, which is what a running Moonlander reports (the bootloader's differs on rev A). */
 export const ZSA_VENDOR_ID = 0x3297;

@@ -61,8 +61,8 @@ describe("the bootloader packet", () => {
   });
 
   test("its command byte is not one Oryx or VIA answers to", () => {
-    // oryx.h: commands 0x00-0x0C and 0xFE; via.h: 0x01-0x0F range and 0xFF. A collision would also trigger that command.
-    expect(BOOTLOADER_COMMAND).toBeGreaterThan(0x0f);
+    // oryx.h: commands 0x00-0x0C and 0xFE; via.h: 0x01-0x15 and 0xFF. A collision would also trigger that command.
+    expect(BOOTLOADER_COMMAND).toBeGreaterThan(0x15);
     expect([0xfe, 0xff]).not.toContain(BOOTLOADER_COMMAND);
   });
 });

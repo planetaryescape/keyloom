@@ -5,6 +5,9 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { mock } from "bun:test";
+import * as hid from "../../src/firmware/toolchain/hid.ts";
+import * as hidDefault from "../../src/firmware/toolchain/hid-default.ts";
+import * as hidMacos from "../../src/firmware/toolchain/hid-macos.ts";
 import * as volumes from "../../src/firmware/zmk/volumes.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "keyloom-no-flash-"));
@@ -33,3 +36,20 @@ mock.module("../../src/firmware/zmk/volumes.ts", () => ({
     return realVolumeFinderAt(root);
   },
 }));
+
+// A keyboard running keyloom's firmware reboots into its bootloader on one raw-HID packet, so no test may reach the real
+// HID transports. Listing stays real (it only reads the registry); every write is refused. Tests inject fakes (HandsFreeDeps).
+const refuseHid = (what: string): never => {
+  throw new Error(`${what}: tests must inject a fake transport (HandsFreeDeps); a real write would reboot a real keyboard`);
+};
+const readOnly = (real: hid.HidTransport): hid.HidTransport => ({
+  list: () => real.list(),
+  write: async () => refuseHid("HidTransport.write()"),
+});
+mock.module("../../src/firmware/toolchain/hid-default.ts", () => ({
+  ...hidDefault,
+  defaultHidTransport: async () => refuseHid("defaultHidTransport()"),
+}));
+// The real function is kept first, for the reason given at realVolumeFinderAt above.
+const realMacosHid = hidMacos.macosHid;
+mock.module("../../src/firmware/toolchain/hid-macos.ts", () => ({ ...hidMacos, macosHid: () => readOnly(realMacosHid()) }));

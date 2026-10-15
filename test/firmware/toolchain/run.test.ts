@@ -128,6 +128,15 @@ describe("parsers", () => {
     expect(parseUsbDevices(null)).toEqual([]);
   });
 
+  test("the USB serial number is read from both reports", () => {
+    // Shape captured from BK's Moonlander on Darwin 27, 2026-10-15.
+    const host = { SPUSBHostDataType: [{ _name: "Moonlander Mark I", USBDeviceKeyProductID: "0x1969", USBDeviceKeyVendorID: "0x3297", USBDeviceKeySerialNumber: "QxKPz/zLQ3Md" }] };
+    const old = { SPUSBDataType: [{ _name: "Moonlander Mark I", product_id: "0x1969", vendor_id: "0x3297", serial_num: "keyloom/NPQRSTVWXYZ0" }] };
+    expect(parseUsbDevices(host)[0]?.serial).toBe("QxKPz/zLQ3Md");
+    expect(parseUsbDevices(old)[0]?.serial).toBe("keyloom/NPQRSTVWXYZ0");
+    expect(parseUsbDevices({ SPUSBDataType: [{ product_id: "0x1969", serial_num: "" }] })[0]).not.toHaveProperty("serial");
+  });
+
   test("parseUsbDevices reads the SPUSBHostDataType report newer macOS prints", () => {
     // Shape captured from a real Glove80 on Darwin 27 (serial and location fields dropped).
     const json = {
