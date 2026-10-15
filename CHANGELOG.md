@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0](https://github.com/planetaryescape/keyloom/compare/v0.5.0...v0.6.0) (2026-10-15)
+
+
+### Features
+
+* compare a proposal's alternatives side by side and show remembered priorities as chips ([ebfc092](https://github.com/planetaryescape/keyloom/commit/ebfc0920806fffbce9d406b572d3b6843c64c83b))
+* remember stated priorities and warn when a change moves a pinned key ([b6251a1](https://github.com/planetaryescape/keyloom/commit/b6251a1a575aa4617cfcee0b9380baad6db4bbfa))
+
+
+### Bug Fixes
+
+* don't add a second full stop after the flashed layout's summary ([1a8c6f1](https://github.com/planetaryescape/keyloom/commit/1a8c6f1bf15f5472d87212ea599a5951af1d0c6d))
+* keep the agent's option numbers when bullets split a numbered list ([c8511f7](https://github.com/planetaryescape/keyloom/commit/c8511f7b1335078dd0291cec3081d444de8f23e3))
+* keep the comparison table inside its border and balance long titles ([8beabfb](https://github.com/planetaryescape/keyloom/commit/8beabfb1d87a1971baf20c22d1d28987f870259b))
+
 ## [0.5.0](https://github.com/planetaryescape/keyloom/compare/v0.4.0...v0.5.0) (2026-10-15)
 
 
