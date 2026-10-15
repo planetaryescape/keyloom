@@ -2,7 +2,7 @@
 // remove a tool from a list it controls. It switches off what Codex lets it, runs in a sandbox and
 // a directory with nothing in it, and keeps the guarantee where it already was: only the
 // propose_changes handler writes a change set, and BK's Apply is the only thing that changes a layout.
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -36,11 +36,17 @@ const toml = (value: string | number | boolean | string[]): string => JSON.strin
 /** Codex's names for reasoning effort; keyloom's `max` is its `xhigh`. */
 const effortFor = (effort: string): string => (effort === "max" ? "xhigh" : effort);
 
-export function codexArgs(opts: { model: string; effort: string; cwd: string; serverUrl: string; developerInstructions: string }): string[] {
+/**
+ * `ownHome` is a CODEX_HOME that is keyloom's own (see prepareScratch). There the instructions go in that home's
+ * config.toml (writeInstructions) so they stay out of `ps`, and Codex must read that file, so `--ignore-user-config`
+ * is left off; it is only needed to keep the real home's config out, and with the real home the instructions are the
+ * one thing that has to travel on the command line.
+ */
+export function codexArgs(opts: { model: string; effort: string; cwd: string; serverUrl: string; developerInstructions: string; ownHome: boolean }): string[] {
   const config: Array<[string, string | number | boolean | string[]]> = [
     ["approval_policy", "never"],
     ["web_search", "disabled"],
-    ["developer_instructions", opts.developerInstructions],
+    ...(opts.ownHome ? [] : [["developer_instructions", opts.developerInstructions] as [string, string]]),
     ["model_reasoning_effort", effortFor(opts.effort)],
     ...DISABLED_FEATURES.map((f): [string, boolean] => [`features.${f}`, false]),
     [`mcp_servers.${MCP_SERVER}.url`, opts.serverUrl],
@@ -56,7 +62,7 @@ export function codexArgs(opts: { model: string; effort: string; cwd: string; se
     // The scratch directory is not a git repository.
     "--skip-git-repo-check",
     // BK's own config.toml (MCP servers, hooks, instructions) must not shape keyloom's runs.
-    "--ignore-user-config",
+    ...(opts.ownHome ? [] : ["--ignore-user-config"]),
     "-s", "read-only",
     "-C", opts.cwd,
     "-m", opts.model,
@@ -73,6 +79,9 @@ const PASSED_ENV = [
 
 export type Scratch = {
   cwd: string;
+  /** True when CODEX_HOME is a folder of keyloom's own, which only keyloom has written to. */
+  ownHome: boolean;
+  codexHome: string;
   /** What to spawn Codex with. */
   env: Env;
   remove(): void;
@@ -100,5 +109,15 @@ export function prepareScratch(token: string, env: Env = process.env): Scratch {
   const childEnv: Env = { [TOKEN_ENV]: token, HOME: home, CODEX_HOME: linked ? codexHome : realCodexHome };
   for (const name of PASSED_ENV) if (env[name] !== undefined) childEnv[name] = env[name];
   // rmSync does not follow the symlink, so the real auth.json is never touched.
-  return { cwd, env: childEnv, remove: () => rmSync(root, { recursive: true, force: true }) };
+  return { cwd, ownHome: linked, codexHome: childEnv.CODEX_HOME as string, env: childEnv, remove: () => rmSync(root, { recursive: true, force: true }) };
+}
+
+/** JSON leaves a raw DEL (which TOML basic strings forbid) and the line/paragraph separators (which some TOML readers treat as line ends); escape them. */
+const tomlString = (text: string): string =>
+  JSON.stringify(text).replace(/[\u007f\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+
+/** Puts the instructions in the run's own CODEX_HOME, readable by this user only, instead of on the command line where `ps` shows them. */
+export function writeInstructions(scratch: Pick<Scratch, "codexHome" | "ownHome">, instructions: string): void {
+  if (!scratch.ownHome) throw new Error("instructions go in a config.toml only when CODEX_HOME is keyloom's own");
+  writeFileSync(join(scratch.codexHome, "config.toml"), `developer_instructions = ${tomlString(instructions)}\n`, { mode: 0o600 });
 }

@@ -23,6 +23,8 @@ export type FakeRecord = {
   unauthorised: number;
   /** Where CODEX_HOME/auth.json pointed when Codex started; null when it is not a link. */
   authLink: string | null;
+  /** The config.toml in CODEX_HOME when Codex started; null when there is none. */
+  configToml: string | null;
 };
 
 const SCRIPT = `#!/usr/bin/env bun
@@ -41,7 +43,7 @@ for (let i = 0; i < args.length; i++) if (args[i] === "-c") { const [k, ...v] = 
 const prompt = await new Response(Bun.stdin.stream()).text();
 const url = config["mcp_servers.keyloom.url"];
 const token = process.env.KEYLOOM_MCP_TOKEN;
-const record = { args, prompt, cwd: process.cwd(), env: { HOME: process.env.HOME, CODEX_HOME: process.env.CODEX_HOME, KEYLOOM_MCP_TOKEN: process.env.KEYLOOM_MCP_TOKEN, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY, PATH: process.env.PATH }, tools: [], results: [], unauthorised: 0, authLink: (() => { try { return readlinkSync(join(process.env.CODEX_HOME, "auth.json")); } catch { return null; } })() };
+const record = { args, prompt, cwd: process.cwd(), env: { HOME: process.env.HOME, CODEX_HOME: process.env.CODEX_HOME, KEYLOOM_MCP_TOKEN: process.env.KEYLOOM_MCP_TOKEN, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY, PATH: process.env.PATH }, tools: [], results: [], unauthorised: 0, authLink: (() => { try { return readlinkSync(join(process.env.CODEX_HOME, "auth.json")); } catch { return null; } })(), configToml: (() => { try { return readFileSync(join(process.env.CODEX_HOME, "config.toml"), "utf8"); } catch { return null; } })() };
 const save = () => writeFileSync(join(dir, "record.json"), JSON.stringify(record));
 const rpc = async (method, params, auth = true) => {
   const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(auth ? { authorization: "Bearer " + token } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });

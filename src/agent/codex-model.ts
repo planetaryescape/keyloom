@@ -9,7 +9,7 @@ import { type AgentModel, type ContentBlock, type ModelMessage, type ModelReques
 import { type CodexEvent, type McpToolCall, parseEventLine, resultText } from "./codex/events.ts";
 import { CodexError, codexErrorFor, notInstalled } from "./codex/errors.ts";
 import { codexBin } from "./codex/login.ts";
-import { codexArgs, prepareScratch } from "./codex/lockdown.ts";
+import { type Scratch, codexArgs, prepareScratch, writeInstructions } from "./codex/lockdown.ts";
 import { transcriptPrompt } from "./codex/prompt.ts";
 import { startToolServer } from "./codex/tool-server.ts";
 import { DEFAULT_MODELS } from "./provider.ts";
@@ -102,7 +102,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
 async function runCodex(input: {
   request: ModelRequest;
   server: { url: string };
-  scratch: { cwd: string; env: Record<string, string | undefined> };
+  scratch: Scratch;
   model: string;
   effort: string;
   env: Record<string, string | undefined>;
@@ -112,9 +112,10 @@ async function runCodex(input: {
 }): ReturnType<AgentModel["run"]> {
   const { request, scratch } = input;
   const bin = codexBin(input.env);
+  const developerInstructions = `${request.system}\n\n${LOCKDOWN_NOTE}`;
+  if (scratch.ownHome) writeInstructions(scratch, developerInstructions);
   const args = codexArgs({
-    model: input.model, effort: input.effort, cwd: scratch.cwd, serverUrl: input.server.url,
-    developerInstructions: `${request.system}\n\n${LOCKDOWN_NOTE}`,
+    model: input.model, effort: input.effort, cwd: scratch.cwd, serverUrl: input.server.url, developerInstructions, ownHome: scratch.ownHome,
   });
 
   const child = spawn(bin, args, { cwd: scratch.cwd, env: scratch.env as NodeJS.ProcessEnv, stdio: ["pipe", "pipe", "pipe"] });

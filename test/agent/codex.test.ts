@@ -2,11 +2,12 @@
 // (S20 covers the real binary). What matters here is the lockdown, the transcript, and that the
 // validator is still the only way a change set comes into being (D-108, D-110).
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { codexModel } from "../../src/agent/codex-model.ts";
+import { prepareScratch, writeInstructions } from "../../src/agent/codex/lockdown.ts";
 import { startToolServer } from "../../src/agent/codex/tool-server.ts";
 import type { ModelTool } from "../../src/agent/model.ts";
 import { ModelError, sendMessage, showConversation } from "../../src/app/index.ts";
@@ -126,7 +127,7 @@ describe("the lockdown", () => {
       const rec = fake.record()!;
       const args = rec.args.join(" ");
       expect(rec.args.slice(0, 2)).toEqual(["exec", "--experimental-json"]);
-      for (const flag of ["--ephemeral", "--ignore-user-config", "--skip-git-repo-check", "-s read-only"]) expect(args).toContain(flag);
+      for (const flag of ["--ephemeral", "--skip-git-repo-check", "-s read-only"]) expect(args).toContain(flag);
       for (const setting of [
         'approval_policy="never"', 'web_search="disabled"', "features.shell_tool=false", "features.apps=false", "features.unified_exec=false",
         "features.plugins=false", "features.multi_agent=false", "features.memories=false",
@@ -149,9 +150,14 @@ describe("the lockdown", () => {
       expect(rec.unauthorised).toBe(1);
       expect(existsSync(rec.env.HOME!)).toBe(false);
       expect(rec.args[rec.args.indexOf("-m") + 1]).toBe("gpt-6.1-sol");
-      // keyloom's prompt travels as developer instructions, plus the note that nothing else can change a layout.
-      expect(args).toContain("developer_instructions=");
-      expect(args).toContain("except a successful propose_changes call");
+      // keyloom's prompt travels as developer instructions in the run's own config.toml (off the command line, where `ps`
+      // shows it), plus the note that nothing else can change a layout. Codex has to read that file, so the flag that
+      // ignores user config is not passed.
+      expect(args).not.toContain("--ignore-user-config");
+      expect(args).not.toContain("developer_instructions");
+      expect(args).not.toContain("except a successful propose_changes call");
+      expect(rec.configToml).toStartWith("developer_instructions = ");
+      expect(rec.configToml).toContain("except a successful propose_changes call");
     } finally {
       for (const [k, v] of [["ANTHROPIC_API_KEY", saved.a], ["OPENROUTER_API_KEY", saved.o]] as const) {
         if (v === undefined) delete process.env[k];
@@ -177,6 +183,12 @@ describe("the lockdown", () => {
     expect(rec.env.CODEX_HOME).toBe(real);
     expect(rec.authLink).toBeNull();
     expect(rec.env.HOME).toMatch(/keyloom-codex-.*\/home$/);
+    // The real home's own config.toml must stay out, so the flag stays and the instructions travel as an argument;
+    // nothing is written into the real home.
+    expect(rec.args).toContain("--ignore-user-config");
+    expect(rec.args.join(" ")).toContain("developer_instructions=");
+    expect(rec.args.join(" ")).toContain("except a successful propose_changes call");
+    expect(rec.configToml).toBeNull();
   });
 
   test("the schema of propose_changes reaches Codex whole", async () => {
@@ -325,5 +337,21 @@ describe("the tool server", () => {
     const server = await startToolServer([echo]);
     await server.stop();
     await expect(fetch(server.url, { method: "POST" })).rejects.toThrow();
+  });
+});
+
+describe("writeInstructions", () => {
+  test("writes TOML that reads back as the same text, for this user only, and never into the real home", () => {
+    const scratch = prepareScratch("t", { CODEX_HOME: fakeCodexHome(true) });
+    try {
+      const text = 'a "quoted" line\nsecond \\ backslash \u007f del and   separator';
+      writeInstructions(scratch, text);
+      const file = join(scratch.codexHome, "config.toml");
+      expect((statSync(file).mode & 0o777).toString(8)).toBe("600");
+      expect(Bun.TOML.parse(readFileSync(file, "utf8"))).toEqual({ developer_instructions: text });
+      expect(() => writeInstructions({ codexHome: scratch.codexHome, ownHome: false }, "x")).toThrow(/only when CODEX_HOME is keyloom's own/);
+    } finally {
+      scratch.remove();
+    }
   });
 });
