@@ -132,10 +132,7 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
   return (
     <section className="chat" aria-label="Chat with keyloom">
       <header className="chat-head">
-        <div className="chat-title">
-          <h2>Chat</h2>
-          <ProviderLine status={provider.status} pinned={transcript.pinned} />
-        </div>
+        <h2>Chat</h2>
         <div className="chat-head-actions">
           <button type="button" className="button" aria-pressed={view === "decisions"} onClick={() => setView(view === "decisions" ? "chat" : "decisions")}>
             <ScrollText size={14} aria-hidden="true" />
@@ -161,6 +158,8 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
           </button>
         </div>
       </header>
+
+      {view === "chat" ? <ProviderLine status={provider.status} pinned={transcript.pinned} /> : null}
 
       {view === "decisions" ? (
         <DecisionsView

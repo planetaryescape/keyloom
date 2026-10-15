@@ -66,6 +66,10 @@ Yes. Flash `fl_01M5067Z2Y2JT3EDYD3JCY0NSC` copied keyloom's combined `glove80.uf
 
 Yes, with one change. The existing adapter, pointed at `https://openrouter.ai/api` with `authToken`, passed `option-option.eval.test.ts` on `anthropic/claude-opus-5.5`: the Tool Runner, streaming, adaptive thinking, effort and `cache_control` all worked. OpenRouter rejects the fallback beta's `fallbacks: "default"` (400, expects an array), so the beta is sent to Anthropic only. `usage.cost` arrives on the closing `message_delta` and not in the SDK's final message, so the adapter reads it from the stream event. The out-of-credits path is tested against scripted responses only. See [../research/spikes/S19.md](../research/spikes/S19.md).
 
+### S20 result (2026-10-15)
+
+Yes, with four findings that changed the lockdown. Through a loopback MCP server (the official SDK, bearer token per run, 127.0.0.1), the real Codex received `propose_changes`'s full schema and `option-option` passed on it, with two valid proposals. Codex still sees BK's global instructions unless `HOME` and `CODEX_HOME` are replaced; it lists the ChatGPT account's connected apps unless `features.apps` is off; it can call MCP tools only through code mode, so that host stays on, and code mode has no file, network or `require` access and its `apply_patch` is rejected by the read-only sandbox. The hostile-prompt eval passed. The validate-and-retry loop was tested only against a stand-in, and the plan usage of a conversation can't be read from Codex. See [../research/spikes/S20.md](../research/spikes/S20.md).
+
 ### S10 result, devicetree half (2026-10-15)
 
 `web-tree-sitter` loads `tree-sitter-devicetree.wasm` inside a `bun build --compile` binary: the compiled `keyloom import --board moergo/glove80` and `generate` ran on the macOS arm64 binary with no extra flags. See [../research/spikes/S10.md](../research/spikes/S10.md).

@@ -1,6 +1,6 @@
 # 19: Model providers: Codex subscription, OpenRouter key or Anthropic key
 
-Status: proposal, 2026-10-15. Source baseline: origin/main at `65cc12a` (v0.10.1).
+Status: built in rung 10, 2026-10-15. Source baseline: origin/main at `65cc12a` (v0.10.1). Results: S19 and S20 in [15](15-open-questions.md).
 
 BK: "use codex cli for AI I think it allow you to use codex sub with it's agent sdk if I'm not mistaken, we can use that. Also make it possible for me to use an openrouter api key". This came after the Anthropic account behind keyloom's key ran out of credits, which stopped the chat and the live evals.
 
@@ -24,7 +24,7 @@ OpenRouter serves an Anthropic Messages endpoint, and `@anthropic-ai/sdk` takes 
 
 - **Model IDs.** `anthropic/claude-opus-5.5` and `anthropic/claude-sonnet-5.5`, confirmed from OpenRouter's live `/models` response.
 - **Cost.** OpenRouter returns `usage.cost` on every response. keyloom shows it in place of its own price-table estimate.
-- **Unverified until S19.** Without a key, nobody has checked that the Tool Runner's tool loop, the fallback beta header, `cache_control` and the out-of-credits error all behave through OpenRouter.
+- **Checked in S19.** The Tool Runner loop, thinking, effort and `cache_control` work through OpenRouter. The fallback beta doesn't (OpenRouter rejects `fallbacks: "default"`), so only the direct API sends it (D-121). `usage.cost` arrives on the closing stream event and the adapter reads it there.
 
 Non-Claude models on OpenRouter would need a Chat Completions adapter. That isn't planned until BK asks for it (Q22).
 
@@ -37,13 +37,15 @@ How the adapter works (D-108):
 - **Spawning.** It spawns `codex exec --experimental-json` directly, not through `@openai/codex-sdk`. The SDK finds its binary through `node_modules`, which a `bun build --compile` binary doesn't have. Spawning directly also allows `--ignore-user-config` and `--ephemeral`.
 - **Tools.** keyloom's `ModelTool`s are served by a loopback MCP server, bound to 127.0.0.1 with a bearer token per run. Tool approval is set to `approve`. The `propose_changes` schema is larger than Codex's default `tool_input_schema_max_bytes` of 5000, so the limit is raised. Whether the schema then survives intact is S20.
 - **Lockdown.** Shell off, `-s read-only`, `approval_policy="never"`, `--ignore-user-config`, `--ephemeral`, an empty scratch directory as the working directory, and web search off.
+  - Each run gets its own `HOME` and `CODEX_HOME`, with only `auth.json` linked in, because BK's global instructions otherwise reach it, and the ChatGPT account's connected apps are switched off (D-122).
+  - Codex defers MCP tools behind its code mode, so that host stays on. Code mode has no file, network or `require` access, and its `apply_patch` is rejected by the read-only sandbox (S20).
   - Codex still lists sub-agent and user-input tools that can't be removed. They can't change a layout, but they can use up plan quota.
   - keyloom counts tool calls, and aborts the run past the same iteration cap the Anthropic adapter uses.
 - **Prompt.** keyloom's system prompt goes in `developer_instructions`. Codex's own base prompt still applies, so each run carries 24k to 80k input tokens of Codex's own text.
 - **Streaming.** Codex streams whole messages, not tokens. The chat shows each message when it completes, and a tool call when it starts.
 - **Usage.** Tokens are reported, but there is no cost and no rate-limit data. The UI shows tokens only for Codex.
 - **Errors.** Codex's errors are message strings. A usage limit maps to `rate_limit`, a logged-out state to `missing_key`, and a failed spawn to `connection`.
-- **History.** Codex keeps its own thread. keyloom stores Codex's thread ID with the conversation, and synthesises `tool_use` and `tool_result` blocks from the MCP calls, so keyloom's transcript, decisions and evals read the same as with the other providers.
+- **History.** The run is `--ephemeral`, so Codex keeps no thread. keyloom replays the stored conversation to it as text each turn (D-124), and synthesises `tool_use` and `tool_result` blocks from the MCP calls, so keyloom's transcript, decisions and evals read the same as with the other providers.
 - **Login.** keyloom runs `codex login status` and says "run `codex login`" when needed. keyloom never handles the ChatGPT credential.
 
 OpenAI's docs recommend API keys for automation and say nothing about third-party apps using ChatGPT login. Their terms weren't readable during the research. So the Codex provider ships for BK's own use, and whether other users get it waits on Q20.
@@ -66,10 +68,10 @@ Codex's loop isn't keyloom's, so the guarantee can't depend on the loop. It rest
 ## Choosing a provider
 
 - **Selection.**
-  - `agent.provider` is one of `anthropic`, `openrouter` or `codex`, with `--provider` on the CLI.
-  - `agent.model` and `agent.effort` are read per provider, with a default model per provider.
-  - The order is the flag, then config, then the default.
-  - The web app shows the active provider and model next to the chat, and lets BK change them. A change applies to the next conversation.
+  - `agent.provider` is one of `anthropic`, `openrouter` or `codex`, with `--provider` on `chat` and `serve`, in `<data dir>/config.json` (D-120).
+  - `agent.model` and `agent.effort` are read from the same file, with a default model per provider. A config model applies only to the provider the config names.
+  - The order is the flag, then `KEYLOOM_PROVIDER`, then the config, then the first provider with a credential.
+  - The web app shows the active provider and model under the chat header, and the provider and model a conversation started on when one is open. It doesn't change them; that waits for a request.
 - **Credentials.**
   - Anthropic reads `ANTHROPIC_API_KEY`. OpenRouter reads `OPENROUTER_API_KEY`. Codex uses its own login, and an optional `CODEX_API_KEY` switches it to API billing.
   - keyloom never stores a key, as today (03).
