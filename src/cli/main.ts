@@ -6,6 +6,7 @@ import {
   regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runToolchainChecks, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
+import { type ChatDeps, registerChatCommands } from "./commands/chat.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve } from "./serve.ts";
@@ -21,7 +22,7 @@ const stdIo = (): Io => ({
 
 type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: boolean };
 
-export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }): Command {
+export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
     .version(pkg.version, "-V, --version", "print the keyloom version")
@@ -163,6 +164,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     });
 
   registerChangeCommands(program, { io, format, withApp });
+  registerChatCommands(program, { io, format, withApp }, chat);
 
   program
     .command("serve")
@@ -216,9 +218,9 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 });
 
 /** Runs the CLI and returns the exit code; never throws. */
-export async function runCli(argv: string[], io: Io = stdIo()): Promise<number> {
+export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
-  const program = buildProgram(io, state);
+  const program = buildProgram(io, state, chat);
   let jsonErrors = false;
   try {
     await program.parseAsync(argv, { from: "user" });

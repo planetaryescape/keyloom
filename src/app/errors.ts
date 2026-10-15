@@ -28,3 +28,16 @@ export class StaleBaseError extends Error {
     super(message);
   }
 }
+
+/** The model API refused, rejected or could not be reached, or no key is set: exit 9. `kind` says which, for the chat panel. */
+export class ModelError extends Error {
+  override name = "ModelError";
+  constructor(readonly kind: string, message: string) {
+    super(message);
+  }
+}
+
+/** The conversation is already answering a message in this process: the second message would interleave with it. */
+export class BusyError extends Error {
+  override name = "BusyError";
+}
