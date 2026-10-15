@@ -18,12 +18,12 @@ const same = (a: Slot, b: Slot) => a.layerId === b.layerId && a.position === b.p
 
 /** Each function `binding` produces at `slot`, with the other keys (and layers) that produce it too. */
 export function whereElse(layout: Layout, slot: Slot, binding: Binding): WhereElse[] {
-  return bindingFunctions(binding).map((fn) => {
+  return bindingFunctions(binding, layout.tapDances).map((fn) => {
     const others: Slot[] = [];
     for (const layer of layout.layers) {
       layer.bindings.forEach((candidate, position) => {
         const at = { layerId: layer.id, position };
-        if (!same(at, slot) && bindingFunctions(candidate).includes(fn)) others.push(at);
+        if (!same(at, slot) && bindingFunctions(candidate, layout.tapDances).includes(fn)) others.push(at);
       });
     }
     return { function: fn, name: nameOf(fn, layout), others };

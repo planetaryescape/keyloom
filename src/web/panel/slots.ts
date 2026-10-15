@@ -30,7 +30,7 @@ export type TapPick =
 /** What a person can put in the hold slot: modifiers or a layer, the two holds the model has. */
 export type HoldPick = { t: "mods"; mods: Mod[] } | { t: "layer"; layerId: string };
 
-export type TapKind = "key" | "modifier" | "layer" | "macro" | "transparent" | "none" | "native";
+export type TapKind = "key" | "modifier" | "layer" | "macro" | "tapDance" | "transparent" | "none" | "native";
 
 /** The hold slot is filled once the draft is a hold-tap. */
 export const hasHold = (draft: Draft): boolean => draft.kind === "holdTap";

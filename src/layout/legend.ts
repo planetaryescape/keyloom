@@ -113,11 +113,6 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
       if (binding.label.length > 5 && tap !== undefined && tap !== "" && hold !== undefined && hold !== "" && more.length === 0) return { kind: "native", tap, hold };
       return { kind: "native", tap: shortNative(binding.label) };
     }
-<<<<<<< HEAD
-||||||| parent of 939e964 (feat: tap dance model, QMK and ZMK generators, and the Oryx tap dance importer)
-    case "native":
-      return { kind: "native", tap: binding.label };
-=======
     case "tapDance": {
       const td = ctx.tapDances?.find((t) => t.id === binding.tapDanceId);
       if (!td) return { kind: "tapDance", tap: "TD?" };
@@ -126,11 +121,10 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
         td.doubleTap ? `2×${slotLabel(td.doubleTap, ctx)}` : "",
         td.tapThenHold ? `2×hold ${slotLabel(td.tapThenHold, ctx)}` : "",
       ].filter((t) => t !== "");
-      return { kind: "tapDance", tap: slotLabel(td.tap, ctx), ...(extra.length ? { hold: extra.join(" ") } : {}) };
+      // A long tap ("HypSPC") would be drawn under the legend size floor, so the cap names the dance instead; the panel lists the slots.
+      const tap = slotLabel(td.tap, ctx);
+      return { kind: "tapDance", tap: tap.length > 5 ? `TD${ctx.tapDances?.indexOf(td)}` : tap, ...(extra.length ? { hold: extra.join(" ") } : {}) };
     }
-    case "native":
-      return { kind: "native", tap: binding.label };
->>>>>>> 939e964 (feat: tap dance model, QMK and ZMK generators, and the Oryx tap dance importer)
     case "transparent":
       return { kind: "transparent", tap: "" };
     case "none":

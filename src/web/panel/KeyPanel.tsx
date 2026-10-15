@@ -581,6 +581,9 @@ function tapSlotText(draft: Draft, layout: Layout): string {
       return "Transparent";
     case "none":
       return "Nothing";
+    case "tapDance":
+      // The panel edits a tap dance's slots in the next part of rung 14; until then it shows the dance and leaves it alone.
+      return bindingSummary(draft.tapDance as Binding, layout);
     case "native":
       return draft.native?.label ?? "Custom";
   }
@@ -612,6 +615,7 @@ function selectedIdsFor(slot: SlotName, draft: Draft): string[] {
       return ["special-transparent"];
     case "none":
       return ["special-none"];
+    case "tapDance":
     case "native":
       return [];
   }

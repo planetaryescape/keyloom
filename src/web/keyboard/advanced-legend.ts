@@ -44,6 +44,10 @@ export function advancedLegend(binding: Binding, layout: Layout): Pick<Legend, "
     }
     case "macro":
       return { tap: binding.macroId };
+    case "tapDance": {
+      const index = layout.tapDances.findIndex((t) => t.id === binding.tapDanceId);
+      return { tap: firmware === "qmk" ? `TD(DANCE_${index})` : `&${binding.tapDanceId.replace(/[^A-Za-z0-9_]/g, "_")}` };
+    }
     case "native":
       return { tap: binding.source };
     case "transparent":
