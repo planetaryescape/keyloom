@@ -2,13 +2,13 @@
 // the file is derived, and `boards check` regenerates it to catch drift.
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { GeometryError } from "./geometry-error.ts";
+import { parsePhysicalLayout } from "./zmk-geometry.ts";
 import { type BoardDefinition, type BoardRevision, type Geometry, GeometrySchema } from "./schema.ts";
 
 export type TextFetcher = (url: string) => Promise<string>;
 
-export class GeometryError extends Error {
-  override name = "GeometryError";
-}
+export { GeometryError } from "./geometry-error.ts";
 
 export const defaultFetcher: TextFetcher = async (url) => {
   const res = await fetch(url);
@@ -25,6 +25,9 @@ function githubSlug(repo: string): string {
 }
 
 export function geometryPath(rev: BoardRevision): string {
+  // A ZMK board names the file holding its `zmk,physical-layout`; a QMK board's is derived from its target.
+  const physical = rev.build.kind === "zmk-moergo-template" ? rev.build.physicalLayout : undefined;
+  if (typeof physical === "string") return physical;
   if (!rev.qmkTarget) throw new GeometryError(`revision ${rev.id} has no qmkTarget`);
   return `keyboards/${rev.qmkTarget}/keyboard.json`;
 }
@@ -53,11 +56,13 @@ export type GeometryOptions = { fetchText?: TextFetcher; cacheDir?: string | und
 
 /** Geometry for one revision of a QMK board: `layouts.LAYOUT.layout`, in binding order. */
 export async function generateGeometry(board: BoardDefinition, rev: BoardRevision, opts: GeometryOptions = {}): Promise<Geometry> {
-  if (board.firmware !== "qmk") {
-    throw new GeometryError(`geometry generation for ${board.firmware} boards is not implemented yet`);
-  }
   const path = geometryPath(rev);
   const text = await fetchPinned(rev, path, opts.fetchText ?? defaultFetcher, opts.cacheDir);
+  if (board.firmware === "zmk") {
+    const keys = parsePhysicalLayout(text);
+    if (keys.length !== board.keyCount) throw new GeometryError(`${path} has ${keys.length} keys, board.json says keyCount ${board.keyCount}`);
+    return GeometrySchema.parse({ schemaVersion: 1, source: { repo: rev.source.repo, sha: rev.source.sha, path }, keys });
+  }
   let doc: { layouts?: Record<string, { layout?: QmkKey[] }> };
   try {
     doc = JSON.parse(text);

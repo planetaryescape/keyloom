@@ -70,7 +70,7 @@ describe("Moonlander geometry", () => {
     await expect(generateGeometry(definition, rev, { fetchText: fetchWith("{not json") })).rejects.toThrow(GeometryError);
     await expect(generateGeometry(definition, rev, { fetchText: fetchWith(JSON.stringify({ layouts: { LAYOUT_a: { layout: [] }, LAYOUT_b: { layout: [] } } })) })).rejects.toThrow(/no layout named LAYOUT/);
     await expect(generateGeometry(definition, rev, { fetchText: fetchWith(JSON.stringify({ layouts: { LAYOUT: { layout: [{ x: 0, y: 0 }] } } })) })).rejects.toThrow(/1 keys/);
-    await expect(generateGeometry({ ...definition, firmware: "zmk" }, rev, { fetchText: offlineFetch })).rejects.toThrow(/not implemented/);
+    await expect(generateGeometry({ ...definition, firmware: "zmk" }, rev, { fetchText: offlineFetch })).rejects.toThrow(/key_physical_attrs/);
   });
 
   test("fetched files are cached by SHA and reused", async () => {

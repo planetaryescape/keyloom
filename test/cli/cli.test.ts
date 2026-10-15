@@ -189,7 +189,10 @@ describe("exit codes", () => {
 describe("boards", () => {
   test("list, show", async () => {
     const list = json(await cli(["boards", "list"]));
-    expect(list.boards).toEqual([{ id: "zsa/moonlander", name: "Moonlander", firmware: "qmk", key_count: 72 }]);
+    expect(list.boards).toEqual([
+      { id: "moergo/glove80", name: "Glove80", firmware: "zmk", key_count: 80 },
+      { id: "zsa/moonlander", name: "Moonlander", firmware: "qmk", key_count: 72 },
+    ]);
     const show = await cli(["boards", "show", "zsa/moonlander", "--format", "table"]);
     expect(show.out).toContain("reva: build qmk-docker, flash zapp, USB PID 0x1969");
     expect(show.out).toContain("revb: build qmk-docker, flash zapp, USB PID 0x1972");

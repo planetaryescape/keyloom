@@ -13,7 +13,7 @@ export {
   getBuild, getFlash, startBuild, startFlash,
 } from "./firmware.ts";
 export { BuildFailedError, FlashFailedError } from "./firmware-errors.ts";
-export type { ImportReport } from "../firmware/qmk/import.ts";
+export type { ImportReport } from "../layout/import-report.ts";
 export type { Layout } from "../layout/schema.ts";
 export { type ChangeOp, ChangeOpSchema } from "../layout/change.ts";
 export { describeBinding } from "../layout/functions.ts";

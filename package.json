@@ -22,6 +22,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tree-sitter-c": "0.24.1",
+    "tree-sitter-devicetree": "0.15.0",
     "ulid": "3.0.2",
     "web-tree-sitter": "0.27.0",
     "zod": "^4"

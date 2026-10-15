@@ -1,6 +1,8 @@
 // Use cases for layouts: import, list, get (01#modules).
 import type { Board } from "../boards/load.ts";
-import { ImportError, type ImportReport, importOryxSource } from "../firmware/qmk/import.ts";
+import { ImportError, importOryxSource } from "../firmware/qmk/import.ts";
+import { ZmkImportError, importZmkSource } from "../firmware/zmk/import.ts";
+import type { ImportReport } from "../layout/import-report.ts";
 import type { Layout } from "../layout/schema.ts";
 import {
   NameTakenError, type LayoutRow, type RevisionRow, createLayout, findLayoutRow, findRevision, listLayoutRows,
@@ -12,7 +14,7 @@ import { NotFoundError, UsageError } from "./errors.ts";
 export type ImportInput = {
   /** Board ID, such as `zsa/moonlander`. */
   board: string;
-  /** An Oryx source zip, or the folder it unpacks to. */
+  /** An Oryx source zip or the folder it unpacks to; or a Layout Editor `.keymap` file, or a folder holding one. */
   source: string;
   /** Layout name; derived from the source when omitted. */
   name?: string;
@@ -20,8 +22,11 @@ export type ImportInput = {
 
 export type ImportOutcome = { layoutId: string; revisionId: string; name: string; report: ImportReport };
 
-const IMPORTERS = new Map<string, (path: string, board: Board) => ReturnType<typeof importOryxSource>>([
+type Imported = { layout: Layout; report: ImportReport; suggestedName: string };
+
+const IMPORTERS = new Map<string, (path: string, board: Board) => Promise<Imported>>([
   ["oryx-source", (path, board) => importOryxSource(path, board.definition)],
+  ["zmk-layout-editor-keymap", (path, board) => importZmkSource(path, board.definition)],
 ]);
 
 export async function importLayout(app: App, input: ImportInput): Promise<ImportOutcome> {
@@ -33,11 +38,11 @@ export async function importLayout(app: App, input: ImportInput): Promise<Import
   if (input.name !== undefined && !explicit) throw new UsageError("--name must not be empty");
   if (explicit?.startsWith("lay_")) throw new UsageError('a layout name can\'t start with "lay_"; that prefix is for IDs');
 
-  let result;
+  let result: Imported;
   try {
     result = await importer(input.source, board);
   } catch (err) {
-    if (err instanceof ImportError) throw new UsageError(err.message);
+    if (err instanceof ImportError || err instanceof ZmkImportError) throw new UsageError(err.message);
     throw err;
   }
   const { layout, report, suggestedName } = result;

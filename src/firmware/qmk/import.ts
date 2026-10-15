@@ -1,5 +1,6 @@
 // Oryx source (keymap.c, config.h, rules.mk, keymap.json) -> keyloom Layout + import report (05).
 import type { BoardDefinition } from "../../boards/schema.ts";
+import type { ImportReport, NativeItem, PassthroughItem } from "../../layout/import-report.ts";
 import { fromQmk } from "../../layout/keycodes.ts";
 import {
   type Binding, type Combo, type FirmwareSetting, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough,
@@ -12,24 +13,7 @@ import { macroFor, parseMacroCase } from "./send-string.ts";
 import { ImportError, type SourceFiles, readOryxSource } from "./source.ts";
 
 export { ImportError } from "./source.ts";
-
-export type NativeItem = { layerId: string; position: number; source: string; label: string; reason: string };
-export type PassthroughItem = { file: string; anchor: string; refersToLayerIndices: boolean };
-
-export type ImportReport = {
-  boardId: string;
-  layers: number;
-  keysPerLayer: number;
-  /** Bindings across all layers, by kind. */
-  bindings: Record<Binding["kind"], number>;
-  macros: string[];
-  combos: number;
-  settings: number;
-  profiles: string[];
-  native: NativeItem[];
-  passthrough: PassthroughItem[];
-  warnings: string[];
-};
+export type { ImportReport, NativeItem, PassthroughItem } from "../../layout/import-report.ts";
 
 export type ImportResult = { layout: Layout; report: ImportReport; suggestedName: string };
 

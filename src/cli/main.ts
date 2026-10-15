@@ -52,8 +52,8 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   program
     .command("import")
     .description("import an existing layout; prints the new layout ID and an import report")
-    .requiredOption("--board <board>", "board ID, such as zsa/moonlander")
-    .argument("<file>", "Oryx source zip, or the folder it unpacks to")
+    .requiredOption("--board <board>", "board ID, such as zsa/moonlander or moergo/glove80")
+    .argument("<file>", "Oryx source zip or its folder (Moonlander), or a Layout Editor .keymap file (Glove80)")
     .option("--name <name>", "layout name (default: taken from the source)")
     .action(async (file: string, opts: { board: string; name?: string }) => {
       const outcome: ImportOutcome = await withApp((app) =>
