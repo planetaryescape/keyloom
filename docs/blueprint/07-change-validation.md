@@ -59,13 +59,14 @@ Warnings appear in the preview beside the trade-offs. They don't block apply.
 
 | Code | Rule | Why |
 |---|---|---|
-| `doubled_letter_tapdance` | A multi-tap behaviour on a letter that doubles in common English words (`l s e o t f p r m c n d g b z`) | "class" would break. This is why double-tap S was rejected for Option–Option (D-019) |
+| `doubled_letter_tapdance` | A modelled tap dance, or a native Oryx one, whose tap is a letter that doubles in common English words (`l s e o t f p r m c n d g b z`) | "class" would break. This is why double-tap S was rejected for Option–Option (D-019) |
 | `homerow_same_hand_mods` | A hold-tap on a home-row letter that holds a modifier has no opposite-hand constraint: QMK `CHORDAL_HOLD` off, or ZMK `hold-trigger-key-positions` empty or naming the key's own hand beyond the thumbs. One warning per profile, only for what the change adds (D-058) | Rolling same-hand letters triggers the modifier by accident (D-017) |
 | `moved_pinned` | The change moves a slot or function covered by a `pinned` priority | BK said to keep it there (D-021). It's a reminder, not a block (D-023) |
 | `contradicts_decision` | The change alters, retunes or removes the layer of keys an active `choice` decision placed, unless BK marked it `tried_unhelpful`. The `DecisionReminder` carries the stored goal, choice, reason and status | It surfaces the old reason (D-022, D-053) |
 | `outside_selection` | The message carried a selection, and the change edits a key that isn't in it (another position, or the same position on another layer) | BK pointed at the keys he meant. Editing others is sometimes necessary, but he should see it (D-062) |
 | `large_relearn` | `relearnCount` is above 6 | Muscle memory cost. BK should choose it knowingly |
 | `identifier_clash` | A layer, macro, combo or profile ID would generate a name that collides with a firmware identifier (a ZMK behaviour label, a QMK keycode) | Generated firmware would fail to compile or bind the wrong thing. Taken from keymap-editor's warnings ([../research/keymap-editor.md](../research/keymap-editor.md)) |
+| `tap_dance_same_action` | Two filled slots of a tap dance do the same thing (tap and double-tap are both Esc). Reported for the first key that uses it, and only when the change adds or alters it (D-156) | The extra slot adds nothing, and the key waits for a second tap for no reason |
 | `macro_looks_like_secret` | A macro types a long run of plain characters with no modifiers, which looks like a password | Firmware isn't a safe place for a secret: anyone with the keyboard can replay it. Taken from keymap-editor's warnings |
 
 `moved_pinned` and `contradicts_decision` are warnings on purpose. An old decision prompts a reminder; it never prevents a new one (D-023).

@@ -184,17 +184,19 @@ TEST_F(Emulate, Run) {
     std::ifstream in(events);
     unsigned at, position;
     std::string action;
-    unsigned now = 0;
+    // The clock is QMK's own, not a count kept here: firmware code that waits (Oryx's tap dance reset calls
+    // wait_ms(10)) moves it, and a count kept here would then put every later event that much too late.
+    const uint32_t start = timer_read32();
     while (in >> at >> position >> action) {
         uint8_t row = 255, col = 255;
         for (uint8_t r = 0; r < MATRIX_ROWS; r++)
             for (uint8_t c = 0; c < MATRIX_COLS; c++)
                 if (keyloom_probe[r][c] == position + 1) { row = r; col = c; }
         ASSERT_NE(row, 255) << "position " << position << " is not on the matrix";
-        if (at > now) { idle_for(at - now); now = at; }
+        const uint32_t now = timer_read32() - start;
+        if (at > now) idle_for(at - now);
         if (action == "press") press_key(col, row); else release_key(col, row);
         idle_for(1);
-        now += 1;
     }
     idle_for(settle ? atoi(settle) : 1000);
     fclose(out);

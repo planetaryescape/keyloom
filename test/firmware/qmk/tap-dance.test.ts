@@ -85,6 +85,44 @@ describe("generating tap dances", () => {
   });
 });
 
+describe("macros with text steps", () => {
+  test("a text step is a C string literal in SEND_STRING, escaped, between the other steps", () => {
+    const macro: Macro = {
+      id: "typed", name: "Typed",
+      steps: [{ op: "tap", code: "C", mods: ["LGUI"] }, { op: "text", text: 'Thanks, "BK"!\n\tC:\\' }, { op: "waitMs", ms: 50 }, { op: "text", text: "ok" }],
+    };
+    const c = text({ ...base, macros: [...base.macros, macro] }, "keymap.c");
+    expect(c).toContain('SEND_STRING(SS_LGUI(SS_TAP(X_C)) "Thanks, \\"BK\\"!\\n\\tC:\\\\" SS_DELAY(50) "ok");');
+  });
+
+  test("a character that can't be typed stops the build with the macro's name and the character", () => {
+    const macro: Macro = { id: "typed", name: "Typed", steps: [{ op: "text", text: "naïve" }] };
+    expect(() => gen({ ...base, macros: [...base.macros, macro] })).toThrow(/macro "Typed": "ï" can't be typed/);
+  });
+
+  test("the text comes back as the same step", async () => {
+    const macro: Macro = { id: "st-macro-4", name: "ST_MACRO_4", steps: [{ op: "text", text: 'Thanks, "BK"!\n\tC:\\' }, { op: "waitMs", ms: 50 }, { op: "tap", code: "A" }] };
+    const again = await reimport({ ...base, macros: [...base.macros, macro] });
+    expect(again.layout.macros.at(-1)).toEqual(macro);
+  });
+});
+
+describe("what the output depends on", () => {
+  test("the same layout generates the same bytes, and a key's dance is its slots, not its place in the list", async () => {
+    const full: TapDance = { id: "zz", name: "ZZ", tap: key("A"), hold: { kind: "modifier", mods: ["LSFT"] }, doubleTap: key("B") };
+    const l = withDance(withDance(base, escCaps, 0), full, 1);
+    expect(gen(structuredClone(l))).toEqual(gen(l));
+    const reordered: Layout = { ...l, tapDances: [...l.tapDances].reverse() };
+    const slotsAt = async (layout: Layout, position: number) => {
+      const again = (await reimport(layout)).layout;
+      const b = again.layers[0]?.bindings[position];
+      return b?.kind === "tapDance" ? slots(again.tapDances.find((t) => t.id === b.tapDanceId) as TapDance) : undefined;
+    };
+    for (const position of [0, 1, 34, 35]) expect(await slotsAt(reordered, position)).toEqual(await slotsAt(l, position));
+    expect(await slotsAt(l, 1)).toMatchObject({ hold: { kind: "modifier", mods: ["LSFT"] } });
+  });
+});
+
 describe("importing tap dances", () => {
   test("BK's TD0 and TD1 are tap dances with a tap and a double-tap, and no tap dance code is left as passthrough", () => {
     const none = { hold: undefined, tapThenHold: undefined, termMs: undefined };

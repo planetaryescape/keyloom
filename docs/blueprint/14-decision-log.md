@@ -648,3 +648,53 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 ### D-169: Every sync records the times from Apply to a verified flash, so rung 17 is decided by measurement. (Claude, building rung 13; D-096)
 - **Recorded:** per sync, the revision's Apply time, the start, the end of the build, the start of the flash and the end. `keyloom sync status --format json` shows the last as `timings_s` (wait, build, flash, apply to verified); `logs/sync-<id>.log` has a line per step with the milliseconds since Apply.
 - **Meaning:** the number that decides rung 17 is `apply_to_verified`, over a week of BK's use. A build that is reused (a retry) shows a build time near zero.
+||||||| parent of cf03c56 (feat: tap dance validation, text steps and docs; fix the QMK emulator clock)
+
+||||||| parent of aa1754b (feat: tap dance validation, text steps and docs; fix the QMK emulator clock)
+
+
+### D-150: `Layout.tapDances` is a new array, `schemaVersion` stays 1, and an old document reads as `[]`. (Claude, building rung 14)
+- **Rule the codebase already follows:** `schemaVersion` is `z.literal(1)` and has never changed. Macros, combos and profiles were added to version 1, so a field is added with a default and the version is kept for an incompatible change only.
+- **How:** `tapDances: z.array(TapDanceSchema).default([])`. Every read of a stored document goes through `LayoutSchema.parse`, so an old row gains the field when it is read and the next revision writes it. `test/persistence/pre-tap-dance-layout.test.ts` loads a revision stored without the key (the web sample fixture, then a database row) and checks the document and the stored JSON.
+- **Demo:** the rung 2 run's database (written before this change, no `tapDances`) loads with the new code (`evidence/rung14/demo-migration.log`).
+
+### D-151: A tap dance slot is a key, modifier, layer or macro action, never a hold-tap or another tap dance, and each slot is a function. (Claude, building rung 14; refines D-093)
+- **Why flat:** both firmwares' state machines are flat, and a nested hold-tap would need a profile per slot. `SlotAction` is the four binding kinds that mean one action (`key`, `modifier`, `layer`, `macro`).
+- **Functions:** `slotFunction` gives the same string a key of its own would (`key:ESCAPE`, `layer:toggle:num`), so reachability, the drop flow of D-092 and `find_function` treat a slot like any key, with no tap dance case. Replacing a tap dance key asks for a `dropFunction` for each slot function that exists nowhere else.
+- **Type guard:** `bindingFunctions(binding)` accepts any binding except `tapDance`; a `tapDance` binding needs the layout's `tapDances` as a second argument. A caller holding a general `Binding` can't compile without passing them, which is how the callers that would have silently returned `[]` were found (`tsc` listed them).
+- **Layer graph:** `layerTargets` returns every layer a binding switches to; a tap dance can have one per slot, and each is an edge.
+
+### D-152: QMK tap dances are Oryx's state machine, and an empty slot does nothing, as in Oryx. (Claude, building rung 14)
+- **Shape:** per entry `on_dance_n`, `dance_n_finished`, `dance_n_reset` around one shared `dance_step`, in `tap_dance_actions[]` with `ACTION_TAP_DANCE_FN_ADVANCED`. The cases are `SINGLE_TAP` (tap), `SINGLE_HOLD` (hold), `DOUBLE_TAP` (doubleTap), `DOUBLE_HOLD` (tapThenHold, which Oryx's UI calls "tap-hold"), and `DOUBLE_SINGLE_TAP` (two quick taps, written from the tap slot). A count of 3 types the tap three times and each tap after that once, because that is what Oryx's `on_dance_n` does.
+- **Slot code:** a key or modifier is `register_code16`/`unregister_code16`; a momentary layer is `layer_on`/`layer_off`; toggle, to and one-shot are `layer_invert`, `layer_move` and `set_oneshot_layer`/`clear_oneshot_layer_state`; a macro is its `SEND_STRING` inline.
+- **Term:** ZSA's fork has `ACTION_TAP_DANCE_FN_ADVANCED` and `_WITH_RELEASE` only (checked in `quantum/process_keycode/process_tap_dance.h` at the pinned checkout), no variant with a timeout. A `termMs` is written as a `case TD(DANCE_n): return N;` in `get_tapping_term`, with `TAPPING_TERM_PER_KEY` defined, which is where QMK asks (`GET_TAPPING_TERM(active_td, ...)` in `tap_dance_task`).
+- **rules.mk:** `TAP_DANCE_ENABLE = yes` is appended when there are entries and it isn't on; `= no` when there are none, no Oryx tap dance code is kept, and it was on, for the reason COMBO_ENABLE is handled (an enabled feature with no `tap_dance_actions[]` doesn't link).
+- **Empty slots:** an unfilled hold or tap-then-hold slot types nothing on QMK, as Oryx's generated code does (no `SINGLE_HOLD` case). ZMK differs (S16).
+
+### D-153: The importer trusts a reading only if keyloom's own generator writes the same code back. (Claude, building rung 14)
+- **Why:** a tap dance is code, and "plausible but wrong" is the failure that survives review. The importer reads each `dance_n_finished` into slots, regenerates the whole tap dance block from the entries (`renderTapDances`), and compares it with the original after collapsing spacing and writing every key expression by what it means (Oryx nests `LALT(LCTL(LGUI(LSFT(KC_SPACE))))`; keyloom writes the same key in its own order).
+- **All or nothing:** if the block differs anywhere (a third step, `wait_ms(20)`, a case it doesn't know, a `get_tapping_term` with other cases), no tap dance is imported, every `TD()` key stays `native` and the code stays in `Passthrough`, and the report says so. Partial import would need the shared `dance_step` and `dance_state[]` split apart.
+- **Names:** an imported entry is `dance-n` / "Tap dance n". The C has no place for a name, so a tap dance made with another id or name is written as `DANCE_n` by position and comes back as `dance-n`. Macros behave the same way (`ST_MACRO_n`).
+- **DF0 stays native:** `DUAL_FUNC_0` is `LT(5, KC_4)` with a `process_record_user` case: tap sends F5, hold calls `layer_move(5)` on press and on release. It isn't a tap dance (there is no double-tap), and as a hold-tap it would be `LT(5)` momentary, which is a different behaviour (the layer would leave on release). It stays `native` with its code kept.
+- **Per-key terms:** the importer reads `get_tapping_term` into `termMs` only when every case is a `TD(DANCE_n)` and the default is `TAPPING_TERM`.
+
+### D-154: ZMK tap dances are `zmk,behavior-tap-dance` with a generated tap-preferred hold-tap in each position that has a hold, and the ZMK importer does not read them back. (Claude, building rung 14; refines D-093)
+- **Positions:** tap, then double-tap. A hold slot makes position one a hold-tap `<id>_hold` (`&kp`/`&kp`, `&mo`/`&kp` and so on, chosen from the slot kinds); a tap-then-hold slot makes position two `<id>_tap_hold` with the double-tap as its tap (`&none` when there is none). A macro or layer slot is its behaviour, and a hold-tap given a behaviour that takes no parameter gets `0`.
+- **Terms:** the dance and its hold-taps use `termMs`, 200 ms when it is unset (ZMK has no global tapping term to fall back on).
+- **Measured against QMK (S16):** the keys typed agree for tap, double-tap, hold and tap-then-hold. The feel differs in six ways, listed in S16; the generator was not changed to hide them. The one fix tried, a 10 ms hold-tap term in position one, made the hold fire at 211 ms like QMK, but a key pressed while the dance key was held then typed `U` and `Shift+U` instead of `U` and a late Esc, which is worse.
+- **Not read back:** the ZMK importer keeps a `zmk,behavior-tap-dance` node as written, as before. Layout Editor exports carry MoErgo's own tap dances (`layer_td`), whose bindings keyloom doesn't model.
+
+### D-155: A macro can have a text step, typed on a US layout. (Claude, building rung 14; completes D-088's model)
+- **Model:** `{ op: "text"; text: string }`. QMK writes it as a C string literal in `SEND_STRING` (the firmware adds Shift); the importer reads a literal back, so Oryx's `SEND_STRING("hello")` is now a text macro and no longer native. ZMK writes one `&kp` per character, `LS(...)` where Shift is needed.
+- **One check for both:** `textKeys` accepts the US letters, digits, space, tab, newline and the printable punctuation, and names the first character it can't type. `macro_text_untypable` is the validator error; the generators throw the same sentence.
+
+### D-156: What the validator says about tap dances. (Claude, building rung 14)
+- **Errors:** `unknown_ref` for a missing entry, layer or macro; `schema` for a repeated id; `firmware_unsupported` for a key keyloom doesn't know; `qmk_tapdance_mixed_hands` for left and right modifiers in one slot (QMK stores one hand bit); `tap_dance_slot` for a momentary layer on the tap slot (it ends when the dance does); `qmk_combo_tapdance` for a combo whose output is a tap dance (QMK combos can't run one; a tap dance key is fine as a combo input); `tap_dance_native_conflict` for adding a tap dance beside Oryx tap dance code that was kept as written.
+- **Warnings:** `tap_dance_same_action`, in people's words ("Key 4 on Base: tapping and double-tapping do the same thing, so the extra slot adds nothing."), for any two slots with the same function, only when the change adds or alters it. `doubled_letter_tapdance` now reads a modelled tap dance's tap slot as well as a native one.
+- **Diff:** a key whose tap dance entry changed counts as changed, though its binding didn't, so the decision memory, the selection check and the preview see it.
+
+### D-157: A tap dance key is `TDn` in the text grid, with a legend under the grids, as macros are `Mn`. (Claude, building rung 14)
+- **Why:** a grid cell is six characters. Two slots don't fit, and a cell that cuts "HypSP…" says nothing. `layout show` and the agent's `get_layout` print `TD0 … TD2` and, below the last grid, one line per entry: `TD2  Esc, Caps Lock on double-tap: Esc tap, CAPS double-tap`. The graphical cap shows the tap large and the other slots small.
+
+### D-158: The QMK emulator counts time with QMK's own clock. (Claude, building rung 14)
+- **Found by S16:** the harness kept its own count of elapsed time, so a `wait_ms(10)` inside the firmware (Oryx's tap dance reset has one) pushed every later scripted event 10 ms late, and a run of 20 scenarios drifted 110 ms. Events now wait for `timer_read32()`; nothing else in the harness changed, and the earlier emulator tests give the same reports.

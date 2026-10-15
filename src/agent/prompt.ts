@@ -34,15 +34,16 @@ export function boardContext(board: Board): string {
 /** What this firmware can and cannot express, short and generated from the rules the validator enforces (05, 06, 07). */
 export function firmwareCapabilities(firmware: Layout["firmware"]): string {
   const common = [
-    "Bindings: key (with optional modifiers), modifier, holdTap (tap half plus a modifier or layer hold, with a hold-tap profile), layer (momentary, toggle, to, oneShot), macro, transparent, none.",
-    "Macros are steps: tap, press, release (a key code and/or modifiers) and waitMs. Combos fire an output binding when several positions are pressed together.",
+    "Bindings: key (with optional modifiers), modifier, holdTap (tap half plus a modifier or layer hold, with a hold-tap profile), layer (momentary, toggle, to, oneShot), macro, tapDance (a key with up to four slots), transparent, none.",
+    "Macros are steps: tap, press, release (a key code and/or modifiers), waitMs, and text (typed as written; US-layout letters, digits and punctuation, with Shift added where a character needs it). Tap dances are entries in the layout with a tap slot and optionally hold, doubleTap and tapThenHold slots (each a key, modifier, layer or macro action) and an optional termMs; a key uses one with a tapDance binding. Combos fire an output binding when several positions are pressed together.",
   ];
   const qmk = [
     "QMK hold-tap feel: profiles can differ in TAPPING_TERM and QUICK_TAP_TERM (milliseconds) and in PERMISSIVE_HOLD and HOLD_ON_OTHER_KEY_PRESS (true or false), because QMK sets those per key. CHORDAL_HOLD, FLOW_TAP_TERM and RETRO_TAPPING are layout-wide: change them with setFirmwareSetting, not in a profile. Two keys with the same tap and hold must share their values.",
     "QMK: the tap half of a hold-tap must be a basic keycode with no modifiers. One right-hand modifier makes a whole mod-tap right-handed, so mixed left and right modifiers on one hold-tap are an error.",
-    "QMK: at most 32 layers, 8 when LAYER_STATE_8BIT is set. Tap dance is not modelled; it is imported as a native binding that keyloom keeps but cannot edit.",
+    "QMK: at most 32 layers, 8 when LAYER_STATE_8BIT is set. A tap dance becomes an Oryx-style state machine; one that keyloom could not read stays a native binding, and then keyloom cannot add tap dances beside it.",
   ];
   const zmk = [
+    "ZMK: a tap dance becomes a `zmk,behavior-tap-dance` node, and a hold or tap-then-hold slot a generated tap-preferred hold-tap in that position. ZMK acts on other keys pressed between the taps before the dance resolves, which QMK does not, so tell him the double-tap feel can differ. A tap dance has no global fallback term on ZMK, so leave termMs out only if 200 ms is right.",
     "ZMK: hold-tap behaviours have flavors and per-key timing set through hold-tap profiles. A profile's options are the behaviour's properties: flavor (hold-preferred, balanced, tap-preferred, tap-unless-interrupted), tapping-term-ms, quick-tap-ms, require-prior-idle-ms (milliseconds), hold-trigger-key-positions (a list of key positions) and a true or false flag such as hold-trigger-on-release. The built-in profiles mt and lt can be tuned like any other.",
   ];
   return ["# What this firmware can express", ...common, ...(firmware === "qmk" ? qmk : zmk)].join("\n");

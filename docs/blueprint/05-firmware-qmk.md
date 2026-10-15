@@ -27,7 +27,7 @@ Parsing (`src/firmware/qmk/import.ts`):
    - `MO`, `TG`, `TO`, `OSL` → `layer` actions. `OSM(MOD_x)` → `native` for now; one-shot mods aren't modelled in v1.
    - `_______` and `KC_TRNS` → `transparent`. `XXXXXXX` and `KC_NO` → `none`.
    - `ST_MACRO_n`, with its body in `process_record_user` written as `SEND_STRING(SS_TAP(...) SS_DELAY(n) ...)`, → `Macro`, when the body matches Oryx's generated pattern. Otherwise it's `native` with the case kept as `Passthrough`.
-   - `TD(DANCE_n)` → `native`, with the tap-dance code kept as `Passthrough`. Tap dance isn't in the IR in v1 (D-019 rejects the one use the session discussed).
+   - `TD(DANCE_n)` → a `tapDance` binding, when the file's tap dance code is exactly what keyloom writes back for the entries it read from it (D-153, S16). Anything else leaves every `TD()` key `native` and the tap dance code in `Passthrough`, as before. `DUAL_FUNC_0` stays `native`: its hold is `layer_move(5)`, which stays on the layer, and no slot action says that without a plausible but wrong momentary layer.
 3. Read `config.h` into `FirmwareSetting`s (`TAPPING_TERM`, `PERMISSIVE_HOLD`, `CHORDAL_HOLD`, `FLOW_TAP_TERM`, `QUICK_TAP_TERM` and the rest) and into a `home-row-mods` `HoldTapProfile`. Per-key tapping terms from `get_tapping_term` become further profiles.
 4. Keep anything else (`rgb_matrix` code, `keyboard_post_init_user`, Oryx's `qmk_modules` hooks) as `Passthrough`.
 5. Print the import report, as for ZMK.

@@ -24,6 +24,7 @@ type Layout = {
   firmware: Firmware;              // copied from the board definition (D-002)
   layers: Layer[];                 // order = firmware layer number; layers[0] is the base layer
   macros: Macro[];
+  tapDances: TapDance[];           // 16#tap-dance-is-a-key-with-a-double-tap-slot; [] in documents stored before rung 14
   combos: Combo[];
   holdTapProfiles: HoldTapProfile[];
   settings: FirmwareSetting[];     // global tap-hold and other firmware options (D-017)
@@ -53,11 +54,12 @@ type HoldAction = { mods: Mod[] } | { layerId: string };
 
 type Macro = {
   id: string; name: string;
-  steps: MacroStep[];              // press, release, tap, waitMs
+  steps: MacroStep[];              // press, release, tap, waitMs, text
 };
 type MacroStep =
   | { op: "tap" | "press" | "release"; code?: KeyCode; mods?: Mod[] }
-  | { op: "waitMs"; ms: number };
+  | { op: "waitMs"; ms: number }
+  | { op: "text"; text: string };  // typed as written, US layout; Shift is added where a character needs it (D-155)
 
 type Combo = {
   id: string; name: string;

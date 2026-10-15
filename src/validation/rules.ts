@@ -9,6 +9,7 @@ import type { Binding, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
+import { tapDanceRules } from "./tap-dance-rules.ts";
 import { functionHomes, lostFunctions, reachableLayers, trappedLayers } from "./reachability.ts";
 
 import { keyOn, layerName } from "./words.ts";
@@ -38,6 +39,7 @@ export function duplicateIds(doc: Layout): Issue[] {
   };
   check("layer", doc.layers.map((l) => l.id));
   check("macro", doc.macros.map((m) => m.id));
+  check("tap dance", doc.tapDances.map((t) => t.id));
   check("combo", doc.combos.map((c) => c.id));
   check("hold-tap profile", doc.holdTapProfiles.map((p) => p.id));
   check("firmware setting", doc.settings.map((s) => `${s.firmware}:${s.key}`));
@@ -187,6 +189,7 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...unknownRefs(board, doc),
   ...firmwareSupport(board, doc),
   ...qmkHoldTap(doc),
+  ...tapDanceRules(doc),
   ...holdTapOptions(board, doc),
   ...layerLimit(doc),
   ...layerUnreachable(doc),
@@ -269,6 +272,13 @@ const DOUBLING_LETTERS = new Set("lseotfprmcndgbz".toUpperCase());
 export function doubledLetterTapdance(doc: Layout): Issue[] {
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
+    const modelled = b.kind === "tapDance" ? doc.tapDances.find((t) => t.id === b.tapDanceId) : undefined;
+    const tapped = modelled?.tap.kind === "key" && !modelled.tap.mods?.length ? modelled.tap.code : undefined;
+    if (tapped !== undefined && tapped.length === 1 && DOUBLING_LETTERS.has(tapped)) {
+      out.push(issue("doubled_letter_tapdance", `${where}: a tap dance on ${tapped}, which doubles in common words ("class"); a second tap meaning something else makes typing it twice unreliable`,
+        `${slot ? keyOn(doc, slot) : "A key"} is a tap dance on ${tapped}, which doubles in words like "class". A second meaning on a double tap makes typing it twice unreliable.`, slotOf(slot)));
+      continue;
+    }
     const n = b.kind === "native" ? /^TD\(DANCE_(\d+)\)$/.exec(b.source)?.[1] : undefined;
     if (n === undefined) continue;
     const source = doc.passthrough.map((p) => p.source).join("\n");

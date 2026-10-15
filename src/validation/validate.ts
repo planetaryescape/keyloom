@@ -4,12 +4,13 @@ import type { BoardDefinition } from "../boards/schema.ts";
 import { applyOps } from "../layout/apply-ops.ts";
 import { type ChangeOp, ChangeOpSchema, type Slot } from "../layout/change.ts";
 import { deepEqual } from "../layout/equal.ts";
-import { type Layout, LayoutSchema } from "../layout/schema.ts";
+import { type Binding, type Layout, LayoutSchema } from "../layout/schema.ts";
 import { type DecisionFact, contradictsDecision, touchedDecisions } from "./decision-rules.ts";
 import { homerowSameHandMods, retunedSlots } from "./hold-tap-rules.ts";
 import type { Issue, ValidationResult } from "./result.ts";
 import { type PinnedPriority, largeRelearn, movedPinned } from "./priority-rules.ts";
 import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
+import { tapDanceWarnings } from "./tap-dance-rules.ts";
 import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex } from "./rules.ts";
 import { type SelectionScope, outsideSelection } from "./selection-rules.ts";
 
@@ -19,14 +20,18 @@ const failed = (errors: Issue[]): Evaluation => ({ result: { ok: false, errors, 
 
 const issueKey = (i: Issue) => JSON.stringify([i.code, i.message, i.slots ?? []]);
 
-/** Slots whose binding differs. Layers that exist on only one side have no slot to compare, so they aren't listed. */
+const danceOf = (doc: Layout, b: Binding | undefined) => (b?.kind === "tapDance" ? doc.tapDances.find((t) => t.id === b.tapDanceId) : undefined);
+
+/** Slots whose binding differs, or whose tap dance entry does. Layers that exist on only one side have no slot to compare, so they aren't listed. */
 function changedSlots(before: Layout, after: Layout): Slot[] {
   const out: Slot[] = [];
   for (const layer of after.layers) {
     const was = before.layers.find((l) => l.id === layer.id);
     if (!was) continue;
     for (const [position, binding] of layer.bindings.entries()) {
-      if (!deepEqual(binding, was.bindings[position])) out.push({ layerId: layer.id, position });
+      // A tap dance key keeps its binding when its entry changes, but it is not the same key.
+      const wasBinding = was.bindings[position];
+      if (!deepEqual(binding, wasBinding) || !deepEqual(danceOf(after, binding), danceOf(before, wasBinding))) out.push({ layerId: layer.id, position });
     }
   }
   return out;
@@ -82,6 +87,10 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   // Only a tap dance this change adds or moves is news; one already in the layout isn't the change's doing.
   const knownDances = new Set(doubledLetterTapdance(before).map(issueKey));
   warnings.push(...doubledLetterTapdance(after).filter((i) => !knownDances.has(issueKey(i))));
+
+  // The same for a tap dance that does less than it looks like: only one this change adds or alters is news.
+  const knownSame = new Set(tapDanceWarnings(before).map(issueKey));
+  warnings.push(...tapDanceWarnings(after).filter((i) => !knownSame.has(issueKey(i))));
 
   const changed = changedSlots(before, after);
   const beforeHomes = functionHomes(before, reachableLayers(before));
