@@ -1,6 +1,6 @@
 {
   "name": "keyloom",
-  "version": "0.19.0",
+  "version": "0.19.1",
   "private": true,
   "description": "Open-source, local-first keyboard configurator for QMK and ZMK boards, with an agent that proposes validated layout changes.",
   "license": "MIT",

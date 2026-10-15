@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.19.1](https://github.com/planetaryescape/keyloom/compare/v0.19.0...v0.19.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* a macro key prints a short form of its name instead of its slot number ([bfeecc4](https://github.com/planetaryescape/keyloom/commit/bfeecc4333308dc40053eccd5e4beb3d412515c9))
+* a trailing layer no custom code names can be removed on layouts with layer numbers in passthrough ([bc31723](https://github.com/planetaryescape/keyloom/commit/bc317230f735e9cb27ad9933b894ac321c198199))
+* a ZMK macro wait step pauses once instead of setting the wait for every later step ([0fc0af6](https://github.com/planetaryescape/keyloom/commit/0fc0af636f375d8b8d0fba383501f075947b4ab0))
+* combo labels move off cap legends, and fade any they cannot avoid ([a1e5460](https://github.com/planetaryescape/keyloom/commit/a1e5460eb55c5b4798d659941d64f3f1c1ab418f))
+* go-back labels no longer stack Back to, Redo and Undo prefixes ([c8a59bf](https://github.com/planetaryescape/keyloom/commit/c8a59bf2e93450ab159010e7b376cb2e74ff025a))
+* keep keyloom's system prompt out of Codex's command line when the run has its own CODEX_HOME ([996b79c](https://github.com/planetaryescape/keyloom/commit/996b79c6d24a926a1f0e92dda6bc76430191e26b))
+* the draft note hangs under the undo buttons so the layer tabs keep their width ([898dec6](https://github.com/planetaryescape/keyloom/commit/898dec65d8c8f1c3ac0740434c9a99be068420c6))
+* write the files a container mounts under a temporary name and rename them into place ([a6522c5](https://github.com/planetaryescape/keyloom/commit/a6522c5444c09382bbcc86a5bcdd6fd2e65ee9d8))
+
 ## [0.19.0](https://github.com/planetaryescape/keyloom/compare/v0.18.0...v0.19.0) (2026-10-15)
 
 
