@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/planetaryescape/keyloom/compare/v0.10.1...v0.11.0) (2026-10-15)
+
+
+### Features
+
+* a sentence for people beside every validator rule ([169482d](https://github.com/planetaryescape/keyloom/commit/169482d5eb91423ccc9bd6f0060d30fb96e50e26))
+* change any key in the editor, dropping or placing what it replaces ([6c83026](https://github.com/planetaryescape/keyloom/commit/6c83026f8ced11d789f978e6319f8c921a9f1b70))
+
+
+### Bug Fixes
+
+* a UF2 copy refused with EACCES says how to allow it on macOS ([190dd57](https://github.com/planetaryescape/keyloom/commit/190dd575dcea406b89918949700c1e935921c944))
+
 ## [0.10.1](https://github.com/planetaryescape/keyloom/compare/v0.10.0...v0.10.1) (2026-10-15)
 
 
