@@ -10,6 +10,7 @@ import { macroCase, macroNames } from "./emit-macros.ts";
 import { tappingCallbacks } from "./emit-tapping.ts";
 import { qmkRevision } from "./board-config.ts";
 import { GenerateError } from "./generate-error.ts";
+import { WRAPPER_SYMBOL, NO_LTO, WRAP_LINK_FLAG, buildMarker, serialDefine, wrapperSource } from "./handsfree.ts";
 
 export { GenerateError } from "./generate-error.ts";
 
@@ -20,10 +21,20 @@ export type GenerateInput = {
   revisionId: string;
   /** Which hardware revision's build config to read (the layout macro is the same for all of a board's today). */
   boardRevisionId?: string;
+  /**
+   * Makes the firmware flashable with no keypress (D-070): its USB serial number names this build, and a raw-HID
+   * packet reboots it into the bootloader. Left out, the output is what Oryx's own source builds to.
+   */
+  handsFree?: { buildId: string };
 };
 
 export type GeneratedFile = { path: string; content: string };
-export type GeneratedSource = { keymapName: string; files: GeneratedFile[] };
+export type GeneratedSource = {
+  keymapName: string;
+  files: GeneratedFile[];
+  /** Functions the linked firmware must define, or the build is rejected (the hands-free wrapper, D-070). */
+  requiredSymbols?: string[];
+};
 
 export const KEYMAP_NAME = "keyloom";
 
@@ -70,6 +81,9 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   }
   const rev = qmkRevision(board, input.boardRevisionId);
   checkLayers(layout);
+  // The wrapper replaces a function of ZSA's Oryx module; on another board the link would fail or, worse, wrap something else.
+  if (input.handsFree && board.vendor !== "ZSA") throw new GenerateError(`hands-free flashing is only built for ZSA boards, not ${board.id}`);
+  const marker = input.handsFree ? buildMarker(input.handsFree.buildId) : undefined;
 
   const ctx: EmitContext = {
     layerIndex: new Map(layout.layers.map((l, i) => [l.id, i])),
@@ -124,9 +138,13 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     );
   }
 
+  if (marker !== undefined) c.push("", wrapperSource());
+
   const h: string[] = [header(input.revisionId, "//")];
   for (const s of layout.settings) if (s.firmware === "qmk") h.push(settingLine(s));
-  for (const p of passthroughIn(layout, "config.h")) h.push(p.source);
+  // Oryx's SERIAL_NUMBER is replaced, not redefined: a second #define would warn and the build fails on warnings.
+  for (const p of passthroughIn(layout, "config.h")) if (marker === undefined || p.anchor !== "define:SERIAL_NUMBER") h.push(p.source);
+  if (marker !== undefined) h.push(serialDefine(marker));
   for (const d of [...combos.defines, ...tapping.defines]) h.push(`#define ${d}`);
 
   const files: GeneratedFile[] = [
@@ -134,13 +152,13 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     { path: "config.h", content: `${h.join("\n")}\n` },
   ];
 
-  const rules = rulesMk(layout, combos.count);
+  const rules = rulesMk(layout, combos.count, marker !== undefined);
   if (rules) files.push({ path: "rules.mk", content: rules });
 
   const keymapJson = passthroughIn(layout, "keymap.json")[0]?.source ?? (rev.build.modules ? `${JSON.stringify({ modules: rev.build.modules }, null, 4)}\n` : undefined);
   if (keymapJson !== undefined) files.push({ path: "keymap.json", content: keymapJson.endsWith("\n") ? keymapJson : `${keymapJson}\n` });
 
-  return { keymapName: KEYMAP_NAME, files };
+  return { keymapName: KEYMAP_NAME, files, ...(marker !== undefined ? { requiredSymbols: [WRAPPER_SYMBOL] } : {}) };
 }
 
 const COMBO_YES = /^\s*COMBO_ENABLE\s*[:?]?=\s*yes\b/m;
@@ -150,11 +168,12 @@ const COMBO_YES = /^\s*COMBO_ENABLE\s*[:?]?=\s*yes\b/m;
  * are on: with COMBO_ENABLE and no key_combos[] the link fails, and with combos and no COMBO_ENABLE
  * they are silently dead. make takes the last assignment, so a correction is appended.
  */
-function rulesMk(layout: Layout, comboCount: number): string | undefined {
+function rulesMk(layout: Layout, comboCount: number, handsFree: boolean): string | undefined {
   const source = passthroughIn(layout, "rules.mk")[0]?.source;
   let text = source === undefined ? "" : source.endsWith("\n") || source === "" ? source : `${source}\n`;
   const on = COMBO_YES.test(text);
   if (comboCount > 0 && !on) text += "COMBO_ENABLE = yes\n";
   if (comboCount === 0 && on) text += "# keyloom: the layout has no combos, and COMBO_ENABLE needs a key_combos[]\nCOMBO_ENABLE = no\n";
+  if (handsFree) text += `# keyloom: route raw_hid_receive through the bootloader command (handsfree.ts)\n${WRAP_LINK_FLAG}\n${NO_LTO}\n`;
   return text === "" ? undefined : text;
 }

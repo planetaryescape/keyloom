@@ -6,6 +6,7 @@ import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { FAKE_DOCKER, FAKE_GIT, dfuImage, fakeBinDir, withPath } from "./fake-bin.ts";
 import { FIXTURE_DIR } from "./board.ts";
+import { fakeElf } from "./fake-elf.ts";
 import { tempDir } from "./tmp.ts";
 
 export const PIN = "93b2b9ec3368f86c5eb5a2e3f934049f8daef885";
@@ -25,8 +26,11 @@ export async function toolchainEnv(opts: { zapp?: string } = {}) {
   const revbFile = join(root, "revb.bin");
   await Bun.write(revaFile, REVA);
   await Bun.write(revbFile, REVB);
+  // What a hands-free build links (D-070): the build is refused without it.
+  const elfFile = join(root, "firmware.elf");
+  await Bun.write(elfFile, fakeElf(["__wrap_raw_hid_receive", "raw_hid_receive"]));
   const vars = {
-    XDG_CACHE_HOME: cache, FAKE_MODE: "ok", FAKE_DOCKER_LOG: join(root, "docker.calls"), FAKE_BIN_REVA: revaFile, FAKE_BIN_REVB: revbFile,
+    XDG_CACHE_HOME: cache, FAKE_MODE: "ok", FAKE_DOCKER_LOG: join(root, "docker.calls"), FAKE_BIN_REVA: revaFile, FAKE_BIN_REVB: revbFile, FAKE_ELF: elfFile,
     FAKE_GIT_HEAD: PIN, ZAPP_CALLS: join(root, "zapp.calls"), FAKE_USB: '{"SPUSBDataType":[]}',
   };
   // The pinned checkout "exists": a .git folder for the state check and a Makefile for the mount probe.

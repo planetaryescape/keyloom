@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { BuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
+import { definedSymbols } from "../toolchain/elf.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
 import { qmkRevision } from "./board-config.ts";
@@ -112,6 +113,14 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
           hint(output) ??
           (located ? `The generated firmware doesn't compile: ${describeLocated(located)}` : `QMK's build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
         throw new BuildFailure(detail);
+      }
+
+      if (input.source.requiredSymbols?.length) {
+        // --wrap can silently not apply (LTO, an unused module); a firmware without the wrapper must not be offered for flashing.
+        const elf = Bun.file(join(input.checkoutDir, ".build", `${id}.elf`));
+        const defined = (await elf.exists()) ? definedSymbols(new Uint8Array(await elf.arrayBuffer())) : new Set<string>();
+        const missing = input.source.requiredSymbols.filter((s) => !defined.has(s));
+        if (missing.length > 0) throw new BuildFailure(`The build linked, but ${id}.elf doesn't define ${missing.join(", ")}, so hands-free flashing wouldn't work. This is a bug in keyloom; the build log has the details.`);
       }
 
       const kind = artifactKind(rev.build);
