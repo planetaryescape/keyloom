@@ -1,50 +1,167 @@
-import type { CSSProperties } from "react";
+import { useRef, type CSSProperties, type KeyboardEvent } from "react";
 import type { GeometryKey } from "../../boards/schema.ts";
-import type { Layout } from "../../layout/schema.ts";
-import { Key } from "./Key.tsx";
-import { boardBounds, keyRect, type KeyRect } from "./geometry.ts";
-import { keyLabelAt } from "./labels.ts";
+import type { KeyDescription } from "../../layout/describe.ts";
+import { Cap } from "./Cap.tsx";
+import { boardBounds, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
+import { neighbour, type Direction } from "./navigate.ts";
+import { useFitUnit } from "./useFitUnit.ts";
+import "./keyboard.css";
 
-// Pixels per key unit, and the gap left between neighbouring keys.
-const UNIT = 60;
-const GAP = 6;
+// Space between neighbouring caps, and the margin around the board, in key units.
+const GAP = 0.09;
+const MARGIN = 0.3;
+// Vertical room the header, tabs, inspector and page padding take (px), so the board and the
+// inspector fit in one window.
+const RESERVED_HEIGHT = 380;
+
+const ARROWS: Record<string, Direction> = {
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+};
 
 interface KeyboardProps {
-  layout: Layout;
-  layerIndex: number;
-  // Already has display rotation applied, so keys[i] is the i-th binding's key.
+  /** Already has display rotation applied, so keys[i] is the i-th binding's key. */
   keys: readonly GeometryKey[];
+  hands: { left: readonly number[]; right: readonly number[] };
+  /** One description per key, for the current layer. */
+  descriptions: readonly (KeyDescription | null)[];
+  /** Finger names by key position, for accessible names. */
+  fingers: Readonly<Record<string, string>>;
+  layerName: string;
+  selected: number | null;
+  /** Keys that are chord partners of the inspected key. */
+  partners: ReadonlySet<number>;
+  /** Keys that belong to a combo active on this layer. */
+  comboKeys: ReadonlySet<number>;
+  onSelect: (index: number | null) => void;
+  onHover: (index: number | null) => void;
 }
 
-export function Keyboard({ layout, layerIndex, keys }: KeyboardProps) {
+function ariaLabel(index: number, description: KeyDescription, finger: string | undefined): string {
+  // The headline carries the meaning in words; the printed legend can be a symbol a screen
+  // reader says badly.
+  const parts = [`Key ${index + 1}`, description.headline];
+  if (finger !== undefined) parts.push(`${finger.replace("-", " ")} finger`);
+  const combos = description.combos.filter((combo) => combo.activeHere).map((combo) => combo.name);
+  if (combos.length > 0) parts.push(`In ${combos.join(", ")}`);
+  return parts.join(". ");
+}
+
+export function Keyboard({
+  keys,
+  hands,
+  descriptions,
+  fingers,
+  layerName,
+  selected,
+  partners,
+  comboKeys,
+  onSelect,
+  onHover,
+}: KeyboardProps) {
   const bounds = boardBounds(keys);
-  const canvasStyle: CSSProperties = {
-    width: bounds.width * UNIT + GAP,
-    height: bounds.height * UNIT + GAP,
+  const canvas: Bounds = {
+    minX: bounds.minX - MARGIN,
+    minY: bounds.minY - MARGIN,
+    width: bounds.width + 2 * MARGIN,
+    height: bounds.height + 2 * MARGIN,
   };
+  const { ref, unit, overflowing } = useFitUnit({
+    width: canvas.width,
+    height: canvas.height,
+    reservedHeight: RESERVED_HEIGHT,
+  });
+  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // One tab stop for the whole board; arrow keys move within it.
+  const tabStop = selected ?? 0;
+
+  function onKeyDown(event: KeyboardEvent<HTMLElement>, index: number) {
+    if (event.key === "Escape") {
+      onSelect(null);
+      return;
+    }
+    const direction = ARROWS[event.key];
+    if (direction === undefined) return;
+    event.preventDefault();
+    const next = neighbour(keys, index, direction);
+    if (next !== null) buttons.current[next]?.focus();
+  }
 
   return (
-    <div className="keyboard" role="group" aria-label="Keyboard" style={canvasStyle}>
-      {keys.map((geometryKey, index) => (
-        <Key
-          key={index}
-          style={keyStyle(keyRect(geometryKey, bounds))}
-          label={keyLabelAt(layout, layerIndex, index)}
-        />
-      ))}
+    <div ref={ref} className="keyboard-well" data-overflowing={overflowing}>
+      {overflowing ? <p className="scroll-hint">Scroll sideways to see the right half.</p> : null}
+      <div
+        className="keyboard"
+        role="group"
+        aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}
+        style={{ width: canvas.width * unit, height: canvas.height * unit }}
+      >
+        {[hands.left, hands.right].map((positions, side) => (
+          <Tray key={side} keys={positions.flatMap((p) => keys[p] ?? [])} canvas={canvas} unit={unit} />
+        ))}
+        {keys.map((geometryKey, index) => {
+          const description = descriptions[index];
+          if (description === undefined || description === null) return null;
+          const rect = keyRect(geometryKey, canvas);
+          return (
+            <Cap
+              key={index}
+              ref={(element) => {
+                buttons.current[index] = element;
+              }}
+              tone={description.kind}
+              legend={description.legend}
+              unit={unit}
+              width={geometryKey.w}
+              combo={comboKeys.has(index)}
+              style={keyStyle(rect, unit)}
+              tabIndex={index === tabStop ? 0 : -1}
+              aria-label={ariaLabel(index, description, fingers[String(index)])}
+              aria-pressed={selected === index}
+              data-partner={partners.has(index)}
+              onFocus={() => onSelect(index)}
+              onClick={() => onSelect(index)}
+              onKeyDown={(event) => onKeyDown(event, index)}
+              onPointerEnter={(event) => {
+                if (event.pointerType === "mouse") onHover(index);
+              }}
+              onPointerLeave={() => onHover(null)}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
 
+// Tray behind one hand: the bounding box of its rotated keys, a little larger.
+function Tray({ keys, canvas, unit }: { keys: readonly GeometryKey[]; canvas: Bounds; unit: number }) {
+  if (keys.length === 0) return null;
+  const hand = boardBounds(keys);
+  const pad = MARGIN * 0.6;
+  const style: CSSProperties = {
+    left: (hand.minX - pad - canvas.minX) * unit,
+    top: (hand.minY - pad - canvas.minY) * unit,
+    width: (hand.width + 2 * pad) * unit,
+    height: (hand.height + 2 * pad) * unit,
+    borderRadius: unit * 0.5,
+  };
+  return <div className="keyboard-half" aria-hidden="true" style={style} />;
+}
+
 // The gap shrinks each box and keeps the rotation origin on the same point, because the
 // origin is measured from the box's top-left.
-function keyStyle(rect: KeyRect): CSSProperties {
+function keyStyle(rect: KeyRect, unit: number): CSSProperties {
   return {
-    left: rect.left * UNIT + GAP / 2,
-    top: rect.top * UNIT + GAP / 2,
-    width: rect.width * UNIT - GAP,
-    height: rect.height * UNIT - GAP,
-    transform: `rotate(${rect.rotate}deg)`,
-    transformOrigin: `${rect.originX * UNIT - GAP / 2}px ${rect.originY * UNIT - GAP / 2}px`,
+    position: "absolute",
+    left: (rect.left + GAP / 2) * unit,
+    top: (rect.top + GAP / 2) * unit,
+    width: (rect.width - GAP) * unit,
+    height: (rect.height - GAP) * unit,
+    transform: rect.rotate === 0 ? undefined : `rotate(${rect.rotate}deg)`,
+    transformOrigin: `${(rect.originX - GAP / 2) * unit}px ${(rect.originY - GAP / 2) * unit}px`,
   };
 }

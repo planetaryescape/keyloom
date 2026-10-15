@@ -1,0 +1,135 @@
+/*
+ * Semantic tokens. Components use these names and never a raw colour. Every text colour here
+ * keeps at least 4.5:1 on the surfaces it sits on (checked in test/web/contrast.test.ts).
+ *
+ * Dark is the default under prefers-color-scheme: dark; [data-theme] forces either theme.
+ * The light block is the :root default, so the dark block and [data-theme="dark"] repeat the
+ * same values: CSS has no way to share one declaration between a media query and an attribute.
+ */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-page: #edeff3;
+  --color-surface: #fbfbfc;
+  --color-panel: #e2e6ec;
+  --color-border: #c9ced8;
+  --color-border-strong: #778090;
+  --color-text: #12151a;
+  --color-text-muted: #474f5c;
+  --color-focus: #12151a;
+  --color-error: #a3170f;
+  --color-error-bg: #fdeceb;
+
+  --cap-key: #ffffff;
+  --cap-key-ink: #12151a;
+  --cap-modifier: #dde1e9;
+  --cap-modifier-ink: #2a303b;
+  --cap-hold: #fbe7bd;
+  --cap-hold-ink: #5a3800;
+  --cap-layer: #d8e2ff;
+  --cap-layer-ink: #1a3280;
+  --cap-macro: #f2d9fb;
+  --cap-macro-ink: #5b2079;
+  --cap-native: #c8ece6;
+  --cap-native-ink: #06453c;
+  --color-combo: #3f7d1a;
+
+  --cap-shadow-edge: rgb(18 24 38 / 0.28);
+  --cap-shadow-drop: rgb(18 24 38 / 0.18);
+  --cap-highlight: rgb(255 255 255 / 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-page: #0d0e12;
+    --color-surface: #15171c;
+    --color-panel: #101217;
+    --color-border: #2a2e37;
+    --color-border-strong: #5f6672;
+    --color-text: #eceef3;
+    --color-text-muted: #a3abb8;
+    --color-focus: #ffffff;
+    --color-error: #ff9088;
+    --color-error-bg: #2b1513;
+
+    --cap-key: #2b3039;
+    --cap-key-ink: #eceef3;
+    --cap-modifier: #20242b;
+    --cap-modifier-ink: #c9cfda;
+    --cap-hold: #3a2e1a;
+    --cap-hold-ink: #f7d896;
+    --cap-layer: #222c4f;
+    --cap-layer-ink: #c0d2ff;
+    --cap-macro: #3a2349;
+    --cap-macro-ink: #efc8fb;
+    --cap-native: #143a3a;
+    --cap-native-ink: #a6efe4;
+    --color-combo: #a5e06a;
+
+    --cap-shadow-edge: rgb(0 0 0 / 0.5);
+    --cap-shadow-drop: rgb(0 0 0 / 0.45);
+    --cap-highlight: rgb(255 255 255 / 0.08);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-page: #0d0e12;
+  --color-surface: #15171c;
+  --color-panel: #101217;
+  --color-border: #2a2e37;
+  --color-border-strong: #5f6672;
+  --color-text: #eceef3;
+  --color-text-muted: #a3abb8;
+  --color-focus: #ffffff;
+  --color-error: #ff9088;
+  --color-error-bg: #2b1513;
+
+  --cap-key: #2b3039;
+  --cap-key-ink: #eceef3;
+  --cap-modifier: #20242b;
+  --cap-modifier-ink: #c9cfda;
+  --cap-hold: #3a2e1a;
+  --cap-hold-ink: #f7d896;
+  --cap-layer: #222c4f;
+  --cap-layer-ink: #c0d2ff;
+  --cap-macro: #3a2349;
+  --cap-macro-ink: #efc8fb;
+  --cap-native: #143a3a;
+  --cap-native-ink: #a6efe4;
+  --color-combo: #a5e06a;
+
+  --cap-shadow-edge: rgb(0 0 0 / 0.5);
+  --cap-shadow-drop: rgb(0 0 0 / 0.45);
+  --cap-highlight: rgb(255 255 255 / 0.08);
+}
+
+/* Spacing is a 4px scale and type is one scale; nothing in the app uses a value outside them.
+   Keycap legends are the exception: they size in key units (see keyboard/fit.ts). */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}

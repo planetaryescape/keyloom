@@ -1,32 +1,37 @@
-import { useEffect, useState, type ReactNode } from "react";
-import type { GeometryKey } from "../boards/schema.ts";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
-import { Keyboard } from "./keyboard/Keyboard.tsx";
-import { LayerTabs } from "./keyboard/LayerTabs.tsx";
+import { Header, type HeaderFacts } from "./shell/Header.tsx";
+import { EmptyState, ErrorState, Loading } from "./shell/States.tsx";
+import { Viewer } from "./Viewer.tsx";
 
-type View = { id: string; detail: LayoutDetail } | { id: string; error: string };
+type Failure = { message: string; retryable: boolean };
+type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
 
 export function App({ token }: { token: string }) {
   const [layouts, setLayouts] = useState<LayoutSummary[] | null>(null);
-  const [listError, setListError] = useState<string | null>(null);
+  const [listError, setListError] = useState<Failure | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View | null>(null);
-  const [layerId, setLayerId] = useState<string | null>(null);
+  // Bumping this refetches the list; it backs the "Check again" and "Try again" buttons.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    setListError(null);
     fetchLayouts(token, controller.signal)
       .then((list) => {
         setLayouts(list);
-        setSelectedId(list[0]?.id ?? null);
+        setSelectedId((previous) =>
+          list.some((layout) => layout.id === previous) ? previous : (list[0]?.id ?? null),
+        );
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setListError(describe(error));
       });
     return () => controller.abort();
-  }, [token]);
+  }, [token, attempt]);
 
   useEffect(() => {
     if (selectedId === null) return;
@@ -39,41 +44,46 @@ export function App({ token }: { token: string }) {
         if (!controller.signal.aborted) setView({ id: selectedId, error: describe(error) });
       });
     return () => controller.abort();
-  }, [token, selectedId]);
+  }, [token, selectedId, attempt]);
+
+  const retry = () => {
+    setView(null);
+    setAttempt((count) => count + 1);
+  };
 
   if (listError !== null) {
     return (
       <Shell>
-        <Message error>{listError}</Message>
+        <ErrorState title="Can't load your layouts" {...(listError.retryable ? { onRetry: retry } : {})}>
+          {listError.message}
+        </ErrorState>
       </Shell>
     );
   }
   if (layouts === null) {
     return (
       <Shell>
-        <Message>Loading layouts…</Message>
+        <Loading>Loading layouts…</Loading>
       </Shell>
     );
   }
   if (layouts.length === 0) {
     return (
       <Shell>
-        <Message>No layouts yet.</Message>
+        <EmptyState onRetry={retry} />
       </Shell>
     );
   }
 
-  // A view for an earlier selection is ignored until the new one arrives.
-  const current = view !== null && view.id === selectedId ? view : null;
+  const summary = layouts.find((layout) => layout.id === selectedId) ?? layouts[0];
+  if (summary === undefined) return null;
   const picker =
     layouts.length > 1 ? (
       <select
+        className="layout-picker"
         aria-label="Layout"
-        value={selectedId ?? ""}
-        onChange={(event) => {
-          setSelectedId(event.target.value);
-          setLayerId(null);
-        }}
+        value={summary.id}
+        onChange={(event) => setSelectedId(event.target.value)}
       >
         {layouts.map((layout) => (
           <option key={layout.id} value={layout.id}>
@@ -81,65 +91,67 @@ export function App({ token }: { token: string }) {
           </option>
         ))}
       </select>
-    ) : (
-      <span className="layout-name">{layouts[0]?.name}</span>
-    );
+    ) : undefined;
 
+  // A view for an earlier selection is ignored until the new one arrives.
+  const current = view !== null && view.id === summary.id ? view : null;
   if (current === null) {
     return (
       <Shell picker={picker}>
-        <Message>Loading layout…</Message>
+        <Loading>Loading layout…</Loading>
       </Shell>
     );
   }
   if ("error" in current) {
     return (
       <Shell picker={picker}>
-        <Message error>{current.error}</Message>
+        <ErrorState title="Can't show this layout" {...(current.error.retryable ? { onRetry: retry } : {})}>
+          {current.error.message}
+        </ErrorState>
       </Shell>
     );
   }
 
-  const { document: layout, board, geometry } = current.detail;
-  const problem = findProblem(current.detail);
-  if (problem !== null) {
-    return (
-      <Shell picker={picker}>
-        <Message error>{problem}</Message>
-      </Shell>
-    );
-  }
+  return <LayoutPage key={summary.id} summary={summary} detail={current.detail} picker={picker} />;
+}
 
-  const layerIndex = Math.max(
-    0,
-    layout.layers.findIndex((candidate) => candidate.id === layerId),
-  );
-  const layer = layout.layers[layerIndex];
-  if (layer === undefined) {
-    return (
-      <Shell picker={picker}>
-        <Message>This layout has no layers.</Message>
-      </Shell>
-    );
-  }
+function LayoutPage({
+  summary,
+  detail,
+  picker,
+}: {
+  summary: LayoutSummary;
+  detail: LayoutDetail;
+  picker: ReactNode;
+}) {
+  const { document: layout, board, geometry } = detail;
+  const problem = findProblem(detail);
+  const rotated = useMemo(() => {
+    try {
+      return { keys: applyDisplayRotation(geometry.keys, board.display) };
+    } catch (error) {
+      return { error: describe(error).message };
+    }
+  }, [geometry.keys, board.display]);
 
-  let keys: GeometryKey[];
-  try {
-    keys = applyDisplayRotation(geometry.keys, board.display);
-  } catch (error) {
-    return (
-      <Shell picker={picker}>
-        <Message error>{describe(error)}</Message>
-      </Shell>
-    );
-  }
+  const facts: HeaderFacts = {
+    layoutName: summary.name,
+    board: `${board.vendor} ${board.name}`,
+    firmware: layout.firmware,
+    keyCount: board.keyCount,
+    layerCount: layout.layers.length,
+    createdAt: summary.createdAt,
+    revisionId: summary.revisionId,
+  };
 
+  const failure = problem ?? ("error" in rotated ? rotated.error : null);
   return (
-    <Shell picker={picker} board={board.name}>
-      <LayerTabs layers={layout.layers} selectedId={layer.id} onSelect={setLayerId} />
-      <div className="keyboard-frame">
-        <Keyboard layout={layout} layerIndex={layerIndex} keys={keys} />
-      </div>
+    <Shell facts={facts} picker={picker}>
+      {failure !== null || !("keys" in rotated) ? (
+        <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
+      ) : (
+        <Viewer detail={detail} keys={rotated.keys} />
+      )}
     </Shell>
   );
 }
@@ -158,34 +170,30 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
 }
 
 function Shell({
+  facts,
   picker,
-  board,
   children,
 }: {
+  facts?: HeaderFacts;
   picker?: ReactNode;
-  board?: string;
   children?: ReactNode;
 }) {
   return (
     <div className="app">
-      <header className="app-header">
-        <span className="brand">keyloom</span>
-        {picker}
-        {board ? <span className="board-name">{board}</span> : null}
-      </header>
+      <Header {...(facts === undefined ? {} : { facts })} picker={picker} />
       <main className="app-main">{children}</main>
     </div>
   );
 }
 
-function Message({ error = false, children }: { error?: boolean; children: ReactNode }) {
-  return <p className={error ? "app-message app-error" : "app-message"}>{children}</p>;
-}
-
-function describe(error: unknown): string {
+// A rejected token won't be accepted on a retry; the person has to open keyloom's link again.
+function describe(error: unknown): Failure {
   if (error instanceof ApiError && error.status === 401) {
-    return "The keyloom server rejected this page's token. Open the link printed by keyloom again.";
+    return {
+      message: "The keyloom server rejected this page's token. Open the link printed by keyloom again.",
+      retryable: false,
+    };
   }
-  if (error instanceof Error) return error.message;
-  return "Something went wrong loading the layout.";
+  if (error instanceof Error) return { message: error.message, retryable: true };
+  return { message: "Something went wrong loading the layout.", retryable: true };
 }

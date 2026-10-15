@@ -19,6 +19,7 @@
     "react-dom": "19.3.0",
     "commander": "15.0.0",
     "fflate": "0.8.3",
+    "lucide-react": "1.52.0",
     "tree-sitter-c": "0.24.1",
     "ulid": "3.0.2",
     "web-tree-sitter": "0.27.0",

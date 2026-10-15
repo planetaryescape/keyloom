@@ -1,0 +1,140 @@
+.keyboard {
+  position: relative;
+  margin-inline: auto;
+}
+
+.scroll-hint {
+  position: sticky;
+  left: 0;
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* A faint tray under each half, so the two halves read as one board and not 72 loose keys. */
+.keyboard-half {
+  position: absolute;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.cap {
+  --cap: var(--cap-key);
+  --cap-ink: var(--cap-key-ink);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--cap);
+  color: var(--cap-ink);
+  font-family: var(--font-ui);
+  line-height: 1.1;
+  text-align: center;
+  user-select: none;
+  /* A lit top edge, a darker lower lip and a short drop shadow: enough to read as a keycap. */
+  box-shadow:
+    inset 0 1px 0 var(--cap-highlight),
+    inset 0 -3px 0 var(--cap-shadow-edge),
+    0 1px 0 var(--cap-shadow-edge),
+    0 5px 6px -4px var(--cap-shadow-drop);
+}
+
+.cap[data-tone="modifier"] {
+  --cap: var(--cap-modifier);
+  --cap-ink: var(--cap-modifier-ink);
+}
+.cap[data-tone="holdTap"] {
+  --cap: var(--cap-hold);
+  --cap-ink: var(--cap-hold-ink);
+}
+.cap[data-tone="layer"] {
+  --cap: var(--cap-layer);
+  --cap-ink: var(--cap-layer-ink);
+}
+.cap[data-tone="macro"] {
+  --cap: var(--cap-macro);
+  --cap-ink: var(--cap-macro-ink);
+}
+.cap[data-tone="native"] {
+  --cap: var(--cap-native);
+  --cap-ink: var(--cap-native-ink);
+}
+
+/* Transparent keys keep their place but give up the fill; the dashed edge says "see through". */
+.cap[data-tone="transparent"] {
+  --cap: transparent;
+  --cap-ink: var(--color-text-muted);
+  border: 1.5px dashed var(--color-border-strong);
+  box-shadow: none;
+}
+
+.cap[data-tone="none"] {
+  --cap: transparent;
+  border: 1.5px dotted var(--color-border);
+  box-shadow: none;
+}
+
+.cap-tap {
+  max-width: 100%;
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.cap-tap[data-wrap="true"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.cap-hold {
+  max-width: 100%;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.cap-combo {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--color-combo);
+  box-shadow: 0 0 0 1.5px var(--cap, var(--color-page));
+}
+
+button.cap {
+  cursor: pointer;
+  transition:
+    transform 90ms var(--ease-out),
+    background-color 120ms var(--ease-out);
+}
+
+button.cap:hover {
+  background: color-mix(in srgb, var(--cap) 86%, var(--color-text));
+}
+
+button.cap[data-tone="transparent"]:hover,
+button.cap[data-tone="none"]:hover {
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+button.cap:active {
+  transform: translateY(1px);
+}
+
+button.cap[aria-pressed="true"] {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The other keys of a chord light up when one of them is inspected. */
+button.cap[data-partner="true"] {
+  outline: 2px dashed var(--color-combo);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.cap:active {
+    transform: none;
+  }
+}

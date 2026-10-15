@@ -169,5 +169,11 @@
   },
   "importers": [
     "oryx-source"
-  ]
+  ],
+  "display": {
+    "rotate": [
+      { "positions": [66, 67, 68], "r": 15, "rx": 5, "ry": 5.5 },
+      { "positions": [69, 70, 71], "r": -15, "rx": 12, "ry": 5.5 }
+    ]
+  }
 }
