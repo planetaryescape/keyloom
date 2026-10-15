@@ -129,10 +129,24 @@ button.cap[data-current="true"] {
   outline-offset: 2px;
 }
 
-/* In the chat selection: an accent ring inside the cap and a tint, so it never relies on colour alone. */
+/* In the chat selection: an accent ring inside the cap, a tint and a tick, so it never relies on colour alone
+   and stays apart from the current key (outline), a draft (dashed, dot) and a move's landing (dotted). */
 button.cap[aria-pressed="true"] {
   --cap-ring: inset 0 0 0 3px var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 22%, var(--cap));
+  background: color-mix(in srgb, var(--color-accent) 30%, var(--cap));
+}
+
+button.cap[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  right: 18%;
+  bottom: 14%;
+  width: 22%;
+  height: 12%;
+  border-bottom: 3px solid var(--color-accent);
+  border-left: 3px solid var(--color-accent);
+  transform: rotate(-45deg);
+  pointer-events: none;
 }
 
 /* The other keys of a chord light up when one of them is inspected. */

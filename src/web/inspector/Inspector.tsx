@@ -47,7 +47,7 @@ export function Inspector({ description, position, finger, layerName, tapAt, onO
   }
   const where = [
     KIND_NAME[description.kind],
-    `Position ${position + 1}`,
+    `Key ${position + 1}`,
     finger === undefined ? undefined : `${capitalise(finger.replace("-", " "))} finger`,
     layerName,
   ].filter((part) => part !== undefined);
