@@ -106,6 +106,25 @@ describe("chat routes", () => {
     expect(evs[1]).toMatchObject({ type: "error", code: "model_auth" });
   });
 
+  test("a reply that goes quiet while the model thinks gets keep-alive comments, so Bun's 10 s idle timeout can't drop it", async () => {
+    const backend = {
+      send: async (_ref: string, _request: unknown, emit: (event: { type: "start"; conversationId: string; messageId: string }) => void) => {
+        emit({ type: "start", conversationId: "conv_1", messageId: "msg_1" });
+        await Bun.sleep(5_300);
+      },
+      list: async () => [],
+      get: async () => null,
+    };
+    const server = Bun.serve({
+      port: 0,
+      fetch: async (request) => (await handleChatRoute(request, new URL(request.url).pathname, backend, TOKEN)) ?? new Response("no", { status: 404 }),
+    });
+    servers.push(server);
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/layouts/x/chat`, { method: "POST", headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" }, body: JSON.stringify({ message: "hi" }) });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain(": keepalive\n\n");
+  }, 10_000);
+
   test("every route needs the session token, and other paths are left alone", async () => {
     const { call, layoutId } = await serve([]);
     expect((await call(`/api/layouts/${layoutId}/chat`, post("x"), null)).status).toBe(401);

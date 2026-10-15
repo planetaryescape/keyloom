@@ -70,10 +70,19 @@ export function ChatPanel({ token, layoutRef, layout, board, selection, onRemove
     input.current?.focus();
   }
 
-  // Follows the reply as it streams unless the person has scrolled up to read.
+  // Follows the reply as it streams unless the person has scrolled up to read. Once the newest reply
+  // has proposals, it stops at the first card instead, so the options are read from the top.
   useEffect(() => {
     const element = log.current;
-    if (element !== null && stick.current) element.scrollTop = element.scrollHeight;
+    if (element === null || !stick.current) return;
+    const replies = element.querySelectorAll<HTMLElement>(".msg-assistant");
+    const firstCard = replies[replies.length - 1]?.querySelector<HTMLElement>(".proposals > li");
+    if (firstCard) {
+      element.scrollTop += firstCard.getBoundingClientRect().top - element.getBoundingClientRect().top - 12;
+      stick.current = false;
+      return;
+    }
+    element.scrollTop = element.scrollHeight;
   }, [transcript.turns, chat.problem, view]);
 
   // The Stop button leaves the page when the reply ends; hand focus back to the box instead of dropping it.

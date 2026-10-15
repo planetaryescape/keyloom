@@ -6,6 +6,7 @@ import { checkToken } from "./guard.ts";
 
 const LAYOUTS = "/api/layouts/";
 const CONVERSATIONS = "/api/conversations/";
+const HEARTBEAT_MS = 5_000;
 
 type Match = { kind: "send"; ref: string } | { kind: "list"; ref: string } | { kind: "get"; id: string };
 
@@ -108,7 +109,19 @@ async function send(request: Request, ref: string, backend: ChatBackend): Promis
       closed = true; // the browser went away
     }
   };
+  // Bun.serve drops a request that sends nothing for 10 seconds, and the model can think for longer
+  // than that before its first token. An SSE comment every few seconds keeps the stream open and is
+  // ignored by EventSource parsers (seen 2026-10-15: "request timed out after 10 seconds").
+  const heartbeat = setInterval(() => {
+    if (closed) return;
+    try {
+      controller.enqueue(encoder.encode(": keepalive\n\n"));
+    } catch {
+      closed = true;
+    }
+  }, HEARTBEAT_MS);
   const close = () => {
+    clearInterval(heartbeat);
     if (closed) return;
     closed = true;
     try {
@@ -140,6 +153,7 @@ async function send(request: Request, ref: string, backend: ChatBackend): Promis
 
   await firstOutcome;
   if (!opened) {
+    clearInterval(heartbeat);
     const f = failure(failed ?? new Error("the chat backend ended without a reply"));
     return errorResponse(f.status, f.code, f.message);
   }
