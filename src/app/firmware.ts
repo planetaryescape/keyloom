@@ -157,6 +157,8 @@ export type BuildOptions = {
   boardRevision?: string;
   /** Every line the build prints. */
   onProgress?: (line: string) => void;
+  /** Aborting stops the build and removes its container. */
+  signal?: AbortSignal;
 };
 
 /**
@@ -168,13 +170,13 @@ export async function startBuild(app: App, ref: string, opts: BuildOptions = {})
   const boardRevision = await resolveBoardRevision(view.board, opts.boardRevision);
   const id = newBuildId();
   const row = createBuild(app.db, { id, revisionId: view.revision.id, layoutId: view.layout.id, boardRevision, logPath: `logs/build-${id}.log` });
-  const task = runBuild(app, view, row, opts.onProgress);
+  const task = runBuild(app, view, row, opts.onProgress, opts.signal);
   buildTasks.set(id, task);
   void task.finally(() => buildTasks.delete(id));
   return toBuildView(app, row);
 }
 
-async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: ((line: string) => void) | undefined): Promise<void> {
+async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: ((line: string) => void) | undefined, signal: AbortSignal | undefined): Promise<void> {
   const log = new LogSink(absolute(app, row.logPath));
   const say = (line: string) => {
     log.line(line);
@@ -196,6 +198,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     await buildQmk({
       board: view.board.definition, boardRevisionId: row.boardRevision, source, checkoutDir: checkoutDirFor(view.board),
       artifactPath: absolute(app, artifactRel), log, containerName: `keyloom-${row.id}`, ...(onProgress ? { onLine: onProgress } : {}),
+      ...(signal ? { signal } : {}),
     });
     finishBuild(app.db, row.id, { artifactPath: artifactRel });
   } catch (err) {
@@ -254,6 +257,8 @@ export type FlashOptions = {
   onProgress?: (line: string) => void;
   /** Called when the flash changes state, including the first state. */
   onState?: (flash: FlashView) => void;
+  /** Aborting stops zapp, so nothing is left waiting for the keyboard. */
+  signal?: AbortSignal;
   /** How long to wait for the keyboard to enter its bootloader (default 2 minutes). Short values are for tests. */
   bootloaderWaitMs?: number;
 };
@@ -315,6 +320,7 @@ async function runFlash(app: App, row: FlashRow, artifact: string, bootloader: s
     const result = await flashWithZapp({
       artifactPath: artifact, bootloader, log, ...(opts.onProgress ? { onLine: opts.onProgress } : {}),
       ...(opts.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: opts.bootloaderWaitMs }),
+      ...(opts.signal ? { signal: opts.signal } : {}),
       onState: (state) => {
         if (state === "waiting_for_bootloader" || state === "writing") {
           setFlashProgress(app.db, row.id, state);

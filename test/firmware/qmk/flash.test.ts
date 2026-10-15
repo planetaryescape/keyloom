@@ -19,7 +19,7 @@ async function setup(zappBody: string | undefined) {
   const log = new LogSink(join(dir, "flash.log"));
   const flash = (over: Partial<Parameters<typeof flashWithZapp>[0]> = {}) =>
     flashWithZapp({ artifactPath: artifact, bootloader: REVB, log, onState: (s, i) => states.push([s, i]), zapp: bin ? join(bin, "zapp") : join(dir, "no-such-zapp"), ...over });
-  return { flash, states, log, artifact, dir };
+  return { flash, states, log, artifact, dir, bin };
 }
 
 describe("DFU suffix", () => {
@@ -66,6 +66,17 @@ describe("flashWithZapp (fake zapp)", () => {
     expect(r.error).toContain("Nothing was flashed");
     expect(Date.now() - started).toBeLessThan(6000);
     expect(s.states.map(([st]) => st)).toEqual(["waiting_for_bootloader", "failed"]);
+  });
+
+  test("Ctrl-C stops zapp, so it can't be left waiting to flash whenever the board next enters its bootloader", async () => {
+    const s = await setup('echo $$ > "$0.pid"; echo "Firmware loaded: STM32 DFU (80 bytes)"; exec sleep 600');
+    const c = new AbortController();
+    setTimeout(() => c.abort(), 300);
+    const r = await s.flash({ signal: c.signal });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+    const pid = Number(await Bun.file(join(s.bin as string, "zapp.pid")).text());
+    expect(pid).toBeGreaterThan(0);
+    expect(() => process.kill(pid, 0)).toThrow(); // gone
   });
 
   test("zapp rejecting the file is a failure that carries its message", async () => {

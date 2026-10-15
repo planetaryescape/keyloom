@@ -12,6 +12,20 @@ export type FirmwareCommandDeps = {
   withApp: <T>(fn: (app: App) => Promise<T> | T) => Promise<T>;
 };
 
+/** Ctrl-C aborts the work instead of killing keyloom and leaving docker or zapp running on its own. */
+async function untilInterrupted<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  process.once("SIGINT", abort);
+  process.once("SIGTERM", abort);
+  try {
+    return await fn(controller.signal);
+  } finally {
+    process.off("SIGINT", abort);
+    process.off("SIGTERM", abort);
+  }
+}
+
 /** One line that rewrites itself, so a build of thousands of lines shows where it is without scrolling. */
 function progressLine(io: Io): { write: (line: string) => void; end: () => void } {
   if (!io.isTTY) return { write: () => undefined, end: () => undefined };
@@ -70,12 +84,15 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .action(async (ref: string, opts: { rev?: string; boardRev?: string }) => {
       const progress = progressLine(io);
       try {
-        const b = await withApp((app) =>
-          buildAndWait(app, ref, {
-            ...(opts.rev ? { revisionId: opts.rev } : {}),
-            ...(opts.boardRev ? { boardRevision: opts.boardRev } : {}),
-            onProgress: progress.write,
-          }),
+        const b = await untilInterrupted((signal) =>
+          withApp((app) =>
+            buildAndWait(app, ref, {
+              ...(opts.rev ? { revisionId: opts.rev } : {}),
+              ...(opts.boardRev ? { boardRevision: opts.boardRev } : {}),
+              onProgress: progress.write,
+              signal,
+            }),
+          ),
         );
         progress.end();
         print(io, format(), {
@@ -95,15 +112,18 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .option("--layout <layout>", "flash the newest successful build of this layout")
     .action(async (opts: { build?: string; layout?: string }) => {
       if (opts.build !== undefined && opts.layout !== undefined) throw new UsageError("pass --build or --layout, not both");
-      const f = await withApp((app) =>
-        flashAndWait(app, {
-          ...(opts.build ? { buildId: opts.build } : {}),
-          ...(opts.layout ? { layout: opts.layout } : {}),
-          // The instruction is the point: it goes to stderr whatever the format, so a script's stdout stays parseable.
-          onState: (flash) => {
-            if (flash.instruction) io.err(`${flash.instruction}\n`);
-          },
-        }),
+      const f = await untilInterrupted((signal) =>
+        withApp((app) =>
+          flashAndWait(app, {
+            ...(opts.build ? { buildId: opts.build } : {}),
+            ...(opts.layout ? { layout: opts.layout } : {}),
+            signal,
+            // The instruction is the point: it goes to stderr whatever the format, so a script's stdout stays parseable.
+            onState: (flash) => {
+              if (flash.instruction) io.err(`${flash.instruction}\n`);
+            },
+          }),
+        ),
       );
       print(io, format(), {
         json: flashJson(f),

@@ -109,6 +109,14 @@ describe("buildQmk (fake docker)", () => {
     expect(await Bun.file(s.dockerLog).text()).toContain("rm -f keyloom-test");
   });
 
+  test("cancelling stops the build and removes the container", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    setTimeout(() => c.abort(), 500);
+    await expect(s.build("hang", {}, { signal: c.signal })).rejects.toThrow("The build was cancelled.");
+    expect(await Bun.file(s.dockerLog).text()).toContain("rm -f keyloom-test");
+  });
+
   test("a second build reuses the checkout without cloning again", async () => {
     const s = await setup();
     await s.build("ok");

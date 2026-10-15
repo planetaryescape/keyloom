@@ -27,6 +27,8 @@ export type FlashInput = {
   zapp?: string;
   bootloaderWaitMs?: number;
   writeTimeoutMs?: number;
+  /** Aborting stops zapp. Without this a Ctrl-C would leave it waiting, and it would flash whenever the board next enters its bootloader. */
+  signal?: AbortSignal;
 };
 
 export type FlashResult = { state: "succeeded" | "failed"; error: string | null; output: string[] };
@@ -52,8 +54,14 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   const output: string[] = [];
   let loaded = false;
   let writing = false;
-  let abortedFor: "bootloader" | "write" | undefined;
+  let abortedFor: "bootloader" | "write" | "cancelled" | undefined;
   const controller = new AbortController();
+  const cancel = () => {
+    abortedFor ??= "cancelled";
+    controller.abort();
+  };
+  if (input.signal?.aborted) cancel();
+  else input.signal?.addEventListener("abort", cancel, { once: true });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const arm = (ms: number, reason: "bootloader" | "write") => {
     clearTimeout(timer);
@@ -92,7 +100,11 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     },
   });
   clearTimeout(timer);
+  input.signal?.removeEventListener("abort", cancel);
 
+  if (abortedFor === "cancelled") {
+    return fail(writing ? "Cancelled while writing. The keyboard may be left in its bootloader: flash again, or flash an earlier build." : "Cancelled. Nothing was flashed.", output);
+  }
   if (abortedFor === "bootloader") {
     return fail("No Moonlander in bootloader mode was found within 2 minutes. Nothing was flashed. Press the reset button and flash again.", output);
   }

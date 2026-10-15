@@ -168,9 +168,11 @@ decisions(...)                         -- defined in 08
 builds(
   id TEXT PRIMARY KEY,                 -- bld_…
   revision_id TEXT NOT NULL REFERENCES revisions(id),
+  board_revision TEXT NOT NULL,        -- reva | revb: which hardware the binary is for
   status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed')),
-  artifact_path TEXT NULL, log_path TEXT NOT NULL,
+  artifact_path TEXT NULL, log_path TEXT NOT NULL,   -- relative to the data directory
   error TEXT NULL,
+  pid INTEGER NOT NULL,                -- the keyloom process running it, so a dead one can be told from a live one
   started_at INTEGER NOT NULL, finished_at INTEGER NULL
 );
 
@@ -179,6 +181,7 @@ flashes(
   build_id TEXT NOT NULL REFERENCES builds(id),
   status TEXT NOT NULL CHECK (status IN ('waiting_for_bootloader','writing','succeeded','failed')),
   error TEXT NULL,
+  log_path TEXT NOT NULL, pid INTEGER NOT NULL,
   started_at INTEGER NOT NULL, finished_at INTEGER NULL
 );
 ```

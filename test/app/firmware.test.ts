@@ -239,6 +239,17 @@ describe("startFlash / flashAndWait (fake zapp)", () => {
     });
   });
 
+  test("aborting a flash cancels it and leaves nothing waiting", async () => {
+    const e = await toolchainEnv({ zapp: FAKE_ZAPP_HANG });
+    await built(e);
+    await e.run(async () => {
+      const c = new AbortController();
+      setTimeout(() => c.abort(), 300);
+      const err = (await flashAndWait(e.app, { layout: "synchronized", signal: c.signal }).catch((x) => x)) as FlashFailedError;
+      expect(err.message).toContain("Cancelled. Nothing was flashed.");
+    });
+  });
+
   test("only one flash at a time", async () => {
     const e = await toolchainEnv({ zapp: FAKE_ZAPP_HANG });
     await built(e);
