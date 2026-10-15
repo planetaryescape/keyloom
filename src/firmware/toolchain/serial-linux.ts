@@ -36,7 +36,8 @@ export function linuxSerial(sysClassTty = "/sys/class/tty", devDir = "/dev", byI
     async list() {
       let nodes: string[];
       try {
-        nodes = readdirSync(sysClassTty).filter((n) => /^ttyACM\d+$/.test(n));
+        // readdir order differs between filesystems; ttyACM number order keeps the listing stable.
+        nodes = readdirSync(sysClassTty).filter((n) => /^ttyACM\d+$/.test(n)).sort((a, b) => Number(a.slice(6)) - Number(b.slice(6)));
       } catch {
         return [];
       }
