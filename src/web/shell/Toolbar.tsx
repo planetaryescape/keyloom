@@ -1,4 +1,4 @@
-import { CircleHelp, History, LoaderCircle, Redo2, Undo2 } from "lucide-react";
+import { CircleHelp, History, LoaderCircle, Redo2, Spline, Undo2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
 
@@ -11,6 +11,9 @@ interface Props {
   onUndo: () => void;
   historyOpen: boolean;
   onHistory: () => void;
+  /** Combos are drawn as lines between their keys, and listed beside the board. */
+  combosShown: boolean;
+  onCombos: () => void;
   onShortcuts: () => void;
   advanced: boolean;
   onAdvanced: (value: boolean) => void;
@@ -18,7 +21,7 @@ interface Props {
 
 // An undo is itself a revision, so undoing it puts the change back: with the head an undo, the
 // Undo button is off and Redo is on, and the other way round otherwise. Both call the same route.
-export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOpen, onHistory, onShortcuts, advanced, onAdvanced }: Props) {
+export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOpen, onHistory, combosShown, onCombos, onShortcuts, advanced, onAdvanced }: Props) {
   const canRedo = revision.origin === "undo" && revision.undoable;
   const canUndo = revision.origin !== "undo" && revision.undoable;
   const icon = (Icon: typeof Undo2) => (busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <Icon size={16} aria-hidden="true" />);
@@ -50,6 +53,10 @@ export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOp
         <button type="button" className="toggle-button toggle-icon" aria-pressed={historyOpen} aria-label="History" onClick={onHistory} title="Every revision of this layout, with undo to any of them and flash">
           <History size={14} aria-hidden="true" />
           <span>History</span>
+        </button>
+        <button type="button" className="toggle-button toggle-icon" aria-pressed={combosShown} onClick={onCombos} title="Draw a line between the keys of each combo, with what it sends, and list them">
+          <Spline size={14} aria-hidden="true" />
+          <span>Show combos</span>
         </button>
         <button type="button" className="toggle-button" aria-pressed={advanced} onClick={() => onAdvanced(!advanced)} title="Show firmware names such as KC_A on keys and in the panel">
           Advanced view

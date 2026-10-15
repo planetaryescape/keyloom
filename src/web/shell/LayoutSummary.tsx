@@ -1,5 +1,6 @@
 import type { LayoutSummary as Summary, RevisionInfo } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
+import { niceLayerName } from "../../layout/layer-ops.ts";
 import { layerLegend } from "../../layout/legend.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { Legend } from "../inspector/Legend.tsx";
@@ -44,7 +45,7 @@ export function LayoutSummary({ summary, layout, board, revision }: Props) {
             {layout.layers.map((layer) => (
               <li key={layer.id}>
                 <span className="layer-list-label" aria-hidden="true">{layerLegend(layer.id, ctx)}</span>
-                <span>{layer.name}</span>
+                <span>{niceLayerName(layer.name)}</span>
               </li>
             ))}
           </ol>

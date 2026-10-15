@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { importOryxSource } from "../../src/firmware/qmk/import.ts";
 import { describeKey } from "../../src/layout/describe.ts";
+import { bindingLegend } from "../../src/layout/legend.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import type { GeometryKey } from "../../src/boards/schema.ts";
 import { CAP_INSET, HOLD_SIZE, LEGEND_FLOOR_PX, TAP_SIZE, fitLegend, widestPieceEm } from "../../src/web/keyboard/fit.ts";
@@ -101,5 +104,32 @@ describe("fitLegend", () => {
 
   test("a legend of only symbols is drawn larger, since symbols render small", () => {
     expect(fitLegend("⌫", 1, TAP_SIZE).size).toBeGreaterThan(TAP_SIZE.max);
+  });
+});
+
+// D-187: "L4 toggle" broke as "toggl / e" on a phone.
+describe("a layer key's action word never breaks inside a word", () => {
+  const ctx = { layers: [{ id: "a", name: "Alpha" }, { id: "b", name: "Beta" }], macros: [] };
+  const actions = ["momentary", "toggle", "to", "oneShot"] as const;
+
+  test("every action word fits a 1u cap at the phone unit and its 10 px floor, so nothing has to wrap", () => {
+    for (const action of actions) {
+      const hold = bindingLegend({ kind: "layer", action, layerId: "b" }, ctx).hold ?? "";
+      const fit = fitLegend(hold, 1, HOLD_SIZE, { unit: 40, floor: 10 });
+      expect({ hold, fits: fit.fits }).toEqual({ hold, fits: true });
+    }
+  });
+
+  test("and at the laptop unit with the 11 px floor", () => {
+    for (const action of actions) {
+      const hold = bindingLegend({ kind: "layer", action, layerId: "b" }, ctx).hold ?? "";
+      expect(fitLegend(hold, 1, HOLD_SIZE, { unit: 49 }).fits).toBe(true);
+    }
+  });
+
+  test("the stylesheet breaks legends only at their seams", () => {
+    const css = readFileSync(join(import.meta.dir, "../../src/web/keyboard/keyboard.css"), "utf8");
+    expect(css).not.toMatch(/overflow-wrap:\s*anywhere/);
+    expect(css).not.toMatch(/word-break:\s*break-all/);
   });
 });

@@ -348,7 +348,8 @@
 .stage-notes {
   position: absolute;
   z-index: 3;
-  top: var(--space-3);
+  /* Below the selection bar, which is the first row of the stage. */
+  top: calc(var(--selection-bar-h, 48px) + var(--space-3));
   right: var(--space-3);
   left: var(--space-3);
   display: flex;

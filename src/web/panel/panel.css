@@ -516,3 +516,21 @@
 .panel-foot .button-primary kbd {
   border-color: currentColor;
 }
+
+/* Swap, Copy and Paste sit above the verdict, on a row of their own. */
+.panel-moves {
+  display: flex;
+  flex: 1 1 100%;
+  gap: var(--space-2);
+}
+
+.panel-moves .button {
+  flex: 1;
+  gap: var(--space-1);
+}
+
+.panel-moves .button[aria-pressed="true"] {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-page);
+}

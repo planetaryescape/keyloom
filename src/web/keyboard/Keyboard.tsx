@@ -2,7 +2,11 @@ import { useImperativeHandle, useMemo, useRef, type CSSProperties, type Keyboard
 import type { GeometryKey } from "../../boards/schema.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "./Cap.tsx";
+import { ComboLines, type ComboLine } from "./ComboLines.tsx";
 import { MoveArrows } from "./MoveArrows.tsx";
+import { LEGEND_FLOOR_PX } from "./fit.ts";
+import { useKeyDrag } from "./useKeyDrag.ts";
+import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { boardBounds, growBounds, handTrays, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { useFitUnit } from "./useFitUnit.ts";
@@ -41,7 +45,7 @@ interface KeyboardProps {
   onSelect: (index: number | null) => void;
   onHover: (index: number | null) => void;
   /** A click or Enter on a key. Whether it opens the key's panel or adds it to the chat is the caller's rule (D-099). */
-  onPress: (index: number, via: "pointer" | "keyboard") => void;
+  onPress: (index: number, via: "pointer" | "keyboard", extend?: boolean) => void;
   /** The key whose panel is open, drawn with an outline; `selected` still decides the one tab stop. */
   current?: number | null;
   /** Replaces a key's legend, for the Advanced view's firmware names. */
@@ -65,6 +69,16 @@ interface KeyboardProps {
   half?: "left" | "right" | null;
   /** A horizontal swipe on the board, for the phone's half switcher. */
   onSwipe?: (direction: "left" | "right") => void;
+  /** Lines between the keys of combos, with their outputs (16#combos-are-made-from-a-selection). */
+  comboLines?: readonly ComboLine[];
+  /** The combo being pointed at, and the keys that makes light up. */
+  comboHovered?: string | null;
+  comboLit?: ReadonlySet<number>;
+  onComboHover?: (id: string | null) => void;
+  onComboOpen?: (id: string) => void;
+  /** Whether a key can be dragged onto another, and what dropping does (swap, or copy with Option). */
+  dragEnabled?: boolean;
+  onDropKey?: (from: number, to: number, copy: boolean) => void;
 }
 
 function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined, remembered = false): string {
@@ -105,7 +119,17 @@ export function Keyboard({
   handle,
   half = null,
   onSwipe,
+  comboLines = [],
+  comboHovered = null,
+  comboLit,
+  onComboHover,
+  onComboOpen,
+  dragEnabled = false,
+  onDropKey,
 }: KeyboardProps) {
+  // A phone draws the board small, so its legend floor is 10 px; everywhere else 11 (18#legends-stay-readable).
+  const floorPx = useMediaQuery(PHONE) ? PHONE_FLOOR_PX : LEGEND_FLOOR_PX;
+  const { drag, onPointerDown: dragStart, wasDrag } = useKeyDrag({ enabled: dragEnabled, onDrop: (from, to, copy) => onDropKey?.(from, to, copy) });
   // One hand's keys, when only one is shown. The canvas, the trays, the caps and the arrow keys all follow it.
   const visible = useMemo(() => (half === null ? null : new Set(hands[half])), [half, hands]);
   const shownKeys = useMemo(() => (visible === null ? keys : keys.filter((_, index) => visible.has(index))), [keys, visible]);
@@ -118,6 +142,10 @@ export function Keyboard({
   };
   const { ref, unit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  // Shift-, Cmd- or Ctrl-click adds a key to the selection. The focus that the press causes must not move the open panel to that key first.
+  const extendNext = useRef(false);
+  // A phone shows one hand, so a combo is drawn only when all its keys are on it.
+  const visibleLines = visible === null ? comboLines : comboLines.filter((line) => line.positions.every((position) => visible.has(position)));
   useImperativeHandle(
     handle,
     () => ({
@@ -188,6 +216,7 @@ export function Keyboard({
               remembered={remembered?.has(index) ?? false}
               title={description.headline}
               unit={unit}
+              floorPx={floorPx}
               width={geometryKey.w}
               combo={comboKeys.has(index)}
               // The Moonlander's thumbs tilt a little and read fine; the Glove80's fan out to 60 degrees.
@@ -202,13 +231,29 @@ export function Keyboard({
               data-pending={pendingIndex === index || marks?.get(index) === "changed"}
               data-home={marks?.get(index) === "home"}
               data-applied={appliedIndex === index}
-              onFocus={() => onSelect(index)}
-              onClick={() => {
-                // Safari doesn't focus a button on click, so the click selects as well as the focus.
-                onSelect(index);
-                onPress(index, "pointer");
+              data-key-index={index}
+              data-combo-hover={comboLit?.has(index) ?? false}
+              data-dragging={drag?.from === index}
+              data-drop={drag !== null && drag.over === index}
+              onPointerDown={(event) => {
+                extendNext.current = event.shiftKey || event.metaKey || event.ctrlKey;
+                dragStart(event, index);
               }}
-              onKeyDown={(event) => onKeyDown(event, index)}
+              onFocus={() => {
+                if (!extendNext.current) onSelect(index);
+              }}
+              onClick={(event) => {
+                const extend = extendNext.current || event.shiftKey || event.metaKey || event.ctrlKey;
+                extendNext.current = false;
+                if (wasDrag()) return;
+                // Safari doesn't focus a button on click, so the click selects as well as the focus.
+                if (!extend) onSelect(index);
+                onPress(index, "pointer", extend);
+              }}
+              onKeyDown={(event) => {
+                extendNext.current = false;
+                onKeyDown(event, index);
+              }}
               onPointerEnter={(event) => {
                 if (event.pointerType === "mouse") onHover(index);
               }}
@@ -217,7 +262,13 @@ export function Keyboard({
           );
         })}
         <MoveArrows keys={keys} canvas={canvas} unit={unit} arrows={arrows} />
+        <ComboLines keys={keys} canvas={canvas} unit={unit} lines={visibleLines} hovered={comboHovered} onHover={(id) => onComboHover?.(id)} onOpen={(id) => onComboOpen?.(id)} />
       </div>
+      {drag === null ? null : (
+        <div className="key-ghost" role="status" style={{ left: drag.x, top: drag.y }}>
+          {drag.over === null ? "Drop on a key" : `${drag.copy ? "Copy to" : "Swap with"} key ${drag.over + 1}`}
+        </div>
+      )}
     </div>
   );
 }
@@ -243,6 +294,7 @@ function Tray({ tray, canvas, unit }: { tray: Bounds; canvas: Bounds; unit: numb
 }
 
 const UPRIGHT_ABOVE_DEG = 20;
+const PHONE_FLOOR_PX = 10;
 const SWIPE_PX = 48;
 
 // The gap shrinks each box and keeps the rotation origin on the same point, because the

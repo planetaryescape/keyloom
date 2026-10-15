@@ -88,7 +88,9 @@
 
 .cap-tap[data-wrap="true"] {
   white-space: normal;
-  overflow-wrap: anywhere;
+  /* Wraps only where the legend has a seam (a zero-width space after _ + or open bracket), never inside a word. */
+  overflow-wrap: normal;
+  word-break: normal;
   line-height: 1;
 }
 
@@ -106,7 +108,8 @@
 
 .cap-hold[data-wrap="true"] {
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
   text-align: left;
 }
 
@@ -317,4 +320,165 @@ button.cap[data-applied="true"] {
     content: "";
     inset: -2px;
   }
+}
+
+/* Combo lines (18#a-keycap-shows-every-slot-it-has): the svg lets the pointer through to the caps except on the lines and labels. */
+.combo-lines {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: visible;
+  color: var(--color-combo);
+  pointer-events: none;
+}
+
+.combo-halo,
+.combo-stroke,
+.combo-hit {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.combo-halo {
+  stroke: var(--color-page);
+  stroke-width: 5;
+  opacity: 0.85;
+}
+
+.combo-stroke {
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.combo-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.combo-label {
+  cursor: pointer;
+  pointer-events: all;
+  outline: none;
+}
+
+.combo-label rect {
+  fill: var(--color-surface);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.combo-label text {
+  fill: var(--color-text);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+}
+
+.combo-label:focus-visible rect {
+  stroke: var(--color-focus);
+  stroke-width: 2.5;
+}
+
+.combo-line[data-state="hover"] .combo-stroke,
+.combo-line[data-state="editing"] .combo-stroke {
+  stroke-width: 3.5;
+}
+
+.combo-line[data-state="editing"] .combo-stroke {
+  stroke-dasharray: 6 4;
+}
+
+.combo-line[data-state="hover"] .combo-label rect,
+.combo-line[data-state="editing"] .combo-label rect {
+  fill: color-mix(in srgb, var(--color-combo) 14%, var(--color-surface));
+  stroke-width: 2.5;
+}
+
+/* The keys of a combo being pointed at, in the list or on its line. */
+button.cap[data-combo-hover="true"] {
+  outline: 2px solid var(--color-combo);
+  outline-offset: 2px;
+}
+
+/* A key a drag is over, and the key being dragged. */
+button.cap[data-drop="true"] {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+button.cap[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+/* Fingers drag keys after a long press, so the cap must not scroll the page instead (D-182). */
+@media (pointer: coarse) {
+  button.cap {
+    touch-action: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+.key-ghost {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  pointer-events: none;
+  transform: translate(12px, 12px);
+}
+
+/* The selection bar sits above the board in the stage's flow. */
+.selection-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-height: var(--selection-bar-h, 48px);
+  padding: var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.selection-count {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.selection-count[data-empty="true"] {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.selection-actions .button,
+.selection-actions .toggle-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.selection-bar[data-mode="quick"] {
+  border-bottom-color: var(--color-accent);
+  background: var(--color-accent-bg);
 }

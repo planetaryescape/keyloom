@@ -2,7 +2,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { SHEET_SIZES, clampSheet, nearestSize, shorter, taller, type SheetSize } from "./sheet.ts";
 
-export type PanelMode = "summary" | "key" | "chat" | "repeat" | "history";
+export type PanelMode = "summary" | "key" | "chat" | "repeat" | "history" | "combo";
 
 interface Props {
   mode: PanelMode;
@@ -11,6 +11,7 @@ interface Props {
   chat: ReactNode;
   repeat: ReactNode;
   history: ReactNode;
+  combo: ReactNode;
   /** The sheet's height on a narrow screen, and the window's height it is measured against. */
   size: SheetSize;
   viewportHeight: number;
@@ -23,7 +24,7 @@ const NAMES: Record<SheetSize, string> = { peek: "peeking", half: "half height",
 // opening a panel never changes the stage beside it. The chat stays mounted while hidden, so a
 // reply that is streaming or a draft that was typed survives a look at a key. On a narrow screen the
 // same panel is a bottom sheet: the grabber and the two buttons in its bar (hidden on a wide screen) set its height.
-export function SidePanel({ mode, summary, key_, chat, repeat, history, size, viewportHeight, onSize }: Props) {
+export function SidePanel({ mode, summary, key_, chat, repeat, history, combo, size, viewportHeight, onSize }: Props) {
   const drag = useRef<{ startY: number; startHeight: number; pointer: number } | null>(null);
   const side = useRef<HTMLElement>(null);
   const [dragHeight, setDragHeight] = useState<number | null>(null);
@@ -92,6 +93,7 @@ export function SidePanel({ mode, summary, key_, chat, repeat, history, size, vi
       <div id="side-chat" className="side-pane" hidden={mode !== "chat"}>{chat}</div>
       <div className="side-pane" hidden={mode !== "repeat"}>{repeat}</div>
       <div className="side-pane" hidden={mode !== "history"}>{history}</div>
+      <div className="side-pane" hidden={mode !== "combo"}>{combo}</div>
     </aside>
   );
 }

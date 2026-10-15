@@ -1,0 +1,130 @@
+/* The combos list and a combo's own panel (16#combos-are-made-from-a-selection). They reuse the key panel's rows, picker and footer. */
+.combo-pane {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.combo-editor {
+  overflow: hidden;
+}
+
+.combo-lead {
+  padding: 0 var(--space-4) var(--space-2);
+}
+
+.combo-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4);
+  list-style: none;
+}
+
+.combo-row {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.combo-row:hover,
+.combo-row:focus-visible {
+  border-color: var(--color-combo);
+  background: color-mix(in srgb, var(--color-combo) 10%, var(--color-surface));
+}
+
+.combo-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.combo-section h3,
+.combo-section legend,
+.combo-section label {
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.combo-section input:not([type="checkbox"]) {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-page);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.combo-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.combo-keys li {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-combo);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-combo) 10%, var(--color-surface));
+}
+
+.combo-key {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.combo-keys .icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.combo-more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.combo-more > summary {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.combo-more[open] {
+  display: flex;
+}
+
+.combo-layers {
+  gap: var(--space-1);
+}
+
+.combo-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--weight-regular);
+}

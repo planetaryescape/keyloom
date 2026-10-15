@@ -2,7 +2,9 @@ import { MousePointerClick, Repeat2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding } from "../layout/schema.ts";
-import type { Slot } from "../layout/change.ts";
+import type { ChangeOp, Slot } from "../layout/change.ts";
+import { addLayerChange, convertLayerOps, duplicateLayerChange, layerColorOf, moveLayerOps, niceLayerName } from "../layout/layer-ops.ts";
+import { bindingLegend } from "../layout/legend.ts";
 import type { ApplyResponse, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard, RevisionEntry } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
@@ -14,15 +16,25 @@ import { arrowsOn, marksOn, otherMarkedLayers, previewProposal, rememberedOn } f
 import { Reminders } from "./decisions/Reminders.tsx";
 import { HistoryPanel } from "./history/HistoryPanel.tsx";
 import { useRevisions } from "./history/useRevisions.ts";
-import { withBinding } from "./editor/draft.ts";
+import { ComboEditor, ComboList, draftFromCombo, type ComboDraft } from "./combos/ComboPane.tsx";
+import { combosOn, newComboId } from "./combos/combo-ops.ts";
+import { bindingSummary, withBinding } from "./editor/draft.ts";
+import { DropConfirm } from "./editor/DropConfirm.tsx";
+import { bindingAt, copyOps, copySummary, pasteOps, pasteSummary, quickAssignOps, quickAssignSummary, swapOps, swapSummary } from "./editor/move-ops.ts";
+import { useChange, type ChangeOutcome } from "./editor/useChange.ts";
 import { functionName } from "./editor/function-label.ts";
 import type { Placement } from "./editor/lost-functions.ts";
 import { RepeatPanel } from "./editor/RepeatPanel.tsx";
 import type { LastChange } from "./editor/repeat-plan.ts";
 import { advancedLegend } from "./keyboard/advanced-legend.ts";
+import type { ComboLine } from "./keyboard/ComboLines.tsx";
 import { Keyboard, type KeyboardHandle } from "./keyboard/Keyboard.tsx";
-import { LayerTabs } from "./keyboard/LayerTabs.tsx";
+import { LayerTabs, type LayerActions } from "./keyboard/LayerTabs.tsx";
+import { SelectionBar } from "./keyboard/SelectionBar.tsx";
+import { extendSelection } from "./keyboard/selection.ts";
+import { KeyMoves } from "./panel/KeyMoves.tsx";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
+import { keyForChar } from "./panel/slots.ts";
 import { ChatBar } from "./shell/ChatBar.tsx";
 import { FirstRunTip } from "./shell/FirstRunTip.tsx";
 import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
@@ -57,6 +69,7 @@ type Editing = { layerId: string; position: number; focus: boolean };
 const CLEAN: DraftState = { binding: null, dirty: false };
 const NONE: ReadonlySet<number> = new Set();
 const ADVANCED_KEY = "keyloom.advanced";
+const SHOW_COMBOS_KEY = "keyloom.showCombos";
 
 // The window's height, so the sheet's three heights follow a rotated phone or a keyboard that opens.
 function useViewportHeight(): number {
@@ -100,6 +113,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The keys of the decision being pointed at in the decisions list.
   const [decisionFocus, setDecisionFocus] = useState<Slot[] | null>(null);
   const [advanced, setAdvanced] = useState(() => readStored(ADVANCED_KEY) === "1");
+  // Combos drawn as lines, the combos list, and the combo being made or edited (16#combos-are-made-from-a-selection).
+  const [showCombos, setShowCombos] = useState(() => readStored(SHOW_COMBOS_KEY) === "1");
+  const [combosOpen, setCombosOpen] = useState(false);
+  const [comboDraft, setComboDraft] = useState<ComboDraft | null>(null);
+  const [comboPicking, setComboPicking] = useState(false);
+  const [hoverCombo, setHoverCombo] = useState<string | null>(null);
+  // Moving keys (16#moving-and-copying-keys): the key waiting for a swap partner, the copied key, taps selecting instead of opening,
+  // the keys typed so far in a quick-assign run, and a change that needs the person to agree to drop a function.
+  const [swapping, setSwapping] = useState<Slot | null>(null);
+  const [clipboard, setClipboard] = useState<{ binding: Binding; from: Slot } | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [quick, setQuick] = useState<readonly string[] | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<{ ops: ChangeOp[]; summary: string; lost: string[]; reason: string } | null>(null);
+  const [changing, setChanging] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
   const panel = useRef<KeyPanelHandle>(null);
   // History is a panel of its own; it stays chosen while a key or the chat is looked at, and comes back when they close.
@@ -142,42 +170,61 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       withBinding(base, editing.layerId, editing.position, draft.binding),
     );
   }, [layout, preview, editing, draft.binding, placements]);
+  // Keys typed in a quick-assign run show on the board before they are applied, like a draft.
+  const quickTargets = useMemo<Slot[]>(
+    () => (chatSelection === null ? [] : chatSelection.positions.map((position) => ({ layerId: chatSelection.layerId, position }))),
+    [chatSelection],
+  );
+  const view = useMemo(
+    () =>
+      quick === null
+        ? shown
+        : quick.reduce((acc, code, i) => {
+            const at = quickTargets[i];
+            return at === undefined ? acc : withBinding(acc, at.layerId, at.position, { kind: "key", code });
+          }, shown),
+    [shown, quick, quickTargets],
+  );
   const layerIndex = Math.max(
     0,
-    shown.layers.findIndex((candidate) => candidate.id === layer?.id),
+    view.layers.findIndex((candidate) => candidate.id === layer?.id),
   );
   const descriptions = useMemo(
-    () => keys.map((_, index) => describeKey(shown, layerIndex, index)),
-    [shown, layerIndex, keys],
+    () => keys.map((_, index) => describeKey(view, layerIndex, index)),
+    [view, layerIndex, keys],
   );
   // Firmware names, in the Advanced view only (D-101).
   const legendOverrides = useMemo(
-    () => (advanced ? (shown.layers[layerIndex]?.bindings ?? []).map((binding) => advancedLegend(binding, shown) ?? undefined) : undefined),
-    [advanced, shown, layerIndex],
+    () => (advanced ? (view.layers[layerIndex]?.bindings ?? []).map((binding) => advancedLegend(binding, view) ?? undefined) : undefined),
+    [advanced, view, layerIndex],
   );
-  // A layer key's edge takes the colour of the layer it points at.
+  // A layer key's edge takes the colour of the layer it points at: the one chosen for that layer, or the one its place picks.
   const layerColors = useMemo(() => {
     const colors = new Map<number, number>();
     descriptions.forEach((description, index) => {
-      const target = description?.kind === "layer" ? shown.layers.findIndex((candidate) => candidate.id === description.targetLayerId) : -1;
-      if (target >= 0) colors.set(index, (target % 6) + 1);
+      const target = description?.kind === "layer" ? view.layers.findIndex((candidate) => candidate.id === description.targetLayerId) : -1;
+      if (target >= 0) colors.set(index, layerColorOf(view.layers, target));
     });
     return colors;
-  }, [descriptions, shown]);
+  }, [descriptions, view]);
   const marks = useMemo(() => {
     const own = marksOn(preview, layer?.id ?? "");
-    if (placements.length === 0) return own;
+    if (placements.length === 0 && quick === null) return own;
     const withPlaced = new Map(own);
     for (const placement of placements) if (placement.slot.layerId === layer?.id) withPlaced.set(placement.slot.position, "home");
+    quick?.forEach((_, i) => {
+      const at = quickTargets[i];
+      if (at !== undefined && at.layerId === layer?.id) withPlaced.set(at.position, "changed");
+    });
     return withPlaced;
-  }, [preview, layer, placements]);
+  }, [preview, layer, placements, quick, quickTargets]);
   const arrows = useMemo(() => arrowsOn(preview, layer?.id ?? ""), [preview, layer]);
   const markedLayers = useMemo(() => otherMarkedLayers(preview, layer?.id ?? ""), [preview, layer]);
   const remembered = useMemo(() => rememberedOn(preview, decisionFocus, layer?.id ?? ""), [preview, decisionFocus, layer]);
   const reminders = preview !== null && proposal !== null ? proposal.validation.diff.reminders : [];
   const chatSelected = useMemo(
-    () => (chatOpen && chatSelection !== null && chatSelection.layerId === layer?.id ? new Set(chatSelection.positions) : NONE),
-    [chatOpen, chatSelection, layer],
+    () => (chatSelection !== null && chatSelection.layerId === layer?.id ? new Set(chatSelection.positions) : NONE),
+    [chatSelection, layer],
   );
 
   const inspected = hovered ?? selected;
@@ -194,6 +241,30 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
     return { partners: partnerSet, comboKeys: new Set(active.flatMap((combo) => combo.positions)) };
   }, [layout.combos, layer, inspected]);
+
+  // The lines "Show combos" draws, and the one being edited, which is drawn whether or not the toggle is on.
+  const comboLines = useMemo<ComboLine[]>(() => {
+    if (layer === undefined) return [];
+    const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances };
+    const lineFor = (id: string, name: string, positions: readonly number[], output: Binding | null, editing: boolean): ComboLine => {
+      const legend = output === null ? null : bindingLegend(output, ctx);
+      const label = legend === null ? "…" : legend.hold === undefined ? legend.tap : `${legend.tap} ${legend.hold}`;
+      return {
+        id, positions, label, editing,
+        name: `${name}, keys ${positions.map((position) => position + 1).join(" and ")}${output === null ? "" : `, sends ${bindingSummary(output, layout)}`}`,
+      };
+    };
+    const lines = showCombos ? combosOn(layout, layer.id).filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false)) : [];
+    if (comboDraft !== null && comboDraft.positions.length >= 2) lines.push(lineFor(comboDraft.id, comboDraft.name || "New combo", comboDraft.positions, comboDraft.output, true));
+    return lines;
+  }, [showCombos, layout, layer, comboDraft]);
+  // Pointing at a combo (its line, its label or its row) lights the keys it is made of.
+  const comboLit = useMemo<ReadonlySet<number>>(() => {
+    const positions = new Set<number>(comboDraft?.positions ?? []);
+    const hovered = hoverCombo === null ? undefined : (hoverCombo === comboDraft?.id ? comboDraft : layout.combos.find((combo) => combo.id === hoverCombo));
+    for (const position of hovered?.positions ?? []) positions.add(position);
+    return positions;
+  }, [comboDraft, hoverCombo, layout.combos]);
 
   // A pulse that outlives the apply would read as a second change, so it clears itself.
   useEffect(() => {
@@ -222,7 +293,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [draft.binding]);
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
-  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : repeating ? "repeat" : historyOpen ? "history" : "summary";
+  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : "summary";
 
   // Opening the chat puts the cursor in its box, so Cmd-K then typing is one gesture.
   useEffect(() => {
@@ -266,9 +337,244 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setPlacing(null);
   }
 
+  // One change set from the board or the tabs. A change that would drop the only copy of a function asks first (D-092).
+  const change = useChange({ token, layoutRef, revisionId: revision.id, onChanged, onStale });
+
+  async function perform(ops: ChangeOp[], summary: string, options: { dropReason?: string; quiet?: boolean } = {}): Promise<ChangeOutcome> {
+    setChanging(true);
+    const outcome = await change(ops, summary);
+    setChanging(false);
+    if (outcome.ok) {
+      toasts.show({ kind: "success", message: "Applied", detail: [summary, outcome.warnings[0]].filter(Boolean).join(". ") });
+    } else if (outcome.lost.length > 0 && options.dropReason !== undefined) {
+      setPendingDrop({ ops, summary, lost: outcome.lost, reason: options.dropReason });
+    } else if (options.quiet !== true && !outcome.stale) {
+      toasts.show({ kind: "error", message: outcome.message, detail: outcome.problems.slice(0, 2).join(" ") });
+    }
+    return outcome;
+  }
+
+  // The panel's draft would be lost under a change that reloads the layout, so the board's moves wait for it.
+  function draftBlocks(): boolean {
+    if (editing === null || !draft.dirty) return false;
+    toasts.show({ kind: "info", message: "Apply or reset the key you are editing first" });
+    return true;
+  }
+
+  const dropOps = (functions: readonly string[], reason: string): ChangeOp[] => functions.map((fn) => ({ op: "dropFunction", function: fn, reason }));
+
+  // Layers (16#layers-are-managed-in-their-tabs): each action is one change set, by layer id.
+  const layerNameOf = (id: string) => niceLayerName(layout.layers.find((candidate) => candidate.id === id)?.name ?? id);
+  const layerActions: LayerActions | undefined =
+    preview !== null
+      ? undefined
+      : {
+          blockedReason: undoBlock,
+          add: async () => {
+            const added = addLayerChange(layout);
+            const outcome = await perform(added.ops, `Added ${added.name}`);
+            if (!outcome.ok) return;
+            setLayerId(added.layerId);
+            setRenamingId(added.layerId);
+          },
+          rename: async (id, name) => {
+            if (layout.layers.some((candidate) => candidate.id !== id && candidate.name.toLowerCase() === name.toLowerCase())) {
+              toasts.show({ kind: "info", message: `Another layer is already called ${name}` });
+              return;
+            }
+            await perform([{ op: "renameLayer", layerId: id, name }], `Renamed ${layerNameOf(id)} to ${name}`);
+          },
+          duplicate: async (id) => {
+            const copy = duplicateLayerChange(layout, id);
+            if (copy === null) return;
+            const outcome = await perform(copy.ops, `Duplicated ${layerNameOf(id)} as ${copy.name}`);
+            if (outcome.ok) setLayerId(copy.layerId);
+          },
+          move: async (id, toIndex) => {
+            const ops = moveLayerOps(layout, id, toIndex);
+            if (ops === null) {
+              toasts.show({ kind: "info", message: "The base layer stays first" });
+              return;
+            }
+            await perform(ops, `Moved ${layerNameOf(id)} to position ${toIndex + 1}`);
+          },
+          style: async (id, label, color) => {
+            await perform([{ op: "setLayerStyle", layerId: id, shortLabel: label, color }], `Changed the label and colour of ${layerNameOf(id)}`);
+          },
+          convert: async (id, from, to) => {
+            const ops = convertLayerOps(layout, id, from, to);
+            if (ops === null) return;
+            await perform(ops, `Turned ${ops.length} ${from} ${ops.length === 1 ? "key" : "keys"} into ${to} on ${layerNameOf(id)}`);
+          },
+          remove: async (id, drops) => {
+            const name = layerNameOf(id);
+            const outcome = await perform([...dropOps(drops, `Deleted layer ${name}`), { op: "removeLayer", layerId: id }], `Deleted layer ${name}`, { quiet: true });
+            if (outcome.ok && editing?.layerId === id) closeEditor(false);
+            return outcome;
+          },
+          openKey: (slot) => {
+            setLayerId(slot.layerId);
+            openEditor(slot.position, slot.layerId);
+          },
+          notify: (message) => toasts.show({ kind: "info", message }),
+          nameFunction: (fn) => functionName(fn, layout),
+        };
+
+  // Selecting several keys: Shift- or Cmd-click, or taps in select mode. The key whose panel is open joins the first Shift-click.
+  function extendSelectionTo(position: number) {
+    if (layer === undefined) return;
+    setChatSelection((previous) => extendSelection(previous, layer.id, position, editingHere && editing !== null ? editing.position : null));
+  }
+
+  // Combos: "Make a combo" takes the selected keys to the combo panel, which opens on the output picker.
+  function makeCombo() {
+    if (chatSelection === null || chatSelection.positions.length < 2 || draftBlocks()) return;
+    if (editing !== null) closeEditor(false);
+    setChatOpen(false);
+    setSelectMode(false);
+    setComboDraft({ id: newComboId(layout), isNew: true, name: "", positions: [...chatSelection.positions], layerIds: "all", output: null, timeoutMs: undefined });
+    setComboPicking(false);
+    setCombosOpen(true);
+    setChatSelection(null);
+  }
+
+  function openCombo(id: string) {
+    const combo = layout.combos.find((candidate) => candidate.id === id);
+    if (combo === undefined || draftBlocks()) return;
+    if (editing !== null) closeEditor(false);
+    setChatOpen(false);
+    setComboDraft(draftFromCombo(combo));
+    setComboPicking(false);
+    setCombosOpen(true);
+  }
+
+  function toggleCombos() {
+    const on = !showCombos;
+    setShowCombos(on);
+    writeStored(SHOW_COMBOS_KEY, on ? "1" : "0");
+    if (!on) {
+      setCombosOpen(false);
+      setComboDraft(null);
+      setComboPicking(false);
+      return;
+    }
+    if (draftBlocks()) return;
+    if (editing !== null) closeEditor(false);
+    setCombosOpen(true);
+  }
+
+  // The keys a paste reaches: the selected keys, or the open key.
+  function pasteTargets(): Slot[] {
+    if (chatSelection !== null) return chatSelection.positions.map((position) => ({ layerId: chatSelection.layerId, position }));
+    return editing === null ? [] : [{ layerId: editing.layerId, position: editing.position }];
+  }
+
+  function copyKey(slot: Slot) {
+    const binding = bindingAt(layout, slot);
+    if (binding === undefined) return;
+    setClipboard({ binding, from: slot });
+    toasts.show({ kind: "info", message: "Copied", detail: bindingSummary(binding, layout) });
+  }
+
+  async function paste() {
+    const targets = pasteTargets();
+    if (clipboard === null || targets.length === 0 || draftBlocks()) return;
+    const ops = pasteOps(layout, clipboard.binding, targets);
+    if (ops === null) {
+      toasts.show({ kind: "info", message: "Already that", detail: "Every key already does this." });
+      return;
+    }
+    const what = bindingSummary(clipboard.binding, layout);
+    // The history line counts the keys that changed, not the ones that already had it.
+    const changed = ops.flatMap((op) => (op.op === "setBinding" ? [op.at] : []));
+    const outcome = await perform(ops, pasteSummary(layout, clipboard.binding, changed), { dropReason: `Replaced by pasting ${what}` });
+    if (outcome.ok) setChatSelection(null);
+  }
+
+  async function finishSwap(index: number) {
+    if (swapping === null || layer === undefined) return;
+    const to = { layerId: layer.id, position: index };
+    const ops = swapOps(swapping, to);
+    if (ops === null) {
+      toasts.show({ kind: "info", message: "Choose a different key", detail: "This is the key you are swapping." });
+      return;
+    }
+    const summaryText = swapSummary(layout, swapping, to);
+    setSwapping(null);
+    const outcome = await perform(ops, summaryText);
+    if (outcome.ok) setApplied(to);
+  }
+
+  // A drag from one key onto another swaps them; with Option held it copies instead. Both are on the layer showing.
+  async function dropKey(from: number, to: number, copy: boolean) {
+    if (layer === undefined || draftBlocks()) return;
+    const a = { layerId: layer.id, position: from };
+    const b = { layerId: layer.id, position: to };
+    const ops = copy ? copyOps(layout, a, b) : swapOps(a, b);
+    if (ops === null) {
+      toasts.show({ kind: "info", message: "Already that", detail: "Both keys do the same thing." });
+      return;
+    }
+    const what = bindingSummary(bindingAt(layout, a) ?? { kind: "none" }, layout);
+    const outcome = await perform(ops, copy ? copySummary(layout, a, b) : swapSummary(layout, a, b), { dropReason: `Replaced by a copy of ${what}` });
+    if (outcome.ok) setApplied(b);
+  }
+
+  // Quick assign: typed keys go to the selected keys in order and are applied together when the run ends.
+  function startQuick() {
+    if (chatSelection === null || draftBlocks()) return;
+    if (editing !== null) closeEditor(false);
+    setChatOpen(false);
+    setSelectMode(false);
+    setQuick([]);
+  }
+
+  async function applyQuick() {
+    if (quick === null || quick.length === 0) return;
+    const ops = quickAssignOps(quickTargets, quick);
+    if (ops === null) return;
+    const outcome = await perform(ops, quickAssignSummary(layout, quickTargets, quick), { dropReason: "Replaced by typing the key" });
+    if (outcome.ok) {
+      setQuick(null);
+      setChatSelection(null);
+    }
+  }
+
+  // While a run is open the keyboard types into it, ahead of every other shortcut.
+  useEffect(() => {
+    if (quick === null) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (typing(event.target) || document.querySelector("dialog[open]") !== null) return;
+      const handled = () => {
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      if (event.key === "Escape") {
+        handled();
+        setQuick(null);
+      } else if (event.key === "Enter") {
+        handled();
+        void applyQuick();
+      } else if (event.key === "Backspace") {
+        handled();
+        setQuick((codes) => (codes === null ? codes : codes.slice(0, -1)));
+      } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        handled();
+        const code = keyForChar(event.key)?.name;
+        if (code === undefined) toasts.show({ kind: "info", message: `${event.key} isn't a key keyloom knows how to type` });
+        else if (quick.length >= quickTargets.length) toasts.show({ kind: "info", message: "Every selected key has its key", detail: "Press Enter to apply, or Backspace to change one." });
+        else setQuick((codes) => [...(codes ?? []), code]);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // applyQuick reads the latest run through this render's closure; the effect is rebuilt as the run grows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quick, quickTargets, layout, revision.id]);
+
   function select(index: number | null) {
-    // Place mode owns clicks; moving focus must not place anything.
-    if (placing !== null) return;
+    // Place, swap and combo-key modes own clicks; moving focus must not choose anything.
+    if (placing !== null || swapping !== null || comboPicking) return;
     if (chatOpen || editing === null || index === null) {
       setSelected(index);
       return;
@@ -282,9 +588,28 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     if (index !== editing.position) setEditing({ layerId: editing.layerId, position: index, focus: false });
   }
 
-  function press(index: number, via: "pointer" | "keyboard") {
+  function press(index: number, via: "pointer" | "keyboard", extend = false) {
     if (placing !== null) {
       placeOn(index);
+      return;
+    }
+    if (comboPicking && comboDraft !== null) {
+      const has = comboDraft.positions.includes(index);
+      if (has && comboDraft.positions.length <= 2) {
+        toasts.show({ kind: "info", message: "A combo needs at least two keys" });
+        return;
+      }
+      setComboDraft({ ...comboDraft, positions: (has ? comboDraft.positions.filter((candidate) => candidate !== index) : [...comboDraft.positions, index]).sort((a, b) => a - b) });
+      return;
+    }
+    if (swapping !== null) {
+      void finishSwap(index);
+      return;
+    }
+    if (quick !== null) return;
+    if (via === "pointer" && (extend || selectMode) && !chatOpen) {
+      if (extend) extendSelectionTo(index);
+      else toggleChatKey(index);
       return;
     }
     if (chatOpen) {
@@ -300,8 +625,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   function chooseLayer(id: string) {
-    // A kept function can go on any layer, so place mode lets the board show another one.
-    if (placing !== null) {
+    // A kept function, or a swap partner, can be on any layer, so those modes let the board show another one.
+    if (placing !== null || swapping !== null || comboPicking) {
       setLayerId(id);
       return;
     }
@@ -321,11 +646,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
     setSelected(position);
     setBlocked(false);
+    // A key opens over the combo being made; the combo is not kept.
+    setComboDraft(null);
+    setComboPicking(false);
     if (editing?.position === position && editing.layerId === (onLayer ?? layer.id)) return;
     setDraft(CLEAN);
     setPlacing(null);
     setPlacements([]);
     setRepeating(false);
+    setSwapping(null);
     setEditing({ layerId: onLayer ?? layer.id, position, focus: true });
   }
 
@@ -403,12 +732,31 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         setShortcutsOpen(true);
         return;
       }
+      // Copy and paste act on selected keys, or on the open key; anywhere else the browser's own copy and paste are left alone.
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !typing(event.target) && (event.key.toLowerCase() === "c" || event.key.toLowerCase() === "v") && window.getSelection()?.toString() === "") {
+        const source = chatSelection?.positions.length === 1 ? { layerId: chatSelection.layerId, position: chatSelection.positions[0] ?? 0 } : editing !== null ? { layerId: editing.layerId, position: editing.position } : null;
+        if (event.key.toLowerCase() === "c" && source !== null) {
+          event.preventDefault();
+          copyKey(source);
+          return;
+        }
+        if (event.key.toLowerCase() === "v" && clipboard !== null && (chatSelection !== null || editing !== null)) {
+          event.preventDefault();
+          void paste();
+          return;
+        }
+      }
       if (event.key === "Escape") {
         if (panel.current?.closePicker() === true) return;
-        if (chatOpen) setChatOpen(false);
+        if (swapping !== null) setSwapping(null);
+        else if (comboPicking) setComboPicking(false);
+        else if (comboDraft !== null) setComboDraft(null);
+        else if (chatOpen) setChatOpen(false);
         else if (editing !== null) closeEditor(true);
         else if (repeating) setRepeating(false);
         else if (historyOpen) setHistoryOpen(false);
+        else if (combosOpen) setCombosOpen(false);
+        else if (chatSelection !== null) setChatSelection(null);
         return;
       }
       // 1 to 9 switch layers. With a key's panel open a digit is a key to type, so it goes to the panel instead.
@@ -535,13 +883,25 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   return (
     <div className="workspace">
       <Toolbar
-        tabs={<LayerTabs layers={layout.layers} selectedId={layer.id} onSelect={chooseLayer} marked={markedLayers} />}
+        tabs={
+          <LayerTabs
+            layout={layout}
+            selectedId={layer.id}
+            onSelect={chooseLayer}
+            marked={markedLayers}
+            {...(layerActions === undefined ? {} : { actions: layerActions })}
+            renamingId={renamingId}
+            onRenaming={setRenamingId}
+          />
+        }
         revision={revision}
         busy={undoing}
         blockedReason={undoBlock}
         onUndo={() => void undo()}
         historyOpen={historyOpen}
         onHistory={() => setHistoryOpen((open) => !open)}
+        combosShown={showCombos}
+        onCombos={toggleCombos}
         onShortcuts={() => setShortcutsOpen(true)}
         advanced={advanced}
         onAdvanced={(value) => {
@@ -553,6 +913,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         <section className="stage" aria-label="Layout" data-placing={placing !== null}>
           {shownHalf === null ? null : <HalfSwitcher value={half} onChange={setHalf} hands={board.hands} />}
           <FirstRunTip />
+          <SelectionBar
+            count={chatSelection?.positions.length ?? 0}
+            layerName={chatSelection === null ? layer.name : layerNameOf(chatSelection.layerId)}
+            selectMode={selectMode}
+            onSelectMode={setSelectMode}
+            onClear={() => setChatSelection(null)}
+            onCombo={makeCombo}
+            copied={clipboard === null ? null : bindingSummary(clipboard.binding, layout)}
+            onPaste={() => void paste()}
+            quick={quick === null ? null : { labels: quick.map((code) => functionName(`key:${code}`, layout)), total: quickTargets.length }}
+            onQuickStart={startQuick}
+            onQuickApply={() => void applyQuick()}
+            onQuickCancel={() => setQuick(null)}
+            busy={changing}
+          />
           <Keyboard
             handle={keyboard}
             keys={keys}
@@ -577,6 +952,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             onPress={press}
             half={shownHalf}
             onSwipe={(direction) => setHalf(direction === "left" ? "right" : "left")}
+            comboLines={comboLines}
+            comboHovered={hoverCombo}
+            comboLit={comboLit}
+            onComboHover={setHoverCombo}
+            onComboOpen={openCombo}
+            dragEnabled={placing === null && swapping === null && !comboPicking && quick === null && !chatOpen && !changing}
+            onDropKey={(from, to, copy) => void dropKey(from, to, copy)}
           />
           <div className="stage-notes">
             {preview !== null && proposal !== null ? (
@@ -585,6 +967,20 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 layerName={layerName(layout, preview.layerId)}
                 onStop={pinnedProposal !== null && hoveredProposal === null ? () => setPinnedProposal(null) : undefined}
               />
+            ) : null}
+            {swapping === null || layer === undefined ? null : (
+              <p className="place-banner" role="status">
+                <MousePointerClick size={16} aria-hidden="true" />
+                <span>Click the key to swap with key {swapping.position + 1} on {layerNameOf(swapping.layerId)}. You can change layer first. Escape cancels.</span>
+                <button type="button" className="button" onClick={() => setSwapping(null)}>Cancel</button>
+              </p>
+            )}
+            {comboPicking ? (
+              <p className="place-banner" role="status">
+                <MousePointerClick size={16} aria-hidden="true" />
+                <span>Click keys to add or remove them from the combo. Escape stops.</span>
+                <button type="button" className="button" onClick={() => setComboPicking(false)}>Done</button>
+              </p>
             ) : null}
             {placing === null ? null : (
               <p className="place-banner" role="status">
@@ -611,6 +1007,35 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onFlash={(target) => onOpenRelease({ id: target.id, summary: target.summary })}
                 blockedReason={undoBlock}
               />
+            ) : null
+          }
+          combo={
+            comboDraft !== null ? (
+              <ComboEditor
+                key={`${revision.id}:${comboDraft.id}`}
+                token={token}
+                layoutRef={layoutRef}
+                revisionId={revision.id}
+                layout={layout}
+                layerId={layer.id}
+                draft={comboDraft}
+                onDraft={setComboDraft}
+                picking={comboPicking}
+                onPicking={setComboPicking}
+                onBack={() => {
+                  setComboDraft(null);
+                  setComboPicking(false);
+                }}
+                onApplied={async (summaryText) => {
+                  await onChanged();
+                  setComboDraft(null);
+                  setComboPicking(false);
+                  toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+                }}
+                onStale={onStale}
+              />
+            ) : combosOpen ? (
+              <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} />
             ) : null
           }
           summary={<LayoutSummary summary={summary} layout={layout} board={board} revision={revision} />}
@@ -645,6 +1070,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onShowLayer={(id) => {
                   if (!draft.dirty) setLayerId(id);
                 }}
+                footerExtra={
+                  <KeyMoves
+                    swapping={swapping !== null}
+                    onSwap={() => setSwapping((current) => (current === null ? { layerId: editing.layerId, position: editing.position } : null))}
+                    onCopy={() => copyKey({ layerId: editing.layerId, position: editing.position })}
+                    copied={clipboard === null ? null : bindingSummary(clipboard.binding, layout)}
+                    pasteTargets={Math.max(1, chatSelection?.positions.length ?? 0)}
+                    onPaste={() => void paste()}
+                    blockedReason={draft.dirty ? "Apply or reset this key first" : null}
+                  />
+                }
               />
             )
           }
@@ -709,6 +1145,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       </div>
       <ChatBar open={chatOpen} onToggle={toggleChat} />
       <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      {pendingDrop === null ? null : (
+        <DropConfirm
+          summary={pendingDrop.summary}
+          names={pendingDrop.lost.map((fn) => functionName(fn, layout))}
+          onCancel={() => setPendingDrop(null)}
+          onConfirm={() => {
+            const { ops, summary: summaryText, lost, reason } = pendingDrop;
+            setPendingDrop(null);
+            void perform([...ops, ...dropOps(lost, reason)], summaryText);
+          }}
+        />
+      )}
     </div>
   );
 }

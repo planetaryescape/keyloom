@@ -80,6 +80,8 @@ interface Props {
   /** The layout moved on under this panel; the parent reloads and closes it. */
   onStale: () => void;
   onShowLayer: (layerId: string) => void;
+  /** Controls that act on this key from outside its draft: swap, copy and paste (16#moving-and-copying-keys). */
+  footerExtra?: ReactNode;
   handle?: Ref<KeyPanelHandle>;
 }
 
@@ -90,7 +92,7 @@ type OpenPicker = { slot: SlotName; tab: PickerTab } | null;
 export function KeyPanel(props: Props) {
   const {
     token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, placements, placing,
-    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, handle,
+    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, footerExtra, handle,
   } = props;
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
   const layer = layout.layers[layerIndex];
@@ -505,6 +507,7 @@ export function KeyPanel(props: Props) {
       </fieldset>
 
       <footer className="panel-foot">
+        {footerExtra}
         <div className="panel-foot-note" aria-live="polite">
           {confirmingNative ? (
             <p className="blocked" role="alert">

@@ -10,6 +10,8 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   legend: Pick<Legend, "tap" | "hold">;
   /** Pixels per key unit. */
   unit: number;
+  /** The smallest legend, in px; phones allow 10 (18#legends-stay-readable). */
+  floorPx?: number;
   /** Key width in units; wider caps give their legend more room. */
   width: number;
   /** Which kind of element to draw: a real button on the board, a plain swatch elsewhere. */
@@ -37,14 +39,16 @@ const breakAtSeams = (text: string) => text.replace(/[_+(]/g, (seam) => `${seam}
 // dashes, a none key's hatching) as well as by fill, and the selection, draft and remembered marks
 // are each their own element so they can show together.
 export function Cap({
-  tone, legend, unit, width, as = "button", combo = false, legendTurn, layerColor, pending = false, remembered = false, breakable = false, style, ...rest
+  tone, legend, unit, floorPx, width, as = "button", combo = false, legendTurn, layerColor, pending = false, remembered = false, breakable = false, style, ...rest
 }: CapProps) {
-  const tap = fitLegend(legend.tap, width, TAP_SIZE, { unit });
-  const hold = legend.hold === undefined ? null : fitLegend(legend.hold, width, HOLD_SIZE, { unit });
-  // A name that is wider than the cap wraps at its seams (layer_ / td); one that fits stays on a line.
-  const wraps = (value: string, size: number, fits: boolean) => breakable || !fits || (/[_+(]/.test(value) && textEm(value) * size > width - CAP_INSET);
-  const tapWraps = wraps(legend.tap, tap.size, tap.fits);
-  const holdWraps = legend.hold !== undefined && hold !== null && wraps(legend.hold, hold.size, hold.fits);
+  const floor = floorPx === undefined ? {} : { floor: floorPx };
+  const tap = fitLegend(legend.tap, width, TAP_SIZE, { unit, ...floor });
+  const hold = legend.hold === undefined ? null : fitLegend(legend.hold, width, HOLD_SIZE, { unit, ...floor });
+  // A name wider than the cap wraps at its seams (layer_ / td) and nowhere else: a word with no seam stays whole
+  // (a "toggl / e" legend broke mid-word on a phone, fixed in rung 15, D-187), so its table entry has to be short enough to fit.
+  const wraps = (value: string, size: number) => breakable || (/[_+(]/.test(value) && textEm(value) * size > width - CAP_INSET);
+  const tapWraps = wraps(legend.tap, tap.size);
+  const holdWraps = legend.hold !== undefined && hold !== null && wraps(legend.hold, hold.size);
   const words = (
     <>
       {legend.tap === "" ? null : (
