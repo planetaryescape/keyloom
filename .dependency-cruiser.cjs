@@ -7,7 +7,7 @@ const ALLOWED = {
   layout: [],
   validation: ["layout", "boards"],
   boards: ["layout"],
-  "firmware/qmk": ["layout", "boards", "firmware/toolchain"],
+  "firmware/qmk": ["layout", "boards", "firmware/toolchain", "firmware/emulate"],
   "firmware/zmk": ["layout", "boards", "firmware/toolchain", "firmware/emulate"],
   "firmware/emulate": ["layout", "boards", "firmware/toolchain"],
   "firmware/toolchain": [],

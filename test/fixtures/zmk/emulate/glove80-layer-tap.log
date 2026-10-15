@@ -1,0 +1,73 @@
+[00:00:00.000,000] <dbg> zmk: behavior_macro_init: Precalculate initial release state:
+[00:00:00.000,000] <dbg> zmk: behavior_macro_init: Precalculate initial release state:
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: press
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: tap
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro wait time set: 40
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: release
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: tap
+[00:00:00.000,000] <dbg> zmk: behavior_macro_init: Precalculate initial release state:
+*** Booting Zephyr OS build  ***
+[00:00:00.000,000] <wrn> zmk: Have 3 combos!
+[00:00:00.000,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 10
+[00:00:00.000,000] <dbg> zmk: get_selected_transport: No endpoint transports are ready.
+[00:00:00.000,000] <inf> zmk: Welcome to ZMK!
+
+[00:00:00.011,000] <dbg> zmk: kscan_mock_work_handler_0: ev 675840 row 0 column 80 state 0
+
+[00:00:00.011,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 10
+[00:00:00.011,000] <wrn> zmk: Not found in transform: row: 0, col: 80, pressed: false
+[00:00:00.022,000] <dbg> zmk: kscan_mock_work_handler_0: ev 2153991680 row 0 column 78 state 1
+
+[00:00:00.022,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 99
+[00:00:00.022,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 78, position: 78, pressed: true
+[00:00:00.022,000] <dbg> zmk: position_state_changed_listener: 78 bubble (no undecided hold_tap active)
+[00:00:00.022,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 78, binding name: lt_sp
+[00:00:00.022,000] <dbg> zmk: on_hold_tap_binding_pressed: 78 new undecided hold_tap
+[00:00:00.122,000] <dbg> zmk: kscan_mock_work_handler_0: ev 2150045696 row 0 column 24 state 1
+
+[00:00:00.122,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 39
+[00:00:00.122,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 24, position: 24, pressed: true
+[00:00:00.122,000] <dbg> zmk: position_state_changed_listener: 78 capturing 24 down event
+[00:00:00.122,000] <dbg> zmk: zmk_event_manager_handle_from: Listener captured the event
+[00:00:00.162,000] <dbg> zmk: kscan_mock_work_handler_0: ev 1251328 row 0 column 24 state 0
+
+[00:00:00.162,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 19
+[00:00:00.162,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 24, position: 24, pressed: false
+[00:00:00.162,000] <dbg> zmk: position_state_changed_listener: 78 capturing 24 up event
+[00:00:00.162,000] <dbg> zmk: zmk_event_manager_handle_from: Listener captured the event
+[00:00:00.182,000] <dbg> zmk: kscan_mock_work_handler_0: ev 131091968 row 0 column 78 state 0
+
+[00:00:00.182,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 2000
+[00:00:00.182,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 78, position: 78, pressed: false
+[00:00:00.182,000] <dbg> zmk: position_state_changed_listener: 78 bubble undecided hold-tap keyrelease event
+[00:00:00.182,000] <dbg> zmk: tap_dance_position_state_changed_listener: Ignore upstroke at position 78.
+[00:00:00.182,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 78, binding name: lt_sp
+[00:00:00.182,000] <dbg> zmk: decide_hold_tap: 78 decided tap (tap-preferred decision moment key-up)
+[00:00:00.182,000] <dbg> zmk: on_keymap_binding_pressed: position 78 keycode 0x7002C
+[00:00:00.182,000] <dbg> zmk: hid_listener_keycode_pressed: usage_page 0x07 keycode 0x2C implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_hid_implicit_modifiers_press: Modifiers set to 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x07
+[00:00:00.182,000] <err> zmk: USB endpoint is not supported
+[00:00:00.182,000] <dbg> zmk: release_captured_events: Releasing key position event for position 24 pressed
+[00:00:00.182,000] <dbg> zmk: position_state_changed_listener: 24 bubble (no undecided hold_tap active)
+[00:00:00.182,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 24, binding name: key_press
+[00:00:00.182,000] <dbg> zmk: on_keymap_binding_pressed: position 24 keycode 0x7001A
+[00:00:00.182,000] <dbg> zmk: hid_listener_keycode_pressed: usage_page 0x07 keycode 0x1A implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_hid_implicit_modifiers_press: Modifiers set to 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x07
+[00:00:00.182,000] <err> zmk: USB endpoint is not supported
+[00:00:00.182,000] <dbg> zmk: release_captured_events: Releasing key position event for position 24 released
+[00:00:00.182,000] <dbg> zmk: position_state_changed_listener: 24 bubble (no undecided hold_tap active)
+[00:00:00.182,000] <dbg> zmk: tap_dance_position_state_changed_listener: Ignore upstroke at position 24.
+[00:00:00.182,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 24, binding name: key_press
+[00:00:00.182,000] <dbg> zmk: on_keymap_binding_released: position 24 keycode 0x7001A
+[00:00:00.182,000] <dbg> zmk: hid_listener_keycode_released: usage_page 0x07 keycode 0x1A implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_hid_implicit_modifiers_release: Modifiers set to 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x07
+[00:00:00.182,000] <err> zmk: USB endpoint is not supported
+[00:00:00.182,000] <dbg> zmk: on_keymap_binding_released: position 78 keycode 0x7002C
+[00:00:00.182,000] <dbg> zmk: hid_listener_keycode_released: usage_page 0x07 keycode 0x2C implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_hid_implicit_modifiers_release: Modifiers set to 0x00
+[00:00:00.182,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x07
+[00:00:00.182,000] <err> zmk: USB endpoint is not supported
+[00:00:00.182,000] <dbg> zmk: on_hold_tap_binding_released: 78 cleaning up hold-tap

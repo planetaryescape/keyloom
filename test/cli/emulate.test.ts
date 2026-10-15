@@ -121,9 +121,15 @@ describe("keyloom emulate", () => {
   test("a firmware without an emulator yet says so (exit 2)", async () => {
     const dataDir = join(tempDir(), "data");
     await cli(["import", "--board", "zsa/moonlander", FIXTURE_DIR, "--data-dir", dataDir, "--name", "bk"]);
-    const r = await cli(["emulate", "bk", "--keys", "tap 1", "--data-dir", dataDir]);
-    expect(r.code).toBe(2);
-    expect(problem(r)).toContain("emulating QMK boards isn't available yet");
+    const qmk = EMULATORS.qmk;
+    EMULATORS.qmk = undefined;
+    try {
+      const r = await cli(["emulate", "bk", "--keys", "tap 1", "--data-dir", dataDir]);
+      expect(r.code).toBe(2);
+      expect(problem(r)).toContain("emulating QMK boards isn't available yet");
+    } finally {
+      EMULATORS.qmk = qmk;
+    }
   });
 
   test("an emulator that fails is exit 7 with the reason and the log path", async () => {

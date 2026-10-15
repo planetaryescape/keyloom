@@ -4,3 +4,5 @@ dist/
 .DS_Store
 .env
 .*.bun-build
+# Captured firmware logs are test fixtures, not run output.
+!test/fixtures/**/*.log

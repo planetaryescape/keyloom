@@ -1,0 +1,31 @@
+*** Booting Zephyr OS build dacab4875df7 ***
+[00:00:00.000,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 10
+[00:00:00.000,000] <dbg> zmk: get_selected_transport: No endpoint transports are ready.
+[00:00:00.000,000] <inf> zmk: Welcome to ZMK!
+
+[00:00:00.011,000] <dbg> zmk: kscan_mock_work_handler_0: ev 666112 row 0 column 42 state 0
+
+[00:00:00.011,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 10
+[00:00:00.011,000] <wrn> zmk: Not found in transform: row: 0, col: 42, pressed: false
+[00:00:00.022,000] <dbg> zmk: kscan_mock_work_handler_0: ev 2150048512 row 0 column 35 state 1
+
+[00:00:00.022,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 39
+[00:00:00.022,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 35, position: 35, pressed: true
+[00:00:00.022,000] <dbg> zmk: position_state_changed_listener: 35 bubble (no undecided hold_tap active)
+[00:00:00.022,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 35, binding name: key_press
+[00:00:00.022,000] <dbg> zmk: on_keymap_binding_pressed: position 35 keycode 0xC00E9
+[00:00:00.022,000] <dbg> zmk: hid_listener_keycode_pressed: usage_page 0x0C keycode 0xE9 implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.022,000] <dbg> zmk: zmk_hid_implicit_modifiers_press: Modifiers set to 0x00
+[00:00:00.022,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x0C
+[00:00:00.022,000] <err> zmk: USB endpoint is not supported
+[00:00:00.062,000] <dbg> zmk: kscan_mock_work_handler_0: ev 131080960 row 0 column 35 state 0
+
+[00:00:00.062,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 2000
+[00:00:00.062,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 35, position: 35, pressed: false
+[00:00:00.062,000] <dbg> zmk: position_state_changed_listener: 35 bubble (no undecided hold_tap active)
+[00:00:00.062,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 35, binding name: key_press
+[00:00:00.062,000] <dbg> zmk: on_keymap_binding_released: position 35 keycode 0xC00E9
+[00:00:00.062,000] <dbg> zmk: hid_listener_keycode_released: usage_page 0x0C keycode 0xE9 implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.062,000] <dbg> zmk: zmk_hid_implicit_modifiers_release: Modifiers set to 0x00
+[00:00:00.062,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x0C
+[00:00:00.062,000] <err> zmk: USB endpoint is not supported

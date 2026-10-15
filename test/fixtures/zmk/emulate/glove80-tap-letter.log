@@ -1,0 +1,41 @@
+[00:00:00.000,000] <dbg> zmk: behavior_macro_init: Precalculate initial release state:
+[00:00:00.000,000] <dbg> zmk: behavior_macro_init: Precalculate initial release state:
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: press
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: tap
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro wait time set: 40
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: release
+[00:00:00.000,000] <dbg> zmk: handle_control_binding: macro mode set: tap
+[00:00:00.000,000] <dbg> zmk: behavior_macro_init: Precalculate initial release state:
+*** Booting Zephyr OS build  ***
+[00:00:00.000,000] <wrn> zmk: Have 3 combos!
+[00:00:00.000,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 10
+[00:00:00.000,000] <dbg> zmk: get_selected_transport: No endpoint transports are ready.
+[00:00:00.000,000] <inf> zmk: Welcome to ZMK!
+
+[00:00:00.011,000] <dbg> zmk: kscan_mock_work_handler_0: ev 675840 row 0 column 80 state 0
+
+[00:00:00.011,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 10
+[00:00:00.011,000] <wrn> zmk: Not found in transform: row: 0, col: 80, pressed: false
+[00:00:00.022,000] <dbg> zmk: kscan_mock_work_handler_0: ev 2150045696 row 0 column 24 state 1
+
+[00:00:00.022,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 39
+[00:00:00.022,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 24, position: 24, pressed: true
+[00:00:00.022,000] <dbg> zmk: position_state_changed_listener: 24 bubble (no undecided hold_tap active)
+[00:00:00.022,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 24, binding name: key_press
+[00:00:00.022,000] <dbg> zmk: on_keymap_binding_pressed: position 24 keycode 0x7001A
+[00:00:00.022,000] <dbg> zmk: hid_listener_keycode_pressed: usage_page 0x07 keycode 0x1A implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.022,000] <dbg> zmk: zmk_hid_implicit_modifiers_press: Modifiers set to 0x00
+[00:00:00.022,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x07
+[00:00:00.022,000] <err> zmk: USB endpoint is not supported
+[00:00:00.062,000] <dbg> zmk: kscan_mock_work_handler_0: ev 131078144 row 0 column 24 state 0
+
+[00:00:00.062,000] <dbg> zmk: kscan_mock_schedule_next_event_0: delaying next keypress: 2000
+[00:00:00.062,000] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 0, col: 24, position: 24, pressed: false
+[00:00:00.062,000] <dbg> zmk: position_state_changed_listener: 24 bubble (no undecided hold_tap active)
+[00:00:00.062,000] <dbg> zmk: tap_dance_position_state_changed_listener: Ignore upstroke at position 24.
+[00:00:00.062,000] <dbg> zmk: zmk_keymap_apply_position_state: layer_id: 0 position: 24, binding name: key_press
+[00:00:00.062,000] <dbg> zmk: on_keymap_binding_released: position 24 keycode 0x7001A
+[00:00:00.062,000] <dbg> zmk: hid_listener_keycode_released: usage_page 0x07 keycode 0x1A implicit_mods 0x00 explicit_mods 0x00
+[00:00:00.062,000] <dbg> zmk: zmk_hid_implicit_modifiers_release: Modifiers set to 0x00
+[00:00:00.062,000] <dbg> zmk: zmk_endpoints_send_report: usage page 0x07
+[00:00:00.062,000] <err> zmk: USB endpoint is not supported
