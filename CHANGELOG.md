@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.0](https://github.com/planetaryescape/keyloom/compare/v0.17.0...v0.18.0) (2026-10-15)
+
+
+### Features
+
+* a library pane for macros, tap dances and timing profiles ([704984b](https://github.com/planetaryescape/keyloom/commit/704984b8d553082871068954667630efdffb6608))
+* double-tap and tap-then-hold slots, the Macro tab and tap dance timing in the key panel ([bcb35c7](https://github.com/planetaryescape/keyloom/commit/bcb35c7943cc53f82f4717c124d03df58b1335b3))
+* macro builder follows the steps live, with a shared-macro choice, and the panel layout fixes ([9704276](https://github.com/planetaryescape/keyloom/commit/9704276e7a2768706778a4cb4f50784bb6fb85c4))
+* tap dance caps, slot-to-ops mapping, macro builder and the password warning ([3feb347](https://github.com/planetaryescape/keyloom/commit/3feb347af66d766aa85ccff9d131c3906f8abe7f))
+* tap dance reuse and extra slots in the picker, a visible shared-item choice, and decision D-159 ([87d6160](https://github.com/planetaryescape/keyloom/commit/87d61606dbec8f0b7341180e353ec2b552df6a68))
+
 ## [0.17.0](https://github.com/planetaryescape/keyloom/compare/v0.16.0...v0.17.0) (2026-10-15)
 
 
