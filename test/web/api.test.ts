@@ -6,6 +6,15 @@ interface LayoutListBody {
   layouts: LayoutSummary[];
 }
 
+const summary: LayoutSummary = {
+  id: "a",
+  name: "A",
+  boardId: "zsa/moonlander",
+  createdAt: 1,
+  updatedAt: 1,
+  revisionId: "rev_a",
+};
+
 let mock: ReturnType<typeof spyOn> | undefined;
 const controller = new AbortController();
 
@@ -21,14 +30,12 @@ function respondWith(body: LayoutListBody): void {
 
 describe("fetchLayouts", () => {
   test("returns the layouts from a well-formed response", async () => {
-    respondWith({ layouts: [{ id: "a", name: "A", boardId: "zsa/moonlander", updatedAt: 1 }] });
-    expect(await fetchLayouts("tok", controller.signal)).toEqual([
-      { id: "a", name: "A", boardId: "zsa/moonlander", updatedAt: 1 },
-    ]);
+    respondWith({ layouts: [summary] });
+    expect(await fetchLayouts("tok", controller.signal)).toEqual([summary]);
   });
 
   test("a malformed response gives the page a plain sentence, and the detail goes to the console", async () => {
-    respondWith({ layouts: [{ id: "", name: "A", boardId: "zsa/moonlander", updatedAt: 1 }] });
+    respondWith({ layouts: [{ ...summary, id: "" }] });
     const logged = spyOn(console, "error").mockImplementation(() => {});
     try {
       // The anchored pattern rules out the raw ZodError text, which the page must never show.

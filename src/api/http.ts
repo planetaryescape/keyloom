@@ -8,7 +8,10 @@ export const LayoutSummarySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   boardId: z.string().min(1),
+  // When the layout was first saved (its import, today) and the revision the viewer is showing.
+  createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
+  revisionId: z.string().min(1),
 });
 export type LayoutSummary = z.infer<typeof LayoutSummarySchema>;
 

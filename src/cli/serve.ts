@@ -9,7 +9,14 @@ export const DEFAULT_PORT = 4477;
 export function appLayoutSource(app: App): LayoutSource {
   return {
     async list() {
-      return listLayouts(app).map((r) => ({ id: r.id, name: r.name, boardId: r.boardId, updatedAt: r.updatedAt }));
+      return listLayouts(app).map((r) => ({
+        id: r.id,
+        name: r.name,
+        boardId: r.boardId,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        revisionId: r.headRevisionId,
+      }));
     },
     async get(ref) {
       try {

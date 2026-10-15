@@ -11,7 +11,7 @@ const fixture = await loadFixture();
 
 function sourceWith(overrides: Partial<LayoutSource> = {}): LayoutSource {
   return {
-    list: async () => [{ id: "moonlander-daily", name: "Daily driver", boardId: "zsa/moonlander", updatedAt: 1 }],
+    list: async () => [{ id: "moonlander-daily", name: "Daily driver", boardId: "zsa/moonlander", createdAt: 1, updatedAt: 1, revisionId: "rev_1" }],
     get: async (ref) => (ref === "moonlander-daily" ? fixture : null),
     ...overrides,
   };

@@ -8,7 +8,7 @@ import { loadFixture } from "../server/fixture.ts";
 const fixture = await loadFixture();
 const source: LayoutSource = {
   list: async () => [
-    { id: "moonlander-daily", name: "Daily driver", boardId: fixture.board.id, updatedAt: Date.now() },
+    { id: "moonlander-daily", name: "Daily driver", boardId: fixture.board.id, createdAt: Date.now(), updatedAt: Date.now(), revisionId: "rev_demo" },
   ],
   get: async (ref) => (ref === "moonlander-daily" ? fixture : null),
 };

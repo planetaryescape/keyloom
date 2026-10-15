@@ -36,6 +36,11 @@ export function shortKeyLabel(code: string): string {
   return aliases.reduce((best, n) => (n.length < best.length ? n : best), info.label);
 }
 
+/** A key with its modifiers in front: ⌘⇧4. Shared by the terminal grid and the viewer's keycaps. */
+export function tapText(code: string, mods?: readonly Mod[]): string {
+  return `${mods ? modsText(mods) : ""}${shortKeyLabel(code)}`;
+}
+
 function layerRef(id: string, ctx: GridContext): string {
   const i = ctx.layers.findIndex((l) => l.id === id);
   return i < 0 ? id : String(i);
@@ -45,11 +50,11 @@ function layerRef(id: string, ctx: GridContext): string {
 export function bindingLabel(b: Binding, ctx: GridContext): string {
   switch (b.kind) {
     case "key":
-      return `${b.mods ? modsText(b.mods) : ""}${shortKeyLabel(b.code)}`;
+      return tapText(b.code, b.mods);
     case "modifier":
       return modsText(b.mods);
     case "holdTap": {
-      const tap = `${b.tap.mods ? modsText(b.tap.mods) : ""}${shortKeyLabel(b.tap.code)}`;
+      const tap = tapText(b.tap.code, b.tap.mods);
       const hold = "mods" in b.hold ? modsText(b.hold.mods) : `L${layerRef(b.hold.layerId, ctx)}`;
       return `${tap}/${hold}`;
     }
