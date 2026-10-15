@@ -115,7 +115,8 @@ function freeName(name: string, layout: Layout, pending: readonly Macro[], ownId
   return `${name} ${n}`;
 }
 
-function freeId(layout: Layout, pending: readonly Macro[]): string {
+/** An id no macro in the layout or among the unsaved ones has. */
+export function newMacroId(layout: Layout, pending: readonly Macro[] = []): string {
   const used = new Set([...layout.macros, ...pending].map((m) => m.id));
   let n = layout.macros.length + 1;
   while (used.has(`macro-${n}`)) n++;
@@ -126,7 +127,7 @@ function freeId(layout: Layout, pending: readonly Macro[]): string {
 export function toMacro(b: Builder, layout: Layout, pending: readonly Macro[] = [], id: string | null = b.id): Macro | null {
   if (b.steps.length === 0) return null;
   const wanted = b.nameTouched && b.name.trim() !== "" ? b.name.trim() : generatedName(b.steps);
-  const own = id ?? freeId(layout, pending);
+  const own = id ?? newMacroId(layout, pending);
   return { id: own, name: freeName(wanted, layout, pending, own), steps: toSteps(b.steps) };
 }
 
@@ -139,11 +140,14 @@ const MODIFIER_WORDS: ReadonlyArray<[RegExp, Mod]> = [
 
 /**
  * "cmd c", "⌘+tab" or "⌘c": leading modifier words become modifiers and the rest is the key to search for, so
- * a chord is one pick instead of a modifier click and a key click.
+ * a chord is one pick instead of a modifier click and a key click. A trailing "wait 100" is the pause after it.
  */
-export function parseChordQuery(query: string): { mods: Mod[]; rest: string } {
+export function parseChordQuery(query: string): { mods: Mod[]; rest: string; waitMs: number } {
   const mods: Mod[] = [];
-  let rest = query.trimStart();
+  // "cmd tab, wait 100": the wait that follows the key, typed in the same pick.
+  const wait = /(?:^|[\s,;]+)wait\s+(\d{1,5})\s*(?:ms)?\s*$/i.exec(query);
+  const waitMs = wait?.[1] === undefined ? 0 : Number(wait[1]);
+  let rest = (wait === null ? query : query.slice(0, wait.index)).trimStart();
   for (let progressed = true; progressed; ) {
     progressed = false;
     for (const [pattern, mod] of MODIFIER_WORDS) {
@@ -160,5 +164,5 @@ export function parseChordQuery(query: string): { mods: Mod[]; rest: string } {
       break;
     }
   }
-  return { mods: sortMods(mods), rest: rest.trim() };
+  return { mods: sortMods(mods), rest: rest.trim(), waitMs };
 }

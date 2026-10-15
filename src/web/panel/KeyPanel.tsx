@@ -218,12 +218,15 @@ export function KeyPanel(props: Props) {
   }
 
   // A macro made in the picker is saved with the change, and the slot points at it.
-  function finishMacro(slotName: SlotName, macro: Macro) {
+  function setMacro(slotName: SlotName, macro: Macro) {
     update((previous) => {
       const withMacro = { ...previous, pendingMacros: [...previous.pendingMacros.filter((m) => m.id !== macro.id), macro] };
       if (slotName === "tap") return pickTap(withMacro, { t: "macro", macroId: macro.id });
       return isExtraSlot(slotName) ? setExtraSlot(withMacro, slotName as ExtraSlot, { kind: "macro", macroId: macro.id }, layout, slot) : previous;
     });
+  }
+
+  function closeMacroPicker() {
     setPicker(null);
     root.current?.focus({ preventScroll: true });
   }
@@ -337,7 +340,7 @@ export function KeyPanel(props: Props) {
       ? dirty ? (incomplete ?? "This is the same as the key now.") : null
       : check.state.status === "checking" ? "Checking the change." : result !== null && !result.ok ? "Fix the errors above first." : null;
 
-  const slotText = tapSlotText(draft, layout);
+  const slotText = tapSlotText(draft, drawn);
   const holdText = holdSlotText(draft, layout);
   const selectedTap = new Set(selectedIdsFor("tap", draft));
   const selectedHold = new Set(selectedIdsFor("hold", draft));
@@ -356,8 +359,10 @@ export function KeyPanel(props: Props) {
           position={position}
           currentMacroId={held}
           pending={draft?.pendingMacros ?? []}
-          autoFocus={focusPicker}
-          onDone={(macro) => finishMacro(slotName, macro)}
+          // The person just chose the Macros tab, so the search for the first key is where they type next.
+          autoFocus
+          onChange={(macro) => setMacro(slotName, macro)}
+          onDone={closeMacroPicker}
           onUse={(macroId) => pick(slotName, { t: "macro", macroId })}
         />
       ),

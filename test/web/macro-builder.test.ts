@@ -113,19 +113,27 @@ describe("editing a macro that already exists", () => {
 
 describe("a chord typed in the search", () => {
   test("leading modifier words or symbols become modifiers and the rest is the key", () => {
-    expect(parseChordQuery("cmd c")).toEqual({ mods: ["LGUI"], rest: "c" });
-    expect(parseChordQuery("⌘+tab")).toEqual({ mods: ["LGUI"], rest: "tab" });
-    expect(parseChordQuery("⌘c")).toEqual({ mods: ["LGUI"], rest: "c" });
-    expect(parseChordQuery("ctrl shift z")).toEqual({ mods: ["LCTL", "LSFT"], rest: "z" });
-    expect(parseChordQuery("opt+left")).toEqual({ mods: ["LALT"], rest: "left" });
-    expect(parseChordQuery("cmd")).toEqual({ mods: ["LGUI"], rest: "" });
+    expect(parseChordQuery("cmd c")).toEqual({ mods: ["LGUI"], rest: "c", waitMs: 0 });
+    expect(parseChordQuery("⌘+tab")).toEqual({ mods: ["LGUI"], rest: "tab", waitMs: 0 });
+    expect(parseChordQuery("⌘c")).toEqual({ mods: ["LGUI"], rest: "c", waitMs: 0 });
+    expect(parseChordQuery("ctrl shift z")).toEqual({ mods: ["LCTL", "LSFT"], rest: "z", waitMs: 0 });
+    expect(parseChordQuery("opt+left")).toEqual({ mods: ["LALT"], rest: "left", waitMs: 0 });
+    expect(parseChordQuery("cmd")).toEqual({ mods: ["LGUI"], rest: "", waitMs: 0 });
+  });
+
+  test("a wait typed after the key is the pause that follows it", () => {
+    expect(parseChordQuery("cmd tab, wait 100")).toEqual({ mods: ["LGUI"], rest: "tab", waitMs: 100 });
+    expect(parseChordQuery("tab wait 250ms")).toEqual({ mods: [], rest: "tab", waitMs: 250 });
+    expect(parseChordQuery("wait 100")).toEqual({ mods: [], rest: "", waitMs: 100 });
+    expect(parseChordQuery("waiting").waitMs).toBe(0);
+    expect(parseChordQuery("wait").rest).toBe("wait");
   });
 
   test("a word that only starts like a modifier is a search, not a chord", () => {
-    expect(parseChordQuery("command line")).toEqual({ mods: ["LGUI"], rest: "line" });
-    expect(parseChordQuery("shiftlock")).toEqual({ mods: [], rest: "shiftlock" });
-    expect(parseChordQuery("altitude")).toEqual({ mods: [], rest: "altitude" });
-    expect(parseChordQuery("")).toEqual({ mods: [], rest: "" });
+    expect(parseChordQuery("command line")).toEqual({ mods: ["LGUI"], rest: "line", waitMs: 0 });
+    expect(parseChordQuery("shiftlock")).toEqual({ mods: [], rest: "shiftlock", waitMs: 0 });
+    expect(parseChordQuery("altitude")).toEqual({ mods: [], rest: "altitude", waitMs: 0 });
+    expect(parseChordQuery("")).toEqual({ mods: [], rest: "", waitMs: 0 });
   });
 });
 

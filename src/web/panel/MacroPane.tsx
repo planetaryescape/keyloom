@@ -6,7 +6,7 @@ import { tapText } from "../../layout/render-grid.ts";
 import { firmwareName, searchKeys } from "../editor/keysearch.ts";
 import { macroUsers } from "./change-ops.ts";
 import {
-  addKey, addText, builderFromMacro, emptyBuilder, generatedName, moveStep, parseChordQuery, removeStep, rename, setStepMods, setWait, summary, toMacro, type Builder,
+  addKey, addText, builderFromMacro, emptyBuilder, generatedName, moveStep, newMacroId, parseChordQuery, removeStep, rename, setStepMods, setWait, summary, toMacro, type Builder,
 } from "./macro-builder.ts";
 
 interface Props {
@@ -19,8 +19,9 @@ interface Props {
   /** Macros made in this panel and not saved yet. */
   pending: readonly Macro[];
   autoFocus: boolean;
-  /** Done: the macro to put in the slot and save with the change. */
-  onDone: (macro: Macro) => void;
+  /** Each change to the steps: the macro the slot should hold, saved with the change. The key can be applied at any point; Done only closes the picker. */
+  onChange: (macro: Macro) => void;
+  onDone: () => void;
   /** A macro from the library, used as it is. */
   onUse: (macroId: string) => void;
 }
@@ -37,7 +38,7 @@ const SHOWN = 18;
 // The Macro tab (16#macros-are-made-in-the-picker-and-each-pick-adds-a-step, D-088). A pick adds a step and the
 // search stays open, so a three-key macro is: the Macros tab, three picks, Done. A chord is one pick when it is
 // typed ("cmd tab"), and the modifier buttons above the search are there for the mouse.
-export function MacroPane({ layout, layerId, position, currentMacroId, pending, autoFocus, onDone, onUse }: Props) {
+export function MacroPane({ layout, layerId, position, currentMacroId, pending, autoFocus, onChange, onDone, onUse }: Props) {
   const id = useId();
   const known = (macroId: string | null) => (macroId === null ? undefined : (pending.find((m) => m.id === macroId) ?? layout.macros.find((m) => m.id === macroId)));
   const start = known(currentMacroId);
@@ -49,7 +50,9 @@ export function MacroPane({ layout, layerId, position, currentMacroId, pending, 
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [asking, setAsking] = useState(false);
+  // A macro other keys use is changed for this key only, as a copy, unless every key is chosen.
+  const [forAll, setForAll] = useState(false);
+  const [ownId] = useState(() => newMacroId(layout, pending));
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLOListElement>(null);
 
@@ -68,28 +71,30 @@ export function MacroPane({ layout, layerId, position, currentMacroId, pending, 
   const slotRef = { layerId, position };
   const original = known(builder.id);
   const others = builder.id === null ? [] : macroUsers(layout, builder.id, slotRef);
-  const done = toMacro(builder, layout, pending);
+  const sharedElsewhere = builder.id !== null && others.length > 0;
+  const macroId = builder.id !== null && (!sharedElsewhere || forAll) ? builder.id : ownId;
+  const done = toMacro(builder, layout, pending, macroId);
   const edited = original !== undefined && done !== null && JSON.stringify({ name: done.name, steps: done.steps }) !== JSON.stringify({ name: original.name, steps: original.steps });
+  const changeKey = done === null ? "" : JSON.stringify(done);
+  const first = useRef(true);
+  // The slot follows the steps as they are built, so Apply works without Done. An unchanged macro opened for a look saves nothing.
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      if (builder.id !== null && !edited) return;
+    }
+    if (done !== null && (builder.id === null || edited)) onChange(done);
+    // The macro's content decides; the callback closes over state that only matters through its functional updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changeKey]);
   const secret = builder.steps.some((step) => step.kind === "text" && looksLikeSecret(step.text));
 
   function addPick(code: string) {
-    setBuilder((b) => addKey(b, code, allMods));
+    setBuilder((b) => (chord.waitMs > 0 ? setWait(addKey(b, code, allMods), b.steps.length, chord.waitMs) : addKey(b, code, allMods)));
     setQuery("");
     search.current?.focus();
     // The new step scrolls into view at the end of the list.
     window.requestAnimationFrame(() => list.current?.lastElementChild?.scrollIntoView({ block: "nearest" }));
-  }
-
-  function finish(forAll: boolean) {
-    const macro = toMacro(builder, layout, pending, forAll || builder.id === null ? builder.id : null);
-    if (macro !== null) onDone(macro);
-  }
-
-  function onDoneClick() {
-    if (done === null) return;
-    // Changing a macro other keys use asks first; a new one, or one only this key uses, doesn't.
-    if (builder.id !== null && edited && others.length > 0) setAsking(true);
-    else finish(true);
   }
 
   function onSearchKey(event: KeyboardEvent<HTMLInputElement>) {
@@ -98,7 +103,11 @@ export function MacroPane({ layout, layerId, position, currentMacroId, pending, 
       event.stopPropagation();
       const key = keys[cursor];
       if (key !== undefined) addPick(key.name);
-      else if (query.trim() === "" && done !== null) onDoneClick();
+      // "wait 100" on its own is the pause after the last step.
+      else if (chord.rest === "" && chord.waitMs > 0 && builder.steps.length > 0) {
+        setBuilder((b) => setWait(b, b.steps.length - 1, chord.waitMs));
+        setQuery("");
+      } else if (query.trim() === "" && done !== null) onDone();
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -145,7 +154,7 @@ export function MacroPane({ layout, layerId, position, currentMacroId, pending, 
                 aria-autocomplete="list"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="Add a key: c, tab, cmd v"
+                placeholder="Add a key: c, cmd tab, wait 100"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={onSearchKey}
@@ -253,25 +262,23 @@ export function MacroPane({ layout, layerId, position, currentMacroId, pending, 
             </label>
           )}
 
-          {asking ? (
-            <div className="macro-ask" role="group" aria-label="Who changes">
+          {sharedElsewhere && edited ? (
+            <div className="macro-ask" role="radiogroup" aria-label="Who changes">
               <p>
-                {others.length} other {others.length === 1 ? "key uses" : "keys use"} this macro. Change it for this key only, or for every key that uses it?
+                {others.length} other {others.length === 1 ? "key uses" : "keys use"} this macro. Change it for:
               </p>
               <div className="macro-ask-actions">
-                <button type="button" className="button button-primary" onClick={() => finish(false)}>This key only</button>
-                <button type="button" className="button" onClick={() => finish(true)}>Every key that uses it</button>
-                <button type="button" className="button" onClick={() => setAsking(false)}>Keep editing</button>
+                <button type="button" role="radio" aria-checked={!forAll} className="button" onClick={() => setForAll(false)}>This key only</button>
+                <button type="button" role="radio" aria-checked={forAll} className="button" onClick={() => setForAll(true)}>Every key that uses it</button>
               </div>
             </div>
-          ) : (
-            <div className="macro-foot">
-              <button type="button" className="button button-primary" disabled={done === null} onClick={onDoneClick}>
-                <Check size={14} aria-hidden="true" />
-                Done
-              </button>
-            </div>
-          )}
+          ) : null}
+          <div className="macro-foot">
+            <button type="button" className="button" disabled={done === null} onClick={onDone}>
+              <Check size={14} aria-hidden="true" />
+              Done
+            </button>
+          </div>
         </>
       )}
 

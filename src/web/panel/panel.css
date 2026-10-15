@@ -32,6 +32,11 @@
   border: 0;
 }
 
+.panel-body > * {
+  /* A taller panel scrolls; it must not squeeze its sections into each other. */
+  flex-shrink: 0;
+}
+
 .panel-body:disabled {
   opacity: 0.7;
 }
@@ -606,18 +611,16 @@
 
 .macro-steps {
   display: flex;
-  max-height: 220px;
   flex-direction: column;
   gap: var(--space-1);
   margin: 0;
   padding: 0;
-  overflow-y: auto;
   list-style: none;
 }
 
 .macro-step {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-1) var(--space-2);
   padding: var(--space-1) var(--space-2);
@@ -635,13 +638,23 @@
 
 .macro-step-what {
   min-width: 0;
-  flex: 1;
   overflow-wrap: anywhere;
   font-weight: var(--weight-semibold);
 }
 
+/* The modifiers and the wait share the second line. */
+.macro-step-mods,
+.macro-wait {
+  grid-row: 2;
+}
+
+.macro-step-mods {
+  grid-column: 2;
+}
+
 .macro-wait {
   display: flex;
+  grid-column: 3;
   align-items: center;
   gap: var(--space-1);
   color: var(--color-text-muted);
@@ -657,7 +670,8 @@
 
 .macro-step-actions {
   display: flex;
-  margin-left: auto;
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .macro-summary {
