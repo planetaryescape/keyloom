@@ -40,7 +40,7 @@ export type ChangeOp = z.infer<typeof ChangeOpSchema>;
 export const DecisionDraftSchema = z.object({
   goal: z.string().trim().min(1).max(300).describe("The frustration or goal this answers, in BK's words where he gave them."),
   choice: z.string().trim().min(1).max(300).describe('What was chosen, such as "Command-Shift on key 60, with Backspace moved to key 12".'),
-  reason: z.string().trim().min(1).max(500).describe("Why this choice and not another, so BK can judge it months later."),
+  reason: z.string().trim().min(1).max(500).describe('Why this choice and not another, so BK can judge it months later. Address him directly ("You barely use F16"), never as "BK".'),
   scope: z
     .object({
       apps: z.array(z.string().trim().min(1)).max(10).describe("Apps it matters in; empty if none were named."),
