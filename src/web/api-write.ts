@@ -9,6 +9,7 @@ import {
   FlashSchema,
   ParseBindingResponseSchema,
   UndoResponseSchema,
+  UpgradeResponseSchema,
   type ApplyRequest,
   type ApplyResponse,
   type Build,
@@ -19,6 +20,7 @@ import {
   type ParseBindingResponse,
   type UndoRequest,
   type UndoResponse,
+  type UpgradeResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import { ApiError } from "./api.ts";
@@ -97,6 +99,10 @@ export function applyChangeSet(token: string, changeSetId: string): Promise<Appl
 
 export function undoChange(token: string, ref: string, body: UndoRequest): Promise<UndoResponse> {
   return request("POST", layoutPath(ref, "undo"), token, UndoResponseSchema, undefined, body);
+}
+
+export function upgradeStoredLayout(token: string, ref: string): Promise<UpgradeResponse> {
+  return request("POST", layoutPath(ref, "upgrade"), token, UpgradeResponseSchema, undefined, {});
 }
 
 export function startBuild(token: string, ref: string, revisionId: string, boardRevision?: string): Promise<Build> {

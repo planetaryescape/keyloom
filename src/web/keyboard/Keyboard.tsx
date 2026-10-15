@@ -52,6 +52,8 @@ interface KeyboardProps {
   legendOverrides?: readonly ({ tap: string; hold?: string } | undefined)[] | undefined;
   /** For a layer key, which of the six layer colours its edge takes. */
   layerColors?: ReadonlyMap<number, number>;
+  /** Key position -> the hex its LED shows on this layer (D-192). */
+  ledColors?: ReadonlyMap<number, string> | undefined;
   /** The key whose draft is not applied yet, drawn with a pending mark. */
   pendingIndex?: number | null;
   /** The key just changed by an apply, which pulses once. */
@@ -112,6 +114,7 @@ export function Keyboard({
   current = null,
   legendOverrides,
   layerColors,
+  ledColors,
   pendingIndex = null,
   appliedIndex = null,
   chatSelected,
@@ -215,6 +218,7 @@ export function Keyboard({
               legend={legendOverrides?.[index] ?? description.legend}
               breakable={legendOverrides?.[index] !== undefined}
               layerColor={layerColors?.get(index) ?? 1}
+              {...(ledColors?.has(index) ? { led: ledColors.get(index) as string } : {})}
               pending={pendingIndex === index || marks?.get(index) === "changed"}
               remembered={remembered?.has(index) ?? false}
               title={description.headline}

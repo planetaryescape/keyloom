@@ -146,6 +146,22 @@
   border-radius: 5px 0 0 5px;
 }
 
+/* An LED colour (D-192): a faint wash, so the legend keeps its contrast whatever the hue (test/web/led-contrast.test.ts), and a bar along the top edge that carries the colour. */
+.cap[data-led="true"] {
+  background: color-mix(in srgb, var(--led) var(--led-wash), var(--cap));
+}
+
+.cap-led {
+  position: absolute;
+  top: 3px;
+  right: 18%;
+  left: 18%;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--led);
+  pointer-events: none;
+}
+
 /* A macro's kind shape: the play mark, top-left. */
 .cap-glyph {
   position: absolute;

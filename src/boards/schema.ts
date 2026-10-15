@@ -54,6 +54,10 @@ export const BoardDefinitionSchema = z.strictObject({
   rows: z.record(z.string(), positions),
   mirror: z.record(z.string(), z.number().int().nonnegative()),
   importers: z.array(z.enum(IMPORTER_IDS)).min(1),
+  // Per-key RGB (D-190): `ledPositions[i]` is the key position LED number i sits under. Absent means the board has no per-key lighting keyloom writes.
+  lighting: z.strictObject({ ledPositions: z.array(z.number().int().nonnegative()).min(1) }).optional(),
+  // Where this board differs from the firmware's own default for a setting on the settings page, such as mouse keys on a Moonlander.
+  settingDefaults: z.record(z.string(), z.union([z.number(), z.boolean()])).optional(),
   // Display-only rotation; never affects positions or generation (04).
   display: z
     .strictObject({

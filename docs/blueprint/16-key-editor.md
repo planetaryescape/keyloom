@@ -191,6 +191,7 @@ A panel beside the layer tabs lists the layout's macros, tap dances, combos and 
 - **Settings page.** Firmware-wide options are on one page with a filter box: tapping term, combo term, one-shot timeout, Caps Word, auto shift and mouse keys.
   - Each option shows its default, a slider or switch, and a paragraph on when to change it, as Oryx's page does (D-103).
   - Options keyloom doesn't model yet are listed read-only, from passthrough, so nothing is hidden.
+- **Built as:** a Settings button in the toolbar opens the page in the side column ([D-191](14-decision-log.md#d-191-the-settings-page-offers-options-whose-defaults-were-read-from-the-pinned-firmware-writes-feature-switches-to-rulesmk-and-keeps-hold-tap-profiles-that-copied-an-option-in-step-with-it-claude-building-rung-18-d-103)). Edits stage and are applied as one change set.
 - **Lighting.** On boards with per-key RGB (the Moonlander), each layer can set a colour for the whole layer or for individual keys. The colour shows on the caps in the editor, like Oryx's "Individual keys" and "Layer" tabs. It's the last rung of this chapter, because neither of BK's two problems (D-025) needs it (D-104).
 
 ## What keyloom doesn't take, and why

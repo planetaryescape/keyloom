@@ -302,6 +302,9 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `rows` | all | An object from a row name to its positions. Every position is in exactly one row. |
 | `mirror` | all | An object from each left-hand position to the right-hand position it mirrors to. |
 | `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
+| `lighting` | qmk | Optional. Present on a board with per-key RGB that keyloom writes layer colours for. |
+| `lighting.ledPositions` | qmk | For each LED number, the key position it sits under. Read it from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates. |
+| `settingDefaults` | all | Optional. An object from a setting's name to the value this board has by default when that differs from the firmware's, such as `"MOUSEKEY_ENABLE": true`. |
 | `display` | all | Optional. Changes how the board is drawn, never what positions mean. |
 | `display.rotate` | all | A list of rotations to draw. |
 | `display.rotate[].positions` | all | The keys to turn. |

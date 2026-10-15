@@ -37,6 +37,8 @@ export const LayoutDetailSchema = z.object({
   document: LayoutSchema,
   board: BoardDefinitionSchema,
   geometry: GeometrySchema,
+  // What the head holds as Oryx code that keyloom can now read into the model (D-193); null when nothing, and the page then offers nothing.
+  upgrade: z.object({ colours: z.boolean(), tapDances: z.boolean() }).nullable().default(null),
 });
 export type LayoutDetail = z.infer<typeof LayoutDetailSchema>;
 
@@ -104,6 +106,9 @@ export type ApplyResponse = z.infer<typeof ApplyResponseSchema>;
 // `to` goes back to an earlier revision of the same layout instead of one step; it is still one new revision (D-170).
 export const UndoRequestSchema = z.object({ revisionId: z.string().min(1), to: z.string().min(1).optional() });
 export type UndoRequest = z.infer<typeof UndoRequestSchema>;
+
+export const UpgradeResponseSchema = z.object({ changed: z.boolean(), message: z.string().min(1), revisionId: z.string().min(1).nullable() });
+export type UpgradeResponse = z.infer<typeof UpgradeResponseSchema>;
 
 export const UndoResponseSchema = z.object({ revisionId: z.string().min(1) });
 export type UndoResponse = z.infer<typeof UndoResponseSchema>;

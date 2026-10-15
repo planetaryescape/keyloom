@@ -182,6 +182,28 @@ export function layerTrap(doc: Layout): Issue[] {
       entered.flatMap((e) => (e.slot ? [e.slot] : []))));
 }
 
+/**
+ * `lighting_unsupported`: colours on a board with no per-key RGB, on a firmware keyloom doesn't write them for, or past the last key
+ * would be dropped by the generator, so they are refused instead of silently not shown (D-190).
+ */
+export function lightingSupport(board: BoardDefinition, doc: Layout): Issue[] {
+  const out: Issue[] = [];
+  for (const layer of doc.layers) {
+    if (layer.lighting === undefined) continue;
+    if (board.lighting === undefined) {
+      out.push(issue("lighting_unsupported", `layer "${layer.id}" has lighting, but ${board.id} has no per-key RGB keyloom writes`,
+        `${layer.name} has LED colours, but ${board.name} has no per-key lighting keyloom can set.`));
+      continue;
+    }
+    const pastTheEnd = Object.keys(layer.lighting.keys ?? {}).filter((p) => Number(p) >= board.keyCount);
+    if (pastTheEnd.length > 0) {
+      out.push(issue("lighting_unsupported", `layer "${layer.id}" colours positions ${pastTheEnd.join(", ")}, past the board's ${board.keyCount} keys`,
+        `${layer.name} colours a key ${board.name} doesn't have.`));
+    }
+  }
+  return out;
+}
+
 /** The rules that look at one document; the relational ones below also need the document before. */
 export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...duplicateIds(doc),
@@ -191,6 +213,7 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...qmkHoldTap(doc),
   ...tapDanceRules(doc),
   ...holdTapOptions(board, doc),
+  ...lightingSupport(board, doc),
   ...layerLimit(doc),
   ...layerUnreachable(doc),
   ...layerTrap(doc),

@@ -2,6 +2,7 @@ import type { LayoutSummary as Summary, RevisionInfo } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import { layerLegend } from "../../layout/legend.ts";
+import type { ReactNode } from "react";
 import type { Layout } from "../../layout/schema.ts";
 import { Legend } from "../inspector/Legend.tsx";
 import { boardTitle } from "./Header.tsx";
@@ -16,11 +17,13 @@ interface Props {
   layout: Layout;
   board: BoardDefinition;
   revision: RevisionInfo;
+  /** The offer to read Oryx code into the model, when the layout has some (D-193). */
+  offer?: ReactNode;
 }
 
 // What the side panel shows when nothing else is open: the facts that used to crowd the header
 // (18: the import date, revision and key count move here), and what each kind of key looks like.
-export function LayoutSummary({ summary, layout, board, revision }: Props) {
+export function LayoutSummary({ summary, layout, board, revision, offer }: Props) {
   const ctx = { layers: layout.layers, macros: layout.macros };
   return (
     <section className="summary" aria-label="Layout summary">
@@ -31,6 +34,7 @@ export function LayoutSummary({ summary, layout, board, revision }: Props) {
         </div>
       </header>
       <div className="summary-body">
+        {offer}
         <dl className="facts">
           <div><dt>Board</dt><dd>{board.vendor} {board.name}</dd></div>
           <div><dt>Firmware</dt><dd>{layout.firmware.toUpperCase()}</dd></div>

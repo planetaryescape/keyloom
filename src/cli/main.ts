@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
+  type App, type ImportOutcome, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout,
   regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -86,6 +86,19 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
           rows.length === 0
             ? "no layouts yet; import one with: keyloom import --board <board> <file>"
             : columns([["ID", "NAME", "BOARD", "UPDATED"], ...rows.map((r) => [r.id, r.name, r.boardId, new Date(r.updatedAt).toISOString()])]),
+      });
+    });
+
+  layout
+    .command("upgrade")
+    .description("read the colours and tap dances a stored layout still holds as Oryx code into the model, as one revision that undoes like any change; changes nothing when there are none")
+    .argument("<layout>", "layout ID or name")
+    .action(async (ref: string) => {
+      const out = await withApp((app) => upgradeLayout(app, ref));
+      print(io, format(), {
+        json: { changed: out.changed, message: out.message, revision_id: out.changed ? out.revisionId : null },
+        ids: out.changed ? [out.revisionId] : [],
+        table: out.changed ? `${out.revisionId}\n${out.message}` : out.message,
       });
     });
 

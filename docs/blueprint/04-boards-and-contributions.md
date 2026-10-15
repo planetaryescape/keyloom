@@ -81,6 +81,8 @@ The editor draws keys from `geometry.json`: one entry per position with `x`, `y`
 
 `boards check` regenerates it and fails if it differs from the committed file. keymap-editor reads geometry from a separate `info.json` and community metadata. Its author's own issues show that drifting from the firmware and producing off-by-one layouts ([../research/keymap-editor.md](../research/keymap-editor.md)). The template's `info.json` beside MoErgo's Glove80 config is the same kind of file, and nothing reads it ([../research/zmk-and-glove80.md](../research/zmk-and-glove80.md)).
 
+**Lighting and setting defaults.** A board with per-key RGB declares `"lighting": { "ledPositions": [...] }`, LED number to key position, read from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates (D-190). `"settingDefaults": { "MOUSEKEY_ENABLE": true }` records where the board differs from the firmware's own default on the settings page (D-191).
+
 **Display-only overrides.** The Moonlander's `keyboard.json` doesn't rotate the thumb cluster ([05](05-firmware-qmk.md#physical-layout)). `board.json` may carry `"display": { "rotate": { "positions": [...], "r": 25, "rx": …, "ry": … } }` so the picture looks like the real board. It's applied only when drawing. Generation, positions and the agent's grid ignore it.
 
 ## `SKILL.md` is optional agent guidance

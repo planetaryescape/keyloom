@@ -504,7 +504,7 @@ export function KeyPanel(props: Props) {
           {draft.kind === "native" && draft.native !== null ? (
             <p className="form-note">
               keyloom keeps this {draft.native.firmware.toUpperCase()} binding as written, <code>{draft.native.source}</code>. Picking something else replaces it.
-              {/^TD\(DANCE_\d+\)$/.test(draft.native.source) ? " It is a tap dance from an earlier import. Import your Oryx layout again and keyloom will read its taps so you can edit them here." : ""}
+              {/^TD\(DANCE_\d+\)$/.test(draft.native.source) ? " It is a tap dance from an earlier import. Choose Update layout (in the layout summary, or below) and keyloom will read its taps so you can edit them here." : ""}
             </p>
           ) : null}
           {draft.kind === "tapDance" ? (

@@ -1,4 +1,4 @@
-import { CircleHelp, History, Library, LoaderCircle, Redo2, Spline, Undo2 } from "lucide-react";
+import { CircleHelp, History, Library, LoaderCircle, Redo2, SlidersHorizontal, Spline, Undo2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
 
@@ -17,6 +17,9 @@ interface Props {
   /** The library pane (macros, tap dances and timing profiles) is showing. */
   libraryOpen: boolean;
   onLibrary: () => void;
+  /** The settings page (firmware options and layer colours) is showing. */
+  settingsOpen: boolean;
+  onSettings: () => void;
   onShortcuts: () => void;
   advanced: boolean;
   onAdvanced: (value: boolean) => void;
@@ -24,7 +27,7 @@ interface Props {
 
 // An undo is itself a revision, so undoing it puts the change back: with the head an undo, the
 // Undo button is off and Redo is on, and the other way round otherwise. Both call the same route.
-export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOpen, onHistory, combosShown, onCombos, libraryOpen, onLibrary, onShortcuts, advanced, onAdvanced }: Props) {
+export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOpen, onHistory, combosShown, onCombos, libraryOpen, onLibrary, settingsOpen, onSettings, onShortcuts, advanced, onAdvanced }: Props) {
   const canRedo = revision.origin === "undo" && revision.undoable;
   const canUndo = revision.origin !== "undo" && revision.undoable;
   const icon = (Icon: typeof Undo2) => (busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <Icon size={16} aria-hidden="true" />);
@@ -64,6 +67,10 @@ export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOp
         <button type="button" className="toggle-button toggle-icon" aria-pressed={libraryOpen} aria-label="Library" onClick={onLibrary} title="Macros, tap dances and timing profiles, and where each is used">
           <Library size={14} aria-hidden="true" />
           <span>Library</span>
+        </button>
+        <button type="button" className="toggle-button toggle-icon" aria-pressed={settingsOpen} aria-label="Settings" onClick={onSettings} title="Caps Word, combo and tapping term, and the colour of each layer">
+          <SlidersHorizontal size={14} aria-hidden="true" />
+          <span>Settings</span>
         </button>
         <button type="button" className="toggle-button" aria-pressed={advanced} onClick={() => onAdvanced(!advanced)} title="Show firmware names such as KC_A on keys and in the panel">
           Advanced view

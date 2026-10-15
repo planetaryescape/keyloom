@@ -1,14 +1,14 @@
 import { MousePointerClick, Repeat2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
-import type { Binding } from "../layout/schema.ts";
+import type { Binding, Layout } from "../layout/schema.ts";
 import type { ChangeOp, Slot } from "../layout/change.ts";
 import { addLayerChange, convertLayerOps, duplicateLayerChange, layerColorOf, moveLayerOps, niceLayerName } from "../layout/layer-ops.ts";
 import { bindingLegend } from "../layout/legend.ts";
 import type { ApplyResponse, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard, RevisionEntry } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
-import { undoChange } from "./api-write.ts";
+import { undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
@@ -34,6 +34,12 @@ import { SelectionBar } from "./keyboard/SelectionBar.tsx";
 import { extendSelection } from "./keyboard/selection.ts";
 import { KeyMoves } from "./panel/KeyMoves.tsx";
 import { LibraryPane } from "./panel/LibraryPane.tsx";
+import { UpgradeOffer } from "./settings/UpgradeOffer.tsx";
+import { KeyColour } from "./settings/KeyColour.tsx";
+import { SettingsPane } from "./settings/SettingsPane.tsx";
+import { type LightingDraft, withKeyColour, withLighting } from "./settings/lighting-ops.ts";
+import { colourAt, hsvToHex, isDark } from "../layout/colour.ts";
+import type { LayerLighting } from "../layout/schema.ts";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
 import { keyForChar } from "./panel/slots.ts";
 import { ChatBar } from "./shell/ChatBar.tsx";
@@ -82,6 +88,11 @@ function useViewportHeight(): number {
   }, []);
   return height;
 }
+
+const editedNativeSource = (layout: Layout, at: { layerId: string; position: number }): string => {
+  const b = layout.layers.find((l) => l.id === at.layerId)?.bindings[at.position];
+  return b?.kind === "native" ? b.source : "";
+};
 
 const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
@@ -136,6 +147,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The library pane works the same way, and the keys on the board it points at (a hovered row's users). It shares the column with History, so one closes the other.
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryKeys, setLibraryKeys] = useState<readonly number[] | null>(null);
+  // The settings page shares the column with History and the library. Its staged layer colours are drawn on the board before they are applied (D-190).
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [lightingDraft, setLightingDraft] = useState<LightingDraft>(new Map());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const history = useRevisions(token, layoutRef, revision.id, historyOpen);
   // Phones: the panel is a bottom sheet and a split board shows one hand (18#phones).
@@ -213,6 +227,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     });
     return colors;
   }, [descriptions, view]);
+  // The LED colour each key shows on this layer, with the staged colours applied, as a faint wash on the cap (D-192).
+  const ledColors = useMemo(() => {
+    const lit = withLighting(view, lightingDraft).layers[layerIndex];
+    if (board.lighting === undefined || lit?.lighting === undefined) return undefined;
+    const colours = new Map<number, string>();
+    keys.forEach((_, index) => {
+      const colour = colourAt(lit, index);
+      if (!isDark(colour)) colours.set(index, hsvToHex(colour));
+    });
+    return colours;
+  }, [view, lightingDraft, layerIndex, board.lighting, keys]);
   const marks = useMemo(() => {
     const own = marksOn(preview, layer?.id ?? "");
     if (placements.length === 0 && quick === null) return own;
@@ -299,7 +324,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [draft.binding]);
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
-  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : "summary";
+  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
   const libraryHighlight = useMemo(() => (mode === "library" && libraryKeys !== null ? new Set(libraryKeys) : NONE), [mode, libraryKeys]);
 
   // Opening the chat puts the cursor in its box, so Cmd-K then typing is one gesture.
@@ -763,6 +788,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         else if (repeating) setRepeating(false);
         else if (historyOpen) setHistoryOpen(false);
         else if (libraryOpen) setLibraryOpen(false);
+        else if (settingsOpen) setSettingsOpen(false);
         else if (combosOpen) setCombosOpen(false);
         else if (chatSelection !== null) setChatSelection(null);
         return;
@@ -878,6 +904,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     void undo();
   }
 
+  // The one place a stored layout's Oryx code is read into the model, and only on the button (D-193).
+  async function upgradeNow() {
+    const out = await upgradeStoredLayout(token, layoutRef);
+    await onChanged();
+    toasts.show({ kind: out.changed ? "success" : "info", message: out.changed ? "Updated" : "Nothing to update", detail: out.message });
+  }
+  const offer = detail.upgrade === null || detail.upgrade === undefined ? null : <UpgradeOffer offer={detail.upgrade} onUpgrade={upgradeNow} />;
+
   async function onTuned(summaryText: string) {
     await onChanged();
     toasts.show({ kind: "success", message: "Applied", detail: summaryText });
@@ -909,13 +943,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         historyOpen={historyOpen}
         onHistory={() => {
           setLibraryOpen(false);
+          setSettingsOpen(false);
           setHistoryOpen((open) => !open);
         }}
         libraryOpen={libraryOpen}
         onLibrary={() => {
           setHistoryOpen(false);
+          setSettingsOpen(false);
           setLibraryKeys(null);
           setLibraryOpen((open) => !open);
+        }}
+        settingsOpen={settingsOpen}
+        onSettings={() => {
+          setHistoryOpen(false);
+          setLibraryOpen(false);
+          setSettingsOpen((open) => !open);
         }}
         combosShown={showCombos}
         onCombos={toggleCombos}
@@ -965,6 +1007,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             arrows={arrows}
             legendOverrides={legendOverrides}
             layerColors={layerColors}
+            ledColors={ledColors}
             onSelect={select}
             onHover={setHovered}
             onPress={press}
@@ -1015,6 +1058,38 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           size={sheet}
           viewportHeight={viewportHeight}
           onSize={setSheet}
+          settings={
+            settingsOpen ? (
+              <SettingsPane
+                key={revision.id}
+                token={token}
+                layoutRef={layoutRef}
+                layout={layout}
+                board={board}
+                revisionId={revision.id}
+                advanced={advanced}
+                lighting={lightingDraft}
+                onLighting={(id, next) =>
+                  setLightingDraft((previous) => {
+                    const map = new Map(previous);
+                    if (next === undefined) map.delete(id);
+                    else map.set(id, next);
+                    return map;
+                  })
+                }
+                currentLayerId={layer.id}
+                onShowLayer={chooseLayer}
+                offer={detail.upgrade?.colours === true ? offer : null}
+                onClose={() => setSettingsOpen(false)}
+                onApplied={async (summaryText) => {
+                  await onChanged();
+                  setLightingDraft(new Map());
+                  toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+                }}
+                onStale={onStale}
+              />
+            ) : null
+          }
           library={
             libraryOpen ? (
               <LibraryPane
@@ -1074,7 +1149,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} />
             ) : null
           }
-          summary={<LayoutSummary summary={summary} layout={layout} board={board} revision={revision} />}
+          summary={<LayoutSummary summary={summary} layout={layout} board={board} revision={revision} offer={offer} />}
           key_={
             editing === null ? null : (
               <KeyPanel
@@ -1107,6 +1182,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   if (!draft.dirty) setLayerId(id);
                 }}
                 footerExtra={
+                  <>
                   <KeyMoves
                     swapping={swapping !== null}
                     onSwap={() => setSwapping((current) => (current === null ? { layerId: editing.layerId, position: editing.position } : null))}
@@ -1116,6 +1192,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                     onPaste={() => void paste()}
                     blockedReason={draft.dirty ? "Apply or reset this key first" : null}
                   />
+                  {detail.upgrade?.tapDances !== true || !/^TD\(/.test(editedNativeSource(layout, editing)) ? null : offer}
+                  {board.lighting === undefined ? null : (
+                    <KeyColour
+                      layer={layout.layers.find((candidate) => candidate.id === editing.layerId) ?? layer}
+                      position={editing.position}
+                      busy={changing}
+                      onPick={(colour) => {
+                        const target = layout.layers.find((candidate) => candidate.id === editing.layerId);
+                        if (target === undefined) return;
+                        const lighting: LayerLighting = withKeyColour(target.lighting, editing.position, colour);
+                        void perform([{ op: "setLayerLighting", layerId: target.id, lighting }], `${target.name}, key ${editing.position + 1}: ${colour === null ? "follows the layer colour" : "own colour"}`);
+                      }}
+                    />
+                  )}
+                  </>
                 }
               />
             )

@@ -6,5 +6,5 @@ import type { LayoutSummary, RevisionInfo } from "../api/http.ts";
 // implementation; the server knows nothing about where layouts live.
 export interface LayoutSource {
   list(): Promise<LayoutSummary[]>;
-  get(ref: string): Promise<{ revision: RevisionInfo; document: Layout; board: BoardDefinition; geometry: Geometry } | null>;
+  get(ref: string): Promise<{ revision: RevisionInfo; document: Layout; board: BoardDefinition; geometry: Geometry; upgrade?: { colours: boolean; tapDances: boolean } | null } | null>;
 }

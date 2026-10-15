@@ -1,5 +1,5 @@
 import type {
-  ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, ImportResponse, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse,
+  ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, ImportResponse, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse, UpgradeResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 
@@ -13,6 +13,8 @@ export interface EditorBackend {
   /** Applies a stored proposal by id, re-validating it against the head. */
   applyChangeSet(changeSetId: string): Promise<ApplyResponse>;
   undo(ref: string, request: UndoRequest): Promise<UndoResponse>;
+  /** Reads the Oryx colours and tap dances a stored layout still holds as code into the model: one revision, only when asked (D-193). */
+  upgrade(ref: string): Promise<UpgradeResponse>;
   /** The layout's revisions, newest first. */
   revisions(ref: string): Promise<RevisionEntry[]>;
   /** The boards keyloom can import a layout for. */

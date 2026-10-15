@@ -43,6 +43,10 @@ function touchesOf(op: ChangeOp, base: Layout): Touch[] {
     case "moveLayer": return [{ label: "layer order", read: (d) => d.layers.map((l) => l.id) }];
     case "setLayerStyle":
       return [{ label: `layer ${op.layerId} (look)`, read: (d) => { const l = d.layers.find((x) => x.id === op.layerId); return [l?.shortLabel, l?.color]; } }];
+    case "setLayerLighting":
+      return [{ label: `layer ${op.layerId} (lighting)`, read: (d) => d.layers.find((x) => x.id === op.layerId)?.lighting }];
+    case "removeFirmwareSetting":
+      return [itemTouch("setting", `${op.firmware}:${op.key}`, (d) => d.settings.find((s) => s.firmware === op.firmware && s.key === op.key))];
     case "upsertMacro": return [itemTouch("macro", op.macro.id, (d) => d.macros.find((m) => m.id === op.macro.id))];
     case "removeMacro": return [itemTouch("macro", op.macroId, (d) => d.macros.find((m) => m.id === op.macroId))];
     case "upsertTapDance": return [itemTouch("tap dance", op.tapDance.id, (d) => d.tapDances.find((t) => t.id === op.tapDance.id))];

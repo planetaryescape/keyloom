@@ -2,7 +2,7 @@
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
   type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
-  ValidationResultSchema, getBuild, getFlash, importUpload, listBoardDefinitions, listRevisions, startBuild, startFlash, undo,
+  ValidationResultSchema, getBuild, getFlash, importUpload, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
 } from "../app/index.ts";
 import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
 
@@ -57,6 +57,11 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     apply: (ref, request) => translate(() => applied(applyOps(app, ref, request))),
     applyChangeSet: (changeSetId) => translate(() => applied(applyChange(app, changeSetId))),
     undo: (ref, request) => translate(() => applied({ revisionId: undo(app, ref, { revisionId: request.revisionId, ...(request.to === undefined ? {} : { to: request.to }) }).revision.id })),
+    upgrade: (ref) => translate(() => {
+      const out = upgradeLayout(app, ref);
+      if (out.changed) applied(undefined);
+      return { changed: out.changed, message: out.message, revisionId: out.changed ? out.revisionId : null };
+    }),
     revisions: async (ref) => translate(() => {
       const rows = listRevisions(app, ref);
       return rows.map((r, index) => ({ id: r.id, parentId: r.parentId, origin: r.origin, summary: r.summary, createdAt: r.createdAt, isHead: index === 0 }));

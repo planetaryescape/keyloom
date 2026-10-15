@@ -1,5 +1,5 @@
 // `keyloom serve`: the local web app over the same use cases the CLI calls (01#server-and-transport).
-import { type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, type SyncDeps, boardDevView, createSyncEngine, getLayout, listLayouts } from "../app/index.ts";
+import { type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, type SyncDeps, boardDevView, createSyncEngine, getLayout, listLayouts, upgradeOffer } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import { appChatBackend } from "./chat-backend.ts";
@@ -31,6 +31,7 @@ export function appLayoutSource(app: App): LayoutSource {
           document: view.document,
           board: view.board.definition,
           geometry: view.board.geometry,
+          upgrade: upgradeOffer(view),
         };
       } catch (err) {
         // An unknown ref is the server's 404; anything else is a real failure (500).

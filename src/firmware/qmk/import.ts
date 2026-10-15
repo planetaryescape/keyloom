@@ -11,6 +11,7 @@ import { PASSTHROUGH_DEFINES, parseDefines, settingsFrom, tapHoldOptions } from 
 import { type ParsedKeymap, parseKeymapC } from "./keymap-c.ts";
 import { macroNames } from "./emit-macros.ts";
 import { importTapDances } from "./import-tap-dance.ts";
+import { readLighting } from "./import-lighting.ts";
 import { macroFor, parseMacroCase } from "./send-string.ts";
 import { ImportError, type SourceFiles, readOryxSource } from "./source.ts";
 
@@ -100,6 +101,15 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     }),
   }));
 
+  // Oryx's layer colours become lighting on the layers when they read back exactly (D-190); otherwise they stay code.
+  const read = board.lighting === undefined ? null : readLighting(parsed.chunks, layers, board.lighting.ledPositions);
+  if (read !== null && "problem" in read) warnings.push(read.problem);
+  const lightingRead = read !== null && "lighting" in read ? read : null;
+  if (lightingRead !== null) layers.forEach((layer, i) => {
+    const lighting = lightingRead.lighting.get(i);
+    if (lighting !== undefined) Object.assign(layer, { lighting });
+  });
+
   const { settings, profileOptions, passthrough: configPassthrough } = importConfig(files, warnings);
   const holdTapProfiles: HoldTapProfile[] = PROFILE_NAMES.filter(([id]) => profilesUsed.has(id)).map(([id, name]) => ({
     id, name, firmware: "qmk", options: { ...profileOptions },
@@ -108,7 +118,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
   const combos = importCombos(parsed, parsed.layers[0] ?? [], tapDanceCtx, warnings);
 
   const passthrough: Passthrough[] = [
-    ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),
+    ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor) && !(lightingRead?.consumed.has(c.anchor) ?? false)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),
     ...parsed.cases
       .filter((c) => !consumedCases.has(c.label))
       .map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: `process_record_user:${c.label}`, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),

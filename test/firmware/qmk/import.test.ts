@@ -139,7 +139,9 @@ describe("BK's real Oryx export", () => {
       expect(p).toBeDefined();
       return p?.refersToLayerIndices;
     };
-    expect(flag("keymap.c:rgb")).toBe(true); // ledmap[], case 1:, set_layer_color(1)
+    // The layer colours (ledmap, set_layer_color, the indicators) are modelled as lighting; what stays is Oryx's helper and post-init.
+    expect(flag("keymap.c:rgb")).toBe(false);
+    expect(byAnchor.has("keymap.c:rgb-ledmap")).toBe(false);
     expect(flag("keymap.c:define:DUAL_FUNC_0")).toBe(true); // LT(5, KC_4)
     expect(flag("keymap.c:process_record_user:DUAL_FUNC_0")).toBe(true); // layer_move(5)
     // The tap dance code is modelled, so it is not also kept as source.

@@ -115,6 +115,15 @@ function applyOp(doc: Layout, op: ChangeOp): void {
       else layer.color = op.color;
       return;
     }
+    case "setLayerLighting": {
+      const layer = layerOf(doc, op.layerId);
+      for (const position of Object.keys(op.lighting?.keys ?? {})) {
+        if (Number(position) >= layer.bindings.length) throw new OpFailure("unknown_ref", `layer "${op.layerId}" has no position ${position} (it has ${layer.bindings.length})`);
+      }
+      if (op.lighting === null) delete layer.lighting;
+      else layer.lighting = structuredClone(op.lighting);
+      return;
+    }
     case "upsertMacro": return upsert(doc.macros, op.macro);
     case "removeMacro": return remove(doc.macros, op.macroId, "macro");
     case "upsertTapDance": return upsert(doc.tapDances, op.tapDance);
@@ -126,6 +135,10 @@ function applyOp(doc: Layout, op: ChangeOp): void {
       const at = doc.settings.findIndex((s) => s.firmware === op.setting.firmware && s.key === op.setting.key);
       if (at < 0) doc.settings.push(structuredClone(op.setting));
       else doc.settings[at] = structuredClone(op.setting);
+      return;
+    }
+    case "removeFirmwareSetting": {
+      doc.settings = doc.settings.filter((s) => !(s.firmware === op.firmware && s.key === op.key));
       return;
     }
     // Only licenses a loss when the validator checks reachability (07); the document is unchanged.

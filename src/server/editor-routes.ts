@@ -16,6 +16,7 @@ import {
   RevisionListResponseSchema,
   UndoRequestSchema,
   UndoResponseSchema,
+  UpgradeResponseSchema,
   type ApiErrorBody,
 } from "../api/http.ts";
 import { EditorError, type EditorBackend } from "./editor-backend.ts";
@@ -42,6 +43,7 @@ const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["layouts/:/apply", { method: "POST", run: (b, ref, r) => apply(b, ref, r) }],
   ["change-sets/:/apply", { method: "POST", run: (b, id, r) => applyChangeSet(b, id, r) }],
   ["layouts/:/undo", { method: "POST", run: (b, ref, r) => undo(b, ref, r) }],
+  ["layouts/:/upgrade", { method: "POST", run: (b, ref, r) => upgrade(b, ref, r) }],
   ["layouts/:/revisions", { method: "GET", run: async (b, ref) => Response.json(RevisionListResponseSchema.parse({ revisions: await b.revisions(ref) })) }],
   ["boards", { method: "GET", run: async (b) => Response.json(BoardListResponseSchema.parse({ boards: await b.boards() })) }],
   ["import", { method: "POST", run: (b, _id, r) => importUpload(b, r) }],
@@ -168,6 +170,12 @@ async function applyChangeSet(backend: EditorBackend, changeSetId: string, reque
   const body = await readBody(request, EmptyBody);
   if (body instanceof Response) return body;
   return Response.json(ApplyResponseSchema.parse(await backend.applyChangeSet(changeSetId)));
+}
+
+async function upgrade(backend: EditorBackend, ref: string, request: Request): Promise<Response> {
+  const body = await readBody(request, EmptyBody);
+  if (body instanceof Response) return body;
+  return Response.json(UpgradeResponseSchema.parse(await backend.upgrade(ref)));
 }
 
 async function undo(backend: EditorBackend, ref: string, request: Request): Promise<Response> {

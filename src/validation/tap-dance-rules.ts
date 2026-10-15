@@ -86,8 +86,8 @@ export function tapDanceRules(doc: Layout): Issue[] {
 
   // QMK keeps Oryx tap dance code it couldn't read, and that code owns DANCE_n and tap_dance_actions[].
   if (doc.firmware === "qmk" && doc.tapDances.length > 0 && doc.passthrough.some((p) => p.firmware === "qmk" && p.anchor.startsWith("tap-dance"))) {
-    out.push(issue("tap_dance_native_conflict", "this layout keeps Oryx tap dance code as written (imported before keyloom read tap dances, or not in the shape keyloom writes), so keyloom can't add tap dances beside it; import the Oryx source again to read them",
-      "This layout keeps tap dance code from Oryx as it was, so keyloom can't add another tap dance next to it. Import your Oryx layout again and keyloom will read its tap dances."));
+    out.push(issue("tap_dance_native_conflict", "this layout keeps Oryx tap dance code as written (imported before keyloom read tap dances, or not in the shape keyloom writes), so keyloom can't add tap dances beside it; run `keyloom layout upgrade` (or Update layout in the app) to read them",
+      "This layout keeps tap dance code from Oryx as it was, so keyloom can't add another tap dance next to it. Choose Update layout in the layout summary and keyloom will read its tap dances."));
   }
   return out;
 }

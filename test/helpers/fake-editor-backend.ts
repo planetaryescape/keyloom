@@ -169,6 +169,10 @@ export class FakeEditor implements EditorBackend {
     return { layoutId: "lay_imported", revisionId: "rev_imported", name: request.filename.replace(/\.\w+$/, ""), layers: 4, keysPerLayer: 72, warnings: [] };
   }
 
+  async upgrade(): Promise<{ changed: boolean; message: string; revisionId: string | null }> {
+    return { changed: false, message: "Nothing to update.", revisionId: null };
+  }
+
   async undo(_ref: string, request: UndoRequest): Promise<UndoResponse> {
     if (request.revisionId !== this.head.id) {
       throw new EditorError(409, "stale_head", "The layout changed since you opened it.");

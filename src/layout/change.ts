@@ -2,7 +2,7 @@
 // validator all speak this one vocabulary; src/layout/apply-ops.ts applies it.
 import { z } from "zod";
 import {
-  BindingSchema, ComboSchema, FirmwareSettingSchema, HoldTapProfileSchema, LayerSchema, MacroSchema, TapDanceSchema,
+  BindingSchema, ComboSchema, FirmwareSettingSchema, FirmwareSchema, HoldTapProfileSchema, LayerLightingSchema, LayerSchema, MacroSchema, TapDanceSchema,
 } from "./schema.ts";
 
 export const SlotSchema = z.object({
@@ -39,6 +39,8 @@ export const ChangeOpSchema = z.discriminatedUnion("op", [
     shortLabel: LayerSchema.shape.shortLabel.unwrap().nullable(),
     color: LayerSchema.shape.color.unwrap().nullable(),
   }),
+  // Replaces the layer's whole lighting (D-190); null removes it, so the layer sets no LED colours.
+  z.object({ op: z.literal("setLayerLighting"), layerId: z.string().min(1), lighting: LayerLightingSchema.nullable() }),
   z.object({ op: z.literal("upsertMacro"), macro: MacroSchema }),
   z.object({ op: z.literal("removeMacro"), macroId: z.string().min(1) }),
   z.object({ op: z.literal("upsertTapDance"), tapDance: TapDanceSchema }),
@@ -47,6 +49,8 @@ export const ChangeOpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("removeCombo"), comboId: z.string().min(1) }),
   z.object({ op: z.literal("upsertHoldTapProfile"), profile: HoldTapProfileSchema }),
   z.object({ op: z.literal("setFirmwareSetting"), setting: FirmwareSettingSchema }),
+  // Back to the firmware's own default: the option is no longer written (D-191).
+  z.object({ op: z.literal("removeFirmwareSetting"), firmware: FirmwareSchema, key: z.string().min(1) }),
   // The only way to lose a function (07, D-020).
   z.object({ op: z.literal("dropFunction"), function: z.string().min(1), reason: z.string().min(1) }),
 ]);

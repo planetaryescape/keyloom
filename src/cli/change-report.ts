@@ -15,6 +15,7 @@ export function opLine(op: ChangeOp): string {
     case "duplicateLayer": return `duplicate layer ${op.layerId} as ${op.layer.id} ("${op.layer.name}")`;
     case "moveLayer": return `move layer ${op.layerId} after ${op.afterLayerId}`;
     case "setLayerStyle": return `set layer ${op.layerId} label ${op.shortLabel ?? "(default)"}, colour ${op.color ?? "(default)"}`;
+    case "setLayerLighting": return op.lighting === null ? `clear the lighting of layer ${op.layerId}` : `set the lighting of layer ${op.layerId}`;
     case "upsertMacro": return `set macro ${op.macro.id}`;
     case "removeMacro": return `remove macro ${op.macroId}`;
     case "upsertTapDance": return `set tap dance ${op.tapDance.id}`;
@@ -23,6 +24,7 @@ export function opLine(op: ChangeOp): string {
     case "removeCombo": return `remove combo ${op.comboId}`;
     case "upsertHoldTapProfile": return `set hold-tap profile ${op.profile.id}`;
     case "setFirmwareSetting": return `set ${op.setting.firmware} setting ${op.setting.key} to ${String(op.setting.value)}`;
+    case "removeFirmwareSetting": return `reset ${op.firmware} setting ${op.key} to the firmware default`;
     case "dropFunction": return `drop ${op.function}: ${op.reason}`;
   }
 }

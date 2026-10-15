@@ -39,6 +39,9 @@ function classify(node: Node, used: ReadonlySet<string>, modelled: ReadonlySet<s
     case "function_definition": {
       const name = functionName(node);
       if (!name || name === "process_record_user") return null;
+      // The three blocks Oryx's layer colours are made of get their own chunks so the importer can model them (import-lighting.ts).
+      if (name === "set_layer_color") return "rgb-set-layer-color";
+      if (name === "rgb_matrix_indicators_user") return "rgb-indicators";
       if (RGB.test(text)) return "rgb";
       if (TAP_DANCE.test(text)) return "tap-dance";
       return `function:${name}`;
@@ -52,6 +55,7 @@ function classify(node: Node, used: ReadonlySet<string>, modelled: ReadonlySet<s
       // keymaps[] and the combo arrays mention TD(DANCE_n) and friends but are imported, not kept.
       if (name && modelled.has(name)) return null;
       if (name === "chordal_hold_layout") return "chordal-hold-layout";
+      if (name === "ledmap") return "rgb-ledmap";
       if (text.includes("tap_dance_codes")) return "tap-dance-codes";
       if (TAP_DANCE.test(text)) return "tap-dance";
       if (RGB.test(text)) return "rgb";

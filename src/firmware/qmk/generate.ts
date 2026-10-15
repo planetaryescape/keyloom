@@ -2,9 +2,12 @@
 // Pure: it returns text, so the same layout always gives the same bytes and the round-trip test can
 // run without a filesystem.
 import type { BoardDefinition } from "../../boards/schema.ts";
+import { RULES_KEYS } from "../../layout/firmware-options.ts";
 import type { FirmwareSetting, Layout, Passthrough } from "../../layout/schema.ts";
 import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { renderCombos } from "./emit-combos.ts";
+import { LIGHTING_PRELUDE, renderLighting } from "./emit-lighting.ts";
+import { LIGHTING_ANCHORS } from "./import-lighting.ts";
 import { renderKeymaps } from "./emit-keymap.ts";
 import { macroCase, macroNames } from "./emit-macros.ts";
 import { danceEnumName, renderTapDances } from "./emit-tap-dance.ts";
@@ -106,6 +109,14 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   // Order in C only matters to the linker's layout, but keeping Oryx's makes the binary identical to Oryx's.
   const beforeCombos = rest.filter((p) => p.anchor === "chordal-hold-layout");
   const afterCombos = rest.filter((p) => p.anchor !== "chordal-hold-layout");
+  // Layer colours (D-190). Kept Oryx code with the same names can't sit beside generated ones: the C would define them twice.
+  const lighting = layout.layers.some((l) => l.lighting !== undefined);
+  if (lighting && !board.lighting) throw new GenerateError(`${board.id} has no per-key RGB keyloom writes, so layer colours can't be generated`);
+  if (lighting && keymapC.some((p) => LIGHTING_ANCHORS.some((a) => p.anchor.startsWith(a)))) {
+    throw new GenerateError("keymap.c keeps layer colour code from Oryx that keyloom couldn't read, so keyloom can't add layer colours beside it");
+  }
+  const lightingBlocks = board.lighting ? renderLighting(layout.layers, board.lighting.ledPositions) : [];
+  const hasPrelude = keymapC.some((p) => p.anchor === "rgb" || p.anchor.startsWith("rgb#"));
   const passthroughC = keymapC.map((p) => p.source).join("\n");
 
   const combos = renderCombos(layout, ctx, passthroughC);
@@ -126,6 +137,8 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   for (const p of beforeCombos) c.push("", p.source);
   if (combos.source) c.push("", combos.source);
   for (const p of afterCombos) c.push("", p.source);
+  if (lightingBlocks.length > 0 && !hasPrelude) c.push("", LIGHTING_PRELUDE);
+  for (const block of lightingBlocks) c.push("", block);
   if (dances) c.push("", dances.code);
   if (tapping.functions.length > 0) c.push("", ...tapping.functions.flatMap((f, i) => (i === 0 ? [f] : ["", f])));
 
@@ -150,7 +163,8 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   if (marker !== undefined) c.push("", wrapperSource());
 
   const h: string[] = [header(input.revisionId, "//")];
-  for (const s of layout.settings) if (s.firmware === "qmk") h.push(settingLine(s));
+  // Feature switches (Caps Word, Auto Shift, mouse keys) are rules.mk's business; in config.h they would do nothing.
+  for (const s of layout.settings) if (s.firmware === "qmk" && !RULES_KEYS.has(s.key)) h.push(settingLine(s));
   // Oryx's SERIAL_NUMBER is replaced, not redefined: a second #define would warn and the build fails on warnings.
   for (const p of passthroughIn(layout, "config.h")) if (marker === undefined || p.anchor !== "define:SERIAL_NUMBER") h.push(p.source);
   if (marker !== undefined) h.push(serialDefine(marker));
@@ -190,6 +204,10 @@ function rulesMk(layout: Layout, comboCount: number, hasTapDances: boolean, hand
   const dancesOn = TAP_DANCE_YES.test(text);
   if (hasTapDances && !dancesOn) text += "TAP_DANCE_ENABLE = yes\n";
   if (!hasTapDances && !keepsOryxDances && dancesOn) text += "# keyloom: the layout has no tap dances, and TAP_DANCE_ENABLE needs a tap_dance_actions[]\nTAP_DANCE_ENABLE = no\n";
+  // The settings page's feature switches (D-191). The last assignment wins in make, so these go after whatever Oryx wrote.
+  for (const s of layout.settings) {
+    if (s.firmware === "qmk" && RULES_KEYS.has(s.key)) text += `# keyloom: set on the settings page\n${s.key} = ${s.value === true || (typeof s.value === "number" && s.value !== 0) ? "yes" : "no"}\n`;
+  }
   if (handsFree) text += `# keyloom: route raw_hid_receive through the bootloader command (handsfree.ts)\n${WRAP_LINK_FLAG}\n${NO_LTO}\n`;
   return text === "" ? undefined : text;
 }

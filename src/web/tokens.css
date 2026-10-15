@@ -50,6 +50,9 @@
   --layer-5: #6d28d9;
   --layer-6: #9a4a07;
 
+  /* How much of a key's LED colour tints its cap; led-contrast.test.ts holds every hue to 4.5:1 for the legend at this strength. */
+  --led-wash: 6%;
+
   --cap-shadow-edge: rgb(18 24 38 / 0.28);
   --cap-highlight: rgb(255 255 255 / 0.9);
   --shadow-pop: 0 8px 24px rgb(18 24 38 / 0.18);

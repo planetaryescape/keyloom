@@ -27,7 +27,7 @@ describe("the rung 1 demo", () => {
     expect(imp.out).toContain("6 layers x 72 keys");
     expect(imp.out).toContain("native bindings kept as source (23)");
     expect(imp.out).toContain("passthrough kept verbatim (9)");
-    expect(imp.out).toContain("keymap.c rgb  (refers to layer numbers");
+    expect(imp.out).toContain("keymap.c rgb");
 
     const show = await cli(["layout", "show", "synchronized", "--data-dir", dir], { tty: true });
     expect(show.code).toBe(0);

@@ -81,6 +81,20 @@ export const TapDanceSchema = z.object({
 });
 export type TapDance = z.infer<typeof TapDanceSchema>;
 
+// A colour as QMK's HSV (each 0 to 255), the way Oryx's ledmap writes it. {0,0,0} is dark, so a key with no colour is "off", not white.
+// A plain length-3 array, not z.tuple: a tuple's JSON schema ends `items: false`, which the Anthropic SDK's strict-schema transform
+// rejects, and every agent tool that takes ops would fail to register. The cast gives it the tuple type the code wants.
+export const HsvSchema = z.array(z.number().int().min(0).max(255)).length(3) as unknown as z.ZodType<[number, number, number]>;
+export type Hsv = [number, number, number];
+
+// What a layer's per-key LEDs show while it is the top layer (16#settings-and-lighting, D-190). `layer` colours every key; `keys`
+// (by position, as a string) overrides single keys. A key with neither is dark. Absent means the layer leaves the LEDs to the board's effect.
+export const LayerLightingSchema = z.object({
+  layer: HsvSchema.optional(),
+  keys: z.record(z.string().regex(/^\d+$/), HsvSchema).optional(),
+});
+export type LayerLighting = z.infer<typeof LayerLightingSchema>;
+
 export const LayerSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
   name: z.string().min(1),
@@ -89,6 +103,8 @@ export const LayerSchema = z.object({
   shortLabel: z.string().min(1).max(4).optional(),
   // One of the six layer colours (1 to 6); absent means the layer's position picks one. Display only: no firmware reads it.
   color: z.number().int().min(1).max(6).optional(),
+  // The LED colours this layer sets on boards with per-key RGB; absent means the layer sets none.
+  lighting: LayerLightingSchema.optional(),
 });
 export type Layer = z.infer<typeof LayerSchema>;
 

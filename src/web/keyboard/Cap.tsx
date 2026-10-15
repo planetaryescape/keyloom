@@ -21,6 +21,8 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   legendTurn?: number;
   /** For a layer key: which of the layer colours (1 to 6) its left edge is drawn in. */
   layerColor?: number;
+  /** The key's LED colour on this layer as a hex, drawn as a faint wash and a bar along the top edge (D-192). */
+  led?: string;
   /** The draft mark: this key's change is not applied yet. */
   pending?: boolean;
   /** The remembered mark: keyloom keeps a reason for this key. */
@@ -39,7 +41,7 @@ const breakAtSeams = (text: string) => text.replace(/[_+(]/g, (seam) => `${seam}
 // dashes, a none key's hatching) as well as by fill, and the selection, draft and remembered marks
 // are each their own element so they can show together.
 export function Cap({
-  tone, legend, unit, floorPx, width, as = "button", combo = false, legendTurn, layerColor, pending = false, remembered = false, breakable = false, style, ...rest
+  tone, legend, unit, floorPx, width, as = "button", combo = false, legendTurn, layerColor, led, pending = false, remembered = false, breakable = false, style, ...rest
 }: CapProps) {
   const floor = floorPx === undefined ? {} : { floor: floorPx };
   const tap = fitLegend(legend.tap, width, TAP_SIZE, { unit, ...floor });
@@ -78,6 +80,7 @@ export function Cap({
   const selected = rest["aria-pressed"] === true;
   const children = (
     <>
+      {led === undefined ? null : <span className="cap-led" aria-hidden="true" />}
       {tone === "holdTap" ? <span className="cap-band" aria-hidden="true" /> : null}
       {tone === "layer" ? <span className="cap-edge" aria-hidden="true" style={{ background: `var(--layer-${layerColor ?? 1})` }} /> : null}
       {tone === "macro" ? <span className="cap-glyph" aria-hidden="true" style={{ fontSize: Math.max(11, unit * 0.2) }}>▸</span> : null}
@@ -102,17 +105,17 @@ export function Cap({
       ) : null}
     </>
   );
-  const capStyle: CSSProperties = { borderRadius: Math.min(unit * 0.14, 8), ...style };
+  const capStyle: CSSProperties = { borderRadius: Math.min(unit * 0.14, 8), ...(led === undefined ? {} : { "--led": led }), ...style };
   if (as === "span") {
     return (
       // A swatch only illustrates; whatever it sits beside carries the words.
-      <span className="cap" data-tone={tone} style={capStyle} aria-hidden="true">
+      <span className="cap" data-tone={tone} data-led={led !== undefined} style={capStyle} aria-hidden="true">
         {children}
       </span>
     );
   }
   return (
-    <button type="button" className="cap" data-tone={tone} style={capStyle} {...rest}>
+    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} style={capStyle} {...rest}>
       {children}
     </button>
   );
