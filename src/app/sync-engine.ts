@@ -188,7 +188,8 @@ export class SyncEngine {
     return next;
   }
 
-  private tick(): Promise<void> {
+  /** One look at the keyboards and the database, and a sync if one is due. The timer calls it; tests call it with a clock they hold. */
+  tick(): Promise<void> {
     // Never rejects: this runs from timers, where an error nobody catches ends the whole server, and the engine is a guest in it.
     return this.exclusive(async () => {
       if (this.stopping) return;

@@ -5,7 +5,7 @@ import { UsageError } from "../../src/app/index.ts";
 import { SyncEngine } from "../../src/app/sync-engine.ts";
 import { activeSyncs, claimSync, finishSync, getBoardSync, lastSyncOfBoard, newSyncId, progressSync, recentSyncs, recordHandsFreeProof } from "../../src/persistence/syncs.ts";
 import { proposeChange } from "../../src/app/index.ts";
-import { BOARD, type SyncWorld, gate, syncWorld, waitFor } from "../helpers/fake-sync.ts";
+import { BOARD, type SyncWorld, gate, skewedClock, syncWorld, waitFor } from "../helpers/fake-sync.ts";
 import { setKey } from "../helpers/ops.ts";
 
 let current: SyncWorld | undefined;
@@ -52,21 +52,26 @@ describe("batching and one at a time", () => {
   test("three quick Applies become one build and one verified flash of the last one", async () => {
     const w = await world();
     w.flashed();
-    const e = w.engine({ quietMs: 120 });
+    const clock = skewedClock();
+    const QUIET = 10_000;
+    const e = w.engine({ quietMs: QUIET, tickMs: 600_000, now: clock.now });
     await e.start();
     w.apply();
-    await Bun.sleep(30);
     w.apply();
-    await Bun.sleep(30);
     const last = w.apply();
+    // However slowly the three Applies ran, no time has passed for the engine, so it is still waiting.
+    await e.tick();
     expect(w.stateOf(e)).toMatchObject({ kind: "behind", changes: 3, why: "waiting" });
+    expect(w.calls.builds).toEqual([]);
+    clock.advance(QUIET);
+    await e.tick();
     await settled(w, e);
     expect(w.calls.builds.map((b) => b.revisionId)).toEqual([last]);
     expect(w.calls.flashes).toHaveLength(1);
     const run = lastSyncOfBoard(w.app.db, BOARD);
     expect(run).toMatchObject({ status: "succeeded", revisionId: last, trigger: "auto" });
     // The wait started at the last Apply, not the first: a burst keeps being a burst while it goes on.
-    expect((run?.startedAt ?? 0) - (run?.appliedAt ?? 0)).toBeGreaterThanOrEqual(110);
+    expect((run?.startedAt ?? 0) - (run?.appliedAt ?? 0)).toBeGreaterThanOrEqual(QUIET);
   });
 
   test("an Apply during a build stops that build and syncs the head once, not both", async () => {

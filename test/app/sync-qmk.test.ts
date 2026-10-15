@@ -8,7 +8,7 @@ import { SyncEngine } from "../../src/app/sync-engine.ts";
 import { buildMarker } from "../../src/firmware/qmk/handsfree.ts";
 import { getBoardSync, lastSyncOfBoard, recentSyncs } from "../../src/persistence/syncs.ts";
 import { liveKeyboard, REPEATING_ZAPP, stampMarker } from "../helpers/fake-live-keyboard.ts";
-import { waitFor } from "../helpers/fake-sync.ts";
+import { skewedClock, waitFor } from "../helpers/fake-sync.ts";
 import { setKey } from "../helpers/ops.ts";
 import { toolchainEnv } from "../helpers/toolchain-env.ts";
 
@@ -51,7 +51,9 @@ describe("Apply to a verified flash on the Moonlander", () => {
       expect(getBoardSync(s.e.app.db, BOARD).provenAt).not.toBeNull();
       expect(s.kb.writes).toHaveLength(1);
 
-      const engine = new SyncEngine(s.e.app, s.deps, { quietMs: 150, tickMs: 10, pollMs: 30 });
+      const clock = skewedClock();
+      const QUIET = 10_000;
+      const engine = new SyncEngine(s.e.app, s.deps, { quietMs: QUIET, tickMs: 600_000, pollMs: 30, now: clock.now });
       await engine.start();
       const view = () => engine.views().find((v) => v.boardId === BOARD);
       expect(view()?.state.kind).toBe("in_sync");
@@ -59,10 +61,11 @@ describe("Apply to a verified flash on the Moonlander", () => {
 
       const apply = (code: string) => applyOps(s.e.app, "synchronized", { baseRevisionId: getLayout(s.e.app, "synchronized").revision.id, ops: setKey(6, code), summary: `key 6: ${code}` });
       apply("F17");
-      await Bun.sleep(40);
       apply("F18");
-      await Bun.sleep(40);
       const last = apply("F19");
+      // The quiet time passes when the test says so, however slowly the Applies ran.
+      clock.advance(QUIET);
+      await engine.tick();
       await waitFor(() => lastSyncOfBoard(s.e.app.db, BOARD)?.status === "succeeded" && lastSyncOfBoard(s.e.app.db, BOARD)?.revisionId === last.revisionId, "the sync", 8000);
       await engine.stop();
 

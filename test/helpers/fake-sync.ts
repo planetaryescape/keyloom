@@ -24,6 +24,15 @@ export const gate = (): Gate => {
   return { promise, open };
 };
 
+/**
+ * A clock the engine reads instead of the wall: revisions are stamped with the real time, so this is the real time plus a skew
+ * the test moves. Pair it with a `tickMs` too long to fire, and the quiet time passes when the test says so, not when a slow runner does.
+ */
+export function skewedClock() {
+  let skew = 0;
+  return { now: () => Date.now() + skew, advance: (ms: number) => void (skew += ms) };
+}
+
 export async function waitFor(cond: () => boolean, what: string, ms = 3000): Promise<void> {
   const end = Date.now() + ms;
   while (!cond()) {
