@@ -69,6 +69,8 @@ export type CheckResponse = z.infer<typeof CheckResponseSchema>;
 export const ApplyRequestSchema = CheckRequestSchema.extend({
   // One line for the revision history, such as "Layer 2, key 31: Left Alt".
   summary: z.string().min(1).max(200),
+  // Why, if the person wants keyloom to remember it: a later change to these keys brings it back (08).
+  reason: z.string().max(1000).optional(),
 });
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
 
@@ -76,6 +78,8 @@ export const ApplyResponseSchema = z.object({
   revisionId: z.string().min(1),
   changeSetId: z.string().min(1),
   validation: ValidationResultSchema,
+  // The decision written for this change, or null when it had no reason to remember.
+  decisionId: z.string().min(1).nullable(),
 });
 export type ApplyResponse = z.infer<typeof ApplyResponseSchema>;
 
@@ -241,3 +245,60 @@ export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
 //                                                                 longer proposed; 409 stale_base or validation_failed)
 // It applies the change set exactly as stored, against the head, and marks its siblings superseded. It
 // never builds or flashes.
+
+// Decisions (rung 6, 08): what keyloom remembers about why keys are where they are.
+//   GET    /api/layouts/:ref/decisions             -> DecisionListResponse     (retired ones are left out)
+//   PATCH  /api/decisions/:id    DecisionPatch     -> DecisionCard             (400 usage on an empty field)
+//   DELETE /api/decisions/:id                      -> 204                      (retires it; the record stays)
+//   GET    /api/layouts/:ref/outcome-questions     -> OutcomeQuestionsResponse (the 7-day question, Q6)
+//   POST   /api/decisions/:id/outcome  OutcomeAnswer -> DecisionCard           (400 usage when it no longer applies)
+export const DecisionStatusSchema = z.enum(["hypothesis", "tried_helpful", "tried_unhelpful", "superseded", "retired"]);
+
+export const DecisionCardSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["choice", "priority"]),
+  priorityKind: z.enum(["pinned", "rarely_used", "frequent", "willing_to_relearn"]).nullable(),
+  status: DecisionStatusSchema,
+  goal: z.string(),
+  choice: z.string(),
+  reason: z.string(),
+  scope: z.object({ apps: z.array(z.string()), habits: z.array(z.string()) }),
+  subject: z.object({ slots: z.array(SlotSchema).optional(), functions: z.array(z.string().min(1)).optional() }),
+  outcomeNote: z.string().nullable(),
+  // The decision that replaced this one; null while it is active, or when it was overridden without a recorded reason.
+  supersededBy: z.string().nullable(),
+  // The link back to the words it came from (08): the conversation and BK's messages in it.
+  conversationId: z.string().nullable(),
+  sourceMessageIds: z.array(z.string()),
+  createdAt: z.number().finite(),
+  updatedAt: z.number().finite(),
+});
+export type DecisionCard = z.infer<typeof DecisionCardSchema>;
+
+export const DecisionListResponseSchema = z.object({ decisions: z.array(DecisionCardSchema) });
+export type DecisionListResponse = z.infer<typeof DecisionListResponseSchema>;
+
+export const DecisionPatchSchema = z
+  .object({
+    goal: z.string().min(1).max(500),
+    choice: z.string().min(1).max(500),
+    reason: z.string().min(1).max(1000),
+    scope: z.object({ apps: z.array(z.string().min(1)).max(20), habits: z.array(z.string().min(1)).max(20) }),
+    // BK may move a decision between these; superseded and retired are set by keyloom and by Retire.
+    status: z.enum(["hypothesis", "tried_helpful", "tried_unhelpful"]),
+  })
+  .partial()
+  .refine((patch) => Object.keys(patch).length > 0, { message: "nothing to change" });
+export type DecisionPatch = z.infer<typeof DecisionPatchSchema>;
+
+export const OutcomeQuestionsResponseSchema = z.object({
+  questions: z.array(z.object({ decision: DecisionCardSchema, flashedAt: z.number().finite() })),
+});
+export type OutcomeQuestionsResponse = z.infer<typeof OutcomeQuestionsResponseSchema>;
+
+// Either a verdict in BK's words, or "not now", which ends the question and leaves the decision a hypothesis.
+export const OutcomeAnswerSchema = z.union([
+  z.object({ status: z.enum(["tried_helpful", "tried_unhelpful"]), note: z.string().trim().min(1).max(500) }),
+  z.object({ dismiss: z.literal(true) }),
+]);
+export type OutcomeAnswer = z.infer<typeof OutcomeAnswerSchema>;

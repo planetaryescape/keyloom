@@ -3,6 +3,8 @@ import type { BoardDevView } from "../boards/dev.ts";
 import { BoardDevViewSchema } from "../boards/dev.ts";
 import type { ChatBackend } from "./chat-backend.ts";
 import { handleChatRoute } from "./chat-routes.ts";
+import type { DecisionsBackend } from "./decisions-backend.ts";
+import { handleDecisionRoute } from "./decisions-routes.ts";
 import type { EditorBackend } from "./editor-backend.ts";
 import { MAX_BODY_BYTES, handleEditorRoute, isEditorPath } from "./editor-routes.ts";
 import { checkHost, checkToken } from "./guard.ts";
@@ -17,6 +19,8 @@ export interface ServerOptions {
   editor?: EditorBackend;
   /** The rung 3 chat side. Without it the chat routes fall through to the layout routes' 404. */
   chat?: ChatBackend;
+  /** The rung 6 decisions side. Without it the decisions routes fall through to a 404. */
+  decisions?: DecisionsBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
   boardDev?: () => Promise<BoardDevView>;
   token?: string;
@@ -35,7 +39,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -51,6 +55,10 @@ export function startServer({ port, source, editor, chat, boardDev, token, open 
       if (chat !== undefined) {
         const chatResponse = await handleChatRoute(request, url.pathname, chat, sessionToken);
         if (chatResponse !== null) return chatResponse;
+      }
+      if (decisions !== undefined) {
+        const decisionResponse = await handleDecisionRoute(request, url.pathname, decisions, sessionToken);
+        if (decisionResponse !== null) return decisionResponse;
       }
       if (url.pathname === LIST_PATH || url.pathname === BOARD_DEV_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);

@@ -158,16 +158,17 @@ export function insertChoice(db: Database, input: InsertChoiceInput): DecisionRo
   return findDecision(db, id) as DecisionRow;
 }
 
+// An undefined field is left as it is.
 export type DecisionFields = {
-  goal?: string;
-  choice?: string;
-  reason?: string;
-  scope?: Scope;
-  status?: DecisionStatus;
-  outcomeNote?: string | null;
-  supersededBy?: string | null;
-  statusBefore?: DecisionStatus | null;
-  outcomeAskedAt?: number | null;
+  goal?: string | undefined;
+  choice?: string | undefined;
+  reason?: string | undefined;
+  scope?: Scope | undefined;
+  status?: DecisionStatus | undefined;
+  outcomeNote?: string | null | undefined;
+  supersededBy?: string | null | undefined;
+  statusBefore?: DecisionStatus | null | undefined;
+  outcomeAskedAt?: number | null | undefined;
 };
 
 // A fixed column per field, so a caller's key is never spliced into SQL.

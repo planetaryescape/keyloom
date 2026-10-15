@@ -3,6 +3,7 @@ import { type App, NotFoundError, boardDevView, getLayout, listLayouts } from ".
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import { appChatBackend } from "./chat-backend.ts";
+import { appDecisionsBackend } from "./decisions-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
 
 export const DEFAULT_PORT = 4477;
@@ -46,5 +47,5 @@ export function serveBoardDev(dir: string, opts: { port: number; open: boolean }
 }
 
 export function serve(app: App, opts: { port: number; open: boolean }): RunningServer {
-  return startServer({ port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app), chat: appChatBackend(app), open: opts.open });
+  return startServer({ port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app), chat: appChatBackend(app), decisions: appDecisionsBackend(app), open: opts.open });
 }

@@ -114,7 +114,7 @@ export class FakeEditor implements EditorBackend {
       if (op.op === "setBinding") document.layers.find((l) => l.id === op.at.layerId)!.bindings[op.at.position] = op.binding;
     }
     const revision = this.push("editor", request.summary, document);
-    return { revisionId: revision.id, changeSetId: `cs_${++this.counter}`, validation };
+    return { revisionId: revision.id, changeSetId: `cs_${++this.counter}`, validation, decisionId: null };
   }
 
   /** Stores a proposal against the current head, as the real agent's propose_changes does. */
@@ -142,7 +142,7 @@ export class FakeEditor implements EditorBackend {
     for (const other of this.proposals.values()) {
       if (other.group === proposal.group && other.id !== proposal.id && other.status === "proposed") other.status = "superseded";
     }
-    return { revisionId: revision.id, changeSetId: proposal.id, validation: { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] } } };
+    return { revisionId: revision.id, changeSetId: proposal.id, validation: { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] } }, decisionId: null };
   }
 
   async undo(_ref: string, request: UndoRequest): Promise<UndoResponse> {

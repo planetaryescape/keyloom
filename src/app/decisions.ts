@@ -40,12 +40,19 @@ export function retireDecision(app: App, id: string): DecisionRow {
   return showDecision(app, id);
 }
 
-export function editDecision(app: App, id: string, fields: { goal?: string; choice?: string; reason?: string; status?: DecisionStatus }): DecisionRow {
-  showDecision(app, id);
-  for (const [name, value] of Object.entries(fields)) {
-    if (typeof value === "string" && name !== "status" && !value.trim()) throw new UsageError(`the ${name} must not be empty`);
+export type DecisionEdit = {
+  goal?: string | undefined; choice?: string | undefined; reason?: string | undefined; scope?: { apps: string[]; habits: string[] } | undefined;
+  status?: DecisionStatus | undefined; outcomeNote?: string | null | undefined;
+};
+
+export function editDecision(app: App, id: string, fields: DecisionEdit): DecisionRow {
+  const row = showDecision(app, id);
+  for (const name of ["goal", "choice", "reason"] as const) {
+    const value = fields[name];
+    if (value !== undefined && !value.trim()) throw new UsageError(`the ${name} must not be empty`);
   }
-  updateDecision(app.db, id, fields);
+  // Moving a decision back to a hypothesis, or on to a verdict, is BK's call; what he last said about it stays unless he changes it.
+  updateDecision(app.db, id, { ...fields, ...(fields.status !== undefined && fields.status !== row.status ? { statusBefore: null } : {}) });
   return showDecision(app, id);
 }
 

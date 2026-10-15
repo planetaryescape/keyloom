@@ -163,7 +163,7 @@ export function editorDraft(summary: string, reason: string | undefined): Stored
 export function applyOps(
   app: App,
   ref: string,
-  input: { baseRevisionId: string; ops: ChangeOp[]; summary: string; reason?: string },
+  input: { baseRevisionId: string; ops: ChangeOp[]; summary: string; reason?: string | undefined },
 ): ApplyOutcome {
   requireText(input.summary, "the summary");
   return transact(app.db, () => {
