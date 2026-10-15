@@ -70,6 +70,10 @@ Yes, with one change. The existing adapter, pointed at `https://openrouter.ai/ap
 
 Yes, with four findings that changed the lockdown. Through a loopback MCP server (the official SDK, bearer token per run, 127.0.0.1), the real Codex received `propose_changes`'s full schema and `option-option` passed on it, with two valid proposals. Codex still sees BK's global instructions unless `HOME` and `CODEX_HOME` are replaced; it lists the ChatGPT account's connected apps unless `features.apps` is off; it can call MCP tools only through code mode, so that host stays on, and code mode has no file, network or `require` access and its `apply_patch` is rejected by the read-only sandbox. The hostile-prompt eval passed. The validate-and-retry loop was tested only against a stand-in, and the plan usage of a conversation can't be read from Codex. See [../research/spikes/S20.md](../research/spikes/S20.md).
 
+### S16 result (2026-10-15)
+
+Yes for QMK, and no for DF0 on purpose. TD0 and TD1 import as tap dances (tap Hyper+Space or Alt+Space, double-tap `[` or `]`), and for ten key scripts each, Oryx's exported `keymap.c` and keyloom's regenerated source send identical reports on QMK's real core. DF0 stays native: its hold is `layer_move(5)`, which no slot action or hold-tap says without changing what it does. ZMK's `&td` with generated hold-taps types the same keys for tap, double-tap, hold and tap-then-hold on the Glove80 and the Corne, but the feel differs in six ways (double-tap fires on the second press, three taps cycle, an empty hold slot holds the key, a hold takes two terms, and others). See [../research/spikes/S16.md](../research/spikes/S16.md).
+
 ### S10 result, devicetree half (2026-10-15)
 
 `web-tree-sitter` loads `tree-sitter-devicetree.wasm` inside a `bun build --compile` binary: the compiled `keyloom import --board moergo/glove80` and `generate` ran on the macOS arm64 binary with no extra flags. See [../research/spikes/S10.md](../research/spikes/S10.md).
