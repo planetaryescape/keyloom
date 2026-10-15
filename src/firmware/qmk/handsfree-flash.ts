@@ -61,6 +61,9 @@ const WRITE_ERROR_WAIT_MS = 4_000;
  * bootloader to appear on USB. A write error is not conclusive: the keyboard can reset before the OS
  * reports the write done, so the bootloader appearing is the only proof either way.
  */
+const HID_LOOKUP_TRIES = 5;
+const HID_LOOKUP_GAP_MS = 400;
+
 export async function rebootToBootloader(
   deps: HandsFreeDeps,
   target: KeyboardTarget,
@@ -80,14 +83,26 @@ export async function rebootToBootloader(
 
   let transport: HidTransport;
   let iface: RawHidInterface | undefined;
+  let seen: RawHidInterface[] = [];
   try {
     transport = await deps.hid();
-    const all = await transport.list();
-    iface = all.find((h) => h.vendorId === ZSA_VENDOR_ID && hexId(h.productId) === target.productId && (h.serial === undefined || h.serial === firmware.serial));
+    // On BK's Moonlander one lookup in three missed the interface that the next one found (2026-10-15),
+    // so a miss is retried briefly before keyloom falls back to asking for the key.
+    for (let attempt = 0; attempt < HID_LOOKUP_TRIES; attempt++) {
+      if (attempt > 0) await Bun.sleep(deps.pollMs ?? HID_LOOKUP_GAP_MS);
+      seen = await transport.list();
+      iface = seen.find((h) => h.vendorId === ZSA_VENDOR_ID && hexId(h.productId) === target.productId && (h.serial === undefined || h.serial === firmware.serial));
+      if (iface) break;
+    }
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
-  if (!iface) return { ok: false, reason: `the ${target.name}'s raw HID interface wasn't found` };
+  if (!iface) {
+    // Said in full, so an intermittent miss on real hardware shows what the lookup saw instead of a guess.
+    const zsa = seen.filter((h) => h.vendorId === ZSA_VENDOR_ID).map((h) => `${hexId(h.productId)} serial ${h.serial ?? "none"}`);
+    const saw = zsa.length === 0 ? `no ZSA raw HID interface among ${seen.length}` : `only ${zsa.join(", ")}`;
+    return { ok: false, reason: `the ${target.name}'s raw HID interface wasn't found (USB says ${firmware.serial}; raw HID showed ${saw})` };
+  }
 
   let writeError: string | undefined;
   log(`keyloom: sending the bootloader command to the ${target.name} (running ${firmware.serial})`);

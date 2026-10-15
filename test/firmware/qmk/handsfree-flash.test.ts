@@ -90,6 +90,20 @@ describe("rebootToBootloader", () => {
     expect(none.writes.concat(noHid.writes)).toEqual([]);
   });
 
+  test("a raw HID lookup that misses once is retried, and a miss every time says what it saw", async () => {
+    const k = fakeKeyboard({ usb: () => [runningKeyboard(OLD)] });
+    let lists = 0;
+    const flaky = { list: async () => (++lists === 1 ? [] : [rawHidOf(OLD)]), write: async (_t: unknown, r: Uint8Array) => void k.writes.push(new Uint8Array(r)) };
+    await rebootToBootloader({ ...k.deps, hid: async () => flaky }, MOONLANDER_REVA, say, 50);
+    expect(lists).toBe(2);
+    expect(k.writes).toHaveLength(1);
+
+    const never = fakeKeyboard({ usb: () => [runningKeyboard(OLD)], hid: [rawHidOf("keyloom/BBBBBBBBBBBB")] });
+    const r = (await rebootToBootloader(never.deps, MOONLANDER_REVA, say, 50)) as { reason: string };
+    expect(r.reason).toContain(`USB says ${OLD}; raw HID showed only 0x1969 serial keyloom/BBBBBBBBBBBB`);
+    expect(never.writes).toEqual([]);
+  });
+
   test("with two keyboards attached the packet goes to the one whose serial matches, never the other", async () => {
     const other = { vendorId: 0x3297, productId: 0x1969, serial: "keyloom/BBBBBBBBBBBB", handle: "fake-2" };
     const writes: string[] = [];
