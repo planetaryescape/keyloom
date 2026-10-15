@@ -78,6 +78,18 @@ describe("keyloom generate, build and flash for a Glove80 layout", () => {
       expect(r.err).toContain("Cancelled. Nothing was flashed.");
     });
   });
+
+  test("with --wait, every instruction says that wait, from the first line on", async () => {
+    const e = await zmkEnv();
+    await e.run(async () => {
+      await cli(["build", "glove80", "--data-dir", e.dataDir]);
+      setTimeout(() => process.emit("SIGINT"), 300);
+      const r = await cli(["flash", "--layout", "glove80", "--volumes-root", e.volumes, "--wait", "15", "--data-dir", e.dataDir]);
+      expect(r.code).toBe(8);
+      expect(r.err).toContain("keyloom waits 15 minutes");
+      expect(r.err).not.toContain("2 minutes");
+    });
+  });
 });
 
 describe("keyloom doctor with a Glove80 board", () => {

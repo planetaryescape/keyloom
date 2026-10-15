@@ -328,6 +328,8 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
 
   const id = newFlashId();
   const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });
+  // A longer wait was asked for, so the first instruction says so rather than the default.
+  if (opts.bootloaderWaitMs !== undefined && board) flashInstructions.set(id, driverFor(board).waitingInstruction(board, opts.bootloaderWaitMs));
   const task = runFlash(app, row, board, build.boardRevision, artifact, opts);
   flashTasks.set(id, task);
   void task.finally(() => flashTasks.delete(id));

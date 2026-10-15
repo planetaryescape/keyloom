@@ -4,7 +4,7 @@ import type { Board } from "../boards/load.ts";
 import { artifactKind } from "../firmware/qmk/artifact.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { buildQmk } from "../firmware/qmk/build.ts";
-import { CHECKING_INSTRUCTION, RESET_INSTRUCTION, flashWithZapp } from "../firmware/qmk/flash.ts";
+import { CHECKING_INSTRUCTION, flashWithZapp, resetInstruction } from "../firmware/qmk/flash.ts";
 import { type HandsFreeDeps, handsFreeHooks, keyboardTarget, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { GenerateError as QmkGenerateError, generateQmkSource } from "../firmware/qmk/generate.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
@@ -65,19 +65,20 @@ export type FirmwareDriver = {
   build(args: BuildArgs): Promise<void>;
   flash(args: FlashArgs): Promise<FlashResult>;
   /** What to tell the person about a flash that is waiting, before the flasher has said anything itself. */
-  waitingInstruction(board: Board): string;
+  /** What to do before the flasher has said anything; `waitMs` is how long this flash will wait, when it was asked for. */
+  waitingInstruction(board: Board, waitMs?: number): string;
 };
 
 const qmk: FirmwareDriver = {
   name: "QMK",
   artifactExtension: (board, rev) => artifactKind(qmkRevision(board.definition, rev).build),
-  waitingInstruction(board) {
+  waitingInstruction(board, waitMs = BOOTLOADER_WAIT_MS) {
     const flash = qmkRevision(board.definition).flash;
-    if (flash.kind === "uf2-drives") return instructionFor(flash.steps[0] as FlashStep, 0, flash.steps.length, BOOTLOADER_WAIT_MS);
+    if (flash.kind === "uf2-drives") return instructionFor(flash.steps[0] as FlashStep, 0, flash.steps.length, waitMs);
     if (flash.kind === "manual") return flash.instructions;
     // Until the flasher has looked at the keyboard, the person can't be told to press anything: if it runs keyloom's
     // firmware there is nothing to press (D-070), and a wrong "press reset" for the few seconds it takes to look is worse than none.
-    return keyboardTarget(board.definition, qmkRevision(board.definition)) ? CHECKING_INSTRUCTION : RESET_INSTRUCTION;
+    return keyboardTarget(board.definition, qmkRevision(board.definition)) ? CHECKING_INSTRUCTION : resetInstruction(waitMs);
   },
   generate(view, boardRevision, buildId) {
     const rev = qmkRevision(view.board.definition, boardRevision);
@@ -132,9 +133,9 @@ const zmk: FirmwareDriver = {
   name: "ZMK",
   artifactExtension: (board) => (zmkRevision(board.definition).build.kind === "zmk-west-docker" ? "zip" : "uf2"),
   // A flash starts at the first step, so that is what the person should be doing until the flasher says otherwise.
-  waitingInstruction(board) {
+  waitingInstruction(board, waitMs = BOOTLOADER_WAIT_MS) {
     const steps = zmkRevision(board.definition).flash.steps;
-    return instructionFor(steps[0] as FlashStep, 0, steps.length, BOOTLOADER_WAIT_MS);
+    return instructionFor(steps[0] as FlashStep, 0, steps.length, waitMs);
   },
   generate(view) {
     const build = zmkRevision(view.board.definition).build;
