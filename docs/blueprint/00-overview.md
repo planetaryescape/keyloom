@@ -67,7 +67,7 @@ v1 covers:
 - **Keystroke logging.** v1 learns habits from what BK tells it, not from recording his typing (D-035). Deferred, not rejected.
 - **Carrying a profile from one keyboard to another.** "Adapt my Moonlander habits to the Glove80" was discussed but not asked for (Q4). Deferred, not rejected.
 - **Exact translation between QMK and ZMK.** Where a behaviour has no equivalent, keyloom says so (D-024).
-- **Runtime keymap updates (ZMK Studio, VIA/Vial).** v1 builds and flashes firmware (D-039). Deferred, not rejected.
+- **Runtime keymap updates (ZMK Studio, VIA/Vial).** v1 builds and flashes firmware (D-039). Replaced on 2026-10-15 by D-096: Apply ends on the keyboard through hands-free flashing, and live writes come only if the wait proves too long ([17](17-keyboard-sync.md)).
 
 ## Glossary
 

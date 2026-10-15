@@ -21,9 +21,13 @@ BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10
 | 10 | [CLI](10-cli.md) | Command tree, output contract, exit codes, agent skill |
 | 11 | [Observability and evals](11-observability-and-evals.md) | Logs, recovering from a bad flash, the agent eval set |
 | 12 | [Cost model](12-cost-model.md) | Model cost per turn and per session |
-| 13 | [Roadmap](13-roadmap.md) | Phase 0, then eight usable rungs from "see my layout" to "someone else adds a keyboard" |
+| 13 | [Roadmap](13-roadmap.md) | Phase 0, eight usable rungs from "see my layout" to "someone else adds a keyboard", then rungs 9 to 18 for configurator parity and the new UI |
 | 14 | [Decision log](14-decision-log.md) | Every decision, the options rejected, and how the design got here |
 | 15 | [Open questions](15-open-questions.md) | Spikes to run against BK's real boards, and product questions |
+| 16 | [Key editor](16-key-editor.md) | The Oryx-style key panel, tap dance, macros, combos and layers made on the board, and the parity matrix against keymap-editor, Oryx and Vial |
+| 17 | [Keyboard sync](17-keyboard-sync.md) | Apply ends on the keyboard: hands-free flashing on every board, the ZMK module, auto-sync, and live writes if they're needed |
+| 18 | [Visual design](18-visual-design.md) | The UI audit's findings, layout, keycaps, the visual system, words, states, phones and the screenshot gate |
+| 19 | [Model providers](19-model-providers.md) | Running the agent on a Codex subscription, an OpenRouter key or an Anthropic key |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
 Research behind these decisions:
@@ -32,6 +36,10 @@ Research behind these decisions:
 - [../research/zmk-and-glove80.md](../research/zmk-and-glove80.md): where Glove80 firmware lives, MoErgo's build routes, the Layout Editor's export, UF2 flashing, ZMK Studio and physical layouts.
 - [../research/prior-art.md](../research/prior-art.md): keymap-drawer, CustomKeymap, keymap-ai and other editors.
 - [../research/keymap-editor.md](../research/keymap-editor.md): a code reading of `nickcoutsos/keymap-editor`, the editor BK pointed to, with adopt, adapt and skip verdicts.
+- [../research/configurators/oryx-features.md](../research/configurators/oryx-features.md), [vial-features.md](../research/configurators/vial-features.md) and [keymap-editor-features.md](../research/configurators/keymap-editor-features.md): every feature of the three configurators, with click counts for the same tasks.
+- [../research/keyloom-ui-audit.md](../research/keyloom-ui-audit.md): a visual and UX audit of v0.10.1 on BK's layouts, with 26 screenshots.
+- [../research/handsfree-flash-all-boards.md](../research/handsfree-flash-all-boards.md): how each of BK's boards can be flashed and edited without touching it.
+- [../research/model-providers.md](../research/model-providers.md): the Codex SDK, OpenRouter and Anthropic as providers for keyloom's agent.
 - `docs/research/spikes/`: spike evidence, one file per spike. None run yet.
 
 ## Summary
@@ -51,6 +59,11 @@ Research behind these decisions:
   - keystroke logging (D-035)
   - runtime updates through ZMK Studio, VIA or Vial (D-039)
   - Oryx GraphQL import (D-041)
+
+- **Configurator parity (2026-10-15):** a key is built on the key, as in Oryx: tap, hold, double-tap and tap-then-hold slots, macros in the picker, combos from a selection, and nothing created elsewhere first (D-085 to D-093, [16](16-key-editor.md)).
+- **Apply ends on the keyboard:** hands-free flashing on all three boards, through a `keyloom-zmk` module for ZMK, and auto-sync. Live writes come only if the wait hurts (D-094 to D-097, [17](17-keyboard-sync.md)).
+- **The UI:** the board is the page, one click does one job, kind is shown by shape, plain words first, and every visual rung passes a screenshot gate (D-098 to D-102, [18](18-visual-design.md)).
+- **Providers:** the agent runs on an Anthropic key, an OpenRouter key or BK's Codex subscription. A Claude subscription isn't allowed for third-party apps (D-106 to D-111, [19](19-model-providers.md)).
 
 ## Rules for coding agents
 

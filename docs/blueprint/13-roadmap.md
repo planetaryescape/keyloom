@@ -220,9 +220,183 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 
 **Left out:** everything after the car.
 
+## Rungs 9 to 18: configurator parity and a UI BK enjoys (planned 2026-10-15)
+
+The car is built and released (v0.10.1). These rungs take what keymap-editor, Oryx and Vial do well into keyloom ([16](16-key-editor.md)), make Apply end on the keyboard ([17](17-keyboard-sync.md)), let BK run the agent on his Codex subscription or an OpenRouter key ([19](19-model-providers.md)), and redo the look ([18](18-visual-design.md)). Every rung keeps the build philosophy above, and every rung that changes the UI passes the screenshot gate in [18](18-visual-design.md#how-a-rung-proves-it-looks-good).
+
+Only BK can do these:
+
+| # | Action | Needed by |
+|---|---|---|
+| A6 | Create an OpenRouter key with credit and make it available as `OPENROUTER_API_KEY` | Rung 10 (S19) |
+| A7 | Keep `codex login` signed in to his ChatGPT account (it was on 2026-10-15) | Rung 10 (S20) |
+| A8 | Connect both Glove80 halves by USB and do one key-combo bootloader entry per half for the first module flash | Rung 12 (S12) |
+| A9 | Connect the Corne and put each half in its bootloader once | Rung 12 (S13) |
+
+## Rung 9: Fix: change any key in the editor
+
+**Previously:** the editor refuses most single-key changes with validator text. **Now:** any key can be changed, and every problem is a sentence with a way forward.
+
+**Promise:** "I click F16, make it F17, and keyloom asks whether to drop F16 or put it somewhere first."
+
+**Build:** the drop-function prompt and "place" mode ([16](16-key-editor.md#replacing-a-key-whose-function-exists-nowhere-else-asks-in-plain-words), D-092). A people sentence for every validator rule (D-101). 1-based key numbers everywhere a person reads them.
+
+**New unknowns:** none.
+
+**Demo:** change F16 to F17 on BK's Moonlander layout, choose Drop F16, apply, undo.
+
+**Done when:** on the installed binary, every key on BK's Moonlander and Glove80 base layers can be changed to an unused key through the editor alone, and no screen shows a layer ID or a 0-based position.
+
+**Left out:** the new key panel (rung 11).
+
+## Rung 10: Scooter: keyloom's chat runs on my Codex subscription or OpenRouter key
+
+**Previously:** the agent needs Anthropic API credits, which ran out. **Now:** BK picks a provider: his Codex subscription, an OpenRouter key, or an Anthropic key.
+
+**Promise:** "I signed in with Codex, asked keyloom about Option–Option, and got the same validated proposals."
+
+**Build:** [19](19-model-providers.md): the provider adapters behind `AgentModel`, provider settings, the evals per provider.
+
+**New unknowns:** whether Codex's agent loop can be limited to keyloom's tools; whether the evals pass on the other providers.
+
+**Demo:** run the four evals in `evals/scenarios` on each configured provider, then ask the Option–Option question in the web app on Codex.
+
+**Done when:** the evals pass on at least one non-Anthropic provider on the installed binary, and the chat works end to end on it.
+
+**Left out:** providers other than the three.
+
+## Rung 11: Scooter: the key panel
+
+**Previously:** a binding editor under the board, picked by kind. **Now:** the Oryx-style key panel beside a board that fills the stage.
+
+**Promise:** "I click A, click held, click Ctrl, and it's a home-row mod, while I can still see the key."
+
+**Build:** the key panel with tap and hold slots, the picker with categories and Any, typed keys filling the tap slot ([16](16-key-editor.md#the-key-panel), D-086, D-087). The new shell: board stage, side panel, chat drawer, header with layout menu, toolbar, toasts ([18](18-visual-design.md#the-board-stays-in-view-while-a-key-is-edited), D-098, D-099). The visual tokens and keycap anatomy for the kinds that exist ([18](18-visual-design.md#visual-system), D-100).
+
+**New unknowns:** scaling the board to the stage for three geometries; the chat drawer's chip selection.
+
+**Demo:** make A a mod-tap, change a layer key, use Any for `LCTL_T(KC_A)`, all on the Moonlander and Glove80.
+
+**Done when:** a mod-tap takes 4 clicks from an empty key and 3 from A, the board never moves while editing, and the screenshot gate passes.
+
+**Left out:** double-tap slots and macros (rung 14).
+
+## Rung 12: Bicycle: flash my Glove80 and Corne without touching them
+
+**Previously:** ZMK flashes need a key combo on each half. **Now:** after one more manual flash, keyloom restarts each half into its bootloader itself.
+
+**Promise:** "I click Flash and the Glove80 updates while my hands stay in my lap."
+
+**Build:** the `keyloom-zmk` module, the host trigger, markers and verification, the `handsFree` board block ([17](17-keyboard-sync.md#hands-free-flash-on-zmk-the-keyloom-zmk-module), D-095).
+
+**New unknowns:** S12 (module and relay on the Glove80); S13 (the Corne).
+
+**Demo:** flash the Glove80 by key combo once, then flash a change with no keypress, with the right half on its cable. Then the same on the Corne.
+
+**Done when:** two hands-free flashes in a row are verified on both ZMK boards, and a failed trigger falls back to the manual instruction.
+
+**Left out:** auto-sync (rung 13).
+
+## Rung 13: Bicycle: Apply puts it on the keyboard
+
+**Previously:** Apply, then a separate Build and flash dialog. **Now:** Apply ends on the keyboard, with the sync state in the header.
+
+**Promise:** "I click a key, pick what it should be, and a minute later I'm typing with it, without another click."
+
+**Build:** sync states, auto-sync per board, batching, last good image, Pause ([17](17-keyboard-sync.md#apply-sync-and-the-keyboards-state), D-094).
+
+**New unknowns:** how often a burst of edits collides with a running flash; how long the wait feels in use (it decides rung 17).
+
+**Demo:** three edits in a row on the Moonlander, one build, verified; the same on the Glove80; unplug mid-sync and recover.
+
+**Done when:** a week of BK's real use with auto-sync on, and his answer to "does the wait bother you?" recorded in the ledger.
+
+**Left out:** live writes (rung 17).
+
+## Rung 14: Motorbike: tap dances and macros on the key
+
+**Previously:** tap dance is impossible and macros need the CLI. **Now:** double-tap, tap-then-hold and macros are built on the key.
+
+**Promise:** "I made Esc double-tap to Caps Lock, and a copy-switch-paste macro, without leaving the key."
+
+**Build:** the `tapDance` kind, both generators and the importer for Oryx tap dances ([16](16-key-editor.md#tap-dance-is-a-key-with-a-double-tap-slot), D-093). The Macro tab ([16](16-key-editor.md#macros-are-made-in-the-picker-and-each-pick-adds-a-step), D-088). The library list.
+
+**New unknowns:** S16 (tap dance equivalence and import).
+
+**Demo:** the Esc/Caps tap dance and a three-key macro on both boards, checked in the emulators, synced, and typed.
+
+**Done when:** BK's imported TD0, TD1 and DF0 show as editable tap dances, and a three-key macro takes 6 clicks.
+
+**Left out:** combos (rung 15).
+
+## Rung 15: Motorbike: combos, layers and moving keys
+
+**Previously:** combos are read-only and layers can only be switched. **Now:** combos are made from a selection, layers are managed in their tabs, and keys swap, drag, copy and paste.
+
+**Promise:** "I selected J and K, made them Esc, renamed Layer 2 to Nav, and swapped two keys across layers."
+
+**Build:** [16](16-key-editor.md#combos-are-made-from-a-selection) (D-089), [layers](16-key-editor.md#layers-are-managed-in-their-tabs) (D-090), [moving keys](16-key-editor.md#moving-and-copying-keys) (D-091), short layer labels on caps ([18](18-visual-design.md#legends-stay-readable-at-every-size)).
+
+**New unknowns:** combo lines on rotated thumb clusters; drag on touch screens.
+
+**Demo:** the J+K combo, a renamed and reordered layer, a cross-layer swap, all synced.
+
+**Done when:** a two-key combo takes 5 clicks, no Glove80 legend renders below 11 px, and deleting a referenced layer is refused with the keys listed.
+
+**Left out:** conditional layers.
+
+## Rung 16: Motorbike: history, states, themes and phones
+
+**Previously:** History lists chats, the theme follows the OS, and a phone scrolls the board sideways. **Now:** the rest of [18](18-visual-design.md).
+
+**Promise:** "I scrolled back through my revisions and flashed last Tuesday's, in dark mode, from my phone."
+
+**Build:** revision history (D-102), the import screen per board, tips, visible disabled reasons, the theme toggle, glyph sets, the phone layout ([18](18-visual-design.md#phones-and-narrow-windows)), shortcuts.
+
+**New unknowns:** none beyond layout work.
+
+**Demo:** undo three revisions back, flash one, then import a Glove80 export from the empty state, then edit a key on a 390 px screen.
+
+**Done when:** the screenshot gate passes for every screen at both widths and themes.
+
+**Left out:** settings and lighting (rung 18).
+
+## Rung 17: Car: live writes (only if rung 13 says the wait hurts)
+
+**Previously:** every change flashes. **Now:** a binding-only change goes live in under a second, and everything else still syncs by flash.
+
+**Promise:** "I swapped two keys and they were swapped before I lifted my hand."
+
+**Build:** [17](17-keyboard-sync.md#live-writes-are-built-only-if-auto-sync-is-too-slow-in-use) (D-096, D-097): the Moonlander set-keycode command and the ZMK Studio client, live writes recorded as revisions, reset after flash, drift detection.
+
+**New unknowns:** S15 (Moonlander dynamic keymap); S14 (Studio on the Glove80).
+
+**Demo:** a live swap on each board, then a hold-tap change that falls back to a flash, then a flash that resets the live state.
+
+**Done when:** live writes are verified by reading the key back from the board, and a reboot after a flash shows the flashed keymap.
+
+**Left out:** live combos and macros on ZMK, which Studio can't do.
+
+## Rung 18: Car: settings and lighting
+
+**Previously:** firmware options are only in the timing tuner and passthrough. **Now:** a settings page and per-key and per-layer colours.
+
+**Promise:** "I set Caps Word and the combo term on one page that explained them, and coloured my Nav layer."
+
+**Build:** [16](16-key-editor.md#settings-and-lighting) (D-103, D-104).
+
+**New unknowns:** which settings Oryx's generated source already sets that keyloom must not override; RGB generation in ZSA's fork.
+
+**Demo:** change three settings and two layer colours on the Moonlander, synced.
+
+**Done when:** every option on the page round-trips through import and generation unchanged when untouched.
+
+**Left out:** everything in [16](16-key-editor.md#what-keyloom-doesnt-take-and-why).
+
 ## After the car (not planned yet)
 
-- Runtime updates through ZMK Studio for binding-only changes (D-039).
+- Conditional layers (tri-layer) in the editor.
+- The features [16](16-key-editor.md#what-keyloom-doesnt-take-and-why) defers (D-105).
 - Pulling a layout from Oryx's GraphQL endpoint (D-041, S4).
 - A typing profile carried between boards (Q4).
 - Key-frequency statistics (Q5).

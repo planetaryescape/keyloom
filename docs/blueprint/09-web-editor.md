@@ -1,5 +1,7 @@
 # 09: Web editor
 
+Status update, 2026-10-15: the key panel in [16](16-key-editor.md) replaces the binding editor and the layer and selection interactions below, and [18](18-visual-design.md) replaces the screen layout. The rest of this chapter still holds.
+
 The browser side of `keyloom serve` (D-028). It puts the keyboard picture and the chat side by side, both editing one layout (D-003, D-013). The aim is that BK sees a proposed change on the keyboard before he flashes anything, because the picture is the fastest way to catch a misunderstanding (D-015).
 
 BK pointed to `nickcoutsos/keymap-editor` as "a pretty good editor" to learn from (D-044). Its public source is a 2023 snapshot under MIT. The polished app it's known for is closed, and its author has stopped publishing source. The full reading, with an adopt, adapt or skip verdict for each idea, is in [../research/keymap-editor.md](../research/keymap-editor.md) (`main` at `e7946792`). This document says where each adopted idea lands.

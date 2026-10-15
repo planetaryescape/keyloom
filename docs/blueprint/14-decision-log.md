@@ -136,6 +136,7 @@ Change a decision only by adding a new entry that replaces the old one.
 - `claude-opus-5-5`, adaptive thinking, effort `medium`, Tool Runner with strict zod tools.
 - **Why:** BK's tools already use Claude, and the SDK's zod tool helpers match keyloom's zod schemas.
 - **Revisit:** Q3 (other providers for other users).
+- **Replaced in part by D-106** (2026-10-15): the provider is now Anthropic, OpenRouter or Codex. Claude through OpenRouter keeps this entry's model and SDK.
 
 ### D-032: Local SQLite, append-only revisions. (Claude, in the blueprint)
 - **Option rejected:** layouts as files in a git repo. Diffable, but it adds a second history beside revisions, and conversations and decisions don't fit it. `keyloom layout export` covers sharing. Revisit: Q7.
@@ -166,6 +167,7 @@ Change a decision only by adding a new entry that replaces the old one.
 ### D-039: Runtime updates (ZMK Studio, VIA, Vial) are deferred. v1 always reflashes. (Claude, in the blueprint)
 - **Why:** Studio can't change hold-tap properties, macros or combos. It ignores later `.keymap` changes once it manages a keymap. Stock MoErgo builds probably lack it. VIA and Vial support only Moonlander rev A, and ZSA doesn't support them.
 - **Revisit:** after the car. Instant binding swaps would make trying changes cheaper.
+- **Replaced by D-096** (2026-10-15): live writes become an optimisation of Apply, built only if auto-sync proves too slow in use.
 
 ### D-040: The Moonlander builds from ZSA's QMK fork (`firmware25`), pinned. (Claude, in the blueprint)
 - **Option rejected:** mainline QMK. It has only rev A, and the rev B PR closed unmerged on 2026-06-22. BK's board may be rev B (S1).
@@ -373,3 +375,112 @@ Change a decision only by adding a new entry that replaces the old one.
 - **Names:** the harness prints `get_keycode_string()` for keys and, for media keys, the name of the keycode whose `KEYCODE2CONSUMER` value matches the usage. `fromQmk` maps those to keyloom's names. keyloom has no usage table to join on and the harness already knows QMK's mapping. A key keyloom doesn't name is shown by QMK's name and warned about.
 - **Time:** the fixture's own loop runs `keyboard_task()` once per millisecond. Each event is applied at its time and scanned at that millisecond; events with the same time are applied one millisecond apart in the order given. Reports are stamped with the simulated time, relative to the first event.
 - **Settle:** `settleMs` (default 1000) runs after the last event so a pending tap-hold or one-shot resolves. A script that ends with a key still down stays down.
+
+## Configurator parity and UI/UX (2026-10-15, after v0.10.1)
+
+After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configurator and every feature of oryx, see how they work and create a /blueprint of it so that we can build those features into keyloom", to "do the same for vial", and to "do a visual assessment of keyloom" and "a UI/UX blueprint". He named his taste: "i love most oryx and vial". Mid-session he added "so is there no way for me to flash without needing to physically interact with the boards, similar to what vial does?", "Not just for glove 80 but for all my boards", and asked to use his Codex subscription and an OpenRouter key for the AI. Five research files and the UI audit back these decisions. They are listed in [README](README.md).
+
+### D-084: Configurator parity and the UI/UX plan extend this blueprint as chapters 16 to 19 and rungs 9 to 18. (Claude, delegated by BK)
+- **Option rejected:** a separate feature blueprint under `docs/configurator/`. D-039 and D-031 change, so one decision log keeps the history in one place.
+- **Principle (BK, earlier this session):** "I said you can decide on things".
+
+### D-085: Everything about a key is made on the key. Nothing has to be created elsewhere and then assigned. (BK)
+- **BK:** "Others need you to first go create a thing somewhere else and then you come and assign the thing to the key, there's no way to click a key and then create the complex thing for the key right there. but I think oryx comes close to this."
+- **Evidence:** Vial needs 9 clicks across two tabs for a tap dance and 8 plus a 5 s physical unlock for a macro. keymap-editor creates hold-taps in a separate `behaviors` tab. Oryx builds both on the key ([16](16-key-editor.md#bks-rule-never-create-a-thing-elsewhere-and-come-back-to-assign-it)).
+- **Consequence:** the library lists shared things for reuse and editing. It is never a required step.
+
+### D-086: A key is up to four slots (tapped, held, double-tapped, tapped then held), and the filled slots decide its kind. (Claude, from BK's preference for Oryx)
+- **Taken from:** Oryx's key popover (`oryx-features.md`, screenshots 06 and 12).
+- **Options rejected:** (a) keymap-editor's "pick a behaviour, then its parameters", which costs 8 clicks for a mod-tap and needs a custom behaviour first; (b) Vial's palette of masked keycodes, which moves the selection off the key after the outer pick.
+- **Why:** the person thinks "when I hold it, Ctrl", not "it's a hold-tap with parameters".
+
+### D-087: One picker serves every slot, with search, categories and an Any expression field. The hold slot opens on Modifiers and Layers. (Claude, in the blueprint)
+- **Taken from:** Oryx's picker and Vial's Any keycode dialog.
+- **Fixes:** keymap-editor types `&mt`'s hold as a keycode, so its modifier toggles produce `LC(TAB)` instead of a hold.
+
+### D-088: Macros are built in the picker's Macro tab, and each picked key adds a step without closing anything. (Claude, in the blueprint)
+- **Why:** Oryx needs a CLOSE per step (12 clicks for three keys). Vial needs a separate tab, Save and a physical unlock. keyloom's flow is six clicks.
+
+### D-089: Combos are made from a selection on the board, with an optional name. (Claude, in the blueprint)
+- **Why:** five clicks, against Oryx's 8 plus a name and keymap-editor's 12. Positions are picked where they are, on the board.
+
+### D-090: Layer tabs add, rename inline, duplicate, reorder, delete with a reference check, and carry a short label and colour. (Claude, in the blueprint)
+- **Replaces:** the unbuilt layer actions in [09](09-web-editor.md#interactions), which v0.10.1 never shipped.
+- **Avoids:** keymap-editor's index-splice delete, which breaks references.
+
+### D-091: Keys can be swapped, dragged, copied and pasted, each as one change set. (Claude, in the blueprint)
+- **Taken from:** Oryx's Swap keys and copy key.
+
+### D-092: A change that drops a function asks "Drop F16" or "Put F16 somewhere first" in plain words, and this ships first. (Claude, from the UI audit)
+- **Evidence:** v0.10.1 refuses F16 → F17 with validator text and offers no way to add `dropFunction` (`src/validation/rules.ts:230`; audit screenshot 17). Most single-key edits dead-end.
+- **Principle (BK's CLAUDE.md):** "Fix before adding."
+
+### D-093: The layout model gains a `tapDance` binding kind with up to four slot actions and one term. (Claude, in the blueprint)
+- **QMK:** `ACTION_TAP_DANCE_FN_ADVANCED`, in the shape Oryx generates, so BK's imported tap dances stop being opaque `native` keys. **ZMK:** `&td` with generated hold-taps. Equivalence is S16.
+- **Option rejected:** keeping tap dance as `native` only. BK can't edit what he can't see.
+
+### D-094: Apply puts the change on the keyboard. Each board shows a sync state, and auto-sync turns on per board after one verified hands-free flash. (Claude, from BK's "click a key, click what you want it to be and done")
+- **BK:** "vial is really really user friendly in terms of not needing to manually flash".
+- **Safety:** firmware keyloom didn't build is never replaced without the flash dialog's confirmation. Only verified flashes count as in sync (D-072).
+- **Open:** whether auto-sync is on by default once proven (Q16).
+
+### D-095: ZMK boards get hands-free flashing from a vendored `keyloom-zmk` module: a USB serial port, a 1200-baud touch, a relay from the left half to the right, and a build marker in the USB serial. (Claude, from the research)
+- **Evidence:** [../research/handsfree-flash-all-boards.md](../research/handsfree-flash-all-boards.md). The bootloader enters UF2 mode on GPREGRET `0x57` (`bl-moergo@bb68c75` `src/main.c:112-116`). The split relay works on existing right-half firmware (`zmk-fork@ce69e85` `app/src/behavior.c:96-101`).
+- **Options rejected:** (a) ZMK Studio, which has no reboot request and can't be extended to add one (`core.proto:10-17`); (b) a ZMK raw HID module, which runs on the central only; (c) BLE OTA DFU, which needs a Nordic DFU client and has no known Glove80 user; (d) tadakado's module as-is, which needs Zephyr boot-mode retention that neither pin has.
+- **Cost:** the first keyloom flash of each ZMK half still needs its key combo.
+
+### D-096: Live writes are an optimisation of Apply, built only if auto-sync is too slow in BK's use. (Claude, in the blueprint. Replaces D-039)
+- **Why:** they add a second source of truth, and on ZMK they can't change hold-tap timing, combos, macros or tap dances, which BK's two problems need (D-025).
+- **Gate:** a week of auto-sync from rung 13, then BK's answer to whether the wait bothers him.
+
+### D-097: The Moonlander stays on ZSA's fork. A live write, if built, is keyloom's own set-keycode command in its raw HID wrapper, not Vial. (Claude, in the blueprint)
+- **Options rejected:** Vial firmware. It brings live tap dance, combos and tapping term, but drops ZSA's fork, Oryx's live view, Keymapp and rev B, and its bootloader jump needs a physical unlock (`quantum/via.c:434-446`).
+- **Open:** Q18 asks BK whether Vial's extra live reach is worth giving up Oryx.
+
+### D-098: The board is the page. Editing happens in a side panel that never moves the board, and chat is a drawer. (Claude, from the UI audit and BK's preference for Oryx)
+- **Evidence:** opening the editor scrolls the board 552 px away at 1440×900 (`src/web/Viewer.tsx:132-137`); the chat column takes 400 px whether used or not.
+
+### D-099: One click, one job. Clicking a key edits it. Keys reach the chat only through its "Asking about" chips. (Claude, from the UI audit)
+- **Evidence:** a click inspects and selects for chat at once (`src/web/keyboard/Keyboard.tsx:176-180`).
+- **Open:** Q19.
+
+### D-100: The visual system carries kind by shape as well as colour, uses a 1.25 type scale and 4-based spacing only, and every visual rung is gated on screenshots in both themes and widths plus a non-text contrast test. (Claude, from BK's "make sure the UI you build looks good" and "follows good design principles")
+- **Evidence:** kind fills differ by 1.17:1 to 1.31:1; empty-key borders are 1.53:1; legends fall to 8.1 px ([../research/keyloom-ui-audit.md](../research/keyloom-ui-audit.md)).
+
+### D-101: Plain words first. Firmware names appear only in an Advanced view, and every validator rule has a sentence for people. (Claude, from the UI audit)
+- **Taken from:** Oryx's Simple and Advanced views.
+
+### D-102: History means layout revisions, with undo to any revision and "flash this revision". Chats are "Conversations". (Claude, from the UI audit)
+- **Evidence:** v0.10.1's History lists chats, and undo goes back one step (audit screenshots 18 and 19).
+
+### D-103: Firmware-wide options live on one settings page with a filter and a paragraph per option. Per-key timing lives on the key. (Claude, in the blueprint)
+- **Taken from:** Oryx's settings page. **Improves on:** Oryx, which sends per-key tapping term to settings.
+
+### D-104: Per-key and per-layer lighting comes last, for boards with per-key RGB. (Claude, in the blueprint)
+- **Why:** neither of BK's two problems needs it (D-025).
+
+### D-105: keyloom doesn't take accounts and cloud layouts, GitHub OAuth, encoders, key overrides, MIDI, stenography, audio, a matrix tester, `.vil`, Smart Layers or a macro recorder. (Claude, in the blueprint)
+- **Why:** each lacks a validated need or a board that uses it ([16](16-key-editor.md#what-keyloom-doesnt-take-and-why)). Deferred, not rejected. Most are reachable through Any as `native` bindings.
+- **Principle (BK's CLAUDE.md):** "Don't ship features just because you can."
+
+### D-106: The agent runs on one of three providers behind `AgentModel`: Anthropic, OpenRouter or Codex. (BK. Replaces D-031's "on the user's own key" for the provider choice)
+- **BK:** "use codex cli for AI I think it allow you to use codex sub with it's agent sdk if I'm not mistaken, we can use that. Also make it possible for me to use an openrouter api key".
+- **Context:** the Anthropic account behind keyloom's key ran out of credits ("Your credit balance is too low to access the Anthropic API"), which stopped the chat and the live evals.
+- **Research:** [../research/model-providers.md](../research/model-providers.md).
+
+### D-107: OpenRouter uses the existing Anthropic adapter, pointed at OpenRouter's Messages endpoint with `baseURL` and `authToken`. (Claude, from the research)
+- **Option rejected for now:** a Chat Completions adapter through `openai`. It's needed only for non-Claude models (Q22).
+- **Unverified until S19:** the Tool Runner, the fallback beta, `cache_control` and the out-of-credits error through OpenRouter.
+
+### D-108: Codex spawns the installed `codex exec --experimental-json` directly, serves keyloom's tools from a loopback MCP server, and runs with shell off, a read-only sandbox and an empty working directory. (Claude, from the research)
+- **Options rejected:** (a) `@openai/codex-sdk`, whose binary lookup through `node_modules` fails in a compiled binary and which doesn't expose `--ignore-user-config` or `--ephemeral`; (b) treating Codex as a drop-in `AgentModel`, since it runs its own loop and keeps its own thread.
+- **Costs:** no token streaming, no cost figure, and 24k to 80k tokens of Codex's own prompt per run.
+- **Open:** whether other users get it (Q20).
+
+### D-109: A Claude subscription is not offered as a provider. (Claude, from Anthropic's docs)
+- **Why:** Anthropic's docs say third-party apps may not route requests through Free, Pro or Max credentials, Agent SDK apps included.
+
+### D-110: Whatever the provider, layouts change only through the validated `propose_changes` path and BK's Apply, and a hostile-prompt eval checks it for Codex. (Claude, in the blueprint; restates D-014 for providers keyloom doesn't control)
+
+### D-111: A conversation is pinned to the provider and model that started it, and stored blocks become provider-neutral. (Claude, from the research)
+- **Option rejected:** switching provider mid-conversation, which loses tool results and thinking blocks, and which Codex can't take at all.

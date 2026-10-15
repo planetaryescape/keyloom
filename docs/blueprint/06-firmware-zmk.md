@@ -86,6 +86,8 @@ Whether both halves boot correctly from the combined file is spike S8. It's how 
 
 ## Runtime updates through ZMK Studio are deferred
 
+Status update, 2026-10-15: hands-free flashing for ZMK and the conditions for Studio live writes are in [17](17-keyboard-sync.md) (D-095, D-096).
+
 ZMK Studio can change layer bindings on a running keyboard over USB or BLE. Its protocol is open protobuf, with an official MIT TypeScript client (`@zmkfirmware/zmk-studio-ts-client` 0.0.18). keyloom v1 doesn't use it (D-039):
 
 - Studio can't change behaviour properties (so no hold-tap timing), macros or combos. Those are most of what BK's two problems touch (D-025).
