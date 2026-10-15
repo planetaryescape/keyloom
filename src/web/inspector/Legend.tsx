@@ -15,7 +15,7 @@ function entries(firmware: string): Entry[] {
     { tone: "modifier", tap: "⇧", name: "Modifier", note: "Held while pressed" },
     { tone: "holdTap", tap: "S", hold: "⌥", name: "Hold-tap", note: "Tap and hold do different things" },
     { tone: "layer", tap: "NAV", hold: "hold", name: "Layer", note: "Switches layer" },
-    { tone: "macro", tap: "M0", hold: "macro", name: "Macro", note: "Runs a sequence of keys" },
+    { tone: "macro", tap: "M0", name: "Macro", note: "Runs a sequence of keys" },
     {
       tone: "native",
       tap: "Boot",
