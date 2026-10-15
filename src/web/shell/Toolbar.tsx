@@ -25,6 +25,8 @@ interface Props {
   onAdvanced: (value: boolean) => void;
 }
 
+const WHY_ID = "toolbar-why";
+
 // An undo is itself a revision, so undoing it puts the change back: with the head an undo, the
 // Undo button is off and Redo is on, and the other way round otherwise. Both call the same route.
 export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOpen, onHistory, combosShown, onCombos, libraryOpen, onLibrary, settingsOpen, onSettings, onShortcuts, advanced, onAdvanced }: Props) {
@@ -36,26 +38,31 @@ export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOp
     <div className="toolbar">
       <div className="toolbar-tabs">{tabs}</div>
       <div className="toolbar-actions">
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Undo"
-          disabled={!canUndo || busy || blockedReason !== null}
-          title={canUndo ? reason(`Undo: ${revision.summary} (⌘Z)`) : "Nothing to undo"}
-          onClick={onUndo}
-        >
-          {icon(Undo2)}
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Redo"
-          disabled={!canRedo || busy || blockedReason !== null}
-          title={canRedo ? reason("Put the undone change back (⇧⌘Z)") : "Nothing to redo"}
-          onClick={onUndo}
-        >
-          {icon(Redo2)}
-        </button>
+        <div className="toolbar-undo">
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Undo"
+            aria-describedby={blockedReason === null ? undefined : WHY_ID}
+            disabled={!canUndo || busy || blockedReason !== null}
+            title={canUndo ? reason(`Undo: ${revision.summary} (⌘Z)`) : "Nothing to undo"}
+            onClick={onUndo}
+          >
+            {icon(Undo2)}
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Redo"
+            aria-describedby={blockedReason === null ? undefined : WHY_ID}
+            disabled={!canRedo || busy || blockedReason !== null}
+            title={canRedo ? reason("Put the undone change back (⇧⌘Z)") : "Nothing to redo"}
+            onClick={onUndo}
+          >
+            {icon(Redo2)}
+          </button>
+          {blockedReason === null ? null : <p id={WHY_ID} className="toolbar-why" role="status">{blockedReason}</p>}
+        </div>
         <button type="button" className="toggle-button toggle-icon" aria-pressed={historyOpen} aria-label="History" onClick={onHistory} title="Every revision of this layout, with undo to any of them and flash">
           <History size={14} aria-hidden="true" />
           <span>History</span>
@@ -79,7 +86,6 @@ export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOp
           <CircleHelp size={16} aria-hidden="true" />
         </button>
       </div>
-      {blockedReason === null ? null : <p className="toolbar-why" role="status">{blockedReason}</p>}
     </div>
   );
 }
