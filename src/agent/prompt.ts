@@ -25,6 +25,7 @@ export function boardContext(board: Board): string {
     `${d.keyCount} keys. Left hand positions: ${d.hands.left.join(",")}. Right hand positions: ${d.hands.right.join(",")}.`,
     `Rows by position:\n${rows.join("\n")}`,
     `Finger per position:\n${fingerSummary(d)}`,
+    `Mirror pairs, left position and the right position at the same place on the other half: ${Object.entries(d.mirror).map(([l, r]) => `${l}<->${r}`).join(", ")}.`,
   ];
   if (board.skill) parts.push(`## Board notes\n${board.skill.trim()}`);
   return parts.join("\n\n");
@@ -69,11 +70,25 @@ export function assembleSystemPrompt(board: Board, document: Layout, priorities:
   return [system.trim(), boardContext(board), firmwareCapabilities(document.firmware), prioritiesContext(priorities, document)].join("\n\n");
 }
 
-/** "Selected: layer-0 positions 29, 30, 31 (A, S/⌥, D)": each user message carries the selection made when it was sent (D-012). */
+/**
+ * "Selected on Layer 0 (layer id layer-0): key 30 (position 29) S/⌥; key 31 (position 30) D": each user
+ * message carries the selection made when it was sent (D-012). Both numbers are given because BK
+ * talks in key numbers and ops take positions; the header ends at the first blank line.
+ */
 export function userMessageText(text: string, selection: Selection | undefined, document: Layout): string {
   if (!selection) return text;
   const layer = document.layers.find((l) => l.id === selection.layerId);
   const ctx = { layers: document.layers, macros: document.macros };
-  const names = layer ? selection.positions.map((p) => (layer.bindings[p] ? bindingLabel(layer.bindings[p], ctx) : "?")).join(", ") : "";
-  return `Selected: ${selection.layerId} positions ${selection.positions.join(", ")}${names ? ` (${names})` : ""}\n\n${text}`;
+  const keys = selection.positions.map((p) => {
+    const binding = layer?.bindings[p];
+    return `key ${p + 1} (position ${p}) ${binding ? bindingLabel(binding, ctx) : "?"}`;
+  });
+  return `Selected on ${layer?.name ?? selection.layerId} (layer id ${selection.layerId}): ${keys.join("; ")}\n\n${text}`;
+}
+
+/** What BK typed, without the selection header `userMessageText` put in front of it. */
+export function typedText(stored: string): string {
+  if (!stored.startsWith("Selected")) return stored;
+  const end = stored.indexOf("\n\n");
+  return end < 0 ? stored : stored.slice(end + 2);
 }

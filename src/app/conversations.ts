@@ -2,7 +2,7 @@
 import { type AgentModel, type ModelMessage } from "../agent/model.ts";
 import { classifyModelError } from "../agent/anthropic-model.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
-import { userMessageText } from "../agent/prompt.ts";
+import { typedText, userMessageText } from "../agent/prompt.ts";
 import type { Usage } from "../agent/model.ts";
 import {
   type ConversationRow, type Selection, findConversation, insertConversation, insertMessage, listConversations, listMessages,
@@ -153,7 +153,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
     try {
       outcome = await runAgentTurn({
         model,
-        ports: createAgentPorts(app, view.layout.id, conversation.id, [userMessage.id]),
+        ports: createAgentPorts(app, view.layout.id, conversation.id, [userMessage.id], selection),
         history,
         ...(input.maxIterations === undefined ? {} : { maxIterations: input.maxIterations }),
         ...(input.signal ? { signal: input.signal } : {}),
@@ -231,7 +231,9 @@ export function showConversation(app: App, id: string): ConversationView {
   if (!conversation) throw new NotFoundError(`no conversation "${id}"`);
   const messages: DisplayMessage[] = [];
   for (const m of listMessages(app.db, id)) {
-    const text = m.content.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("");
+    const stored = m.content.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("");
+    // The selection travels beside the message, so the bubble shows what BK typed, not the header the model was given.
+    const text = m.role === "user" && m.selection ? typedText(stored) : stored;
     const toolCalls = m.content.flatMap((b) => (b.type === "tool_use" && typeof b.name === "string" ? [b.name] : []));
     if (text === "" && toolCalls.length === 0) continue;
     messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt });

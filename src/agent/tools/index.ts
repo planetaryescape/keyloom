@@ -4,6 +4,7 @@ import type { TurnRecorder } from "../recorder.ts";
 import { analyseChangeTool } from "./analyse-change.ts";
 import { findFunctionTool } from "./find-function.ts";
 import { getLayoutTool } from "./get-layout.ts";
+import { mirrorKeysTool } from "./mirror-keys.ts";
 import { proposeChangesTool } from "./propose-changes.ts";
 import { recordPriorityTool } from "./record-priority.ts";
 
@@ -18,5 +19,6 @@ export function createTools(ports: AgentPorts, recorder: TurnRecorder, events: T
     analyseChangeTool(ports, recorder),
     recordPriorityTool(ports, events.onPriority),
     proposeChangesTool(ports, recorder, events.onProposal),
+    mirrorKeysTool(ports),
   ];
 }

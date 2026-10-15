@@ -4,6 +4,7 @@ import type { AgentPorts, PriorityFact, Proposal, ProposalResult } from "../agen
 import type { DecisionRow } from "../persistence/decisions.ts";
 import { newId } from "../persistence/ids.ts";
 import type { ValidationResult } from "../validation/result.ts";
+import type { SelectionScope } from "../validation/selection-rules.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 import { checkChange, proposeChange } from "./changes.ts";
 import type { App } from "./context.ts";
@@ -15,14 +16,18 @@ export const toPriorityFact = (d: DecisionRow): PriorityFact => ({
   id: d.id, priorityKind: d.priorityKind ?? "pinned", statement: d.goal, reason: d.reason, subject: d.subject,
 });
 
-/** `sourceMessageIds` are BK's messages this turn answers: the link back from a priority to the words it came from (08). */
-export function createAgentPorts(app: App, layoutId: string, conversationId: string, sourceMessageIds: string[] = []): AgentPorts {
+/**
+ * `sourceMessageIds` are BK's messages this turn answers: the link back from a priority to the words it came from (08).
+ * `selection` is what he had selected when he sent the message, so a proposal that strays from it is warned about (07).
+ */
+export function createAgentPorts(app: App, layoutId: string, conversationId: string, sourceMessageIds: string[] = [], selection?: SelectionScope): AgentPorts {
+  const scope = selection ? { selection } : {};
   return {
     snapshot() {
       const view = getLayout(app, layoutId);
       return { layoutId: view.layout.id, layoutName: view.layout.name, revisionId: view.revision.id, document: view.document, board: view.board };
     },
-    check: (ops) => checkChange(app, layoutId, { ops }),
+    check: (ops) => checkChange(app, layoutId, { ops, ...scope }),
     priorities: () => layoutPriorities(app, layoutId).map(toPriorityFact),
     recordPriority(input) {
       const { decision, created } = recordPriority(app, layoutId, { ...input, conversationId, sourceMessageIds });
@@ -32,11 +37,11 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
       // One group for the alternatives of a call, so applying one supersedes the rest.
       const proposalGroup = newId("pg");
       return alternatives.map((alt) => {
-        const validation = checkChange(app, layoutId, { ops: alt.ops });
+        const validation = checkChange(app, layoutId, { ops: alt.ops, ...scope });
         if (!validation.ok) return { title: alt.title, changeSetId: null, validation };
         try {
           const cs = proposeChange(app, layoutId, {
-            ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, conversationId, proposalGroup,
+            ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, conversationId, proposalGroup, ...scope,
           });
           return { title: alt.title, changeSetId: cs.id, validation: cs.validation };
         } catch (err) {

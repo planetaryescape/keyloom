@@ -11,6 +11,7 @@ import { type RevisionRow, findRevision } from "../persistence/layouts.ts";
 import { appendRevision } from "../persistence/revisions.ts";
 import { transact } from "../persistence/transaction.ts";
 import { type ValidationResult, ValidationResultSchema } from "../validation/result.ts";
+import type { SelectionScope } from "../validation/selection-rules.ts";
 import { type Evaluation, evaluate } from "../validation/validate.ts";
 import type { App } from "./context.ts";
 import { pinnedFor } from "./decisions.ts";
@@ -44,7 +45,7 @@ const staleMessage = (baseRevisionId: string, conflicts: StaleConflict[]) =>
  * Validates `ops` against the head. A stale base is a `stale_base` error here (07 lists it as one),
  * but apply throws it as a StaleBaseError instead.
  */
-export function checkChange(app: App, ref: string, input: { baseRevisionId?: string; ops: ChangeOp[] }): ValidationResult {
+export function checkChange(app: App, ref: string, input: { baseRevisionId?: string; ops: ChangeOp[]; selection?: SelectionScope }): ValidationResult {
   const view = getLayout(app, ref);
   if (input.baseRevisionId !== undefined) {
     const conflicts = conflictsWithHead(app, view, input.baseRevisionId, input.ops);
@@ -54,14 +55,14 @@ export function checkChange(app: App, ref: string, input: { baseRevisionId?: str
       return { ok: false, errors: [error], warnings: [], diff: NO_DIFF };
     }
   }
-  return evaluate(view.board.definition, view.document, input.ops, { pinned: pinnedFor(app, view.layout.id) }).result;
+  return evaluate(view.board.definition, view.document, input.ops, { pinned: pinnedFor(app, view.layout.id), ...(input.selection ? { selection: input.selection } : {}) }).result;
 }
 
 /** Re-validates against the head and returns the document to save; throws unless the ops are valid and not stale. */
-function resolveAgainstHead(app: App, view: LayoutView, baseRevisionId: string, ops: ChangeOp[]): { result: ValidationResult; after: Layout } {
+function resolveAgainstHead(app: App, view: LayoutView, baseRevisionId: string, ops: ChangeOp[], selection?: SelectionScope): { result: ValidationResult; after: Layout } {
   const conflicts = conflictsWithHead(app, view, baseRevisionId, ops);
   if (conflicts.length > 0) throw new StaleBaseError(staleMessage(baseRevisionId, conflicts), conflicts.map((c) => c.label));
-  const evaluation: Evaluation = evaluate(view.board.definition, view.document, ops, { pinned: pinnedFor(app, view.layout.id) });
+  const evaluation: Evaluation = evaluate(view.board.definition, view.document, ops, { pinned: pinnedFor(app, view.layout.id), ...(selection ? { selection } : {}) });
   if (!evaluation.result.ok || !evaluation.after) {
     const { errors } = evaluation.result;
     throw new ValidationFailedError(`${errors.length} validation error${errors.length === 1 ? "" : "s"}: ${errors[0]?.message ?? "invalid"}`, evaluation.result);
@@ -74,7 +75,7 @@ const requireText = (value: string, what: string) => {
 };
 
 /** What an agent proposal carries beyond the ops: a card heading, trade-offs, and the conversation and alternatives group it belongs to. */
-export type ProposalMeta = { title?: string; tradeoffs?: Tradeoffs; conversationId?: string; proposalGroup?: string };
+export type ProposalMeta = { title?: string; tradeoffs?: Tradeoffs; conversationId?: string; proposalGroup?: string; selection?: SelectionScope };
 
 /** Saves a valid change set against the current head without applying it. Invalid ops are refused, not stored. */
 export function proposeChange(
@@ -85,7 +86,7 @@ export function proposeChange(
   requireText(input.explanation, "the explanation");
   return transact(app.db, () => {
     const view = getLayout(app, ref);
-    const { result } = resolveAgainstHead(app, view, view.revision.id, input.ops);
+    const { result } = resolveAgainstHead(app, view, view.revision.id, input.ops, input.selection);
     return toView(insertChangeSet(app.db, {
       layoutId: view.layout.id, baseRevisionId: view.revision.id, source: input.source, ops: input.ops, explanation: input.explanation,
       validation: result, status: "proposed",

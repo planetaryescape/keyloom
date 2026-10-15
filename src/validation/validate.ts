@@ -9,6 +9,7 @@ import type { Issue, ValidationResult } from "./result.ts";
 import { type PinnedPriority, largeRelearn, movedPinned } from "./priority-rules.ts";
 import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
 import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex } from "./rules.ts";
+import { type SelectionScope, outsideSelection } from "./selection-rules.ts";
 
 const NO_DIFF: ValidationResult["diff"] = { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] };
 
@@ -33,7 +34,7 @@ function changedSlots(before: Layout, after: Layout): Slot[] {
 export type Evaluation = { result: ValidationResult; after: Layout | null };
 
 /** What the layout alone can't tell the validator: priorities BK has stated (08). The browser's own check passes none. */
-export type EvaluationContext = { pinned?: readonly PinnedPriority[] };
+export type EvaluationContext = { pinned?: readonly PinnedPriority[]; selection?: SelectionScope };
 
 export const validate = (board: BoardDefinition, before: Layout, ops: readonly ChangeOp[], context: EvaluationContext = {}): ValidationResult =>
   evaluate(board, before, ops, context).result;
@@ -81,6 +82,7 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   const afterHomes = functionHomes(after, reachableLayers(after));
   const relearnCount = relearned(beforeHomes, afterHomes);
   warnings.push(...movedPinned(before, changed, beforeHomes, afterHomes, context.pinned ?? []), ...largeRelearn(relearnCount));
+  if (context.selection) warnings.push(...outsideSelection(before, changed, context.selection));
 
   return {
     result: {
