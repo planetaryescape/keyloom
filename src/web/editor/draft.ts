@@ -177,7 +177,7 @@ export function switchKind(draft: Draft, kind: Binding["kind"]): Draft {
 
 /** Why the draft can't be turned into a binding yet, in words for the person; null when it can. */
 export function incompleteReason(draft: Draft, layout: Layout): string | null {
-  if (isDance(draft) && draft.danceId === null) return "Pick what a tap does.";
+  if (isDance(draft) && (draft.danceId === null || !["key", "holdTap", "modifier", "layer", "macro"].includes(draft.kind))) return "Pick what a tap does.";
   switch (draft.kind) {
     case "key":
       return draft.key.code === null ? "Pick a key." : null;

@@ -534,3 +534,223 @@
   background: var(--color-text);
   color: var(--color-page);
 }
+
+/* The Macro tab: modifiers and a search that stays open, typed text, the steps, then Done. */
+.macro-pane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-1);
+}
+
+.macro-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.macro-add .picker-search {
+  min-width: 140px;
+  flex: 1;
+}
+
+.macro-mods,
+.macro-step-mods {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.macro-mods .toggle,
+.macro-step-mods .toggle {
+  min-width: 32px;
+  padding: 0 var(--space-1);
+}
+
+.macro-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: var(--space-1);
+}
+
+.macro-keys .picker-tile[aria-selected="true"] {
+  border-color: var(--color-focus);
+  background: var(--color-surface);
+  color: inherit;
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.macro-text {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.macro-text label,
+.macro-name {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.macro-text-label,
+.macro-name > span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.macro-steps {
+  display: flex;
+  max-height: 220px;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.macro-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.macro-step-n {
+  width: 1.5em;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.macro-step-what {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-weight: var(--weight-semibold);
+}
+
+.macro-wait {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.macro-wait input {
+  width: 4.5em;
+  min-height: 32px;
+  padding: 0 var(--space-1);
+  text-align: right;
+}
+
+.macro-step-actions {
+  display: flex;
+  margin-left: auto;
+}
+
+.macro-summary {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.macro-secret {
+  margin: 0;
+}
+
+.macro-foot,
+.macro-ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.macro-ask {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+
+.macro-ask p {
+  margin: 0 0 var(--space-2);
+}
+
+.macro-library h4 {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.macro-library ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.macro-library-item {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.macro-library-item:hover {
+  border-color: var(--color-border-strong);
+}
+
+/* A tap dance's timing sentence, with its term editable in place. */
+.dance-timing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dance-term {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dance-term input {
+  width: 5em;
+  min-height: 32px;
+  padding: 0 var(--space-1);
+  text-align: right;
+}
+
+.dance-shared {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.dance-shared input {
+  margin-top: var(--space-1);
+}

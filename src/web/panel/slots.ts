@@ -24,6 +24,8 @@ export type TapPick =
   | { t: "key"; code: string }
   | { t: "layer"; action: LayerAction; layerId: string }
   | { t: "macro"; macroId: string }
+  /** An existing tap dance, to use on this key too. */
+  | { t: "dance"; danceId: string }
   | { t: "transparent" }
   | { t: "none" };
 
@@ -84,10 +86,14 @@ export function pickTap(draft: Draft, pick: TapPick): Draft {
       return { ...draft, kind: "layer", layerAction: pick.action, layerId: pick.layerId };
     case "macro":
       return { ...draft, kind: "macro", macroId: pick.macroId };
+    // Using a dance replaces the whole draft, which needs the layout: the panel does it.
+    case "dance":
+      return draft;
+    // A blank key has no tap to double, so the dance's other slots go with it.
     case "transparent":
-      return { ...draft, kind: "transparent" };
+      return { ...draft, kind: "transparent", doubleTap: null, tapThenHold: null };
     case "none":
-      return { ...draft, kind: "none" };
+      return { ...draft, kind: "none", doubleTap: null, tapThenHold: null };
   }
 }
 

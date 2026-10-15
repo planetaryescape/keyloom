@@ -66,7 +66,7 @@ interface ViewerProps {
 }
 
 type Editing = { layerId: string; position: number; focus: boolean };
-const CLEAN: DraftState = { binding: null, dirty: false };
+const CLEAN: DraftState = { binding: null, dirty: false, after: null };
 const NONE: ReadonlySet<number> = new Set();
 const ADVANCED_KEY = "keyloom.advanced";
 const SHOW_COMBOS_KEY = "keyloom.showCombos";
@@ -164,12 +164,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const shown = useMemo(() => {
     const base = preview?.layout ?? layout;
     if (editing === null || draft.binding === null) return base;
+    // A change that brings a tap dance or a macro with it is drawn from the layout it makes.
+    if (draft.after !== null) return draft.after;
     // The board shows both keys of the change: the edited one and every key a kept function was put on.
     return placements.reduce(
       (acc, placement) => withBinding(acc, placement.slot.layerId, placement.slot.position, placement.binding),
       withBinding(base, editing.layerId, editing.position, draft.binding),
     );
-  }, [layout, preview, editing, draft.binding, placements]);
+  }, [layout, preview, editing, draft.binding, draft.after, placements]);
   // Keys typed in a quick-assign run show on the board before they are applied, like a draft.
   const quickTargets = useMemo<Slot[]>(
     () => (chatSelection === null ? [] : chatSelection.positions.map((position) => ({ layerId: chatSelection.layerId, position }))),

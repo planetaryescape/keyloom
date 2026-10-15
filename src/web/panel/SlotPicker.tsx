@@ -1,5 +1,5 @@
 import { Search, X } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Binding, Layout } from "../../layout/schema.ts";
 import type { LayerAction } from "../editor/draft.ts";
 import { neighbour, type Direction } from "../keyboard/navigate.ts";
@@ -26,7 +26,11 @@ interface Props {
   onPick: (pick: TapPick) => void;
   /** A whole binding read from the Any field. */
   onUseBinding: (binding: Binding) => void;
+  /** The Macro tab's builder, which takes the place of the search and the tiles on that tab. */
+  macroPane?: ReactNode;
 }
+
+const SLOT_TITLE: Record<SlotName, string> = { tap: "When tapped", hold: "When held", doubleTap: "When double-tapped", tapThenHold: "When tapped, then held" };
 
 const ARROWS: Record<string, Direction> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
 
@@ -41,7 +45,7 @@ const LAYER_ACTIONS: readonly { value: LayerAction; label: string; hint: string 
 // search box and the arrow keys move a cursor through the tiles (the ARIA combobox pattern over a
 // listbox that doesn't pop up); Enter takes the tile under the cursor.
 export function SlotPicker({
-  slot, tab, onTab, layout, layerId, keysOnly, advanced, selectedIds, initialLayerAction, autoFocus, token, layoutRef, position, onPick, onUseBinding,
+  slot, tab, onTab, layout, layerId, keysOnly, advanced, selectedIds, initialLayerAction, autoFocus, token, layoutRef, position, onPick, onUseBinding, macroPane,
 }: Props) {
   const id = useId();
   const [query, setQuery] = useState("");
@@ -119,12 +123,13 @@ export function SlotPicker({
     if (!move(direction) && sideways) setCursor((current) => Math.min(flat.length - 1, Math.max(0, current + (direction === "right" ? 1 : -1))));
   }
 
-  const title = slot === "hold" ? "When held" : "When tapped";
+  const title = SLOT_TITLE[slot];
   const layersShown = (tab === "layers" || searching) && tabs.includes("layers");
+  const building = tab === "macro" && macroPane !== undefined;
 
   return (
     <div className="picker" data-slot={slot}>
-      <label className="picker-search">
+      <label className="picker-search" hidden={building}>
         <span className="sr-only">Search keys for {title.toLowerCase()}</span>
         <Search size={16} aria-hidden="true" />
         <input
@@ -170,11 +175,13 @@ export function SlotPicker({
         ))}
       </div>
 
-      {tab === "any" && !searching ? (
+      {building ? (
+        macroPane
+      ) : tab === "any" && !searching ? (
         <AnyField token={token} layoutRef={layoutRef} layout={layout} firmware={layout.firmware} position={position} autoFocus onUse={onUseBinding} />
       ) : (
         <>
-          {layersShown && slot === "tap" ? (
+          {layersShown && slot !== "hold" ? (
             <div className="layer-actions" role="radiogroup" aria-label="What the layer key does">
               {LAYER_ACTIONS.map((action) => (
                 <button
@@ -222,7 +229,7 @@ export function SlotPicker({
             ))}
             {sections.length === 0 ? (
               <p className="picker-empty">
-                {searching ? <>No key matches &ldquo;{query}&rdquo;. Try its name, such as &ldquo;volume&rdquo;, or open the Any tab to type a firmware keycode.</> : tab === "macro" ? "This layout has no macros yet. Macros are created from the CLI for now." : "Nothing here."}
+                {searching ? <>No key matches &ldquo;{query}&rdquo;. Try its name, such as &ldquo;volume&rdquo;, or open the Any tab to type a firmware keycode.</> : tab === "dance" ? "This layout has no tap dances yet. Fill When double-tapped on a key to make one." : "Nothing here."}
               </p>
             ) : null}
           </div>

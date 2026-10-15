@@ -2,11 +2,12 @@ import { ArrowRight, LoaderCircle, Plus, TriangleAlert, X } from "lucide-react";
 import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { describeKey, modsWords } from "../../layout/describe.ts";
 import { bindingLegend } from "../../layout/legend.ts";
-import type { Binding, HoldTapProfile, Layout, Mod } from "../../layout/schema.ts";
+import { deepEqual } from "../../layout/equal.ts";
+import type { Binding, HoldTapProfile, Layout, Macro, Mod, SlotAction } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import {
-  bindingFromDraft, bindingSummary, changeSummary, draftFromBinding, incompleteReason, keyWords, sameBinding, withBinding, type Draft,
+  bindingFromDraft, bindingSummary, changeSummary, draftFromBinding, incompleteReason, isDance, keyWords, type Draft,
 } from "../editor/draft.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { functionName } from "../editor/function-label.ts";
@@ -15,14 +16,19 @@ import { ModifierToggles } from "../editor/ModifierToggles.tsx";
 import { ProfileTuner } from "../editor/ProfileTuner.tsx";
 import { usersOf } from "../editor/tuning.ts";
 import {
-  type LostFunction, type Placement, canDrop, dropReason, editorOps, keyName, lostFunctionsIn, placeableBinding, splitLost,
+  type LostFunction, type Placement, canDrop, dropReason, keyName, lostFunctionsIn, placeableBinding, splitLost,
 } from "../editor/lost-functions.ts";
 import { useOpsCheck } from "../editor/useCheck.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { advancedLegend } from "../keyboard/advanced-legend.ts";
 import { Cap } from "../keyboard/Cap.tsx";
 import { distinguishingWords, profileWords } from "../../layout/option-words.ts";
-import { openingTab, type PickerTab, type SlotName } from "./picker-items.ts";
+import { keyChange, macroUsers } from "./change-ops.ts";
+import {
+  canAddExtraSlot, canToggleSlotMods, clearExtraSlot, danceUsers, setExtraSlot, slotFromPick, slotMods, slotWords, toggleSlotMod, type ExtraSlot,
+} from "./dance.ts";
+import { MacroPane } from "./MacroPane.tsx";
+import { isExtraSlot, openingTab, type PickerTab, type SlotName } from "./picker-items.ts";
 import { SlotPicker } from "./SlotPicker.tsx";
 import {
   addHold, canAddHold, canToggleTapMods, clearHold, hasHold, keyForChar, modOfKey, pickHold, pickTap, profileFor, tapKind, tapMods, toggleHoldMod,
@@ -42,6 +48,8 @@ export interface DraftState {
   binding: Binding | null;
   /** True once anything has been touched, even if the draft is not complete. */
   dirty: boolean;
+  /** The layout once the change is applied, with the tap dance and macros it brings; the board draws the key from it. */
+  after: Layout | null;
 }
 
 export interface KeyPanelHandle {
@@ -130,19 +138,32 @@ export function KeyPanel(props: Props) {
   useImperativeHandle(handle, () => ({ apply: () => latest.current.apply(), closePicker: () => latest.current.closePicker() }), []);
 
   const draftBinding = draft === null ? null : bindingFromDraft(draft, layout);
-  const changed = draftBinding !== null && original !== undefined && !sameBinding(draftBinding, original);
   const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(initial);
-  const binding = changed ? draftBinding : null;
   const slot = useMemo(() => ({ layerId, position }), [layerId, position]);
   // Functions the person chose to let go of; each becomes a dropFunction op with a generated reason.
   const [drops, setDrops] = useState<ReadonlySet<string>>(new Set());
+  // What the draft stands for as a change: the key, and the tap dance and macros that come with it (D-086).
+  const planned = useMemo(
+    () => (draft === null || draftBinding === null || original === undefined ? null : keyChange({ layout, slot, draft, binding: draftBinding, original, placements, drops: new Map() })),
+    // draftBinding follows the draft, so the draft is what to watch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draft, layout, slot, original, placements],
+  );
+  const changed = planned !== null && planned.after !== null && !deepEqual(planned.after, layout);
+  const binding = changed && planned !== null ? planned.binding : null;
+  const after = changed && planned !== null ? planned.after : null;
   const replacedBy = useMemo(
-    () => (binding === null || layerIndex < 0 ? "" : (describeKey(withBinding(layout, layerId, position, binding), layerIndex, position)?.headline ?? "")),
-    [binding, layout, layerId, layerIndex, position],
+    () => (binding === null || after === null || layerIndex < 0 ? "" : (describeKey(after, layerIndex, position)?.headline ?? "")),
+    [binding, after, layerIndex, position],
   );
   const ops = useMemo(
-    () => (binding === null ? null : editorOps(slot, binding, placements, new Map([...drops].map((fn) => [fn, dropReason(replacedBy, layout, slot)])))),
-    [binding, slot, placements, drops, replacedBy, layout],
+    () =>
+      binding === null || draft === null || original === undefined || draftBinding === null
+        ? null
+        : keyChange({ layout, slot, draft, binding: draftBinding, original, placements, drops: new Map([...drops].map((fn) => [fn, dropReason(replacedBy, layout, slot)])) }).ops,
+    // The draft decides the binding; the reason text decides the drops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [binding, draft, slot, placements, drops, replacedBy, layout],
   );
   const check = useOpsCheck({ token, layoutRef, revisionId, ops });
   // The last answer's lost functions stay on screen while the next check runs, so the buttons don't flicker away.
@@ -161,12 +182,12 @@ export function KeyPanel(props: Props) {
     setStrandedNow(collateral);
   }, [check.state, slot, placements, layout]);
 
-  const bindingKey = binding === null ? "" : JSON.stringify(binding);
+  const changeKey = binding === null || planned === null ? "" : JSON.stringify(planned.ops);
   useEffect(() => {
-    onDraft({ binding, dirty });
-    // The key string stands for the binding, so a new object with the same content doesn't re-fire.
+    onDraft({ binding, dirty, after });
+    // The ops stand for the change, so a new object with the same content doesn't re-fire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bindingKey, dirty]);
+  }, [changeKey, dirty]);
 
   const current = useMemo(() => describeKey(layout, layerIndex, position), [layout, layerIndex, position]);
   const where = useMemo(() => (original === undefined ? [] : whereElse(layout, slot, original)), [layout, slot, original]);
@@ -189,9 +210,35 @@ export function KeyPanel(props: Props) {
     setPicker((open) => (open?.slot === slotName && tab === undefined ? null : { slot: slotName, tab: openingTab(slotName, tab ?? null) }));
   }
 
+  // A tap dance from the library, used on this key too. Changing it afterwards changes a copy unless "every key" is chosen.
+  function useDance(danceId: string) {
+    update(draftFromBinding({ kind: "tapDance", tapDanceId: danceId }, layout, layerId));
+    setPicker(null);
+    root.current?.focus({ preventScroll: true });
+  }
+
+  // A macro made in the picker is saved with the change, and the slot points at it.
+  function finishMacro(slotName: SlotName, macro: Macro) {
+    update((previous) => {
+      const withMacro = { ...previous, pendingMacros: [...previous.pendingMacros.filter((m) => m.id !== macro.id), macro] };
+      if (slotName === "tap") return pickTap(withMacro, { t: "macro", macroId: macro.id });
+      return isExtraSlot(slotName) ? setExtraSlot(withMacro, slotName as ExtraSlot, { kind: "macro", macroId: macro.id }, layout, slot) : previous;
+    });
+    setPicker(null);
+    root.current?.focus({ preventScroll: true });
+  }
+
   function pick(slotName: SlotName, choice: TapPick) {
+    if (choice.t === "dance") {
+      useDance(choice.danceId);
+      return;
+    }
     update((previous) => {
       if (slotName === "tap") return pickTap(previous, choice);
+      if (isExtraSlot(slotName)) {
+        const action = slotFromPick(choice);
+        return action === null ? previous : setExtraSlot(previous, slotName as ExtraSlot, action, layout, slot);
+      }
       if (choice.t === "layer") {
         const next = pickHold(previous, { t: "layer", layerId: choice.layerId });
         return profileTouched ? next : { ...next, profileId: profileFor(layout, "layer", homeRow) };
@@ -228,7 +275,7 @@ export function KeyPanel(props: Props) {
   if (draft === null || layer === undefined || original === undefined) return null;
 
   const incomplete = incompleteReason(draft, layout);
-  const summary = binding === null ? null : withChoices(changeSummary(layout, layerId, position, binding), layout, placements, drops);
+  const summary = binding === null ? null : withChoices(changeSummary(after ?? layout, layerId, position, binding), after ?? layout, placements, drops);
   const result = check.state.status === "done" ? check.state.result : null;
   const canApply = binding !== null && result !== null && result.ok && !applying;
   const warnings = result?.warnings.length ?? 0;
@@ -279,7 +326,8 @@ export function KeyPanel(props: Props) {
 
   const tap = tapKind(draft);
   const keysOnly = hasHold(draft);
-  const ctx = { layers: layout.layers, macros: layout.macros };
+  const drawn = after ?? layout;
+  const ctx = { layers: drawn.layers, macros: drawn.macros, tapDances: drawn.tapDances };
   const shownLegend = bindingLegend(binding ?? draftBinding ?? original, ctx);
   const shownTone = (binding ?? draftBinding ?? original).kind;
   const where2 = [layer.name, finger === undefined ? undefined : `${finger.replace("-", " ")} finger`].filter(Boolean).join(" · ");
@@ -294,7 +342,91 @@ export function KeyPanel(props: Props) {
   const selectedTap = new Set(selectedIdsFor("tap", draft));
   const selectedHold = new Set(selectedIdsFor("hold", draft));
   const shownBinding = binding ?? draftBinding;
-  const advancedText = advanced && shownBinding !== null ? advancedLegend(shownBinding, layout) : null;
+  const advancedText = advanced && shownBinding !== null ? advancedLegend(shownBinding, drawn) : null;
+
+  // The macro builder for the open slot, on the Macro tab only.
+  function macroPaneFor(slotName: SlotName) {
+    if (picker?.slot !== slotName || picker.tab !== "macro" || (slotName === "tap" && keysOnly)) return {};
+    const held = slotName === "tap" ? (draft?.kind === "macro" ? draft.macroId : null) : slotName === "doubleTap" ? macroIdOf(draft?.doubleTap) : macroIdOf(draft?.tapThenHold);
+    return {
+      macroPane: (
+        <MacroPane
+          layout={layout}
+          layerId={layerId}
+          position={position}
+          currentMacroId={held}
+          pending={draft?.pendingMacros ?? []}
+          autoFocus={focusPicker}
+          onDone={(macro) => finishMacro(slotName, macro)}
+          onUse={(macroId) => pick(slotName, { t: "macro", macroId })}
+        />
+      ),
+    };
+  }
+
+  // One of the tap dance's extra slots: a row when it is filled, an add button when it is not, and the picker and modifier toggles beside it.
+  function extraSlot(which: ExtraSlot, label: string) {
+    const action = draft?.[which] ?? null;
+    const open = picker?.slot === which;
+    return (
+      <>
+        {action === null && !open ? (
+          <button
+            type="button"
+            className="slot slot-add"
+            onClick={() => {
+              setFocusPicker(true);
+              setPicker({ slot: which, tab: "letters" });
+            }}
+          >
+            <Plus size={14} aria-hidden="true" />
+            {label}
+          </button>
+        ) : (
+          <SlotRow
+            label={label}
+            value={action === null ? "Choose" : slotWords(action, drawn)}
+            open={open}
+            onToggle={() => openPicker(which)}
+            onClear={() => {
+              update((previous) => clearExtraSlot(previous, which));
+              setPicker(null);
+            }}
+            clearLabel={`Clear ${label.toLowerCase()}`}
+          />
+        )}
+        {open ? (
+          <SlotPicker
+            slot={which}
+            tab={picker.tab}
+            onTab={(tab) => setPicker({ slot: which, tab })}
+            layout={layout}
+            layerId={layerId}
+            keysOnly={false}
+            advanced={advanced}
+            selectedIds={new Set(action === null ? [] : slotSelectedIds(action))}
+            initialLayerAction={action?.kind === "layer" ? action.action : "toggle"}
+            autoFocus={focusPicker}
+            token={token}
+            layoutRef={layoutRef}
+            position={position}
+            onPick={(choice) => pick(which, choice)}
+            onUseBinding={() => {}}
+            {...macroPaneFor(which)}
+          />
+        ) : null}
+        {action !== null && canToggleSlotMods(action) ? (
+          <Mods
+            legend={action.kind === "modifier" ? "Modifiers" : "Sent together with it"}
+            prompt="Add Shift, Ctrl, Alt or GUI"
+            mods={slotMods(action)}
+            hidden={picker !== null}
+            onToggle={(mod: Mod) => update((previous) => (previous[which] === null ? previous : { ...previous, [which]: toggleSlotMod(previous[which] as SlotAction, mod) }))}
+          />
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <section ref={root} tabIndex={-1} className="key-panel" aria-label={`Key ${position + 1}`} onKeyDown={onKeyDown}>
@@ -318,7 +450,7 @@ export function KeyPanel(props: Props) {
           {binding === null ? null : (
             <>
               <ArrowRight size={14} aria-hidden="true" />
-              <strong>{bindingSummary(binding, layout)}</strong>
+              <strong>{bindingSummary(binding, drawn)}</strong>
             </>
           )}
         </p>
@@ -352,6 +484,7 @@ export function KeyPanel(props: Props) {
                 setPicker(null);
                 root.current?.focus({ preventScroll: true });
               }}
+              {...macroPaneFor("tap")}
             />
           ) : null}
           {canToggleTapMods(draft) ? (
@@ -366,6 +499,12 @@ export function KeyPanel(props: Props) {
           {draft.kind === "native" && draft.native !== null ? (
             <p className="form-note">
               keyloom keeps this {draft.native.firmware.toUpperCase()} binding as written, <code>{draft.native.source}</code>. Picking something else replaces it.
+              {/^TD\(DANCE_\d+\)$/.test(draft.native.source) ? " It is a tap dance from an earlier import. Import your Oryx layout again and keyloom will read its taps so you can edit them here." : ""}
+            </p>
+          ) : null}
+          {draft.kind === "tapDance" ? (
+            <p className="form-note">
+              This tap dance has a slot the panel can&apos;t show yet, such as a hold that toggles a layer. It is left as it is; the chat or the CLI can change it, and picking something else here replaces it.
             </p>
           ) : null}
           {draft.kind === "transparent" ? <p className="form-note">{transparentNote(layout, layerId)}</p> : null}
@@ -432,9 +571,28 @@ export function KeyPanel(props: Props) {
               When held
             </button>
           ) : null}
+
+          {canAddExtraSlot(draft) ? (
+            <>
+              {extraSlot("doubleTap", "When double-tapped")}
+              {extraSlot("tapThenHold", "When tapped, then held")}
+            </>
+          ) : null}
         </div>
 
-        {hasHold(draft) ? (
+        {isDance(draft) ? (
+          <DanceTiming
+            term={draft.danceTermMs}
+            fallback={defaultTermMs(layout)}
+            hasHold={hasHold(draft)}
+            others={draft.danceId === null ? 0 : danceUsers(layout, draft.danceId, slot).length}
+            forAll={draft.danceForAll}
+            onTerm={(ms) => update((previous) => ({ ...previous, danceTermMs: ms }))}
+            onForAll={(value) => update((previous) => ({ ...previous, danceForAll: value }))}
+          />
+        ) : null}
+
+        {hasHold(draft) && !isDance(draft) ? (
           <Timing
             layout={layout}
             profile={profile}
@@ -737,6 +895,74 @@ function Timing({
         />
       ) : null}
       {tuning && savedHoldTap !== null ? tuner : null}
+    </section>
+  );
+}
+
+const macroIdOf = (action: SlotAction | null | undefined): string | null => (action?.kind === "macro" ? action.macroId : null);
+
+// The picker's selected tiles for a slot action.
+function slotSelectedIds(action: SlotAction): string[] {
+  switch (action.kind) {
+    case "key": return [`key-${action.code}`];
+    case "modifier": return action.mods.map((mod) => `key-${MODIFIER_KEY[mod]}`);
+    case "layer": return [`layer-${action.layerId}`];
+    case "macro": return [`macro-${action.macroId}`];
+  }
+}
+
+/** The tapping term the firmware uses when a dance sets none: the layout's own TAPPING_TERM, else 200 ms (ZMK has no global one). */
+function defaultTermMs(layout: Layout): number {
+  const setting = layout.settings.find((candidate) => candidate.firmware === layout.firmware && candidate.key === "TAPPING_TERM");
+  return typeof setting?.value === "number" ? setting.value : 200;
+}
+
+// A tap dance's feel in one sentence: it waits a term for the next tap, and the term can be set here.
+function DanceTiming({
+  term, fallback, hasHold, others, forAll, onTerm, onForAll,
+}: {
+  term: number | null;
+  fallback: number;
+  hasHold: boolean;
+  others: number;
+  forAll: boolean;
+  onTerm: (ms: number | null) => void;
+  onForAll: (value: boolean) => void;
+}) {
+  const id = useId();
+  const ms = term ?? fallback;
+  return (
+    <section className="dance-timing" aria-label="How the tap dance feels">
+      <p className="timing-sentence">
+        <span className="timing-label">Feels like</span>
+        <strong>A tap dance</strong>
+        <span className="muted">waits {ms} ms for the next tap{hasHold ? " and for a hold" : ""}</span>
+      </p>
+      <div className="dance-term">
+        <label htmlFor={id}>Tapping term</label>
+        <input
+          id={id}
+          type="number"
+          min={1}
+          step={10}
+          inputMode="numeric"
+          value={term ?? ""}
+          placeholder={String(fallback)}
+          onChange={(event) => {
+            const value = event.target.valueAsNumber;
+            onTerm(Number.isFinite(value) && value >= 1 ? Math.round(value) : null);
+          }}
+        />
+        <span className="muted">ms{term === null ? ", the keyboard's own" : ""}</span>
+      </div>
+      {others === 0 ? null : (
+        <label className="dance-shared">
+          <input type="checkbox" checked={forAll} onChange={(event) => onForAll(event.target.checked)} />
+          <span>
+            {others} other {others === 1 ? "key uses" : "keys use"} this tap dance. {forAll ? "Changing it for every key that uses it." : "Changing it for this key only."}
+          </span>
+        </label>
+      )}
     </section>
   );
 }

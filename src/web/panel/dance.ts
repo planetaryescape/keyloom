@@ -97,7 +97,7 @@ export function clearExtraSlot(draft: Draft, which: ExtraSlot): Draft {
 /** Whether the tap slot can start a dance: it holds a key, modifier, layer or macro. */
 export const canAddExtraSlot = (draft: Draft): boolean => tapSlotAction(draft) !== null;
 
-function slotWords(action: SlotAction, layout: Layout): string {
+export function slotWords(action: SlotAction, layout: Layout): string {
   switch (action.kind) {
     case "key": return keyWords(action.code, action.mods);
     case "modifier": return modsWords(sortMods(action.mods));

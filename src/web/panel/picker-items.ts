@@ -5,8 +5,11 @@ import { firmwareName, searchKeys, type PickerGroup } from "../editor/keysearch.
 import type { LayerAction } from "../editor/draft.ts";
 import { modOfKey, type TapPick } from "./slots.ts";
 
-export type PickerTab = "letters" | "punctuation" | "modifiers" | "layers" | "navigation" | "media" | "function" | "macro" | "other" | "any";
-export type SlotName = "tap" | "hold";
+export type PickerTab = "letters" | "punctuation" | "modifiers" | "layers" | "navigation" | "media" | "function" | "macro" | "dance" | "other" | "any";
+/** "doubleTap" and "tapThenHold" are the tap dance's extra slots (16); they take what a tap takes, bar the empty keys and Any. */
+export type SlotName = "tap" | "hold" | "doubleTap" | "tapThenHold";
+
+export const isExtraSlot = (slot: SlotName): boolean => slot === "doubleTap" || slot === "tapThenHold";
 
 export const TAB_TITLE: Readonly<Record<PickerTab, string>> = {
   letters: "Letters",
@@ -17,6 +20,7 @@ export const TAB_TITLE: Readonly<Record<PickerTab, string>> = {
   media: "Media",
   function: "Function",
   macro: "Macros",
+  dance: "Tap dances",
   other: "More",
   any: "Any",
 };
@@ -25,7 +29,10 @@ export const TAB_TITLE: Readonly<Record<PickerTab, string>> = {
 export function tabsFor(slot: SlotName, keysOnly: boolean): PickerTab[] {
   if (slot === "hold") return ["modifiers", "layers"];
   const keys: PickerTab[] = ["letters", "punctuation", "modifiers", "navigation", "media", "function", "other"];
-  return keysOnly ? keys : ["letters", "punctuation", "modifiers", "layers", "navigation", "media", "function", "macro", "other", "any"];
+  if (keysOnly) return keys;
+  // A dance can't be a slot of another dance, and Any reads a whole binding.
+  if (isExtraSlot(slot)) return ["letters", "punctuation", "modifiers", "layers", "navigation", "media", "function", "macro", "other"];
+  return ["letters", "punctuation", "modifiers", "layers", "navigation", "media", "function", "macro", "dance", "other", "any"];
 }
 
 /** The tab a slot opens on: a hold opens on Modifiers, the tap on the first. */
@@ -115,6 +122,16 @@ function macroSection(query: PickerQuery, text: string): PickerSection[] {
   return items.length === 0 ? [] : [{ id: "macros", title: "Macros", items }];
 }
 
+function danceSection(query: PickerQuery, text: string): PickerSection[] {
+  const items = query.layout.tapDances
+    .filter((dance) => text === "" || norm(dance.name).includes(text) || "tap dance".includes(text) || "double".includes(text))
+    .map((dance): PickerItem => {
+      const slots = [dance.hold ? "hold" : "", dance.doubleTap ? "double-tap" : "", dance.tapThenHold ? "tap, then hold" : ""].filter((word) => word !== "");
+      return { id: `dance-${dance.id}`, label: dance.name, ...(slots.length ? { detail: slots.join(", ") } : {}), pick: { t: "dance", danceId: dance.id } };
+    });
+  return items.length === 0 ? [] : [{ id: "dances", title: "Tap dances", items }];
+}
+
 const SPECIAL: readonly { words: readonly string[]; item: PickerItem }[] = [
   { words: ["transparent", "trans", "fall through", "blank"], item: { id: "special-transparent", label: "Transparent", detail: "Use the layer below", pick: { t: "transparent" } } },
   { words: ["none", "nothing", "disabled", "off"], item: { id: "special-none", label: "Nothing", detail: "Does nothing", pick: { t: "none" } } },
@@ -137,8 +154,9 @@ export function pickerSections(query: PickerQuery): PickerSection[] {
   const sections: PickerSection[] = [];
   if (searching || query.tab === "layers") sections.push(...(allowed.has("layers") ? layerSection(query, text) : []));
   if (searching || query.tab === "macro") sections.push(...(allowed.has("macro") ? macroSection(query, text) : []));
+  if (searching || query.tab === "dance") sections.push(...(allowed.has("dance") ? danceSection(query, text) : []));
   if (searching || query.tab === "other") sections.push(...(query.slot === "tap" && !query.keysOnly ? specialSection(text) : []));
-  if (searching || !["layers", "macro"].includes(query.tab)) sections.push(...keyItems(query, text));
+  if (searching || !["layers", "macro", "dance"].includes(query.tab)) sections.push(...keyItems(query, text));
   // A search lists keys first: the best match leads, so Enter after typing takes it.
-  return searching ? [...sections.filter((s) => !["layers", "macros", "special"].includes(s.id)), ...sections.filter((s) => ["layers", "macros", "special"].includes(s.id))] : sections;
+  return searching ? [...sections.filter((s) => !["layers", "macros", "dances", "special"].includes(s.id)), ...sections.filter((s) => ["layers", "macros", "dances", "special"].includes(s.id))] : sections;
 }
