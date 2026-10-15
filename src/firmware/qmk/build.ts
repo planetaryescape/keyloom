@@ -62,8 +62,10 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       const keymapDir = join(input.checkoutDir, rev.build.keymapsDir, input.source.keymapName);
       await writeSource(keymapDir, input.source, { clean: true });
       const id = `${idFor(rev.qmkTarget)}_${input.source.keymapName}`;
-      // Stale objects or a stale .bin from an earlier layout must not be able to pass for this build.
-      await rm(join(input.checkoutDir, ".build", `obj_${id}`), { recursive: true, force: true });
+      // A stale .bin from an earlier layout must not be able to pass for this build. Stale objects are
+      // removed inside the container below instead: deleting them from the host left Colima's sshfs
+      // mount with a cached view of the old directory, so QMK's mkdir -p skipped `src/` and the next
+      // build failed writing into it (seen 2026-10-15, second reva build in a row).
       for (const ext of ["bin", "elf", "hex"]) await rm(join(input.checkoutDir, ".build", `${id}.${ext}`), { force: true });
       await rm(join(input.checkoutDir, `${id}.bin`), { force: true });
 
@@ -74,7 +76,11 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       ];
       // Docker Desktop mounts an empty directory for a path it isn't allowed to share, and make then says only
       // "No rule to make target", which sends people hunting in the wrong place.
-      const visible = await run({ cmd: [...base, rev.build.image, "test", "-f", "Makefile"], log: input.log, timeoutMs: 5 * 60_000 });
+      const visible = await run({
+        cmd: [...base, rev.build.image, "sh", "-c", `test -f Makefile && rm -rf .build/obj_${id}`],
+        log: input.log,
+        timeoutMs: 5 * 60_000,
+      });
       if (visible.exitCode !== 0) {
         throw new BuildFailure(
           `Docker can't see ${input.checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`,

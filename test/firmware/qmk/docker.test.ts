@@ -18,6 +18,9 @@ const gated = process.env.KEYLOOM_DOCKER_TESTS === "1" ? describe : describe.ski
 // SHA-256 of what the pinned fork and image build from BK's unchanged Oryx source for revb (S5,
 // zsa_moonlander_revb_oryxs3.bin). Generated source that is equivalent must give the same bytes.
 const ORYX_REVB_SHA256 = "fcceb9fba425d4fe40ae4b53c541891edba6fe357c01f22af4b9310d3fa37e4d";
+// The same for reva, which BK's Moonlander is (S1: USB product 0x1969, read 2026-10-15). Built with the
+// S5 command from the unchanged fixture as keymap `oryxs3`; 67,268 bytes.
+const ORYX_REVA_SHA256 = "ccd90fdeda0a7f5e7c0017d1b5c8a9585fa2f08faeb341859ba05183d94a43fe";
 
 gated("a generated keymap built in Docker", () => {
   const TIMEOUT = 20 * 60_000;
@@ -41,6 +44,14 @@ gated("a generated keymap built in Docker", () => {
     const built = await build(layout, "revb");
     expect(dfuProblem(built.bytes, "3297:2003")).toBeUndefined();
     expect(new Bun.CryptoHasher("sha256").update(built.bytes).digest("hex")).toBe(ORYX_REVB_SHA256);
+  }, TIMEOUT);
+
+  test("BK's Oryx layout, round-tripped through keyloom, builds for reva to the same binary Oryx's source gives", async () => {
+    const board = await moonlander();
+    const { layout } = await importOryxSource(FIXTURE_DIR, board.definition);
+    const built = await build(layout, "reva");
+    expect(dfuProblem(built.bytes, "0483:df11")).toBeUndefined();
+    expect(new Bun.CryptoHasher("sha256").update(built.bytes).digest("hex")).toBe(ORYX_REVA_SHA256);
   }, TIMEOUT);
 
   test("an edited layout with a new macro, a layer-scoped combo, a combo timeout and a tapping-term override compiles for reva", async () => {
