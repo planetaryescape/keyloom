@@ -26,6 +26,7 @@ For each spike, record the command or request, the output (with private data rem
 | S18 | Does anything of MoErgo's (Layout Editor, support tools) break when the Glove80's USB serial no longer starts with `moergo.com:`? | The Glove80 marker (D-095) | [17](17-keyboard-sync.md) | Rung 12 |
 | S19 | With an OpenRouter key, does `option-option.eval.test.ts` pass through the Anthropic SDK with `baseURL` and `authToken`, and do the Tool Runner, fallback beta, `cache_control`, `usage.cost` and an out-of-credits error behave? | The OpenRouter provider (D-107) | [19](19-model-providers.md) | Rung 10 |
 | S20 | Through a loopback MCP server, does Codex receive `propose_changes`'s full schema, run the validate-and-retry loop, refuse to write files, and can a `permissions` profile stop it reading keyloom's database? What does a four-message conversation cost in plan usage? | The Codex provider (D-108, D-110) | [19](19-model-providers.md) | Rung 10 (Codex part) |
+| S21 | Can MoErgo's ZMK fork at `ce69e85` give each Glove80 key its own colour on each layer, the way the Moonlander's ledmap does? | Whether the Glove80 gets lighting (D-194, D-225) | [20](20-cross-board.md) | Rung 19 |
 
 ### S3 result (2026-10-15)
 
@@ -62,6 +63,10 @@ The combined `glove80.uf2` holds two images at the same addresses with different
 
 Yes. Flash `fl_01M5067Z2Y2JT3EDYD3JCY0NSC` copied keyloom's combined `glove80.uf2` (build `bld_01M4ZXEWMANN3V3H25Y28EC6JP`, BK's `42-key-map` keymap) to `GLV80RHBOOT` and then to the left half's boot drive with `keyloom flash --wait 15` (v0.10.1). Each bootloader took its own image and rebooted, both halves came back on USB as "Glove80 Right" and "Glove80 Left", and BK typed on the board: "typing works as you can see." An earlier attempt, `fl_01M5066BDXSVVD2CF3ZJT0JMN5`, failed with `EACCES` on the copy because the agent's sandbox blocked writes to `/Volumes`. A flash now explains that error, since macOS raises the same one for an app without Removable Volumes access.
 
+### S21 result (2026-10-15)
+
+No. At `ce69e85` the Glove80's underglow fills one buffer with one effect, and the only per-LED colours are fixed status LEDs on the left half, with a magenta layer indicator. A key's own colour on a layer exists only in the open community pull request `moergo-sc/zmk#36`, which is on another base and unmerged. The Glove80 therefore gets no lighting model; the board says why and the agent says it plainly. See [../research/spikes/S21.md](../research/spikes/S21.md).
+
 ### S19 result (2026-10-15)
 
 Yes, with one change. The existing adapter, pointed at `https://openrouter.ai/api` with `authToken`, passed `option-option.eval.test.ts` on `anthropic/claude-opus-5.5`: the Tool Runner, streaming, adaptive thinking, effort and `cache_control` all worked. OpenRouter rejects the fallback beta's `fallbacks: "default"` (400, expects an array), so the beta is sent to Anthropic only. `usage.cost` arrives on the closing `message_delta` and not in the SDK's final message, so the adapter reads it from the stream event. The out-of-credits path is tested against scripted responses only. See [../research/spikes/S19.md](../research/spikes/S19.md).
@@ -85,7 +90,7 @@ Yes for QMK, and no for DF0 on purpose. TD0 and TD1 import as tap dances (tap Hy
 | Q1 | Which licence? | **Answered 2026-10-15:** MIT |
 | Q2 | npm's `keyloom` is taken by an unrelated password CLI. Keep the name and ship only through GitHub releases and `install.sh`, or rename? | **Answered 2026-10-15:** keep keyloom, with no npm package in v1 (D-034) |
 | Q3 | Other users: bring their own Anthropic key only, or support other model providers? | **Answered 2026-10-15** by D-106: Anthropic, OpenRouter or Codex |
-| Q4 | Should keyloom carry a typing profile from one board to another ("adapt my Moonlander habits to the Glove80")? The assistant raised it; BK never took it up | Open; deferred, not rejected. Not in the roadmap |
+| Q4 | Should keyloom carry a typing profile from one board to another ("adapt my Moonlander habits to the Glove80")? The assistant raised it; BK never took it up | **Answered 2026-10-15** by D-220, narrowed to copying a named thing: BK: "it should be possible for me to say copy this thing from my other keyboard and apply it here". Rung 19 |
 | Q5 | Should keyloom ever learn from actual keystrokes (key-frequency stats), or only from what BK says? | Open; blueprint assumes only what BK says in v1 (D-035) |
 | Q6 | When should keyloom ask whether a change worked out? | Open; blueprint assumes once, when the layout is next opened at least 7 days after the flash ([08](08-decision-memory.md#tried-outweighs-hypothesised)) |
 | Q7 | Layouts in SQLite, or as files in a git repo BK can diff? | Open; blueprint assumes SQLite with `layout export` (D-032) |
@@ -105,3 +110,4 @@ Yes for QMK, and no for DF0 on purpose. TD0 and TD1 import as tap dances (tap Hy
 | Q21 | Should keyloom read API keys from the macOS Keychain itself, or keep taking them from the environment (`op run`, shell profile)? | Open; blueprint assumes the environment only, as today |
 | Q22 | OpenRouter for Claude models only, or other models too (which needs a Chat Completions adapter)? | Open; blueprint assumes Claude only (D-107) |
 | Q23 | Is Codex acceptable without token streaming and without a cost figure? | Open; blueprint assumes yes, showing whole messages and tokens only (D-108) |
+| Q24 | Would BK build the Glove80 against the community fork behind `moergo-sc/zmk#36` to get per-key, per-layer colours, given it is unmerged and on a different base from MoErgo's v26.09? | Open; blueprint assumes no, and the Glove80 has no lighting (D-225, S21) |

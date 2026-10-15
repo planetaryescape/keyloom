@@ -56,6 +56,9 @@ export const BoardDefinitionSchema = z.strictObject({
   importers: z.array(z.enum(IMPORTER_IDS)).min(1),
   // Per-key RGB (D-190): `ledPositions[i]` is the key position LED number i sits under. Absent means the board has no per-key lighting keyloom writes.
   lighting: z.strictObject({ ledPositions: z.array(z.number().int().nonnegative()).min(1) }).optional(),
+  // Why the board lacks something people ask for, in one sentence they can read (20#capabilities). The agent and the validator quote it
+  // instead of offering what the board cannot do. Only `lighting` for now: it is absent exactly when `lighting` above is.
+  limits: z.strictObject({ lighting: z.string().min(1) }).optional(),
   // Where this board differs from the firmware's own default for a setting on the settings page, such as mouse keys on a Moonlander.
   settingDefaults: z.record(z.string(), z.union([z.number(), z.boolean()])).optional(),
   // Display-only rotation; never affects positions or generation (04).

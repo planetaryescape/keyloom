@@ -130,7 +130,7 @@ export async function runAgentTurn(input: {
 
   const snapshot = ports.snapshot();
   const result = await model.run({
-    system: assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices()),
+    system: assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices(), ports.layouts().filter((l) => l.layoutId !== snapshot.layoutId)),
     messages: mergeConsecutiveUsers(input.history),
     tools,
     maxIterations: input.maxIterations ?? DEFAULT_MAX_ITERATIONS,

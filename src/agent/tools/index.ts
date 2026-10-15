@@ -4,6 +4,8 @@ import type { TurnRecorder } from "../recorder.ts";
 import { analyseChangeTool } from "./analyse-change.ts";
 import { findFunctionTool } from "./find-function.ts";
 import { getLayoutTool } from "./get-layout.ts";
+import { listLayoutsTool } from "./list-layouts.ts";
+import { mapKeysTool } from "./map-keys.ts";
 import { mirrorKeysTool } from "./mirror-keys.ts";
 import { proposeChangesTool } from "./propose-changes.ts";
 import { recordPriorityTool } from "./record-priority.ts";
@@ -14,6 +16,7 @@ export type ToolEvents = { onProposal: (p: ProposalResult) => void; onPriority: 
 
 export function createTools(ports: AgentPorts, recorder: TurnRecorder, events: ToolEvents): ModelTool[] {
   return [
+    listLayoutsTool(ports),
     getLayoutTool(ports),
     findFunctionTool(ports),
     analyseChangeTool(ports, recorder),
@@ -21,5 +24,6 @@ export function createTools(ports: AgentPorts, recorder: TurnRecorder, events: T
     updateDecisionOutcomeTool(ports),
     proposeChangesTool(ports, recorder, events.onProposal),
     mirrorKeysTool(ports),
+    mapKeysTool(ports),
   ];
 }

@@ -188,6 +188,9 @@
     "70": 73,
     "71": 72
   },
+  "limits": {
+    "lighting": "its lights are ZMK underglow, which shows one effect across all 80 LEDs, and MoErgo's firmware (v26.09) has no way to give a key its own colour on a layer"
+  },
   "importers": [
     "zmk-layout-editor-keymap"
   ]

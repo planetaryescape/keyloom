@@ -55,6 +55,10 @@ export type OutcomeInput = { decisionId: string; status: "tried_helpful" | "trie
 
 export interface AgentPorts {
   snapshot(): LayoutSnapshot;
+  /** The head of every layout keyloom holds, this conversation's included. Read-only: a proposal can only target `snapshot()` (D-014, D-220). */
+  layouts(): LayoutSnapshot[];
+  /** The head of another layout by id or name. Throws a readable Error when no layout is called that, or the name is ambiguous. */
+  layout(ref: string): LayoutSnapshot;
   /** Validates against the head without saving anything. */
   check(ops: ChangeOp[]): ValidationResult;
   /** Validates each alternative and stores the valid ones as proposed change sets sharing one group. */

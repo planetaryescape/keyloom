@@ -29,11 +29,13 @@ Each tool is a `betaZodTool` in `src/agent/tools/`, one file per tool.
 
 | Tool | Input | Returns | Why it exists |
 |---|---|---|---|
-| `get_layout` | `{ layers?: string[] }` | The head revision as one text grid per layer (labels placed by the board's physical rows, with a legend), plus the IR JSON for the requested layers | The grid is how the model reasons about position. The JSON is what it edits against |
+| `list_layouts` | `{}` | Every layout: id, name, board, firmware, layers, and what its board can and cannot do ([20](20-cross-board.md)) | So the agent looks at BK's other keyboards before asking him for them (D-220) |
+| `get_layout` | `{ layout?: string, layers?: string[] }` | The head revision as one text grid per layer (labels placed by the board's physical rows, with a legend), plus the IR JSON for the requested layers | The grid is how the model reasons about position. The JSON is what it edits against |
 | `find_function` | `{ function: string }` | Every position and layer producing that function, and how each layer is reached | Answers "where is Option now?" deterministically, not by reading grids |
 | `analyse_change` | `{ ops: ChangeOp[] }` | The validator's result for those ops against head ([07](07-change-validation.md)), without saving anything | Lets the agent check an idea before proposing it |
 | `propose_changes` | `{ alternatives: Proposal[] }` (1–3) | For each alternative: its change set ID and validation result | The only way a proposal reaches BK. Invalid alternatives come back with errors so the agent can fix them |
 | `mirror_keys` | `{ positions: number[], layer: string }` | For each position, the key at its mirror position, the binding this position should hold to match it (its own letter, the right hand's modifiers, a mirrored ZMK profile where the original lists the other hand's keys), and ops covering exactly the keys that change, validated | "The same as the other hand, mirrored" without the model counting positions or guessing hands (D-060) |
+| `map_keys` | `{ from, fromLayer?, toLayer?, strategy?, positions?, carry?, comboIds?, minConfidence? }` | Which key of another layout is the same key here, with a reason and confidence, the keys with no counterpart, and with `carry` checked ops that copy colours, behaviours or combos | Matching keys across boards that differ in size and shape, which a model gets plausibly wrong (D-221) |
 | `record_priority` | `{ subject, priorityKind, statement, reason? }` | The new priority's ID | Captures "keep Backspace where it is" or "I barely use Caps Lock" as a decision of kind `priority` (D-021). It shows in the chat as a chip BK can remove |
 | `update_decision_outcome` | `{ decisionId, status: "tried_helpful" \| "tried_unhelpful", note }` | A line confirming it | Records "that fixed it" or "that feels slow" against an earlier decision, in BK's words (D-018). It refuses a priority and a decision that no longer applies (D-055) |
 

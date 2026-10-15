@@ -1,6 +1,7 @@
 // The rung 2 error rules (07#errors). Each takes a whole document so the same rule can run on
 // the layout before and after a change; validate.ts reports only what the change made worse.
 // Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
+import { lightingRefusal } from "../boards/capabilities.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import type { Slot } from "../layout/change.ts";
@@ -192,7 +193,7 @@ export function lightingSupport(board: BoardDefinition, doc: Layout): Issue[] {
     if (layer.lighting === undefined) continue;
     if (board.lighting === undefined) {
       out.push(issue("lighting_unsupported", `layer "${layer.id}" has lighting, but ${board.id} has no per-key RGB keyloom writes`,
-        `${layer.name} has LED colours, but ${board.name} has no per-key lighting keyloom can set.`));
+        `${layer.name} has LED colours. ${lightingRefusal(board)}`));
       continue;
     }
     const pastTheEnd = Object.keys(layer.lighting.keys ?? {}).filter((p) => Number(p) >= board.keyCount);

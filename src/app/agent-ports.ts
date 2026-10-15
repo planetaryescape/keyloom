@@ -1,6 +1,7 @@
 // The agent's view of keyloom for one layout and conversation, built from the change use cases so
 // the agent's validation and storage are exactly the editor's and the CLI's (D-014).
-import type { AgentPorts, ChoiceFact, PriorityFact, Proposal, ProposalResult } from "../agent/ports.ts";
+import type { AgentPorts, ChoiceFact, LayoutSnapshot, PriorityFact, Proposal, ProposalResult } from "../agent/ports.ts";
+import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import type { DecisionRow } from "../persistence/decisions.ts";
 import { newId } from "../persistence/ids.ts";
 import type { ValidationResult } from "../validation/result.ts";
@@ -10,7 +11,7 @@ import { checkChange, proposeChange } from "./changes.ts";
 import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
 import { ValidationFailedError } from "./errors.ts";
-import { getLayout } from "./layouts.ts";
+import { getLayout, listLayouts } from "./layouts.ts";
 
 export const toPriorityFact = (d: DecisionRow): PriorityFact => ({
   id: d.id, priorityKind: d.priorityKind ?? "pinned", statement: d.goal, reason: d.reason, subject: d.subject,
@@ -26,11 +27,23 @@ export const toChoiceFact = (d: DecisionRow): ChoiceFact => ({
  */
 export function createAgentPorts(app: App, layoutId: string, conversationId: string, sourceMessageIds: string[] = [], selection?: SelectionScope): AgentPorts {
   const scope = selection ? { selection } : {};
+  const snapshotOf = (ref: string): LayoutSnapshot => {
+    const view = getLayout(app, ref);
+    return { layoutId: view.layout.id, layoutName: view.layout.name, revisionId: view.revision.id, document: view.document, board: view.board };
+  };
+  // Another layout is shown as a fresh import would read it: a stored Oryx layout still holds its colours and tap dances as code, and the
+  // agent can only copy what it can see. This is a view in memory; nothing is saved, so D-193 (never upgrade on read) stands.
+  const viewOf = (ref: string): LayoutSnapshot => {
+    const s = snapshotOf(ref);
+    if (s.layoutId === layoutId) return s;
+    const upgraded = upgradeStoredOryx(s.document, s.board.definition);
+    return upgraded === null ? s : { ...s, document: upgraded.layout };
+  };
   return {
-    snapshot() {
-      const view = getLayout(app, layoutId);
-      return { layoutId: view.layout.id, layoutName: view.layout.name, revisionId: view.revision.id, document: view.document, board: view.board };
-    },
+    snapshot: () => snapshotOf(layoutId),
+    layouts: () => listLayouts(app).map((row) => viewOf(row.id)),
+    // getLayout reports a name that no layout has as "no layout"; the agent reads that and goes back to list_layouts.
+    layout: (ref) => viewOf(ref),
     check: (ops) => checkChange(app, layoutId, { ops, ...scope }),
     priorities: () => layoutPriorities(app, layoutId).map(toPriorityFact),
     recordPriority(input) {

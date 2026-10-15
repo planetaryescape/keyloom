@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { capabilityLine } from "../../boards/capabilities.ts";
 import { type GridContext, bindingLabel, renderLayerGrid } from "../../layout/render-grid.ts";
 import type { Layer } from "../../layout/schema.ts";
 import type { AgentPorts, LayoutSnapshot } from "../ports.ts";
 import { defineTool } from "./define.ts";
 
 const InputSchema = z.object({
+  layout: z.string().min(1).optional().describe("Another layout's id or name from list_layouts, to read it. Omit for this conversation's layout. Read-only: you cannot propose changes to another layout."),
   layers: z.array(z.string()).optional().describe("Layer ids, names or indexes. Omit for every layer."),
 });
 
@@ -53,10 +55,12 @@ export const getLayoutTool = (ports: AgentPorts) =>
   defineTool({
     name: "get_layout",
     description:
-      "Read the layout's current head revision: for each requested layer, a text grid shaped like the keyboard, a position-to-key table, and the layer's JSON. Call it before proposing anything, and again after BK applies a change.",
+      "Read a layout's current head revision: for each requested layer, a text grid shaped like the keyboard, a position-to-key table, and the layer's JSON. Call it before proposing anything, and again after BK applies a change. Pass `layout` to look at another of BK's keyboards (see list_layouts), for example to copy something from it; that view is read-only.",
     inputSchema: InputSchema,
-    run: ({ layers }) => {
-      const snapshot = ports.snapshot();
+    run: ({ layout, layers }) => {
+      const here = ports.snapshot();
+      const snapshot = layout === undefined || layout === here.layoutId || layout === here.layoutName ? here : ports.layout(layout);
+      const other = snapshot.layoutId !== here.layoutId;
       const ctx = { layers: snapshot.document.layers, macros: snapshot.document.macros, tapDances: snapshot.document.tapDances };
       const chosen = pickLayers(snapshot, layers);
       const sections = chosen.map((layer) => {
@@ -74,6 +78,8 @@ export const getLayoutTool = (ports: AgentPorts) =>
       const macros = snapshot.document.macros.map((m) => `${m.id}: ${m.name}`).join("; ") || "none";
       return [
         `Layout ${snapshot.layoutName} (${snapshot.layoutId}), head revision ${snapshot.revisionId}, board ${snapshot.board.definition.id}.`,
+        ...(other ? [`READ-ONLY: this is another of BK's layouts, not the one you are working on (${here.layoutName}). Positions below are positions on ${snapshot.board.definition.name}; do not use them in ops for ${here.layoutName}. Use map_keys to translate.`] : []),
+        capabilityLine(snapshot.board.definition),
         `Macros: ${macros}.`,
         profilesText(snapshot.document),
         "Legend: ⌥ Option/Alt, ⌘ Command/GUI, ⌃ Ctrl, ⇧ Shift; an r prefix means the right-hand modifier; a/b means tap a, hold b; ▽ transparent; MO/TO/TG layer keys.",

@@ -393,11 +393,26 @@ Only BK can do these:
 
 **Left out:** everything in [16](16-key-editor.md#what-keyloom-doesnt-take-and-why).
 
+## Rung 19: Car: copy from my other keyboard
+
+**Previously:** the agent sees only the layout it is working on, so "make this like my Moonlander" gets a request for an Oryx link. **Now:** it sees every layout, knows what each board can do, and copies colours, behaviours and combos across boards that differ in size and shape.
+
+**Promise:** "I said copy my home row mods from my Moonlander, and it looked at the Moonlander itself and put them on the right keys of the Glove80."
+
+**Build:** [20](20-cross-board.md) (D-220 to D-229): `list_layouts`, `get_layout` of another layout, `map_keys`, board capabilities, the layer and key correspondence.
+
+**New unknowns:** whether MoErgo's firmware can show a colour per key (S21: no); whether the live model uses the tools instead of asking.
+
+**Demo:** in the CLI chat on the Glove80, ask for the Moonlander's key lights (a plain explanation with the reason), then for its home row mods (a proposal), and show the web chat doing the first.
+
+**Done when:** the live evals pass on OpenRouter, the mapping tests hold across the Moonlander, Glove80 and Corne, and the demo transcripts show the agent reading the Moonlander layout itself.
+
+**Left out:** Glove80 lighting (Q24); carrying a typing profile inferred from habits rather than a named thing.
+
 ## After the car (not planned yet)
 
 - Conditional layers (tri-layer) in the editor.
 - The features [16](16-key-editor.md#what-keyloom-doesnt-take-and-why) defers (D-105).
 - Pulling a layout from Oryx's GraphQL endpoint (D-041, S4).
-- A typing profile carried between boards (Q4).
 - Key-frequency statistics (Q5).
 - Other model providers for other users (Q3).

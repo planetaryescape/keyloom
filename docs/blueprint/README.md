@@ -28,6 +28,7 @@ BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10
 | 17 | [Keyboard sync](17-keyboard-sync.md) | Apply ends on the keyboard: hands-free flashing on every board, the ZMK module, auto-sync, and live writes if they're needed |
 | 18 | [Visual design](18-visual-design.md) | The UI audit's findings, layout, keycaps, the visual system, words, states, phones and the screenshot gate |
 | 19 | [Model providers](19-model-providers.md) | Running the agent on a Codex subscription, an OpenRouter key or an Anthropic key |
+| 20 | [Copying from my other keyboard](20-cross-board.md) | The agent sees every layout, deterministic key and layer correspondence across boards, board capabilities, copying colours, behaviours and combos, and why the Glove80 has no lighting |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
 Research behind these decisions:
@@ -40,6 +41,7 @@ Research behind these decisions:
 - [../research/keyloom-ui-audit.md](../research/keyloom-ui-audit.md): a visual and UX audit of v0.10.1 on BK's layouts, with 26 screenshots.
 - [../research/handsfree-flash-all-boards.md](../research/handsfree-flash-all-boards.md): how each of BK's boards can be flashed and edited without touching it.
 - [../research/model-providers.md](../research/model-providers.md): the Codex SDK, OpenRouter and Anthropic as providers for keyloom's agent.
+- [../research/spikes/S21.md](../research/spikes/S21.md): what MoErgo's firmware can and can't do for per-key colours on the Glove80.
 - `docs/research/spikes/`: spike evidence, one file per spike. None run yet.
 
 ## Summary

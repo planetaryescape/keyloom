@@ -1,6 +1,7 @@
 // Prompt assembly (03#what-the-agent-sees). The stable parts come first so prompt caching holds
 // across a conversation: system prompt, then the board, then what the firmware can express. The
 // layout itself is fetched through tools so it never goes stale mid-conversation.
+import { capabilityLine } from "../boards/capabilities.ts";
 import type { Board } from "../boards/load.ts";
 import { bindingLabel } from "../layout/render-grid.ts";
 import type { Layout } from "../layout/schema.ts";
@@ -27,6 +28,7 @@ export function boardContext(board: Board): string {
     `Finger per position:\n${fingerSummary(d)}`,
     `Mirror pairs, left position and the right position at the same place on the other half: ${Object.entries(d.mirror).map(([l, r]) => `${l}<->${r}`).join(", ")}.`,
   ];
+  parts.push(capabilityLine(d));
   if (board.skill) parts.push(`## Board notes\n${board.skill.trim()}`);
   return parts.join("\n\n");
 }
@@ -105,11 +107,19 @@ export function choicesContext(choices: readonly ChoiceFact[], document: Layout)
   return [header, "Check these before you propose moving or replacing any of those keys. When a change touches one, quote its reason to BK and ask whether it still holds before you propose.", ...lines].join("\n");
 }
 
+/** The layouts besides this conversation's, by name and board, so the agent knows there is something to look at before it asks BK. */
+export function otherLayoutsContext(others: readonly { layoutName: string; layoutId: string; board: Board; document: Layout }[]): string {
+  const header = "# BK's other layouts (read-only)";
+  if (others.length === 0) return `${header}\nNone: this is the only layout keyloom holds, so there is nothing to copy from.`;
+  const lines = others.map((o) => `- "${o.layoutName}" (${o.layoutId}): ${o.board.definition.vendor} ${o.board.definition.name}, ${o.document.firmware.toUpperCase()}, ${o.document.layers.length} layers`);
+  return [header, "Look at these with list_layouts and get_layout before asking BK about them.", ...lines].join("\n");
+}
+
 export function assembleSystemPrompt(
-  board: Board, document: Layout, priorities: readonly PriorityFact[] = [], choices: readonly ChoiceFact[] = [],
+  board: Board, document: Layout, priorities: readonly PriorityFact[] = [], choices: readonly ChoiceFact[] = [], others: Parameters<typeof otherLayoutsContext>[0] = [],
 ): string {
   return [
-    system.trim(), boardContext(board), firmwareCapabilities(document.firmware), prioritiesContext(priorities, document), choicesContext(choices, document),
+    system.trim(), boardContext(board), firmwareCapabilities(document.firmware), otherLayoutsContext(others), prioritiesContext(priorities, document), choicesContext(choices, document),
   ].join("\n\n");
 }
 

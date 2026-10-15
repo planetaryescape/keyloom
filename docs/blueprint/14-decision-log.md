@@ -808,3 +808,53 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 
 ### D-194: The Glove80 has no lighting in the model. (Claude, building rung 18; D-104)
 - **Why:** its lights are ZMK underglow, which is a strip with effects and no per-key colour, and the model has nothing to hold it. Its page shows the ZMK Kconfig options only, and the Layer colours section appears only for boards with `lighting`.
+
+### D-220: The agent sees every layout, and BK can say "copy this from my other keyboard". Q4 is answered. (BK. Reverses Q4's "deferred")
+- **BK:** "I think the agent shoudl be able to see the layouts of other keyboards. and it should be possible for me to say copy this thing from my other keyboard and apply it here and it should have the smarts to figure out the best way to do it even if the keyboards have differnt number of keys or differnt layouts".
+- **Context:** in his v0.19.0 Glove80 chat he asked for the key lights to be like his Moonlander's. The agent said it couldn't see the Moonlander, asked for an Oryx link or screenshots, and offered to "set per-key colours on each layer here", which the Glove80 can't show.
+- **What it adds:** `list_layouts`, `get_layout` with a `layout` argument, and `map_keys`. Other layouts are read-only; every proposal targets only the conversation's layout and validation is unchanged (D-014).
+- **Q4** ("carry a typing profile from one board to another") was deferred, not rejected. This is it, narrowed to what BK asked for: copying a named thing, not inferring a typing profile.
+
+### D-221: Which key corresponds to which is decided by pure code, not by the model. (Claude, building rung 19)
+- **Why:** counting positions across a 72-key, an 80-key and a 42-key board is where a plausible mapping is wrong and passes review. `mapKeys` returns each match with a method, a reason in words and a confidence, and lists keys with no counterpart instead of forcing them.
+- **Strategies:** `function` (the key that does the same thing), `position` (hand, finger, row from the home row, column from the finger's home key, thumbs by rank from the middle) and `auto` (function, then position on target keys nothing claimed).
+- **Deterministic:** slots come from geometry and the board's facts, rows are ordered by height, and ties break by position number. Shuffling `hands`, `fingers`, `rows` and `mirror` changes nothing, and a test shuffles them.
+- **Option rejected:** letting the model match keys from two grids. It is what the old chat would have done, and it cannot check itself.
+
+### D-222: Another layout is shown the way a fresh import would read it, in memory only. (Claude, building rung 19; D-193)
+- **Why:** BK's stored Moonlander holds its colours and two tap dances as Oryx code until he clicks "Update layout". The agent would see no colours to copy. `upgradeStoredOryx` is pure, so the port applies it to the copy it hands the agent.
+- **What does not change:** nothing is saved. D-193's "never on read" is about changing the stored layout, and this changes nothing stored. The conversation's own layout is not previewed, because its head is what proposals apply to.
+
+### D-223: Layers correspond by name, role and what they do, one-to-one, best first. (Claude, building rung 19)
+- **Signals:** name (equal 1, shared stem 0.7, a name with a number only exactly), role (base is base), and Jaccard overlap of functions leaving out layer switches, macros and native code. The strongest sets the score; under 0.3 is no match.
+- **Why one-to-one:** two source layers claiming one target would copy both onto it.
+- **Layer keys follow the match:** a layer key copied across points at the matching layer, or is skipped with the layer's name.
+
+### D-224: What a board cannot do is a fact in `board.json` that the agent, the prompt and the validator quote. (Claude, building rung 19)
+- **Where:** `limits.lighting`, one sentence, present when `lighting` is absent. `src/boards/capabilities.ts` derives per-board capabilities; the prompt and `list_layouts` state them; `lighting_unsupported` now says "<board> can't show per-key colours because <reason>".
+- **Agent rule:** never offer or propose what the board can't do. State the reason and stop.
+- **Not added:** a validator error for combos, tap dance or macros. Both firmwares model them, so there is nothing to refuse.
+
+### D-225: The Glove80 does not get lighting. (Claude, building rung 19, S21; D-194)
+- **Evidence:** MoErgo's fork at `ce69e85` fills one pixel buffer with one effect and overlays fixed-colour status LEDs, on the left half only; the layer indicator is magenta. Per-key, per-layer colour exists only in the open community pull request `moergo-sc/zmk#36`, on a different base. See [../research/spikes/S21.md](../research/spikes/S21.md).
+- **Result:** no model, no generator, no Docker proof. Copying colours onto the Glove80 ends in the board's sentence and no proposal.
+- **Open:** whether BK wants the community fork (Q24).
+
+### D-226: Copying a behaviour keeps the target key's letter, takes the target's hand, and never replaces what the key already does. (Claude, building rung 19)
+- **Rules:** a hold-tap keeps the target's own tap and takes the source's hold, with modifiers of the hand the key is on (D-060). Layer keys map through D-223. Macros and tap dances come along, reused when the target already has the same steps. Native code is never copied (D-024).
+- **Profiles:** the key's own, else its finger's, else its hand's. With none, a ZMK profile per hand that waits for the other hand and the thumbs, with the source's tapping term when it has one; a QMK target reuses what it has. A skipped key leaves no macro, dance or profile op behind.
+- **Replacing:** if the copy would remove a function the target key has, the key is skipped and named, so the agent asks BK where it should go.
+
+### D-227: The Corne's finger table was one column off and is fixed. (Claude, building rung 19)
+- **What was wrong:** `boards/foostan/corne/board.json` marked its outer column as the pinky and the pinky column as the ring finger, so A, S, D, F were ring, middle, index, index. Nothing read it until key correspondence did. Q, W, E on the Corne's top row sit on the pinky, ring and middle fingers.
+- **Found by:** a test that asks the letters A S D F for their fingers on all three boards. It fails on the old file.
+
+### D-228: A position match is weaker evidence than a function match, and a guess is not applied without BK. (Claude, building rung 19)
+- **Numbers:** function 0.95 under the same finger, 0.85 elsewhere, 0.8 and 0.7 for first-function matches; position 0.7 for an exact slot, 0.5 down to 0.3 for a nearer column, thumbs 0.5 or 0.4 (0.4 when the two boards have different thumb counts).
+- **Floor:** `carry` applies matches of 0.6 and over. The rest are shown with their confidence so the agent can ask.
+- **Why:** an earlier first draft gave exact positions 0.9, and put Moonlander F12 on Glove80 F13 because they sit in the same place.
+
+### D-229: The agent asks only where a copy is genuinely ambiguous, and says which mapping it used. (Claude, building rung 19)
+- **Ask when:** a match is under 60%, several keys fit equally, a layer has no counterpart, or a key's target already does something else. Ask together, and say the default.
+- **Always say:** the mapping used, in plain words, in the reply and in the proposal's explanation; what didn't carry over.
+- **Evals:** three live scenarios on OpenRouter, all passing (see [20](20-cross-board.md#evals)). Colours onto the Glove80: it explains why, proposes nothing and asks for no link. Colours onto a second Moonlander: a valid proposal, every colour on the same key. Home row mods onto the Glove80: a valid proposal on home-row keys only with each finger's modifiers in profiles that wait for the other hand.
