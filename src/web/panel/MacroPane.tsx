@@ -73,7 +73,9 @@ export function MacroPane({ layout, layerId, position, currentMacroId, pending, 
   const others = builder.id === null ? [] : macroUsers(layout, builder.id, slotRef);
   const sharedElsewhere = builder.id !== null && others.length > 0;
   const macroId = builder.id !== null && (!sharedElsewhere || forAll) ? builder.id : ownId;
-  const done = toMacro(builder, layout, pending, macroId);
+  // The copy this pane made for "this key only" is not another macro to avoid a name clash with once "every key" is chosen.
+  const rivals = pending.filter((m) => m.id !== ownId);
+  const done = toMacro(builder, layout, rivals, macroId);
   const edited = original !== undefined && done !== null && JSON.stringify({ name: done.name, steps: done.steps }) !== JSON.stringify({ name: original.name, steps: original.steps });
   const changeKey = done === null ? "" : JSON.stringify(done);
   const first = useRef(true);

@@ -768,3 +768,9 @@
 .dance-shared input {
   margin-top: var(--space-1);
 }
+
+.macro-ask [aria-checked="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+}

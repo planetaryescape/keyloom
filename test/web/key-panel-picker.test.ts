@@ -66,3 +66,25 @@ describe("a search looks across tabs and finds plain names", () => {
     expect(pickerSections(base({ text: "zzzzzz" }))).toEqual([]);
   });
 });
+
+describe("the tap dance's extra slots take what a tap takes, bar the empty keys and Any", () => {
+  test("a double-tap offers macros and layers but not Any or tap dances", () => {
+    const tabs = tabsFor("doubleTap", false);
+    expect(tabs).toContain("macro");
+    expect(tabs).toContain("layers");
+    expect(tabs).not.toContain("any");
+    expect(tabs).not.toContain("dance");
+    expect(tabsFor("tapThenHold", false)).toEqual(tabs);
+    expect(ids({ slot: "doubleTap", tab: "other" })).not.toContain("special-none");
+  });
+
+  test("only the tap slot offers existing tap dances for reuse, and a search finds them by name", () => {
+    expect(tabsFor("tap", false)).toContain("dance");
+    expect(tabsFor("tap", true)).not.toContain("dance");
+    const withDance = { ...layout, tapDances: [{ id: "d", name: "Esc, Caps Lock on double-tap", tap: { kind: "key" as const, code: "ESCAPE" }, doubleTap: { kind: "key" as const, code: "CAPS_LOCK" } }] };
+    const found = pickerSections(base({ layout: withDance, tab: "dance" })).flatMap((s) => s.items);
+    expect(found).toEqual([{ id: "dance-d", label: "Esc, Caps Lock on double-tap", detail: "double-tap", pick: { t: "dance", danceId: "d" } }]);
+    expect(pickerSections(base({ layout: withDance, text: "caps lock" })).flatMap((s) => s.items.map((i) => i.id))).toContain("dance-d");
+    expect(pickerSections(base({ layout: withDance, slot: "doubleTap", tab: "dance" }))).toEqual([]);
+  });
+});
