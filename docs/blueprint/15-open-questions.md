@@ -49,6 +49,10 @@ The Layout Editor export itself is still pending from BK, so (a) and (b) were ru
 
 The combined `glove80.uf2` holds two images at the same addresses with different family IDs (`0x9807b007` and `0x9808b007`), which is how a UF2 bootloader skips blocks that aren't its own. Not run on a keyboard: nothing was flashed. See [../research/spikes/S8.md](../research/spikes/S8.md).
 
+### S8 result (2026-10-15)
+
+Yes. Flash `fl_01M5067Z2Y2JT3EDYD3JCY0NSC` copied keyloom's combined `glove80.uf2` (build `bld_01M4ZXEWMANN3V3H25Y28EC6JP`, BK's `42-key-map` keymap) to `GLV80RHBOOT` and then to the left half's boot drive with `keyloom flash --wait 15` (v0.10.1). Each bootloader took its own image and rebooted, both halves came back on USB as "Glove80 Right" and "Glove80 Left", and BK typed on the board: "typing works as you can see." An earlier attempt, `fl_01M5066BDXSVVD2CF3ZJT0JMN5`, failed with `EACCES` on the copy because the agent's sandbox blocked writes to `/Volumes`. A flash now explains that error, since macOS raises the same one for an app without Removable Volumes access.
+
 ### S10 result, devicetree half (2026-10-15)
 
 `web-tree-sitter` loads `tree-sitter-devicetree.wasm` inside a `bun build --compile` binary: the compiled `keyloom import --board moergo/glove80` and `generate` ran on the macOS arm64 binary with no extra flags. See [../research/spikes/S10.md](../research/spikes/S10.md).
