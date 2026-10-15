@@ -223,7 +223,7 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
                 <div className="callout callout-success" role="status">
                   <CircleCheck size={18} aria-hidden="true" />
                   <p>
-                    <strong>Flashed.</strong> Your {boardName} restarts with the latest layout: {head.summary}.
+                    <strong>Flashed.</strong> Your {boardName} restarts with the latest layout: {withFullStop(head.summary)}
                   </p>
                 </div>
                 <details className="log-details">
@@ -250,4 +250,9 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
       </div>
     </dialog>
   );
+}
+
+// Summaries are often whole sentences from the agent; add a full stop only when one is missing.
+function withFullStop(text: string): string {
+  return /[.!?]$/.test(text.trim()) ? text : `${text}.`;
 }
