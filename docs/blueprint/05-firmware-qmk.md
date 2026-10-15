@@ -32,7 +32,12 @@ Parsing (`src/firmware/qmk/import.ts`):
 4. Keep anything else (`rgb_matrix` code, `keyboard_post_init_user`, Oryx's `qmk_modules` hooks) as `Passthrough`.
 5. Print the import report, as for ZMK.
 
-What an Oryx export of BK's actual layout contains is spike S3. The parser is written against that file. A synthetic one isn't enough.
+What an Oryx export of BK's actual layout contains was spike S3 ([../research/spikes/S3.md](../research/spikes/S3.md)). The parser is written against that file, committed as `test/fixtures/oryx/synchronized/`. S3 added these rules:
+
+- **Combos are keycode-based in QMK.** The importer resolves each combo key to the base-layer position whose binding produces that keycode, and imports the combo with `layerIds: "all"`. The generator writes the base-layer bindings at those positions back as keycodes.
+- **`keymap.json` is kept as a passthrough file.** It carries `{"modules": ["zsa/oryx", "zsa/defaults"]}`, so the build needs ZSA's `qmk_modules` beside the fork.
+- **`LAYER_STATE_8BIT` in `config.h` caps the layout at 8 layers.** It's imported as a setting and enforced by the validator.
+- **Some of Oryx's generated code uses layer indices:** the `ledmap`, `rgb_matrix_indicators_user`'s `case n:`, and `layer_move(n)` and `LT(n, …)` inside `process_record_user`. That code is passthrough, so layer order is fixed for such a layout until the generator learns to rewrite it.
 
 ## Generation writes `keymap.c`, `config.h` and `rules.mk`
 

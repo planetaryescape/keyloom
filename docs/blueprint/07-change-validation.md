@@ -39,6 +39,8 @@ Errors make the change set invalid. The codes are stable strings that the agent 
 | `qmk_modtap_basic` | On QMK, a hold-tap's tap side is a basic keycode with no mods | QMK limits `MT()` to basic keycodes (qmk/qmk_firmware `7a1bbf3` `docs/mod_tap.md:65`) |
 | `qmk_modtap_mixed_hands` | On QMK, a mod-tap's mods are all left-hand or all right-hand | One right-hand mod makes all of them right-handed (same source) |
 | `combo_conflict` | Two combos on the same layers don't use the same set of positions | Only one could fire |
+| `passthrough_layer_index` | No op removes or reorders layers when the layout has `Passthrough` that refers to layer indices. Adding a layer at the end is allowed | Oryx's RGB and custom-key code uses layer numbers and would silently point at the wrong layers (S3) |
+| `layer_limit` | The layer count stays within the firmware's limit, including `LAYER_STATE_8BIT` (8) where it's set | The firmware wouldn't compile, or layers above the cap would be unreachable (S3) |
 | `native_edit` | No op changes a `native` binding or a `Passthrough` block, except to replace it whole after BK confirms | keyloom can't reason about source it doesn't model (D-024) |
 
 ## Reachability

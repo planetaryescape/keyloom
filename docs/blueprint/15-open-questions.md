@@ -18,12 +18,23 @@ For each spike, record the command or request, the output (with private data rem
 | S10 | Do `web-tree-sitter` and the C and devicetree grammars' `.wasm` files load inside a `bun build --compile` binary? | Import has to work in the released binary, not only in dev | [01](01-architecture.md#release) | Rung 1 (C), rung 5 (devicetree) |
 | S11 | Zapp's non-interactive behaviour: exact invocation, how it reports waiting for the bootloader, success and failure, and its exit codes | keyloom wraps it and has to report it accurately | [05](05-firmware-qmk.md#flash-uses-zsas-zapp-cli) | Rung 2 |
 
+### S3 result (2026-10-15)
+
+BK's layout "Synchronized" (`QxKPz`, revision `zLQ3Md`, `qmkVersion` 25.0) is public on Oryx, and its source zip downloads without a session. The full inventory and conclusions are in [../research/spikes/S3.md](../research/spikes/S3.md). The ones that change the design:
+
+- QMK combos are keycode-based.
+- Oryx's passthrough code refers to layer indices, so removing or reordering layers is an error until the generator can rewrite those references.
+- `LAYER_STATE_8BIT` caps the layout at 8 layers.
+- The build needs ZSA's `zsa/oryx` and `zsa/defaults` modules.
+
+[05](05-firmware-qmk.md) and [07](07-change-validation.md) carry these as rules.
+
 ## Product questions for BK
 
 | # | Question | Status |
 |---|---|---|
-| Q1 | Which licence? | Open; blueprint assumes MIT |
-| Q2 | npm's `keyloom` is taken by an unrelated password CLI. Keep the name and ship only through GitHub releases and `install.sh`, or rename? | Open; blueprint assumes keep "keyloom", with no npm package in v1 (D-034) |
+| Q1 | Which licence? | **Answered 2026-10-15:** MIT |
+| Q2 | npm's `keyloom` is taken by an unrelated password CLI. Keep the name and ship only through GitHub releases and `install.sh`, or rename? | **Answered 2026-10-15:** keep keyloom, with no npm package in v1 (D-034) |
 | Q3 | Other users: bring their own Anthropic key only, or support other model providers? | Open; blueprint assumes their own Anthropic key only (D-031) |
 | Q4 | Should keyloom carry a typing profile from one board to another ("adapt my Moonlander habits to the Glove80")? The assistant raised it; BK never took it up | Open; deferred, not rejected. Not in the roadmap |
 | Q5 | Should keyloom ever learn from actual keystrokes (key-frequency stats), or only from what BK says? | Open; blueprint assumes only what BK says in v1 (D-035) |
@@ -35,4 +46,4 @@ For each spike, record the command or request, the output (with private data rem
 | Q11 | Which apps need Option–Option, and which shortcuts is Command–Shift for? | Open; rungs 3 and 4 need the real answers for their demos. The agent asks for them during the demo, so the blueprint doesn't assume any |
 | Q12 | Is Docker an acceptable hard requirement for building? | Open; blueprint assumes yes ([01](01-architecture.md#firmware-toolchains)) |
 | Q13 | v1 tested on macOS only? | Open; blueprint assumes macOS, with Linux expected to work but untested |
-| Q14 | Public GitHub repo from rung 1, or private until the car? | Open; blueprint assumes public from rung 1, since releases go through GitHub |
+| Q14 | Public GitHub repo from rung 1, or private until the car? | **Answered 2026-10-15:** public from rung 1. BK authorised creating `planetaryescape/keyloom` |
