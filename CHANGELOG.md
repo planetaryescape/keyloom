@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/planetaryescape/keyloom/compare/v0.19.1...v0.20.0) (2026-10-15)
+
+
+### Features
+
+* the agent sees every layout and copies colours, behaviours and combos across boards ([e863588](https://github.com/planetaryescape/keyloom/commit/e863588d402fe65af51a72d613fd37017ce56f99))
+
 ## [0.19.1](https://github.com/planetaryescape/keyloom/compare/v0.19.0...v0.19.1) (2026-10-15)
 
 
