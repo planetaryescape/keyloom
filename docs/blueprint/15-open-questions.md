@@ -29,6 +29,10 @@ BK's layout "Synchronized" (`QxKPz`, revision `zLQ3Md`, `qmkVersion` 25.0) is pu
 
 [05](05-firmware-qmk.md) and [07](07-change-validation.md) carry these as rules.
 
+### S5 result (2026-10-15)
+
+Both revisions build from BK's unchanged Oryx source with `docker run … ghcr.io/qmk/qmk_cli@sha256:b7d7fa8f… make zsa/moonlander/<rev>:<keymap>`, in about 100 s each. The binaries aren't byte-identical to Oryx's: keyloom skips the git and version info, and the keymap name differs. Behaviour equivalence is S9. See [../research/spikes/S5.md](../research/spikes/S5.md).
+
 ## Product questions for BK
 
 | # | Question | Status |
