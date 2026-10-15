@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.16.0](https://github.com/planetaryescape/keyloom/compare/v0.15.0...v0.16.0) (2026-10-15)
+
+
+### Features
+
+* go back to any revision, import by upload and choose the provider from the web ([0d9aac7](https://github.com/planetaryescape/keyloom/commit/0d9aac7ae8538092883f2815d1c163d0635beb53))
+* history panel, import screen, provider picker, phone sheet, skeleton and shortcuts in the web app ([7ef9323](https://github.com/planetaryescape/keyloom/commit/7ef9323bb383a8f5bbcdb1c8d99cec1771e35e70))
+
+
+### Bug Fixes
+
+* sheet full height stops at the header, warning wraps on a phone, Escape closes History, tests for go-back refusals ([04c2509](https://github.com/planetaryescape/keyloom/commit/04c25095510737cebe6fde9d50b768383b47523d))
+
 ## [0.15.0](https://github.com/planetaryescape/keyloom/compare/v0.14.0...v0.15.0) (2026-10-15)
 
 
