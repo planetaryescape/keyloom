@@ -205,7 +205,7 @@
   color: var(--color-text-muted);
 }
 
-.choices-list .choice:hover:not([data-disabled="true"]) {
+.choices-list .choice:hover:not([data-disabled="true"], :has(input:checked)) {
   background: var(--color-panel);
   color: var(--color-text);
 }
@@ -245,8 +245,8 @@
   background: var(--color-surface);
 }
 
-.choices-pills .choice:hover:not([data-disabled="true"]),
-.choices-cards .choice:hover:not([data-disabled="true"]) {
+.choices-pills .choice:hover:not([data-disabled="true"], :has(input:checked)),
+.choices-cards .choice:hover:not([data-disabled="true"], :has(input:checked)) {
   background: var(--color-panel);
 }
 

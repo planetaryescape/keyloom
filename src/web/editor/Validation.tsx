@@ -21,7 +21,7 @@ function slotName(layout: Layout, slot: Slot): string {
 
 function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" | "warning"; layout: Layout; slot: Slot }) {
   const Icon = kind === "error" ? CircleX : TriangleAlert;
-  const others = (issue.slots ?? []).filter((s) => s.layerId !== slot.layerId || s.position !== slot.position);
+  const others = issue.slots ?? [];
   return (
     <li className={`issue issue-${kind}`}>
       <Icon size={16} aria-hidden="true" />
@@ -33,7 +33,7 @@ function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" 
         {others.length === 0 ? null : (
           <ul className="slot-chips" aria-label="Keys involved">
             {others.map((other) => (
-              <li key={`${other.layerId}:${other.position}`} className="chip">{slotName(layout, other)}</li>
+              <li key={`${other.layerId}:${other.position}`} className="chip">{other.layerId === slot.layerId && other.position === slot.position ? "This key" : slotName(layout, other)}</li>
             ))}
           </ul>
         )}

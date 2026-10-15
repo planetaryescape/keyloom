@@ -127,7 +127,7 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
           </div>
         )}
 
-        <ol className="steps">
+        <ol className="release-steps">
           <Step number={1} title="Build the firmware" state={buildState} {...(build === null ? {} : { aside: elapsedOf(build, now) })}>
             {build === null ? (
               <>

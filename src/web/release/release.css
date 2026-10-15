@@ -62,7 +62,7 @@
   font-weight: var(--weight-medium);
 }
 
-.steps {
+.release-steps {
   display: flex;
   flex-direction: column;
   margin: 0;
@@ -322,4 +322,8 @@
     animation: none;
     opacity: 0.5;
   }
+}
+
+.step-body .field-group {
+  width: 100%;
 }

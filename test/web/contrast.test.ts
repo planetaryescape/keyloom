@@ -51,6 +51,7 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["color-accent", "color-surface", TEXT],
   ["color-accent", "color-panel", TEXT],
   ["color-accent", "color-accent-bg", TEXT],
+  ["color-accent", "cap-key", UI],
   ["color-text", "color-accent-bg", TEXT],
   ["color-warning", "color-surface", TEXT],
   ["color-warning", "color-warning-bg", TEXT],
