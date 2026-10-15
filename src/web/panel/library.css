@@ -1,0 +1,81 @@
+/* The library pane (16): what keys share, with where each is used. */
+.library {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.library-head h2,
+.library-section h3 {
+  margin: 0;
+}
+
+.library-section h3 {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.library-lead,
+.library-section > p {
+  margin: 0;
+}
+
+.library ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-item {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.library-item:hover {
+  border-color: var(--color-border-strong);
+}
+
+.library-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.library-uses {
+  display: flex;
+  flex-flow: row wrap;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+}
+
+.library-use {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.library-use:hover {
+  border-color: var(--color-border-strong);
+}

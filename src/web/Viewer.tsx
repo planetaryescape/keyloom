@@ -33,6 +33,7 @@ import { LayerTabs, type LayerActions } from "./keyboard/LayerTabs.tsx";
 import { SelectionBar } from "./keyboard/SelectionBar.tsx";
 import { extendSelection } from "./keyboard/selection.ts";
 import { KeyMoves } from "./panel/KeyMoves.tsx";
+import { LibraryPane } from "./panel/LibraryPane.tsx";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
 import { keyForChar } from "./panel/slots.ts";
 import { ChatBar } from "./shell/ChatBar.tsx";
@@ -132,6 +133,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const panel = useRef<KeyPanelHandle>(null);
   // History is a panel of its own; it stays chosen while a key or the chat is looked at, and comes back when they close.
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The library pane works the same way, and the keys on the board it points at (a hovered row's users). It shares the column with History, so one closes the other.
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryKeys, setLibraryKeys] = useState<readonly number[] | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const history = useRevisions(token, layoutRef, revision.id, historyOpen);
   // Phones: the panel is a bottom sheet and a split board shows one hand (18#phones).
@@ -295,7 +299,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [draft.binding]);
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
-  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : "summary";
+  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : "summary";
+  const libraryHighlight = useMemo(() => (mode === "library" && libraryKeys !== null ? new Set(libraryKeys) : NONE), [mode, libraryKeys]);
 
   // Opening the chat puts the cursor in its box, so Cmd-K then typing is one gesture.
   useEffect(() => {
@@ -757,6 +762,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         else if (editing !== null) closeEditor(true);
         else if (repeating) setRepeating(false);
         else if (historyOpen) setHistoryOpen(false);
+        else if (libraryOpen) setLibraryOpen(false);
         else if (combosOpen) setCombosOpen(false);
         else if (chatSelection !== null) setChatSelection(null);
         return;
@@ -901,7 +907,16 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         blockedReason={undoBlock}
         onUndo={() => void undo()}
         historyOpen={historyOpen}
-        onHistory={() => setHistoryOpen((open) => !open)}
+        onHistory={() => {
+          setLibraryOpen(false);
+          setHistoryOpen((open) => !open);
+        }}
+        libraryOpen={libraryOpen}
+        onLibrary={() => {
+          setHistoryOpen(false);
+          setLibraryKeys(null);
+          setLibraryOpen((open) => !open);
+        }}
         combosShown={showCombos}
         onCombos={toggleCombos}
         onShortcuts={() => setShortcutsOpen(true)}
@@ -944,6 +959,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             pendingIndex={editingHere && draft.binding !== null ? editing.position : null}
             appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
             chatSelected={chatSelected}
+            highlighted={libraryHighlight}
             marks={marks}
             remembered={remembered}
             arrows={arrows}
@@ -999,6 +1015,24 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           size={sheet}
           viewportHeight={viewportHeight}
           onSize={setSheet}
+          library={
+            libraryOpen ? (
+              <LibraryPane
+                layout={layout}
+                layerId={layer.id}
+                onHighlight={setLibraryKeys}
+                onOpenKey={(slot) => {
+                  setLibraryKeys(null);
+                  setLayerId(slot.layerId);
+                  openEditor(slot.position, slot.layerId);
+                }}
+                onClose={() => {
+                  setLibraryKeys(null);
+                  setLibraryOpen(false);
+                }}
+              />
+            ) : null
+          }
           history={
             historyOpen ? (
               <HistoryPanel

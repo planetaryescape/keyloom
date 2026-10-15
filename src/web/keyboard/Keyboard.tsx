@@ -74,6 +74,8 @@ interface KeyboardProps {
   /** The combo being pointed at, and the keys that makes light up. */
   comboHovered?: string | null;
   comboLit?: ReadonlySet<number>;
+  /** Keys the library is pointing at (a macro's or a tap dance's users), drawn with an outline. */
+  highlighted?: ReadonlySet<number>;
   onComboHover?: (id: string | null) => void;
   onComboOpen?: (id: string) => void;
   /** Whether a key can be dragged onto another, and what dropping does (swap, or copy with Option). */
@@ -122,6 +124,7 @@ export function Keyboard({
   comboLines = [],
   comboHovered = null,
   comboLit,
+  highlighted,
   onComboHover,
   onComboOpen,
   dragEnabled = false,
@@ -233,6 +236,7 @@ export function Keyboard({
               data-applied={appliedIndex === index}
               data-key-index={index}
               data-combo-hover={comboLit?.has(index) ?? false}
+              data-highlight={highlighted?.has(index) ?? false}
               data-dragging={drag?.from === index}
               data-drop={drag !== null && drag.over === index}
               onPointerDown={(event) => {
