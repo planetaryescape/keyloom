@@ -65,46 +65,48 @@ These numbers decide rung 17 (see [live writes](#live-writes-are-built-only-if-a
 
 keyloom vendors a small Zephyr module, `firmware/zmk/keyloom-zmk/`, and adds it to every ZMK build it makes (D-095).
 
-- **Builds.** The MoErgo fork's Nix build takes it through `extraModules` (`zmk-fork@ce69e85` `nix/zmk.nix:112`). West builds take `-DZMK_EXTRA_MODULES`.
+- **Builds.** The MoErgo fork's Nix build takes it through `extraModules` (`zmk-fork@ce69e85` `nix/zmk.nix:112`), from a `config/default.nix` keyloom writes into its template checkout. West builds take `-DZMK_EXTRA_MODULES`. Both also pass the overlay that adds the serial port as `EXTRA_DTC_OVERLAY_FILE`, because Zephyr 3.5 modules can't carry a snippet (D-130, D-131).
 - **Size.** It's about 80 lines of C, plus Kconfig and a devicetree overlay.
 - **Reference.** `tadakado/zmk-bootloader-1200@3445d71` is the reference, but keyloom can't use it as-is. It needs Zephyr's newer boot-mode retention, which neither keyloom pin has, and it has no relay to the right half.
 
 What the module does:
 
-1. **Adds a serial port.** It adds a CDC ACM serial port (`zephyr,cdc-acm-uart` under `&zephyr_udc0`) on both halves. If the Studio snippet already added one on the left half, the module watches that one instead.
+1. **Adds a serial port.** It adds a CDC ACM serial port (`zephyr,cdc-acm-uart` under `&zephyr_udc0`) on both halves. When rung 13 adds the Studio snippet, the module is to watch Studio's port on the left half instead (not built yet, D-130).
 2. **Enables USB serial.** It enables `USB_DEVICE_STACK`, `USB_CDC_ACM`, `SERIAL`, `UART_LINE_CTRL` and `UART_INTERRUPT_DRIVEN`, the same set the Studio snippet uses.
 3. **Watches for the trigger.** It polls the port's line coding every 250 ms.
    - A close at 1200 baud reboots this half into its bootloader.
-   - A close at 1201 baud, on the central only, relays `&bootloader` to every peripheral over the split link. It uses `zmk_split_central_invoke_behavior`, which works on the right half's existing firmware (`zmk-fork@ce69e85` `app/src/behavior.c:96-101`).
+   - A close at 1201 baud, on the central only, relays `&bootloader` to every peripheral over the split link. It uses `zmk_split_central_invoke_behavior`, which works on the right half's existing firmware (`zmk-fork@ce69e85` `app/src/behavior.c:96-101`). The module sets the rate back to 115200 afterwards so the next touch is seen (D-133).
    - S12 settles whether the relay should be a baud rate or a text command.
 4. **Reboots into the bootloader.** On Zephyr 3.5 it calls `sys_reboot(0x57)`, the Adafruit bootloader's UF2 magic, passed through GPREGRET (`bl-moergo@bb68c75` `src/main.c:112-116`). On newer Zephyr it calls `bootmode_set(BOOT_MODE_TYPE_BOOTLOADER)`.
-5. **Marks the build.** It writes keyloom's marker into the USB serial number: `keyloom/<12 chars of the build ID>-<L|R>`.
-   - On the Glove80 it keeps MoErgo's template and replaces the prefix (`app/boards/arm/glove80/usb_serial_number.c:26-39`).
-   - On boards with no override of their own, the module provides `usb_update_sn_string_descriptor`.
+5. **Marks the build.** It writes keyloom's marker into the USB serial number: `keyloom/<12 chars of the build ID>-<L|R>:<tail>` (D-132).
+   - On the Glove80 it keeps MoErgo's template and replaces the prefix (`app/boards/arm/glove80/usb_serial_number.c:26-39`), with one template per half.
+   - On boards with no override of their own, the module provides `usb_update_sn_string_descriptor`, and keyloom turns it on.
    - S18 checks whether MoErgo's own tools read the `moergo.com:` prefix.
 
 The host side reuses what keyloom already has:
 
-- **Find.** On macOS, the IOKit walk (D-071) finds the device by its marker and reads its CDC interface's `IOCalloutDevice`. On Linux, keyloom reads `/dev/serial/by-id/`. Neither opens a device.
+- **Find.** On macOS, an IOKit walk like D-071's lists the serial ports and reads each one's `IOCalloutDevice` and its owning device's serial number. On Linux, keyloom reads sysfs and returns the `/dev/serial/by-id` link. Neither opens a device (D-134).
 - **Trigger.** `stty -f <port> 1200` on macOS, `stty -F <port> 1200` on Linux. No serial library goes into the compiled binary. Linux users need to be in the `dialout` group (S17).
 - **Flash.** The existing UF2 copy (D-038), which now explains a refused write (`190dd57`).
 - **Verify.** keyloom waits for each half to come back with the new marker, as D-072 does.
 - **Fall back.** If no marker, port or boot drive appears within 15 s, keyloom shows the board's manual instruction with the reason, as D-072 does.
 
-`board.json` gains one block per board, so a new nRF52 ZMK board with an Adafruit bootloader needs only data ([04](04-boards-and-contributions.md)):
+The flash recipe gains one block per revision, so a new nRF52 ZMK board with an Adafruit bootloader needs only data ([04](04-boards-and-contributions.md)). A half names the label of the flash step that writes it, and the block sits in `flash` beside the steps (D-136):
 
 ```json
 "handsFree": {
   "trigger": "cdc-1200",
+  "usbVendorId": "0x16c0",
   "halves": [
-    { "role": "central", "volume": "GLV80LHBOOT", "marker": "L" },
-    { "role": "peripheral", "volume": "GLV80RHBOOT", "marker": "R", "relay": true }
+    { "role": "central", "step": "left half", "marker": "L", "usbProductId": "0x27db" },
+    { "role": "peripheral", "step": "right half", "marker": "R", "usbProductId": "0x27d9", "relay": true }
   ],
-  "serialMarker": "usb-sn-template"
+  "serialMarker": "usb-sn-template",
+  "serialTail": ":GLV80-0123456789ABCDEF"
 }
 ```
 
-Both of the Corne's halves mount as `NICENANO`, so its adapter flashes one half, waits for it to come back with the new marker, then does the other.
+Both of the Corne's halves mount as `NICENANO`, so its adapter flashes one half, waits for it to come back with the new marker, then does the other. The Corne's USB IDs are unknown until S13, so its ports are told apart from the Glove80's by the Glove80's IDs (D-134).
 
 ## Live writes are built only if auto-sync is too slow in use
 
