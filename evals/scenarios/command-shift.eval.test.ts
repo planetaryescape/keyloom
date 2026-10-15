@@ -1,6 +1,7 @@
 // The Command-Shift scenario (13 rung 4, D-020, D-025) against the real model. It costs money, so it
 // runs only on purpose:
-//   ANTHROPIC_API_KEY=... KEYLOOM_LIVE_EVALS=1 bun test evals/scenarios/command-shift.eval.test.ts
+//   KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex (default anthropic) with that provider's credential,
+//   KEYLOOM_LIVE_EVALS=1 bun test evals/scenarios/command-shift.eval.test.ts
 // Otherwise it is skipped, and nothing here touches the network.
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -10,8 +11,8 @@ import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import { deepEqual } from "../../src/layout/equal.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import { BACKSPACE_POSITION, commandShiftApp } from "../../test/helpers/command-shift.ts";
+import { costLine, evalProvider, live, reportFile } from "../provider.ts";
 
-const live = Boolean(process.env.ANTHROPIC_API_KEY) && process.env.KEYLOOM_LIVE_EVALS === "1";
 
 const PROBLEM = "I press Command–Shift a lot; give me one key for it.";
 // What BK would say to the questions the agent is expected to ask; sent only while it has proposed nothing.
@@ -22,8 +23,6 @@ const ANSWERS = [
 ];
 const MAX_TURNS = 4;
 
-// Opus 5.5 list prices (12-cost-model): $4/M input, $20/M output, $0.20/M cache reads; cache writes at 1.25x input.
-const cost = (u: ChatOutcome["usage"]) => (u.inputTokens * 4 + u.outputTokens * 20 + u.cacheReadTokens * 0.2 + u.cacheCreationTokens * 5) / 1e6;
 
 const hasCommandShift = (doc: Layout) =>
   doc.layers.some((l) =>
@@ -41,6 +40,7 @@ describe("eval: Command-Shift", () => {
     let conversationId: string | undefined;
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const outcome = await sendMessage(app, layoutId, {
+      provider: evalProvider,
         message: turn === 0 ? PROBLEM : (ANSWERS[turn - 1] ?? "Please propose now."),
         ...(conversationId ? { conversationId } : {}),
       });
@@ -89,13 +89,13 @@ describe("eval: Command-Shift", () => {
     const date = new Date().toISOString().slice(0, 10);
     const first = outcomes[0];
     const report = [
-      `# Command-Shift eval, ${date}, ${first?.model} (effort ${first?.effort})`,
+      `# Command-Shift eval, ${date}, ${evalProvider}, ${first?.model} (effort ${first?.effort})`,
       "",
       ...Object.entries(checks).map(([k, v]) => `- ${v ? "pass" : "FAIL"}: ${k}`),
       "",
       `Turns: ${outcomes.length}. Model requests: ${outcomes.reduce((n, o) => n + o.iterations, 0)}.`,
       `Tokens: ${usage.inputTokens} in, ${usage.outputTokens} out, ${usage.cacheReadTokens} cache read, ${usage.cacheCreationTokens} cache write.`,
-      `Estimated cost: $${cost(usage).toFixed(3)}.`,
+      costLine(outcomes, usage),
       "",
       "## Remembered priorities",
       ...priorities.map((d) => `- ${JSON.stringify(d)}`),
@@ -108,7 +108,7 @@ describe("eval: Command-Shift", () => {
     ].join("\n");
     const dir = join(import.meta.dir, "..", "reports");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, `${date}-${first?.model}-${first?.effort}-command-shift.md`), `${report}\n`);
+    writeFileSync(join(dir, reportFile(date, first?.model, first?.effort, "command-shift")), `${report}\n`);
 
     expect(checks).toEqual({
       askedBeforeProposing: true, atLeastTwoValidAlternatives: true, everyValidOneGivesCommandShift: true, displacedShown: true,

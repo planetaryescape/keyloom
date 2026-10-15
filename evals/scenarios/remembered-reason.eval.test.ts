@@ -2,7 +2,8 @@
 // Command-Shift key months ago and gave a reason; now he asks to replace it. keyloom should bring the
 // reason up and ask before proposing, the proposals should carry the reminder, and applying one anyway
 // should supersede the old decision. It costs money, so it runs only on purpose:
-//   ANTHROPIC_API_KEY=... KEYLOOM_LIVE_EVALS=1 bun test evals/scenarios/remembered-reason.eval.test.ts
+//   KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex (default anthropic) with that provider's credential,
+//   KEYLOOM_LIVE_EVALS=1 bun test evals/scenarios/remembered-reason.eval.test.ts
 // Otherwise it is skipped, and nothing here touches the network.
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -10,8 +11,8 @@ import { join } from "node:path";
 import { type ChatOutcome, applyChange, getLayout, listDecisions, proposeChange, sendMessage, showDecision } from "../../src/app/index.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { commandShiftApp, TAB_POSITION } from "../../test/helpers/command-shift.ts";
+import { costLine, evalProvider, live, reportFile } from "../provider.ts";
 
-const live = Boolean(process.env.ANTHROPIC_API_KEY) && process.env.KEYLOOM_LIVE_EVALS === "1";
 
 const REASON = "My right hand stays on the mouse, so the left hand has to do Command-Shift shortcuts in Figma on its own.";
 const SEEDED: ChangeOp[] = [{ op: "setBinding", at: { layerId: "layer-0", position: TAB_POSITION }, binding: { kind: "modifier", mods: ["LGUI", "LSFT"] } }];
@@ -23,8 +24,6 @@ const ANSWERS = [
   "Yes, propose it now.",
 ];
 const MAX_TURNS = 3;
-
-const cost = (u: ChatOutcome["usage"]) => (u.inputTokens * 4 + u.outputTokens * 20 + u.cacheReadTokens * 0.2 + u.cacheCreationTokens * 5) / 1e6;
 
 describe("eval: remembered reason", () => {
   test.skipIf(!live)("quotes the stored reason and asks, proposals carry the reminder, applying anyway supersedes it", async () => {
@@ -43,6 +42,7 @@ describe("eval: remembered reason", () => {
     let conversationId: string | undefined;
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const outcome = await sendMessage(app, layoutId, {
+      provider: evalProvider,
         message: turn === 0 ? ASK : (ANSWERS[turn - 1] ?? "Yes, propose it now."), ...(conversationId ? { conversationId } : {}),
       });
       conversationId = outcome.conversationId;
@@ -84,13 +84,13 @@ describe("eval: remembered reason", () => {
 
     const date = new Date().toISOString().slice(0, 10);
     const report = [
-      `# Remembered-reason eval, ${date}, ${first?.model} (effort ${first?.effort})`,
+      `# Remembered-reason eval, ${date}, ${evalProvider}, ${first?.model} (effort ${first?.effort})`,
       "",
       ...Object.entries(checks).map(([k, v]) => `- ${v ? "pass" : "FAIL"}: ${k}`),
       "",
       `Turns: ${outcomes.length}. Model requests: ${outcomes.reduce((n, o) => n + o.iterations, 0)}.`,
       `Tokens: ${usage.inputTokens} in, ${usage.outputTokens} out, ${usage.cacheReadTokens} cache read, ${usage.cacheCreationTokens} cache write.`,
-      `Estimated cost: $${cost(usage).toFixed(3)}.`,
+      costLine(outcomes, usage),
       "",
       "## Seeded decision",
       `- ${old}: ${REASON}`,
@@ -108,7 +108,7 @@ describe("eval: remembered reason", () => {
     ].join("\n");
     const dir = join(import.meta.dir, "..", "reports");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, `${date}-${first?.model}-${first?.effort}-remembered-reason.md`), `${report}\n`);
+    writeFileSync(join(dir, reportFile(date, first?.model, first?.effort, "remembered-reason")), `${report}\n`);
 
     expect(checks).toEqual({
       askedBeforeProposing: true, citesTheStoredReason: true, namesTheKeyLikeTheEditor: true, asksWhetherItStillHolds: true,

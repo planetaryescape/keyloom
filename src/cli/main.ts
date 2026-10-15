@@ -2,11 +2,11 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
+  type App, type ImportOutcome, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
   regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
-import { type ChatDeps, registerChatCommands } from "./commands/chat.ts";
+import { type ChatDeps, parseProvider, registerChatCommands } from "./commands/chat.ts";
 import { registerDecisionCommands } from "./commands/decisions.ts";
 import { registerEmulateCommand } from "./commands/emulate.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
@@ -176,12 +176,14 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .option("--port <port>", "port on 127.0.0.1", String(DEFAULT_PORT))
     .option("--no-open", "don't open the browser")
     .option("--board-dev <board>", "contributors: show a board's keys with their position numbers instead of your layouts; takes a board ID under ./boards or a board folder")
-    .action(async (opts: { port: string; open: boolean; boardDev?: string }) => {
+    .option("--provider <provider>", `model provider for new chats: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
+    .action(async (opts: { port: string; open: boolean; boardDev?: string; provider?: string }) => {
+      const provider = opts.provider === undefined ? undefined : parseProvider(opts.provider);
       const port = Number(opts.port);
       if (!Number.isInteger(port) || port < 1 || port > 65535) throw new UsageError(`--port must be 1-65535, got "${opts.port}"`);
       const start = (app: App | undefined) => {
         try {
-          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
+          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, ...(provider ? { provider } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
         } catch (err) {
           if ((err as { code?: string }).code === "EADDRINUSE") throw new UsageError(`port ${port} is in use; pass --port`);
           throw err;

@@ -2,7 +2,7 @@
 import type { Command } from "commander";
 import { createInterface } from "node:readline";
 import {
-  type AgentModel, type ChatOutcome, ModelError, UsageError, listConversationSummaries, listLayouts, sendMessage,
+  type AgentModel, type ChatOutcome, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage,
 } from "../../app/index.ts";
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
@@ -31,8 +31,10 @@ const outcomeJson = (o: ChatOutcome) => ({
   text: o.text,
   proposals: o.proposals.map(proposalJson),
   priorities: o.priorities.map((p) => ({ id: p.id, priority_kind: p.priorityKind, statement: p.statement, subject: p.subject })),
+  provider: o.provider,
   model: o.model,
   effort: o.effort,
+  ...(o.costUsd === undefined ? {} : { cost_usd: o.costUsd }),
   usage: {
     input_tokens: o.usage.inputTokens, output_tokens: o.usage.outputTokens,
     cache_read_input_tokens: o.usage.cacheReadTokens, cache_creation_input_tokens: o.usage.cacheCreationTokens,
@@ -61,18 +63,26 @@ const NOTICE: Partial<Record<ChatOutcome["status"], string>> = {
   iteration_limit: "The model kept calling tools and was stopped before it replied. Ask again, more specifically.",
 };
 
+/** `--provider`; a typo is a usage error here rather than a missing-credential error later. */
+export function parseProvider(text: string): ProviderId {
+  if (!isProviderId(text)) throw new UsageError(`--provider must be one of ${PROVIDERS.join(", ")}, got "${text}"`);
+  return text;
+}
+
 export function registerChatCommands(program: Command, ctx: CliContext, deps: ChatDeps = {}): void {
   program
     .command("chat")
-    .description("talk to the agent about a layout; streams its reply and prints any proposals. Needs ANTHROPIC_API_KEY")
+    .description("talk to the agent about a layout; streams its reply and prints any proposals. Needs ANTHROPIC_API_KEY, OPENROUTER_API_KEY or a `codex login`")
     .argument("[layout]", "layout ID or name (optional when there is only one layout)")
     .argument("[message]", "one message; the same as --message")
     .option("--message <text>", "send one message and exit instead of starting an interactive chat")
     .option("--conversation <id>", "continue this conversation")
     .option("--select <layer:positions>", "keys selected on a layer, such as layer-0:29,30,31")
-    .action(async (layoutArg: string | undefined, positional: string | undefined, opts: { message?: string; conversation?: string; select?: string }) => {
+    .option("--provider <provider>", `model provider for a new conversation: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
+    .action(async (layoutArg: string | undefined, positional: string | undefined, opts: { message?: string; conversation?: string; select?: string; provider?: string }) => {
       const oneShot = opts.message ?? positional;
       const select = opts.select === undefined ? undefined : parseSelect(opts.select);
+      const provider = opts.provider === undefined ? undefined : parseProvider(opts.provider);
       const machine = ctx.format() !== "table";
 
       await ctx.withApp(async (app) => {
@@ -94,6 +104,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
             ...(conversationId ? { conversationId } : {}),
             ...(pendingSelect ? { selection: pendingSelect } : {}),
             ...(deps.model ? { model: deps.model } : {}),
+            ...(provider ? { provider } : {}),
             onEvent: (e) => {
               if (machine) return;
               if (e.type === "text") {

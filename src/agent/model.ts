@@ -2,6 +2,7 @@
 // speaks these types, so tests script a model without a network and a second provider (Q3) is one
 // new implementation.
 import type { z } from "zod";
+import type { ProviderId } from "./provider.ts";
 
 /** An Anthropic content block, carried as the provider sent it. keyloom stores and replays these unchanged. */
 export type ContentBlock = { type: string; [key: string]: unknown };
@@ -47,11 +48,18 @@ export type ModelResult = {
   stopReason: string;
   iterations: number;
   usage: Usage;
+  /** What the provider charged, when it says (OpenRouter's `usage.cost`). Absent for a provider that doesn't, such as Codex. */
+  costUsd?: number;
 };
+
+export type ModelErrorKind = "missing_key" | "auth" | "no_credits" | "permission" | "rate_limit" | "overloaded" | "connection" | "request" | "server";
 
 export interface AgentModel {
   /** Recorded in the per-turn log. */
+  readonly provider: ProviderId;
   readonly model: string;
   readonly effort: string;
   run(request: ModelRequest): Promise<ModelResult>;
+  /** Maps this provider's failure to the few kinds BK acts on; null when it isn't a model API failure, so a bug stays a bug. */
+  classifyError(err: unknown): { kind: ModelErrorKind; message: string } | null;
 }

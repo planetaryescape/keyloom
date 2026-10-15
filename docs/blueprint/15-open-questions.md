@@ -62,6 +62,10 @@ The combined `glove80.uf2` holds two images at the same addresses with different
 
 Yes. Flash `fl_01M5067Z2Y2JT3EDYD3JCY0NSC` copied keyloom's combined `glove80.uf2` (build `bld_01M4ZXEWMANN3V3H25Y28EC6JP`, BK's `42-key-map` keymap) to `GLV80RHBOOT` and then to the left half's boot drive with `keyloom flash --wait 15` (v0.10.1). Each bootloader took its own image and rebooted, both halves came back on USB as "Glove80 Right" and "Glove80 Left", and BK typed on the board: "typing works as you can see." An earlier attempt, `fl_01M5066BDXSVVD2CF3ZJT0JMN5`, failed with `EACCES` on the copy because the agent's sandbox blocked writes to `/Volumes`. A flash now explains that error, since macOS raises the same one for an app without Removable Volumes access.
 
+### S19 result (2026-10-15)
+
+Yes, with one change. The existing adapter, pointed at `https://openrouter.ai/api` with `authToken`, passed `option-option.eval.test.ts` on `anthropic/claude-opus-5.5`: the Tool Runner, streaming, adaptive thinking, effort and `cache_control` all worked. OpenRouter rejects the fallback beta's `fallbacks: "default"` (400, expects an array), so the beta is sent to Anthropic only. `usage.cost` arrives on the closing `message_delta` and not in the SDK's final message, so the adapter reads it from the stream event. The out-of-credits path is tested against scripted responses only. See [../research/spikes/S19.md](../research/spikes/S19.md).
+
 ### S10 result, devicetree half (2026-10-15)
 
 `web-tree-sitter` loads `tree-sitter-devicetree.wasm` inside a `bun build --compile` binary: the compiled `keyloom import --board moergo/glove80` and `generate` ran on the macOS arm64 binary with no extra flags. See [../research/spikes/S10.md](../research/spikes/S10.md).

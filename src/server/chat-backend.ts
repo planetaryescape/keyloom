@@ -18,7 +18,7 @@ export interface ChatBackend {
 /** A failure the browser should see as-is: the status and code go into ApiErrorBody (or an `error` event). */
 export class ChatError extends Error {
   constructor(
-    readonly status: 400 | 404 | 409 | 429 | 502 | 503,
+    readonly status: 400 | 402 | 404 | 409 | 429 | 502 | 503,
     readonly code: string,
     message: string,
   ) {

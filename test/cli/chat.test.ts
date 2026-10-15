@@ -5,6 +5,7 @@ import { parseSelect } from "../../src/cli/commands/chat.ts";
 import type { Io } from "../../src/cli/output.ts";
 import { type ScriptStep, fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
+import { withoutCredentials } from "../helpers/no-credentials.ts";
 import { draft } from "../helpers/ops.ts";
 
 async function cli(args: string[], deps: Parameters<typeof runCli>[2] = {}) {
@@ -81,19 +82,31 @@ describe("keyloom chat", () => {
     expect(fake.requests[1]?.body.messages).toHaveLength(3); // first, its answer, second
   });
 
-  test("a missing API key exits 9 with a clear message", async () => {
+  test("a missing API key exits 9 and names every way to set one up", async () => {
     const { dir } = await optionOptionApp();
-    const saved = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
+    await withoutCredentials(async () => {
       const r = await cli(["chat", "bk", "--message", "hi", "--format", "table", "--data-dir", dir]);
       expect(r.code).toBe(9);
-      expect(r.err).toContain("ANTHROPIC_API_KEY is not set");
+      expect(r.err).toContain("ANTHROPIC_API_KEY");
+      expect(r.err).toContain("OPENROUTER_API_KEY");
+      expect(r.err).toContain("codex login");
       const j = await cli(["chat", "bk", "--message", "hi", "--format", "json", "--data-dir", dir]);
       expect(JSON.parse(j.err)).toMatchObject({ error: { code: "missing_api_key" } });
-    } finally {
-      if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
-    }
+    });
+  });
+
+  test("--provider names the credential that provider needs", async () => {
+    const { dir } = await optionOptionApp();
+    await withoutCredentials(async () => {
+      const anthropic = await cli(["chat", "bk", "--message", "hi", "--provider", "anthropic", "--format", "table", "--data-dir", dir]);
+      expect(anthropic.err).toContain("ANTHROPIC_API_KEY is not set");
+      const openrouter = await cli(["chat", "bk", "--message", "hi", "--provider", "openrouter", "--format", "table", "--data-dir", dir]);
+      expect(openrouter.code).toBe(9);
+      expect(openrouter.err).toContain("OPENROUTER_API_KEY is not set");
+      const typo = await cli(["chat", "bk", "--message", "hi", "--provider", "openai", "--format", "table", "--data-dir", dir]);
+      expect(typo.code).toBe(2);
+      expect(typo.err).toContain("anthropic, openrouter, codex");
+    });
   });
 
   test("a refusal exits 9 after printing what happened", async () => {

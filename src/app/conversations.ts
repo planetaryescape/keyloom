@@ -1,6 +1,6 @@
 // Use cases for talking to the agent: send a message, list and show conversations (03, 10).
 import { type AgentModel, type ModelMessage } from "../agent/model.ts";
-import { classifyModelError } from "../agent/anthropic-model.ts";
+import type { ProviderId } from "../agent/provider.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
 import { typedText, userMessageText } from "../agent/prompt.ts";
 import type { DecisionDraft } from "../layout/change.ts";
@@ -63,9 +63,12 @@ export type ChatOutcome = {
   text: string;
   proposals: ProposalCard[];
   priorities: PriorityCard[];
+  provider: ProviderId;
   model: string;
   effort: string;
   usage: Usage;
+  /** What the provider charged, when it reports a figure. */
+  costUsd?: number;
   iterations: number;
 };
 
@@ -75,6 +78,8 @@ export type SendMessageInput = {
   /** `layer` is an ID, index or name, as for `layout show --layer`. */
   selection?: { layer: string; positions: number[] };
   model?: AgentModel;
+  /** `--provider`: which provider answers when `model` isn't given. */
+  provider?: ProviderId;
   maxIterations?: number;
   onEvent?: (event: ChatEvent) => void;
   signal?: AbortSignal;
@@ -129,7 +134,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   const view = getLayout(app, ref);
   const selection = resolveSelection(app, ref, input.selection);
   // Before anything is stored, so a missing key doesn't leave an empty conversation behind.
-  const model = input.model ?? defaultAgentModel();
+  const model = input.model ?? defaultAgentModel(app.dataDir, input.provider ? { provider: input.provider } : {});
 
   let conversation: ConversationRow;
   if (input.conversationId === undefined) {
@@ -144,7 +149,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   answering.add(conversation.id);
 
   const started = Date.now();
-  const logBase = { conversationId: conversation.id, model: model.model, effort: model.effort };
+  const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
   try {
     const text = userMessageText(input.message, selection, view.document);
     const userMessage = insertMessage(app.db, {
@@ -176,7 +181,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
         },
       });
     } catch (err) {
-      const known = classifyModelError(err);
+      const known = model.classifyError(err);
       logTurn(app, { ...logBase, messageIds: [userMessage.id] }, started, {
         status: "error", error: known?.kind ?? (err instanceof Error ? err.name : "unknown"),
       });
@@ -193,6 +198,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
 
     logTurn(app, { ...logBase, messageIds }, started, {
       usage: outcome.usage,
+      ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
       status: outcome.status,
       stopReason: outcome.stopReason,
       iterations: outcome.iterations,
@@ -204,7 +210,8 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
 
     const result: ChatOutcome = {
       conversationId: conversation.id, messageIds, status: outcome.status, text: outcome.text, proposals, priorities,
-      model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
+      provider: model.provider, model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
+      ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
     };
     input.onEvent?.({ type: "done", outcome: result });
     return result;

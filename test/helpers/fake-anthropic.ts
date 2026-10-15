@@ -6,12 +6,13 @@ export type ScriptedBlock = { text: string } | { tool: string; input: unknown };
 export type ScriptedReply = {
   blocks: ScriptedBlock[];
   stop?: "end_turn" | "tool_use" | "max_tokens" | "refusal";
-  usage?: { input: number; output: number };
+  usage?: { input: number; output: number; cost?: number };
   /** An HTTP error instead of a reply. */
   error?: { status: number; message: string };
 };
 
 export type SeenRequest = {
+  url: string;
   body: Record<string, any>;
   headers: Headers;
   /** The text of every tool_result in the last user message, in order. */
@@ -44,12 +45,12 @@ function stream(reply: ScriptedReply, n: number): string {
     }
     events.push(["content_block_stop", { type: "content_block_stop", index }]);
   });
-  events.push(["message_delta", { type: "message_delta", delta: { stop_reason: stop, stop_sequence: null }, usage: { output_tokens: usage.output } }]);
+  events.push(["message_delta", { type: "message_delta", delta: { stop_reason: stop, stop_sequence: null }, usage: { output_tokens: usage.output, ...(usage.cost === undefined ? {} : { cost: usage.cost }) } }]);
   events.push(["message_stop", { type: "message_stop" }]);
   return sse(events);
 }
 
-export function fakeAnthropic(script: ScriptStep[]): { client: Anthropic; requests: SeenRequest[] } {
+export function fakeAnthropic(script: ScriptStep[], clientOptions: ConstructorParameters<typeof Anthropic>[0] = {}): { client: Anthropic; requests: SeenRequest[] } {
   const requests: SeenRequest[] = [];
   const fetchFake = async (_url: unknown, init?: { body?: unknown; headers?: HeadersInit }): Promise<Response> => {
     const body = JSON.parse(String(init?.body)) as Record<string, any>;
@@ -58,7 +59,7 @@ export function fakeAnthropic(script: ScriptStep[]): { client: Anthropic; reques
     const toolResults = blocks
       .filter((b) => b.type === "tool_result")
       .map((b) => (typeof b.content === "string" ? b.content : (b.content ?? []).map((c: any) => c.text ?? "").join("")));
-    const seen: SeenRequest = { body, headers: new Headers(init?.headers), toolResults };
+    const seen: SeenRequest = { url: String(_url), body, headers: new Headers(init?.headers), toolResults };
     requests.push(seen);
     const step = script[requests.length - 1];
     if (!step) throw new Error(`the scripted model was called ${requests.length} times, but the script has ${script.length} steps`);
@@ -70,6 +71,6 @@ export function fakeAnthropic(script: ScriptStep[]): { client: Anthropic; reques
     }
     return new Response(stream(reply, requests.length), { status: 200, headers: { "content-type": "text/event-stream" } });
   };
-  const client = new Anthropic({ apiKey: "test-key", fetch: fetchFake as unknown as typeof fetch, maxRetries: 0 });
+  const client = new Anthropic({ apiKey: "test-key", ...clientOptions, fetch: fetchFake as unknown as typeof fetch, maxRetries: 0 });
   return { client, requests };
 }

@@ -36,6 +36,7 @@ export type TurnOutcome = {
   proposals: ProposalResult[];
   priorities: RecordedPriority[];
   usage: Usage;
+  costUsd?: number;
   iterations: number;
   toolCalls: ToolCallTrace[];
   validationFailures: ValidationFailureTrace[];
@@ -147,6 +148,7 @@ export async function runAgentTurn(input: {
     proposals,
     priorities,
     usage: result.usage,
+    ...(result.costUsd === undefined ? {} : { costUsd: result.costUsd }),
     iterations: result.iterations,
     toolCalls: recorder.toolCalls,
     validationFailures: recorder.validationFailures,
