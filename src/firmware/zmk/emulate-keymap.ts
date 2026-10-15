@@ -2,6 +2,7 @@
 // does the same: a mock kscan replays key events, and the log says what the firmware did. The board's
 // matrix is replaced by one row of keys numbered by position, so a keyloom position is a column and the
 // board's real wiring (which the keymap already abstracts away) is left out.
+import { EmulationError } from "../emulate/error.ts";
 import type { EmulatorEvent } from "../emulate/types.ts";
 
 /** Behaviours that need hardware the host doesn't have, or send nothing a keyboard report carries. */
@@ -30,7 +31,7 @@ export const SETTLE_MS = 2000;
 /** The mock packs a delay into 15 bits. */
 const MAX_DELAY_MS = 0x7fff;
 
-export class EmulateKeymapError extends Error {
+export class EmulateKeymapError extends EmulationError {
   override name = "EmulateKeymapError";
 }
 
