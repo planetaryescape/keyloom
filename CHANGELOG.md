@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/planetaryescape/keyloom/compare/v0.11.0...v0.12.0) (2026-10-15)
+
+
+### Features
+
+* chat shows the active provider and lists every way to set one up ([0e9f18e](https://github.com/planetaryescape/keyloom/commit/0e9f18e47d52cb77c5b2ab8655d5adb1ae43329f))
+* Codex provider with a loopback MCP tool server and a locked-down run (S20) ([c6d23e7](https://github.com/planetaryescape/keyloom/commit/c6d23e7455e57c1d6a8fa41030a6b61a9a6cb3b0))
+* neutral stored blocks and conversations pinned to their provider (D-111) ([977a240](https://github.com/planetaryescape/keyloom/commit/977a240eca239541f1e9761734d7818050b6db88))
+* OpenRouter provider and provider selection (flag, env, data-dir config) ([1f8c00b](https://github.com/planetaryescape/keyloom/commit/1f8c00b721114c27c0be1a345b0d68d9e37fa352))
+
+
+### Bug Fixes
+
+* codex tests no longer depend on the machine's Codex login or on event timing, and codex loads lazily ([65e31ed](https://github.com/planetaryescape/keyloom/commit/65e31edcfb0e1b37eb4d72e041587d7b48899a77))
+
 ## [0.11.0](https://github.com/planetaryescape/keyloom/compare/v0.10.1...v0.11.0) (2026-10-15)
 
 
