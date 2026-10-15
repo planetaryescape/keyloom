@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/planetaryescape/keyloom/compare/v0.18.0...v0.19.0) (2026-10-15)
+
+
+### Features
+
+* settings page and per-layer and per-key LED colours, with Oryx's ledmap read in and regenerated identically ([ae2399e](https://github.com/planetaryescape/keyloom/commit/ae2399ee10e4625eb0fba090080cbc03c8293eb9))
+
 ## [0.18.0](https://github.com/planetaryescape/keyloom/compare/v0.17.0...v0.18.0) (2026-10-15)
 
 
