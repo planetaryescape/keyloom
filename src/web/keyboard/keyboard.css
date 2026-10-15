@@ -133,7 +133,47 @@ button.cap[data-partner="true"] {
   outline-offset: 2px;
 }
 
+/* A draft that is not applied: a dashed accent ring and a dot, so it never reads as saved. */
+button.cap[data-pending="true"] {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: 2px;
+}
+
+button.cap[data-pending="true"]::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-panel);
+}
+
+/* The key an apply just changed rings once and fades. */
+button.cap[data-applied="true"] {
+  animation: applied 1.6s var(--ease-out) forwards;
+}
+
+@keyframes applied {
+  from {
+    outline: 2px solid var(--color-success);
+    outline-offset: 2px;
+  }
+  to {
+    outline: 2px solid transparent;
+    outline-offset: 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  button.cap[data-applied="true"] {
+    animation: none;
+    outline: 2px solid var(--color-success);
+    outline-offset: 2px;
+  }
+
   button.cap:active {
     transform: none;
   }

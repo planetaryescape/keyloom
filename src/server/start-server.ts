@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import type { EditorBackend } from "./editor-backend.ts";
+import { MAX_BODY_BYTES, handleEditorRoute, isEditorPath } from "./editor-routes.ts";
 import { checkHost, checkToken } from "./guard.ts";
 import type { LayoutSource } from "./layout-source.ts";
 import { loadWebAssets } from "./web-assets.ts";
@@ -7,6 +9,8 @@ import { LayoutDetailSchema, LayoutListResponseSchema } from "../api/http.ts";
 export interface ServerOptions {
   port: number;
   source: LayoutSource;
+  /** The rung 2 write side. Without it the write routes answer 404, as if they did not exist. */
+  editor?: EditorBackend;
   token?: string;
   open?: boolean;
 }
@@ -22,17 +26,18 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
+    maxRequestBodySize: MAX_BODY_BYTES,
     async fetch(request) {
       const denied = checkHost(request, boundPort());
       if (denied) return denied;
       const url = new URL(request.url);
-      if (url.pathname === LIST_PATH || url.pathname.startsWith(DETAIL_PREFIX)) {
+      if (url.pathname === LIST_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);
       }
       return page(request, url.pathname);
@@ -50,6 +55,10 @@ export function startServer({ port, source, token, open = false }: ServerOptions
   async function api(request: Request, pathname: string): Promise<Response> {
     const denied = checkToken(request, sessionToken);
     if (denied) return denied;
+    if (isEditorPath(pathname)) {
+      if (editor === undefined) return Response.json({ error: "not found" }, { status: 404 });
+      return respond(async () => (await handleEditorRoute(request, pathname, editor)) ?? notFound());
+    }
     if (request.method !== "GET") {
       return new Response("method not allowed", { status: 405, headers: { allow: "GET" } });
     }
@@ -82,6 +91,10 @@ export function startServer({ port, source, token, open = false }: ServerOptions
   }
 
   return { url, token: sessionToken, stop: () => server.stop(true) };
+}
+
+function notFound(): Response {
+  return Response.json({ error: "not found" }, { status: 404 });
 }
 
 // The ref is the single path segment after /api/layouts/. A malformed escape is a 404,

@@ -159,6 +159,10 @@
   color: var(--color-text-muted);
 }
 
+.inspector-edit {
+  margin-top: var(--space-3);
+}
+
 .inspector .button {
   align-self: flex-start;
 }

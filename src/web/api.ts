@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { ValidationResult } from "../validation/result.ts";
 import {
   LayoutDetailSchema,
   LayoutListResponseSchema,
@@ -8,11 +9,17 @@ import {
 
 export class ApiError extends Error {
   readonly status: number;
+  /** The server's ApiErrorBody code, such as "stale_base"; absent for transport failures and reads. */
+  readonly code: string | undefined;
+  /** Present when a change was refused for validation errors, so the editor can point at the slots. */
+  readonly validation: ValidationResult | undefined;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail: { code?: string; validation?: ValidationResult } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = detail.code;
+    this.validation = detail.validation;
   }
 }
 

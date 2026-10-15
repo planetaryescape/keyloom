@@ -1,4 +1,4 @@
-import { ArrowRight, MousePointer2 } from "lucide-react";
+import { ArrowRight, MousePointer2, Pencil } from "lucide-react";
 import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "../keyboard/Cap.tsx";
 import "./inspector.css";
@@ -23,13 +23,15 @@ interface InspectorProps {
   /** What each key position prints, to name a combo's other keys. */
   tapAt: (position: number) => string;
   onOpenLayer: (layerId: string) => void;
+  /** Opens the binding editor for the selected key; absent when nothing can be edited. */
+  onEdit?: () => void;
 }
 
 function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-export function Inspector({ description, position, finger, layerName, tapAt, onOpenLayer }: InspectorProps) {
+export function Inspector({ description, position, finger, layerName, tapAt, onOpenLayer, onEdit }: InspectorProps) {
   if (description === null || position === null) {
     return (
       <section className="card inspector inspector--idle" aria-label="Key details">
@@ -37,7 +39,7 @@ export function Inspector({ description, position, finger, layerName, tapAt, onO
           <MousePointer2 size={22} aria-hidden="true" />
           <p>
             <strong>Pick a key to see what it does</strong>
-            Tap, hover or click one, or Tab into the keyboard and use the arrow keys.
+            Tap, hover or click one, or Tab into the keyboard and use the arrow keys. Press Enter on a key to edit it.
           </p>
         </div>
       </section>
@@ -63,9 +65,15 @@ export function Inspector({ description, position, finger, layerName, tapAt, onO
             style={{ width: 64, height: 64 }}
           />
         </div>
-        <div>
+        <div className="inspector-title">
           <p className="inspector-headline">{description.headline}</p>
           <p className="inspector-where">{where.join(" · ")}</p>
+          {onEdit === undefined ? null : (
+            <button type="button" className="button button-primary inspector-edit" onClick={onEdit}>
+              <Pencil size={14} aria-hidden="true" />
+              Edit key
+            </button>
+          )}
         </div>
       </div>
 
