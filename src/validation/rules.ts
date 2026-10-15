@@ -10,6 +10,7 @@ import type { Binding, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
+import { kanataProfileOptions, kanataSupport, remapperLockout } from "./kanata-rules.ts";
 import { tapDanceRules } from "./tap-dance-rules.ts";
 import { functionHomes, lostFunctions, reachableLayers, trappedLayers } from "./reachability.ts";
 
@@ -218,6 +219,9 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...layerLimit(doc),
   ...layerUnreachable(doc),
   ...layerTrap(doc),
+  ...kanataSupport(doc),
+  ...kanataProfileOptions(doc),
+  ...remapperLockout(board, doc),
 ];
 
 const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b.firmware, b.source, b.label]);

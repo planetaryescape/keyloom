@@ -1,0 +1,36 @@
+;; keyloom generated this file. Edits are overwritten the next time you Apply; change the layout in keyloom instead.
+;; keyloom-layout: none
+;; keyloom-revision: safe
+;; keyloom-body-sha256: aaaaf160b9b2660d2a9de961faf85c367b903f2f5be7dbd025633ca418a0114f
+;; ---- body ----
+(defcfg
+  ;; Keys keyloom doesn't list still reach the Mac.
+  process-unmapped-keys yes
+  ;; Transparent keys on a switched layer fall back to the first layer, as QMK's do.
+  delegate-to-first-layer yes
+  ;; The built-in keyboard only: BK's external boards stay with their own firmware.
+  macos-dev-names-include ("Apple Internal Keyboard / Trackpad")
+)
+
+(defsrc
+  esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+  grv 1 2 3 4 5 6 7 8 9 0 min eql bspc
+  tab q w e r t y u i o p lbrc rbrc bksl
+  caps a s d f g h j k l scln apo ret
+  lshift z x c v b n m comm Period Slash rshift
+  fn lctrl lalt lmeta spc rmeta ralt lft up down rght
+)
+
+(defvirtualkeys
+  keyloom-safe XX
+)
+
+;; Every key sends itself: remapping is off while this file is loaded.
+(deflayer safe
+  esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+  grv 1 2 3 4 5 6 7 8 9 0 min eql bspc
+  tab q w e r t y u i o p lbrc rbrc bksl
+  caps a s d f g h j k l scln apo ret
+  lshift z x c v b n m comm Period Slash rshift
+  fn lctrl lalt lmeta spc rmeta ralt lft up down rght
+)

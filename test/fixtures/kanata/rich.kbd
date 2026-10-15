@@ -1,0 +1,84 @@
+;; keyloom generated this file. Edits are overwritten the next time you Apply; change the layout in keyloom instead.
+;; keyloom-layout: lay_TEST
+;; keyloom-revision: rev_TEST
+;; keyloom-body-sha256: e2c6cb264caa264660aa32e2e48c528aea3567164c3069e20e73864412a063a3
+;; ---- body ----
+(defcfg
+  ;; Keys keyloom doesn't list still reach the Mac.
+  process-unmapped-keys yes
+  ;; Transparent keys on a switched layer fall back to the first layer, as QMK's do.
+  delegate-to-first-layer yes
+  ;; Required by defchordsv2.
+  concurrent-tap-hold yes
+  ;; The built-in keyboard only: BK's external boards stay with their own firmware.
+  macos-dev-names-include ("Apple Internal Keyboard / Trackpad")
+)
+
+(defhands
+  (left esc f1 f2 f3 f4 f5 grv 1 2 3 4 5 tab q w e r t caps a s d f g lshift z x c v b fn lctrl lalt lmeta)
+  (right f6 f7 f8 f9 f10 f11 f12 6 7 8 9 0 min eql bspc y u i o p lbrc rbrc bksl h j k l scln apo ret n m comm Period Slash rshift spc rmeta ralt lft up down rght)
+)
+
+(defsrc
+  esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+  grv 1 2 3 4 5 6 7 8 9 0 min eql bspc
+  tab q w e r t y u i o p lbrc rbrc bksl
+  caps a s d f g h j k l scln apo ret
+  lshift z x c v b n m comm Period Slash rshift
+  fn lctrl lalt lmeta spc rmeta ralt lft up down rght
+)
+
+(defvirtualkeys
+  keyloom-rev_TEST XX
+)
+
+(defalias
+  ;; A taps, LGUI holds (profile hrm)
+  ht-1 (tap-hold-opposite-hand 200 a lmeta (timeout hold) (same-hand tap) (tap-repress-timeout 120) (require-prior-idle 150))
+  ;; S taps, LALT holds (profile hrm)
+  ht-2 (tap-hold-opposite-hand 200 s lalt (timeout hold) (same-hand tap) (tap-repress-timeout 120) (require-prior-idle 150))
+  ;; D taps, LCTL holds (profile hrm)
+  ht-3 (tap-hold-opposite-hand 200 d lctrl (timeout hold) (same-hand tap) (tap-repress-timeout 120) (require-prior-idle 150))
+  ;; F taps, LSFT holds (profile hrm)
+  ht-4 (tap-hold-opposite-hand 200 f lshift (timeout hold) (same-hand tap) (tap-repress-timeout 120) (require-prior-idle 150))
+  ;; SPACE taps, layer nav holds (profile space)
+  ht-5 (tap-hold-press 0 1000 spc (layer-while-held nav))
+  ;; macro "Option-Option"
+  m-opt-opt (macro lalt lalt)
+  ;; macro "Signature"
+  m-sign (macro S-b e s t comm spc S-b S-k S-Digit1 100 M-s)
+  ;; tap dance "Tab or backtick"
+  td-td-tab (tap-dance 200 (tab grv))
+)
+
+(deflayer base
+  esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+  grv @m-sign (one-shot 2000 (layer-while-held nav)) 3 4 5 6 7 8 9 0 min eql bspc
+  @td-td-tab q w e r t y u i o p lbrc rbrc bksl
+  (caps-word-toggle 2000) @ht-1 @ht-2 @ht-3 @ht-4 g h j k l scln apo ret
+  lshift z x c v b n m comm Period Slash rshift
+  fn lctrl lalt lmeta @ht-5 (layer-switch num) @m-opt-opt lft up down rght
+)
+
+(deflayer nav
+  _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ lft down up rght _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _
+)
+
+(deflayer num
+  _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ (layer-switch base) _ _ _ _ _
+)
+
+(defchordsv2
+  (x c) M-x 50 first-release ()
+  (i o) eql 50 first-release (nav num)
+)

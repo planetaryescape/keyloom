@@ -5,6 +5,7 @@
 import type { BoardDefinition } from "../boards/schema.ts";
 import type { Slot } from "../layout/change.ts";
 import { deepEqual } from "../layout/equal.ts";
+import { isOppositeHand, readKanataProfile } from "../layout/kanata/profiles.ts";
 import type { Binding, HoldTapProfile, Layout } from "../layout/schema.ts";
 import type { Issue } from "./result.ts";
 
@@ -142,7 +143,7 @@ function zmkOptions(board: BoardDefinition, doc: Layout): Issue[] {
 }
 
 /** `firmware_unsupported` for hold-tap profile options the firmware can't take, so the build never fails on them. */
-export const holdTapOptions = (board: BoardDefinition, doc: Layout): Issue[] => (doc.firmware === "qmk" ? qmkOptions(doc) : zmkOptions(board, doc));
+export const holdTapOptions = (board: BoardDefinition, doc: Layout): Issue[] => (doc.firmware === "qmk" ? qmkOptions(doc) : doc.firmware === "zmk" ? zmkOptions(board, doc) : []);
 
 const isOn = (v: string | number | boolean | undefined) => v !== undefined && v !== false && v !== 0 && v !== "0" && v !== "";
 
@@ -163,6 +164,10 @@ function constrained(board: BoardDefinition, doc: Layout, at: HoldTapAt): boolea
     const setting = doc.settings.find((s) => s.firmware === "qmk" && s.key === "CHORDAL_HOLD")?.value;
     const own = profile?.options.CHORDAL_HOLD;
     return isOn(own === undefined || Array.isArray(own) ? setting : own);
+  }
+  if (doc.firmware === "kanata") {
+    const read = profile ? readKanataProfile(profile) : undefined;
+    return read?.ok === true && isOppositeHand(read.spec.variant);
   }
   const positions = profile?.options["hold-trigger-key-positions"];
   if (!Array.isArray(positions) || positions.length === 0) return false;
@@ -185,7 +190,7 @@ export function homerowSameHandMods(board: BoardDefinition, doc: Layout): Issue[
     if (constrained(board, doc, at)) continue;
     byProfile.set(at.binding.profileId, [...(byProfile.get(at.binding.profileId) ?? []), at.slot]);
   }
-  const how = doc.firmware === "qmk" ? "turn on CHORDAL_HOLD" : "give its profile hold-trigger-key-positions for the opposite hand";
+  const how = doc.firmware === "qmk" ? "turn on CHORDAL_HOLD" : doc.firmware === "kanata" ? "give its profile the opposite-hand variant" : "give its profile hold-trigger-key-positions for the opposite hand";
   return [...byProfile].map(([profileId, slots]) =>
     issue(
       "homerow_same_hand_mods",
