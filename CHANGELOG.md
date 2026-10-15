@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.8.0](https://github.com/planetaryescape/keyloom/compare/v0.7.0...v0.8.0) (2026-10-15)
+
+
+### Features
+
+* carry the decision draft on proposal cards and test the agent's memory with a scripted model ([8016bf8](https://github.com/planetaryescape/keyloom/commit/8016bf8d13b7a0ffc697a6aeb3ba796173913135))
+* decision lifecycle, outcome tool and tuning guidance for the agent ([ed8f605](https://github.com/planetaryescape/keyloom/commit/ed8f605bbb8000d76030ed73a6e16eee97e52c1f))
+* decisions outcome, due and dismiss, and change propose --reason ([67c9196](https://github.com/planetaryescape/keyloom/commit/67c919691e2bb63cee918183b7a6012568085611))
+* decisions routes for the web app ([5737365](https://github.com/planetaryescape/keyloom/commit/573736574e9441fd81c3f56c32eaf4a02e6826f1))
+* decisions view, reminders in the preview, outcome question card and hold-tap tuning in the web app ([15b9a5e](https://github.com/planetaryescape/keyloom/commit/15b9a5ee8e89fcd1fdf57fa5d79e22d182287d34))
+* mark retuned hold-tap keys in a proposal preview ([a6e51e7](https://github.com/planetaryescape/keyloom/commit/a6e51e7148fe97149a46f930a332cc771eef7a99))
+* validate decision reminders, retuned keys and hold-tap profile options ([3ee67cf](https://github.com/planetaryescape/keyloom/commit/3ee67cf45059ead0a0647a6ef5866b34fad00a21))
+* write choice decisions on apply, supersede on override, follow undo, outcome questions ([c4255f1](https://github.com/planetaryescape/keyloom/commit/c4255f1ef888e1a73d80e6372550a9867bbf1f32))
+
+
+### Bug Fixes
+
+* keep outcomes for choices that were lived with, and write decision drafts to BK directly ([51265a4](https://github.com/planetaryescape/keyloom/commit/51265a4ba0d3599dd3a7a7df5cfe3a512a54853c))
+* keep the decisions adapter inside the module table ([d819e66](https://github.com/planetaryescape/keyloom/commit/d819e66b5fec0708ff2b40d6ed643fc65563e65f))
+* name a decision's keys by their full names in the decisions list ([87b9b14](https://github.com/planetaryescape/keyloom/commit/87b9b1411b6484c524aeedd4bfa14b8ed7be2b7f))
+* name an editor decision by what was done, and tidy the outcome question card ([15081e7](https://github.com/planetaryescape/keyloom/commit/15081e7797e571f725ec71b9b72bb7f773627622))
+* type the key-name lookup by plain string ([cd0f604](https://github.com/planetaryescape/keyloom/commit/cd0f60414f98e19cde00226edd9364cbdd0ffd3c))
+
 ## [0.7.0](https://github.com/planetaryescape/keyloom/compare/v0.6.0...v0.7.0) (2026-10-15)
 
 
