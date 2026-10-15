@@ -43,7 +43,7 @@ keyloom keeps a build workspace per board at `$XDG_CACHE_HOME/keyloom/build/moer
 - keyloom copies it to `$XDG_DATA_HOME/keyloom/artifacts/<build id>.uf2`, stores the full log at `logs/<build id>.log`, and records the build in `builds` ([02](02-layout-model.md#database)).
 - **Failure handling.** If Docker isn't running, keyloom fails before starting with "Docker isn't running. Start Docker Desktop and run `keyloom build` again." A failed compile shows the last 40 lines of the log and the log path. If the error names a line in `glove80.keymap`, keyloom maps it back to the layer and position.
 
-The first build downloads the Nix image and toolchain, which takes minutes. Later builds reuse the Docker image and its Nix store. The cost of the first build is measured in spike S7.
+keyloom builds with its own lean image, `infra/glove80/Dockerfile`, not the template's. The template's Dockerfile pre-builds four refs and ran out of space on BK's Docker disk. keyloom's image pre-builds only the pinned ref: the first image build takes 163 s at 5.22 GB, and each firmware build then takes 16–20 s (S7, [../research/spikes/S7.md](../research/spikes/S7.md)). `keyloom doctor` warns when Docker's VM has less than 15G free.
 
 Rejected: building in MoErgo's cloud Layout Editor, because it needs an account, has unpublished build limits, and takes the build off BK's machine (D-028). Rejected: GitHub Actions in a user config repo, because it needs a repo and a push for every change and takes minutes per round trip.
 
