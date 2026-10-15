@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.0](https://github.com/planetaryescape/keyloom/compare/v0.16.0...v0.17.0) (2026-10-15)
+
+
+### Features
+
+* combos from a selection, layer tabs, swap, drag, copy, paste and quick assign in the web app ([0789765](https://github.com/planetaryescape/keyloom/commit/0789765be2912929ce59d3d38753dba717ce784b))
+* layer style, duplicate and move ops, and new layers that warn instead of fail when out of reach ([54f16b7](https://github.com/planetaryescape/keyloom/commit/54f16b76ec8d3ad8411bc101e5d83f96291c10b6))
+
 ## [0.16.0](https://github.com/planetaryescape/keyloom/compare/v0.15.0...v0.16.0) (2026-10-15)
 
 
