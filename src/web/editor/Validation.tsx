@@ -2,6 +2,7 @@ import { CircleCheck, CircleX, Info, LoaderCircle, TriangleAlert } from "lucide-
 import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { Issue, ValidationResult } from "../../validation/result.ts";
+import { functionLabel } from "./function-label.ts";
 import type { CheckState } from "./useCheck.ts";
 
 interface Props {
@@ -49,7 +50,7 @@ function diffLine({ diff }: ValidationResult): string {
 }
 
 // Functions that move or disappear are worth their own lines; the headline count is not.
-function DiffDetails({ result }: { result: ValidationResult }) {
+function DiffDetails({ result, layout }: { result: ValidationResult; layout: Layout }) {
   const { displaced, dropped } = result.diff;
   const moved = displaced.filter((d) => d.to !== null);
   if (moved.length === 0 && dropped.length === 0) return null;
@@ -57,22 +58,24 @@ function DiffDetails({ result }: { result: ValidationResult }) {
     <div className="diff">
       <ul>
         {moved.map((d) => (
-          <li key={`${d.function}:${d.from.position}`}>{d.function} moves from key {d.from.position + 1} to key {(d.to?.position ?? 0) + 1}.</li>
+          <li key={`${d.function}:${d.from.layerId}:${d.from.position}`}>
+            {functionLabel(d.function, layout)} moves from {slotName(layout, d.from)} to {d.to === null ? "nowhere" : slotName(layout, d.to)}.
+          </li>
         ))}
         {dropped.map((d) => (
-          <li key={d.function}>{d.function} is dropped: {d.reason}</li>
+          <li key={d.function}>{functionLabel(d.function, layout)} is dropped: {d.reason}</li>
         ))}
       </ul>
     </div>
   );
 }
 
-function Summary({ result }: { result: ValidationResult }) {
+function Summary({ result, layout }: { result: ValidationResult; layout: Layout }) {
   const line = diffLine(result);
   return (
     <>
       {line === "" ? null : <p className="diff-line">{line}.</p>}
-      <DiffDetails result={result} />
+      <DiffDetails result={result} layout={layout} />
     </>
   );
 }
@@ -127,7 +130,7 @@ export function Validation({ layout, slot, idleNote, state, onRecheck }: Props) 
             ))}
           </ul>
         )}
-        {errors.length === 0 && warnings.length === 0 ? <DiffDetails result={state.result} /> : <Summary result={state.result} />}
+        {errors.length === 0 && warnings.length === 0 ? <DiffDetails result={state.result} layout={layout} /> : <Summary result={state.result} layout={layout} />}
       </>
     );
   }
