@@ -5,9 +5,18 @@
   "description": "Open-source, local-first keyboard configurator for QMK and ZMK boards, with an agent that proposes validated layout changes.",
   "license": "MIT",
   "type": "module",
-  "bin": { "keyloom": "src/cli/main.ts" },
+  "bin": {
+    "keyloom": "src/cli/main.ts"
+  },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "typescript": "7.0.2"
   }
 }
