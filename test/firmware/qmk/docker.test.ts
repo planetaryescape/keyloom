@@ -1,0 +1,60 @@
+// The real thing: generated source built by QMK in Docker. Gated, because it needs Docker, the pinned
+// checkout (created on first run, ~500 MB) and about a minute per build:
+//   KEYLOOM_DOCKER_TESTS=1 bun test test/firmware/qmk/docker.test.ts
+import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
+import { checkoutDirFor } from "../../../src/app/firmware.ts";
+import { dfuProblem } from "../../../src/firmware/qmk/dfu.ts";
+import { buildQmk } from "../../../src/firmware/qmk/build.ts";
+import { generateQmkSource } from "../../../src/firmware/qmk/generate.ts";
+import { importOryxSource } from "../../../src/firmware/qmk/import.ts";
+import { LogSink } from "../../../src/firmware/toolchain/run.ts";
+import type { Layout } from "../../../src/layout/schema.ts";
+import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
+import { tempDir } from "../../helpers/tmp.ts";
+
+const gated = process.env.KEYLOOM_DOCKER_TESTS === "1" ? describe : describe.skip;
+
+// SHA-256 of what the pinned fork and image build from BK's unchanged Oryx source for revb (S5,
+// zsa_moonlander_revb_oryxs3.bin). Generated source that is equivalent must give the same bytes.
+const ORYX_REVB_SHA256 = "fcceb9fba425d4fe40ae4b53c541891edba6fe357c01f22af4b9310d3fa37e4d";
+
+gated("a generated keymap built in Docker", () => {
+  const TIMEOUT = 20 * 60_000;
+
+  async function build(layout: Layout, boardRevisionId: "reva" | "revb") {
+    const board = await moonlander();
+    const dir = tempDir();
+    const log = new LogSink(join(dir, "build.log"));
+    const artifactPath = join(dir, "out.bin");
+    const r = await buildQmk({
+      board: board.definition, boardRevisionId, checkoutDir: checkoutDirFor(board), artifactPath, log, containerName: `keyloom-test-${process.pid}-${boardRevisionId}`,
+      source: generateQmkSource({ layout, board: board.definition, revisionId: "rev_test", boardRevisionId }),
+    });
+    log.close();
+    return { ...r, bytes: await Bun.file(artifactPath).bytes() };
+  }
+
+  test("BK's Oryx layout, round-tripped through keyloom, builds for revb to the same binary Oryx's source gives", async () => {
+    const board = await moonlander();
+    const { layout } = await importOryxSource(FIXTURE_DIR, board.definition);
+    const built = await build(layout, "revb");
+    expect(dfuProblem(built.bytes, "3297:2003")).toBeUndefined();
+    expect(new Bun.CryptoHasher("sha256").update(built.bytes).digest("hex")).toBe(ORYX_REVB_SHA256);
+  }, TIMEOUT);
+
+  test("an edited layout with a new macro, a layer-scoped combo, a combo timeout and a tapping-term override compiles for reva", async () => {
+    const board = await moonlander();
+    const { layout } = await importOryxSource(FIXTURE_DIR, board.definition);
+    const edited: Layout = {
+      ...layout,
+      layers: layout.layers.map((l, i) => (i === 0 ? { ...l, bindings: l.bindings.map((b, p) => (p === 4 ? { kind: "key" as const, code: "Z", mods: ["LCTL" as const, "LSFT" as const] } : p === 5 ? { kind: "macro" as const, macroId: "new" } : b)) } : l)),
+      macros: [...layout.macros, { id: "new", name: "Paste twice", steps: [{ op: "tap", code: "V", mods: ["LGUI"] }, { op: "waitMs", ms: 40 }, { op: "tap", code: "V", mods: ["LGUI"] }, { op: "press", code: "A", mods: ["LSFT"] }, { op: "release", code: "A", mods: ["LSFT"] }] }],
+      combos: [...layout.combos, { id: "extra", name: "Extra", positions: [45, 46], layerIds: ["layer-0", "layer-1"], output: { kind: "key", code: "ESCAPE" }, timeoutMs: 25 }],
+      holdTapProfiles: layout.holdTapProfiles.map((p) => (p.id === "home-row-mods" ? { ...p, options: { ...p.options, TAPPING_TERM: 175, PERMISSIVE_HOLD: false } } : p)),
+    };
+    const built = await build(edited, "reva");
+    expect(dfuProblem(built.bytes, "0483:df11")).toBeUndefined();
+    expect(built.bytes.length).toBeGreaterThan(60_000);
+  }, TIMEOUT);
+});

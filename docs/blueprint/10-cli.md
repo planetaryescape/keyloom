@@ -35,8 +35,9 @@ keyloom
   decisions edit <dec> [--goal …] [--choice …] [--reason …] [--status …]
   decisions retire <dec>
 
-  generate <layout> [--rev R] --out <dir>  write firmware source without building
-  build <layout> [--rev R]                 generate and build; prints the build ID and artifact path
+  generate <layout> [--rev R] [--board-rev B] --out <dir>  write firmware source without building
+  build <layout> [--rev R] [--board-rev B] generate and build; prints the build ID and artifact path
+                                           (--board-rev reva|revb; detected from a connected keyboard when omitted)
   flash [--build B] [--layout L]           flash the newest successful build of L, or B
   doctor                                   Docker, toolchain images, pinned checkouts, API key, database
 ```

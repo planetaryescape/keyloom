@@ -18,7 +18,8 @@ describe("migrations", () => {
   test("every SQL file in migrations/ is registered, in order, with matching versions", () => {
     const files = readdirSync(`${import.meta.dir}/../../src/persistence/migrations`).filter((f) => f.endsWith(".sql")).sort();
     expect(MIGRATIONS.map((m) => `${m.name}.sql`)).toEqual(files);
-    MIGRATIONS.forEach((m, i) => expect(m.version).toBe(i + 1));
+    // The version is the file's number, so parallel branches can add 0002 and 0003 independently.
+    for (const m of MIGRATIONS) expect(m.version).toBe(Number(m.name.slice(0, 4)));
   });
 
   test("opening twice applies each migration once and keeps data", () => {

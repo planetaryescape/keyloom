@@ -219,14 +219,20 @@ describe("doctor", () => {
   test("a missing database is fine and is not created; a real one passes every check", async () => {
     const dir = tempDir();
     const fresh = await cli(["doctor", "--data-dir", join(dir, "new"), "--format", "table"]);
-    expect(fresh.code).toBe(0);
+    // The toolchain checks depend on this machine (Docker running); the database ones don't.
+    expect(fresh.out).toContain("ok    database: ");
     expect(fresh.out).toContain("does not exist yet");
     expect(await Bun.file(join(dir, "new", "keyloom.db")).exists()).toBe(false);
     await cli(["import", "--board", "zsa/moonlander", FIXTURE_DIR, "--data-dir", dir]);
     const r = json(await cli(["doctor", "--data-dir", dir]));
-    expect(r.ok).toBe(true);
-    expect(r.checks.map((c: { name: string }) => c.name)).toEqual(["data directory", "database integrity", "journal mode", "migrations", "layouts"]);
-    expect(r.checks.at(-1).detail).toBe("1");
+    const names = ["data directory", "database integrity", "journal mode", "migrations", "layouts"];
+    const database = r.checks.filter((c: { name: string }) => names.includes(c.name));
+    expect(database.map((c: { name: string }) => c.name)).toEqual(names);
+    expect(database.every((c: { ok: boolean }) => c.ok)).toBe(true);
+    expect(database.at(-1).detail).toBe("1");
+    // Docker, zapp and the checkout follow the database checks.
+    expect(r.checks.map((c: { name: string }) => c.name)).toContain("docker");
+    expect(r.checks.map((c: { name: string }) => c.name)).toContain("zapp");
   });
 
   test("a database from a newer keyloom fails the migration check with exit 1", async () => {

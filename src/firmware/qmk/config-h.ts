@@ -55,8 +55,8 @@ function settingValue(raw: string): FirmwareSetting["value"] {
   if (/^-?\d+$/.test(raw)) return Number(raw);
   if (/^0[xX][0-9a-fA-F]+$/.test(raw)) return Number.parseInt(raw, 16);
   if (raw === "true" || raw === "false") return raw === "true";
-  const quoted = /^"(.*)"$/.exec(raw);
-  return quoted?.[1] !== undefined ? quoted[1] : raw;
+  // Anything else stays C source text, quotes included, so the generator can write it back as it was.
+  return raw;
 }
 
 /** Defines that the generator derives from the layout, so importing them as settings would let them go stale. */
