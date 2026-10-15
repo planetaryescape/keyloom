@@ -8,6 +8,7 @@ import { zipSync } from "fflate";
 import type { ZmkWestDockerBuild } from "../../boards/recipes.ts";
 import { BuildFailure } from "../toolchain/build-failure.ts";
 import { withLock } from "../toolchain/lock.ts";
+import { writeFresh } from "../toolchain/write-fresh.ts";
 import { run } from "../toolchain/run.ts";
 import { describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import { zmkRevision } from "./board-config.ts";
@@ -54,8 +55,8 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       await mkdir(config, { recursive: true });
       // A keymap or conf left from another layout must not be built.
       for (const f of await readdir(config)) if (/\.(keymap|conf)$/.test(f)) await rm(join(config, f));
-      await Bun.write(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha));
-      for (const f of input.source.files) await Bun.write(join(config, f.path), f.content);
+      await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha));
+      for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
       const handsFree = rev.flash.handsFree !== undefined;
       if (handsFree) await writeModule(input.checkoutDir);
 

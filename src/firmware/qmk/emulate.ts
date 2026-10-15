@@ -15,6 +15,7 @@ import { parseHarnessOutput, typedText } from "./emulate-reports.ts";
 import { type GeneratedSource, generateQmkSource } from "./generate.ts";
 import { describeLocated, locateCompileError } from "./locate-error.ts";
 import { writeSource } from "./write-source.ts";
+import { writeFresh } from "../toolchain/write-fresh.ts";
 
 export const EMULATE_TIMEOUT_MS = 5 * 60_000;
 /** Simulated time after the last event, so a tap-hold or one-shot that is still waiting gets to resolve. */
@@ -108,7 +109,7 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
 
       const dir = join(input.checkoutDir, "tests", name);
       await writeSource(dir, { keymapName: name, files: files });
-      await Bun.write(join(dir, "events.txt"), script);
+      await writeFresh(join(dir, "events.txt"), script);
 
       const inContainer = `/qmk_firmware/tests/${name}`;
       const uid = process.getuid?.() ?? 1000;

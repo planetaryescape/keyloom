@@ -6,6 +6,7 @@ import type { BoardDefinition } from "../../boards/schema.ts";
 import { BuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
+import { writeFresh } from "../toolchain/write-fresh.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
 import { zmkRevision } from "./board-config.ts";
 import type { GeneratedSource } from "./generate.ts";
@@ -71,7 +72,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       }
 
       // The template's build reads config/glove80.keymap and config/glove80.conf (default.nix).
-      for (const f of input.source.files) await Bun.write(join(input.checkoutDir, "config", f.path), f.content);
+      for (const f of input.source.files) await writeFresh(join(input.checkoutDir, "config", f.path), f.content);
       const uid = process.getuid?.() ?? 1000;
       const gid = process.getgid?.() ?? 1000;
       const mount = ["-v", `${input.checkoutDir}:/config`];
@@ -96,9 +97,9 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
         // an earlier build must not be used in its place.
         for (const half of handsFree.halves) {
           const path = halfConfFile(half.marker);
-          if (!input.source.files.some((f) => f.path === path)) await Bun.write(join(input.checkoutDir, "config", path), "# keyloom: no build marker\n");
+          if (!input.source.files.some((f) => f.path === path)) await writeFresh(join(input.checkoutDir, "config", path), "# keyloom: no build marker\n");
         }
-        await Bun.write(join(input.checkoutDir, "config", "default.nix"), GLOVE80_NIX);
+        await writeFresh(join(input.checkoutDir, "config", "default.nix"), GLOVE80_NIX);
       }
 
       const output: string[] = [];

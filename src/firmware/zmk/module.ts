@@ -1,7 +1,8 @@
 // keyloom's ZMK module (firmware/zmk/keyloom-zmk, D-095), embedded in the binary and written out beside each
 // build, so a released keyloom needs no checkout of this repository (the Dockerfile in image.ts is shipped the same way).
-import { mkdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import { writeFresh } from "../toolchain/write-fresh.ts";
 import CMAKE from "../../../firmware/zmk/keyloom-zmk/CMakeLists.txt" with { type: "text" };
 import KCONFIG from "../../../firmware/zmk/keyloom-zmk/Kconfig" with { type: "text" };
 import OVERLAY from "../../../firmware/zmk/keyloom-zmk/keyloom-cdc-acm.overlay" with { type: "text" };
@@ -28,8 +29,7 @@ export async function writeModule(workDir: string): Promise<string> {
   const dir = join(workDir, MODULE_DIR);
   await rm(dir, { recursive: true, force: true });
   for (const [path, content] of Object.entries(MODULE_FILES)) {
-    await mkdir(dirname(join(dir, path)), { recursive: true });
-    await Bun.write(join(dir, path), content);
+    await writeFresh(join(dir, path), content);
   }
   return dir;
 }

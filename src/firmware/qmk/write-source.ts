@@ -1,5 +1,6 @@
-import { mkdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import { writeFresh } from "../toolchain/write-fresh.ts";
 import type { GeneratedSource } from "./generate.ts";
 
 /**
@@ -10,7 +11,6 @@ export async function writeSource(dir: string, source: GeneratedSource, opts: { 
   if (opts.clean) await rm(dir, { recursive: true, force: true });
   for (const f of source.files) {
     const path = join(dir, f.path);
-    await mkdir(dirname(path), { recursive: true });
-    await Bun.write(path, f.content);
+    await writeFresh(path, f.content);
   }
 }
