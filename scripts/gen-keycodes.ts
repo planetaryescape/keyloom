@@ -1,5 +1,8 @@
 // Generates src/layout/keycodes.ts (D-044): keyloom's closed KeyCode set, joined from ZMK's
-// HID table and QMK's keycode data on the HID usage both firmwares send.
+// key names and QMK's keycode data on the HID usage both firmwares send.
+//
+// ZMK's names come from the firmware headers (SPDX MIT). docs/src/data/hid.js is deliberately not
+// used: it is CC-BY-NC-SA-4.0, which doesn't fit an MIT repo.
 //
 //   bun scripts/gen-keycodes.ts           write src/layout/keycodes.ts
 //   bun scripts/gen-keycodes.ts --check   fail if the committed file differs (CI drift check)
@@ -39,27 +42,79 @@ async function fetchText(url: string): Promise<string> {
 // HID usage = (page << 16) | id.
 const KEYBOARD_PAGE = 0x07;
 const usageOf = (page: number, id: number) => (page << 16) | id;
-const LSHIFT_USAGE = usageOf(KEYBOARD_PAGE, 0xe1);
 
 // --- ZMK ---------------------------------------------------------------------------------------
 
-type ZmkEntry = { names: string[]; context: string; description: string; usages: number[] };
+/** One ZMK key: `names[0]` is the define that holds the usage, the rest are its aliases. */
+type ZmkEntry = { names: string[]; usage: number; shifted: boolean };
 
-function parseZmk(source: string): ZmkEntry[] {
-  // hid.js is an ES module that imports helper constants. They are three trivial values, so
-  // they are supplied here instead of fetching and bundling five more files.
-  const body = source.replace(/^import[\s\S]*?;\n/gm, "").replace("export default", "return");
-  // oxlint-disable-next-line no-new-func -- pinned, reviewed upstream data file; no network or fs access is given to it.
-  const build = new Function("keyboardApplication", "consumerApplication", "keyPage", "consumerPage", "usage", body) as (
-    ...args: unknown[]
-  ) => Array<{ names: string[]; context: string; description: string; usages: Array<{ item: number }> }>;
-  const entries = build("keyboard", "consumer", KEYBOARD_PAGE, 0x0c, usageOf);
-  return entries.map((e) => ({
-    names: e.names.filter((n) => /^[A-Z][A-Z0-9_]*$/.test(n)),
-    context: e.context,
-    description: e.description,
-    usages: e.usages.map((u) => u.item),
-  }));
+const NUMBER = /^(0[xX][0-9a-fA-F]+|\d+)$/;
+
+/** `#define NAME (value)` pairs. A value on the next line, or after a backslash, is joined first. */
+function defines(source: string): Array<{ name: string; value: string; deprecated: boolean }> {
+  const joined = source.replace(/\\\n/g, " ").replace(/(#define[ \t]+\w+)[ \t]*\n[ \t]+/g, "$1 ");
+  const out: Array<{ name: string; value: string; deprecated: boolean }> = [];
+  for (const m of joined.matchAll(/^#define[ \t]+(\w+)[ \t]+(.*)$/gm)) {
+    const [, name, rest] = m;
+    if (!name || rest === undefined) continue;
+    const [value = "", comment = ""] = rest.split("//");
+    out.push({ name, value: value.trim(), deprecated: /DEPRECATED/.test(comment) });
+  }
+  return out;
+}
+
+/** Numeric `#define NAME (0x..)` constants from hid_usage.h and hid_usage_pages.h. */
+function constants(...sources: string[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const src of sources) {
+    for (const d of defines(src)) {
+      const inner = /^\((.*)\)$/.exec(d.value)?.[1];
+      if (inner !== undefined && NUMBER.test(inner)) out.set(d.name, Number(inner));
+    }
+  }
+  return out;
+}
+
+/**
+ * ZMK's keys.h. Each define is a usage (`ZMK_HID_USAGE(page, id)`), an implicit-Shift usage
+ * (`LS(ZMK_HID_USAGE(...))`, which is how ZMK spells `!`), or an alias of another define.
+ * Names marked DEPRECATED are skipped. Only plain and Left-Shift forms are kept.
+ */
+function parseZmk(keysH: string, usageH: string, pagesH: string): ZmkEntry[] {
+  const known = constants(usageH, pagesH);
+  const num = (name: string): number => {
+    if (NUMBER.test(name)) return Number(name); // some keys give the id as a literal
+    const v = known.get(name);
+    if (v === undefined) throw new Error(`keys.h refers to ${name}, which hid_usage*.h doesn't define`);
+    return v;
+  };
+  const roots = new Map<string, { usage: number; shifted: boolean }>();
+  const aliases = new Map<string, string>();
+  for (const d of defines(keysH)) {
+    if (d.deprecated || !/^[A-Z][A-Z0-9_]*$/.test(d.name)) continue;
+    const direct = /^\((LS)?\(?ZMK_HID_USAGE\((\w+),\s*(\w+)\)\)?\)$/.exec(d.value);
+    const alias = /^\((\w+)\)$/.exec(d.value);
+    if (direct?.[2] && direct[3]) {
+      roots.set(d.name, { usage: usageOf(num(direct[2]), num(direct[3])), shifted: direct[1] !== undefined });
+    } else if (alias?.[1]) {
+      aliases.set(d.name, alias[1]);
+    } else if (/ZMK_HID_USAGE|^\(\w+\(/.test(d.value)) {
+      // Other modifier wrappers (LA(...), RS(...)) are not keys keyloom models.
+      continue;
+    } else {
+      throw new Error(`keys.h: can't read \`#define ${d.name} ${d.value}\``);
+    }
+  }
+  const byRoot = new Map<string, string[]>([...roots.keys()].map((r) => [r, [r]]));
+  for (const [alias, target] of aliases) {
+    let t = target;
+    for (let hops = 0; aliases.has(t) && hops < 10; hops++) t = aliases.get(t) as string;
+    byRoot.get(t)?.push(alias);
+  }
+  return [...byRoot].map(([root, names]) => {
+    const r = roots.get(root) as { usage: number; shifted: boolean };
+    return { names, usage: r.usage, shifted: r.shifted };
+  });
 }
 
 // --- QMK ---------------------------------------------------------------------------------------
@@ -119,7 +174,7 @@ type Category =
   | "letter" | "number" | "punctuation" | "control" | "navigation" | "function" | "modifier" | "keypad"
   | "international" | "media" | "system" | "other";
 
-function categoryOf(usage: number, zmkContext: string): Category {
+function categoryOf(usage: number): Category {
   const page = usage >> 16;
   const id = usage & 0xffff;
   if (page === 0x0c) return "media";
@@ -132,7 +187,7 @@ function categoryOf(usage: number, zmkContext: string): Category {
   if (id >= 0x2d && id <= 0x38) return "punctuation";
   if ((id >= 0x3a && id <= 0x45) || (id >= 0x68 && id <= 0x73)) return "function";
   if (id >= 0x49 && id <= 0x52) return "navigation";
-  if (zmkContext === "Keypad") return "keypad";
+  if ((id >= 0x53 && id <= 0x63) || id === 0x67 || (id >= 0x85 && id <= 0x86) || (id >= 0xb0 && id <= 0xdd)) return "keypad";
   if (id === 0x64) return "punctuation";
   if (id >= 0x87 && id <= 0x98) return "international";
   if (id >= 0x80 && id <= 0x82) return "media";
@@ -158,8 +213,11 @@ function keyloomName(qmkKey: string): string {
 }
 
 async function build(): Promise<string> {
-  const [hid, report, ...qmkTexts] = await Promise.all([
-    fetchText(raw(ZMK_REPO, ZMK_SHA, "docs/src/data/hid.js")),
+  const zmkPath = (f: string) => raw(ZMK_REPO, ZMK_SHA, `app/include/dt-bindings/zmk/${f}`);
+  const [keysH, usageH, pagesH, report, ...qmkTexts] = await Promise.all([
+    fetchText(zmkPath("keys.h")),
+    fetchText(zmkPath("hid_usage.h")),
+    fetchText(zmkPath("hid_usage_pages.h")),
     fetchText(raw(QMK_REPO, QMK_SHA, "tmk_core/protocol/report.h")),
     ...QMK_FILES.map((f) => fetchText(raw(QMK_REPO, QMK_SHA, `data/constants/keycodes/${f}`))),
     fetchText(raw(QMK_REPO, QMK_SHA, "data/constants/keycodes/extras/keycodes_us_0.0.1.hjson")),
@@ -167,7 +225,7 @@ async function build(): Promise<string> {
   const files = new Map<string, string>();
   [...QMK_FILES, "extras/keycodes_us_0.0.1.hjson"].forEach((f, i) => files.set(f, qmkTexts[i] as string));
 
-  const zmk = parseZmk(hid);
+  const zmk = parseZmk(keysH, usageH, pagesH);
   const qmk = parseQmk(files);
   const reportUsages = parseQmkReportUsages(report);
 
@@ -186,26 +244,22 @@ async function build(): Promise<string> {
 
   const joined: Joined[] = [];
   const zmkSingle = new Map<number, ZmkEntry>();
-  const zmkShifted: Array<{ base: number; entry: ZmkEntry }> = [];
+  const zmkShifted = new Map<number, ZmkEntry>();
   for (const z of zmk) {
-    if (z.usages.length === 1) {
-      const u = z.usages[0] as number;
-      if (zmkSingle.has(u)) throw new Error(`two ZMK entries share usage ${u.toString(16)}`);
-      zmkSingle.set(u, z);
-    } else if (z.usages.length === 2 && z.usages[1] === LSHIFT_USAGE) {
-      zmkShifted.push({ base: z.usages[0] as number, entry: z });
-    }
+    const into = z.shifted ? zmkShifted : zmkSingle;
+    if (into.has(z.usage)) throw new Error(`two ZMK keys share usage ${z.usage.toString(16)}${z.shifted ? " with Shift" : ""}`);
+    into.set(z.usage, z);
   }
 
   for (const [usage, q] of qmkByUsage) {
     const z = zmkSingle.get(usage);
-    if (!z || z.names.length === 0) continue;
+    if (!z) continue;
     joined.push({
       name: keyloomName(q.key),
       qmk: [q.key, ...q.aliases.filter((a) => a !== q.key)],
       zmk: z.names,
       label: q.label,
-      category: categoryOf(usage, z.context),
+      category: categoryOf(usage),
       qmkBasic: q.code <= 0xff,
       usage,
     });
@@ -218,14 +272,14 @@ async function build(): Promise<string> {
     names.add(j.name);
   }
 
-  // Shifted symbols: QMK's `S(KC_x)` aliases joined to ZMK's two-usage entries on (base usage, LSFT).
+  // Shifted symbols: QMK's `S(KC_x)` aliases joined to ZMK's `LS(...)` keys on the base usage.
   const byQmkKey = new Map(joined.map((j) => [j.qmk[0] as string, j]));
   const shifted: Shifted[] = [];
   for (const s of qmk.shifted) {
     const base = byQmkKey.get(s.base);
     if (!base) continue;
-    const z = zmkShifted.find((x) => x.base === base.usage);
-    shifted.push({ code: base.name, qmk: s.names, zmk: z?.entry.names ?? [], label: s.label });
+    const z = zmkShifted.get(base.usage);
+    shifted.push({ code: base.name, qmk: s.names, zmk: z?.names ?? [], label: s.label });
   }
 
   return render(joined, shifted);
@@ -245,7 +299,8 @@ function render(joined: Joined[], shifted: Shifted[]): string {
 // Names on only one firmware are not here; they are reachable only as \`native\` bindings.
 //
 // Sources (pinned):
-//   ZMK  ${ZMK_REPO}@${ZMK_SHA}  docs/src/data/hid.js
+//   ZMK  ${ZMK_REPO}@${ZMK_SHA}  app/include/dt-bindings/zmk/{keys,hid_usage,hid_usage_pages}.h (SPDX MIT)
+//        (docs/src/data/hid.js is deliberately not used: it is CC-BY-NC-SA-4.0)
 //   QMK  ${QMK_REPO}@${QMK_SHA}  data/constants/keycodes/keycodes_*.hjson, extras/keycodes_us_0.0.1.hjson,
 //        tmk_core/protocol/report.h (consumer/system usages for the media block)
 //

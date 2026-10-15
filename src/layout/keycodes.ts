@@ -4,7 +4,8 @@
 // Names on only one firmware are not here; they are reachable only as `native` bindings.
 //
 // Sources (pinned):
-//   ZMK  zmkfirmware/zmk@4dd95d7840eb3d5a3f59bb29fbf1ab054715ef85  docs/src/data/hid.js
+//   ZMK  zmkfirmware/zmk@4dd95d7840eb3d5a3f59bb29fbf1ab054715ef85  app/include/dt-bindings/zmk/{keys,hid_usage,hid_usage_pages}.h (SPDX MIT)
+//        (docs/src/data/hid.js is deliberately not used: it is CC-BY-NC-SA-4.0)
 //   QMK  qmk/qmk_firmware@7a1bbf37c5c07da4ea0a162bb139083a46ef40a1  data/constants/keycodes/keycodes_*.hjson, extras/keycodes_us_0.0.1.hjson,
 //        tmk_core/protocol/report.h (consumer/system usages for the media block)
 //
@@ -29,6 +30,9 @@ export type KeyCodeInfo = {
 
 // [name, qmk, zmk, label, category, qmkBasic]
 const ROWS = [
+  ["SYSTEM_POWER", ["KC_SYSTEM_POWER", "KC_PWR"], ["SYSTEM_POWER", "SYS_PWR"], "Power", "system", true],
+  ["SYSTEM_SLEEP", ["KC_SYSTEM_SLEEP", "KC_SLEP"], ["SYSTEM_SLEEP", "SYS_SLEEP"], "Sleep", "system", true],
+  ["SYSTEM_WAKE", ["KC_SYSTEM_WAKE", "KC_WAKE"], ["SYSTEM_WAKE_UP", "SYS_WAKE"], "Wake", "system", true],
   ["A", ["KC_A"], ["A"], "A", "letter", true],
   ["B", ["KC_B"], ["B"], "B", "letter", true],
   ["C", ["KC_C"], ["C"], "C", "letter", true],
