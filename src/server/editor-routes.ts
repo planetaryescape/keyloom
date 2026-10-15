@@ -4,13 +4,16 @@ import { z } from "zod";
 import {
   ApplyRequestSchema,
   ApplyResponseSchema,
+  BoardListResponseSchema,
   BuildRequestSchema,
   BuildSchema,
   CheckRequestSchema,
   CheckResponseSchema,
   FlashSchema,
+  ImportResponseSchema,
   ParseBindingRequestSchema,
   ParseBindingResponseSchema,
+  RevisionListResponseSchema,
   UndoRequestSchema,
   UndoResponseSchema,
   type ApiErrorBody,
@@ -20,6 +23,9 @@ import { EditorError, type EditorBackend } from "./editor-backend.ts";
 // The most any request body may carry. Change sets are small; this stops a runaway client
 // before the body is read into memory.
 export const MAX_BODY_BYTES = 1_000_000;
+
+// An uploaded export is a zip of a few hundred kB at most; the cap only stops a runaway upload.
+export const MAX_IMPORT_BYTES = 8_000_000;
 
 const EmptyBody = z.object({}).strict();
 
@@ -36,6 +42,9 @@ const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["layouts/:/apply", { method: "POST", run: (b, ref, r) => apply(b, ref, r) }],
   ["change-sets/:/apply", { method: "POST", run: (b, id, r) => applyChangeSet(b, id, r) }],
   ["layouts/:/undo", { method: "POST", run: (b, ref, r) => undo(b, ref, r) }],
+  ["layouts/:/revisions", { method: "GET", run: async (b, ref) => Response.json(RevisionListResponseSchema.parse({ revisions: await b.revisions(ref) })) }],
+  ["boards", { method: "GET", run: async (b) => Response.json(BoardListResponseSchema.parse({ boards: await b.boards() })) }],
+  ["import", { method: "POST", run: (b, _id, r) => importUpload(b, r) }],
   ["layouts/:/builds", { method: "POST", run: (b, ref, r) => startBuild(b, ref, r) }],
   ["builds/:", { method: "GET", run: (b, id) => found(b.getBuild(id), BuildSchema, "build") }],
   ["builds/:/flashes", { method: "POST", run: (b, id, r) => startFlash(b, id, r) }],
@@ -165,6 +174,23 @@ async function undo(backend: EditorBackend, ref: string, request: Request): Prom
   const body = await readBody(request, UndoRequestSchema);
   if (body instanceof Response) return body;
   return Response.json(UndoResponseSchema.parse(await backend.undo(ref, body)));
+}
+
+// The file is the request body, not a form field: application/octet-stream can't be sent by a plain HTML form,
+// which keeps this write as closed to other sites as the JSON ones. Everything else rides in the query.
+async function importUpload(backend: EditorBackend, request: Request): Promise<Response> {
+  const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  if (type !== "application/octet-stream") return fail(415, "content_type", "Send the file as application/octet-stream.");
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (declared > MAX_IMPORT_BYTES) return fail(413, "too_large", "That file is too large to be a layout export.");
+  const query = new URL(request.url).searchParams;
+  const board = query.get("board");
+  const filename = query.get("filename");
+  const name = query.get("name")?.trim();
+  if (!board || !filename) return fail(400, "schema", "Name the board and the file: ?board=...&filename=...");
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.length > MAX_IMPORT_BYTES) return fail(413, "too_large", "That file is too large to be a layout export.");
+  return Response.json(ImportResponseSchema.parse(await backend.importUpload({ board, filename, bytes, ...(name ? { name } : {}) })), { status: 201 });
 }
 
 async function startBuild(backend: EditorBackend, ref: string, request: Request): Promise<Response> {

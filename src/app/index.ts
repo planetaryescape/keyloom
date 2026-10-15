@@ -6,6 +6,8 @@ export {
 } from "./changes.ts";
 export { type ParsedBinding, parseBindingExpression } from "./binding-expression.ts";
 export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, importLayout, listLayouts } from "./layouts.ts";
+export { type UploadInput, importUpload } from "./import-upload.ts";
+export { listRevisions } from "./history.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type DoctorCheck, runDoctor, runKeyboardChecks, runToolchainChecks } from "./doctor.ts";
@@ -37,7 +39,7 @@ export {
   type DecisionRow, type DecisionStatus, type OutcomeQuestion, type OutcomeStatus, dismissOutcome, editDecision, listDecisions, outcomeQuestions,
   recordOutcome, recordPriority, retireDecision, retirePriority, showDecision,
 } from "./decisions.ts";
-export { type ProviderStatus, defaultAgentModel, providerStatus } from "./chat-model.ts";
+export { type ProviderStatus, chooseNextProvider, defaultAgentModel, providerStatus } from "./chat-model.ts";
 export type { AgentModel } from "../agent/model.ts";
 export { PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
 export type { ConversationRow } from "../persistence/conversations.ts";

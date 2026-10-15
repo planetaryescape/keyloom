@@ -1,11 +1,11 @@
 // The Anthropic adapter on its two addresses (D-107), the credit-balance error (S19) and how the
 // app picks a provider (19#choosing-a-provider). No network: the SDK's own fetch is scripted.
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { anthropicModel, classifyModelError, openRouterClientFromEnv } from "../../src/agent/anthropic-model.ts";
 import { NO_CODEX } from "../helpers/no-credentials.ts";
-import { chooseProvider, defaultAgentModel, keyedProviders, providerStatus } from "../../src/app/chat-model.ts";
+import { chooseNextProvider, chooseProvider, defaultAgentModel, keyedProviders, providerStatus } from "../../src/app/chat-model.ts";
 import { ModelError, UsageError, sendMessage } from "../../src/app/index.ts";
 import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { fakeCodex } from "../helpers/fake-codex.ts";
@@ -163,6 +163,42 @@ describe("provider status for the chat panel", () => {
     const status = await providerStatus(tempDir("keyloom-status-"), {}, { KEYLOOM_CODEX_BIN: fakeCodex({ loggedIn: true }).bin });
     expect(status.active?.provider).toBe("codex");
     expect(status.providers.find((p) => p.id === "codex")?.ready).toBe(true);
+  });
+});
+
+describe("choosing the provider from the web app", () => {
+  const env = { KEYLOOM_CODEX_BIN: NO_CODEX, OPENROUTER_API_KEY: "o" };
+
+  test("the choice is written to config.json, keeps the effort already there, and applies to the next conversation", async () => {
+    const dir = tempDir("keyloom-pick-");
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ agent: { provider: "openrouter", model: "old/model", effort: "high" } }));
+    const status = await chooseNextProvider(dir, { provider: "anthropic", model: "claude-test" }, {}, env);
+    expect(JSON.parse(readFileSync(join(dir, "config.json"), "utf8"))).toEqual({ agent: { provider: "anthropic", model: "claude-test", effort: "high" } });
+    expect(status.active).toEqual({ provider: "anthropic", model: "claude-test", effort: "high" });
+    // A provider without a credential can still be chosen: the panel then says what it needs.
+    expect(status.providers.find((p) => p.id === "anthropic")?.ready).toBe(false);
+  });
+
+  test("no model means that provider's default, and an earlier model for another provider is dropped", async () => {
+    const dir = tempDir("keyloom-pick-");
+    await chooseNextProvider(dir, { provider: "openrouter", model: "x/y" }, {}, env);
+    const status = await chooseNextProvider(dir, { provider: "anthropic" }, {}, env);
+    expect(status.active?.model).toBe("claude-opus-5-5");
+    expect(JSON.parse(readFileSync(join(dir, "config.json"), "utf8")).agent).toEqual({ provider: "anthropic" });
+  });
+
+  test("a flag or KEYLOOM_PROVIDER outranks the file, and the status says so", async () => {
+    const dir = tempDir("keyloom-pick-");
+    expect((await providerStatus(dir, { provider: "openrouter" }, env)).lockedBy).toBe("--provider");
+    expect((await providerStatus(dir, {}, { ...env, KEYLOOM_PROVIDER: "openrouter" })).lockedBy).toBe("KEYLOOM_PROVIDER");
+    expect((await providerStatus(dir, {}, env)).lockedBy).toBeNull();
+  });
+
+  test("a config file keyloom can't read is reported and left as it was", async () => {
+    const dir = tempDir("keyloom-pick-");
+    writeFileSync(join(dir, "config.json"), "{ not json");
+    await expect(chooseNextProvider(dir, { provider: "anthropic" }, {}, env)).rejects.toThrow(UsageError);
+    expect(readFileSync(join(dir, "config.json"), "utf8")).toBe("{ not json");
   });
 });
 

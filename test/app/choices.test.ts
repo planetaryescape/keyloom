@@ -167,6 +167,19 @@ describe("undo and redo carry the memory with the document", () => {
     expect(showDecision(app, first).status).toBe("retired");
   });
 
+  test("going back several revisions retires every decision after the target, and undoing the go-back brings them back", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const base = getLayout(app, layoutId).revision.id;
+    const first = agentApply(app, layoutId, cmdShift).applied.decisionId as string;
+    const second = agentApply(app, layoutId, capsWord).applied.decisionId as string;
+    undo(app, layoutId, { revisionId: getLayout(app, layoutId).revision.id, to: base });
+    expect(showDecision(app, first).status).toBe("retired");
+    expect(showDecision(app, second).status).toBe("retired");
+    undo(app, layoutId);
+    expect(showDecision(app, second).status).toBe("hypothesis");
+    expect(showDecision(app, first)).toMatchObject({ status: "superseded", supersededBy: second });
+  });
+
   test("a new change after an undo does not resurrect the undone decision", async () => {
     const { app, layoutId } = await commandShiftApp();
     const first = agentApply(app, layoutId, cmdShift).applied.decisionId as string;

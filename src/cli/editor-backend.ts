@@ -2,7 +2,7 @@
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
   type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
-  ValidationResultSchema, getBuild, getFlash, startBuild, startFlash, undo,
+  ValidationResultSchema, getBuild, getFlash, importUpload, listBoardDefinitions, listRevisions, startBuild, startFlash, undo,
 } from "../app/index.ts";
 import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
 
@@ -56,7 +56,19 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     parseBinding: (ref, request) => translate(() => parseBindingExpression(app, ref, request)),
     apply: (ref, request) => translate(() => applied(applyOps(app, ref, request))),
     applyChangeSet: (changeSetId) => translate(() => applied(applyChange(app, changeSetId))),
-    undo: (ref, request) => translate(() => applied({ revisionId: undo(app, ref, request).revision.id })),
+    undo: (ref, request) => translate(() => applied({ revisionId: undo(app, ref, { revisionId: request.revisionId, ...(request.to === undefined ? {} : { to: request.to }) }).revision.id })),
+    revisions: async (ref) => translate(() => {
+      const rows = listRevisions(app, ref);
+      return rows.map((r, index) => ({ id: r.id, parentId: r.parentId, origin: r.origin, summary: r.summary, createdAt: r.createdAt, isHead: index === 0 }));
+    }),
+    boards: async () => listBoardDefinitions().map((b) => ({
+      id: b.definition.id, name: b.definition.name, vendor: b.definition.vendor, firmware: b.definition.firmware, keyCount: b.definition.keyCount, importers: b.definition.importers,
+    })),
+    importUpload: (request) =>
+      translate(async () => {
+        const out = await importUpload(app, request);
+        return { layoutId: out.layoutId, revisionId: out.revisionId, name: out.name, layers: out.report.layers, keysPerLayer: out.report.keysPerLayer, warnings: out.report.warnings };
+      }),
     startBuild: (ref, request) =>
       translate(async () =>
         toBuild(await startBuild(app, ref, {

@@ -101,11 +101,41 @@ export const ApplyResponseSchema = z.object({
 export type ApplyResponse = z.infer<typeof ApplyResponseSchema>;
 
 // Undo names the head it expects to undo, so a stale tab can't undo someone else's change.
-export const UndoRequestSchema = z.object({ revisionId: z.string().min(1) });
+// `to` goes back to an earlier revision of the same layout instead of one step; it is still one new revision (D-170).
+export const UndoRequestSchema = z.object({ revisionId: z.string().min(1), to: z.string().min(1).optional() });
 export type UndoRequest = z.infer<typeof UndoRequestSchema>;
 
 export const UndoResponseSchema = z.object({ revisionId: z.string().min(1) });
 export type UndoResponse = z.infer<typeof UndoResponseSchema>;
+
+// History is the layout's revisions, newest first (18#words, D-102).
+//   GET  /api/layouts/:ref/revisions                 -> RevisionListResponse
+//   GET  /api/boards                                 -> BoardListResponse     (what the import screen offers)
+//   POST /api/import?board=&filename=&name=  <file bytes as application/octet-stream> -> ImportResponse
+export const RevisionEntrySchema = RevisionInfoSchema.omit({ undoable: true }).extend({ isHead: z.boolean() });
+export type RevisionEntry = z.infer<typeof RevisionEntrySchema>;
+export const RevisionListResponseSchema = z.object({ revisions: z.array(RevisionEntrySchema) });
+
+export const BoardChoiceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  vendor: z.string().min(1),
+  firmware: z.enum(["qmk", "zmk"]),
+  keyCount: z.number().int().positive(),
+  importers: z.array(z.string().min(1)).min(1),
+});
+export type BoardChoice = z.infer<typeof BoardChoiceSchema>;
+export const BoardListResponseSchema = z.object({ boards: z.array(BoardChoiceSchema) });
+
+export const ImportResponseSchema = z.object({
+  layoutId: z.string().min(1),
+  revisionId: z.string().min(1),
+  name: z.string().min(1),
+  layers: z.number().int().nonnegative(),
+  keysPerLayer: z.number().int().nonnegative(),
+  warnings: z.array(z.string()),
+});
+export type ImportResponse = z.infer<typeof ImportResponseSchema>;
 
 export const BuildRequestSchema = z.object({
   revisionId: z.string().min(1),
@@ -201,9 +231,13 @@ export const ChatProviderIdSchema = z.enum(["anthropic", "openrouter", "codex"])
 export const ChatProviderStatusSchema = z.object({
   // What the next new conversation uses; null when no provider has a credential, which is the missing-key state.
   active: z.object({ provider: ChatProviderIdSchema, model: z.string().min(1), effort: z.string().min(1) }).nullable(),
+  // Set when something outranks the config file, so the picker can say why a choice would not apply: the --provider flag or KEYLOOM_PROVIDER.
+  lockedBy: z.enum(["--provider", "KEYLOOM_PROVIDER"]).nullable().default(null),
   providers: z.array(z.object({
     id: ChatProviderIdSchema,
     label: z.string().min(1),
+    // What a conversation on this provider uses when the config names no model.
+    defaultModel: z.string().min(1),
     ready: z.boolean(),
     // What to do to use it, as a sentence for the missing-key state.
     setup: z.string().min(1),
@@ -212,6 +246,14 @@ export const ChatProviderStatusSchema = z.object({
   })),
 });
 export type ChatProviderStatus = z.infer<typeof ChatProviderStatusSchema>;
+
+//   POST /api/chat/provider   ChatProviderChoice -> ChatProviderStatus   (writes <data dir>/config.json; the next conversation uses it)
+export const ChatProviderChoiceSchema = z.object({
+  provider: ChatProviderIdSchema,
+  // Omitted means the provider's default model.
+  model: z.string().trim().min(1).optional(),
+});
+export type ChatProviderChoice = z.infer<typeof ChatProviderChoiceSchema>;
 
 export const ChatUsageSchema = z.object({
   inputTokens: z.number().int().nonnegative(),

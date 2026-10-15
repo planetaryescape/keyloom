@@ -6,7 +6,7 @@ import { DEFAULT_EFFORT, anthropicModel, clientFromEnv, openRouterClientFromEnv 
 import { LOGIN_HINT } from "../agent/codex/errors.ts";
 import { checkCodexLogin } from "../agent/codex/login.ts";
 import { DEFAULT_MODELS, PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
-import { type AgentConfig, readAgentConfig } from "./agent-config.ts";
+import { type AgentConfig, readAgentConfig, writeAgentConfig } from "./agent-config.ts";
 import { ModelError, UsageError } from "./errors.ts";
 
 type Env = Record<string, string | undefined>;
@@ -84,7 +84,9 @@ export async function defaultAgentModel(dataDir: string, choice: ModelChoice = {
 export type ProviderStatus = {
   /** What the next new conversation would use; null when nothing is set up. */
   active: { provider: ProviderId; model: string; effort: string } | null;
-  providers: Array<{ id: ProviderId; label: string; ready: boolean; setup: string; command: string }>;
+  /** What outranks the config file, so a choice made in the picker would not apply; null when nothing does. */
+  lockedBy: "--provider" | "KEYLOOM_PROVIDER" | null;
+  providers: Array<{ id: ProviderId; label: string; defaultModel: string; ready: boolean; setup: string; command: string }>;
 };
 
 const SETUP: Record<ProviderId, { label: string; setup: string; command: string }> = {
@@ -107,5 +109,15 @@ export async function providerStatus(dataDir: string, choice: ModelChoice = {}, 
   } catch (err) {
     if (!(err instanceof ModelError)) throw err;
   }
-  return { active, providers: PROVIDERS.map((id) => ({ id, ready: ready.has(id), ...SETUP[id] })) };
+  const lockedBy = choice.provider ? "--provider" : envProviderSafe(env) ? "KEYLOOM_PROVIDER" : null;
+  return { active, lockedBy, providers: PROVIDERS.map((id) => ({ id, defaultModel: DEFAULT_MODELS[id], ready: ready.has(id), ...SETUP[id] })) };
+}
+
+// A bad KEYLOOM_PROVIDER already surfaces as a UsageError from chooseProvider; the lock only needs to know whether a valid one is set.
+const envProviderSafe = (env: Env): boolean => isProviderId(env.KEYLOOM_PROVIDER?.trim());
+
+/** The picker's save: validated by the caller's schema, written to the data directory's config, and applied from the next conversation (D-111). */
+export async function chooseNextProvider(dataDir: string, choice: { provider: ProviderId; model?: string | undefined }, current: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {
+  writeAgentConfig(dataDir, choice);
+  return providerStatus(dataDir, current, env);
 }

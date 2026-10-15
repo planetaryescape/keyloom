@@ -99,11 +99,18 @@ export class FakeChat implements ChatBackend {
 
   async provider(): Promise<ChatProviderStatus> {
     const providers: ChatProviderStatus["providers"] = [
-      { id: "anthropic", label: "Anthropic API key", ready: false, setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve" },
-      { id: "openrouter", label: "OpenRouter API key", ready: !this.options.missingKey, setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve" },
-      { id: "codex", label: "Codex (ChatGPT login)", ready: false, setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login" },
+      { id: "anthropic", label: "Anthropic API key", defaultModel: "claude-opus-5-5", ready: false, setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve" },
+      { id: "openrouter", label: "OpenRouter API key", defaultModel: "anthropic/claude-opus-5.5", ready: !this.options.missingKey, setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve" },
+      { id: "codex", label: "Codex (ChatGPT login)", defaultModel: "gpt-6.1-sol", ready: false, setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login" },
     ];
-    return { active: this.options.missingKey ? null : { provider: "openrouter", model: "anthropic/claude-opus-5.5", effort: "medium" }, providers };
+    return { active: this.options.missingKey ? null : { provider: this.chosen.provider, model: this.chosen.model, effort: "medium" }, lockedBy: null, providers };
+  }
+
+  private chosen: { provider: "anthropic" | "openrouter" | "codex"; model: string } = { provider: "openrouter", model: "anthropic/claude-opus-5.5" };
+
+  async chooseProvider(choice: { provider: "anthropic" | "openrouter" | "codex"; model?: string | undefined }): Promise<ChatProviderStatus> {
+    this.chosen = { provider: choice.provider, model: choice.model ?? { anthropic: "claude-opus-5-5", openrouter: "anthropic/claude-opus-5.5", codex: "gpt-6.1-sol" }[choice.provider] };
+    return this.provider();
   }
 
   async list(ref: string): Promise<ConversationSummary[] | null> {

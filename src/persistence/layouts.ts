@@ -91,3 +91,12 @@ export function findRevision(db: Database, layoutId: string, revisionId: string)
   if (!row?.document) return undefined;
   return { revision: toRevision(row), layout: LayoutSchema.parse(JSON.parse(row.document)) };
 }
+
+/** The revisions from `headId` back to the first, newest first. Revisions are append-only and linear, so the parent links are the order (created_at can tie within a millisecond). */
+export function revisionChain(db: Database, layoutId: string, headId: string): RevisionRow[] {
+  const rows = db.query("SELECT id, layout_id, parent_id, origin, summary, created_at FROM revisions WHERE layout_id = ?").all(layoutId) as RevisionDb[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const chain: RevisionRow[] = [];
+  for (let at = byId.get(headId); at; at = at.parent_id === null ? undefined : byId.get(at.parent_id)) chain.push(toRevision(at));
+  return chain;
+}

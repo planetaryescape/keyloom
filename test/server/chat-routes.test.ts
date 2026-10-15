@@ -106,6 +106,17 @@ describe("chat routes", () => {
     });
   });
 
+  test("POST /api/chat/provider needs the token and JSON, and saves the choice for the next conversation", async () => {
+    const { call } = await serve([], false);
+    const post = (body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) => ({ method: "POST", headers, body: JSON.stringify(body) });
+    expect((await call("/api/chat/provider", post({ provider: "anthropic" }), null)).status).toBe(401);
+    expect((await call("/api/chat/provider", post({ provider: "anthropic" }, { "content-type": "text/plain" }))).status).toBe(415);
+    expect((await call("/api/chat/provider", post({ provider: "nope" }))).status).toBe(400);
+    const saved = await call("/api/chat/provider", post({ provider: "anthropic", model: "claude-test" }));
+    expect(saved.status).toBe(200);
+    expect((await saved.json()).active).toMatchObject({ provider: "anthropic", model: "claude-test" });
+  });
+
   test("a model failure after the stream opened arrives as an error event", async () => {
     const { call, layoutId } = await serve([{ blocks: [], error: { status: 401, message: "invalid x-api-key" } }]);
     const res = await call(`/api/layouts/${layoutId}/chat`, post("x"));
@@ -121,7 +132,8 @@ describe("chat routes", () => {
         emit({ type: "start", conversationId: "conv_1", messageId: "msg_1" });
         await Bun.sleep(5_300);
       },
-      provider: async () => ({ active: null, providers: [] }),
+      provider: async () => ({ active: null, lockedBy: null, providers: [] }),
+      chooseProvider: async () => ({ active: null, lockedBy: null, providers: [] }),
       list: async () => [],
       get: async () => null,
       retirePriority: async () => false,

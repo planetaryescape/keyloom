@@ -1,5 +1,5 @@
 import type {
-  ApplyRequest, ApplyResponse, Build, BuildRequest, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse,
+  ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, ImportResponse, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 
@@ -13,6 +13,12 @@ export interface EditorBackend {
   /** Applies a stored proposal by id, re-validating it against the head. */
   applyChangeSet(changeSetId: string): Promise<ApplyResponse>;
   undo(ref: string, request: UndoRequest): Promise<UndoResponse>;
+  /** The layout's revisions, newest first. */
+  revisions(ref: string): Promise<RevisionEntry[]>;
+  /** The boards keyloom can import a layout for. */
+  boards(): Promise<BoardChoice[]>;
+  /** Imports an uploaded export (a .zip or a .keymap); the same use case as `keyloom import`. */
+  importUpload(request: { board: string; filename: string; bytes: Uint8Array; name?: string | undefined }): Promise<ImportResponse>;
   startBuild(ref: string, request: BuildRequest): Promise<Build>;
   getBuild(id: string): Promise<Build | null>;
   startFlash(buildId: string): Promise<Flash>;
@@ -22,7 +28,7 @@ export interface EditorBackend {
 /** A failure the browser should see as-is: the status and code go into ApiErrorBody. */
 export class EditorError extends Error {
   constructor(
-    readonly status: 400 | 404 | 409 | 503,
+    readonly status: 400 | 404 | 409 | 413 | 503,
     readonly code: string,
     message: string,
     readonly validation?: ValidationResult,

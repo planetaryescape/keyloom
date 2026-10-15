@@ -9,11 +9,12 @@ import {
   type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, type StoredDraft, type Tradeoffs, findChangeSet, insertChangeSet, listChangeSets, markApplied,
   markRejected,
 } from "../persistence/change-sets.ts";
-import { type RevisionRow, findRevision } from "../persistence/layouts.ts";
+import { type RevisionRow, findRevision, revisionChain } from "../persistence/layouts.ts";
 import { appendRevision, liveChangeSets } from "../persistence/revisions.ts";
 import { transact } from "../persistence/transaction.ts";
 import { type ValidationResult, ValidationResultSchema } from "../validation/result.ts";
 import type { SelectionScope } from "../validation/selection-rules.ts";
+import { restoreProblems } from "../validation/restore.ts";
 import { type Evaluation, evaluate } from "../validation/validate.ts";
 import type { App } from "./context.ts";
 import { decisionFactsFor, pinnedFor } from "./decisions.ts";
@@ -208,30 +209,53 @@ export function showChange(app: App, changeSetId: string): ChangeSetView {
  * Undoes the head: a new revision whose document is the head's parent's (D-015). A revision that
  * is not the head can't be undone alone, because that would also discard the changes after it;
  * naming one is how a stale tab finds out the head moved.
+ *
+ * With `to`, the document is that earlier revision's instead: one new revision that goes back
+ * several steps at once (D-170). It is checked against the rules first, but only for problems the
+ * head doesn't already have, so a layout imported with a flaw stays restorable.
  */
-export function undo(app: App, ref: string, input: { revisionId?: string } = {}): { revision: RevisionRow; undoesRevisionId: string } {
+export function undo(app: App, ref: string, input: { revisionId?: string; to?: string } = {}): { revision: RevisionRow; undoesRevisionId: string } {
   return transact(app.db, () => {
     const view = getLayout(app, ref);
     const head = view.revision;
     if (input.revisionId !== undefined && input.revisionId !== head.id) {
       throw new StaleBaseError(`the head of ${view.layout.name} is ${head.id}, not ${input.revisionId}; only the head can be undone`);
     }
-    if (head.parentId === null) throw new UsageError(`${head.id} is the first revision of ${view.layout.name}; there is nothing before it to go back to`);
-    const parent = findRevision(app.db, view.layout.id, head.parentId);
-    if (!parent) throw new Error(`revision ${head.id} has a missing parent ${head.parentId}`);
-    // Restoring an earlier document is not a change set, so it isn't re-validated: undo must work
+    const target = input.to === undefined ? undefined : goBackTarget(app, view, input.to);
+    if (target === undefined && head.parentId === null) throw new UsageError(`${head.id} is the first revision of ${view.layout.name}; there is nothing before it to go back to`);
+    const parentId = target?.row.id ?? head.parentId;
+    const parent = findRevision(app.db, view.layout.id, parentId as string);
+    if (!parent) throw new Error(`revision ${head.id} has a missing parent ${parentId}`);
+    if (target !== undefined) {
+      const refused = restoreProblems(view.board.definition, view.document, parent.layout);
+      if (!refused.ok) throw new ValidationFailedError(`${parent.revision.summary} can't be restored: ${refused.errors[0]?.message ?? "it breaks a rule"}`, refused);
+    }
+    // Restoring an earlier document is not a change set, so it isn't re-validated against ops: undo must work
     // even if a rule has since been tightened.
     const revision = appendRevision(app.db, {
-      layoutId: view.layout.id, expectedHeadId: head.id, layout: parent.layout, origin: "undo", summary: undoSummary(head), undoesRevisionId: head.id,
+      layoutId: view.layout.id, expectedHeadId: head.id, layout: parent.layout, origin: "undo",
+      summary: target === undefined ? undoSummary(head) : `Back to: ${parent.revision.summary.replace(/^(Back to|Redo|Undo): /, "")}`,
+      // Memory follows `undoes`'s parent, so naming the revision just after the target makes it follow the target.
+      undoesRevisionId: target?.after.id ?? head.id,
     });
     // Memory follows the document: what the head carried and the restored document does not leaves the
     // memory (and what it had superseded returns), and what the restored document carries comes back (08).
     const was = liveChangeSets(app.db, view.layout.id, head.id);
     const now = liveChangeSets(app.db, view.layout.id, revision.id);
-    for (const id of was) if (!now.has(id)) suspendChangeSet(app.db, id);
+    // Newest first: suspending a later change returns the decision it superseded, which the earlier change's own suspend then retires. The other way round leaves that decision active.
+    for (const id of [...was].reverse()) if (!now.has(id)) suspendChangeSet(app.db, id);
     for (const id of now) if (!was.has(id)) restoreChangeSet(app.db, id);
     return { revision, undoesRevisionId: head.id };
   });
+}
+
+/** The revision to go back to, and the one right after it on the way to the head. */
+function goBackTarget(app: App, view: LayoutView, to: string): { row: RevisionRow; after: RevisionRow } {
+  const chain = revisionChain(app.db, view.layout.id, view.revision.id);
+  const at = chain.findIndex((r) => r.id === to);
+  if (at < 0) throw new NotFoundError(`layout ${view.layout.name} has no revision "${to}"`);
+  if (at === 0) throw new UsageError(`${to} is already the current revision of ${view.layout.name}`);
+  return { row: chain[at] as RevisionRow, after: chain[at - 1] as RevisionRow };
 }
 
 /**
@@ -243,6 +267,8 @@ function undoSummary(head: { origin: string; summary: string }): string {
   if (head.origin === "undo") {
     if (head.summary.startsWith("Undo: ")) return `Redo: ${head.summary.slice("Undo: ".length)}`;
     if (head.summary.startsWith("Redo: ")) return `Undo: ${head.summary.slice("Redo: ".length)}`;
+    // Undoing a go-back puts the later work back.
+    if (head.summary.startsWith("Back to: ")) return `Redo: ${head.summary}`;
   }
   return `Undo: ${head.summary}`;
 }

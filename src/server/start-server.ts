@@ -6,7 +6,7 @@ import { handleChatRoute } from "./chat-routes.ts";
 import type { DecisionsBackend } from "./decisions-backend.ts";
 import { handleDecisionRoute } from "./decisions-routes.ts";
 import type { EditorBackend } from "./editor-backend.ts";
-import { MAX_BODY_BYTES, handleEditorRoute, isEditorPath } from "./editor-routes.ts";
+import { MAX_IMPORT_BYTES, handleEditorRoute, isEditorPath } from "./editor-routes.ts";
 import { checkHost, checkToken } from "./guard.ts";
 import type { LayoutSource } from "./layout-source.ts";
 import type { SyncBackend } from "./sync-backend.ts";
@@ -51,7 +51,8 @@ export function startServer({ port, source, editor, chat, decisions, sync, board
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
-    maxRequestBodySize: MAX_BODY_BYTES,
+    // The JSON routes enforce their own, smaller limit; only the upload route needs this one.
+    maxRequestBodySize: MAX_IMPORT_BYTES,
     async fetch(request) {
       const denied = checkHost(request, boundPort());
       if (denied) return denied;

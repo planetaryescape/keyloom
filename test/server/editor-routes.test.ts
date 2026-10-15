@@ -2,6 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   ApiErrorBodySchema,
   ApplyResponseSchema,
+  BoardListResponseSchema,
+  ImportResponseSchema,
+  RevisionListResponseSchema,
   BuildSchema,
   CheckResponseSchema,
   FlashSchema,
@@ -282,5 +285,45 @@ describe("applying a stored proposal", () => {
     expect((await call("POST", "/api/change-sets/x/apply", "{}", { "content-type": "text/plain" })).status).toBe(415);
     expect((await call("POST", "/api/change-sets/x/apply", { extra: 1 })).status).toBe(400);
     expect((await call("GET", "/api/change-sets/x/apply")).status).toBe(405);
+  });
+});
+
+describe("history, boards and import", () => {
+  test("revisions come newest first with the head marked, and going back is one undo with `to`", async () => {
+    const editor = quick();
+    const { call } = start(editor);
+    await call("POST", "/api/layouts/moonlander-daily/apply", { baseRevisionId: fixture.revision.id, ops: OPS, summary: "first" });
+    const head = (await (await call("GET", "/api/layouts/moonlander-daily/revisions")).json()).revisions[0].id;
+    const back = await call("POST", "/api/layouts/moonlander-daily/undo", { revisionId: head, to: fixture.revision.id });
+    expect(back.status).toBe(200);
+    const list = RevisionListResponseSchema.parse(await (await call("GET", "/api/layouts/moonlander-daily/revisions")).json()).revisions;
+    expect(list.map((r) => r.isHead)).toEqual([true, false, false].slice(0, list.length));
+    expect(list.at(-1)?.origin).toBe("import");
+    expect((await call("POST", "/api/layouts/moonlander-daily/revisions", {})).status).toBe(405);
+  });
+
+  test("the board list names the boards the import screen offers", async () => {
+    const { call } = start(quick());
+    const boards = BoardListResponseSchema.parse(await (await call("GET", "/api/boards")).json()).boards;
+    expect(boards.map((b) => b.id)).toContain("zsa/moonlander");
+  });
+
+  test("an upload needs octet-stream, a board and a filename, and answers 201 with the new layout", async () => {
+    const { call } = start(quick());
+    const file = new Uint8Array([80, 75, 3, 4]);
+    const octet = { "content-type": "application/octet-stream" };
+    expect((await call("POST", "/api/import?board=zsa/moonlander&filename=a.zip", file as unknown as string, {})).status).toBe(415);
+    expect((await call("POST", "/api/import?filename=a.zip", file as unknown as string, octet)).status).toBe(400);
+    expect((await call("POST", "/api/import?board=zsa/moonlander&filename=a.txt", file as unknown as string, octet)).status).toBe(400);
+    const ok = await call("POST", "/api/import?board=zsa/moonlander&filename=a.zip", file as unknown as string, octet);
+    expect(ok.status).toBe(201);
+    expect(ImportResponseSchema.parse(await ok.json()).name).toBe("a");
+    expect((await call("GET", "/api/import")).status).toBe(405);
+  });
+
+  test("a form post can't import: only the token and octet-stream together get through", async () => {
+    const { port } = start(quick());
+    const res = await fetch(`http://127.0.0.1:${port}/api/import?board=zsa/moonlander&filename=a.zip`, { method: "POST", headers: { "content-type": "multipart/form-data; boundary=x" }, body: "x" });
+    expect(res.status).toBe(401);
   });
 });

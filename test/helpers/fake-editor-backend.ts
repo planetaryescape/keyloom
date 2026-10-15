@@ -4,7 +4,7 @@
 import {
   KEYCODES,
 } from "../../src/layout/keycodes.ts";
-import type { ApplyRequest, ApplyResponse, Build, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
+import type { ApplyRequest, ApplyResponse, BoardChoice, Build, ImportResponse, RevisionEntry, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
 import type { Binding, Layout } from "../../src/layout/schema.ts";
 import type { ChangeOp, Slot } from "../../src/layout/change.ts";
 import { applyOps } from "../../src/layout/apply-ops.ts";
@@ -56,7 +56,7 @@ const FLASH_LOG: readonly string[] = [
 ];
 
 export class FakeEditor implements EditorBackend {
-  private revisions: Revision[];
+  private history: Revision[];
   private counter = 0;
   private readonly builds = new Map<string, { build: Build; revisionId: string }>();
   private readonly flashes = new Map<string, { flash: Flash; startedAt: number }>();
@@ -68,11 +68,11 @@ export class FakeEditor implements EditorBackend {
     options: FakeOptions = {},
   ) {
     this.options = { buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, ...options };
-    this.revisions = [{ ...base.revision, document: structuredClone(base.document) }];
+    this.history = [{ ...base.revision, document: structuredClone(base.document) }];
   }
 
   private get head(): Revision {
-    return this.revisions[this.revisions.length - 1] as Revision;
+    return this.history[this.history.length - 1] as Revision;
   }
 
   /** The read side, so one object serves both interfaces. */
@@ -152,11 +152,33 @@ export class FakeEditor implements EditorBackend {
     return { revisionId: revision.id, changeSetId: proposal.id, validation: { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] } }, decisionId: null };
   }
 
+  async revisions(): Promise<RevisionEntry[]> {
+    return [...this.history].reverse().map((r) => ({ id: r.id, parentId: r.parentId, origin: r.origin, summary: r.summary, createdAt: r.createdAt, isHead: r.id === this.head.id }));
+  }
+
+  async boards(): Promise<BoardChoice[]> {
+    return [
+      { id: "zsa/moonlander", name: "Moonlander", vendor: "ZSA", firmware: "qmk", keyCount: 72, importers: ["oryx-source"] },
+      { id: "moergo/glove80", name: "Glove80", vendor: "MoErgo", firmware: "zmk", keyCount: 80, importers: ["zmk-layout-editor-keymap"] },
+      { id: "foostan/corne", name: "Corne", vendor: "foostan", firmware: "zmk", keyCount: 42, importers: ["zmk-keymap"] },
+    ];
+  }
+
+  async importUpload(request: { board: string; filename: string }): Promise<ImportResponse> {
+    if (!/\.(zip|keymap)$/i.test(request.filename)) throw new EditorError(400, "usage", `${request.filename} is not a .zip or a .keymap file`);
+    return { layoutId: "lay_imported", revisionId: "rev_imported", name: request.filename.replace(/\.\w+$/, ""), layers: 4, keysPerLayer: 72, warnings: [] };
+  }
+
   async undo(_ref: string, request: UndoRequest): Promise<UndoResponse> {
     if (request.revisionId !== this.head.id) {
       throw new EditorError(409, "stale_head", "The layout changed since you opened it.");
     }
-    const parent = this.revisions.find((r) => r.id === this.head.parentId);
+    if (request.to !== undefined) {
+      const target = this.history.find((r) => r.id === request.to);
+      if (target === undefined) throw new EditorError(404, "not_found", "No such revision.");
+      return { revisionId: this.push("undo", `Back to: ${target.summary}`, structuredClone(target.document)).id };
+    }
+    const parent = this.history.find((r) => r.id === this.head.parentId);
     if (parent === undefined) throw new EditorError(409, "not_undoable", "There is nothing to undo.");
     const revision = this.push("undo", `Undid: ${this.head.summary}`, structuredClone(parent.document));
     return { revisionId: revision.id };
@@ -166,7 +188,7 @@ export class FakeEditor implements EditorBackend {
     if (this.options.needsBoardRevision && request.boardRevision === undefined) {
       throw new EditorError(400, "usage", "No Moonlander is connected, so keyloom can't tell which revision to build for. Choose Rev A or Rev B.");
     }
-    if (!this.revisions.some((r) => r.id === request.revisionId)) {
+    if (!this.history.some((r) => r.id === request.revisionId)) {
       throw new EditorError(404, "not_found", "No such revision.");
     }
     const id = `build_${++this.counter}`;
@@ -205,7 +227,7 @@ export class FakeEditor implements EditorBackend {
       undoable: true,
       document,
     };
-    this.revisions.push(revision);
+    this.history.push(revision);
     return revision;
   }
 
