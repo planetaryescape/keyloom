@@ -242,4 +242,10 @@
   .inspector-idle {
     min-height: 0;
   }
+
+  /* With nothing picked there is nothing to keep in view, so the hint stays in the flow. */
+  .inspector--idle {
+    position: static;
+    box-shadow: none;
+  }
 }

@@ -32,12 +32,12 @@ function capitalise(text: string): string {
 export function Inspector({ description, position, finger, layerName, tapAt, onOpenLayer }: InspectorProps) {
   if (description === null || position === null) {
     return (
-      <section className="card inspector" aria-label="Key details">
+      <section className="card inspector inspector--idle" aria-label="Key details">
         <div className="inspector-idle">
           <MousePointer2 size={22} aria-hidden="true" />
           <p>
             <strong>Pick a key to see what it does</strong>
-            Hover or click one, or Tab into the keyboard and use the arrow keys.
+            Tap, hover or click one, or Tab into the keyboard and use the arrow keys.
           </p>
         </div>
       </section>
