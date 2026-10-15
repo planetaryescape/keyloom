@@ -46,6 +46,9 @@ keyloom
                                            run the real firmware logic and print what the keyboard would send
   flash ... --wait <minutes>                how long to wait for a bootloader key press (1 to 60, default 2)
   flash --reboot-only [--board B]          only restart the attached keyboard into its bootloader (keyloom firmware only)
+  sync <layout> [--wait]                   build the head, flash it hands-free and check the keyboard came back running it
+  sync status                              each board's state: in sync, syncing, behind, needs a hand, not connected, not keyloom's
+  autosync on|off|pause|resume|status <board>   whether Apply puts the change on the board by itself
   doctor                                   Docker, toolchain images, pinned checkouts, attached keyboard and its firmware, API key, database
 ```
 
@@ -77,6 +80,19 @@ The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor doe
 | `@500 tap 31` | start the step at 500 ms instead of right after the previous one |
 
 `hold 31 300 then tap 32` holds key 31 for 300 ms, taps key 32 while 31 is down, then lets go of 31. The same text is in `keyloom emulate --help`.
+
+## sync and autosync put the head on the keyboard
+
+`keyloom sync <layout>` runs one sync in the foreground: it builds the head revision (or flashes the build it already has for it), restarts the keyboard into its bootloader itself, writes it, and waits until the keyboard comes back running that build. Progress goes to stderr; the result goes to stdout.
+
+- It never replaces firmware keyloom didn't build (exit 2, naming `keyloom build` and `keyloom flash --layout`), and it needs the keyboard attached (exit 2).
+- A failed build is exit 7. A failed flash, a flash that can't be verified, a flash that needed a key pressed and didn't get one, and a keyboard unplugged midway are exit 8. A keyboard already running the head is exit 0 with `status: "in_sync"`.
+- Another sync running (the server's) is exit 2. `--wait` waits for it to end first.
+- `--format json` prints `{ status: "synced"|"in_sync", board_id, layout_id, revision_id, sync_id, build_id, flash_id, timings_s: { wait, build, flash, apply_to_verified } }`. The times are in seconds, from the Apply that made the head.
+
+`keyloom sync status` prints a row per board that has a layout: `{ board_id, board_name, layout_id, layout_name, head_revision_id, state, step, changes, why, error, instruction, reason, detail, auto_sync: { on, choice, paused, proven, proven_at }, last_sync }`. `state` is `in_sync`, `syncing`, `behind`, `needs_hand`, `not_connected` or `not_keyloom`. It reads USB, so it is the keyboards as they are now. It exits 0 whatever it finds.
+
+`keyloom autosync on|off|pause|resume|status <board>` prints `{ board_id, auto_sync: "on"|"off", choice, paused, proven, proven_at }`. `on` before a flash keyloom did by itself was verified is exit 2, with how to get one. The choice lives in the database, so a running `keyloom serve` sees it at its next look.
 
 ## Global flags
 

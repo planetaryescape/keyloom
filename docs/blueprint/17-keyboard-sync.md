@@ -38,12 +38,16 @@ keyloom knows which revision each keyboard runs, because every keyloom build car
 
 With auto-sync on, Apply starts the sync.
 
-- **Batching.** keyloom waits three seconds after the last Apply, so a burst of edits becomes one build, then syncs the head revision.
-- **One at a time.** A new Apply during a sync queues one more sync. Two builds never run at once.
+- **Batching.** keyloom waits three seconds after the last Apply, so a burst of edits becomes one build, then syncs the head revision. The three seconds run from the revision's own time, so an Apply from the CLI counts too (D-161).
+- **One at a time.** Two builds never run at once, in this process or another. An Apply during a build stops that build and one sync follows, for the head. An Apply during a flash lets the flash finish, then one more sync follows (D-161).
 - **Failure.** A failed build leaves the keyboard on its last good firmware, and the state turns to Behind, with the error.
 - **Verification.** A flash counts as In sync only when it's verified: the keyboard came back with the new marker (D-072).
 
-Auto-sync is per board. It can turn on only after one verified hands-free flash on that board, because until then keyloom can't prove it can reach the board without BK's hands. It can be paused from the header. The blueprint assumes it's on by default once proven (Q16).
+Auto-sync is per board. It can turn on only after one verified hands-free flash on that board, because until then keyloom can't prove it can reach the board without BK's hands. It can be paused from the header. It is on by default once proven (Q16, D-162).
+
+The engine runs inside `keyloom serve` and works from the database, so an Apply from `keyloom change apply` syncs too. `keyloom sync <layout>` runs one sync from the command line, `keyloom sync status` shows each board's state and timings, and `keyloom autosync on|off|pause|resume|status <board>` sets what the header's menu sets ([10](10-cli.md#sync-and-autosync-put-the-head-on-the-keyboard)).
+
+A keyboard is tracked against the layout it runs. Edits to another layout of the same board don't start a sync, because that would replace what the keyboard runs; the header offers "Put this layout on it" (D-163). A keyloom build this copy has no record of is treated like firmware keyloom didn't build.
 
 Measured times BK can expect:
 
@@ -58,7 +62,7 @@ These numbers decide rung 17 (see [live writes](#live-writes-are-built-only-if-a
 - **A half can't be stranded.** A nRF52 half triggered on battery returns to its app after 3 s. A half triggered on USB waits in its bootloader until it's flashed or switched off. The bootloader reads its key combo before starting the app, so a broken app can always be recovered by hand (`bl-moergo@bb68c75` `src/main.c:197-209`).
 - **keyloom keeps the last good image per board and half.** If a copy fails after a trigger, keyloom writes the last good image, so the board is never left without firmware it has run before. It says which image it wrote.
 - **keyloom never writes a bootloader UF2** (family `0xd663823c`) through this path.
-- **Firmware someone else built is never replaced automatically.** A board in the "Not keyloom's" state needs a deliberate Flash keyloom's build, with the flash dialog's existing confirmation (D-094).
+- **Firmware someone else built is never replaced automatically.** A board in the "Not keyloom's" state needs a deliberate Flash keyloom's build, with the flash dialog's existing confirmation (D-094, D-167).
 - **Auto-sync never runs during a chat proposal preview.** Only applied revisions sync.
 
 ## Hands-free flash on ZMK: the `keyloom-zmk` module

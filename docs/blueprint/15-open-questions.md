@@ -93,7 +93,7 @@ Yes, with four findings that changed the lockdown. Through a loopback MCP server
 | Q13 | v1 tested on macOS only? | Open; blueprint assumes macOS, with Linux expected to work but untested |
 | Q14 | Public GitHub repo from rung 1, or private until the car? | **Answered 2026-10-15:** public from rung 1. BK authorised creating `planetaryescape/keyloom` |
 | Q15 | Is it acceptable that the generated keycode table carries identifiers, HID usages and short labels taken from QMK's GPL data files (D-047)? | Open; blueprint assumes yes, because these are interoperability facts and no QMK code or prose is copied |
-| Q16 | Should auto-sync be on by default once a board has had one verified hands-free flash, so Apply always ends on the keyboard? | Open; blueprint assumes yes, with Pause in the header (D-094) |
+| Q16 | Should auto-sync be on by default once a board has had one verified hands-free flash, so Apply always ends on the keyboard? | Open; built as assumed in rung 13 (on once proven, Pause in the header: D-094, D-162), pending BK's week of use |
 | Q17 | For ZMK live writes, is building with `CONFIG_ZMK_STUDIO_LOCKING=n` acceptable, given that any local process could then change the keymap? | Open; blueprint assumes yes, matching D-070's trade-off. Only matters if rung 17 is built |
 | Q18 | Would BK give up Oryx and Keymapp on the Moonlander for Vial's live tap dance, combos and tapping term? | Open; blueprint assumes no, and keeps ZSA's fork (D-097) |
 | Q19 | Should clicking a key always open its panel, with keys sent to the chat only through "Asking about" chips? | Open; blueprint assumes yes (D-099) |

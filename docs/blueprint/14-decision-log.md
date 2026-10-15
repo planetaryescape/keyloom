@@ -591,3 +591,60 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 ### D-145: Non-text contrast is tested for the cap border, the kind fills and the layer colours, with "neighbouring" read as "against the plain key". (Claude, building D-100)
 - **Tests:** the border `keyboard.css` really draws is at least 3:1 against the stage; each kind's fill is at least 1.5:1 against the plain key's; the six layer colours are at least 3:1 against both the layer and the plain fill and differ from each other.
 - **Why the plain key:** most keys are plain, so it is what every other kind sits beside. Six fills at 1.5:1 from each other would need a luminance range no calm palette has, and shape carries the rest (D-143).
+
+### D-160: The sync engine lives in the `serve` process and is level-triggered: each tick asks "does the keyboard run the head, and is it time?" from the database and the last USB reading, with no event queue. (Claude, building rung 13)
+- **Why not events:** the states that make a sync engine wrong are a burst of Applies, an Apply during a sync, an Apply from the CLI (another process), a restart mid-sync and a keyboard that comes back. With a queue each is a special case; with the question asked every 500 ms, each is a different answer to it. The CLI's `change apply` needs no way to tell the server: the engine reads the head from the database, and `notifyApplied` only makes it look sooner.
+- **Reading the keyboards:** USB, serial ports and raw HID are read every 5 s while idle, and fresh before any decision to act. A reading seconds old is never acted on, because the keyboard may have been unplugged or reflashed since.
+- **A guest in the server:** the tick never rejects. A database that has gone away is reported once, not every tick, and doesn't end the process (found when a demo's data directory was deleted under a running server).
+- **A one-shot is not an engine:** `keyloom sync` runs the same code without its timer, and a sync that finishes in a one-shot never starts another by itself.
+
+### D-161: One sync runs at a time in the whole machine, enforced by a row in the database; a burst waits three seconds after the last Apply, and a build for a revision that is no longer the head is stopped. (Claude, building rung 13; refines the blueprint's "queues exactly one more sync")
+- **Claim:** `claimSync` takes the one running slot in a write transaction, after finishing any row whose process has died. The server's engine and a CLI `sync` in another process therefore can't both start. A claim over a live process's row is `busy`, which `keyloom sync --wait` waits out.
+- **Quiet time:** three seconds from the head revision's own creation time, not from when the engine first saw it, so an Apply made from the CLI counts and a burst stays one burst while it goes on. The wait to the start of a sync measured 3.3 s in the demo.
+- **During a build:** the build is stopped (it has touched nothing) and the next sync takes the head. Waiting for it would flash a revision nobody wants, then build and flash again; on the Moonlander that is two 100 s builds. One sync follows, so "exactly one more" still holds.
+- **During a flash:** it is never stopped, because a half-written keyboard is worse than a late sync. When it ends, one more sync takes the head.
+- **Pause:** stops auto-sync starting anything, and stops an auto-sync's build or a wait for a hand, never a write.
+- **Open for BK:** the stopped build is a departure from the blueprint's wording. Turning it off is one line (`supersedeStale`) if a stopped Docker build proves rough in use.
+
+### D-162: Auto-sync turns on for a board once a flash on it went through the hands-free path and was verified, and is then on unless BK turns it off. (Claude, building rung 13; Q16 as the blueprint assumed)
+- **Proof:** recorded by `runFlash`, so a flash from the Build and flash dialog counts too. It requires that keyloom itself restarted every part of the keyboard (a half already in its bootloader doesn't count) and then saw the new marker. A flash after a pressed reset key is verified but proves nothing about reaching the board.
+- **Choice and proof are separate:** `board_sync.auto_sync` is empty until BK chooses, and auto-sync then follows the proof. `keyloom autosync on` before the proof is a usage error that says how to get one. Pause is a separate flag, so "off" and "paused for now" stay different in the header.
+- **Sync now before the proof:** it works; it is the deliberate path that produces the proof.
+
+### D-163: What a keyboard runs is read from its marker, to a build, to a revision; a keyboard is tracked against the layout it runs, and a keyloom build this copy doesn't know is not replaced by itself. (Claude, building rung 13)
+- **Lookup:** the marker holds the last 12 characters of the build ID, so the build is found by that suffix, and a collision names no build rather than the wrong one.
+- **In sync:** the keyboard's revision is the head, or has an identical document. An edit that was undone is in sync without a build.
+- **Behind (n changes):** the revisions between them, or no number when the running revision isn't in the head's history.
+- **Other layouts of the board:** edits to a layout the keyboard doesn't run don't start a sync, because that would replace what the keyboard runs. The header says "Your Glove80 runs 'main'" and offers "Put this layout on it", which is Sync now.
+- **Unknown build:** a marker with no build in this database (another machine, another data directory) is keyloom's firmware but not this copy's, so it is treated like someone else's: Sync now may replace it, auto-sync never does.
+
+### D-164: A failed build leaves the keyboard alone and is not retried for the same revision; only a verified flash is in sync, and it is verified twice. (Claude, building rung 13)
+- **Retried by themselves:** a sync the world interrupted (keyboard unplugged, keyloom stopped, build stopped for a newer head, paused). **Not retried:** a failed build, a failed flash, a flash that couldn't be verified, and a flash that gave up waiting for a hand. A new Apply is a new revision, so it is tried; Sync now tries any.
+- **Verified twice:** the flasher saw the marker come back (D-072), and then the engine reads the keyboard once more, so a keyboard that went back to something else is not reported as in sync. A flash of a build with no marker is not in sync, whatever zapp said.
+- **Unplugged:** during a build, nothing is flashed. During a flash, the state is Not connected, and the sync is tried again when the keyboard returns. A keyboard left in its bootloader (QMK only; ZMK boot drives need the volume finder) is "Needs a hand" with the way out.
+- **Needs a hand:** the flasher's own words, which already say why it couldn't restart the keyboard. They stay on the sync after the flash gives up, so the header still says what to do.
+
+### D-165: QMK keeps its last good image per board revision after a verified flash, as ZMK does per half. (Claude, building rung 13; D-135 for ZMK)
+- **Where:** `firmware/last-good/<board>/<revision>.<ext>` under the data directory, written from the verify step so only an image the keyboard was seen to run is kept.
+- **Not built:** writing it back after a failed flash. The blueprint promises that; nothing yet reads these files. It needs the same care as a flash (a bootloader that is already open) and belongs with the first real failure to learn from.
+
+### D-166: A restart mid-sync is recovered from the database: a build is over, a flash is counted only by the keyboard's marker, and a build already made is flashed again, not built again. (Claude, building rung 13)
+- **Rows:** each sync names its process and the engine instance that runs it. A row whose process has gone, or whose engine is not this one, is finished at start.
+- **A flash in flight:** if the keyboard already shows that build's marker it is counted as succeeded, and nothing is flashed again. If not, the sync is interrupted and the next one starts from the build that exists.
+- **Late writes:** finishing a sync is a single update that applies only while it is still running, so an old engine's late result can't overwrite what the new one settled. A test holds a flash across the restart and releases it afterwards.
+
+### D-167: Firmware keyloom didn't build is never replaced by auto-sync or by `keyloom sync`; the deliberate way is the flash dialog's existing confirmation. (Claude, building rung 13; D-094)
+- **Header:** "Running firmware keyloom didn't build" with Flash keyloom's build, which opens the Build and flash dialog. No second confirmation was invented.
+- **CLI:** `keyloom sync` refuses with exit 2 and names `keyloom build` and `keyloom flash --layout`.
+- **Not decided:** whether a ZMK board with only one half marked should count as keyloom's. It does not: any half running firmware keyloom didn't build makes the board "not keyloom's".
+
+### D-168: The web follows the engine through `GET /api/events`, a Server-Sent Events stream whose first frame is the current state; the header shows one pill per board, and its menu holds the reason, Sync now, Pause and the auto-sync switch. (Claude, building rung 13)
+- **Stream:** each frame is every board's state, so a dropped frame costs nothing and a reconnect starts from a snapshot. Subscribed before the snapshot is read, so no change is lost between them. A comment every 5 s keeps Bun's 10 s idle timeout away. Read with `fetch`, because `EventSource` can't send the session token.
+- **Stale answers:** an action's own response is used only when there is no stream. Otherwise it could arrive after a newer frame and put an old state back.
+- **Boards shown:** the board of the layout on screen always, and any other that is connected. On a phone the header keeps the layout menu and the state of the board on screen as an icon, in a tone (green, blue, amber, red) and a shape (check, spinner, arrows, warning, plug).
+- **Toasts:** a change reaching a keyboard, a failed sync and a need for a hand. The first state after the page opens says nothing.
+- **Left alone:** the Build and flash menu and dialog. They remain the manual path, and the only one for a keyboard that isn't keyloom's.
+
+### D-169: Every sync records the times from Apply to a verified flash, so rung 17 is decided by measurement. (Claude, building rung 13; D-096)
+- **Recorded:** per sync, the revision's Apply time, the start, the end of the build, the start of the flash and the end. `keyloom sync status --format json` shows the last as `timings_s` (wait, build, flash, apply to verified); `logs/sync-<id>.log` has a line per step with the milliseconds since Apply.
+- **Meaning:** the number that decides rung 17 is `apply_to_verified`, over a week of BK's use. A build that is reused (a retry) shows a build time near zero.
