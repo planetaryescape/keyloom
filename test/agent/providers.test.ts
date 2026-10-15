@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { anthropicModel, classifyModelError, openRouterClientFromEnv } from "../../src/agent/anthropic-model.ts";
-import { chooseProvider, credentialedProviders, defaultAgentModel } from "../../src/app/chat-model.ts";
+import { chooseProvider, credentialedProviders, defaultAgentModel, providerStatus } from "../../src/app/chat-model.ts";
 import { ModelError, UsageError, sendMessage } from "../../src/app/index.ts";
 import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
@@ -130,5 +130,19 @@ describe("choosing the provider", () => {
   test("a missing credential for the chosen provider names that provider's variable", () => {
     const dir = tempDir("keyloom-config-");
     expect(() => defaultAgentModel(dir, { provider: "openrouter" }, { ANTHROPIC_API_KEY: "a" })).toThrow(/OPENROUTER_API_KEY is not set/);
+  });
+});
+
+describe("provider status for the chat panel", () => {
+  test("names the active provider and model, and which providers are ready", () => {
+    const status = providerStatus(tempDir("keyloom-status-"), {}, { OPENROUTER_API_KEY: "o" });
+    expect(status.active).toEqual({ provider: "openrouter", model: "anthropic/claude-opus-5.5", effort: "medium" });
+    expect(status.providers.map((p) => [p.id, p.ready])).toEqual([["anthropic", false], ["openrouter", true], ["codex", false]]);
+  });
+
+  test("with nothing set up there is no active provider and all three ways to set one up are listed", () => {
+    const status = providerStatus(tempDir("keyloom-status-"), {}, {});
+    expect(status.active).toBeNull();
+    expect(status.providers.map((p) => p.command)).toEqual(["ANTHROPIC_API_KEY=<your key> keyloom serve", "OPENROUTER_API_KEY=<your key> keyloom serve", "codex login"]);
   });
 });

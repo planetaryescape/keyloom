@@ -4,7 +4,7 @@
 // mid-reply. Proposals are validated by the real validator and stored in the FakeEditor, so
 // applying one goes through POST /api/change-sets/:id/apply like the real thing.
 import type {
-  ChatEvent, ChatOutcome, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard,
+  ChatEvent, ChatOutcome, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard,
 } from "../../src/api/http.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { ChatError, type ChatBackend } from "../../src/server/chat-backend.ts";
@@ -97,6 +97,15 @@ export class FakeChat implements ChatBackend {
     this.options = { tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, ...options };
   }
 
+  async provider(): Promise<ChatProviderStatus> {
+    const providers: ChatProviderStatus["providers"] = [
+      { id: "anthropic", label: "Anthropic API key", ready: false, setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve" },
+      { id: "openrouter", label: "OpenRouter API key", ready: !this.options.missingKey, setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve" },
+      { id: "codex", label: "Codex (ChatGPT login)", ready: false, setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login" },
+    ];
+    return { active: this.options.missingKey ? null : { provider: "openrouter", model: "anthropic/claude-opus-5.5", effort: "medium" }, providers };
+  }
+
   async list(ref: string): Promise<ConversationSummary[] | null> {
     if (ref !== this.layoutId) return null;
     return [...this.conversations.values()].map((c) => c.summary).sort((a, b) => b.createdAt - a.createdAt);
@@ -186,7 +195,8 @@ export class FakeChat implements ChatBackend {
       text,
       proposals: cards,
       priorities: [],
-      model: "fake-model",
+      provider: "openrouter",
+      model: "anthropic/claude-opus-5.5",
       effort: "medium",
       usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
       iterations: 1,

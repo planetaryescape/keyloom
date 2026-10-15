@@ -20,6 +20,30 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.chat-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+/* Provider and model: context, not a control, so it stays small and muted under the title. */
+.chat-provider {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.chat-provider-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-head h2 {
   margin: 0;
   font-size: var(--text-lg);
@@ -232,6 +256,24 @@
 
 .chat-missing-key .muted {
   color: var(--color-text-muted);
+}
+
+.provider-options {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provider-options li {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  text-align: left;
 }
 
 .chat-inline-error {

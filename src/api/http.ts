@@ -178,6 +178,24 @@ export const PriorityCardSchema = z.object({
 });
 export type PriorityCard = z.infer<typeof PriorityCardSchema>;
 
+// Which provider answers, so the panel can say so and, when none is set up, list every way to set one up (19).
+//   GET  /api/chat/provider                           -> ChatProviderStatus
+export const ChatProviderIdSchema = z.enum(["anthropic", "openrouter", "codex"]);
+export const ChatProviderStatusSchema = z.object({
+  // What the next new conversation uses; null when no provider has a credential, which is the missing-key state.
+  active: z.object({ provider: ChatProviderIdSchema, model: z.string().min(1), effort: z.string().min(1) }).nullable(),
+  providers: z.array(z.object({
+    id: ChatProviderIdSchema,
+    label: z.string().min(1),
+    ready: z.boolean(),
+    // What to do to use it, as a sentence for the missing-key state.
+    setup: z.string().min(1),
+    // A command to copy, when there is one.
+    command: z.string().min(1),
+  })),
+});
+export type ChatProviderStatus = z.infer<typeof ChatProviderStatusSchema>;
+
 export const ChatUsageSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
@@ -194,9 +212,12 @@ export const ChatOutcomeSchema = z.object({
   text: z.string(),
   proposals: z.array(ProposalCardSchema),
   priorities: z.array(PriorityCardSchema),
+  provider: ChatProviderIdSchema,
   model: z.string(),
   effort: z.string(),
   usage: ChatUsageSchema,
+  // What the provider charged, when it says (OpenRouter does; Codex and Anthropic don't).
+  costUsd: z.number().nonnegative().optional(),
   iterations: z.number().int().nonnegative(),
 });
 export type ChatOutcome = z.infer<typeof ChatOutcomeSchema>;

@@ -32,7 +32,7 @@ export {
   type DecisionRow, type DecisionStatus, type OutcomeQuestion, type OutcomeStatus, dismissOutcome, editDecision, listDecisions, outcomeQuestions,
   recordOutcome, recordPriority, retireDecision, retirePriority, showDecision,
 } from "./decisions.ts";
-export { defaultAgentModel } from "./chat-model.ts";
+export { type ProviderStatus, defaultAgentModel, providerStatus } from "./chat-model.ts";
 export type { AgentModel } from "../agent/model.ts";
 export { PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
 export type { ConversationRow } from "../persistence/conversations.ts";

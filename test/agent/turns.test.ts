@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { anthropicModel } from "../../src/agent/anthropic-model.ts";
 import { ModelError, UsageError, sendMessage, showConversation } from "../../src/app/index.ts";
 import { listMessages } from "../../src/persistence/conversations.ts";
+import { withoutCredentials } from "../helpers/no-credentials.ts";
 import { fakeAnthropic, type ScriptStep } from "../helpers/fake-anthropic.ts";
 import { draft } from "../helpers/ops.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
@@ -114,16 +115,12 @@ describe("the per-turn log", () => {
 describe("failures before and during the model call", () => {
   test("a missing API key is a ModelError and stores nothing", async () => {
     const { app, layoutId } = await optionOptionApp();
-    const saved = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
+    await withoutCredentials(async () => {
       const err = await sendMessage(app, layoutId, { message: "hi" }).catch((e) => e);
       expect(err).toBeInstanceOf(ModelError);
       expect(err.kind).toBe("missing_key");
       expect(app.db.query("SELECT COUNT(*) AS n FROM conversations").get()).toEqual({ n: 0 });
-    } finally {
-      if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
-    }
+    });
   });
 
   test("a 401 from the API is a ModelError of kind auth, and BK's message is kept", async () => {

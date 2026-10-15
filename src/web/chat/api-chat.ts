@@ -1,9 +1,11 @@
 // The browser side of the chat routes (src/api/http.ts, "Chat"). Same token and error handling as
 // the editor's writes; the reply is read as a stream of frames.
 import {
+  ChatProviderStatusSchema,
   ConversationDetailSchema,
   ConversationListResponseSchema,
   type ChatEvent,
+  type ChatProviderStatus,
   type ChatRequest,
   type ConversationDetail,
   type ConversationSummary,
@@ -11,6 +13,10 @@ import {
 import { ApiError } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 import { createSseParser, SseError } from "./sse.ts";
+
+export function fetchProviderStatus(token: string, signal: AbortSignal): Promise<ChatProviderStatus> {
+  return request("GET", "/api/chat/provider", token, ChatProviderStatusSchema, signal);
+}
 
 export async function fetchConversations(token: string, ref: string, signal: AbortSignal): Promise<ConversationSummary[]> {
   const body = await request("GET", `/api/layouts/${encodeURIComponent(ref)}/conversations`, token, ConversationListResponseSchema, signal);

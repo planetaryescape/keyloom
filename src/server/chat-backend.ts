@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatRequest, ConversationDetail, ConversationSummary } from "../api/http.ts";
+import type { ChatEvent, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary } from "../api/http.ts";
 
 // The server's chat interface (rung 3). Like EditorBackend, the CLI injects the app-backed
 // implementation, so the server knows nothing about the model, the SDK or the database.
@@ -9,6 +9,8 @@ export interface ChatBackend {
    * and is reported to the browser as an `error` event. `signal` aborts when the browser goes away.
    */
   send(ref: string, request: ChatRequest, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void>;
+  /** Which provider the next new conversation uses, and what each still needs. */
+  provider(): Promise<ChatProviderStatus>;
   list(ref: string): Promise<ConversationSummary[] | null>;
   get(id: string): Promise<ConversationDetail | null>;
   /** Retires a priority from its chip; false when there is no such priority. */

@@ -10,10 +10,11 @@ import { OutcomeQuestions } from "../decisions/OutcomeQuestions.tsx";
 import { useDecisions, useOutcomeQuestions } from "../decisions/useDecisions.ts";
 import { Composer, type SelectedKeys } from "./Composer.tsx";
 import { ConversationList } from "./ConversationList.tsx";
-import { EmptyChat, ProblemNotice } from "./ChatStates.tsx";
+import { EmptyChat, ProblemNotice, ProviderLine } from "./ChatStates.tsx";
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
 import { useChat } from "./useChat.ts";
+import { useProviderStatus } from "./useProviderStatus.ts";
 import "./chat.css";
 
 interface Props {
@@ -45,6 +46,7 @@ const STICK_PX = 48;
 
 export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
   const chat = useChat(token, layoutRef);
+  const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   const [draft, setDraft] = useState("");
   const [view, setView] = useState<"chat" | "history" | "decisions">("chat");
@@ -130,7 +132,10 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
   return (
     <section className="chat" aria-label="Chat with keyloom">
       <header className="chat-head">
-        <h2>Chat</h2>
+        <div className="chat-title">
+          <h2>Chat</h2>
+          <ProviderLine status={provider.status} />
+        </div>
         <div className="chat-head-actions">
           <button type="button" className="button" aria-pressed={view === "decisions"} onClick={() => setView(view === "decisions" ? "chat" : "decisions")}>
             <ScrollText size={14} aria-hidden="true" />
@@ -231,7 +236,7 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
                 ),
               )
             )}
-            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} onRetry={retryDraft} onDismiss={chat.dismissProblem} />}
+            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} providers={provider.status?.providers ?? []} onRetry={retryDraft} onDismiss={chat.dismissProblem} />}
           </div>
           <Composer
             value={draft}

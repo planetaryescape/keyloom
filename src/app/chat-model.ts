@@ -2,7 +2,7 @@
 // KEYLOOM_PROVIDER variable, then the data directory's config, then the first provider that has a
 // credential. Keys come from the environment and are never stored (03#model-and-sdk).
 import { type AgentModel } from "../agent/model.ts";
-import { anthropicModel, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
+import { DEFAULT_EFFORT, anthropicModel, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
 import { CREDENTIAL_HINT, DEFAULT_MODELS, PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
 import { type AgentConfig, readAgentConfig } from "./agent-config.ts";
 import { ModelError, UsageError } from "./errors.ts";
@@ -68,4 +68,32 @@ export function defaultAgentModel(dataDir: string, choice: ModelChoice = {}, env
     case "codex":
       throw new ModelError("missing_key", `The codex provider needs ${CREDENTIAL_HINT.codex}`);
   }
+}
+
+export type ProviderStatus = {
+  /** What the next new conversation would use; null when nothing is set up. */
+  active: { provider: ProviderId; model: string; effort: string } | null;
+  providers: Array<{ id: ProviderId; label: string; ready: boolean; setup: string; command: string }>;
+};
+
+const SETUP: Record<ProviderId, { label: string; setup: string; command: string }> = {
+  anthropic: { label: "Anthropic API key", setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve" },
+  openrouter: { label: "OpenRouter API key", setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve" },
+  codex: { label: "Codex (ChatGPT login)", setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login" },
+};
+
+/** For the chat panel: which provider answers, and what each one still needs. Never throws on a missing credential. */
+export function providerStatus(dataDir: string, choice: ModelChoice = {}, env: Env = process.env): ProviderStatus {
+  const config = readAgentConfig(dataDir);
+  const ready = new Set(credentialedProviders(env));
+  let active: ProviderStatus["active"] = null;
+  try {
+    const provider = chooseProvider(choice, config, env);
+    const model = (config.provider === undefined || config.provider === provider ? config.model : undefined) ?? DEFAULT_MODELS[provider];
+    // An explicit choice with no credential is still shown as active: the panel then says what is missing.
+    active = { provider, model, effort: config.effort ?? DEFAULT_EFFORT };
+  } catch (err) {
+    if (!(err instanceof ModelError)) throw err;
+  }
+  return { active, providers: PROVIDERS.map((id) => ({ id, ready: ready.has(id), ...SETUP[id] })) };
 }

@@ -1,5 +1,6 @@
-import { Check, Copy, KeyRound, MessageSquareText, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Check, Copy, Cpu, KeyRound, MessageSquareText, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { useState } from "react";
+import type { ChatProviderStatus } from "../../api/http.ts";
 import type { Problem } from "./useChat.ts";
 
 export const EXAMPLE_PROMPTS = [
@@ -7,8 +8,6 @@ export const EXAMPLE_PROMPTS = [
   "Backspace is a long reach for my right thumb",
   "I want Escape somewhere I can hit without moving my hand",
 ] as const;
-
-export const KEY_COMMAND = "ANTHROPIC_API_KEY=<your key> keyloom serve";
 
 export function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
   return (
@@ -32,12 +31,27 @@ export function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
   );
 }
 
-function MissingKey({ onRetry }: { onRetry?: (() => void) | undefined }) {
+const PROVIDER_NAMES: Record<ChatProviderStatus["providers"][number]["id"], string> = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" };
+
+/** Which provider and model the next conversation uses. Shown beside the title because cost and behaviour differ by provider. */
+export function ProviderLine({ status }: { status: ChatProviderStatus | null }) {
+  if (status === null) return null;
+  if (status.active === null) return <p className="chat-provider">No model set up</p>;
+  return (
+    <p className="chat-provider">
+      <Cpu size={12} aria-hidden="true" />
+      <span>{PROVIDER_NAMES[status.active.provider]}</span>
+      <span className="chat-provider-model">{status.active.model}</span>
+    </p>
+  );
+}
+
+function CopyCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
   function copy() {
     // Clipboard access can be refused; the command stays selectable either way.
     navigator.clipboard
-      .writeText(KEY_COMMAND)
+      .writeText(command)
       .then(() => {
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1600);
@@ -45,21 +59,33 @@ function MissingKey({ onRetry }: { onRetry?: (() => void) | undefined }) {
       .catch(() => {});
   }
   return (
+    <div className="command">
+      <code>{command}</code>
+      <button type="button" className="button" onClick={copy} aria-label={`Copy ${command}`}>
+        {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+function MissingKey({ providers, onRetry }: { providers: ChatProviderStatus["providers"]; onRetry?: (() => void) | undefined }) {
+  return (
     <div className="chat-problem chat-missing-key" role="alert">
       <span className="state-icon" aria-hidden="true">
         <KeyRound size={22} />
       </span>
-      <h3>Chat needs an Anthropic API key</h3>
-      <p>
-        keyloom reads <code>ANTHROPIC_API_KEY</code> when it starts, so a key set now won't be seen. Stop keyloom in your terminal and start it again with the key set.
-      </p>
-      <div className="command">
-        <code>{KEY_COMMAND}</code>
-        <button type="button" className="button" onClick={copy} aria-label="Copy the command">
-          {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
+      <h3>Chat needs a model</h3>
+      <p>keyloom reads its credentials when it starts, so one set up now won't be seen. Pick one, then stop keyloom in your terminal and start it again.</p>
+      <ul className="provider-options" aria-label="Ways to set up a model">
+        {providers.map((p) => (
+          <li key={p.id}>
+            <strong>{p.label}</strong>
+            <span className="muted">{p.setup}</span>
+            <CopyCommand command={p.command} />
+          </li>
+        ))}
+      </ul>
       <p className="muted">keyloom never stores your key. Reload this page once keyloom is running again.</p>
       {onRetry === undefined ? null : (
         <button type="button" className="button" onClick={onRetry}>
@@ -79,8 +105,8 @@ const TITLES: Record<Exclude<Problem["kind"], "missing_key">, string> = {
 };
 
 // A refusal before the reply started. Your message is back in the box, so Try again is one click.
-export function ProblemNotice({ problem, onRetry, onDismiss }: { problem: Problem; onRetry?: (() => void) | undefined; onDismiss: () => void }) {
-  if (problem.kind === "missing_key") return <MissingKey onRetry={onRetry} />;
+export function ProblemNotice({ problem, providers, onRetry, onDismiss }: { problem: Problem; providers: ChatProviderStatus["providers"]; onRetry?: (() => void) | undefined; onDismiss: () => void }) {
+  if (problem.kind === "missing_key") return <MissingKey providers={providers} onRetry={onRetry} />;
   return (
     <div className="chat-problem" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />

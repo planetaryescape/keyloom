@@ -3,6 +3,7 @@ import { anthropicModel } from "../../src/agent/anthropic-model.ts";
 import { ChatEventSchema, ConversationDetailSchema } from "../../src/api/http.ts";
 import { appChatBackend } from "../../src/cli/chat-backend.ts";
 import { handleChatRoute } from "../../src/server/chat-routes.ts";
+import { withoutCredentials } from "../helpers/no-credentials.ts";
 import { type ScriptStep, fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
 import { draft } from "../helpers/ops.ts";
@@ -87,16 +88,22 @@ describe("chat routes", () => {
   });
 
   test("a missing API key is a 503 with a code the panel can act on", async () => {
-    const saved = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
+    await withoutCredentials(async () => {
       const { call, layoutId } = await serve([], false);
       const res = await call(`/api/layouts/${layoutId}/chat`, post("x"));
       expect(res.status).toBe(503);
       expect((await res.json()).error.code).toBe("missing_api_key");
-    } finally {
-      if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
-    }
+    });
+  });
+
+  test("GET /api/chat/provider needs the token and reports the providers", async () => {
+    await withoutCredentials(async () => {
+      const { call } = await serve([], false);
+      expect((await call("/api/chat/provider", {}, null)).status).toBe(401);
+      const body = await (await call("/api/chat/provider")).json();
+      expect(body.active).toBeNull();
+      expect(body.providers.map((p: { id: string }) => p.id)).toEqual(["anthropic", "openrouter", "codex"]);
+    });
   });
 
   test("a model failure after the stream opened arrives as an error event", async () => {
@@ -114,6 +121,7 @@ describe("chat routes", () => {
         emit({ type: "start", conversationId: "conv_1", messageId: "msg_1" });
         await Bun.sleep(5_300);
       },
+      provider: async () => ({ active: null, providers: [] }),
       list: async () => [],
       get: async () => null,
       retirePriority: async () => false,

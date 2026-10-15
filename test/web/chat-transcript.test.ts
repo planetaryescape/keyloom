@@ -7,7 +7,7 @@ const card = (id: string, status: ProposalCard["status"] = "proposed"): Proposal
   changeSetId: id, proposalGroup: null, title: id, explanation: "why", tradeoffs: { gains: [], costs: [] }, decisionDraft: null, status, validation, ops: [],
 });
 const outcome = (over: Partial<ChatOutcome> = {}): ChatOutcome => ({
-  conversationId: "c1", messageIds: ["m1"], status: "complete", text: "", proposals: [], priorities: [], model: "m", effort: "medium",
+  conversationId: "c1", messageIds: ["m1"], status: "complete", text: "", proposals: [], priorities: [], provider: "anthropic", model: "m", effort: "medium",
   usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, ...over,
 });
 

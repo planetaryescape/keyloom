@@ -1,7 +1,7 @@
 // The server's chat interface over the app's conversation use cases (rung 3). The one place that
 // knows both the server's wire shapes and the app's errors.
 import {
-  type AgentModel, type App, BusyError, ModelError, NotFoundError, type ProviderId, UsageError, listConversationSummaries, retirePriority, sendMessage, showConversation,
+  type AgentModel, type App, BusyError, ModelError, NotFoundError, type ProviderId, UsageError, providerStatus, listConversationSummaries, retirePriority, sendMessage, showConversation,
 } from "../app/index.ts";
 import { type ChatBackend, ChatError } from "../server/chat-backend.ts";
 
@@ -33,6 +33,9 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
       } catch (err) {
         throw toChatError(err);
       }
+    },
+    async provider() {
+      return providerStatus(app.dataDir, opts.provider ? { provider: opts.provider } : {});
     },
     async list(ref) {
       try {

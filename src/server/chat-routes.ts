@@ -1,15 +1,16 @@
 // The chat panel's routes (rung 3). startServer calls `handleChatRoute` for every /api request
 // after its Host check and before its own routing, and serves the Response when one comes back.
-import { ChatRequestSchema, ConversationDetailSchema, ConversationListResponseSchema, type ApiErrorBody, type ChatEvent } from "../api/http.ts";
+import { ChatProviderStatusSchema, ChatRequestSchema, ConversationDetailSchema, ConversationListResponseSchema, type ApiErrorBody, type ChatEvent } from "../api/http.ts";
 import { type ChatBackend, ChatError } from "./chat-backend.ts";
 import { checkToken } from "./guard.ts";
 
 const LAYOUTS = "/api/layouts/";
 const CONVERSATIONS = "/api/conversations/";
 const PRIORITIES = "/api/priorities/";
+const PROVIDER = "/api/chat/provider";
 const HEARTBEAT_MS = 5_000;
 
-type Match = { kind: "send"; ref: string } | { kind: "list"; ref: string } | { kind: "get"; id: string } | { kind: "retire"; id: string };
+type Match = { kind: "provider" } | { kind: "send"; ref: string } | { kind: "list"; ref: string } | { kind: "get"; id: string } | { kind: "retire"; id: string };
 
 function decode(raw: string): string | null {
   if (raw.length === 0 || raw.includes("/")) return null;
@@ -21,6 +22,7 @@ function decode(raw: string): string | null {
 }
 
 function match(method: string, pathname: string): Match | "wrong-method" | null {
+  if (pathname === PROVIDER) return method === "GET" ? { kind: "provider" } : "wrong-method";
   if (pathname.startsWith(LAYOUTS)) {
     const parts = pathname.slice(LAYOUTS.length).split("/");
     const ref = decode(parts[0] ?? "");
@@ -64,6 +66,7 @@ export async function handleChatRoute(request: Request, pathname: string, backen
   if (found === "wrong-method") return new Response("method not allowed", { status: 405 });
 
   try {
+    if (found.kind === "provider") return Response.json(ChatProviderStatusSchema.parse(await backend.provider()));
     if (found.kind === "list") {
       const conversations = await backend.list(found.ref);
       if (conversations === null) return errorResponse(404, "not_found", `no layout "${found.ref}"`);
