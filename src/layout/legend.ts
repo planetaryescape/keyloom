@@ -104,6 +104,22 @@ function slotCap(a: SlotAction, ctx: GridContext): string {
   }
 }
 
+// An imported macro is named after its firmware slot (ST_MACRO_2), which says nothing a cap can use.
+const SLOT_NAME = /^(?:ST_)?MACRO[\s_-]?\d+$|^M\d+$/i;
+
+/**
+ * What a macro's cap prints: the first word of its name, such as "Copy" for "Copy, switch, paste"
+ * (the ▸ mark on the cap says it is a macro). A word longer than five letters is cut to three and an
+ * ellipsis so it fits at the legend floor; a slot name or no name falls back to the number ("M4"),
+ * which Advanced view keeps. The whole name stays in the panel and the key's description.
+ */
+export function macroLegend(index: number, name: string | undefined): string {
+  const first = name?.trim().split(/[\s,;:._-]+/).find((word) => word !== "");
+  if (index < 0) return "M?";
+  if (first === undefined || SLOT_NAME.test(name?.trim() ?? "")) return `M${index}`;
+  return first.length <= 5 ? first : first.slice(0, 4);
+}
+
 export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
   switch (binding.kind) {
     case "key":
@@ -125,7 +141,7 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
     case "macro": {
       const index = ctx.macros.findIndex((macro) => macro.id === binding.macroId);
       // The play mark on the cap says it is a macro, so no second word competes for the width.
-      return { kind: "macro", tap: index < 0 ? "M?" : `M${index}` };
+      return { kind: "macro", tap: macroLegend(index, ctx.macros[index]?.name) };
     }
     case "native": {
       // A kept hold-tap is labelled "tap/hold" ("Enter/OSL2"); two short halves fit a cap where the whole would not.

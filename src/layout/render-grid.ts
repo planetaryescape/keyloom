@@ -25,7 +25,8 @@ export function placedKey(key: GridKey): GridKey {
 
 export type GridContext = {
   layers: readonly Pick<Layer, "id" | "name" | "shortLabel">[];
-  macros: readonly Pick<Macro, "id">[];
+  /** The name lets a graphical cap print a macro's summary; the terminal grid only numbers macros. */
+  macros: readonly (Pick<Macro, "id"> & Partial<Pick<Macro, "name">>)[];
   /** Needed to number a tap dance key; without it one reads "TD?". */
   tapDances?: readonly TapDance[];
 };

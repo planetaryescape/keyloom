@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bindingLegend, layerLegend } from "../../src/layout/legend.ts";
+import { bindingLegend, layerLegend, macroLegend } from "../../src/layout/legend.ts";
 
 const ctx = {
   layers: [
@@ -7,7 +7,7 @@ const ctx = {
     { id: "nav", name: "Navigation" },
     { id: "odd", name: "Layer 7" },
   ],
-  macros: [{ id: "m-one" }],
+  macros: [{ id: "m-one" }, { id: "copy", name: "Copy, switch, paste" }, { id: "slot", name: "ST_MACRO_2" }, { id: "long", name: "Screenshot region" }],
 };
 
 describe("bindingLegend", () => {
@@ -53,6 +53,20 @@ describe("bindingLegend", () => {
   test("macros are numbered like the terminal grid, and an unknown one shows M?", () => {
     expect(bindingLegend({ kind: "macro", macroId: "m-one" }, ctx).tap).toBe("M0");
     expect(bindingLegend({ kind: "macro", macroId: "gone" }, ctx).tap).toBe("M?");
+  });
+
+  test("a macro prints the first word of its name, and its slot number when the name is only the firmware's", () => {
+    expect(bindingLegend({ kind: "macro", macroId: "copy" }, ctx)).toEqual({ kind: "macro", tap: "Copy" });
+    expect(bindingLegend({ kind: "macro", macroId: "slot" }, ctx).tap).toBe("M2");
+    expect(bindingLegend({ kind: "macro", macroId: "long" }, ctx).tap).toBe("Scre");
+  });
+
+  test("macroLegend skips punctuation and blanks, and never prints a name longer than five characters", () => {
+    expect(macroLegend(0, "  , Paste plain")).toBe("Paste");
+    expect(macroLegend(3, "")).toBe("M3");
+    expect(macroLegend(3, "M4")).toBe("M3");
+    expect(macroLegend(-1, "Copy")).toBe("M?");
+    expect([...macroLegend(0, "Supercalifragilistic")].length).toBeLessThanOrEqual(5);
   });
 
   test("a long native label is shortened from a table, and a kept hold-tap splits into tap and hold", () => {
