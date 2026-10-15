@@ -85,6 +85,10 @@ export const LayerSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
   name: z.string().min(1),
   bindings: z.array(BindingSchema),
+  // What layer keys print on their caps; absent means the first letters of the name (16#layers-are-managed-in-their-tabs, D-180).
+  shortLabel: z.string().min(1).max(4).optional(),
+  // One of the six layer colours (1 to 6); absent means the layer's position picks one. Display only: no firmware reads it.
+  color: z.number().int().min(1).max(6).optional(),
 });
 export type Layer = z.infer<typeof LayerSchema>;
 

@@ -90,6 +90,31 @@ function applyOp(doc: Layout, op: ChangeOp): void {
       layerOf(doc, op.layerId).name = op.name;
       return;
     }
+    case "duplicateLayer": {
+      const source = layerOf(doc, op.layerId);
+      if (doc.layers.some((l) => l.id === op.layer.id)) throw new OpFailure("schema", `layer "${op.layer.id}" already exists`);
+      // The copy has its own name and look; only what the keys do is copied. It goes last: a layer inserted
+      // earlier would move every layer after it, and custom code that numbers layers would point at the wrong ones.
+      doc.layers.push({ id: op.layer.id, name: op.layer.name, bindings: structuredClone(source.bindings) });
+      return;
+    }
+    case "moveLayer": {
+      const moving = layerOf(doc, op.layerId);
+      layerOf(doc, op.afterLayerId);
+      if (moving === doc.layers[0]) throw new OpFailure("schema", `layer "${op.layerId}" is the base layer and stays first`);
+      if (op.layerId === op.afterLayerId) return;
+      doc.layers.splice(find(doc.layers, op.layerId), 1);
+      doc.layers.splice(find(doc.layers, op.afterLayerId) + 1, 0, moving);
+      return;
+    }
+    case "setLayerStyle": {
+      const layer = layerOf(doc, op.layerId);
+      if (op.shortLabel === null) delete layer.shortLabel;
+      else layer.shortLabel = op.shortLabel;
+      if (op.color === null) delete layer.color;
+      else layer.color = op.color;
+      return;
+    }
     case "upsertMacro": return upsert(doc.macros, op.macro);
     case "removeMacro": return remove(doc.macros, op.macroId, "macro");
     case "upsertTapDance": return upsert(doc.tapDances, op.tapDance);

@@ -12,6 +12,9 @@ export function opLine(op: ChangeOp): string {
     case "addLayer": return `add layer ${op.layer.id} ("${op.layer.name}") after ${op.afterLayerId}`;
     case "removeLayer": return `remove layer ${op.layerId}`;
     case "renameLayer": return `rename layer ${op.layerId} to "${op.name}"`;
+    case "duplicateLayer": return `duplicate layer ${op.layerId} as ${op.layer.id} ("${op.layer.name}")`;
+    case "moveLayer": return `move layer ${op.layerId} after ${op.afterLayerId}`;
+    case "setLayerStyle": return `set layer ${op.layerId} label ${op.shortLabel ?? "(default)"}, colour ${op.color ?? "(default)"}`;
     case "upsertMacro": return `set macro ${op.macro.id}`;
     case "removeMacro": return `remove macro ${op.macroId}`;
     case "upsertTapDance": return `set tap dance ${op.tapDance.id}`;

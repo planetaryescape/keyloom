@@ -730,3 +730,48 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 
 ### D-177: ⌘C and ⌘V on keys are left to rung 15, and the glyph sets to a later pass. (Claude, building rung 16)
 - **Why:** copying and moving keys is rung 15's scope. The theme toggle already exists, and a glyph setting has no reader until the Advanced view's names are settled.
+
+### D-180: A layer may carry a short label (at most four characters) and a colour (one of six), stored in the layout document as two optional fields, and three ops edit layers: `setLayerStyle`, `duplicateLayer` and `moveLayer`. (Claude, building rung 15; D-090)
+- **Schema:** `LayerSchema` gains optional `shortLabel` and `color`. A document without them parses as before and `schemaVersion` stays 1, so nothing was migrated. No generator reads either field; they are display only, like the position-picked colour they replace. A layer re-imported from firmware loses them, because firmware has nowhere to keep them.
+- **Why in the document, not the browser:** the tabs, the layer keys on caps and the agent's descriptions all read the same label, and a label kept in one browser would differ between the laptop and the phone.
+- **Ops:** `moveLayer` names the layer to go after, by id, and refuses to move the base layer or put anything before it. `duplicateLayer` copies the bindings under a new id and name, and not the look. `setLayerStyle` sets both fields, `null` clearing one. Bulk convert needs no op: it is a `setBinding` for each transparent (or none) key, in one change set.
+- **Default colour:** the layer's place in the list picks one of six, as before. A chosen colour is kept when layers move.
+
+### D-181: A layer a change adds is a warning when nothing switches to it yet, and a layer that was reachable and stops being so stays an error. (Claude, building rung 15; D-090)
+- **Why:** `layer_unreachable` refused every added or duplicated layer, so the tabs' "+" and Duplicate could never succeed on their own. A new layer has lost nothing by being out of reach. The warning says "Add a key that switches to it before you rely on it", and once the layer exists, putting keys on it is no worse than before, so it stays editable.
+- **New layers go last.** Add and Duplicate append, because a layer inserted earlier moves every layer after it and custom code that names layers by number would point at the wrong ones.
+- **Observed on BK's layouts:** both his Moonlander and his Glove80 carry custom code that numbers layers (`refersToLayerIndices`), so Move left, Move right and Delete are refused with "Your custom code refers to layers by number" (`passthrough_layer_index`). That includes deleting a layer just added at the end. The refusal is the validator's and is shown as it words it. Reordering works on a layout without such code (the Corne sample).
+
+### D-182: A key is dragged onto another on the same layer to swap them, or with Option to copy; a mouse starts after 5 px and a finger after a 380 ms long press, and a cap does not scroll on a touch screen. (Claude, building rung 15; D-091)
+- **Touch:** a finger that moves before the long press is a swipe or a tap, so the phone's half switcher keeps working. On a coarse pointer a cap sets `touch-action: none`, so the browser doesn't scroll away under the drag, and the context menu is suppressed.
+- **Across layers:** drag does not cross layers. Swap in the key panel does, in two clicks from an open panel, and the board lets the layer tabs be used while it waits.
+- **Why a hook, not HTML drag and drop:** that API doesn't fire for a long press on most touch browsers, and the same code has to serve the mouse.
+
+### D-183: Selecting several keys is Shift-click or Cmd-click, or taps in "Select keys" mode on a screen with no Shift, and it is the same selection the chat shows as chips. (Claude, building rung 15; D-089)
+- **First Shift-click:** it takes in the key whose panel is open, so "click J, Shift-click K" selects both, which is what makes a combo five clicks.
+- **One selection:** the chat's "Asking about" chips and the selection bar are one set of keys on one layer. Keys picked with the chat closed are there when it opens.
+- **Order:** positions are kept in board order, whatever order they were clicked in.
+
+### D-184: The combo panel opens its output picker on Navigation, names the combo from its output, refuses a second combo on the same keys and layers, and draws a combo as a pill on a line that stops short of the key legends. (Claude, building rung 15; D-089)
+- **Navigation first:** Esc, Enter, Tab and Backspace are what combos usually send, and they are on that tab, so two keys and Esc is five clicks with no search: select key 1, Shift-click key 2, Make a combo, Esc, Add combo.
+- **Name:** "Esc combo", then "Esc combo 2". The name is editable under More.
+- **Conflicts:** two combos on the same keys on overlapping layers can only be honoured once by the firmware, so the panel says which one already exists. The same keys on layers that don't overlap are two combos. BK's own J+K already makes `{` on his Moonlander, so the demo uses N+M.
+- **Lines:** each side of the shape stops 0.3 key units short of a key's middle so it doesn't strike through the legend. Two keys make a line and three or more a loop joined in angular order around their middle. The label is upright at 11 px, so it reads on the Moonlander's tilted and the Glove80's fanned thumb keys. A phone draws a combo only when all its keys are on the hand showing.
+
+### D-185: A move that would drop the only copy of a function asks first, in the key panel's words, and one that is refused says why. (Claude, building rung 15; D-092)
+- **Why:** paste, drop, typed keys and deleting a layer can overwrite or remove a function that exists nowhere else. The change is tried first; if the only thing wrong is `function_lost`, a dialog names the functions and "Replace and drop" sends the same change with `dropFunction` ops. Any other refusal is shown as the validator words it.
+- **Deleting a layer** lists everything that points at it (keys, hold-tap holds, tap dance slots, combo outputs and combos limited to it) and the validator refuses while any is left, so the list and the refusal agree.
+
+### D-186: Quick assign is a mode the selection bar starts with "Type to assign", and a run is one change set applied with Enter. (Claude, building rung 15; 09)
+- **Why not always on:** a stray key typed with keys still selected would rewrite them and make a revision. The typed keys show on the board as a draft; Backspace takes one back, Esc cancels, and keys beyond the selection are refused with a note.
+- **Which keys:** a printable character is the key of that name; anything else is ignored with a note. A shifted character is the plain key, as the key panel's typing already does.
+
+### D-187: A layer key's toggle is "tog", legends never break inside a word, and a phone's legend floor is 10 px. (Claude, building rung 15; D-144)
+- **Fixes:** `docs/issues/legend-breaks-mid-word.md`. "toggle" needs 3.6 em and a 1 u cap has 31 px at the phone's 40 px unit, so it wrapped as "toggl / e". The stylesheet no longer breaks anywhere but a legend's seams. Every action word is tested to fit a 1 u cap at both floors.
+- **Measured:** at 1440 × 900 no Glove80 legend renders below 11 px (96 legends, smallest 11 px).
+
+### D-188: A layer name written with underscores reads as words (one_shot is "One shot"), wherever the layer is named for a person. (Claude, building rung 15; D-090)
+- **Scope:** the tabs, the layout summary, the dialogs and the sentences the viewer builds. The stored name is untouched and the rename field shows it as stored. A name with spaces, or none, is left as written.
+
+### D-189: Copy and paste use keyloom's own clipboard, not the system one. (Claude, building rung 15; D-091)
+- **Why:** what is copied is a binding, which has no text form that pastes anywhere else. Cmd-C and Cmd-V act on the selected keys or the open key and leave the browser's copy alone when text is selected or a field has focus. Paste reaches the selected keys, or the open key when none are selected, and a key that already does it is skipped.

@@ -35,6 +35,8 @@ type Layer = {
   id: string;                      // stable slug, e.g. "base", "num"
   name: string;                    // "Numbers"
   bindings: Binding[];             // length === board.keys.length
+  shortLabel?: string;             // up to 4 characters, printed on layer keys; default: first letters of the name (D-180)
+  color?: 1 | 2 | 3 | 4 | 5 | 6;   // display only; default: the layer's place in the list (D-180)
 };
 
 type Mod = "LCTL" | "LSFT" | "LALT" | "LGUI" | "RCTL" | "RSFT" | "RALT" | "RGUI";

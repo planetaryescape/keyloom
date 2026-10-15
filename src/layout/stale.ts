@@ -38,6 +38,11 @@ function touchesOf(op: ChangeOp, base: Layout): Touch[] {
     case "addLayer": return [presenceTouch(op.layer.id), presenceTouch(op.afterLayerId)];
     case "removeLayer": return wholeLayerTouches(op.layerId, base);
     case "renameLayer": return [nameTouch(op.layerId)];
+    case "duplicateLayer": return [...wholeLayerTouches(op.layerId, base), presenceTouch(op.layer.id)];
+    // Where a layer sits depends on every other layer's place, so any change of order since the base is a conflict.
+    case "moveLayer": return [{ label: "layer order", read: (d) => d.layers.map((l) => l.id) }];
+    case "setLayerStyle":
+      return [{ label: `layer ${op.layerId} (look)`, read: (d) => { const l = d.layers.find((x) => x.id === op.layerId); return [l?.shortLabel, l?.color]; } }];
     case "upsertMacro": return [itemTouch("macro", op.macro.id, (d) => d.macros.find((m) => m.id === op.macro.id))];
     case "removeMacro": return [itemTouch("macro", op.macroId, (d) => d.macros.find((m) => m.id === op.macroId))];
     case "upsertTapDance": return [itemTouch("tap dance", op.tapDance.id, (d) => d.tapDances.find((t) => t.id === op.tapDance.id))];

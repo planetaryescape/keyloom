@@ -55,6 +55,9 @@ type ChangeOp =
   | { op: "addLayer"; layer: { id: string; name: string }; afterLayerId: string } // filled with transparent
   | { op: "removeLayer"; layerId: string }
   | { op: "renameLayer"; layerId: string; name: string }
+  | { op: "duplicateLayer"; layerId: string; layer: { id: string; name: string } } // copy goes last (D-181)
+  | { op: "moveLayer"; layerId: string; afterLayerId: string }                    // never the base layer, nothing before it
+  | { op: "setLayerStyle"; layerId: string; shortLabel: string | null; color: number | null }
   | { op: "upsertMacro"; macro: Macro }
   | { op: "removeMacro"; macroId: string }
   | { op: "upsertCombo"; combo: Combo }

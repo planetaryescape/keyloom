@@ -24,6 +24,21 @@ export const ChangeOpSchema = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("removeLayer"), layerId: z.string().min(1) }),
   z.object({ op: z.literal("renameLayer"), layerId: z.string().min(1), name: z.string().min(1) }),
+  // Copies the layer's bindings under a new id, as the last layer so no other layer's number changes.
+  z.object({
+    op: z.literal("duplicateLayer"),
+    layerId: z.string().min(1),
+    layer: z.object({ id: LayerSchema.shape.id, name: z.string().min(1) }),
+  }),
+  // Moves a layer to just after another, by id. The base layer stays first, so nothing goes before it.
+  z.object({ op: z.literal("moveLayer"), layerId: z.string().min(1), afterLayerId: z.string().min(1) }),
+  // Both fields are set together; null clears one back to its default.
+  z.object({
+    op: z.literal("setLayerStyle"),
+    layerId: z.string().min(1),
+    shortLabel: LayerSchema.shape.shortLabel.unwrap().nullable(),
+    color: LayerSchema.shape.color.unwrap().nullable(),
+  }),
   z.object({ op: z.literal("upsertMacro"), macro: MacroSchema }),
   z.object({ op: z.literal("removeMacro"), macroId: z.string().min(1) }),
   z.object({ op: z.literal("upsertTapDance"), tapDance: TapDanceSchema }),

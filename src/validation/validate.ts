@@ -74,11 +74,16 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   // A layout imported with a flaw of its own must stay editable, so a problem that was already
   // there, identical, is shown as a warning. A change that moves or worsens it is an error.
   const existing = new Set(documentRules(board, before).map(issueKey));
+  const beforeLayers = new Set(before.layers.map((l) => l.id));
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
   for (const i of documentRules(board, after)) {
     if (existing.has(issueKey(i))) warnings.push({ ...i, message: `${i.message} (already so before this change)`, ...(i.plain === undefined ? {} : { plain: `${i.plain} It was already like this before your change.` }) });
-    else errors.push(i);
+    // A layer this change adds has lost nothing by being out of reach, so the tabs' "add" and "duplicate" can make one (D-181);
+    // a layer that was reachable and stops being so keeps being an error.
+    else if (i.code === "layer_unreachable" && i.layerId !== undefined && !beforeLayers.has(i.layerId)) {
+      warnings.push({ ...i, plain: `${i.plain ?? i.message} Add a key that switches to it before you rely on it.` });
+    } else errors.push(i);
   }
   errors.push(...nativeEdit(before, after), ...passthroughLayerIndex(before, after));
 

@@ -42,7 +42,8 @@ function shortNative(label: string): string {
 // One word each, so the action fits under a layer's short label at the legend floor (18#legends).
 const LAYER_ACTION_WORD = {
   momentary: "hold",
-  toggle: "toggle",
+  // "toggle" is six letters and broke mid-word on a phone cap; "tog" fits at the legend floor (D-187).
+  toggle: "tog",
   to: "go",
   oneShot: "once",
 } as const satisfies Record<Extract<Binding, { kind: "layer" }>["action"], string>;
@@ -58,7 +59,7 @@ function capText(code: string, mods?: readonly Mod[]): string {
 
 // Up to four letters: initials of a name with several words ("Left Hand" is LH), a short word as it
 // is, and the first three letters of a long one ("Navigate" is NAV).
-function shortName(name: string): string {
+export function defaultShortLabel(name: string): string {
   const numbered = /^layer\s+(\d+)$/i.exec(name.trim());
   if (numbered) return `L${numbered[1]}`;
   const words = name.trim().split(/[\s_-]+/).filter((word) => word !== "");
@@ -76,8 +77,10 @@ export function layerLegend(layerId: string, ctx: GridContext): string {
   const index = ctx.layers.findIndex((layer) => layer.id === layerId);
   const layer = ctx.layers[index];
   if (layer === undefined) return layerId;
-  const label = shortName(layer.name);
-  const clash = (other: string) => ctx.layers.some((candidate) => candidate.id !== layer.id && shortName(candidate.name) === other);
+  // A label the person chose is printed as it is, even when two layers share it.
+  if (layer.shortLabel !== undefined) return layer.shortLabel;
+  const label = defaultShortLabel(layer.name);
+  const clash = (other: string) => ctx.layers.some((candidate) => candidate.id !== layer.id && defaultShortLabel(candidate.name) === other);
   if (!clash(label)) return label;
   const longer = layer.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase();
   const longerClash = ctx.layers.some((candidate) => candidate.id !== layer.id && candidate.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() === longer);

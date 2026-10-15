@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { importOryxSource } from "../../src/firmware/qmk/import.ts";
+import { applyOps } from "../../src/layout/apply-ops.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { bindingFunctions } from "../../src/layout/functions.ts";
 import { type Binding, type Layer, type Layout, LayoutSchema } from "../../src/layout/schema.ts";
@@ -91,10 +92,25 @@ describe("layer_unreachable", () => {
     expect(validate(tinyBoard, before, [set("base", 2, key("Q"))]).ok).toBe(true);
   });
 
-  test("a new layer is unreachable until something switches to it", () => {
+  test("a new layer is a warning until something switches to it, since nothing was lost by adding it", () => {
     const add: ChangeOp = { op: "addLayer", layer: { id: "fn", name: "Fn" }, afterLayerId: "nav" };
-    expect(codes(validate(tinyBoard, tiny(), [add]).errors)).toEqual(["layer_unreachable"]);
-    expect(validate(tinyBoard, tiny(), [add, set("nav", 2, layer("momentary", "fn"))]).ok).toBe(true);
+    const added = validate(tinyBoard, tiny(), [add]);
+    expect(added.ok).toBe(true);
+    expect(codes(added.warnings)).toEqual(["layer_unreachable"]);
+    expect(added.warnings[0]?.plain).toContain("Add a key that switches to it");
+    const reached = validate(tinyBoard, tiny(), [add, set("nav", 2, layer("momentary", "fn"))]);
+    expect(reached.ok).toBe(true);
+    expect(reached.warnings).toEqual([]);
+  });
+
+  test("a duplicate is out of reach too, and only warns; the layer it copied stays an error if it is stranded", () => {
+    const copy: ChangeOp = { op: "duplicateLayer", layerId: "num", layer: { id: "num-copy", name: "Numbers copy" } };
+    const r = validate(tinyBoard, tiny(), [copy]);
+    expect(r.ok).toBe(true);
+    expect(codes(r.warnings)).toEqual(["layer_unreachable"]);
+    // Filling the unreached copy later is no worse than it was, so it stays editable.
+    const before = applyOps(tiny(), [copy]);
+    expect(before.ok && validate(tinyBoard, before.layout, [set("num-copy", 0, key("Q"))]).ok).toBe(true);
   });
 });
 
@@ -333,7 +349,10 @@ describe("property: a valid change set leaves every layer reachable and loses no
         expect(after).not.toBeNull();
         const saved = after as Layout;
         expect(LayoutSchema.safeParse(saved).success).toBe(true);
-        expect([...oracleReachable(saved)].sort()).toEqual(saved.layers.map((l) => l.id).sort());
+        // A layer the change itself adds may be out of reach (a warning, D-181); every layer that was there still is reachable.
+        const reached = oracleReachable(saved);
+        const kept = saved.layers.filter((l) => before.layers.some((b) => b.id === l.id)).map((l) => l.id);
+        expect(kept.filter((id) => !reached.has(id))).toEqual([]);
         const dropped = new Set(ops.flatMap((o) => (o.op === "dropFunction" ? [o.function] : [])));
         const reachableAfter = functionHomes(saved);
         for (const f of functionHomes(before).keys()) expect(reachableAfter.has(f) || dropped.has(f)).toBe(true);

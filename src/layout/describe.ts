@@ -1,5 +1,6 @@
 // A binding in plain words, for the viewer's inspector and for screen readers. Pure; it reads
 // only the layout document, so the same sentences can serve the CLI and the agent later.
+import { niceLayerName } from "./layer-ops.ts";
 import { keyCodeLabel } from "./keycodes.ts";
 import { profileWords } from "./option-words.ts";
 import { type Legend, bindingLegend } from "./legend.ts";
@@ -81,8 +82,7 @@ function slotWords(a: SlotAction, layout: Layout): string {
   }
 }
 
-const layerName = (layout: Layout, layerId: string): string =>
-  layout.layers.find((layer) => layer.id === layerId)?.name ?? layerId;
+const layerName = (layout: Layout, layerId: string): string => niceLayerName(layout.layers.find((layer) => layer.id === layerId)?.name ?? layerId);
 
 const LAYER_SENTENCE = {
   momentary: (name: string) => `Hold to use ${name} while the key is down`,
