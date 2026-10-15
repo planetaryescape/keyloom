@@ -19,11 +19,59 @@ const QMK_LAYER_MACROS: Record<string, LayerAction> = { MO: "momentary", LT: "mo
  * the layer only that key reaches would look unreachable on a layout where it works.
  */
 function nativeLayerTarget(b: Extract<Binding, { kind: "native" }>, doc: Layout): { layerId: string; action: LayerAction } | undefined {
+  if (b.firmware === "zmk") return zmkLayerTarget(b.source, doc);
   if (b.firmware !== "qmk") return undefined;
   const define = !/^\w+$/.test(b.source) ? undefined : doc.passthrough.map((p) => new RegExp(`^\\s*#define\\s+${b.source}\\s+(.+?)\\s*$`, "m").exec(p.source)?.[1]).find((v) => v !== undefined);
   const m = /^(MO|LT|TT|OSL|TG|TO|DF)\(\s*(\d+)\s*[,)]/.exec(define ?? b.source);
   const layerId = m ? doc.layers[Number(m[2])]?.id : undefined;
   return m && layerId ? { layerId, action: QMK_LAYER_MACROS[m[1] as string] as LayerAction } : undefined;
+}
+
+// ZMK's built-in layer behaviours and which parameter names the layer.
+const ZMK_LAYER_BEHAVIORS: Record<string, LayerAction> = { mo: "momentary", lt: "momentary", sl: "oneShot", tog: "toggle", to: "to" };
+
+/** A layer index, written as a number or as a name `#define`d to one in a kept block (the template's `#define LOWER 1`). */
+function zmkLayerIndex(param: string | undefined, doc: Layout): number | undefined {
+  if (param === undefined) return undefined;
+  if (/^\d+$/.test(param)) return Number(param);
+  if (!/^\w+$/.test(param)) return undefined;
+  const value = doc.passthrough.map((p) => new RegExp(`^\\s*#define\\s+${param}\\s+(\\d+)\\s*$`, "m").exec(p.source)?.[1]).find((v) => v !== undefined);
+  return value === undefined ? undefined : Number(value);
+}
+
+/**
+ * A native ZMK binding's layer switch: a built-in layer behaviour, or a custom behaviour kept as
+ * written whose definition switches layers. The Glove80 template reaches Lower only through the
+ * tap-dance `layer_td` (`bindings = <&mo LOWER>, <&to LOWER>`) and Magic only through the hold-tap
+ * `magic` (`bindings = <&mo>, ...`, so `&magic MAGIC 0` holds MAGIC). Without this, those layers
+ * looked unreachable on a working layout.
+ */
+function zmkLayerTarget(source: string, doc: Layout, depth = 0): { layerId: string; action: LayerAction } | undefined {
+  const [ref, ...params] = source.trim().split(/\s+/);
+  const name = ref?.replace(/^&/, "");
+  if (!name || !/^\w+$/.test(name) || depth > 2) return undefined;
+  const builtin = ZMK_LAYER_BEHAVIORS[name];
+  if (builtin) {
+    const layerId = doc.layers[zmkLayerIndex(params[0], doc) ?? -1]?.id;
+    return layerId ? { layerId, action: builtin } : undefined;
+  }
+  const block = doc.passthrough.find((p) => new RegExp(`^\\s*${name}\\s*:`).test(p.source))?.source;
+  const bindings = block === undefined ? undefined : /bindings\s*=\s*([^;]+);/.exec(block)?.[1];
+  if (bindings === undefined) return undefined;
+  const calls = [...bindings.matchAll(/<([^>]*)>/g)].map((m) => (m[1] ?? "").trim());
+  if (/zmk,behavior-hold-tap/.test(block ?? "")) {
+    // A hold-tap's bindings name behaviours only; the call's first parameter goes to the hold one.
+    const hold = calls[0]?.replace(/^&/, "");
+    const action = hold === undefined ? undefined : ZMK_LAYER_BEHAVIORS[hold];
+    const layerId = action === undefined ? undefined : doc.layers[zmkLayerIndex(params[0], doc) ?? -1]?.id;
+    return action && layerId ? { layerId, action: "momentary" } : undefined;
+  }
+  // A tap-dance (or similar) lists whole calls; the first that switches layers counts.
+  for (const call of calls) {
+    const target = zmkLayerTarget(call, doc, depth + 1);
+    if (target) return target;
+  }
+  return undefined;
 }
 
 /** The layer a binding switches to, if it does. A layer-tap's hold is a momentary layer (its tap is a plain key). */
