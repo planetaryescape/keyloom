@@ -26,10 +26,18 @@ export function keyLabel(layout: Layout, slot: Slot): string {
 
 export type ReplacedNative = { slot: Slot; binding: Extract<Binding, { kind: "native" }> };
 
-/** The native bindings a proposal's changed keys would overwrite. */
+/**
+ * The native bindings a proposal's changed keys would overwrite. One the validator reports as moved
+ * to another key keeps its firmware code (the binding travels whole), so only a native left with
+ * no new home needs the "can't write it back" confirmation.
+ */
 export function replacedNatives(layout: Layout, proposal: ProposalCard): ReplacedNative[] {
+  const moved = new Set(
+    proposal.validation.diff.displaced.filter((d) => d.to !== null).map((d) => `${d.function}@${d.from.layerId}:${d.from.position}`),
+  );
   return proposal.validation.diff.changed.flatMap((slot) => {
     const binding = layout.layers.find((layer) => layer.id === slot.layerId)?.bindings[slot.position];
-    return binding?.kind === "native" ? [{ slot, binding }] : [];
+    if (binding?.kind !== "native") return [];
+    return moved.has(`native:${binding.firmware}:${binding.source}@${slot.layerId}:${slot.position}`) ? [] : [{ slot, binding }];
   });
 }

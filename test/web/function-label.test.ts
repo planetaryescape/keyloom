@@ -14,6 +14,7 @@ describe("functionLabel", () => {
     expect(functionLabel("mod:LALT", layout)).toBe("Hold ⌥");
     expect(functionLabel("layer:toggle:layer-4", layout)).toBe("Toggle Nav");
     expect(functionLabel("macro:oo", layout)).toBe("Option twice");
-    expect(functionLabel("native:qmk:TD(0)", layout)).toBe("A native binding");
+    expect(functionLabel("native:qmk:TD(0)", layout)).toBe("TD(0)");
+    expect(functionLabel("native:zmk:&layer_td", layout)).toBe("layer_td");
   });
 });

@@ -23,7 +23,8 @@ export function functionLabel(fn: string, layout: Layout): string {
     case "macro":
       return layout.macros.find((macro) => macro.id === body)?.name ?? `Macro ${body}`;
     case "native":
-      return "A native binding";
+      // native:<firmware>:<source as written>, e.g. native:zmk:&layer_td.
+      return rest.slice(1).join(":").replace(/^&/, "") || "A native binding";
     default:
       return fn;
   }

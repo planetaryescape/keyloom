@@ -67,4 +67,12 @@ describe("proposal facts", () => {
     expect(replacedNatives(head, card)).toEqual([]);
     expect(replacedNatives(withNative, card)).toEqual([{ slot: { layerId: "base", position: 57 }, binding: { kind: "native", firmware: "qmk", source: "RGB_TOG", label: "RGB" } }]);
   });
+
+  test("a native binding the proposal moves to another key keeps its code, so it needs no confirmation", () => {
+    const withNative = structuredClone(head);
+    withNative.layers[0]!.bindings[57] = { kind: "native", firmware: "qmk", source: "RGB_TOG", label: "RGB" };
+    const card = proposal([optionOn("base", 57)]);
+    card.validation.diff.displaced = [{ function: "native:qmk:RGB_TOG", from: { layerId: "base", position: 57 }, to: { layerId: "base", position: 58 } }];
+    expect(replacedNatives(withNative, card)).toEqual([]);
+  });
 });
