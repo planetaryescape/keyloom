@@ -226,3 +226,47 @@ describe("build and flash", () => {
     }
   });
 });
+
+describe("applying a stored proposal", () => {
+  const ops = OPS as Parameters<FakeEditor["storeProposal"]>[0];
+
+  test("POST /api/change-sets/:id/apply applies it, supersedes its sibling and refuses a second apply", async () => {
+    const editor = quick();
+    const { call } = start(editor);
+    const first = editor.storeProposal(ops, "Base, key 1: F17", "turn-1");
+    const sibling = editor.storeProposal(ops, "Base, key 1: F17 again", "turn-1");
+
+    const applied = await call("POST", `/api/change-sets/${first.id}/apply`, {});
+    expect(applied.status).toBe(200);
+    const body = ApplyResponseSchema.parse(await applied.json());
+    expect(body.changeSetId).toBe(first.id);
+    expect(editor.detail().revision.id).toBe(body.revisionId);
+    expect(editor.proposalStatus(sibling.id)).toBe("superseded");
+
+    const again = await call("POST", `/api/change-sets/${first.id}/apply`, {});
+    expect(again.status).toBe(400);
+    expect(ApiErrorBodySchema.parse(await again.json()).error.code).toBe("usage");
+  });
+
+  test("an unknown id is 404, a proposal made against an older head is 409 stale_base", async () => {
+    const editor = quick();
+    const { call } = start(editor);
+    expect((await call("POST", "/api/change-sets/nope/apply", {})).status).toBe(404);
+
+    const old = editor.storeProposal(ops, "old", "turn-1");
+    await call("POST", "/api/layouts/moonlander-daily/apply", { baseRevisionId: fixture.revision.id, ops: OPS, summary: "moved on" });
+    const stale = await call("POST", `/api/change-sets/${old.id}/apply`, {});
+    expect(stale.status).toBe(409);
+    expect(ApiErrorBodySchema.parse(await stale.json()).error.code).toBe("stale_base");
+  });
+
+  test("the token, the content type and an empty body are required, and GET is 405", async () => {
+    const editor = quick();
+    const { port, call } = start(editor);
+    const url = `http://127.0.0.1:${port}/api/change-sets/x/apply`;
+    expect((await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(401);
+    expect((await call("POST", "/api/change-sets/x/apply", "{}", { "content-type": "text/plain" })).status).toBe(415);
+    expect((await call("POST", "/api/change-sets/x/apply", { extra: 1 })).status).toBe(400);
+    expect((await call("GET", "/api/change-sets/x/apply")).status).toBe(405);
+  });
+});

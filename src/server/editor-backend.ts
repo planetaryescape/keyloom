@@ -8,6 +8,8 @@ import type { ValidationResult } from "../validation/result.ts";
 export interface EditorBackend {
   check(ref: string, request: CheckRequest): Promise<ValidationResult>;
   apply(ref: string, request: ApplyRequest): Promise<ApplyResponse>;
+  /** Applies a stored proposal by id, re-validating it against the head. */
+  applyChangeSet(changeSetId: string): Promise<ApplyResponse>;
   undo(ref: string, request: UndoRequest): Promise<UndoResponse>;
   startBuild(ref: string, request: BuildRequest): Promise<Build>;
   getBuild(id: string): Promise<Build | null>;
