@@ -159,7 +159,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged }: ViewerProp
     try {
       await undoChange(token, layoutRef, { revisionId: revision.id });
       await onChanged();
-      setNotice({ kind: "info", message: restored ? "Change restored" : "Undone", detail: undone.replace(/^Undid: /, "") });
+      setNotice({ kind: "info", message: restored ? "Change restored" : "Undone", detail: undone.replace(/^(Undo|Redo): /, "") });
     } catch (error) {
       const stale = error instanceof ApiError && error.status === 409;
       setNotice({

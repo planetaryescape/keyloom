@@ -210,9 +210,10 @@ describe("undo", () => {
   test("undoing an undo brings the change back", async () => {
     const { app, ref, base } = await setup();
     applyOps(app, ref, { baseRevisionId: base, ops: [setKey(6, "F17")], summary: "one" });
-    undo(app, ref);
-    undo(app, ref);
+    expect(undo(app, ref).revision.summary).toBe("Undo: one");
+    expect(undo(app, ref).revision.summary).toBe("Redo: one");
     expect(binding(app, ref, 6)).toEqual({ kind: "key", code: "F17" });
+    expect(undo(app, ref).revision.summary).toBe("Undo: one");
     closeApp(app);
   });
 

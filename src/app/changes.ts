@@ -167,8 +167,21 @@ export function undo(app: App, ref: string, input: { revisionId?: string } = {})
     // Restoring an earlier document is not a change set, so it isn't re-validated: undo must work
     // even if a rule has since been tightened.
     const revision = appendRevision(app.db, {
-      layoutId: view.layout.id, expectedHeadId: head.id, layout: parent.layout, origin: "undo", summary: `Undo: ${head.summary}`, undoesRevisionId: head.id,
+      layoutId: view.layout.id, expectedHeadId: head.id, layout: parent.layout, origin: "undo", summary: undoSummary(head), undoesRevisionId: head.id,
     });
     return { revision, undoesRevisionId: head.id };
   });
+}
+
+/**
+ * Undoing an undo puts the change back, so it reads "Redo: X" rather than stacking "Undo: Undo: X";
+ * undoing that again reads "Undo: X". Only undo revisions are rewritten, so a person's own summary
+ * that happens to start with "Undo: " is left alone.
+ */
+function undoSummary(head: { origin: string; summary: string }): string {
+  if (head.origin === "undo") {
+    if (head.summary.startsWith("Undo: ")) return `Redo: ${head.summary.slice("Undo: ".length)}`;
+    if (head.summary.startsWith("Redo: ")) return `Undo: ${head.summary.slice("Redo: ".length)}`;
+  }
+  return `Undo: ${head.summary}`;
 }
