@@ -5,6 +5,7 @@ import { getLayout, listChanges, sendMessage, showConversation } from "../../src
 import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
+import { draft } from "../helpers/ops.ts";
 import { type HomeRowCase, GLOVE80_PROFILE, glove80HomeRow, moonlanderHomeRow } from "../helpers/home-row.ts";
 
 const cases: Array<[string, () => Promise<HomeRowCase>]> = [["Moonlander (QMK)", moonlanderHomeRow], ["Glove80 (ZMK)", glove80HomeRow]];
@@ -83,7 +84,7 @@ describe("a selection, a mirror and a proposal through the agent", () => {
         (seen) => {
           expect(seen.toolResults[0]).toContain("Ops covering exactly the keys that change");
           opsFromTool = JSON.parse(seen.toolResults[0]!.split("\n").find((l) => l.startsWith("[")) as string);
-          return { blocks: [{ tool: "propose_changes", input: { alternatives: [{ title: "Mirror the home row mods", ops: opsFromTool, explanation: "Same mods as the left, on the right hand.", tradeoffs: { gains: ["symmetry"], costs: [] } }] } }] };
+          return { blocks: [{ tool: "propose_changes", input: { alternatives: [{ title: "Mirror the home row mods", ops: opsFromTool, explanation: "Same mods as the left, on the right hand.", tradeoffs: { gains: ["symmetry"], costs: [] }, decisionDraft: draft() }] } }] };
         },
         { blocks: [{ text: "Done." }] },
       ]);
@@ -116,7 +117,7 @@ describe("a selection, a mirror and a proposal through the agent", () => {
       };
       const ops = [...planMirror(document, board.definition, c.layerId, c.selection).ops, extra];
       const fake = fakeAnthropic([
-        { blocks: [{ tool: "propose_changes", input: { alternatives: [{ title: "Too much", ops, explanation: "x", tradeoffs: { gains: [], costs: [] } }] } }] },
+        { blocks: [{ tool: "propose_changes", input: { alternatives: [{ title: "Too much", ops, explanation: "x", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft() }] } }] },
         { blocks: [{ text: "Done." }] },
       ]);
       const outcome = await sendMessage(c.app, c.layoutId, { message: "do it", selection: { layer: c.layerId, positions: c.selection }, model: anthropicModel(fake.client) });
