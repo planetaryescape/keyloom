@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { applyOps } from "../../src/layout/apply-ops.ts";
 import type { BoardDefinition } from "../../src/boards/schema.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import type { Binding, Layer, Layout } from "../../src/layout/schema.ts";
@@ -195,8 +196,32 @@ describe("validate: passthrough_layer_index", () => {
     expect(codes(errorsOf(add("base"), pinned(true)))).toEqual(["passthrough_layer_index"]);
   });
 
-  test("removing a layer is not allowed, even the last one", () => {
-    expect(codes(errorsOf([...dropFunctions(["layer:momentary:nav"]), { op: "removeLayer", layerId: "nav" }, { op: "removeCombo", comboId: "go-nav" }], pinned(true)))).toEqual(["passthrough_layer_index"]);
+  const removeNav: ChangeOp[] = [...dropFunctions(["layer:momentary:nav"]), { op: "removeLayer", layerId: "nav" }, { op: "removeCombo", comboId: "go-nav" }];
+  const withSource = (source: string) => tiny({ passthrough: [{ firmware: "qmk", file: "keymap.c", anchor: "rgb", source, refersToLayerIndices: true }] });
+
+  test("removing the last layer is allowed while no pinned block names its number", () => {
+    expect(errorsOf(removeNav, pinned(true))).toEqual([]);
+    expect(errorsOf(removeNav, withSource("case 1: set_layer_color(1); break; // colours 2 and 20"))).toEqual([]);
+  });
+
+  test("removing the last layer is refused when a pinned block names its number", () => {
+    for (const source of ["case 2:", "ledmap[2]", "layer_move(2)", "if (layer == 2)", "x = LT(2, KC_A)", "&mo 2", "#define NAV 2"]) {
+      expect(codes(errorsOf(removeNav, withSource(source)))).toEqual(["passthrough_layer_index"]);
+    }
+  });
+
+  test("removing a layer that is not last, or replacing the last one, is refused", () => {
+    expect(codes(errorsOf([...dropFunctions(["layer:momentary:num"]), { op: "removeLayer", layerId: "num" }], pinned(true)))).toContain("passthrough_layer_index");
+    const replace: ChangeOp[] = [...removeNav, { op: "addLayer", layer: { id: "other", name: "Other" }, afterLayerId: "num" }];
+    expect(codes(errorsOf(replace, withSource("x")))).toEqual(["passthrough_layer_index"]);
+  });
+
+  test("a layer added in one change can be removed in the next even though the block names other layers", () => {
+    const added = validate(tinyBoard, withSource("case 1:"), add("nav"));
+    expect(added.ok).toBe(true);
+    const next = applyOps(withSource("case 1:"), add("nav"));
+    if (!next.ok) throw new Error("add failed");
+    expect(errorsOf([...dropFunctions(["layer:momentary:fn"]), { op: "removeLayer", layerId: "fn" }, { op: "removeCombo", comboId: "go-fn" }], next.layout)).toEqual([]);
   });
 
   test("moving a layer by removing and re-adding it is caught by the result, not the op names", () => {

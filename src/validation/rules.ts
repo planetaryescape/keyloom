@@ -245,18 +245,48 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
 
 /**
  * `passthrough_layer_index`: custom code that names layers by number keeps working only while
- * every existing layer keeps its index. That holds exactly when the old layer order is a prefix of
- * the new one, so adding at the end passes and removing, inserting or reordering does not, however
- * the ops got there.
+ * every existing layer keeps its index. Adding at the end passes. Removing the last layers passes
+ * too, unless a pinned block names a removed layer's number (a layer that was just added is named
+ * by nothing). Inserting, reordering and replacing a layer do not, however the ops got there.
  */
 export function passthroughLayerIndex(before: Layout, after: Layout): Issue[] {
   const pinned = before.passthrough.filter((p) => p.refersToLayerIndices);
   if (pinned.length === 0) return [];
-  const moved = before.layers.some((l, i) => after.layers[i]?.id !== l.id);
-  if (!moved) return [];
+  let kept = 0;
+  while (kept < before.layers.length && before.layers[kept]?.id === after.layers[kept]?.id) kept++;
+  const removed = before.layers.length - kept;
+  const added = after.layers.length - kept;
+  if (removed === 0) return [];
+  if (added === 0) {
+    // Only the tail went, so every surviving layer keeps its index; what is left to break is code that names a removed one.
+    const naming = pinned.filter((p) => before.layers.slice(kept).some((_, i) => namesLayerNumber(p.source, kept + i)));
+    if (naming.length === 0) return [];
+    const where = naming.map((p) => `${p.file} ${p.anchor}`).join(", ");
+    return [issue("passthrough_layer_index", `this change removes a layer, but ${where} refers to it by number and would point at the wrong layer or none`,
+      "Your custom code refers to this layer by number, so it can't be removed.")];
+  }
   const where = pinned.map((p) => `${p.file} ${p.anchor}`).join(", ");
   return [issue("passthrough_layer_index", `this change removes or reorders layers, but ${where} refers to layers by number and would point at the wrong ones`,
     "Your custom code refers to layers by number, and this change would move layers so it points at the wrong ones.")];
+}
+
+/**
+ * Whether firmware source names layer `n` by number in the forms the importer pins on (S3, D-024):
+ * QMK layer keys and functions, `case n:`, a `[n]` table row, and ZMK `&mo n` style bindings or a `#define NAME n`.
+ * Matches may be too eager (a refusal the person can't clear), never too shy.
+ */
+export function namesLayerNumber(source: string, n: number): boolean {
+  const num = `\\b${n}\\b`;
+  const forms = [
+    `\\[\\s*${n}\\s*\\]`,
+    `\\bcase\\s+${n}\\s*:`,
+    `(?:==|!=)\\s*${n}\\b`,
+    `\\b(?:LT|MO|TG|TO|OSL|TT|DF|LM)\\s*\\(\\s*${n}\\b`,
+    `\\b(?:layer_\\w+|default_layer_set|set_single_persistent_default_layer|IS_LAYER_\\w+|get_highest_layer)\\s*\\([^)]*${num}`,
+    `&(?:mo|lt|tog|to|sl|sk)\\s+${n}\\b`,
+    `#define\\s+\\w+\\s+${n}\\b`,
+  ];
+  return forms.some((f) => new RegExp(f).test(source));
 }
 
 const slotText = (s: Slot) => `layer "${s.layerId}", position ${s.position}`;
