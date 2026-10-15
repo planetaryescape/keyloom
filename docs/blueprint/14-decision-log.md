@@ -201,3 +201,12 @@ Change a decision only by adding a new entry that replaces the old one.
 ### D-045: Board geometry is generated from the pinned firmware tree, never maintained by hand. (Claude, in the blueprint)
 - **Why:** keymap-editor reads geometry from a parallel `info.json` and community metadata, and its issues show that drifting from the firmware and producing off-by-one layouts. QMK's `keyboard.json` and ZMK's `zmk,physical-layout` already define x, y, w, h and rotation in binding order.
 - **How:** `keyloom boards geometry` writes `geometry.json`, and `boards check` fails on drift ([04](04-boards-and-contributions.md#geometryjson-is-generated-from-the-firmware-tree)). Display-only rotation for the Moonlander's thumb cluster is the one hand-written exception, and it never affects positions.
+
+### D-046: The core stays in TypeScript; Rust was reconsidered and rejected. (BK, 2026-10-15)
+- **BK asked:** "is it not better to write this software in rust? Ofcourse the UI can be a web app but I mean the brains"
+- **What Rust would have given:** consistency with mxr, spotuify and ms-todo (CLI contract, release chain, Homebrew); native tree-sitter instead of WASM, removing S10; a natural static binary.
+- **Why TypeScript stays:**
+  - Anthropic has no official Rust SDK, so the agent loop (the product's core) would be hand-rolled: tools, streaming, input validation and refusal fallback.
+  - The pure validator runs in the browser for instant preview (01). Rust would need a WASM build or a server round trip per edit.
+  - One zod schema serves the CLI, the server, the browser and the agent's tools. Rust would need generated types across a language boundary.
+- **Not a factor:** reusing ZSA's Zapp crates. Zapp is MIT plus the Commons Clause (`zsa/zapp@a1be758` `LICENSE.md`), so linking it would encumber MIT keyloom. keyloom calls the `zapp` binary in either language (D-043).
