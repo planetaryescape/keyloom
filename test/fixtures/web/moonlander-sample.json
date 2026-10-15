@@ -18,15 +18,15 @@
         "bindings": [
           {
             "kind": "key",
-            "code": "5"
+            "code": "N5"
           },
           {
             "kind": "key",
-            "code": "6"
+            "code": "N6"
           },
           {
             "kind": "key",
-            "code": "1"
+            "code": "N1"
           },
           {
             "kind": "key",
@@ -34,35 +34,35 @@
           },
           {
             "kind": "key",
-            "code": "2"
+            "code": "N2"
           },
           {
             "kind": "key",
-            "code": "3"
+            "code": "N3"
           },
           {
             "kind": "key",
-            "code": "4"
+            "code": "N4"
           },
           {
             "kind": "key",
-            "code": "9"
+            "code": "N9"
           },
           {
             "kind": "key",
-            "code": "0"
+            "code": "N0"
           },
           {
             "kind": "key",
-            "code": "7"
+            "code": "N7"
           },
           {
             "kind": "key",
-            "code": "6"
+            "code": "N6"
           },
           {
             "kind": "key",
-            "code": "8"
+            "code": "N8"
           },
           {
             "kind": "key",
@@ -70,7 +70,7 @@
           },
           {
             "kind": "key",
-            "code": "BSPACE"
+            "code": "BACKSPACE"
           },
           {
             "kind": "key",
@@ -78,7 +78,7 @@
           },
           {
             "kind": "key",
-            "code": "LBRACKET"
+            "code": "LEFT_BRACKET"
           },
           {
             "kind": "key",
@@ -122,11 +122,11 @@
           },
           {
             "kind": "key",
-            "code": "RBRACKET"
+            "code": "RIGHT_BRACKET"
           },
           {
             "kind": "key",
-            "code": "BSLASH"
+            "code": "BACKSLASH"
           },
           {
             "kind": "key",
@@ -150,7 +150,7 @@
           },
           {
             "kind": "key",
-            "code": "CAPSLOCK"
+            "code": "CAPS_LOCK"
           },
           {
             "kind": "holdTap",
@@ -202,7 +202,7 @@
           },
           {
             "kind": "key",
-            "code": "SCOLON"
+            "code": "SEMICOLON"
           },
           {
             "kind": "holdTap",
@@ -302,7 +302,7 @@
           },
           {
             "kind": "key",
-            "code": "BSPACE"
+            "code": "BACKSPACE"
           },
           {
             "kind": "layer",
@@ -328,7 +328,7 @@
           },
           {
             "kind": "key",
-            "code": "RALT"
+            "code": "RIGHT_ALT"
           },
           {
             "kind": "key",
@@ -354,15 +354,15 @@
           },
           {
             "kind": "key",
-            "code": "LCTRL"
+            "code": "LEFT_CTRL"
           },
           {
             "kind": "key",
-            "code": "LALT"
+            "code": "LEFT_ALT"
           },
           {
             "kind": "key",
-            "code": "RCTRL"
+            "code": "RIGHT_CTRL"
           },
           {
             "kind": "transparent"
@@ -378,34 +378,34 @@
         "bindings": [
           {
             "kind": "key",
-            "code": "5"
+            "code": "N5"
           },
           {
             "kind": "key",
-            "code": "6"
+            "code": "N6"
           },
           {
             "kind": "key",
-            "code": "1"
+            "code": "N1"
           },
           {
             "kind": "transparent"
           },
           {
             "kind": "key",
-            "code": "2"
+            "code": "N2"
           },
           {
             "kind": "key",
-            "code": "3"
+            "code": "N3"
           },
           {
             "kind": "key",
-            "code": "4"
+            "code": "N4"
           },
           {
             "kind": "key",
-            "code": "0"
+            "code": "N0"
           },
           {
             "kind": "key",
@@ -413,15 +413,15 @@
           },
           {
             "kind": "key",
-            "code": "8"
+            "code": "N8"
           },
           {
             "kind": "key",
-            "code": "7"
+            "code": "N7"
           },
           {
             "kind": "key",
-            "code": "9"
+            "code": "N9"
           },
           {
             "kind": "key",
@@ -432,7 +432,7 @@
           },
           {
             "kind": "key",
-            "code": "5",
+            "code": "N5",
             "mods": [
               "LSFT"
             ]
@@ -442,7 +442,7 @@
           },
           {
             "kind": "key",
-            "code": "1",
+            "code": "N1",
             "mods": [
               "LSFT"
             ]
@@ -452,56 +452,56 @@
           },
           {
             "kind": "key",
-            "code": "2",
+            "code": "N2",
             "mods": [
               "LSFT"
             ]
           },
           {
             "kind": "key",
-            "code": "3",
+            "code": "N3",
             "mods": [
               "LSFT"
             ]
           },
           {
             "kind": "key",
-            "code": "4",
+            "code": "N4",
             "mods": [
               "LSFT"
             ]
           },
           {
             "kind": "key",
-            "code": "9",
+            "code": "N9",
             "mods": [
               "LSFT"
             ]
           },
           {
             "kind": "key",
-            "code": "0",
+            "code": "N0",
             "mods": [
               "LSFT"
             ]
           },
           {
             "kind": "key",
-            "code": "7",
+            "code": "N7",
             "mods": [
               "LSFT"
             ]
           },
           {
             "kind": "key",
-            "code": "6",
+            "code": "N6",
             "mods": [
               "LSFT"
             ]
           },
           {
             "kind": "key",
-            "code": "8",
+            "code": "N8",
             "mods": [
               "LSFT"
             ]
