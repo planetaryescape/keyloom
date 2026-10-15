@@ -5,7 +5,7 @@
 import { spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
-import { type AgentModel, type ContentBlock, type ModelMessage, type ModelTool, type Usage, emptyUsage } from "./model.ts";
+import { type AgentModel, type ContentBlock, type ModelMessage, type ModelRequest, type ModelTool, type Usage, emptyUsage } from "./model.ts";
 import { type CodexEvent, type McpToolCall, parseEventLine, resultText } from "./codex/events.ts";
 import { CodexError, codexErrorFor, notInstalled } from "./codex/errors.ts";
 import { codexBin } from "./codex/login.ts";
@@ -100,7 +100,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
 }
 
 async function runCodex(input: {
-  request: Parameters<AgentModel["run"]>[0];
+  request: ModelRequest;
   server: { url: string };
   scratch: { cwd: string; env: Record<string, string | undefined> };
   model: string;

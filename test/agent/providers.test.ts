@@ -165,3 +165,17 @@ describe("provider status for the chat panel", () => {
     expect(status.providers.find((p) => p.id === "codex")?.ready).toBe(true);
   });
 });
+
+describe("the provider list", () => {
+  // Persistence, the HTTP contract and the agent can't import one another (01#modules), so each keeps its own copy of the three IDs.
+  test("is the same in the agent, the database check, the wire schema and the migration", async () => {
+    const { PROVIDERS } = await import("../../src/agent/provider.ts");
+    const { CONVERSATION_PROVIDERS } = await import("../../src/persistence/conversations.ts");
+    const { ChatProviderIdSchema } = await import("../../src/api/http.ts");
+    const { MIGRATIONS } = await import("../../src/persistence/migrations.ts");
+    expect([...CONVERSATION_PROVIDERS]).toEqual([...PROVIDERS]);
+    expect(ChatProviderIdSchema.options).toEqual([...PROVIDERS]);
+    const sql = MIGRATIONS.find((m) => m.version === 7)?.sql ?? "";
+    for (const p of PROVIDERS) expect(sql).toContain(`'${p}'`);
+  });
+});
