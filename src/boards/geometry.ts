@@ -25,9 +25,9 @@ function githubSlug(repo: string): string {
 }
 
 export function geometryPath(rev: BoardRevision): string {
-  // A ZMK board names the file holding its `zmk,physical-layout`; a QMK board's is derived from its target.
-  const physical = rev.build.kind === "zmk-moergo-template" ? rev.build.physicalLayout : undefined;
-  if (typeof physical === "string") return physical;
+  // A ZMK board names the file holding its `zmk,physical-layout`; a QMK board's is derived from its target unless it names one.
+  if (rev.build.kind !== "qmk-docker") return rev.build.physicalLayout;
+  if (rev.build.layoutFile) return rev.build.layoutFile;
   if (!rev.qmkTarget) throw new GeometryError(`revision ${rev.id} has no qmkTarget`);
   return `keyboards/${rev.qmkTarget}/keyboard.json`;
 }
@@ -63,18 +63,22 @@ export async function generateGeometry(board: BoardDefinition, rev: BoardRevisio
     if (keys.length !== board.keyCount) throw new GeometryError(`${path} has ${keys.length} keys, board.json says keyCount ${board.keyCount}`);
     return GeometrySchema.parse({ schemaVersion: 1, source: { repo: rev.source.repo, sha: rev.source.sha, path }, keys });
   }
-  let doc: { layouts?: Record<string, { layout?: QmkKey[] }> };
+  let doc: { layouts?: Record<string, { layout?: QmkKey[] }>; layout_aliases?: Record<string, string> };
   try {
     doc = JSON.parse(text);
   } catch (err) {
     throw new GeometryError(`${path} at ${rev.source.sha} is not valid JSON: ${(err as Error).message}`);
   }
   const layouts = doc.layouts ?? {};
-  // Boards with several layout macros (Moonlander also has LAYOUT_halfmoon) use the canonical one.
+  // The layout the keymap is written with: its macro, possibly through an alias (the Moonlander's
+  // LAYOUT_moonlander is an alias of LAYOUT, and the file also holds LAYOUT_halfmoon).
   const names = Object.keys(layouts);
-  const name = names.length === 1 ? names[0] : names.find((n) => n === "LAYOUT");
+  const macro = rev.build.kind === "qmk-docker" ? rev.build.layoutMacro : "LAYOUT";
+  const aliased = layouts[macro] ? macro : doc.layout_aliases?.[macro];
+  // Without the macro's own layout, a file with one layout, or one called LAYOUT, still has an obvious answer.
+  const name = aliased && layouts[aliased] ? aliased : names.length === 1 ? names[0] : names.find((n) => n === "LAYOUT");
   const layout = name ? layouts[name]?.layout : undefined;
-  if (!layout) throw new GeometryError(`${path} has no layout named LAYOUT (found: ${names.join(", ") || "none"})`);
+  if (!layout) throw new GeometryError(`${path} has no layout named ${macro} or LAYOUT (found: ${names.join(", ") || "none"})`);
   if (layout.length !== board.keyCount) {
     throw new GeometryError(`${path} LAYOUT has ${layout.length} keys, board.json says keyCount ${board.keyCount}`);
   }

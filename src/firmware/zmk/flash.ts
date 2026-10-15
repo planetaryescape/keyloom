@@ -3,11 +3,13 @@
 // bootloader unmounts the drive itself when the write was good, so the drive disappearing is the
 // success signal. Both halves take the same combined file; MoErgo says to do the right half first, and
 // the board definition lists the steps in the order to run them.
-import { copyFile, open } from "node:fs/promises";
+import { open, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { unzipSync } from "fflate";
+import type { FlashStep } from "../../boards/recipes.ts";
 import type { FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import type { LogSink } from "../toolchain/run.ts";
-import { describeUf2, inspectUf2, uf2Problem } from "./uf2.ts";
+import { type Uf2Shape, describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import type { VolumeFinder } from "./volumes.ts";
 
 export const BOOTLOADER_WAIT_MS = 120_000;
@@ -16,11 +18,15 @@ export const POLL_MS = 500;
 
 export const WRITING_INSTRUCTION = "Don't unplug or switch off the half. Writing takes a few seconds, and the drive disappears when it is done.";
 
-export type FlashStep = { volume: string; label: string; enter: string };
+export type { FlashStep } from "../../boards/recipes.ts";
 
 export type Uf2FlashInput = {
   artifactPath: string;
   steps: readonly FlashStep[];
+  /** What a plain `.uf2` artifact holds: a Glove80's two halves in one file (default), or one image. A `.zip` bundle always holds single images. */
+  shape?: Uf2Shape;
+  /** Name of the file written to a boot drive; bootloaders accept any `.uf2` name. Defaults to the Glove80's. */
+  driveFileName?: string;
   /** Always passed in: tests give a finder over a temporary directory, so nothing here can reach a real keyboard by default. */
   findVolume: VolumeFinder;
   log: LogSink;
@@ -38,6 +44,43 @@ const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
     const t = setTimeout(resolve, ms);
     signal?.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
   });
+
+/**
+ * What each step writes. A `.zip` artifact is a bundle with one `<target>.uf2` per build target (a split
+ * board built from upstream ZMK); any other artifact is the one file every step writes (a Glove80).
+ */
+async function payloads(input: Uf2FlashInput, say: (line: string) => void): Promise<Uint8Array[] | { error: string }> {
+  const file = Bun.file(input.artifactPath);
+  if (!(await file.exists())) return { error: `${input.artifactPath} doesn't exist; build it again.` };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let result: Uint8Array[];
+  let shape: Uf2Shape = input.shape ?? "halves";
+  if (input.artifactPath.endsWith(".zip")) {
+    shape = "single";
+    let entries: Record<string, Uint8Array>;
+    try {
+      entries = unzipSync(bytes);
+    } catch (err) {
+      return { error: `Not flashing: ${input.artifactPath} isn't a readable bundle (${(err as Error).message}).` };
+    }
+    result = [];
+    for (const step of input.steps) {
+      const entry = step.target === undefined ? undefined : entries[`${step.target}.uf2`];
+      if (!entry) return { error: `Not flashing: the build has no ${step.target ?? "target"}.uf2 for the ${step.label}. Build again.` };
+      result.push(entry);
+    }
+  } else {
+    result = input.steps.map(() => bytes);
+  }
+  for (const [i, data] of result.entries()) {
+    const problem = uf2Problem(data, shape);
+    if (problem) return { error: `Not flashing: ${problem}.` };
+    const info = inspectUf2(data);
+    if ("problem" in info || (i > 0 && data === result[0])) continue;
+    say(shape === "single" && result.length > 1 ? `keyloom: the ${input.steps[i]?.label} file is ${describeUf2(info)}` : `keyloom: ${input.artifactPath} is ${describeUf2(info)}`);
+  }
+  return result;
+}
 
 export const instructionFor = (step: FlashStep, index: number, total: number, waitMs: number): string =>
   `Flash the ${step.label} (${index + 1} of ${total}). ${step.enter} keyloom waits ${Math.round(waitMs / 60_000) >= 1 ? `${Math.round(waitMs / 60_000)} minutes` : `${Math.round(waitMs / 1000)} seconds`}.`;
@@ -57,13 +100,8 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
   const poll = input.pollMs ?? POLL_MS;
   const waitMs = input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS;
 
-  const file = Bun.file(input.artifactPath);
-  if (!(await file.exists())) return fail(`${input.artifactPath} doesn't exist; build it again.`);
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const problem = uf2Problem(bytes);
-  if (problem) return fail(`Not flashing: ${problem}.`);
-  const info = inspectUf2(bytes);
-  if (!("problem" in info)) say(`keyloom: ${input.artifactPath} is ${describeUf2(info)}`);
+  const files = await payloads(input, say);
+  if ("error" in files) return fail(files.error);
 
   for (const [i, step] of input.steps.entries()) {
     const instruction = instructionFor(step, i, input.steps.length, waitMs);
@@ -87,9 +125,9 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
 
     say(`keyloom: ${step.volume} is mounted at ${mount}; writing`);
     input.onState("writing", WRITING_INSTRUCTION);
-    const target = join(mount, "glove80.uf2");
+    const target = join(mount, input.driveFileName ?? "glove80.uf2");
     try {
-      await copyFile(input.artifactPath, target);
+      await writeFile(target, files[i] as Uint8Array);
       // The write has to reach the drive before the bootloader looks at it.
       const handle = await open(target, "r+");
       try {

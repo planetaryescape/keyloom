@@ -8,7 +8,8 @@ import { callText, parseCalls } from "./cells.ts";
 
 export type Located = { line: number; column: number | undefined; message: string };
 
-const AT = /glove80\.keymap:(\d+)(?:[.:](\d+)|\s*\(column \d+\))?/;
+// The keymap is named for the board (`glove80`, `corne`), so any `<name>.keymap` is the generated file.
+const AT = /[\w-]+\.keymap:(\d+)(?:[.:](\d+)|\s*\(column \d+\))?/;
 
 /** The first error that names the keymap, with its message. */
 export function locateCompileError(output: readonly string[]): Located | undefined {
@@ -22,7 +23,7 @@ export function locateCompileError(output: readonly string[]): Located | undefin
 }
 
 /** `layer "Base" (layer 0), position 12 (&kp NOPE)` for a line inside a layer's bindings, else the line itself. */
-export function describeLocation(keymap: string, at: Located): string {
+export function describeLocation(keymap: string, at: Located, fileName = "glove80.keymap"): string {
   const lines = keymap.split("\n");
   const text = lines[at.line - 1] ?? "";
   let layerLine = -1;
@@ -32,7 +33,7 @@ export function describeLocation(keymap: string, at: Located): string {
       break;
     }
   }
-  const generic = `line ${at.line} of glove80.keymap (${text.trim() || "blank"})`;
+  const generic = `line ${at.line} of ${fileName} (${text.trim() || "blank"})`;
   if (layerLine < 0) return generic;
   const start = lines.findIndex((l, i) => i > layerLine && /^\s*bindings = <$/.test(l));
   if (start < 0 || at.line - 1 <= start) return generic;
@@ -58,8 +59,8 @@ export function describeLocation(keymap: string, at: Located): string {
  */
 export function locateConfError(output: readonly string[], conf: string): string | undefined {
   for (const l of output) {
-    const m = /glove80\.conf:(\d+):\s*(?:warning:|error:)?\s*(.*)$/.exec(l);
-    if (m) return `glove80.conf has a setting ZMK rejected: ${(m[2] as string).replace(/\s*\(defined at .*$/, "")} (line ${m[1]}: ${(conf.split("\n")[Number(m[1]) - 1] ?? "").trim()})`;
+    const m = /([\w-]+\.conf):(\d+):\s*(?:warning:|error:)?\s*(.*)$/.exec(l);
+    if (m) return `${m[1]} has a setting ZMK rejected: ${(m[3] as string).replace(/\s*\(defined at .*$/, "")} (line ${m[2]}: ${(conf.split("\n")[Number(m[2]) - 1] ?? "").trim()})`;
   }
   return undefined;
 }

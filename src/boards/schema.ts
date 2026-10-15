@@ -1,6 +1,7 @@
 // Board definition and generated geometry (docs/blueprint/04-boards-and-contributions.md).
 import { z } from "zod";
 import { FirmwareSchema } from "../layout/schema.ts";
+import { BuildRecipeSchema, FlashRecipeSchema } from "./recipes.ts";
 
 // One key in binding order, in key units. Generated from the pinned firmware tree (D-045).
 export const GeometryKeySchema = z.object({
@@ -23,21 +24,21 @@ export type Geometry = z.infer<typeof GeometrySchema>;
 
 const positions = z.array(z.number().int().nonnegative());
 
-export const RevisionSchema = z.object({
+export const RevisionSchema = z.strictObject({
   id: z.string().min(1),
-  source: z.object({
+  source: z.strictObject({
     repo: z.string().url(),
     ref: z.string().min(1),
     sha: z.string().regex(/^[0-9a-f]{40}$/),
   }),
   qmkTarget: z.string().min(1).optional(),
-  build: z.object({ kind: z.enum(["qmk-docker", "zmk-moergo-template"]) }).passthrough(),
-  flash: z.object({ kind: z.enum(["zapp", "uf2-drives"]) }).passthrough(),
+  build: BuildRecipeSchema,
+  flash: FlashRecipeSchema,
   detect: z.object({ usbProductId: z.string().regex(/^0x[0-9a-f]{4}$/i) }).nullable(),
 });
 export type BoardRevision = z.infer<typeof RevisionSchema>;
 
-export const BoardDefinitionSchema = z.object({
+export const BoardDefinitionSchema = z.strictObject({
   schemaVersion: z.literal(1),
   id: z.string().regex(/^[a-z0-9-]+\/[a-z0-9-]+$/),
   name: z.string().min(1),
@@ -52,8 +53,8 @@ export const BoardDefinitionSchema = z.object({
   importers: z.array(z.string().min(1)).min(1),
   // Display-only rotation; never affects positions or generation (04).
   display: z
-    .object({
-      rotate: z.array(z.object({ positions, r: z.number(), rx: z.number(), ry: z.number() })),
+    .strictObject({
+      rotate: z.array(z.strictObject({ positions, r: z.number(), rx: z.number(), ry: z.number() })),
     })
     .optional(),
 });

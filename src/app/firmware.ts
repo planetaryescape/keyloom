@@ -196,7 +196,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
       if (err instanceof SourceError) throw new BuildFailure(`This layout can't be written as ${driver.name} source: ${err.message}`);
       throw err;
     }
-    const artifactRel = `artifacts/${row.id}.${driver.artifactExtension}`;
+    const artifactRel = `artifacts/${row.id}.${driver.artifactExtension(view.board, row.boardRevision)}`;
     const checkoutDir = checkoutDirFor(view.board);
     await driver.build({
       view, boardRevision: row.boardRevision, source, checkoutDir, imageContextDir: join(cacheDir(), "images", view.board.definition.id.replace("/", "-")),

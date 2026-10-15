@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { describeUf2, inspectUf2, uf2Problem } from "../../../src/firmware/zmk/uf2.ts";
+import { describeUf2, inspectUf2, uf2Problem } from "../../../src/firmware/toolchain/uf2.ts";
 import { combinedUf2, uf2Image } from "../../helpers/zmk.ts";
 
 describe("UF2 files", () => {

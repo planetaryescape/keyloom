@@ -12,7 +12,7 @@ import type { GeneratedSource } from "./generate.ts";
 import { ImageBuildError, ensureImage } from "./image.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
 import { CONF_FILE, KEYMAP_FILE } from "./files.ts";
-import { describeUf2, inspectUf2, uf2Problem } from "./uf2.ts";
+import { describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 
 export { BuildFailure } from "../toolchain/build-failure.ts";
 
@@ -37,7 +37,7 @@ export type ZmkBuildInput = {
 
 export type ZmkBuildResult = { artifactPath: string; bytes: number; durationMs: number };
 
-function hint(lines: readonly string[]): string | undefined {
+export function hint(lines: readonly string[]): string | undefined {
   const text = lines.join("\n");
   if (/No space left on device/i.test(text)) return "Docker ran out of disk space. Free some with `docker builder prune` or raise the disk limit, then build again.";
   if (/Cannot connect to the Docker daemon/i.test(text)) return "Docker isn't running. Start it and build again.";
@@ -47,11 +47,13 @@ function hint(lines: readonly string[]): string | undefined {
 export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
   const started = Date.now();
   const rev = zmkRevision(input.board);
+  if (rev.build.kind !== "zmk-moergo-template") throw new BuildFailure(`${input.board.id} builds with ${rev.build.kind}, not MoErgo's template`);
+  const template = rev.build.template;
   const say = (line: string) => {
     input.log.line(line);
     input.onLine?.(line);
   };
-  const spec: CheckoutSpec = { dir: input.checkoutDir, repo: rev.build.template.repo, sha: rev.build.template.sha, submodules: [] };
+  const spec: CheckoutSpec = { dir: input.checkoutDir, repo: template.repo, sha: template.sha, submodules: [] };
   const hooks = { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) };
 
   return withLock(

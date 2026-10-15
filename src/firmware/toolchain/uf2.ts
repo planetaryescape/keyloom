@@ -1,6 +1,7 @@
 // UF2 files (https://github.com/microsoft/uf2): 512-byte blocks, each framed by three magic numbers.
 // A Glove80 build is two images joined end to end, one per half (06, S8), so this reads the blocks and
-// reports the images in it; it never decides what a bootloader will do with them.
+// reports the images in it; it never decides what a bootloader will do with them. A split board built
+// from upstream ZMK, or an RP2040 QMK board, has one image per file.
 
 const START0 = 0x0a324655;
 const START1 = 0x9e5d5157;
@@ -58,14 +59,20 @@ export function describeUf2(info: Uf2Info): string {
     .join("; ")}`;
 }
 
+/** What a file must hold: a Glove80's two halves in one file, or a single image. */
+export type Uf2Shape = "halves" | "single";
+
 /**
- * Why `bytes` can't be flashed to a Glove80, or undefined. Both halves take the same file, so it holds
- * one image per half. They sit at the same addresses and are told apart by family ID (S8: seen in the
- * v26.09 build, 0x9807b007 and 0x9808b007), which is how a bootloader skips the other half's blocks.
+ * Why `bytes` can't be flashed, or undefined. For `halves` (a Glove80), both halves take the same file, so
+ * it holds one image per half. They sit at the same addresses and are told apart by family ID (S8: seen in
+ * the v26.09 build, 0x9807b007 and 0x9808b007), which is how a bootloader skips the other half's blocks.
  */
-export function uf2Problem(bytes: Uint8Array): string | undefined {
+export function uf2Problem(bytes: Uint8Array, shape: Uf2Shape = "halves"): string | undefined {
   const info = inspectUf2(bytes);
   if ("problem" in info) return info.problem;
+  if (shape === "single") {
+    return info.images.length === 1 ? undefined : `it holds ${info.images.length} UF2 images, but one board's firmware is a single image`;
+  }
   if (info.images.length !== 2) return `it holds ${info.images.length} UF2 image${info.images.length === 1 ? "" : "s"}, but a Glove80 build is one image per half`;
   const [a, b] = info.images as [Uf2Image, Uf2Image];
   if (a.family === null || b.family === null || a.family === b.family) return "its two images don't have different family IDs, so a half couldn't tell which one is its own";

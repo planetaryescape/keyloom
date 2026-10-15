@@ -60,7 +60,9 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
   const zmkBoards = listBoardDefinitions().filter((b) => b.definition.firmware === "zmk");
   const images = [...new Set(qmkBoards.flatMap((b) => b.definition.revisions.map((r) => (r.build as { image?: string }).image)).filter((i): i is string => typeof i === "string"))];
   // A ZMK board's image is built by keyloom, named for the firmware ref it holds.
-  const zmkImages = [...new Set(zmkBoards.map((b) => imageTag(zmkRevision(b.definition).source.sha)))];
+  // A west board names a pulled image; a MoErgo-template board's is built by keyloom.
+  const zmkBuilds = zmkBoards.map((b) => ({ board: b, rev: zmkRevision(b.definition) }));
+  const zmkImages = [...new Set(zmkBuilds.map(({ rev }) => (rev.build.kind === "zmk-west-docker" ? rev.build.image : imageTag(rev.source.sha))))];
 
   if (docker.ok) {
     const disk = await dockerFreeSpace(["alpine", ...images, ...zmkImages]);
@@ -81,7 +83,7 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     }
     for (const image of zmkImages) {
       const present = (await capture(["docker", "image", "inspect", image], { timeoutMs: 15_000 })).exitCode === 0;
-      checks.push({ name: "firmware image", ok: true, detail: present ? `${image} is built` : `${image} is not built yet; the first Glove80 build makes it (a few minutes, about 5 GB)` });
+      checks.push({ name: "firmware image", ok: true, detail: present ? image.includes("@") ? `${image.split("@")[0]} is pulled` : `${image} is built` : image.includes("@") ? `${image.split("@")[0]} is not pulled yet; the first build downloads it` : `${image} is not built yet; the first Glove80 build makes it (a few minutes, about 5 GB)` });
     }
   }
 
@@ -101,10 +103,11 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
       return [{ board: board.definition.id, spec: { dir: checkoutDirFor(board), repo: q.source.repo, sha: q.source.sha, submodules: q.build.submodules } }];
     }),
     // A ZMK board builds from MoErgo's template repository; the firmware itself is inside the image.
-    ...zmkBoards.map((board) => {
-      const t = zmkRevision(board.definition).build.template;
-      return { board: board.definition.id, spec: { dir: checkoutDirFor(board), repo: t.repo, sha: t.sha, submodules: [] } };
-    }),
+    ...zmkBuilds.flatMap(({ board, rev }) =>
+      rev.build.kind === "zmk-moergo-template"
+        ? [{ board: board.definition.id, spec: { dir: checkoutDirFor(board), repo: rev.build.template.repo, sha: rev.build.template.sha, submodules: [] } }]
+        : [], // a west board's folder is not a git checkout; west fills it
+    ),
   ];
   for (const { board, spec } of specs) {
     const name = `checkout ${board}`;

@@ -1,4 +1,4 @@
-// Generated keymap -> .bin, in QMK's Docker image, from the pinned ZSA checkout (05#build).
+// Generated keymap -> firmware file, in QMK's Docker image, from the board's pinned checkout (05#build).
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -7,7 +7,7 @@ import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
 import { qmkRevision } from "./board-config.ts";
-import { dfuProblem } from "./dfu.ts";
+import { artifactKind, artifactProblem } from "./artifact.ts";
 import type { GeneratedSource } from "./generate.ts";
 import { describeLocated, locateCompileError } from "./locate-error.ts";
 import { writeSource } from "./write-source.ts";
@@ -21,7 +21,7 @@ export type QmkBuildInput = {
   boardRevisionId: string;
   source: GeneratedSource;
   checkoutDir: string;
-  /** Where the finished .bin is copied. */
+  /** Where the finished firmware file is copied. */
   artifactPath: string;
   log: LogSink;
   /** Docker container name, so a timeout can remove the container as well as the docker client. */
@@ -64,8 +64,8 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       // removed inside the container below instead: deleting them from the host left Colima's sshfs
       // mount with a cached view of the old directory, so QMK's mkdir -p skipped `src/` and the next
       // build failed writing into it (seen 2026-10-15, second reva build in a row).
-      for (const ext of ["bin", "elf", "hex"]) await rm(join(input.checkoutDir, ".build", `${id}.${ext}`), { force: true });
-      await rm(join(input.checkoutDir, `${id}.bin`), { force: true });
+      for (const ext of ["bin", "elf", "hex", "uf2"]) await rm(join(input.checkoutDir, ".build", `${id}.${ext}`), { force: true });
+      for (const ext of ["bin", "hex", "uf2"]) await rm(join(input.checkoutDir, `${id}.${ext}`), { force: true });
 
       const uid = process.getuid?.() ?? 1000;
       const gid = process.getgid?.() ?? 1000;
@@ -114,16 +114,17 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
         throw new BuildFailure(detail);
       }
 
-      const built = [join(input.checkoutDir, ".build", `${id}.bin`), join(input.checkoutDir, `${id}.bin`)].map((p) => Bun.file(p));
+      const kind = artifactKind(rev.build);
+      const built = [join(input.checkoutDir, ".build", `${id}.${kind}`), join(input.checkoutDir, `${id}.${kind}`)].map((p) => Bun.file(p));
       const file = (await Promise.all(built.map(async (f) => ((await f.exists()) ? f : undefined)))).find((f) => f !== undefined);
-      if (!file) throw new BuildFailure(`The build finished but ${id}.bin was not produced.`);
+      if (!file) throw new BuildFailure(`The build finished but ${id}.${kind} was not produced. If this board builds a different file type, set build.artifact in board.json.`);
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const problem = dfuProblem(bytes, rev.flash.bootloader);
+      const problem = artifactProblem(bytes, kind, rev.flash);
       if (problem) throw new BuildFailure(`The build produced a file that can't be flashed: ${problem}.`);
 
       await mkdir(dirname(input.artifactPath), { recursive: true });
       await copyFile(file.name as string, input.artifactPath);
-      say(`keyloom: wrote ${input.artifactPath} (${bytes.length} bytes, DFU ${rev.flash.bootloader})`);
+      say(`keyloom: wrote ${input.artifactPath} (${bytes.length} bytes${rev.flash.kind === "zapp" ? `, DFU ${rev.flash.bootloader}` : `, ${kind}`})`);
       return { artifactPath: input.artifactPath, bytes: bytes.length, durationMs: Date.now() - started };
     },
     { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`) },

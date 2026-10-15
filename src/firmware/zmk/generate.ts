@@ -20,6 +20,8 @@ export type GenerateInput = {
   geometry?: Geometry;
   /** The keyloom revision the source is made from; it goes in the header so a flashed build can be traced. */
   revisionId: string;
+  /** Base name of the written files, `<name>.keymap` and `<name>.conf`; the build recipe decides it (default `glove80`). */
+  keymapName?: string;
 };
 
 export type GeneratedFile = { path: string; content: string };
@@ -137,11 +139,14 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     ...layout.passthrough.filter((p) => p.file === CONF_FILE).map((p) => p.source),
   ];
 
+  // KEYMAP_FILE and CONF_FILE label the layout's passthrough (they are stored in saved layouts); the
+  // files written to disk are named for the board.
+  const name = input.keymapName ?? "glove80";
   return {
-    keymapName: "glove80",
+    keymapName: name,
     files: [
-      { path: KEYMAP_FILE, content: `${keymapText.join("\n")}\n` },
-      { path: CONF_FILE, content: `${confLines.join("\n")}\n` },
+      { path: `${name}.keymap`, content: `${keymapText.join("\n")}\n` },
+      { path: `${name}.conf`, content: `${confLines.join("\n")}\n` },
     ],
   };
 }

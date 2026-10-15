@@ -11,7 +11,7 @@ import { buildZmk } from "../../../src/firmware/zmk/build.ts";
 import { generateZmkSource } from "../../../src/firmware/zmk/generate.ts";
 import { importZmk, importZmkSource } from "../../../src/firmware/zmk/import.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
-import { inspectUf2, uf2Problem } from "../../../src/firmware/zmk/uf2.ts";
+import { inspectUf2, uf2Problem } from "../../../src/firmware/toolchain/uf2.ts";
 import type { Layout } from "../../../src/layout/schema.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import { STYLE_FIXTURE, TEMPLATE_FIXTURE, glove80 } from "../../helpers/zmk.ts";
