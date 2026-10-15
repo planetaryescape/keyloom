@@ -4,7 +4,7 @@ import { fromQmk } from "../../layout/keycodes.ts";
 import {
   type Binding, type Combo, type FirmwareSetting, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough,
 } from "../../layout/schema.ts";
-import { PROFILE_HOME_ROW, PROFILE_LAYER_TAP, PROFILE_MOD_TAP, mapKey } from "./bindings.ts";
+import { type MapContext, PROFILE_HOME_ROW, PROFILE_LAYER_TAP, PROFILE_MOD_TAP, mapKey } from "./bindings.ts";
 import type { Expr } from "./c-parse.ts";
 import { PASSTHROUGH_DEFINES, parseDefines, settingsFrom, tapHoldOptions } from "./config-h.ts";
 import { type ParsedKeymap, parseKeymapC } from "./keymap-c.ts";
@@ -104,7 +104,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
       if (mapped.binding.kind === "native") {
         native.push({
           layerId: layerIds[li] as string, position, source: mapped.binding.source, label: mapped.binding.label,
-          reason: mapped.nativeReason ?? "",
+          reason: mapped.nativeReason ?? "not modelled",
         });
       }
       return mapped.binding;
@@ -185,7 +185,7 @@ function importConfig(files: SourceFiles, warnings: string[]) {
   if (hasConditionals) warnings.push("config.h has #if/#ifdef blocks; every #define in it was imported as if unconditional");
   for (const d of defines) {
     if (PASSTHROUGH_DEFINES.has(d.name)) {
-      passthrough.push({ firmware: "qmk", file: "config.h", anchor: `define:${d.name}`, source: `#define ${d.name} ${d.value}`, refersToLayerIndices: false });
+      passthrough.push({ firmware: "qmk", file: "config.h", anchor: `define:${d.name}`, source: d.raw, refersToLayerIndices: false });
     }
   }
   for (const f of functionLike) {
@@ -199,7 +199,7 @@ function importConfig(files: SourceFiles, warnings: string[]) {
  * QMK combos name keycodes, not positions. Each key is placed on the base-layer position whose
  * binding produces that keycode (05, S3). A combo that can't be placed is reported and skipped.
  */
-function importCombos(parsed: ParsedKeymap, baseLayer: Expr[], ctx: Parameters<typeof mapKey>[2], warnings: string[]): Combo[] {
+function importCombos(parsed: ParsedKeymap, baseLayer: Expr[], ctx: MapContext, warnings: string[]): Combo[] {
   const positionsFor = new Map<string, number[]>();
   baseLayer.forEach((e, p) => {
     const key = canon(e);

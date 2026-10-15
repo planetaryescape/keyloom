@@ -1,7 +1,34 @@
 // config.h: `#define KEY [value]` lines become FirmwareSettings (05).
 import type { FirmwareSetting } from "../../layout/schema.ts";
 
-export type Define = { name: string; value: string };
+/** `raw` is the line as written, for Passthrough. */
+export type Define = { name: string; value: string; raw: string };
+
+// Removes line and block comments that sit outside string literals ("http://x" keeps its slashes).
+function stripComments(line: string): string {
+  let out = "";
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i] as string;
+    if (inString) {
+      out += ch;
+      if (ch === "\\") out += line[++i] ?? "";
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch === "/" && line[i + 1] === "/") {
+      break;
+    } else if (ch === "/" && line[i + 1] === "*") {
+      const end = line.indexOf("*/", i + 2);
+      if (end < 0) break;
+      i = end + 1;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
 
 /** Object-like `#define`s. Backslash continuations are joined; function-like macros are returned in `functionLike`. */
 export function parseDefines(text: string): { defines: Define[]; functionLike: Array<{ name: string; source: string }>; hasConditionals: boolean } {
@@ -10,7 +37,7 @@ export function parseDefines(text: string): { defines: Define[]; functionLike: A
   let hasConditionals = false;
   const lines = text.replace(/\\\r?\n/g, " ").split(/\r?\n/);
   for (const raw of lines) {
-    const line = raw.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "").trim();
+    const line = stripComments(raw).trim();
     if (/^#\s*(if|ifdef|ifndef|elif|else)\b/.test(line)) hasConditionals = true;
     const fn = /^#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\(/.exec(line);
     if (fn?.[1]) {
@@ -18,7 +45,7 @@ export function parseDefines(text: string): { defines: Define[]; functionLike: A
       continue;
     }
     const m = /^#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+(.*))?$/.exec(line);
-    if (m?.[1]) defines.push({ name: m[1], value: (m[2] ?? "").trim() });
+    if (m?.[1]) defines.push({ name: m[1], value: (m[2] ?? "").trim(), raw: raw.trim() });
   }
   return { defines, functionLike, hasConditionals };
 }

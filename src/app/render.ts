@@ -1,6 +1,5 @@
 // Text renderings the CLI prints and the agent will reuse (10#output-contract).
-import { renderLayout } from "../layout/render-grid.ts";
-import { renderCells } from "../layout/render-grid.ts";
+import { renderCells, renderLayout } from "../layout/render-grid.ts";
 import type { LayoutView } from "./layouts.ts";
 import { NotFoundError } from "./errors.ts";
 import type { Board } from "./boards.ts";

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { zipSync } from "fflate";
-import { readdirSync } from "node:fs";
 import { ImportError, importOryxSource, importQmkSource } from "../../../src/firmware/qmk/import.ts";
+import type { Binding } from "../../../src/layout/schema.ts";
 import type { SourceFiles } from "../../../src/firmware/qmk/source.ts";
 import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
 import { irDescriptor, loadOracle, oracleDescriptor } from "../../helpers/oryx-oracle.ts";
@@ -213,7 +213,7 @@ describe("agreement with Oryx's own decoding (GraphQL oracle)", () => {
       oracle[li]?.keys.forEach((oryxKey, i) => {
         const position = oryxOrder[i] as number;
         const want = oracleDescriptor(oryxKey);
-        const got = irDescriptor(layer.bindings[position] as never, layout);
+        const got = irDescriptor(layer.bindings[position] as Binding, layout);
         if (want !== got) mismatches.push(`layer ${li} position ${position}: oryx ${want} vs keyloom ${got}`);
       });
     }
@@ -240,17 +240,11 @@ describe("agreement with Oryx's own decoding (GraphQL oracle)", () => {
 });
 
 describe("inputs", () => {
-  const fixtureFiles = () => {
-    const out: Record<string, Uint8Array> = {};
-    for (const f of readdirSync(FIXTURE_DIR)) {
-      if (["keymap.c", "config.h", "rules.mk", "keymap.json"].includes(f)) out[`zsa_moonlander_synchronized_source/${f}`] = Bun.file(`${FIXTURE_DIR}/${f}`).bytes() as never;
-    }
-    return out;
-  };
-
   test("an Oryx zip imports the same layout as the unpacked folder", async () => {
     const entries: Record<string, Uint8Array> = {};
-    for (const [name, bytes] of Object.entries(fixtureFiles())) entries[name] = await (bytes as unknown as Promise<Uint8Array>);
+    for (const f of ["keymap.c", "config.h", "rules.mk", "keymap.json"]) {
+      entries[`zsa_moonlander_synchronized_source/${f}`] = await Bun.file(`${FIXTURE_DIR}/${f}`).bytes();
+    }
     // The real download also holds the prebuilt firmware; it must not be read.
     entries["zsa_moonlander_reva_QxKPz.bin"] = new Uint8Array(200_000).fill(7);
     entries["README.md"] = new TextEncoder().encode("hello");
@@ -404,5 +398,19 @@ describe("tolerance and failure", () => {
   test("a ZMK board is refused", async () => {
     const zmk = { ...board.definition, firmware: "zmk" as const };
     await expect(importQmkSource(await base(), zmk)).rejects.toThrow(ImportError);
+  });
+});
+
+describe("config.h comments", () => {
+  test("// inside a string is not a comment, and the kept line is verbatim", async () => {
+    const files: SourceFiles = {
+      name: "t",
+      keymapC: await Bun.file(`${FIXTURE_DIR}/keymap.c`).text(),
+      configH: '#define SERIAL_NUMBER "http://x/y" // keep me\n#define A 1 // note\n#define B 2 /* c */\n',
+    };
+    const r = await importQmkSource(files, board.definition);
+    const serial = r.layout.passthrough.find((p) => p.anchor === "define:SERIAL_NUMBER");
+    expect(serial?.source).toBe('#define SERIAL_NUMBER "http://x/y" // keep me');
+    expect(r.layout.settings.map((s) => [s.key, s.value])).toEqual([["A", 1], ["B", 2]]);
   });
 });
