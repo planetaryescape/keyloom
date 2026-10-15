@@ -2,6 +2,7 @@ import { z } from "zod";
 import { boardCapabilities } from "../../boards/capabilities.ts";
 import type { KeyMapping, UnmatchedWhy } from "../../boards/correspondence.ts";
 import { describeSlot, keySlots } from "../../boards/key-slots.ts";
+import { holdKeyCandidates } from "../../boards/placement.ts";
 import { bindingLabel } from "../../layout/render-grid.ts";
 import type { Layer } from "../../layout/schema.ts";
 import {
@@ -52,8 +53,23 @@ function mappingText(from: LayoutSnapshot, to: LayoutSnapshot, mapping: KeyMappi
   // Empty keys (transparent, none) are not worth a line each.
   const worth = unmatched.filter((u) => !["transparent", "none"].includes(sLayer.bindings[u.position]?.kind ?? ""));
   const empty = unmatched.length - worth.length;
+  // A layer or hold key with no counterpart is not forced onto another key; boards that list hold-key candidates get them offered.
+  const takenTargets = new Set(mapping.mapped.flatMap((m) => m.matches.filter((x) => !x.extra).map((x) => x.target)));
+  const candidates = holdKeyCandidates(to.board.definition, takenTargets);
+  const holds = worth.filter((u) => {
+    const b = sLayer.bindings[u.position];
+    return b !== undefined && (b.kind === "layer" || (b.kind === "holdTap" && "layerId" in b.hold));
+  });
+  const proposals =
+    candidates.length === 0 || holds.length === 0
+      ? []
+      : [
+          `${to.layoutName} has fewer thumb keys, so these layer keys have no key of their own. They could go on one of these keys, which would keep its own tap and add the hold (best first): ${candidates.map((c) => `${describeKey(to, tLayer, c.target)}${c.taken ? " (also takes a matched key)" : ""}`).join("; ")}.`,
+          ...holds.map((u) => `- ${describeKey(from, sLayer, u.position)}: pick one of the keys above. Ask BK which, and suggest the first by default.`),
+        ];
   return [
     ...lines.filter(Boolean),
+    ...proposals,
     ...(worth.length ? ["No counterpart (not forced onto another key):", ...worth.map((u) => `- ${describeKey(from, sLayer, u.position)} (${describeSlot(fromSlots.get(u.position))}): ${WHY[u.why]}`)] : []),
     ...(empty ? [`${empty} empty key${empty === 1 ? "" : "s"} (transparent or none) found no counterpart.`] : []),
     ...(only === null && mapping.unmatchedTarget.length ? [`Keys on ${to.layoutName} that nothing maps to: ${mapping.unmatchedTarget.map((p) => p + 1).join(", ")}.`] : []),
@@ -133,7 +149,8 @@ export const mapKeysTool = (ports: AgentPorts) =>
           return `- ${from} -> ${to_}: not copied, ${s.outcome.skip}`;
         });
         const check = plan.ops.length === 0 ? "No ops: nothing to change." : `Validation of these ops: ${validationForModel(ports.check(plan.ops))}`;
-        return [...body, "", "Copying behaviours:", ...lines, "", "Ops (profiles, macros and tap dances first):", JSON.stringify(plan.ops), "", check].join("\n");
+        const translated = plan.notes.length === 0 ? [] : ["Hold-tap settings that kanata has no equivalent for (tell BK; nothing was dropped silently):", ...plan.notes.map((n) => `- ${n}`), ""];
+        return [...body, "", "Copying behaviours:", ...lines, "", ...translated, "Ops (profiles, macros and tap dances first):", JSON.stringify(plan.ops), "", check].join("\n");
       }
 
       const ids = comboIds ?? source.document.combos.map((c) => c.id);

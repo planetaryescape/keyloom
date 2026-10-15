@@ -6,6 +6,7 @@
 // reused). What cannot be carried is returned as a reason, never approximated. Pure.
 import type { ChangeOp } from "./change.ts";
 import { deepEqual } from "./equal.ts";
+import { translateHoldTapProfile } from "./kanata/profiles.ts";
 import { type Hand, modsForHand } from "./mirror.ts";
 import { NO_TAP, ownTap } from "./rewrap.ts";
 import type { Binding, Hsv, HoldTapProfile, LayerLighting, Layout, Macro, SlotAction, TapDance } from "./schema.ts";
@@ -20,6 +21,11 @@ export type TransferEnv = {
   fingerAt(position: number): string | null;
   /** Positions on the target board a hold-tap on `hand` should wait for: the other hand's keys and the thumbs. */
   triggerPositions(hand: Hand): number[];
+  /**
+   * Whether a ZMK `hold-trigger-key-positions` list on the source board is "the other hand's keys and the thumbs" for a key on `hand`,
+   * which is the one list kanata's opposite-hand variants express. Only a copy onto a kanata board needs it.
+   */
+  sourceTriggerIsOppositeHand?(positions: number[], hand: Hand): boolean;
 };
 
 export type Transferred = { binding: Binding } | { skip: string };
@@ -177,6 +183,7 @@ export class BindingTransfer {
     const firmware = this.env.target.firmware;
     const users: Array<{ position: number; profileId: string }> = [];
     for (const layer of this.env.target.layers) layer.bindings.forEach((b, p) => b.kind === "holdTap" && users.push({ position: p, profileId: b.profileId }));
+    if (firmware === "kanata") return this.kanataProfile(source, hand);
     const known = users.filter((u) => this.profiles.find((p) => p.id === u.profileId)?.firmware === firmware);
     const finger = this.env.fingerAt(position);
     const mostUsed = (list: typeof users) => {
@@ -200,6 +207,31 @@ export class BindingTransfer {
     this.made.set(key, id);
     return id;
   }
+
+  /**
+   * A kanata profile for a hold-tap that came from QMK or ZMK: the source profile translated by the table in
+   * src/layout/kanata/profiles.ts. The same source profile always becomes the same kanata one, so a hand's home-row keys share it.
+   * What the translation had to leave out is in the profile's name's notes (the agent reads them in the tool's text).
+   */
+  private kanataProfile(source: Extract<Binding, { kind: "holdTap" }>, hand: Hand | null): string {
+    const key = `kanata:${source.profileId}`;
+    const already = this.made.get(key);
+    if (already !== undefined) return already;
+    const from = this.env.source.holdTapProfiles.find((p) => p.id === source.profileId);
+    const base = from ?? { id: source.profileId, name: "Hold-tap", firmware: this.env.source.firmware, options: {} };
+    const { profile: translated, notes } = translateHoldTapProfile(base, this.env.source.settings, (positions) =>
+      hand !== null && this.env.sourceTriggerIsOppositeHand?.(positions, hand) === true ? "opposite" : "other");
+    const id = uniqueId(new Set(this.profiles.map((p) => p.id)), "home-row-mods");
+    const profile: HoldTapProfile = { ...translated, id, name: from?.name ?? "Home-row mods" };
+    this.notes.push(...notes);
+    this.profiles.push(profile);
+    this.made.set(key, id);
+    this.ops.set(`profile:${id}`, { op: "upsertHoldTapProfile", profile });
+    return id;
+  }
+
+  /** What translating hold-tap profiles for the target had to leave out, for the agent to tell BK (D-024). */
+  readonly notes: string[] = [];
 
   private newProfile(source: Extract<Binding, { kind: "holdTap" }>, hand: Hand | null, firmware: "qmk" | "zmk"): string {
     const from = this.env.source.holdTapProfiles.find((p) => p.id === source.profileId);

@@ -48,7 +48,11 @@ export function firmwareCapabilities(firmware: Layout["firmware"]): string {
     "ZMK: a tap dance becomes a `zmk,behavior-tap-dance` node, and a hold or tap-then-hold slot a generated tap-preferred hold-tap in that position. ZMK acts on other keys pressed between the taps before the dance resolves, which QMK does not, so tell him the double-tap feel can differ. A tap dance has no global fallback term on ZMK, so leave termMs out only if 200 ms is right.",
     "ZMK: hold-tap behaviours have flavors and per-key timing set through hold-tap profiles. A profile's options are the behaviour's properties: flavor (hold-preferred, balanced, tap-preferred, tap-unless-interrupted), tapping-term-ms, quick-tap-ms, require-prior-idle-ms (milliseconds), hold-trigger-key-positions (a list of key positions) and a true or false flag such as hold-trigger-on-release. The built-in profiles mt and lt can be tuned like any other.",
   ];
-  return ["# What this firmware can express", ...common, ...(firmware === "qmk" ? qmk : zmk)].join("\n");
+  const kanata = [
+    "kanata (the MacBook's built-in keyboard): this is a software remapper, not firmware. Apply writes a config file and reloads it in under a second, with no build or flash. Hold-tap profiles take a variant (tap-hold, tap-hold-press, tap-hold-release, tap-hold-press-timeout, tap-hold-tap-keys, tap-hold-opposite-hand, tap-hold-opposite-hand-release), hold-ms, tap-repress-ms and optionally require-prior-idle-ms. The opposite-hand variants make a home-row modifier hold only when the other hand's key follows, which stops same-hand rolls becoming modifiers.",
+    "kanata: a tap dance counts taps, so a hold or tap-then-hold slot can't be written. A macro can hold only modifiers across its steps. The fn/globe key stays as it is. Keep Escape and a Control key reachable: the validator refuses a layout without them, because this is the one keyboard that can't be swapped for another.",
+  ];
+  return ["# What this firmware can express", ...common, ...(firmware === "qmk" ? qmk : firmware === "zmk" ? zmk : kanata)].join("\n");
 }
 
 const PRIORITY_LABEL: Record<PriorityFact["priorityKind"], string> = {

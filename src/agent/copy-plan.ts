@@ -53,6 +53,12 @@ export function transferEnv(from: LayoutSnapshot, to: LayoutSnapshot, layers: re
     handAt,
     fingerAt: (p) => slots.get(p)?.finger ?? null,
     // The other hand's keys and every thumb key: what the validator counts as "waits for the other hand" (07).
+    sourceTriggerIsOppositeHand: (positions, hand) => {
+      const src = from.board.definition;
+      const other = src.hands[hand === "left" ? "right" : "left"];
+      const thumbs = new Set(src.rows.thumb ?? []);
+      return positions.length > 0 && positions.every((p) => other.includes(p) || thumbs.has(p));
+    },
     triggerPositions: (hand) => [...new Set([...def.hands[hand === "left" ? "right" : "left"], ...(def.rows.thumb ?? [])])].sort((a, b) => a - b),
   };
 }
@@ -61,6 +67,8 @@ export type BehaviourCopy = {
   ops: ChangeOp[];
   /** One line per source key: what it became, or why it was not copied. */
   steps: Array<{ source: number; target: number | null; outcome: { binding: Binding } | { unchanged: true } | { skip: string }; confidence: number | null }>;
+  /** What translating hold-tap profiles for the target had to leave out (D-024); empty when the target runs the same firmware. */
+  notes: string[];
 };
 
 /**
@@ -121,7 +129,7 @@ export function planBehaviourCopy(from: LayoutSnapshot, to: LayoutSnapshot, mapp
     setOps.push({ op: "setBinding", at: { layerId: tLayer.id, position: match.target }, binding: result.binding });
     steps.push({ source, target: match.target, outcome: { binding: result.binding }, confidence: match.confidence });
   }
-  return { ops: [...transfer.prerequisiteOps(), ...setOps], steps };
+  return { ops: [...transfer.prerequisiteOps(), ...setOps], steps, notes: [...new Set(transfer.notes)] };
 }
 
 export type LightingCopy = {
