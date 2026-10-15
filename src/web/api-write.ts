@@ -20,7 +20,7 @@ import {
 import type { ValidationResult } from "../validation/result.ts";
 import { ApiError } from "./api.ts";
 
-async function request<T>(
+export async function request<T>(
   method: "GET" | "POST",
   path: string,
   token: string,
@@ -52,7 +52,7 @@ async function request<T>(
   return parsed.data;
 }
 
-async function failure(response: Response): Promise<ApiError> {
+export async function failure(response: Response): Promise<ApiError> {
   if (response.status === 401) {
     return new ApiError(401, "keyloom rejected this page's token. Open the link keyloom printed again.");
   }
@@ -80,6 +80,11 @@ export async function checkChange(
 
 export function applyChange(token: string, ref: string, body: ApplyRequest): Promise<ApplyResponse> {
   return request("POST", layoutPath(ref, "apply"), token, ApplyResponseSchema, undefined, body);
+}
+
+// Applies a proposal the agent stored. The server re-validates it against the head, so a stale one is a 409 stale_base.
+export function applyChangeSet(token: string, changeSetId: string): Promise<ApplyResponse> {
+  return request("POST", `/api/change-sets/${encodeURIComponent(changeSetId)}/apply`, token, ApplyResponseSchema, undefined, {});
 }
 
 export function undoChange(token: string, ref: string, body: UndoRequest): Promise<UndoResponse> {

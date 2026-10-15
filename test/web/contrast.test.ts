@@ -77,6 +77,18 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["color-combo", "color-panel", UI],
   ["color-combo", "cap-key", UI],
   ["color-combo", "cap-hold", UI],
+  // Chat (rung 3): proposal cards sit on the page colour inside the surface-coloured panel.
+  ["color-success", "color-page", TEXT],
+  ["color-warning", "color-page", TEXT],
+  ["color-error", "color-page", TEXT],
+  // The chat-selection ring is drawn in the accent colour inside each kind of cap.
+  ["color-accent", "cap-modifier", UI],
+  ["color-accent", "cap-hold", UI],
+  ["color-accent", "cap-layer", UI],
+  ["color-accent", "cap-macro", UI],
+  ["color-accent", "cap-native", UI],
+  // The preview marks (dashed ring and dot) sit on the board's panel.
+  ["color-accent", "color-panel", UI],
 ];
 
 describe("token contrast", () => {

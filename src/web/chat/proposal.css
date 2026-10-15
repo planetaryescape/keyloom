@@ -1,0 +1,221 @@
+/* A proposal card: a choice between alternatives, so it reads as one self-contained unit. */
+.proposal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-page);
+}
+
+/* Hovering or focusing a card previews it on the board, so the card says which one the board is showing. */
+.proposal[data-status="proposed"]:hover,
+.proposal[data-status="proposed"]:focus-within,
+.proposal[data-pinned="true"] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.proposal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.proposal-head h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1.35;
+}
+
+.proposal-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.proposal-badge[data-tone="success"] {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.proposal-why {
+  margin: 0;
+}
+
+/* A settled card keeps its title and reason and drops the detail, so the open choice stands out. */
+.proposal[data-status="superseded"] .proposal-rows,
+.proposal[data-status="superseded"] .tradeoffs,
+.proposal[data-status="superseded"] .validation {
+  display: none;
+}
+
+.proposal[data-status="superseded"] .proposal-why {
+  color: var(--color-text-muted);
+}
+
+.proposal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.proposal-rows li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.proposal-where {
+  color: var(--color-text-muted);
+}
+
+.proposal-swap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.proposal-swap kbd {
+  min-width: 28px;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.proposal-swap kbd[data-new="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+}
+
+.tradeoffs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.tradeoffs h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.tradeoffs section:first-child h4 {
+  color: var(--color-success);
+}
+
+.tradeoffs section:last-child h4 {
+  color: var(--color-warning);
+}
+
+.tradeoffs ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.tradeoffs li + li {
+  margin-top: var(--space-1);
+}
+
+.proposal .validation {
+  min-height: 0;
+}
+
+.proposal .validation-note {
+  min-height: 0;
+}
+
+.proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.proposal-confirm,
+.proposal-problem,
+.proposal-next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-left: 3px solid;
+  border-radius: var(--radius-sm);
+}
+
+.proposal-confirm {
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+
+.proposal-problem {
+  flex-direction: row;
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+.proposal-problem p,
+.proposal-confirm p,
+.proposal-next p {
+  margin: 0;
+}
+
+.proposal-problem > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-error);
+}
+
+.proposal-problem .button {
+  margin-top: var(--space-2);
+}
+
+.proposal-confirm p {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.proposal-confirm p > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-warning);
+}
+
+.proposal-next {
+  align-items: flex-start;
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.proposal-next:focus-visible {
+  outline-offset: 2px;
+}
+
+@media (max-width: 420px) {
+  .tradeoffs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

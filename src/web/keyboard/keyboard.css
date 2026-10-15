@@ -37,6 +37,7 @@
   user-select: none;
   /* A lit top edge, a darker lower lip and a short drop shadow: enough to read as a keycap. */
   box-shadow:
+    var(--cap-ring, inset 0 0 0 0 transparent),
     inset 0 1px 0 var(--cap-highlight),
     inset 0 -3px 0 var(--cap-shadow-edge),
     0 1px 0 var(--cap-shadow-edge),
@@ -69,13 +70,13 @@
   --cap: transparent;
   --cap-ink: var(--color-text-muted);
   border: 1.5px dashed var(--color-border-strong);
-  box-shadow: none;
+  box-shadow: var(--cap-ring, none);
 }
 
 .cap[data-tone="none"] {
   --cap: transparent;
   border: 1.5px dotted var(--color-border);
-  box-shadow: none;
+  box-shadow: var(--cap-ring, none);
 }
 
 .cap-tap {
@@ -122,9 +123,16 @@ button.cap:active {
   transform: translateY(1px);
 }
 
-button.cap[aria-pressed="true"] {
+/* The key the inspector is showing. */
+button.cap[data-current="true"] {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* In the chat selection: an accent ring inside the cap and a tint, so it never relies on colour alone. */
+button.cap[aria-pressed="true"] {
+  --cap-ring: inset 0 0 0 3px var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 22%, var(--cap));
 }
 
 /* The other keys of a chord light up when one of them is inspected. */
@@ -149,6 +157,12 @@ button.cap[data-pending="true"]::after {
   border-radius: 50%;
   background: var(--color-accent);
   box-shadow: 0 0 0 2px var(--color-panel);
+}
+
+/* Where a displaced function would land under a hovered proposal. */
+button.cap[data-home="true"] {
+  outline: 2px dotted var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* The key an apply just changed rings once and fades. */

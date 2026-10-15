@@ -47,10 +47,15 @@ interface KeyboardProps {
   pendingIndex?: number | null;
   /** The key just changed by an apply, which pulses once. */
   appliedIndex?: number | null;
+  /** Keys clicked to be sent with the next chat message (D-012); a click toggles one. */
+  chatSelected?: ReadonlySet<number>;
+  onToggle?: (index: number) => void;
+  /** Keys a hovered proposal changes, and where a displaced function lands. */
+  marks?: ReadonlyMap<number, "changed" | "home">;
   handle?: Ref<KeyboardHandle>;
 }
 
-function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean): string {
+function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined): string {
   // The headline carries the meaning in words; the printed legend can be a symbol a screen
   // reader says badly.
   const parts = [`Key ${index + 1}`, description.headline];
@@ -58,6 +63,8 @@ function ariaLabel(index: number, description: KeyDescription, finger: string | 
   const combos = description.combos.filter((combo) => combo.activeHere).map((combo) => combo.name);
   if (combos.length > 0) parts.push(`In ${combos.join(", ")}`);
   if (pending) parts.push("Draft change, not applied yet");
+  if (mark === "changed") parts.push("Proposed change, not applied yet");
+  if (mark === "home") parts.push("Where a moved function would go");
   return parts.join(". ");
 }
 
@@ -75,6 +82,9 @@ export function Keyboard({
   onActivate,
   pendingIndex = null,
   appliedIndex = null,
+  chatSelected,
+  onToggle,
+  marks,
   handle,
 }: KeyboardProps) {
   const bounds = boardBounds(keys);
@@ -142,14 +152,21 @@ export function Keyboard({
               combo={comboKeys.has(index)}
               style={keyStyle(rect, unit)}
               tabIndex={index === tabStop ? 0 : -1}
-              aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index)}
-              aria-pressed={selected === index}
+              aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index, marks?.get(index))}
+              // Pressed means "in the chat selection"; `data-current` is the key the inspector shows.
+              aria-pressed={chatSelected?.has(index) ?? false}
+              data-current={selected === index}
               data-partner={partners.has(index)}
-              data-pending={pendingIndex === index}
+              data-pending={pendingIndex === index || marks?.get(index) === "changed"}
+              data-home={marks?.get(index) === "home"}
               data-applied={appliedIndex === index}
               onDoubleClick={() => onActivate?.(index)}
               onFocus={() => onSelect(index)}
-              onClick={() => onSelect(index)}
+              onClick={() => {
+                // Safari doesn't focus a button on click, so the click selects as well as the focus.
+                onSelect(index);
+                onToggle?.(index);
+              }}
               onKeyDown={(event) => onKeyDown(event, index)}
               onPointerEnter={(event) => {
                 if (event.pointerType === "mouse") onHover(index);
