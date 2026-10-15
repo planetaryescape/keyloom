@@ -557,3 +557,37 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 ### D-136: `handsFree` is a block of the `uf2-drives` flash recipe, naming halves by their flash step's label. (Claude, building rung 12; refines the blueprint's example)
 - **Why on the recipe, not the board:** a revision has its own flash steps, and a half is only meaningful beside the step that writes it. The blueprint example repeated each step's `volume`; naming the step's `label` removes the second copy that could drift. The schema rejects a half whose label no step has, two centrals, a repeated marker letter, a relayed central and a `serialTail` that doesn't end in 16 hex characters.
 - **Fields:** `trigger` (`cdc-1200`), `usbVendorId?`, `halves[] { role, step, marker, usbProductId?, relay? }`, `serialMarker` (`usb-sn-template` | `usb-sn-override`), `serialTail`. The Glove80 gives its IDs (vendor `0x16c0`, left `0x27db`, right `0x27d9`, observed with `ioreg` on 2026-10-15). The Corne gives none.
+||||||| parent of 1033f93 (feat: decisions, spacing guard and non-text contrast tests for the key panel)
+
+||||||| parent of 6c1546d (feat: decisions, spacing guard and non-text contrast tests for the key panel)
+
+
+### D-140: The side column has one width in every mode, and the board is sized to the stage beside it, so a panel opening cannot move the board. (Claude, building D-098)
+- **Evidence:** the board's bounding box at 1440×900 is the same before and after a key panel opens ([../research/keyloom-ui-audit.md](../research/keyloom-ui-audit.md) measured a 552 px scroll in v0.10.1). `useFitUnit` reads the stage's width and height, never the window's or the panel's.
+- **Chat:** the chat is the side column's third pane. It stays mounted while hidden, so a reply that is streaming or a message that is half typed survives a look at a key. Opening it closes the key panel when the draft is clean, and is refused with a toast when it isn't.
+- **Phones:** at 900 px or less the column becomes a sheet over the lower part of the screen. The heights and the half-switcher stay with rung 16.
+
+### D-141: The key panel's tap and hold slots sit on the editor's Draft, so the kind follows from the filled slots and nothing asks for a kind. (Claude, building D-086)
+- **Hold:** it is added from a plain key, or from a lone modifier key (which then becomes the tap). Its picker offers Modifiers and Layers only, because those are the two holds the model has. Picking a hold on a home-row key chooses the layout's home-row profile, a layer hold chooses its layer-tap profile, and a person's own choice of profile is kept.
+- **Any:** only the free tap slot has it, because an expression is a whole binding. Its answer fills every slot at once.
+- **Tabs:** Letters, Punctuation, Modifiers, Layers, Navigation, Media, Function, Macros, More, Any. There is no Mouse tab, because the keycode table has no mouse keys; they arrive through Any as native bindings. Transparent and Nothing are in More.
+- **Typing:** with a panel open and its picker closed, a typed character fills the tap slot, digits included. So 1 to 9 switch layers only when no key panel is open.
+
+### D-142: Any is read on the server by the importers' own mappers, and text that isn't an expression is refused. (Claude, building D-087 against the dependency rule)
+- **Why there:** the web can't import `src/firmware` (dependency-cruiser). `POST /api/layouts/:ref/parse-binding` runs `mapKey` (QMK, through tree-sitter) or `mapBinding` (ZMK), so Any and an import agree.
+- **Refusals:** an empty string, a parse error, a bare number or two ZMK bindings are `ok: false` with a sentence. An import keeps unreadable text as written because the file is the person's; here nothing is, and garbage kept as native would fail the firmware build.
+- **Profiles:** a hold-tap whose profile the layout lacks borrows the closest one it has and says so.
+
+### D-143: Kind is carried by shape, selection, draft and remembered marks are separate elements, and layer keys print at most four letters. (Claude, building D-100)
+- **Shapes:** a hold-tap's band, a layer key's left edge in the colour of the layer it points at, a macro's play mark, a transparent key's dashes with the key beneath it at 40%, and a none key's hatching.
+- **Layer labels:** initials for several words, a short word as it is, three letters for a long one, four when two would clash, and the position when four clash too. The action is one word: hold, toggle, go, once.
+- **Marks:** selection (an accent outline and a tick badge), draft (a dashed outline and a dot) and remembered (a bookmark inside the cap) each draw their own element, so all three can show on one key.
+
+### D-144: The legend floor is 11 px, and a legend that doesn't fit is shortened from a table or wrapped at its seams, never shrunk. (Claude, building D-100)
+- **Fit:** `fitLegend` takes the unit size and turns the floor into key units. Names break after an underscore, plus or bracket, and only the longest piece has to fit.
+- **Tables:** native labels longer than five letters are split at a slash into a tap and a hold, or shortened from a small table (`MSBTN2` is `Btn2`). Space with modifiers is `␣`, so Hyper+Space is `Hyp␣`.
+- **Advanced view:** firmware names are long, so they wrap at their seams instead.
+
+### D-145: Non-text contrast is tested for the cap border, the kind fills and the layer colours, with "neighbouring" read as "against the plain key". (Claude, building D-100)
+- **Tests:** the border `keyboard.css` really draws is at least 3:1 against the stage; each kind's fill is at least 1.5:1 against the plain key's; the six layer colours are at least 3:1 against both the layer and the plain fill and differ from each other.
+- **Why the plain key:** most keys are plain, so it is what every other kind sits beside. Six fills at 1.5:1 from each other would need a luminance range no calm palette has, and shape carries the rest (D-143).

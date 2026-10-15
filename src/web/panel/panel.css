@@ -406,8 +406,9 @@
 }
 
 .any-problem svg {
+  position: relative;
+  top: 3px;
   flex: none;
-  margin-top: 3px;
 }
 
 /* Timing: one sentence, then Tune and Change profile. */
@@ -454,6 +455,11 @@
 
 .timing .choices-cards {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* An empty verdict leaves no gap: the validation block only takes room when it has something to say. */
+.panel-body .validation {
+  min-height: 0;
 }
 
 .where-else {

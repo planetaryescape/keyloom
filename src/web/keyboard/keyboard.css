@@ -81,7 +81,7 @@
 
 .cap-tap {
   max-width: 100%;
-  padding-inline: 2px;
+  padding-inline: calc(var(--space-1) / 2);
   font-weight: var(--weight-semibold);
   white-space: nowrap;
 }
@@ -114,7 +114,6 @@
 .cap[data-tone="macro"] .cap-hold,
 .cap[data-tone="native"] .cap-hold {
   position: static;
-  margin-top: 1px;
   font-weight: var(--weight-regular);
 }
 

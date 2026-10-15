@@ -692,6 +692,16 @@
     margin: 0 auto auto;
   }
 
+  /* The board is at the top of a phone's stage, so the tip and the toasts sit at the bottom of it. */
+  .stage-notes {
+    top: auto;
+    bottom: var(--space-3);
+  }
+
+  .toasts {
+    bottom: var(--space-7);
+  }
+
   .layout-trigger-board {
     display: none;
   }
