@@ -1,0 +1,3 @@
+# BK can't reorder or delete layers on either board
+
+Rung 15 (`0789765`) blocks Move left, Move right and Delete on BK's Moonlander and Glove80, because both carry passthrough code that names layers by number (`passthrough_layer_index`, D-024): Oryx's per-layer RGB and keymap code on the Moonlander, and MoErgo's layer defines on the Glove80. Deleting a layer just added at the end is refused too, which is stricter than the rule needs (the old order is still a prefix only if no existing layer moves). Two fixes: allow removing a trailing layer that no passthrough refers to, and teach the generators to rewrite the known layer-number patterns (Oryx's `layer_state_cmp`/`LAYER_` enums, ZMK `#define` layer names) so a reorder keeps the custom code pointing at the right layers.
