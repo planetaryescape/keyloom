@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import type { ChatBackend } from "./chat-backend.ts";
+import { handleChatRoute } from "./chat-routes.ts";
 import type { EditorBackend } from "./editor-backend.ts";
 import { MAX_BODY_BYTES, handleEditorRoute, isEditorPath } from "./editor-routes.ts";
 import { checkHost, checkToken } from "./guard.ts";
@@ -11,6 +13,8 @@ export interface ServerOptions {
   source: LayoutSource;
   /** The rung 2 write side. Without it the write routes answer 404, as if they did not exist. */
   editor?: EditorBackend;
+  /** The rung 3 chat side. Without it the chat routes fall through to the layout routes' 404. */
+  chat?: ChatBackend;
   token?: string;
   open?: boolean;
 }
@@ -26,7 +30,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -37,6 +41,12 @@ export function startServer({ port, source, editor, token, open = false }: Serve
       const denied = checkHost(request, boundPort());
       if (denied) return denied;
       const url = new URL(request.url);
+      // Before the layout routes: POST /api/layouts/:ref/chat shares their prefix. The handler checks
+      // the token itself and answers null for any path that isn't a chat route.
+      if (chat !== undefined) {
+        const chatResponse = await handleChatRoute(request, url.pathname, chat, sessionToken);
+        if (chatResponse !== null) return chatResponse;
+      }
       if (url.pathname === LIST_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);
       }

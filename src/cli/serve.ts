@@ -2,6 +2,7 @@
 import { type App, NotFoundError, getLayout, listLayouts } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
+import { appChatBackend } from "./chat-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
 
 export const DEFAULT_PORT = 4477;
@@ -39,5 +40,5 @@ export function appLayoutSource(app: App): LayoutSource {
 }
 
 export function serve(app: App, opts: { port: number; open: boolean }): RunningServer {
-  return startServer({ port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app), open: opts.open });
+  return startServer({ port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app), chat: appChatBackend(app), open: opts.open });
 }
