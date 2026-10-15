@@ -19,15 +19,15 @@ function centre(key: GeometryKey): Point {
 /**
  * The key an arrow press should move to: the nearest key whose centre lies in that direction,
  * weighting sideways drift double so Up stays in its column. Staggered columns and the tilted
- * thumb clusters need no special cases. Null at an edge.
+ * thumb clusters need no special cases. Null at an edge. `among` limits the search to the keys on screen.
  */
-export function neighbour(keys: readonly GeometryKey[], from: number, direction: Direction): number | null {
+export function neighbour(keys: readonly GeometryKey[], from: number, direction: Direction, among: ReadonlySet<number> | null = null): number | null {
   const origin = keys[from];
   if (origin === undefined) return null;
   const here = centre(origin);
   let best: { index: number; score: number } | null = null;
   keys.forEach((key, index) => {
-    if (index === from) return;
+    if (index === from || (among !== null && !among.has(index))) return;
     const there = centre(key);
     const dx = there.x - here.x;
     const dy = there.y - here.y;

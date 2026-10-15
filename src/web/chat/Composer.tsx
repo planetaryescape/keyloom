@@ -18,12 +18,14 @@ interface Props {
   onOpenKey?: (position: number) => void;
   onClearSelection: () => void;
   inputRef: Ref<HTMLTextAreaElement>;
+  /** Why sending isn't possible whatever is typed, such as no model set up; shown under the box. */
+  blockedReason?: string | null;
 }
 
 const MAX_HEIGHT = 160;
 
-export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onOpenKey, onClearSelection, inputRef }: Props) {
-  const canSend = value.trim() !== "" && !streaming;
+export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onOpenKey, onClearSelection, inputRef, blockedReason = null }: Props) {
+  const canSend = value.trim() !== "" && !streaming && blockedReason === null;
 
   // Grows with the text up to a cap, then scrolls; setting "auto" first lets it shrink again.
   const fit = (element: HTMLTextAreaElement | null) => {
@@ -89,13 +91,17 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
             Stop
           </button>
         ) : (
-          <button type="submit" className="button button-primary" disabled={!canSend}>
+          <button type="submit" className="button button-primary" disabled={!canSend} aria-describedby={blockedReason === null ? undefined : "composer-why"}>
             <SendHorizontal size={14} aria-hidden="true" />
             Send
           </button>
         )}
       </div>
-      <p className="composer-hint">Enter sends, Shift+Enter adds a line.</p>
+      {blockedReason === null ? (
+        <p className="composer-hint">Enter sends, Shift+Enter adds a line.</p>
+      ) : (
+        <p id="composer-why" className="composer-why">{blockedReason}</p>
+      )}
     </form>
   );
 }

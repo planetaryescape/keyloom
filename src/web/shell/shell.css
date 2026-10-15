@@ -5,6 +5,7 @@
 .app {
   --side-width: clamp(340px, 26vw, 400px);
   --bar-height: 48px;
+  --chat-bar-height: 40px;
 }
 
 /* Header: identity and state on one line. */
@@ -196,6 +197,8 @@
   display: grid;
   min-height: 0;
   flex: 1;
+  /* The column is the window's width, whatever the board or the toolbar would like: an auto column grew to the board's width on a phone. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
@@ -218,6 +221,27 @@
 .toolbar-actions {
   display: flex;
   flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Why undo is off while a draft is open: said beside the buttons it concerns, in the toolbar's own row so nothing moves. */
+.toolbar-why {
+  order: 1;
+  max-width: 280px;
+  margin: 0 0 0 auto;
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-align: right;
+}
+
+.toolbar-actions {
+  order: 2;
+}
+
+.toggle-icon {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-1);
 }
@@ -299,6 +323,7 @@
 .stage {
   position: relative;
   display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -308,6 +333,7 @@
 .keyboard-well {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex: 1;
   overflow: auto;
   padding: var(--space-4);
@@ -334,6 +360,13 @@
 
 .stage-notes > * {
   pointer-events: auto;
+}
+
+/* In the stage's flow, above the board, never over it: at a short window the board's top row sat under the tip. */
+.stage > .tip {
+  flex: none;
+  align-self: center;
+  margin: var(--space-3) var(--space-3) 0;
 }
 
 .tip {
@@ -546,7 +579,7 @@
 /* Chat bar */
 .chat-bar {
   display: flex;
-  min-height: 40px;
+  min-height: var(--chat-bar-height);
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
@@ -669,9 +702,134 @@
   margin: 0;
 }
 
-/* Narrow windows: the panel becomes a sheet over the lower part of the screen (the half-switcher and
-   sheet heights come with the phone rung). */
+/* The shortcut list (?) */
+.shortcuts {
+  width: min(480px, calc(100vw - 16px));
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-pop);
+}
+
+.shortcuts::backdrop {
+  background: rgb(8 10 14 / 0.6);
+}
+
+.shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.shortcuts-head h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.shortcut-list > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shortcut-list > div:last-child {
+  border-bottom: 0;
+}
+
+.shortcut-list dt {
+  flex: none;
+  white-space: nowrap;
+}
+
+.shortcut-list dd {
+  margin: 0;
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+/* Loading skeleton: blocks in the shapes of the toolbar, the caps and the panel. */
+.skeleton-block {
+  display: block;
+  background: linear-gradient(90deg, var(--color-border) 0%, var(--color-surface) 50%, var(--color-border) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s linear infinite;
+}
+
+.skeleton-tabs {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.skeleton-tab {
+  width: 72px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+}
+
+.skeleton-cap {
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.skeleton-line {
+  height: 16px;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-line:nth-child(2) {
+  width: 70%;
+}
+
+.skeleton-line:nth-child(3) {
+  width: 45%;
+}
+
+@keyframes skeleton-sweep {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* The sheet's grabber and buttons exist for narrow screens only. */
+.sheet-bar {
+  display: none;
+}
+
+.half-switcher {
+  display: none;
+}
+
+/* Narrow windows (18#phones-and-narrow-windows): the panel becomes a bottom sheet with three heights, set by
+   the grabber and the two buttons in its bar. --sheet-h comes from sheet.ts, so the board's scroll room agrees with it. */
 @media (max-width: 900px) {
+  .app {
+    --chat-bar-height: 44px;
+  }
+
+  /* The skeleton's panel is a block beside the board; as a fixed sheet it would sit over it. */
+  .skeleton .side {
+    display: none;
+  }
+
   .workbench {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -680,24 +838,68 @@
     position: fixed;
     z-index: 20;
     right: 0;
-    bottom: 40px;
+    bottom: var(--chat-bar-height);
     left: 0;
-    height: min(58dvh, 520px);
+    height: var(--sheet-h, 46dvh);
     border-top: 1px solid var(--color-border-strong);
     border-left: 0;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: var(--shadow-pop);
+    transition: height 150ms var(--ease-out);
+  }
+
+  .side[data-dragging="true"] {
+    transition: none;
   }
 
   .side[data-mode="summary"] {
     display: none;
   }
 
+  .sheet-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2) 0 var(--space-3);
+  }
+
+  .sheet-grabber {
+    display: flex;
+    min-height: 44px;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .sheet-grabber > span {
+    width: 40px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--color-border-strong);
+  }
+
+  .sheet-bar .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* The board keeps scroll room under the sheet, so a key opened beneath it can be brought above it. */
+  .workbench[data-sheet] .keyboard {
+    margin-bottom: var(--sheet-h);
+  }
+
+  .workbench[data-sheet] .keyboard-well {
+    scroll-padding-bottom: var(--sheet-h);
+  }
+
   .keyboard {
     margin: 0 auto auto;
   }
 
-  /* The board is at the top of a phone's stage, so the tip and the toasts sit at the bottom of it. */
+  /* The board is at the top of a phone's stage, so the banners and toasts sit at the bottom of it. */
   .stage-notes {
     top: auto;
     bottom: var(--space-3);
@@ -745,13 +947,98 @@
   }
 
   .toolbar {
+    position: relative;
+    flex-wrap: wrap;
     padding-inline: var(--space-3);
+  }
+
+  .toolbar-tabs {
+    flex: 1 1 100%;
+  }
+
+  /* Over the top of the stage instead of a row of its own: a notice must not push the board (and the key being edited) down. */
+  .toolbar-why {
+    position: absolute;
+    z-index: 6;
+    top: calc(100% + var(--space-1));
+    right: var(--space-3);
+    left: var(--space-3);
+    max-width: none;
+    margin: 0;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-sm);
+    background: var(--color-warning-bg);
+    text-align: left;
+  }
+}
+
+/* Phones: a split board shows one hand at a time, picked here or by a swipe. Caps stay at least 44px (useFitUnit). */
+@media (max-width: 600px) {
+  .half-switcher {
+    display: flex;
+    flex: none;
+    gap: var(--space-1);
+    margin: var(--space-3) var(--space-3) 0;
+    padding: var(--space-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+
+  .half-switcher button {
+    min-height: 44px;
+    flex: 1;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+  }
+
+  .half-switcher button[aria-checked="true"] {
+    background: var(--color-text);
+    color: var(--color-page);
+  }
+
+  .half-count {
+    font-weight: var(--weight-regular);
+  }
+
+  /* Taps and sideways swipes reach the board; vertical drags still scroll it. */
+  .keyboard-well[data-half] {
+    touch-action: pan-y;
+  }
+
+  .toggle-icon span {
+    display: none;
+  }
+
+  .toggle-icon {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .toolbar .icon-button,
+  .toolbar .toggle-button {
+    min-height: 44px;
+  }
+
+  .toolbar .icon-button {
+    min-width: 44px;
+  }
+
+  .stage > .tip {
+    margin: var(--space-2) var(--space-3) 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .side-pane,
-  .toast {
+  .toast,
+  .skeleton-block {
     animation: none;
   }
 }

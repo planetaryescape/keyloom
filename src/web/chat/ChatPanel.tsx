@@ -1,4 +1,4 @@
-import { History as HistoryIcon, ScrollText, SquarePen } from "lucide-react";
+import { MessagesSquare, ScrollText, SquarePen } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatSelection, ProposalCard } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
@@ -10,7 +10,8 @@ import { OutcomeQuestions } from "../decisions/OutcomeQuestions.tsx";
 import { useDecisions, useOutcomeQuestions } from "../decisions/useDecisions.ts";
 import { Composer, type SelectedKeys } from "./Composer.tsx";
 import { ConversationList } from "./ConversationList.tsx";
-import { EmptyChat, ProblemNotice, ProviderLine } from "./ChatStates.tsx";
+import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
+import { ProviderPicker } from "./ProviderPicker.tsx";
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
 import { useChat } from "./useChat.ts";
@@ -129,39 +130,43 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
   }, [view, onHighlightDecision]);
 
   const empty = transcript.turns.length === 0;
+  // A new conversation can't start without a credential for the provider it would use, so say so before anything is typed.
+  // A conversation already going keeps working on its own provider.
+  const activeReady = provider.status?.active == null ? false : (provider.status.providers.find((p) => p.id === provider.status?.active?.provider)?.ready ?? false);
+  const needsModel = provider.status !== null && transcript.pinned === null && !activeReady;
   const retryDraft = draft.trim() === "" ? undefined : () => send(draft);
 
   return (
     <section className="chat" aria-label="Chat with keyloom">
       <header className="chat-head">
         <h2>Chat</h2>
+        <button
+          type="button"
+          className="button chat-new"
+          disabled={empty && !streaming}
+          onClick={() => {
+            chat.newConversation();
+            setView("chat");
+            setDraft("");
+            input.current?.focus();
+          }}
+        >
+          <SquarePen size={14} aria-hidden="true" />
+          New
+        </button>
         <div className="chat-head-actions">
           <button type="button" className="button" aria-pressed={view === "decisions"} onClick={() => setView(view === "decisions" ? "chat" : "decisions")}>
             <ScrollText size={14} aria-hidden="true" />
             Decisions
           </button>
           <button type="button" className="button" aria-pressed={view === "history"} onClick={() => (view === "history" ? setView("chat") : showHistory())}>
-            <HistoryIcon size={14} aria-hidden="true" />
-            History
-          </button>
-          <button
-            type="button"
-            className="button"
-            disabled={empty && !streaming}
-            onClick={() => {
-              chat.newConversation();
-              setView("chat");
-              setDraft("");
-              input.current?.focus();
-            }}
-          >
-            <SquarePen size={14} aria-hidden="true" />
-            New
+            <MessagesSquare size={14} aria-hidden="true" />
+            Conversations
           </button>
         </div>
       </header>
 
-      {view === "chat" ? <ProviderLine status={provider.status} pinned={transcript.pinned} /> : null}
+      {view === "chat" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} /> : null}
 
       {view === "decisions" ? (
         <DecisionsView
@@ -208,7 +213,9 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
               stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
             }}
           >
-            {empty && chat.problem === null ? (
+            {needsModel && chat.problem === null && provider.status !== null ? (
+              <MissingKey providers={provider.status.providers} onRetry={provider.reload} retryLabel="Check again" />
+            ) : empty && chat.problem === null ? (
               <EmptyChat
                 onPick={(prompt) => {
                   setDraft(prompt);
@@ -250,6 +257,7 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
             {...(onOpenKey === undefined ? {} : { onOpenKey })}
             onClearSelection={onClearSelection}
             inputRef={input}
+            blockedReason={needsModel ? "Set up a model above before sending a message." : null}
           />
         </>
       )}

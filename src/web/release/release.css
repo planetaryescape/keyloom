@@ -227,6 +227,14 @@
 .callout-error > svg {
   color: var(--color-error);
 }
+.callout-warning {
+  flex-wrap: wrap;
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+.callout-warning > svg {
+  color: var(--color-warning);
+}
 .callout-success {
   border-color: var(--color-success);
   background: var(--color-success-bg);

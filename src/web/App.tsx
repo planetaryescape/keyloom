@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { LayoutDetail, LayoutSummary } from "../api/http.ts";
+import type { ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
 import { Header, type HeaderProps } from "./shell/Header.tsx";
-import { EmptyState, ErrorState, Loading } from "./shell/States.tsx";
+import { ImportScreen } from "./import/ImportScreen.tsx";
+import { BoardSkeleton } from "./shell/BoardSkeleton.tsx";
+import { rememberShape } from "./shell/shape.ts";
+import { ErrorState } from "./shell/States.tsx";
 import { ReleaseDialog } from "./release/ReleaseDialog.tsx";
 import { releaseStatus, type ReleaseStatus } from "./release/status.ts";
 import { useNow } from "./release/useNow.ts";
@@ -19,6 +22,8 @@ export function App({ token }: { token: string }) {
   const [listError, setListError] = useState<Failure | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View | null>(null);
+  // The import screen from the layout menu; with no layouts it is the page itself.
+  const [importing, setImporting] = useState(false);
   // Bumping this refetches the list; it backs the "Check again" and "Try again" buttons.
   const [attempt, setAttempt] = useState(0);
   // Where each keyboard stands against its layout's head; the server's engine does the work and this follows it (17).
@@ -74,31 +79,46 @@ export function App({ token }: { token: string }) {
       </Shell>
     );
   }
+  // The imported layout is selected before the list that holds it arrives; the skeleton covers the gap, so the old layout doesn't flash.
+  const imported = (result: ImportResponse) => {
+    setLayouts(null);
+    setView(null);
+    setSelectedId(result.layoutId);
+    setImporting(false);
+    setAttempt((count) => count + 1);
+  };
   if (layouts === null) {
     return (
-      <Shell>
-        <Loading>Loading layouts…</Loading>
+      <Shell fill>
+        <BoardSkeleton boardId={null} label="Loading layouts" />
       </Shell>
     );
   }
   if (layouts.length === 0) {
     return (
       <Shell>
-        <EmptyState onRetry={retry} />
+        <ImportScreen token={token} onImported={imported} />
       </Shell>
     );
   }
 
   const summary = layouts.find((layout) => layout.id === selectedId) ?? layouts[0];
   if (summary === undefined) return null;
-  const menu = { layouts, selectedId: summary.id, onSelect: setSelectedId };
+  const menu = { layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setSelectedId(id); }, onImport: () => setImporting(true) };
+  if (importing) {
+    return (
+      <Shell menu={menu}>
+        <ImportScreen token={token} onImported={imported} onBack={() => setImporting(false)} />
+      </Shell>
+    );
+  }
 
   // A view for an earlier selection is ignored until the new one arrives.
   const current = view !== null && view.id === summary.id ? view : null;
   if (current === null) {
     return (
-      <Shell menu={menu}>
-        <Loading>Loading layout…</Loading>
+      <Shell menu={menu} fill>
+        <BoardSkeleton boardId={summary.boardId} label="Loading layout" />
       </Shell>
     );
   }
@@ -143,6 +163,12 @@ function LayoutPage({
   const { document: layout, board, geometry } = detail;
   const release = useRelease(token, summary.id);
   const [releaseOpen, setReleaseOpen] = useState(false);
+  // History's "Flash this revision" builds an earlier revision instead of the head; null is the head.
+  const [releaseTarget, setReleaseTarget] = useState<{ id: string; summary: string } | null>(null);
+  const openRelease = (revision?: { id: string; summary: string }) => {
+    setReleaseTarget(revision === undefined || revision.id === detail.revision.id ? null : revision);
+    setReleaseOpen(true);
+  };
   const releasing = release.build?.status === "running" || release.flash?.status === "waiting_for_bootloader" || release.flash?.status === "writing";
   const now = useNow(releasing);
   const status = releaseStatus(release.build, release.flash, detail.revision.id, now);
@@ -155,24 +181,33 @@ function LayoutPage({
     }
   }, [geometry.keys, board.display]);
 
+  const boardSync = sync.boards.find((candidate) => candidate.boardId === summary.boardId);
+  const autoSync = boardSync === undefined ? null : { on: boardSync.auto.on, paused: boardSync.auto.paused, onPause: () => void sync.setPaused(boardSync.boardId, true) };
+  // The shape of the board is kept for the next first load's skeleton.
+  useEffect(() => {
+    if ("keys" in rotated) rememberShape(summary.boardId, rotated.keys, board.hands.left);
+  }, [summary.boardId, rotated, board.hands.left]);
+
   const failure = problem ?? ("error" in rotated ? rotated.error : null);
   return (
     <Shell
       menu={menu}
-      release={failure === null ? { status, onOpen: () => setReleaseOpen(true) } : undefined}
-      sync={{ api: sync, layoutId: summary.id, boardId: summary.boardId, onOpenRelease: () => setReleaseOpen(true) }}
+      release={failure === null ? { status, onOpen: () => openRelease() } : undefined}
+      sync={{ api: sync, layoutId: summary.id, boardId: summary.boardId, onOpenRelease: () => openRelease() }}
       fill
     >
       {failure !== null || !("keys" in rotated) ? (
         <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
       ) : (
-        <Viewer detail={detail} summary={summary} keys={rotated.keys} token={token} layoutRef={summary.id} sync={sync} onChanged={onChanged} onOpenRelease={() => setReleaseOpen(true)} />
+        <Viewer detail={detail} summary={summary} keys={rotated.keys} token={token} layoutRef={summary.id} sync={sync} onChanged={onChanged} onOpenRelease={openRelease} />
       )}
       <ReleaseDialog
         open={releaseOpen}
         onClose={() => setReleaseOpen(false)}
         release={release}
-        head={detail.revision}
+        head={releaseTarget ?? detail.revision}
+        earlierRevision={releaseTarget !== null}
+        autoSync={autoSync}
         boardName={board.name}
         status={status}
         now={now}
@@ -194,7 +229,7 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
   return null;
 }
 
-type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void };
+type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void };
 
 // `fill` is the layout page, which is exactly the window tall so the board and its panel never scroll the page.
 function Shell({

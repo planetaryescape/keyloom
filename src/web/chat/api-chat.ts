@@ -5,6 +5,7 @@ import {
   ConversationDetailSchema,
   ConversationListResponseSchema,
   type ChatEvent,
+  type ChatProviderChoice,
   type ChatProviderStatus,
   type ChatRequest,
   type ConversationDetail,
@@ -16,6 +17,10 @@ import { createSseParser, SseError } from "./sse.ts";
 
 export function fetchProviderStatus(token: string, signal: AbortSignal): Promise<ChatProviderStatus> {
   return request("GET", "/api/chat/provider", token, ChatProviderStatusSchema, signal);
+}
+
+export function chooseProvider(token: string, choice: ChatProviderChoice): Promise<ChatProviderStatus> {
+  return request("POST", "/api/chat/provider", token, ChatProviderStatusSchema, undefined, choice);
 }
 
 export async function fetchConversations(token: string, ref: string, signal: AbortSignal): Promise<ConversationSummary[]> {

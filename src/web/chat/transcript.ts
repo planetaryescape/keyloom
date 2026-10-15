@@ -139,7 +139,9 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
 
 /** A stored conversation. Proposals aren't linked to a message, so they hang off the last reply. */
 export function fromConversation(detail: ConversationDetail): Transcript {
-  const turns: Turn[] = detail.messages.map((message) =>
+  // An assistant turn that only called tools has no words to show; as a turn it would be an empty "keyloom" label.
+  const spoken = detail.messages.filter((message) => message.role === "user" || message.text.trim() !== "");
+  const turns: Turn[] = spoken.map((message) =>
     message.role === "user"
       ? { kind: "user", id: message.id, text: message.text, selection: message.selection }
       : { ...streamingAssistant(message.id), text: message.text, phase: "done", ending: "complete" },

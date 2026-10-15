@@ -1,9 +1,9 @@
 import { MousePointerClick, Repeat2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding } from "../layout/schema.ts";
 import type { Slot } from "../layout/change.ts";
-import type { ApplyResponse, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
+import type { ApplyResponse, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard, RevisionEntry } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { undoChange } from "./api-write.ts";
@@ -12,6 +12,8 @@ import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
 import { arrowsOn, marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
 import { Reminders } from "./decisions/Reminders.tsx";
+import { HistoryPanel } from "./history/HistoryPanel.tsx";
+import { useRevisions } from "./history/useRevisions.ts";
 import { withBinding } from "./editor/draft.ts";
 import { functionName } from "./editor/function-label.ts";
 import type { Placement } from "./editor/lost-functions.ts";
@@ -23,11 +25,15 @@ import { LayerTabs } from "./keyboard/LayerTabs.tsx";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
 import { ChatBar } from "./shell/ChatBar.tsx";
 import { FirstRunTip } from "./shell/FirstRunTip.tsx";
+import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
 import { LayoutSummary } from "./shell/LayoutSummary.tsx";
+import { sheetHeight, type SheetSize } from "./shell/sheet.ts";
+import { Shortcuts } from "./shell/Shortcuts.tsx";
 import { SidePanel, type PanelMode } from "./shell/SidePanel.tsx";
 import { readStored, writeStored } from "./shell/storage.ts";
 import { Toasts, useToasts } from "./shell/Toasts.tsx";
 import { Toolbar } from "./shell/Toolbar.tsx";
+import { NARROW, PHONE, useMediaQuery } from "./shell/useMediaQuery.ts";
 import type { SyncApi } from "./sync/useSync.ts";
 import { useSyncToasts } from "./sync/useSyncToasts.ts";
 
@@ -41,8 +47,8 @@ interface ViewerProps {
   layoutRef: string;
   /** Fetches the layout again after a change, resolving once the new one is on screen. */
   onChanged: () => Promise<void>;
-  /** Opens the Build and flash dialog, which the chat points at after an apply. */
-  onOpenRelease: () => void;
+  /** Opens the Build and flash dialog, which the chat points at after an apply. With a revision, it builds that one instead of the head (History's "Flash this"). */
+  onOpenRelease: (revision?: { id: string; summary: string }) => void;
   /** The keyboard's sync state, for the toasts that say a change reached it or didn't. */
   sync: SyncApi;
 }
@@ -51,6 +57,17 @@ type Editing = { layerId: string; position: number; focus: boolean };
 const CLEAN: DraftState = { binding: null, dirty: false };
 const NONE: ReadonlySet<number> = new Set();
 const ADVANCED_KEY = "keyloom.advanced";
+
+// The window's height, so the sheet's three heights follow a rotated phone or a keyboard that opens.
+function useViewportHeight(): number {
+  const [height, setHeight] = useState(() => window.innerHeight);
+  useEffect(() => {
+    const onResize = () => setHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return height;
+}
 
 const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
@@ -85,6 +102,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [advanced, setAdvanced] = useState(() => readStored(ADVANCED_KEY) === "1");
   const keyboard = useRef<KeyboardHandle>(null);
   const panel = useRef<KeyPanelHandle>(null);
+  // History is a panel of its own; it stays chosen while a key or the chat is looked at, and comes back when they close.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const history = useRevisions(token, layoutRef, revision.id, historyOpen);
+  // Phones: the panel is a bottom sheet and a split board shows one hand (18#phones).
+  const narrow = useMediaQuery(NARROW);
+  const phone = useMediaQuery(PHONE);
+  const [sheet, setSheet] = useState<SheetSize>("half");
+  const [half, setHalf] = useState<Half>("left");
+  const viewportHeight = useViewportHeight();
+  const splitBoard = board.hands.left.length > 0 && board.hands.right.length > 0;
+  const shownHalf = phone && splitBoard ? half : null;
 
   const headIndex = Math.max(
     0,
@@ -192,7 +221,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setPlacing(null);
   }, [draft.binding]);
 
-  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : repeating ? "repeat" : "summary";
+  const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
+  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : repeating ? "repeat" : historyOpen ? "history" : "summary";
 
   // Opening the chat puts the cursor in its box, so Cmd-K then typing is one gesture.
   useEffect(() => {
@@ -200,6 +230,25 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const frame = window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("#side-chat .composer textarea")?.focus({ preventScroll: true }));
     return () => window.cancelAnimationFrame(frame);
   }, [chatOpen]);
+
+  // A panel that opens on a narrow screen opens at half height, not left at a peek from the last one.
+  useEffect(() => {
+    if (narrow && mode !== "summary") setSheet((current) => (current === "peek" ? "half" : current));
+  }, [narrow, mode]);
+
+  // A key on the hand that isn't showing can't be edited from view, so the board turns to its hand.
+  useEffect(() => {
+    if (editing === null || !phone) return;
+    if (board.hands.left.includes(editing.position)) setHalf("left");
+    else if (board.hands.right.includes(editing.position)) setHalf("right");
+  }, [editing?.position, editing?.layerId, phone, board.hands]);
+
+  // The key being edited stays above the sheet that opens over the lower part of the screen.
+  useEffect(() => {
+    if (editing === null || !narrow || mode !== "key") return;
+    const frame = window.requestAnimationFrame(() => keyboard.current?.scrollKeyIntoView(editing.position));
+    return () => window.cancelAnimationFrame(frame);
+  }, [editing?.position, editing?.layerId, narrow, mode, sheet, shownHalf]);
 
   const editingHere = editing !== null && layer !== undefined && editing.layerId === layer.id;
 
@@ -343,6 +392,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         return;
       }
       if (document.querySelector("dialog[open]") !== null) return;
+      // Undo and redo are the revisions' (18#keyboard-use); inside a text box they stay the box's own.
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "z" && !typing(event.target)) {
+        event.preventDefault();
+        stepRevision(event.shiftKey ? "redo" : "undo");
+        return;
+      }
+      if (event.key === "?" && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target)) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
       if (event.key === "Escape") {
         if (panel.current?.closePicker() === true) return;
         if (chatOpen) setChatOpen(false);
@@ -420,19 +480,24 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     void onChanged().catch(() => {});
   }
 
-  async function undo() {
+  // One step back or forward (the head's undo), or, with `target`, back to any earlier revision as one new revision (D-170).
+  async function undo(target?: RevisionEntry) {
     setUndoing(true);
-    const undone = revision.summary;
-    const restored = revision.origin === "undo";
+    const undone = target?.summary ?? revision.summary;
+    const restored = target === undefined && revision.origin === "undo";
     try {
-      await undoChange(token, layoutRef, { revisionId: revision.id });
+      await undoChange(token, layoutRef, { revisionId: revision.id, ...(target === undefined ? {} : { to: target.id }) });
       await onChanged();
-      toasts.show({ kind: "info", message: restored ? "Change restored" : "Undone", detail: undone.replace(/^(Undo|Redo): /, "") });
+      toasts.show(
+        target === undefined
+          ? { kind: "info", message: restored ? "Change restored" : "Undone", detail: undone.replace(/^(Undo|Redo): /, "") }
+          : { kind: "info", message: "Went back", detail: undone },
+      );
     } catch (error) {
-      const stale = error instanceof ApiError && error.status === 409;
+      const stale = error instanceof ApiError && error.status === 409 && error.code !== "validation_failed";
       toasts.show({
         kind: "error",
-        message: stale ? "The layout changed since this page loaded" : "Couldn't undo",
+        message: stale ? "The layout changed since this page loaded" : target === undefined ? "Couldn't undo" : "Couldn't go back",
         ...(stale ? { detail: "Showing the latest version now." } : error instanceof Error ? { detail: error.message } : {}),
       });
       if (stale) void onChanged().catch(() => {});
@@ -441,13 +506,29 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
   }
 
+  // The toolbar's two buttons call the same route; the shortcut says why when the one it means is off.
+  function stepRevision(direction: "undo" | "redo") {
+    const allowed = direction === "undo" ? revision.origin !== "undo" && revision.undoable : revision.origin === "undo" && revision.undoable;
+    if (undoing) return;
+    if (undoBlock !== null) {
+      toasts.show({ kind: "info", message: undoBlock });
+      return;
+    }
+    if (!allowed) {
+      toasts.show({ kind: "info", message: direction === "undo" ? "Nothing to undo" : "Nothing to redo" });
+      return;
+    }
+    void undo();
+  }
+
   async function onTuned(summaryText: string) {
     await onChanged();
     toasts.show({ kind: "success", message: "Applied", detail: summaryText });
   }
 
   if (layer === undefined) return null;
-  const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
+  // The sheet's height is also the room the board keeps below it, so a key opened under it can be scrolled up (18#phones).
+  const workbenchStyle = { "--sheet-h": `${sheetHeight(sheet, viewportHeight)}px` } as CSSProperties;
   const chips = chatSelection?.positions.length ?? 0;
 
   return (
@@ -458,14 +539,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         busy={undoing}
         blockedReason={undoBlock}
         onUndo={() => void undo()}
+        historyOpen={historyOpen}
+        onHistory={() => setHistoryOpen((open) => !open)}
+        onShortcuts={() => setShortcutsOpen(true)}
         advanced={advanced}
         onAdvanced={(value) => {
           setAdvanced(value);
           writeStored(ADVANCED_KEY, value ? "1" : "0");
         }}
       />
-      <div className="workbench">
+      <div className="workbench" data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
         <section className="stage" aria-label="Layout" data-placing={placing !== null}>
+          {shownHalf === null ? null : <HalfSwitcher value={half} onChange={setHalf} hands={board.hands} />}
+          <FirstRunTip />
           <Keyboard
             handle={keyboard}
             keys={keys}
@@ -488,6 +574,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             onSelect={select}
             onHover={setHovered}
             onPress={press}
+            half={shownHalf}
+            onSwipe={(direction) => setHalf(direction === "left" ? "right" : "left")}
           />
           <div className="stage-notes">
             {preview !== null && proposal !== null ? (
@@ -504,12 +592,26 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 <button type="button" className="button" onClick={() => setPlacing(null)}>Cancel</button>
               </p>
             )}
-            <FirstRunTip />
           </div>
           <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
         </section>
         <SidePanel
           mode={mode}
+          size={sheet}
+          viewportHeight={viewportHeight}
+          onSize={setSheet}
+          history={
+            historyOpen ? (
+              <HistoryPanel
+                revisions={history.revisions}
+                onClose={() => setHistoryOpen(false)}
+                onReload={history.reload}
+                onGoBack={(target) => undo(target)}
+                onFlash={(target) => onOpenRelease({ id: target.id, summary: target.summary })}
+                blockedReason={undoBlock}
+              />
+            ) : null
+          }
           summary={<LayoutSummary summary={summary} layout={layout} board={board} revision={revision} />}
           key_={
             editing === null ? null : (
@@ -605,6 +707,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       </div>
       <ChatBar open={chatOpen} onToggle={toggleChat} />
+      <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }

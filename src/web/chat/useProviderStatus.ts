@@ -13,5 +13,5 @@ export function useProviderStatus(token: string) {
   }, [token]);
 
   useEffect(() => reload(), [reload]);
-  return { status, reload };
+  return { status, reload, replace: setStatus };
 }

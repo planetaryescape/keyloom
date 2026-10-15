@@ -30,6 +30,12 @@ describe("neighbour", () => {
     expect(neighbour(grid, 3, "down")).toBeNull();
   });
 
+  test("only keys that are on screen can be moved to (one hand at a time on a phone)", () => {
+    const among = new Set([0, 2]);
+    expect(neighbour(grid, 0, "right", among)).toBeNull();
+    expect(neighbour(grid, 0, "down", among)).toBe(2);
+  });
+
   test("an out-of-range start has no neighbour", () => {
     expect(neighbour(grid, 9, "left")).toBeNull();
   });

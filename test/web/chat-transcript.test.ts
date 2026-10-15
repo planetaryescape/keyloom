@@ -116,6 +116,18 @@ describe("fromConversation", () => {
     expect(assistant(t)).toMatchObject({ phase: "done", proposals: [{ changeSetId: "p1", status: "applied" }] });
   });
 
+  test("a reply that only called tools is not a turn, and is no hook for a priority or proposal either", () => {
+    const toolOnly = { id: "m3", role: "assistant" as const, text: "  ", toolCalls: ["get_layout", "propose_changes"], selection: null, createdAt: 3 };
+    const t = fromConversation({ ...detail, messages: [detail.messages[0]!, toolOnly, detail.messages[1]!, { ...toolOnly, id: "m4" }] });
+    expect(t.turns.map((turn) => turn.id)).toEqual(["m1", "m2"]);
+    expect(assistant(t)?.proposals).toHaveLength(1);
+    // Only tool calls and nothing said: the proposals still show, on a turn of their own.
+    const bare = fromConversation({ ...detail, messages: [detail.messages[0]!, toolOnly] });
+    expect(bare.turns.map((turn) => turn.kind)).toEqual(["user", "assistant"]);
+    expect(assistant(bare)?.text).toBe("");
+    expect(assistant(bare)?.proposals).toHaveLength(1);
+  });
+
   test("proposals with no reply to hang off still show", () => {
     const t = fromConversation({ ...detail, messages: [detail.messages[0]!] });
     expect(assistant(t)?.proposals).toHaveLength(1);

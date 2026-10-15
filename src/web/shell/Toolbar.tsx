@@ -1,4 +1,4 @@
-import { LoaderCircle, Redo2, Undo2 } from "lucide-react";
+import { CircleHelp, History, LoaderCircle, Redo2, Undo2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
 
@@ -6,16 +6,19 @@ interface Props {
   tabs: ReactNode;
   revision: RevisionInfo;
   busy: boolean;
-  /** Why undo and redo are unavailable right now, shown as the button's tooltip. */
+  /** Why undo and redo are unavailable right now, said under the toolbar as well as in the buttons' tooltips. */
   blockedReason: string | null;
   onUndo: () => void;
+  historyOpen: boolean;
+  onHistory: () => void;
+  onShortcuts: () => void;
   advanced: boolean;
   onAdvanced: (value: boolean) => void;
 }
 
 // An undo is itself a revision, so undoing it puts the change back: with the head an undo, the
 // Undo button is off and Redo is on, and the other way round otherwise. Both call the same route.
-export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, advanced, onAdvanced }: Props) {
+export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOpen, onHistory, onShortcuts, advanced, onAdvanced }: Props) {
   const canRedo = revision.origin === "undo" && revision.undoable;
   const canUndo = revision.origin !== "undo" && revision.undoable;
   const icon = (Icon: typeof Undo2) => (busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <Icon size={16} aria-hidden="true" />);
@@ -29,7 +32,7 @@ export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, advanced,
           className="icon-button"
           aria-label="Undo"
           disabled={!canUndo || busy || blockedReason !== null}
-          title={canUndo ? reason(`Undo: ${revision.summary}`) : "Nothing to undo"}
+          title={canUndo ? reason(`Undo: ${revision.summary} (⌘Z)`) : "Nothing to undo"}
           onClick={onUndo}
         >
           {icon(Undo2)}
@@ -39,15 +42,23 @@ export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, advanced,
           className="icon-button"
           aria-label="Redo"
           disabled={!canRedo || busy || blockedReason !== null}
-          title={canRedo ? reason("Put the undone change back") : "Nothing to redo"}
+          title={canRedo ? reason("Put the undone change back (⇧⌘Z)") : "Nothing to redo"}
           onClick={onUndo}
         >
           {icon(Redo2)}
         </button>
+        <button type="button" className="toggle-button toggle-icon" aria-pressed={historyOpen} aria-label="History" onClick={onHistory} title="Every revision of this layout, with undo to any of them and flash">
+          <History size={14} aria-hidden="true" />
+          <span>History</span>
+        </button>
         <button type="button" className="toggle-button" aria-pressed={advanced} onClick={() => onAdvanced(!advanced)} title="Show firmware names such as KC_A on keys and in the panel">
           Advanced view
         </button>
+        <button type="button" className="icon-button toolbar-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={onShortcuts}>
+          <CircleHelp size={16} aria-hidden="true" />
+        </button>
       </div>
+      {blockedReason === null ? null : <p className="toolbar-why" role="status">{blockedReason}</p>}
     </div>
   );
 }

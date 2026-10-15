@@ -1,7 +1,6 @@
-import { Check, Copy, Cpu, KeyRound, MessageSquareText, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Check, Copy, KeyRound, MessageSquareText, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { useState } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
-import type { Pinned } from "./transcript.ts";
 import type { Problem } from "./useChat.ts";
 
 export const EXAMPLE_PROMPTS = [
@@ -32,25 +31,6 @@ export function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
   );
 }
 
-const PROVIDER_NAMES: Record<ChatProviderStatus["providers"][number]["id"], string> = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" };
-
-/**
- * The provider and model answering here. A conversation shows the one it started on, since it can't
- * switch (D-111); a new one shows what the next message will use. Cost and behaviour differ by provider.
- */
-export function ProviderLine({ status, pinned }: { status: ChatProviderStatus | null; pinned: Pinned | null }) {
-  const shown = pinned ? { provider: pinned.provider, model: pinned.model } : status?.active ?? null;
-  if (status === null && pinned === null) return null;
-  if (shown === null) return <p className="chat-provider">No model set up</p>;
-  return (
-    <p className="chat-provider">
-      <Cpu size={12} aria-hidden="true" />
-      <span>{PROVIDER_NAMES[shown.provider]}</span>
-      {shown.model === null ? null : <span className="chat-provider-model">{shown.model}</span>}
-    </p>
-  );
-}
-
 function CopyCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
   function copy() {
@@ -74,7 +54,8 @@ function CopyCommand({ command }: { command: string }) {
   );
 }
 
-function MissingKey({ providers, onRetry }: { providers: ChatProviderStatus["providers"]; onRetry?: (() => void) | undefined }) {
+/** Shown before anything is typed when no provider has a credential, and again if a send is refused for the same reason. */
+export function MissingKey({ providers, onRetry, retryLabel = "Try again" }: { providers: ChatProviderStatus["providers"]; onRetry?: (() => void) | undefined; retryLabel?: string }) {
   return (
     <div className="chat-problem chat-missing-key" role="alert">
       <span className="state-icon" aria-hidden="true">
@@ -95,7 +76,7 @@ function MissingKey({ providers, onRetry }: { providers: ChatProviderStatus["pro
       {onRetry === undefined ? null : (
         <button type="button" className="button" onClick={onRetry}>
           <RefreshCw size={14} aria-hidden="true" />
-          Try again
+          {retryLabel}
         </button>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Hammer, LoaderCircle, TriangleAlert, X, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, TriangleAlert, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
@@ -11,8 +11,12 @@ interface Props {
   open: boolean;
   onClose: () => void;
   release: Release;
-  /** The revision a build would be made from. */
-  head: RevisionInfo;
+  /** The revision a build would be made from: the head, or an earlier one chosen in History. */
+  head: Pick<RevisionInfo, "id" | "summary">;
+  /** True when `head` is not the latest revision, so the dialog says it is flashing an earlier one. */
+  earlierRevision?: boolean;
+  /** The keyboard's auto-sync, which puts the latest layout back after a flash of an earlier revision unless it is paused. */
+  autoSync?: { on: boolean; paused: boolean; onPause: () => void } | null;
   boardName: string;
   status: ReleaseStatus;
   now: number;
@@ -45,7 +49,7 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-export function ReleaseDialog({ open, onClose, release, head, boardName, status, now }: Props) {
+export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, status, now }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
   const { build: lastBuild, flash: lastFlash, starting, error } = release;
@@ -111,7 +115,7 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
           <div>
             <h2 id="release-title">Build and flash</h2>
             <p className="muted">
-              From the latest layout: <strong>{head.summary}</strong>
+              {earlierRevision ? "From an earlier revision: " : "From the latest layout: "}<strong>{head.summary}</strong>
             </p>
           </div>
           <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
@@ -127,6 +131,21 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
             <button type="button" className="button" onClick={release.resume}>Try again</button>
           </div>
         )}
+
+        {!earlierRevision || autoSync === null ? null : autoSync.on ? (
+          <div className="callout callout-warning" role="alert">
+            <TriangleAlert size={18} aria-hidden="true" />
+            <p>
+              Auto-sync is on, so it puts the latest layout back on your {boardName} soon after this flash. Pause it to keep this revision on the keyboard.
+            </p>
+            <button type="button" className="button" onClick={autoSync.onPause}>
+              <Pause size={14} aria-hidden="true" />
+              Pause auto-sync
+            </button>
+          </div>
+        ) : autoSync.paused ? (
+          <p className="muted" role="status">Auto-sync is paused, so the keyboard keeps this revision. Resume it from the sync menu when you want the latest layout back.</p>
+        ) : null}
 
         <ol className="release-steps">
           <Step number={1} title="Build the firmware" state={buildState} {...(build === null ? {} : { aside: elapsedOf(build, now) })}>
@@ -224,7 +243,7 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
                 <div className="callout callout-success" role="status">
                   <CircleCheck size={18} aria-hidden="true" />
                   <p>
-                    <strong>Flashed.</strong> Your {boardName} restarts with the latest layout: {withFullStop(head.summary)}
+                    <strong>Flashed.</strong> Your {boardName} restarts with {earlierRevision ? "this earlier revision" : "the latest layout"}: {withFullStop(head.summary)}
                     {flash.note === null ? null : <> {flash.note}</>}
                   </p>
                 </div>

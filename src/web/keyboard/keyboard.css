@@ -308,3 +308,13 @@ button.cap[data-applied="true"] {
 .stage[data-placing="true"] button.cap {
   cursor: crosshair;
 }
+
+/* A cap is drawn at least 40px on a phone (the board must fit one hand in the width) and is hit as 44px: the invisible
+   rim lies on the gap between caps, so a finger that lands between two still chooses one. */
+@media (pointer: coarse) {
+  .keyboard .cap::after {
+    position: absolute;
+    content: "";
+    inset: -2px;
+  }
+}

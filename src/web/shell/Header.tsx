@@ -1,4 +1,4 @@
-import { Ellipsis, Hammer, Keyboard, Monitor, Moon, Sun, ChevronDown, Check } from "lucide-react";
+import { Ellipsis, Hammer, Keyboard, Monitor, Moon, Sun, ChevronDown, Check, FileUp } from "lucide-react";
 import type { LayoutSummary } from "../../api/http.ts";
 import type { ReleaseStatus } from "../release/status.ts";
 import { SyncStatus } from "../sync/SyncStatus.tsx";
@@ -16,10 +16,11 @@ interface LayoutMenuProps {
   layouts: readonly LayoutSummary[];
   selectedId: string;
   onSelect: (id: string) => void;
+  onImport: () => void;
 }
 
 // Layouts grouped by the board they are for, in the order the boards first appear.
-function LayoutMenu({ layouts, selectedId, onSelect }: LayoutMenuProps) {
+function LayoutMenu({ layouts, selectedId, onSelect, onImport }: LayoutMenuProps) {
   const selected = layouts.find((layout) => layout.id === selectedId);
   const groups = new Map<string, LayoutSummary[]>();
   for (const layout of layouts) groups.set(layout.boardId, [...(groups.get(layout.boardId) ?? []), layout]);
@@ -35,29 +36,36 @@ function LayoutMenu({ layouts, selectedId, onSelect }: LayoutMenuProps) {
         </>
       }
     >
-      {(close) =>
-        [...groups].map(([boardId, group]) => (
-          <div key={boardId} role="group" aria-label={boardTitle(boardId)} className="menu-group">
-            <p className="menu-heading" aria-hidden="true">{boardTitle(boardId)}</p>
-            {group.map((layout) => (
-              <button
-                key={layout.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={layout.id === selectedId}
-                className="menu-item"
-                onClick={() => {
-                  onSelect(layout.id);
-                  close();
-                }}
-              >
-                <span className="menu-item-label">{layout.name}</span>
-                {layout.id === selectedId ? <Check size={14} aria-hidden="true" /> : null}
-              </button>
-            ))}
-          </div>
-        ))
-      }
+      {(close) => (
+        <>
+          {[...groups].map(([boardId, group]) => (
+            <div key={boardId} role="group" aria-label={boardTitle(boardId)} className="menu-group">
+              <p className="menu-heading" aria-hidden="true">{boardTitle(boardId)}</p>
+              {group.map((layout) => (
+                <button
+                  key={layout.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={layout.id === selectedId}
+                  className="menu-item"
+                  onClick={() => {
+                    onSelect(layout.id);
+                    close();
+                  }}
+                >
+                  <span className="menu-item-label">{layout.name}</span>
+                  {layout.id === selectedId ? <Check size={14} aria-hidden="true" /> : null}
+                </button>
+              ))}
+            </div>
+          ))}
+          <div className="menu-separator" role="separator" />
+          <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); onImport(); }}>
+            <FileUp size={14} aria-hidden="true" />
+            <span className="menu-item-label">Import a layout…</span>
+          </button>
+        </>
+      )}
     </Menu>
   );
 }
@@ -110,6 +118,7 @@ export interface HeaderProps {
   layouts?: readonly LayoutSummary[];
   selectedId?: string;
   onSelect?: (id: string) => void;
+  onImport?: () => void;
   release?: { status: ReleaseStatus; onOpen: () => void };
   /** The keyboard's sync state for the layout on screen (17). */
   sync?: { api: SyncApi; layoutId: string; boardId: string; onOpenRelease: () => void };
@@ -117,7 +126,7 @@ export interface HeaderProps {
 
 // The header carries identity and state: which board and layout, the theme, and the way to build.
 // Everything else about the layout lives in the summary panel.
-export function Header({ layouts, selectedId, onSelect, release, sync }: HeaderProps) {
+export function Header({ layouts, selectedId, onSelect, onImport, release, sync }: HeaderProps) {
   const [theme, setTheme] = useTheme();
   return (
     <header className="app-header">
@@ -127,8 +136,8 @@ export function Header({ layouts, selectedId, onSelect, release, sync }: HeaderP
         </span>
         <span className="brand-name">keyloom</span>
       </div>
-      {layouts === undefined || selectedId === undefined || onSelect === undefined ? null : (
-        <LayoutMenu layouts={layouts} selectedId={selectedId} onSelect={onSelect} />
+      {layouts === undefined || selectedId === undefined || onSelect === undefined || onImport === undefined ? null : (
+        <LayoutMenu layouts={layouts} selectedId={selectedId} onSelect={onSelect} onImport={onImport} />
       )}
       <div className="header-end">
         {sync === undefined ? null : <SyncStatus sync={sync.api} layoutId={sync.layoutId} boardId={sync.boardId} onOpenRelease={sync.onOpenRelease} />}

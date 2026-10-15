@@ -698,3 +698,40 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 
 ### D-158: The QMK emulator counts time with QMK's own clock. (Claude, building rung 14)
 - **Found by S16:** the harness kept its own count of elapsed time, so a `wait_ms(10)` inside the firmware (Oryx's tap dance reset has one) pushed every later scripted event 10 ms late, and a run of 20 scenarios drifted 110 ms. Events now wait for `timer_read32()`; nothing else in the harness changed, and the earlier emulator tests give the same reports.
+
+
+### D-170: Going back to any revision is one new `undo` revision that holds that revision's document; undoing it puts the later work back. (Claude, building rung 16; D-102, D-015)
+- **How:** `POST /api/layouts/:ref/undo` takes an optional `to`, with `revisionId` still naming the head the page saw, so a stale tab gets a 409. The new revision's parent is the head and its document is the target's, so history stays append-only and linear. It reads "Back to: <summary>", with any "Back to", "Redo" or "Undo" prefix of the target removed so going back to an undo doesn't stack words.
+- **Validation:** the target's document goes through the document rules, and only a problem the head doesn't already have refuses it (`validation_failed`, 409). That is the rule `evaluate` uses for a change, so a layout imported with a flaw stays restorable. No schema change: `undoes_revision_id` names the revision just after the target on the way to the head, which makes the existing memory rule (an undo follows its undone revision's parent) restore the target's decisions.
+- **Memory:** decisions of every change set after the target are suspended, newest first. Oldest first left a decision that a later change had superseded active, because suspending the later change returned it to hypothesis after the earlier change had already been passed over. `test/app/choices.test.ts` covers going back two changes and undoing that.
+- **Keys:** ⌘Z and ⇧⌘Z are the toolbar's Undo and Redo, so after an undo ⌘Z says "Nothing to undo" and ⇧⌘Z puts the change back (an undo of an undo is a redo, D-015). Going back further is the History panel's job.
+- **Not decided:** whether ⌘Z should keep stepping back after an undo, as an editor's does. That needs the undo stack to be separate from the revisions.
+
+### D-171: The browser imports by posting the file's bytes to `POST /api/import?board=&filename=&name=`, which writes them to a private temporary folder and runs the CLI's `importLayout`. (Claude, building rung 16)
+- **Why bytes in the body:** `application/octet-stream` is a type a plain HTML form can't send, so the write is as closed to other sites as the JSON ones, on top of the token. The body limit rises to 8 MB for this one route; the JSON routes keep their own 1 MB check.
+- **Files:** `.zip` and `.keymap` only, by extension, because that is how the importers tell a source apart. The name is stripped to its last path segment and safe characters. The temporary folder is removed whether the import worked or not.
+- **Cards:** `GET /api/boards` lists the boards; each card's words come from the importer ids in `board.json`, so a board with a known importer needs no web change. One file at a time: a `.conf` beside a `.keymap` is not sent, because the importer reads it only for a few firmware settings.
+
+### D-172: "Flash this revision" opens the Build and flash dialog on that revision, and warns when auto-sync would put the head back. (Claude, building rung 16; D-102)
+- **How:** the dialog takes the revision to build (`POST /api/layouts/:ref/builds` already took one) and says "From an earlier revision". With auto-sync on for the board, it says auto-sync will put the latest layout back soon after the flash and offers Pause, which calls the existing pause route. Paused, it says the keyboard keeps the revision and where to resume.
+- **Not done:** pausing is not automatic, and nothing stops a sync of the head from running between a flash and the click on Pause. The warning is shown first, before any build.
+
+### D-173: The provider picker writes `<data dir>/config.json` through `POST /api/chat/provider` and applies to the next conversation; a flag or `KEYLOOM_PROVIDER` outranks it and the picker says so. (Claude, building rung 16; D-111, 19)
+- **Why:** BK asked for the provider to be changeable in the web app (`provider-picker-in-web`). The file already existed for this and `--provider` and the environment already outranked it, so the status carries `lockedBy` instead of the picker pretending a choice applied.
+- **Choice:** any of the three, with or without a credential; one without says what it needs and still saves, since keys are read at start. A model BK didn't type is not written, so the default can change later. Effort and other keys in the file are kept, a file keyloom can't read is left untouched and reported, and the write goes through a rename.
+
+### D-174: On a phone the side panel is a bottom sheet of three heights, and a split board shows one hand with a Left and Right switcher and a swipe. (Claude, building rung 16; 18#phones-and-narrow-windows)
+- **Sheet:** peek, half (under half the window, 460 px at most) and full. A drag on the grabber snaps to the nearest, a tap on it steps, the arrow keys and two buttons in its bar do the same, and the sheet's height is the room the board keeps below it, so a key opened under the sheet is scrolled above it. Half is the height a panel opens at.
+- **Halves:** the canvas, trays, caps and arrow-key movement follow the one hand; the half follows the key being edited. A swipe is a mostly sideways touch drag (48 px and twice the vertical). The board does not scroll sideways on a phone, so the swipe has nothing to fight.
+- **Caps:** a cap is drawn 40 px wide at the board's 44 px key unit, which is the size one hand fits at 390 px, and hit as 44 px by an invisible rim on touch devices. Making the drawn cap 44 px means a Moonlander hand scrolls sideways at 390 px.
+
+### D-175: States say what to do next: skeleton caps from the last board seen, the tip in the stage's flow, a missing credential before anything is typed, and disabled reasons as text. (Claude, building rung 16; 18#states-say-what-to-do-next)
+- **Skeleton:** the shape of each board is kept in the browser after it first loads, so every later first load draws that board's own caps (one hand on a phone). The first visit gets a generic split board.
+- **Tip:** it sits above the board instead of over it. At 1280×577 it covered the top row of keys; now the board is a row shorter while it shows. A notice that appears while editing (why Undo is off) goes in the toolbar's own row on a wide screen and over the stage's top edge on a phone, so it never pushes the board.
+- **Credential:** the chat drawer shows the three ways to set one up as soon as it opens, and Send says why it is off. A conversation already started keeps working on its own provider.
+
+### D-176: A stored assistant message with no text is not a turn. (Claude, building rung 16)
+- **Why:** an assistant turn made only of tool calls rendered as an empty "keyloom" label when a conversation was reopened (`tool-only-messages-blank`). `fromConversation` drops them before it hangs proposals and priorities on the last reply, so neither lands on a message nobody sees.
+
+### D-177: ⌘C and ⌘V on keys are left to rung 15, and the glyph sets to a later pass. (Claude, building rung 16)
+- **Why:** copying and moving keys is rung 15's scope. The theme toggle already exists, and a glyph setting has no reader until the Advanced view's names are settled.
