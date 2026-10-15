@@ -124,7 +124,7 @@ export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves
         {errors.length === 0 && warnings.length === 0 ? (
           <p className="validation-note validation-ok">
             <CircleCheck size={16} aria-hidden="true" />
-            No problems found
+            <span className="validation-ok-label">No problems found</span>
             <span className="validation-diff">{diffLine(state.result)}</span>
           </p>
         ) : (

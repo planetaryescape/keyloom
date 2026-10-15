@@ -460,8 +460,15 @@
 }
 
 .validation-ok {
+  /* The change count sits on its own line under the verdict, so a narrow proposal card never splits either. */
+  flex-wrap: wrap;
+  row-gap: 0;
   color: var(--color-success);
   font-weight: var(--weight-medium);
+}
+
+.validation-ok-label {
+  white-space: nowrap;
 }
 
 .issues {
@@ -516,15 +523,15 @@
 }
 
 .validation-diff {
-  margin-left: var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   font-weight: var(--weight-regular);
 }
 
-.validation-diff:not(:empty)::before {
-  content: "·";
-  margin-right: var(--space-2);
+/* Lined up with the verdict's text, past the 16px icon and the gap. */
+.validation-ok .validation-diff:not(:empty) {
+  flex-basis: 100%;
+  padding-left: calc(16px + var(--space-2));
 }
 
 .diff,
