@@ -2,6 +2,7 @@
 // that turn what was typed into a profile change. Pure, so the rules are tested without a browser.
 import type { ChangeOp, Slot } from "../../layout/change.ts";
 import { optionLabel } from "../../layout/option-words.ts";
+import { KANATA_VARIANTS } from "../../layout/kanata/profiles.ts";
 import type { Binding, Firmware, HoldTapProfile, Layout } from "../../layout/schema.ts";
 
 export type HoldTap = Extract<Binding, { kind: "holdTap" }>;
@@ -13,6 +14,12 @@ export type OptionSpec =
 
 // The options each firmware takes per profile (05, 06). Anything else a profile holds is carried through untouched.
 export const OPTIONS: Record<Firmware, readonly OptionSpec[]> = {
+  kanata: [
+    { key: "variant", label: "When another key decides it", kind: "choice", choices: KANATA_VARIANTS, hint: "tap-hold-release holds when another key is pressed and released, tap-hold-press when it is pressed, tap-hold-tap-keys only after the time (a roll stays a tap), and the opposite-hand ones only for a key on the other hand." },
+    { key: "hold-ms", label: "Hold time", kind: "number", unit: "ms", hint: "How long a hold takes. Lower is quicker to trigger the hold, and easier to trigger it by accident." },
+    { key: "tap-repress-ms", label: "Repeat window", kind: "number", unit: "ms", hint: "A tap this soon after another press of the key repeats the letter instead of holding." },
+    { key: "require-prior-idle-ms", label: "Quiet time before a hold", kind: "number", unit: "ms", hint: "A key pressed within this time after typing is always a tap, so fast typing never triggers a modifier." },
+  ],
   qmk: [
     { key: "TAPPING_TERM", label: optionLabel("TAPPING_TERM"), kind: "number", unit: "ms", hint: "How long a hold takes. Lower is quicker to trigger the hold, and easier to trigger it by accident." },
     { key: "QUICK_TAP_TERM", label: optionLabel("QUICK_TAP_TERM"), kind: "number", unit: "ms", hint: "A tap this soon after another press of the key repeats the letter instead of holding." },

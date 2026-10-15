@@ -10,7 +10,10 @@ export { type UploadInput, importUpload } from "./import-upload.ts";
 export { listRevisions } from "./history.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
-export { type DoctorCheck, runDoctor, runKeyboardChecks, runToolchainChecks } from "./doctor.ts";
+export { type DoctorCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
+export {
+  type RemapperOverrides, applyToRemapper, confirmExitChord, disableRemapperFor, readRemapper, remapperDoctor, setupRemapper,
+} from "./remapper.ts";
 export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,

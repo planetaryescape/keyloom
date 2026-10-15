@@ -9,6 +9,8 @@ export interface SyncBackend {
   syncNow(layoutId: string): Promise<SyncNowResponse>;
   setAutoSync(boardId: string, enabled: boolean): Promise<BoardSync[]>;
   setPaused(boardId: string, paused: boolean): Promise<BoardSync[]>;
+  /** "Disable remapping": loads the identity map on a software-remapper board, with no sudo (21). */
+  disableRemapping(boardId: string): Promise<BoardSync[]>;
   /** Calls `listener` with every board's state whenever one changes; returns the unsubscribe. */
   subscribe(listener: (boards: BoardSync[]) => void): () => void;
 }

@@ -26,7 +26,7 @@ const groupOf = (key: KeyCodeInfo): PickerGroup["id"] => (key.category === "func
 
 /** The name to show for a key in the layout's own firmware, such as KC_ENTER or RETURN. */
 export function firmwareName(key: KeyCodeInfo, firmware: Firmware): string {
-  return (firmware === "qmk" ? key.qmk[0] : key.zmk[0]) ?? key.name;
+  return (firmware === "qmk" ? key.qmk[0] : firmware === "zmk" ? key.zmk[0] : key.kanata[0]) ?? key.name;
 }
 
 function fields(key: KeyCodeInfo): string[] {

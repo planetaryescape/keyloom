@@ -12,6 +12,8 @@ export interface SyncApi {
   syncNow: (layoutId: string) => Promise<void>;
   setAuto: (boardId: string, enabled: boolean) => Promise<void>;
   setPaused: (boardId: string, paused: boolean) => Promise<void>;
+  /** "Disable remapping" on a software-remapper board: the identity map, no sudo. */
+  disableRemapping: (boardId: string) => Promise<void>;
 }
 
 const RETRY_MIN_MS = 1000;
@@ -79,6 +81,7 @@ export function useSync(token: string): SyncApi {
     boards, live, error,
     syncNow: (layoutId) => act(async () => (await request("POST", "/api/sync", token, SyncNowResponseSchema, undefined, { layoutId })).boards),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),
+    disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
     setPaused: (boardId, paused) => act(async () => (await request("POST", "/api/sync/pause", token, SyncStatusResponseSchema, undefined, { boardId, paused })).boards),
   };
 }

@@ -25,6 +25,7 @@ export function appSyncBackend(engine: SyncEngine): SyncBackend {
       }),
     setAutoSync: (boardId, enabled) => translate(() => (engine.setAutoSync(boardId, enabled), engine.views())),
     setPaused: (boardId, paused) => translate(() => (engine.setPaused(boardId, paused), engine.views())),
+    disableRemapping: (boardId) => translate(async () => (await engine.disableRemapping(boardId), engine.views())),
     subscribe: (listener) => engine.subscribe(listener),
   };
 }

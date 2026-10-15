@@ -21,7 +21,7 @@ type Reading =
   | { status: "ok"; binding: Binding; native: boolean; note?: string }
   | { status: "problem"; message: string };
 
-const EXAMPLE: Record<Firmware, string> = { qmk: "LCTL_T(KC_A)", zmk: "&mt LCTRL A" };
+const EXAMPLE: Record<Firmware, string> = { qmk: "LCTL_T(KC_A)", zmk: "&mt LCTRL A", kanata: "S-a" };
 const DEBOUNCE_MS = 250;
 
 // The escape hatch that keeps the categories small (D-087): a firmware expression, read by the same
@@ -73,7 +73,7 @@ export function AnyField({ token, layoutRef, layout, firmware, position, autoFoc
   return (
     <div className="any">
       <label htmlFor={id} className="any-label">
-        {firmware === "qmk" ? "A QMK keycode" : "A ZMK binding"}
+        {firmware === "qmk" ? "A QMK keycode" : firmware === "zmk" ? "A ZMK binding" : "A kanata key"}
       </label>
       <input
         ref={input}

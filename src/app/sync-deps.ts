@@ -7,12 +7,22 @@ import { latestSuccessfulBuildOfRevision } from "../persistence/builds.ts";
 import type { App } from "./context.ts";
 import { type FlashOptions, startBuild, startFlash, waitForBuild, waitForFlash } from "./firmware.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
+import { applyToRemapper, disableRemapperFor } from "./remapper.ts";
 import { type KeyboardReading, readKeyboards } from "./sync-keyboard.ts";
 
 export type BuildOutcome = { ok: true; buildId: string; reused: boolean } | { ok: false; error: string; buildId?: string };
 export type FlashOutcome = { ok: true; flashId: string; verified: boolean; note: string | null } | { ok: false; flashId?: string; error: string };
 
+export type RemapperDeps = {
+  /** Writes, checks, reloads and verifies one revision on a software remapper. Never throws. */
+  apply(a: { layoutId: string; revisionId: string }): Promise<{ ok: true; ms: number } | { ok: false; step: string; error: string }>;
+  /** Loads the identity map. Never throws. */
+  disable(boardId: string): Promise<{ ok: true } | { ok: false; error: string }>;
+};
+
 export type SyncDeps = {
+  /** Present when a software-remapper board can be synced; the default implementation is the kanata use cases (21). */
+  remapper?: RemapperDeps;
   readKeyboards(): Promise<Map<string, KeyboardReading>>;
   /** Builds `revisionId` for `boardRevision`, or reuses a successful build of exactly that. Never throws; aborting `signal` stops the build and leaves the keyboard alone. */
   build(a: { layoutId: string; revisionId: string; boardRevision: string; signal: AbortSignal; onBuildId: (id: string) => void }): Promise<BuildOutcome>;
@@ -30,6 +40,24 @@ const message = (err: unknown): string => (err instanceof Error ? err.message : 
 export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
   return {
     readKeyboards: () => readKeyboards(opts.handsFree ?? {}),
+
+    remapper: {
+      async apply(a) {
+        try {
+          const r = await applyToRemapper(app, a.layoutId, a.revisionId, opts.handsFree?.remapper ?? {});
+          return r.ok ? { ok: true, ms: r.ms } : { ok: false, step: r.step, error: r.error };
+        } catch (err) {
+          return { ok: false, step: "apply", error: message(err) };
+        }
+      },
+      async disable(boardId) {
+        try {
+          return await disableRemapperFor(boardId, opts.handsFree?.remapper ?? {});
+        } catch (err) {
+          return { ok: false, error: message(err) };
+        }
+      },
+    },
 
     async build(a) {
       try {

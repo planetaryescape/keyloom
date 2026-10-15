@@ -27,7 +27,8 @@ export function describeSync(v: BoardSyncView): string {
     case "syncing": return `syncing: ${s.step}`;
     case "behind": {
       const n = s.changes === null ? "changes" : s.changes === 1 ? "1 change" : `${s.changes} changes`;
-      const why = { waiting: "auto-sync will start it", auto_off: "auto-sync is off", paused: "auto-sync is paused", unproven: "auto-sync is not on yet: it needs one flash that keyloom does and verifies", failed: "the last sync failed", unknown_build: "it runs a keyloom build this copy doesn't know", changed_since: "something else was flashed since" }[s.why];
+      const unproven = v.remapper ? "auto-apply is not on yet: prove the exit chord, then run keyloom remap confirm-exit-chord" : "auto-sync is not on yet: it needs one flash that keyloom does and verifies";
+      const why = { waiting: "auto-sync will start it", auto_off: "auto-sync is off", paused: "auto-sync is paused", unproven, failed: "the last sync failed", unknown_build: "it runs a keyloom build this copy doesn't know", changed_since: "something else was flashed since", remapping_off: "remapping is switched off; sync turns it back on" }[s.why];
       return `behind: ${n} not on it (${why})${s.error ? `; ${s.error}` : ""}`;
     }
     case "needs_hand": return `needs a hand: ${s.instruction} (${s.reason})`;
@@ -96,7 +97,7 @@ export function registerSyncCommands(program: Command, deps: SyncCommandDeps): v
             flash: seconds(s.finishedAt === null || s.flashStartedAt === null ? null : s.finishedAt - s.flashStartedAt), apply_to_verified: seconds(s.finishedAt === null ? null : s.finishedAt - s.appliedAt),
           },
         },
-        table: quiet() ? (s?.id ?? outcome.revisionId) : outcome.status === "in_sync" ? "already on the keyboard; nothing to do" : `synced ${outcome.revisionId} to ${outcome.boardId}: the keyboard came back running it (${s?.id})`,
+        table: quiet() ? (s?.id ?? outcome.revisionId) : outcome.status === "in_sync" ? "already on the keyboard; nothing to do" : `synced ${outcome.revisionId} to ${outcome.boardId}: ${outcome.boardId === "apple/macbook-ansi" ? "kanata reports it loaded" : "the keyboard came back running it"} (${s?.id})`,
         ids: [s?.id ?? outcome.revisionId],
       });
     });

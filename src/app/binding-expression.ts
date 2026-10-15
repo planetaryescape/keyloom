@@ -4,7 +4,8 @@
 import { parseQmkExpression } from "../firmware/qmk/parse-expression.ts";
 import { BUILTIN_PROFILES, type HoldKind } from "../firmware/zmk/builtins.ts";
 import { parseZmkExpression } from "../firmware/zmk/parse-expression.ts";
-import type { Binding, Layout } from "../layout/schema.ts";
+import { fromKanata } from "../layout/keycodes.ts";
+import type { Binding, Layout, Mod } from "../layout/schema.ts";
 import type { App } from "./context.ts";
 import { getLayout } from "./layouts.ts";
 
@@ -34,6 +35,7 @@ export async function parseBindingExpression(app: App, ref: string, input: { exp
   const { document: layout, board } = getLayout(app, ref);
   const position = input.position ?? -1;
   const layerIds = layout.layers.map((layer) => layer.id);
+  if (layout.firmware === "kanata") return parseKanataKey(input.expression);
   if (layout.firmware === "qmk") {
     const home = new Set(board.definition.rows.home ?? []);
     const macroIds = new Map(layout.macros.flatMap((macro) => [[macro.id, macro.id] as const, [macro.name, macro.id] as const]));
@@ -52,6 +54,23 @@ export async function parseBindingExpression(app: App, ref: string, input: { exp
   if (!parsed.ok) return parsed;
   const known = withKnownProfile(layout, parsed.mapped.binding);
   return finish(known.binding, known.note);
+}
+
+// A kanata key name, with the output-chord prefixes kanata itself uses (`S-a`, `C-S-c`). Anything else would be a kept action, and
+// keyloom doesn't take new ones (D-024: the document may not gain a native binding), so it says what to use instead.
+const PREFIX_MOD: Record<string, Mod> = { "C-": "LCTL", "S-": "LSFT", "A-": "LALT", "M-": "LGUI", "RC-": "RCTL", "RS-": "RSFT", "RA-": "RALT", "RM-": "RGUI" };
+
+function parseKanataKey(expression: string): ParsedBinding {
+  let rest = expression.trim();
+  const mods: Mod[] = [];
+  for (let prefix = /^(RC|RS|RA|RM|C|S|A|M)-(?=.)/.exec(rest); prefix; prefix = /^(RC|RS|RA|RM|C|S|A|M)-(?=.)/.exec(rest)) {
+    const mod = PREFIX_MOD[`${prefix[1]}-`] as Mod;
+    if (!mods.includes(mod)) mods.push(mod);
+    rest = rest.slice(prefix[0].length);
+  }
+  const key = fromKanata(rest);
+  if (!key) return { ok: false, message: `"${rest}" isn't a kanata key name keyloom knows. Use a key name such as a, ret, lft, f13 or lmeta, optionally with a prefix like S- or C-S-.` };
+  return { ok: true, binding: mods.length > 0 ? { kind: "key", code: key.name, mods } : { kind: "key", code: key.name }, native: false };
 }
 
 function finish(binding: Binding, note: string | undefined): ParsedBinding {

@@ -125,7 +125,7 @@ export const BoardChoiceSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   vendor: z.string().min(1),
-  firmware: z.enum(["qmk", "zmk"]),
+  firmware: z.enum(["qmk", "zmk", "kanata"]),
   keyCount: z.number().int().positive(),
   importers: z.array(z.string().min(1)).min(1),
 });
@@ -396,6 +396,7 @@ export type OutcomeAnswer = z.infer<typeof OutcomeAnswerSchema>;
 //   POST /api/sync        SyncNowRequest -> SyncNowResponse   (202; 400 usage when the board can't be synced right now, with the reason)
 //   POST /api/sync/auto   AutoSyncRequest -> SyncStatusResponse (400 usage when auto-sync can't be on yet)
 //   POST /api/sync/pause  PauseRequest   -> SyncStatusResponse
+//   POST /api/sync/disable-remapping DisableRemappingRequest -> SyncStatusResponse (400 usage when the board is not a software remapper or kanata is not running)
 //   GET  /api/events                     -> text/event-stream of SyncEvent; the first frame is the current state
 // A state is the same word the CLI prints: in_sync, syncing, behind, needs_hand, not_connected, not_keyloom.
 export const SyncStateSchema = z.discriminatedUnion("kind", [
@@ -411,7 +412,7 @@ export const SyncStateSchema = z.discriminatedUnion("kind", [
     kind: z.literal("behind"),
     // Revisions between what the keyboard runs and the head; null when keyloom can't count them.
     changes: z.number().int().nonnegative().nullable(),
-    why: z.enum(["waiting", "auto_off", "paused", "unproven", "failed", "unknown_build", "changed_since"]),
+    why: z.enum(["waiting", "auto_off", "paused", "unproven", "failed", "unknown_build", "changed_since", "remapping_off"]),
     error: z.string().nullable(),
   }),
   z.object({ kind: z.literal("needs_hand"), instruction: z.string(), reason: z.string() }),
@@ -441,6 +442,8 @@ export const SyncRunSchema = z.object({
 export const BoardSyncSchema = z.object({
   boardId: z.string().min(1),
   boardName: z.string().min(1),
+  // A software remapper (the MacBook's keyboard): Apply writes a config and reloads it, with no build or flash (21). Absent on older senders.
+  remapper: z.boolean().optional(),
   layoutId: z.string().min(1),
   layoutName: z.string().min(1),
   headRevisionId: z.string().min(1),
@@ -472,6 +475,7 @@ export type SyncNowResponse = z.infer<typeof SyncNowResponseSchema>;
 
 export const AutoSyncRequestSchema = z.object({ boardId: z.string().min(1), enabled: z.boolean() });
 export const PauseRequestSchema = z.object({ boardId: z.string().min(1), paused: z.boolean() });
+export const DisableRemappingRequestSchema = z.object({ boardId: z.string().min(1) });
 
 export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema) });
 export type SyncEvent = z.infer<typeof SyncEventSchema>;

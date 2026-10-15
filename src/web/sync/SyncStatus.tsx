@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, Play, RefreshCw, TriangleAlert, Unplug, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, TriangleAlert, Unplug, Zap } from "lucide-react";
 import type { BoardSync } from "../../api/http.ts";
 import { Menu } from "../shell/Menu.tsx";
 import type { SyncApi } from "./useSync.ts";
@@ -11,6 +11,7 @@ const ICON = {
 
 function icon(board: BoardSync, line: SyncLine) {
   if (board.state.kind === "not_connected") return Unplug;
+  if (board.state.kind === "behind" && board.state.why === "remapping_off") return KeyboardOff;
   if (board.state.kind === "needs_hand") return Zap;
   return ICON[line.tone];
 }
@@ -76,10 +77,20 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
             </button>
             {auto.note === null ? null : <p className="sync-note">{auto.note}</p>}
             <div className="menu-separator" role="separator" />
-            <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); onOpenRelease(); }}>
-              <Hammer size={14} aria-hidden="true" />
-              <span className="menu-item-label">Build and flash…</span>
-            </button>
+            {board.remapper === true ? (
+              // Reloads the identity map, so the MacBook types plainly again. Needs no sudo.
+              board.state.kind === "behind" && board.state.why === "remapping_off" ? null : (
+                <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.disableRemapping(board.boardId); }}>
+                  <KeyboardOff size={14} aria-hidden="true" />
+                  <span className="menu-item-label">Disable remapping</span>
+                </button>
+              )
+            ) : (
+              <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); onOpenRelease(); }}>
+                <Hammer size={14} aria-hidden="true" />
+                <span className="menu-item-label">Build and flash…</span>
+              </button>
+            )}
           </>
         )}
       </Menu>

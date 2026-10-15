@@ -22,7 +22,9 @@ export type BehindWhy =
   /** The keyboard runs a keyloom build this copy of keyloom has no record of, so it is not replaced by itself. */
   | "unknown_build"
   /** This revision was already put on the keyboard and something else has been flashed since. */
-  | "changed_since";
+  | "changed_since"
+  /** Remapping was switched off (safe.kbd loaded); Sync now turns it back on. */
+  | "remapping_off";
 
 export type SyncState =
   | { kind: "in_sync" }
@@ -62,6 +64,7 @@ export function deriveState(f: SyncFacts): SyncState {
     };
   }
   if (f.reading.state === "other") return { kind: "not_keyloom", detail: f.reading.detail };
+  if (f.reading.state === "remapping_off") return { kind: "behind", changes: null, why: "remapping_off", error: null };
 
   if (f.running.kind === "same") return { kind: "in_sync" };
   const changes = f.running.kind === "behind" ? f.running.changes : null;

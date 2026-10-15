@@ -15,6 +15,7 @@ import {
   progressSync, revisionLine, setAutoSyncChoice, setPaused as storePaused,
 } from "../persistence/syncs.ts";
 import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
+import { SETUP_REVISION } from "../firmware/kanata/generate.ts";
 import { buildKey } from "../firmware/zmk/handsfree.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
@@ -62,6 +63,8 @@ export type SyncAutoView = {
 export type BoardSyncView = {
   boardId: string;
   boardName: string;
+  /** A software remapper (the MacBook's keyboard): applying writes a config and reloads it, with no build or flash. */
+  remapper: boolean;
   /** The layout this keyboard is tracked against: the one its running build was made from, or the board's newest. */
   layoutId: string;
   layoutName: string;
@@ -99,6 +102,8 @@ type Running = {
 };
 
 const ABSENT: KeyboardReading = { state: "absent" };
+
+const isRemapper = (boardId: string): boolean => showBoard(boardId).definition.firmware === "kanata";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
@@ -255,15 +260,27 @@ export class SyncEngine {
     const reading = this.readingOf(boardId);
     const db = this.app.db;
 
+    // A software remapper names the revision it loaded; there are no builds to look up.
+    const loaded = reading.state === "keyloom" ? reading.revisionId : undefined;
     let builds: Array<BuildRow | undefined> = [];
-    if (reading.state === "keyloom") builds = reading.keys.map((k) => findBuildByKey(db, k));
-    const known = reading.state === "keyloom" && builds.length > 0 && builds.every((b): b is BuildRow => b !== undefined);
+    if (reading.state === "keyloom" && loaded === undefined) builds = reading.keys.map((k) => findBuildByKey(db, k));
+    const known = reading.state === "keyloom" && loaded === undefined && builds.length > 0 && builds.every((b): b is BuildRow => b !== undefined);
     const newest = [...layouts].sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? 1 : -1))[0] as LayoutRow;
-    const ofRunning = known ? layouts.find((l) => l.id === (builds[0] as BuildRow).layoutId) : undefined;
+    const ofRunning = known ? layouts.find((l) => l.id === (builds[0] as BuildRow).layoutId) : loaded === undefined ? undefined : layouts.find((l) => findRevision(db, l.id, loaded) !== undefined);
     const layout = over ?? ofRunning ?? newest;
 
     let running: SyncFacts["running"] = { kind: "unknown" };
-    if (known && reading.state === "keyloom") {
+    if (loaded === SETUP_REVISION) {
+      // keyloom's own identity file, written by setup before any Apply: behind by definition, and keyloom's to replace.
+      running = { kind: "behind", changes: null };
+    } else if (loaded !== undefined && ofRunning && ofRunning.id === layout.id) {
+      const head = layout.headRevisionId;
+      if (this.documentsEqual(layout.id, loaded, head)) running = { kind: "same" };
+      else {
+        const at = revisionLine(db, layout.id, head).indexOf(loaded);
+        running = { kind: "behind", changes: at < 0 ? null : at };
+      }
+    } else if (known && reading.state === "keyloom") {
       const all = builds as BuildRow[];
       if (all.every((b) => b.layoutId === layout.id)) {
         const head = layout.headRevisionId;
@@ -323,7 +340,7 @@ export class SyncEngine {
     const bs = getBoardSync(this.app.db, b.boardId);
     const last = lastSyncOfBoard(this.app.db, b.boardId);
     return {
-      boardId: b.boardId, boardName: b.boardName, layoutId: b.layout.id, layoutName: b.layout.name, headRevisionId: b.layout.headRevisionId,
+      boardId: b.boardId, boardName: b.boardName, remapper: isRemapper(b.boardId), layoutId: b.layout.id, layoutName: b.layout.name, headRevisionId: b.layout.headRevisionId,
       otherLayouts: b.layouts.length - 1, state,
       auto: {
         on: b.facts.auto.on && !b.facts.auto.paused, choice: bs.autoSync, paused: bs.paused, proven: bs.provenAt !== null, provenAt: bs.provenAt,
@@ -388,7 +405,7 @@ export class SyncEngine {
   // --- running a sync -------------------------------------------------------------------------
 
   private launch(b: BoardFacts, trigger: "auto" | "manual"): Running | null {
-    if (b.reading.state !== "keyloom" && !(trigger === "manual" && b.reading.state === "bootloader")) return null;
+    if (b.reading.state !== "keyloom" && !(trigger === "manual" && (b.reading.state === "bootloader" || b.reading.state === "remapping_off"))) return null;
     const id = newSyncId();
     const claim = claimSync(this.app.db, {
       id, boardId: b.boardId, layoutId: b.layout.id, revisionId: b.layout.headRevisionId,
@@ -431,6 +448,25 @@ export class SyncEngine {
     try {
       say(`${row.trigger} sync ${row.id} of ${row.revisionId} for ${row.boardId} ${row.boardRevision} started`);
       this.publish();
+
+      // A software remapper has no build or flash: one apply writes the file, checks it, reloads it and reads it back (21).
+      if (isRemapper(row.boardId)) {
+        const remapper = this.deps.remapper;
+        if (!remapper) return finish({ status: "failed", failure: "flash", error: "this copy of keyloom can't apply to a software remapper" });
+        progressSync(db, row.id, { status: "flashing", step: "writing", builtAt: this.now(), flashStartedAt: this.now() });
+        this.publish();
+        const applied = await remapper.apply({ layoutId: row.layoutId, revisionId: row.revisionId });
+        // Read what kanata runs now, so the header never shows the state from before the apply.
+        await this.exclusive(() => this.refresh(true));
+        if (run.reason !== undefined) return cancelled();
+        if (applied.ok) {
+          say(`applied in ${applied.ms} ms`);
+          return finish({ status: "succeeded" });
+        }
+        // Not running is the world changing (retry when it is back); a refused or unreadable config would fail the same way again.
+        const failure = applied.step === "not_connected" ? "disconnected" : applied.step === "verify" ? "verify" : applied.step === "reload" || applied.step === "check" || applied.step === "generate" ? "build" : "flash";
+        return finish({ status: "failed", failure, error: applied.error });
+      }
 
       const built = await this.deps.build({
         layoutId: row.layoutId, revisionId: row.revisionId, boardRevision: row.boardRevision, signal: run.abort.signal,
@@ -513,7 +549,14 @@ export class SyncEngine {
       }
       await this.refresh(true);
       const reading = this.readingOf(board.definition.id);
-      if (reading.state === "absent") throw new UsageError(`no ${name} is attached; plug it in and try again`);
+      if (reading.state === "absent") {
+        throw new UsageError(board.definition.firmware === "kanata"
+          ? `kanata isn't running for the ${name}, so keyloom can't apply to it. Run \`keyloom doctor\` to see what is missing`
+          : `no ${name} is attached; plug it in and try again`);
+      }
+      if (reading.state === "other" && board.definition.firmware === "kanata") {
+        throw new UsageError(`kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${layout.name} --overwrite\` to do it deliberately.`);
+      }
       if (reading.state === "other") {
         throw new UsageError(`the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${layout.name}\` and \`keyloom flash --layout ${layout.name}\` to do it deliberately.`);
       }
@@ -539,6 +582,23 @@ export class SyncEngine {
     });
   }
 
+  /** "Disable remapping": the identity map goes on, so the built-in keyboard types as a plain one. No sudo (D-235). */
+  async disableRemapping(boardId: string): Promise<void> {
+    const board = showBoard(boardId);
+    if (board.definition.firmware !== "kanata") throw new UsageError(`${board.definition.name} isn't a software remapper, so there is nothing to disable`);
+    const remapper = this.deps.remapper;
+    if (!remapper) throw new UsageError("this copy of keyloom can't reach the remapper");
+    // An apply under way would load its file after the identity map and undo it.
+    await this.exclusive(async () => {
+      const run = this.running;
+      if (run && run.row.boardId === boardId) await run.done;
+      const r = await remapper.disable(boardId);
+      if (!r.ok) throw new UsageError(`couldn't disable remapping: ${r.error}. If kanata is stuck, hold Left Control + Space + Escape to stop it`);
+      await this.refresh(true);
+      this.publish();
+    });
+  }
+
   private requireSyncable(boardId: string): void {
     const board = showBoard(boardId);
     if (!syncSupported(board)) throw new UsageError(`${board.definition.name} can't be synced by keyloom`);
@@ -554,6 +614,9 @@ export class SyncEngine {
   setAutoSync(boardId: string, on: boolean): BoardSyncRow {
     this.requireSyncable(boardId);
     const bs = getBoardSync(this.app.db, boardId);
+    if (on && bs.provenAt === null && isRemapper(boardId)) {
+      throw new UsageError("auto-apply turns on after you have proved kanata's emergency exit once: hold Left Control + Space + Escape, see kanata stop, then run `keyloom remap confirm-exit-chord`");
+    }
     if (on && bs.provenAt === null) {
       throw new UsageError(
         `auto-sync can turn on once keyloom has flashed this board by itself and seen the new firmware come back. Sync it by hand once (\`keyloom sync <layout>\`); if that flash needs no keypress, auto-sync turns on.`,

@@ -17,6 +17,8 @@ import { defaultVolumeFinder, volumeFinderAt } from "../firmware/zmk/volumes.ts"
 import type { FlashNote, FlashResult, FlashState } from "../firmware/toolchain/flash-state.ts";
 import type { LogSink } from "../firmware/toolchain/run.ts";
 import { portOfAnotherBoard } from "./zmk-ports.ts";
+import type { RemapperOverrides } from "./remapper.ts";
+import { GenerateError as KanataGenerateError, generateKanataSource } from "../firmware/kanata/generate.ts";
 import type { LayoutView } from "./layouts.ts";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -43,7 +45,7 @@ export type BuildArgs = {
 };
 
 /** How a keyboard is found and restarted: USB and raw HID for a ZSA board, serial ports for a ZMK one. Tests pass fakes; otherwise the machine's own are used. */
-export type HandsFreeOverrides = Partial<HandsFreeDeps> & { zmk?: Partial<ZmkHandsFreeDeps> };
+export type HandsFreeOverrides = Partial<HandsFreeDeps> & { zmk?: Partial<ZmkHandsFreeDeps>; remapper?: RemapperOverrides };
 
 export type FlashArgs = {
   board: Board;
@@ -216,4 +218,26 @@ const zmk: FirmwareDriver = {
   },
 };
 
-export const driverFor = (board: Board): FirmwareDriver => (board.definition.firmware === "zmk" ? zmk : qmk);
+// A software remapper has no build and no flash (21): `generate` writes the config files, and applying is the remapper use cases in remapper.ts.
+const kanata: FirmwareDriver = {
+  name: "kanata",
+  artifactExtension: () => "kbd",
+  waitingInstruction: () => "",
+  generate(view) {
+    try {
+      const out = generateKanataSource({ layout: view.document, board: view.board.definition, layoutId: view.layout.id, revisionId: view.revision.id });
+      return { keymapName: "keyloom", files: out.files };
+    } catch (err) {
+      if (err instanceof KanataGenerateError) throw new SourceError(err.message);
+      throw err;
+    }
+  },
+  async build() {
+    throw new SourceError("a kanata board isn't built; applying writes its config and reloads it (`keyloom sync`)");
+  },
+  async flash() {
+    throw new SourceError("a kanata board isn't flashed; applying writes its config and reloads it (`keyloom sync`)");
+  },
+};
+
+export const driverFor = (board: Board): FirmwareDriver => (board.definition.firmware === "zmk" ? zmk : board.definition.firmware === "kanata" ? kanata : qmk);

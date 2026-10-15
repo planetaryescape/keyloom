@@ -107,3 +107,32 @@ describe("syncNotice", () => {
     expect(syncNotice(at({ kind: "behind", changes: 1, why: "waiting", error: null }), at(syncing))).toBeNull();
   });
 });
+
+describe("a software remapper (the MacBook's keyboard)", () => {
+  const mac = (state: BoardSync["state"], over: Partial<BoardSync> = {}) => board(state, { boardId: "apple/macbook-ansi", boardName: "MacBook keyboard (ANSI)", remapper: true, ...over });
+
+  test("says writing, not flashing, and never asks to be plugged in", () => {
+    expect(syncLine(mac({ kind: "syncing", step: "writing", syncId: "syn_1", startedAt: 1, trigger: "auto" }), "lay_1").label).toBe("Writing…");
+    const off = syncLine(mac({ kind: "not_connected" }), "lay_1");
+    expect(off.label).toBe("kanata isn't running");
+    expect(off.detail).not.toMatch(/plug/i);
+  });
+
+  test("remapping off is its own state, and its action turns remapping back on", () => {
+    expect(syncLine(mac({ kind: "behind", changes: null, why: "remapping_off", error: null }), "lay_1")).toMatchObject({ label: "Remapping is off", action: { id: "sync_now", label: "Turn remapping on" } });
+  });
+
+  test("a config keyloom didn't write offers no flash", () => {
+    expect(syncLine(mac({ kind: "not_keyloom", detail: "kanata is running a config keyloom didn't write" }), "lay_1").action).toBeNull();
+  });
+
+  test("the auto-apply note names the exit chord, not a flash", () => {
+    expect(autoSyncLine(mac({ kind: "in_sync" }, { auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null } })).note).toContain("emergency exit");
+  });
+
+  test("a sync under a second says so in milliseconds", () => {
+    const last = { id: "syn_1", trigger: "auto" as const, status: "succeeded" as const, step: "done", revisionId: "rev_1", failure: null, error: null, startedAt: 1, finishedAt: 2, timings: { waitMs: 3000, buildMs: null, flashMs: 120, totalMs: 340 } };
+    const notice = syncNotice(mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "auto" }), mac({ kind: "in_sync" }, { last }));
+    expect(notice).toMatchObject({ kind: "success", detail: "340 ms from your change." });
+  });
+});

@@ -14,6 +14,7 @@ import { realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { checkoutDirFor } from "./firmware.ts";
 import { realZmkHandsFreeDeps } from "../firmware/zmk/handsfree-flash.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
+import { type RemapperOverrides, remapperDoctor } from "./remapper.ts";
 import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
@@ -126,6 +127,19 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
       checks.push({ name, ok: false, detail: (err as Error).message });
     }
   }
+  return checks;
+}
+
+/** The MacBook remapper's setup, as warnings: a machine that never set it up shouldn't fail `keyloom doctor` (21). Read-only. */
+export async function runRemapperChecks(over: RemapperOverrides = {}): Promise<DoctorCheck[]> {
+  if (process.platform !== "darwin" && over.probe === undefined) return [];
+  const board = listBoardDefinitions().find((b) => b.definition.firmware === "kanata");
+  if (!board) return [];
+  const report = await remapperDoctor(board.definition.id, over);
+  const checks: DoctorCheck[] = report.findings.map((f) => ({
+    name: `remapper ${f.name}`, ok: true, ...(f.status === "ok" ? {} : { warn: true }), detail: `${f.detail}${f.fix ? ` (${f.fix})` : ""}`,
+  }));
+  if (report.rootCommand) checks.push({ name: "remapper root command", ok: true, warn: true, detail: `after \`keyloom remap setup\`, run once as an administrator: ${report.rootCommand}` });
   return checks;
 }
 

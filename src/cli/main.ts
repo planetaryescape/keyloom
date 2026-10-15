@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout,
-  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
+  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, parseProvider, registerChatCommands } from "./commands/chat.ts";
@@ -11,6 +11,7 @@ import { registerDecisionCommands } from "./commands/decisions.ts";
 import { registerEmulateCommand } from "./commands/emulate.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { registerSyncCommands } from "./commands/sync.ts";
+import { registerRemapCommands } from "./commands/remap.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
@@ -57,7 +58,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .command("import")
     .description("import an existing layout; prints the new layout ID and an import report")
     .requiredOption("--board <board>", "board ID, such as zsa/moonlander or moergo/glove80")
-    .argument("<file>", "Oryx source zip or its folder (Moonlander), or a Layout Editor .keymap file (Glove80)")
+    .argument("<file>", "Oryx source zip or its folder (Moonlander), a Layout Editor .keymap file (Glove80), or a karabiner.json (MacBook; read only)")
     .option("--name <name>", "layout name (default: taken from the source)")
     .action(async (file: string, opts: { board: string; name?: string }) => {
       const outcome: ImportOutcome = await withApp((app) =>
@@ -230,6 +231,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
 
   registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}) });
   registerSyncCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) });
+  registerRemapCommands(program, { io, format, withApp, ...(handsFree ? { handsFree } : {}) });
   registerEmulateCommand(program, { io, format, quiet: () => globals().quiet === true, withApp });
 
   program
@@ -240,6 +242,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),
         ...(await runToolchainChecks()),
         ...(await runKeyboardChecks(handsFree)),
+        ...(await runRemapperChecks(handsFree?.remapper)),
       ];
       print(io, format(), {
         json: { ok: checks.every((c) => c.ok), checks },

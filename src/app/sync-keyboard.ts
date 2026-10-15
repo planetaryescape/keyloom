@@ -6,9 +6,10 @@ import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { type HandsFreeDeps, inBootloader, keyboardTarget, readRunningFirmware, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { realZmkHandsFreeDeps } from "../firmware/zmk/handsfree-flash.ts";
-import { listBoardDefinitions } from "./boards.ts";
+import { listBoardDefinitions, showBoard } from "./boards.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import { attachedZmkHalves } from "./keyboard.ts";
+import { type RemapperOverrides, readRemapper } from "./remapper.ts";
 
 export type KeyboardReading =
   | { state: "absent" }
@@ -16,12 +17,15 @@ export type KeyboardReading =
   | { state: "bootloader" }
   /** Running firmware keyloom didn't build. */
   | { state: "other"; detail: string }
-  /** Running keyloom builds; `keys` are the 12-character build keys its serial numbers carry, one per distinct build across its halves. */
-  | { state: "keyloom"; keys: string[]; boardRevision: string };
+  /** Running keyloom builds; `keys` are the 12-character build keys its serial numbers carry, one per distinct build across its halves. A software remapper has no build keys: it names the layout revision it loaded. */
+  | { state: "keyloom"; keys: string[]; boardRevision: string; revisionId?: string }
+  /** A software remapper that is running, with remapping switched off (safe.kbd): keyloom put it there, and it stays until Apply or Sync now turns it back on. */
+  | { state: "remapping_off" };
 
 /** Whether keyloom can tell what this board runs and restart it itself, which is what a sync needs. */
 export function syncSupported(board: Board): boolean {
   const def = board.definition;
+  if (def.firmware === "kanata") return true;
   if (def.firmware === "zmk") return def.revisions.some((r) => zmkRevision(def, r.id).flash.handsFree !== undefined);
   return def.revisions.some((r) => keyboardTarget(def, qmkRevision(def, r.id)) !== undefined);
 }
@@ -30,6 +34,15 @@ export const syncableBoards = (): Board[] => listBoardDefinitions().filter(syncS
 
 /** `keyloom/AAAAAAAAAAAA` is build key `AAAAAAAAAAAA`. */
 const keyOfMarker = (marker: string): string => marker.slice("keyloom/".length);
+
+/** What the software remapper on this board reports, as a keyboard reading. Never throws. */
+export async function remapperReading(boardId: string, over: RemapperOverrides = {}): Promise<KeyboardReading> {
+  const running = await readRemapper(boardId, over).catch((err: Error) => ({ state: "absent" as const, why: err.message }));
+  if (running.state === "absent") return { state: "absent" };
+  if (running.state === "off") return { state: "remapping_off" };
+  if (running.state === "other") return { state: "other", detail: running.detail };
+  return { state: "keyloom", keys: [], boardRevision: showBoard(boardId).definition.revisions[0]?.id ?? "", revisionId: running.revisionId };
+}
 
 /** One reading per syncable board. A failed read is the board "absent", not an error: an unplugged keyboard and an unreadable bus look the same from here. */
 export async function readKeyboards(over: HandsFreeOverrides = {}): Promise<Map<string, KeyboardReading>> {
@@ -42,6 +55,12 @@ export async function readKeyboards(over: HandsFreeOverrides = {}): Promise<Map<
     // Every QMK board then reads as absent.
   }
   const cached: HandsFreeDeps = { ...deps, usb: async () => devices };
+
+  // A software remapper is read over its TCP port, not from USB.
+  for (const board of syncableBoards()) {
+    if (board.definition.firmware !== "kanata") continue;
+    out.set(board.definition.id, await remapperReading(board.definition.id, over.remapper ?? {}));
+  }
 
   for (const board of syncableBoards()) {
     const def = board.definition;

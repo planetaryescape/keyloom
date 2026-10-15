@@ -16,6 +16,14 @@ export interface SyncLine {
   action: { id: SyncActionId; label: string } | null;
 }
 
+// A software remapper has no build or flash: the words say what it does instead (21).
+const REMAPPER_STEP_WORDS = {
+  building: "Writing…",
+  restarting: "Writing…",
+  writing: "Writing…",
+  verifying: "Checking kanata loaded it…",
+} as const;
+
 const STEP_WORDS = {
   building: "Building…",
   restarting: "Restarting it…",
@@ -37,6 +45,7 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
       tone: "neutral", action: { id: "sync_now", label: "Put this layout on it" },
     };
   }
+  if (board.remapper === true) return remapperLine(board, name, s);
   switch (s.kind) {
     case "in_sync":
       return { label: `On your ${name}`, short: "In sync", detail: "The keyboard is running the latest change.", tone: "success", action: null };
@@ -75,13 +84,42 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
   }
 }
 
+function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): SyncLine {
+  switch (s.kind) {
+    case "in_sync":
+      return { label: `On your ${name}`, short: "In sync", detail: "kanata is running the latest change.", tone: "success", action: null };
+    case "syncing":
+      return { label: REMAPPER_STEP_WORDS[s.step], short: "Syncing", detail: "Writing the config and reloading it. Your keyboard keeps working meanwhile.", tone: "busy", action: null };
+    case "behind": {
+      const label = s.why === "remapping_off" ? "Remapping is off" : s.changes === null || s.changes === 0 ? `Changes not on your ${name}` : `${plural(s.changes, "change", "changes")} not on your ${name}`;
+      const detail =
+        s.why === "remapping_off" ? "Your MacBook keyboard is typing plainly. Turn remapping back on to get your layout."
+        : s.why === "failed" ? (s.error ?? "The last apply failed.")
+        : s.why === "waiting" ? (s.error ? `${s.error} Trying again.` : "Applying in a moment.")
+        : s.why === "paused" ? "Auto-apply is paused."
+        : s.why === "auto_off" ? "Auto-apply is off for this keyboard."
+        : s.why === "unproven" ? "Auto-apply turns on after you prove kanata's emergency exit once (hold Left Control + Space + Escape), then run keyloom remap confirm-exit-chord."
+        : "Something else was loaded since this change.";
+      return { label, short: s.why === "remapping_off" ? "Off" : "Behind", detail, tone: s.why === "failed" ? "error" : "neutral", action: { id: "sync_now", label: s.why === "remapping_off" ? "Turn remapping on" : "Apply now" } };
+    }
+    case "needs_hand":
+      return { label: "Needs a hand", short: "Needs a hand", detail: s.instruction, tone: "warning", action: { id: "sync_now", label: "Try again" } };
+    case "not_connected":
+      return { label: `kanata isn't running`, short: "Not running", detail: "Run keyloom doctor to see what is missing. Until kanata runs, the MacBook keyboard types plainly.", tone: "neutral", action: null };
+    case "not_keyloom":
+      return { label: "kanata runs a config keyloom didn't write", short: "Not keyloom's", detail: `${s.detail}. keyloom never replaces it by itself.`, tone: "warning", action: null };
+  }
+}
+
 /** What auto-sync does, for the popover's switch. */
 export function autoSyncLine(board: BoardSync): { on: boolean; canTurnOn: boolean; note: string | null } {
   const a = board.auto;
   return {
     on: a.on,
     canTurnOn: a.proven,
-    note: a.proven ? null : "Turns on after keyloom flashes this keyboard by itself once and sees it come back.",
+    note: a.proven ? null : board.remapper === true
+      ? "Turns on after you prove kanata's emergency exit once: hold Left Control + Space + Escape, see kanata stop, then run keyloom remap confirm-exit-chord."
+      : "Turns on after keyloom flashes this keyboard by itself once and sees it come back.",
   };
 }
 
@@ -94,6 +132,9 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): { k
   const now = after.state;
   if (was === "syncing" && now.kind === "in_sync") {
     const took = seconds(after.last?.timings.totalMs ?? null);
+    const ms = after.last?.timings.totalMs ?? null;
+    // Under a second is the point of a remapper, so it says milliseconds instead of rounding up to one second.
+    if (after.remapper === true && ms !== null && ms < 1000) return { kind: "success", message: `On your ${after.boardName}`, detail: `${Math.round(ms)} ms from your change.` };
     return { kind: "success", message: `On your ${after.boardName}`, ...(took ? { detail: `${took} from your change.` } : {}) };
   }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
