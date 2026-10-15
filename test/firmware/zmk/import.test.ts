@@ -215,3 +215,18 @@ describe("tolerance", () => {
     expect(r.report.warnings).toContain("layer base: sensor-bindings isn't imported and will be dropped");
   });
 });
+
+describe("key-caps for behaviours kept as written", () => {
+  test("a kept hold-tap reads as its tap and hold, a kept sticky key as one-shot mods, and a macro-tap hold-tap by name", async () => {
+    // The shapes in BK's own Glove80 config (bhekanik/glove80-zmk-config 93b6ac8).
+    const extra = `behaviors {
+      loh: layer_on_hold { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; tapping-term-ms = <200>; bindings = <&sl>, <&kp>; };
+      skq: sticky_key_quick_release { compatible = "zmk,behavior-sticky-key"; #binding-cells = <1>; bindings = <&sk>; quick-release; };
+      magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; tapping-term-ms = <200>; bindings = <&mo>, <&none>; };
+    };`;
+    const bindings = ["&loh 2 ENTER", "&loh 1 LA(SPACE)", "&skq LEFT_SHIFT", "&skq RIGHT_SHIFT", "&magic 3 0", ...Array(75).fill("&none")].join(" ");
+    const { layout } = await importZmk({ name: "x", keymap: small({ extra, bindings }) }, board);
+    const labels = (layout.layers[0]?.bindings ?? []).slice(0, 5).map((b) => (b.kind === "native" ? b.label : b.kind));
+    expect(labels).toEqual(["Enter/OSL2", "⌥SPC/OSL1", "OS⇧", "OSr⇧", "magic/L3"]);
+  });
+});

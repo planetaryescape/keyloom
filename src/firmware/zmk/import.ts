@@ -4,7 +4,7 @@ import type { ImportReport, NativeItem } from "../../layout/import-report.ts";
 import {
   type Binding, type Combo, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough,
 } from "../../layout/schema.ts";
-import { type MapContext, mapBinding } from "./bindings.ts";
+import { type KeptBehavior, type MapContext, mapBinding } from "./bindings.ts";
 import { BUILTIN_NAMES, BUILTIN_OPTIONS, BUILTIN_PROFILES, type HoldKind } from "./builtins.ts";
 import { parseCalls } from "./cells.ts";
 import { parseConf } from "./conf.ts";
@@ -71,6 +71,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   const profiles = new Map<string, HoldTapProfile>();
   const holdKinds = new Map<string, HoldKind>(BUILTIN_PROFILES);
   const macros: Macro[] = [];
+  const keptBehaviors = new Map<string, KeptBehavior>();
   for (const root of roots) {
     for (const container of root.children) {
       if (container === keymapNodes[0]) continue;
@@ -79,6 +80,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
           const r = isHoldTap(n) ? importHoldTap(n, defines) : "keyloom doesn't model this kind of behaviour";
           if (typeof r === "string") {
             keep("behavior", `behavior:${n.label ?? n.name}`, n.source);
+            if (n.label) keptBehaviors.set(n.label, { compatible: stringOf(n, "compatible"), bindings: cellsOf(n, "bindings").map((c) => parseCalls(c).calls[0]?.name ?? "") });
             if (isHoldTap(n)) warnings.push(`hold-tap ${n.label ?? n.name} kept as written: ${r}`);
           } else {
             profiles.set(r.profile.id, r.profile);
@@ -120,7 +122,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   }
 
   const macroLabels = new Set(macros.map((m) => m.id));
-  const ctx: MapContext = { layerIds, defines, profiles: holdKinds, macros: macroLabels };
+  const ctx: MapContext = { layerIds, defines, profiles: holdKinds, macros: macroLabels, kept: keptBehaviors };
 
   // --- layers ---------------------------------------------------------------------------------
   const counts = emptyCounts();
