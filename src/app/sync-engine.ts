@@ -120,6 +120,7 @@ export class SyncEngine {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private stopping = false;
   private started = false;
+  private failure: string | undefined;
   private chain: Promise<unknown> = Promise.resolve();
   private readonly pendingManual = new Map<string, string>();
   private readonly listeners = new Set<(boards: BoardSyncView[]) => void>();
@@ -188,12 +189,21 @@ export class SyncEngine {
   }
 
   private tick(): Promise<void> {
+    // Never rejects: this runs from timers, where an error nobody catches ends the whole server, and the engine is a guest in it.
     return this.exclusive(async () => {
       if (this.stopping) return;
-      if (!this.running && this.now() - this.readAt >= this.pollMs) await this.refresh(true);
-      this.supersedeStale();
-      await this.startDue();
-      this.publish();
+      try {
+        if (!this.running && this.now() - this.readAt >= this.pollMs) await this.refresh(true);
+        this.supersedeStale();
+        await this.startDue();
+        this.publish();
+        this.failure = undefined;
+      } catch (err) {
+        // Said once per kind of failure, not every tick: a database that is gone would otherwise fill the terminal.
+        const text = err instanceof Error ? err.message : String(err);
+        if (text !== this.failure) console.error(`keyloom: keyboard sync could not check the keyboards: ${text}`);
+        this.failure = text;
+      }
     });
   }
 
@@ -386,10 +396,15 @@ export class SyncEngine {
     }, this.alive);
     if ("busy" in claim) return null;
     const run: Running = { row: claim.claimed, abort: new AbortController(), flashAbort: new AbortController(), reason: undefined, done: undefined as never };
-    run.done = this.execute(run).finally(() => {
+    run.done = this.execute(run).catch((err: unknown) => {
+      // The row stays as it was; the next engine's recovery finishes it.
+      console.error(`keyloom: a keyboard sync stopped unexpectedly: ${err instanceof Error ? err.message : String(err)}`);
+      return run.row;
+    }).finally(() => {
       this.running = null;
       // A finished sync may leave the keyboard behind a newer head: look again at once instead of at the next tick.
-      if (!this.stopping) setTimeout(() => void this.tick(), 0);
+      // Only an engine that was started decides things on its own: a one-shot `keyloom sync` does what it was asked and nothing more.
+      if (this.started && !this.stopping) setTimeout(() => void this.tick(), 0);
     });
     this.running = run;
     return run;
@@ -413,7 +428,7 @@ export class SyncEngine {
     };
     const cancelled = (): SyncRow => finish({ status: "cancelled", failure: run.reason === "superseded" ? "superseded" : "cancelled", error: run.reason === "paused" ? "auto-sync was paused" : run.reason === "stopped" ? "keyloom was stopped" : "the layout changed again" });
     try {
-      say(`${row.trigger} sync ${row.id} of ${row.revisionId} for ${row.boardId} ${row.boardRevision}; waited ${this.now() - row.appliedAt} ms since Apply`);
+      say(`${row.trigger} sync ${row.id} of ${row.revisionId} for ${row.boardId} ${row.boardRevision} started`);
       this.publish();
 
       const built = await this.deps.build({

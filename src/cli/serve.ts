@@ -1,5 +1,5 @@
 // `keyloom serve`: the local web app over the same use cases the CLI calls (01#server-and-transport).
-import { type App, type HandsFreeOverrides, NotFoundError, type ProviderId, boardDevView, createSyncEngine, getLayout, listLayouts } from "../app/index.ts";
+import { type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, type SyncDeps, boardDevView, createSyncEngine, getLayout, listLayouts } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import { appChatBackend } from "./chat-backend.ts";
@@ -47,12 +47,24 @@ export function serveBoardDev(dir: string, opts: { port: number; open: boolean }
   return startServer({ port: opts.port, source: none, boardDev: () => boardDevView(dir), open: opts.open });
 }
 
-export function serve(app: App, opts: { port: number; open: boolean; provider?: ProviderId; handsFree?: HandsFreeOverrides }): RunningServer {
+export type ServeOptions = {
+  port: number;
+  open: boolean;
+  provider?: ProviderId;
+  /** How keyboards are found and restarted, for the sync engine and the Build and flash dialog alike; the machine's own when omitted. Tests and demos pass fakes. */
+  handsFree?: HandsFreeOverrides;
+  /** How the sync engine builds and flashes; the build and flash use cases when omitted. */
+  syncDeps?: SyncDeps;
+  /** Where boot drives appear and how long a flash waits, for the Build and flash dialog and the engine. */
+  flash?: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs">;
+};
+
+export function serve(app: App, opts: ServeOptions): RunningServer {
   // The engine that keeps each keyboard on its layout's head lives in this process, beside the server that shows it (D-160).
-  const engine = createSyncEngine(app, opts.handsFree ? { handsFree: opts.handsFree } : {});
+  const engine = createSyncEngine(app, { ...(opts.handsFree ? { handsFree: opts.handsFree } : {}), ...(opts.syncDeps ? { deps: opts.syncDeps } : {}), ...(opts.flash ?? {}) });
   const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const running = startServer({
-    port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, {}, () => engine.notifyApplied()),
+    port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
     chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine), open: opts.open,
   });
   let drained: Promise<void> | undefined;

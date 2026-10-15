@@ -465,6 +465,24 @@ describe("Sync now", () => {
     expect(w.calls.flashes).toHaveLength(2);
   });
 
+  test("an engine that was never started does what it was asked and nothing more, even with a newer Apply and auto-sync on", async () => {
+    const w = await world();
+    w.flashed();
+    w.apply();
+    w.world.flashGate = gate();
+    const oneShot = w.engine();
+    const first = await oneShot.syncNow(w.layoutId);
+    await waitFor(() => w.calls.flashes.length === 1, "the flash");
+    w.apply();
+    // Long enough that the quiet time has passed, so only the engine's own restraint is left to keep it from syncing again.
+    await Bun.sleep(100);
+    w.world.flashGate.open();
+    if (first.kind === "started") await first.done;
+    await Bun.sleep(200);
+    expect(w.calls.flashes).toHaveLength(1);
+    expect(w.calls.builds).toHaveLength(1);
+  });
+
   test("when nothing is behind it says so and does nothing", async () => {
     const w = await world();
     w.flashed();
@@ -616,5 +634,29 @@ describe("rows that are finished stay finished", () => {
     expect("busy" in claimSync(w.app.db, mk(newSyncId()), () => true)).toBe(true);
     expect("claimed" in claimSync(w.app.db, mk(newSyncId()), () => false)).toBe(true);
     expect(recentSyncs(w.app.db).map((r) => r.failure)).toContain("interrupted");
+  });
+});
+
+describe("an engine inside a server", () => {
+  test("a database that has gone away is reported once and never takes the process down", async () => {
+    const w = await world();
+    w.flashed();
+    const e = w.engine({ tickMs: 5 });
+    await e.start();
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args.map(String).join(" "));
+    let rejected = 0;
+    const onRejection = () => rejected++;
+    process.on("unhandledRejection", onRejection);
+    try {
+      w.app.db.close();
+      await Bun.sleep(150);
+    } finally {
+      console.error = original;
+      process.off("unhandledRejection", onRejection);
+    }
+    expect(rejected).toBe(0);
+    expect(errors.filter((m) => m.includes("could not check the keyboards"))).toHaveLength(1);
   });
 });

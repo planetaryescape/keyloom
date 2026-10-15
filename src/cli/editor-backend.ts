@@ -45,7 +45,7 @@ async function orNull<T>(fn: () => Promise<T>): Promise<T | null> {
 }
 
 /** `flash` carries what a flash needs beyond the build: tests point `volumesRoot` at a temporary directory and shorten the wait. */
-export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs"> = {}, onApplied?: () => void): EditorBackend {
+export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs" | "handsFree"> = {}, onApplied?: () => void): EditorBackend {
   // Keyboard sync wakes at once on an Apply instead of at its next look; it would see the new head either way (it reads the database).
   const applied = <T>(value: T): T => {
     onApplied?.();

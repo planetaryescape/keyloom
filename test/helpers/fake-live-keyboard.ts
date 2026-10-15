@@ -14,10 +14,14 @@ export const REPEATING_ZAPP =
 
 export function liveKeyboard(root: string, initialSerial: string | undefined) {
   const flag = join(root, "in-bootloader");
-  const state = { serial: initialSerial as string | undefined, mode: "running" as "running" | "dfu" | "gone", listings: 0, expected: undefined as string | undefined };
+  const state = {
+    serial: initialSerial as string | undefined, mode: "running" as "running" | "dfu" | "gone", listings: 0, expected: undefined as string | undefined,
+    /** Raw HID cannot be found, so keyloom cannot restart the keyboard itself and asks for the reset key. */
+    noHid: false,
+  };
   const writes: Uint8Array[] = [];
   const transport: HidTransport = {
-    list: async () => (state.mode === "running" ? [rawHidOf()] : []),
+    list: async () => (state.mode === "running" && !state.noHid ? [rawHidOf()] : []),
     write: async (_t, report) => {
       writes.push(new Uint8Array(report));
       state.mode = "dfu";
@@ -36,7 +40,13 @@ export function liveKeyboard(root: string, initialSerial: string | undefined) {
     return [runningKeyboard(state.serial)];
   };
   const deps: HandsFreeDeps = { usb, hid: async () => transport, pollMs: 5 };
-  return { deps, flag, state, writes, unplug: () => (state.mode = "gone"), plugIn: () => (state.mode = "running") };
+  /** The person presses the reset key: the keyboard enters its bootloader and the fake zapp is released. */
+  const pressReset = async () => {
+    state.mode = "dfu";
+    state.listings = 0;
+    await Bun.write(flag, "");
+  };
+  return { deps, flag, state, writes, unplug: () => (state.mode = "gone"), plugIn: () => (state.mode = "running"), pressReset };
 }
 
 /** Writes `marker` into a built firmware file where the linker would have put SERIAL_NUMBER, and keeps its DFU suffix valid. */

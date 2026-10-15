@@ -12,6 +12,11 @@ export function tempDir(prefix = "keyloom-test-"): string {
   return dir;
 }
 
-afterAll(() => {
-  for (const d of made) rmSync(d, { recursive: true, force: true });
-});
+// Outside the test runner (the demo servers import these helpers) there is no afterAll, and the OS cleans the temp directory.
+try {
+  afterAll(() => {
+    for (const d of made) rmSync(d, { recursive: true, force: true });
+  });
+} catch {
+  // not under bun test
+}
