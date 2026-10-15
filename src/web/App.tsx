@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
 import { Header, type HeaderFacts } from "./shell/Header.tsx";
 import { EmptyState, ErrorState, Loading } from "./shell/States.tsx";
+import { ReleaseButton } from "./release/ReleaseButton.tsx";
+import { ReleaseDialog } from "./release/ReleaseDialog.tsx";
+import { releaseStatus } from "./release/status.ts";
+import { useNow } from "./release/useNow.ts";
+import { useRelease } from "./release/useRelease.ts";
 import { Viewer } from "./Viewer.tsx";
 
 type Failure = { message: string; retryable: boolean };
@@ -45,6 +50,13 @@ export function App({ token }: { token: string }) {
       });
     return () => controller.abort();
   }, [token, selectedId, attempt]);
+
+  // Refetches the open layout in place after an edit or undo, without the loading state a retry has.
+  const refresh = useCallback(async () => {
+    if (selectedId === null) return;
+    const detail = await fetchLayout(token, selectedId, new AbortController().signal);
+    setView({ id: selectedId, detail });
+  }, [token, selectedId]);
 
   const retry = () => {
     setView(null);
@@ -112,19 +124,37 @@ export function App({ token }: { token: string }) {
     );
   }
 
-  return <LayoutPage key={summary.id} summary={summary} detail={current.detail} picker={picker} />;
+  return (
+    <LayoutPage
+      key={summary.id}
+      token={token}
+      summary={summary}
+      detail={current.detail}
+      picker={picker}
+      onChanged={refresh}
+    />
+  );
 }
 
 function LayoutPage({
+  token,
   summary,
   detail,
   picker,
+  onChanged,
 }: {
+  token: string;
   summary: LayoutSummary;
   detail: LayoutDetail;
   picker: ReactNode;
+  onChanged: () => Promise<void>;
 }) {
   const { document: layout, board, geometry } = detail;
+  const release = useRelease(token, summary.id);
+  const [releaseOpen, setReleaseOpen] = useState(false);
+  const releasing = release.build?.status === "running" || release.flash?.status === "waiting_for_bootloader" || release.flash?.status === "writing";
+  const now = useNow(releasing);
+  const status = releaseStatus(release.build, release.flash, detail.revision.id, now);
   const problem = findProblem(detail);
   const rotated = useMemo(() => {
     try {
@@ -141,17 +171,30 @@ function LayoutPage({
     keyCount: board.keyCount,
     layerCount: layout.layers.length,
     createdAt: summary.createdAt,
-    revisionId: summary.revisionId,
+    revisionId: detail.revision.id,
   };
 
   const failure = problem ?? ("error" in rotated ? rotated.error : null);
   return (
-    <Shell facts={facts} picker={picker}>
+    <Shell
+      facts={facts}
+      picker={picker}
+      actions={failure === null ? <ReleaseButton status={status} onOpen={() => setReleaseOpen(true)} /> : undefined}
+    >
       {failure !== null || !("keys" in rotated) ? (
         <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
       ) : (
-        <Viewer detail={detail} keys={rotated.keys} />
+        <Viewer detail={detail} keys={rotated.keys} token={token} layoutRef={summary.id} onChanged={onChanged} />
       )}
+      <ReleaseDialog
+        open={releaseOpen}
+        onClose={() => setReleaseOpen(false)}
+        release={release}
+        head={detail.revision}
+        boardName={board.name}
+        status={status}
+        now={now}
+      />
     </Shell>
   );
 }
@@ -172,15 +215,17 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
 function Shell({
   facts,
   picker,
+  actions,
   children,
 }: {
   facts?: HeaderFacts;
   picker?: ReactNode;
+  actions?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="app">
-      <Header {...(facts === undefined ? {} : { facts })} picker={picker} />
+      <Header {...(facts === undefined ? {} : { facts })} picker={picker} actions={actions} />
       <main className="app-main">{children}</main>
     </div>
   );

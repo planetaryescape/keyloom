@@ -1,4 +1,4 @@
-import { useRef, type CSSProperties, type KeyboardEvent } from "react";
+import { useImperativeHandle, useRef, type CSSProperties, type KeyboardEvent, type Ref } from "react";
 import type { GeometryKey } from "../../boards/schema.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "./Cap.tsx";
@@ -21,6 +21,10 @@ const ARROWS: Record<string, Direction> = {
   ArrowDown: "down",
 };
 
+export interface KeyboardHandle {
+  focusKey: (index: number) => void;
+}
+
 interface KeyboardProps {
   /** Already has display rotation applied, so keys[i] is the i-th binding's key. */
   keys: readonly GeometryKey[];
@@ -37,15 +41,23 @@ interface KeyboardProps {
   comboKeys: ReadonlySet<number>;
   onSelect: (index: number | null) => void;
   onHover: (index: number | null) => void;
+  /** Enter or a double-click on a key: open it for editing. */
+  onActivate?: (index: number) => void;
+  /** The key whose draft is not applied yet, drawn with a pending mark. */
+  pendingIndex?: number | null;
+  /** The key just changed by an apply, which pulses once. */
+  appliedIndex?: number | null;
+  handle?: Ref<KeyboardHandle>;
 }
 
-function ariaLabel(index: number, description: KeyDescription, finger: string | undefined): string {
+function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean): string {
   // The headline carries the meaning in words; the printed legend can be a symbol a screen
   // reader says badly.
   const parts = [`Key ${index + 1}`, description.headline];
   if (finger !== undefined) parts.push(`${finger.replace("-", " ")} finger`);
   const combos = description.combos.filter((combo) => combo.activeHere).map((combo) => combo.name);
   if (combos.length > 0) parts.push(`In ${combos.join(", ")}`);
+  if (pending) parts.push("Draft change, not applied yet");
   return parts.join(". ");
 }
 
@@ -60,6 +72,10 @@ export function Keyboard({
   comboKeys,
   onSelect,
   onHover,
+  onActivate,
+  pendingIndex = null,
+  appliedIndex = null,
+  handle,
 }: KeyboardProps) {
   const bounds = boardBounds(keys);
   const canvas: Bounds = {
@@ -74,6 +90,7 @@ export function Keyboard({
     reservedHeight: RESERVED_HEIGHT,
   });
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  useImperativeHandle(handle, () => ({ focusKey: (index) => buttons.current[index]?.focus() }), []);
 
   // One tab stop for the whole board; arrow keys move within it.
   const tabStop = selected ?? 0;
@@ -81,6 +98,12 @@ export function Keyboard({
   function onKeyDown(event: KeyboardEvent<HTMLElement>, index: number) {
     if (event.key === "Escape") {
       onSelect(null);
+      return;
+    }
+    if (event.key === "Enter" && onActivate !== undefined) {
+      // Stops the button's own click, so Enter opens the editor without a second select.
+      event.preventDefault();
+      onActivate(index);
       return;
     }
     const direction = ARROWS[event.key];
@@ -119,9 +142,12 @@ export function Keyboard({
               combo={comboKeys.has(index)}
               style={keyStyle(rect, unit)}
               tabIndex={index === tabStop ? 0 : -1}
-              aria-label={ariaLabel(index, description, fingers[String(index)])}
+              aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index)}
               aria-pressed={selected === index}
               data-partner={partners.has(index)}
+              data-pending={pendingIndex === index}
+              data-applied={appliedIndex === index}
+              onDoubleClick={() => onActivate?.(index)}
               onFocus={() => onSelect(index)}
               onClick={() => onSelect(index)}
               onKeyDown={(event) => onKeyDown(event, index)}

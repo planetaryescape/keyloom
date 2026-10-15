@@ -16,7 +16,7 @@ export interface HeaderFacts {
 // The ULID's random tail tells revisions apart; its head is a timestamp shared by neighbours.
 const shortRevision = (id: string): string => id.slice(-6);
 
-export function Header({ facts, picker }: { facts?: HeaderFacts; picker?: ReactNode }) {
+export function Header({ facts, picker, actions }: { facts?: HeaderFacts; picker?: ReactNode; actions?: ReactNode }) {
   return (
     <header className="app-header">
       <div className="brand">
@@ -46,6 +46,7 @@ export function Header({ facts, picker }: { facts?: HeaderFacts; picker?: ReactN
         </div>
       )}
       {picker}
+      {actions === undefined ? null : <div className="header-actions">{actions}</div>}
     </header>
   );
 }
