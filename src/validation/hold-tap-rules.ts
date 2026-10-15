@@ -8,7 +8,8 @@ import { deepEqual } from "../layout/equal.ts";
 import type { Binding, HoldTapProfile, Layout } from "../layout/schema.ts";
 import type { Issue } from "./result.ts";
 
-const issue = (code: string, message: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, slots } : { code, message });
+/** `plain` is the sentence for people; `message` is the precise text the CLI and logs keep. */
+const issue = (code: string, message: string, plain: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, plain, slots } : { code, message, plain });
 
 type HoldTapAt = { binding: Extract<Binding, { kind: "holdTap" }>; slot: Slot };
 
@@ -86,6 +87,7 @@ function qmkOptions(doc: Layout): Issue[] {
         out.push(issue(
           "firmware_unsupported",
           `hold-tap profile "${profileId}" sets ${key} to ${JSON.stringify(value)} but the layout-wide setting is ${JSON.stringify(global ?? null)}, and QMK can't set ${key} per key. Only ${Object.keys(QMK_PER_KEY).join(", ")} can differ between profiles; change the layout-wide setting for the others`,
+          "A hold-tap timing profile sets something this firmware can only set for the whole keyboard. Change that setting for every key instead.",
           slots,
         ));
       }
@@ -108,6 +110,7 @@ function qmkOptions(doc: Layout): Issue[] {
         out.push(issue(
           "firmware_unsupported",
           `keys with the same tap and hold have different ${key} values; QMK picks ${key} by keycode, so they must agree`,
+          "Hold-taps with the same tap and hold keys have different timing, and this firmware needs them to match.",
           group.map((g) => g.slot),
         ));
       }
@@ -119,18 +122,18 @@ function qmkOptions(doc: Layout): Issue[] {
 function zmkOptions(board: BoardDefinition, doc: Layout): Issue[] {
   const out: Issue[] = [];
   for (const profile of doc.holdTapProfiles.filter((p) => p.firmware === "zmk")) {
-    const say = (message: string) => out.push(issue("firmware_unsupported", `hold-tap profile "${profile.id}": ${message}`));
+    const say = (message: string, plain: string) => out.push(issue("firmware_unsupported", `hold-tap profile "${profile.id}": ${message}`, plain));
     for (const [name, value] of Object.entries(profile.options)) {
-      if (!ZMK_PROP_NAME.test(name)) say(`"${name}" isn't a devicetree property name`);
+      if (!ZMK_PROP_NAME.test(name)) say(`"${name}" isn't a devicetree property name`, "A hold-tap timing profile has a setting name this firmware can't read.");
       if (name === "flavor" && (typeof value !== "string" || !ZMK_FLAVORS.has(value))) {
-        say(`flavor must be one of ${[...ZMK_FLAVORS].join(", ")}, not ${JSON.stringify(value)}`);
+        say(`flavor must be one of ${[...ZMK_FLAVORS].join(", ")}, not ${JSON.stringify(value)}`, `A hold-tap timing profile has a flavor this firmware doesn't know. Use one of: ${[...ZMK_FLAVORS].join(", ")}.`);
       }
       if ((ZMK_MS_OPTIONS as readonly string[]).includes(name) && !(typeof value === "number" && Number.isInteger(value) && value >= 0)) {
-        say(`${name} must be a whole number of milliseconds, not ${JSON.stringify(value)}`);
+        say(`${name} must be a whole number of milliseconds, not ${JSON.stringify(value)}`, `A hold-tap timing profile needs a whole number of milliseconds for ${name}.`);
       }
       if (name === "hold-trigger-key-positions") {
         if (!Array.isArray(value) || value.some((p) => !Number.isInteger(p) || p < 0 || p >= board.keyCount)) {
-          say(`hold-trigger-key-positions must list key positions from 0 to ${board.keyCount - 1}`);
+          say(`hold-trigger-key-positions must list key positions from 0 to ${board.keyCount - 1}`, `A hold-tap timing profile lists keys that don't exist. This keyboard has keys 1 to ${board.keyCount}.`);
         }
       }
     }
@@ -187,6 +190,7 @@ export function homerowSameHandMods(board: BoardDefinition, doc: Layout): Issue[
     issue(
       "homerow_same_hand_mods",
       `${slots.length === 1 ? "A home-row letter holds" : `${slots.length} home-row letters hold`} a modifier with nothing that needs the other hand (profile "${profileId}"), so rolling two letters with one hand can trigger the modifier by accident. To avoid that, ${how}`,
+      `${slots.length === 1 ? "A home-row letter holds" : `${slots.length} home-row letters hold`} a modifier, so rolling two letters with one hand can trigger the modifier by accident. Make the hold wait for a key on the other hand.`,
       slots,
     ));
 }

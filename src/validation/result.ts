@@ -7,6 +7,14 @@ export const IssueSchema = z.object({
   code: z.string().min(1),
   message: z.string().min(1),
   slots: z.array(SlotSchema).optional(),
+  // The same finding in words for the person at the editor (D-101): layer names and 1-based key
+  // numbers, no ids. `message` stays as it was for the CLI's JSON and the logs. Optional because
+  // results stored before this field existed don't have it.
+  plain: z.string().min(1).optional(),
+  // For function_lost: the canonical function string, so the editor can offer to drop or place it.
+  function: z.string().min(1).optional(),
+  // For layer_unreachable: the layer, so the editor can tell that dropping a layer key won't help.
+  layerId: z.string().min(1).optional(),
 });
 export type Issue = z.infer<typeof IssueSchema>;
 

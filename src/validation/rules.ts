@@ -11,7 +11,10 @@ import type { Issue } from "./result.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
 import { functionHomes, lostFunctions, reachableLayers, trappedLayers } from "./reachability.ts";
 
-const issue = (code: string, message: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, slots } : { code, message });
+import { keyOn, layerName } from "./words.ts";
+
+/** `plain` is the sentence for people; `message` is the precise text the CLI and logs keep. */
+const issue = (code: string, message: string, plain: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, plain, slots } : { code, message, plain });
 
 /** Every binding in the document with where it lives; combo outputs have no slot. */
 function* bindingsOf(doc: Layout): Generator<{ binding: Binding; slot?: Slot; where: string }> {
@@ -29,7 +32,9 @@ const slotOf = (s?: Slot): Slot[] | undefined => (s ? [s] : undefined);
 export function duplicateIds(doc: Layout): Issue[] {
   const out: Issue[] = [];
   const check = (what: string, ids: string[]) => {
-    for (const id of new Set(ids.filter((id, i) => ids.indexOf(id) !== i))) out.push(issue("schema", `${what} id "${id}" is used more than once`));
+    for (const id of new Set(ids.filter((id, i) => ids.indexOf(id) !== i))) {
+      out.push(issue("schema", `${what} id "${id}" is used more than once`, `Two ${what}s share an internal name, so keyloom can't tell them apart.`));
+    }
   };
   check("layer", doc.layers.map((l) => l.id));
   check("macro", doc.macros.map((m) => m.id));
@@ -43,7 +48,8 @@ export function duplicateIds(doc: Layout): Issue[] {
 export function bindingCount(board: BoardDefinition, doc: Layout): Issue[] {
   return doc.layers
     .filter((l) => l.bindings.length !== board.keyCount)
-    .map((l) => issue("binding_count", `layer "${l.id}" has ${l.bindings.length} bindings, ${board.id} has ${board.keyCount} keys`));
+    .map((l) => issue("binding_count", `layer "${l.id}" has ${l.bindings.length} bindings, ${board.id} has ${board.keyCount} keys`,
+      `${layerName(doc, l.id)} has ${l.bindings.length} keys, but this keyboard has ${board.keyCount}.`));
 }
 
 /** `unknown_ref`: layers, macros, profiles and combo positions must exist. */
@@ -53,21 +59,25 @@ export function unknownRefs(board: BoardDefinition, doc: Layout): Issue[] {
   const profiles = new Set(doc.holdTapProfiles.map((p) => p.id));
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
-    const missing: string[] = [];
-    if (b.kind === "layer" && !layers.has(b.layerId)) missing.push(`layer "${b.layerId}"`);
-    if (b.kind === "macro" && !macros.has(b.macroId)) missing.push(`macro "${b.macroId}"`);
+    const missing: { noun: string; text: string }[] = [];
+    if (b.kind === "layer" && !layers.has(b.layerId)) missing.push({ noun: "layer", text: `layer "${b.layerId}"` });
+    if (b.kind === "macro" && !macros.has(b.macroId)) missing.push({ noun: "macro", text: `macro "${b.macroId}"` });
     if (b.kind === "holdTap") {
-      if ("layerId" in b.hold && !layers.has(b.hold.layerId)) missing.push(`layer "${b.hold.layerId}"`);
-      if (!profiles.has(b.profileId)) missing.push(`hold-tap profile "${b.profileId}"`);
+      if ("layerId" in b.hold && !layers.has(b.hold.layerId)) missing.push({ noun: "layer", text: `layer "${b.hold.layerId}"` });
+      if (!profiles.has(b.profileId)) missing.push({ noun: "hold-tap timing profile", text: `hold-tap profile "${b.profileId}"` });
     }
-    for (const m of missing) out.push(issue("unknown_ref", `${where} refers to ${m}, which does not exist`, slotOf(slot)));
+    for (const m of missing) {
+      const who = slot ? keyOn(doc, slot) : "A combo";
+      out.push(issue("unknown_ref", `${where} refers to ${m.text}, which does not exist`, `${who} points at a ${m.noun} that isn't in this layout.`, slotOf(slot)));
+    }
   }
   for (const combo of doc.combos) {
     for (const p of combo.positions.filter((p) => p >= board.keyCount)) {
-      out.push(issue("unknown_ref", `combo "${combo.id}" uses position ${p}, but ${board.id} has ${board.keyCount} keys`));
+      out.push(issue("unknown_ref", `combo "${combo.id}" uses position ${p}, but ${board.id} has ${board.keyCount} keys`,
+        `A combo uses key ${p + 1}, but this keyboard only has ${board.keyCount} keys.`));
     }
     if (combo.layerIds !== "all") {
-      for (const id of combo.layerIds.filter((id) => !layers.has(id))) out.push(issue("unknown_ref", `combo "${combo.id}" is on layer "${id}", which does not exist`));
+      for (const id of combo.layerIds.filter((id) => !layers.has(id))) out.push(issue("unknown_ref", `combo "${combo.id}" is on layer "${id}", which does not exist`, "A combo is set up on a layer that isn't in this layout."));
     }
   }
   return out;
@@ -80,25 +90,29 @@ export function unknownRefs(board: BoardDefinition, doc: Layout): Issue[] {
  */
 export function firmwareSupport(board: BoardDefinition, doc: Layout): Issue[] {
   const out: Issue[] = [];
-  if (doc.firmware !== board.firmware) out.push(issue("firmware_unsupported", `the layout is ${doc.firmware} but ${board.id} runs ${board.firmware}`));
+  if (doc.firmware !== board.firmware) out.push(issue("firmware_unsupported", `the layout is ${doc.firmware} but ${board.id} runs ${board.firmware}`, "This layout is written for a different kind of firmware than this keyboard runs."));
   const unknownKey = (code: string, where: string, slot?: Slot) => {
-    if (!isKeyCode(code)) out.push(issue("firmware_unsupported", `${where}: "${code}" is not a keycode keyloom knows`, slotOf(slot)));
+    if (!isKeyCode(code)) {
+      out.push(issue("firmware_unsupported", `${where}: "${code}" is not a keycode keyloom knows`,
+        `${slot ? keyOn(doc, slot) : "A macro"} uses a key keyloom doesn't know how to send.`, slotOf(slot)));
+    }
   };
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
     if (b.kind === "key") unknownKey(b.code, where, slot);
     if (b.kind === "holdTap") unknownKey(b.tap.code, where, slot);
     if (b.kind === "native" && b.firmware !== doc.firmware) {
-      out.push(issue("firmware_unsupported", `${where} is a ${b.firmware} native binding in a ${doc.firmware} layout`, slotOf(slot)));
+      out.push(issue("firmware_unsupported", `${where} is a ${b.firmware} native binding in a ${doc.firmware} layout`,
+        `${slot ? keyOn(doc, slot) : "A key"} has custom behaviour written for a different kind of firmware, so this keyboard can't run it.`, slotOf(slot)));
     }
   }
   for (const macro of doc.macros) {
     for (const step of macro.steps) if ("code" in step && step.code !== undefined) unknownKey(step.code, `macro "${macro.id}"`);
   }
   for (const p of doc.holdTapProfiles.filter((p) => p.firmware !== doc.firmware)) {
-    out.push(issue("firmware_unsupported", `hold-tap profile "${p.id}" is for ${p.firmware}, not ${doc.firmware}`));
+    out.push(issue("firmware_unsupported", `hold-tap profile "${p.id}" is for ${p.firmware}, not ${doc.firmware}`, "A hold-tap timing profile is for a different kind of firmware than this layout uses."));
   }
   for (const s of doc.settings.filter((s) => s.firmware !== doc.firmware)) {
-    out.push(issue("firmware_unsupported", `setting ${s.key} is for ${s.firmware}, not ${doc.firmware}`));
+    out.push(issue("firmware_unsupported", `setting ${s.key} is for ${s.firmware}, not ${doc.firmware}`, "A firmware setting is for a different kind of firmware than this layout uses."));
   }
   return out;
 }
@@ -116,15 +130,18 @@ export function qmkHoldTap(doc: Layout): Issue[] {
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
     if (b.kind !== "holdTap") continue;
-    if (b.tap.mods?.length) out.push(issue("qmk_modtap_basic", `${where}: QMK hold-taps can't tap a modified key (${b.tap.code} with ${b.tap.mods.join("+")})`, slotOf(slot)));
+    if (b.tap.mods?.length) out.push(issue("qmk_modtap_basic", `${where}: QMK hold-taps can't tap a modified key (${b.tap.code} with ${b.tap.mods.join("+")})`,
+      `${slot ? keyOn(doc, slot) : "A combo"}: this firmware can't tap a modified key like Shift+A from a hold-tap. Tap a plain key instead.`, slotOf(slot)));
     // An unknown code is firmware_unsupported already; saying it isn't basic as well would repeat it.
     else if (isKeyCode(b.tap.code) && !keyCodeInfo(b.tap.code).qmkBasic) {
-      out.push(issue("qmk_modtap_basic", `${where}: ${b.tap.code} is not a QMK basic keycode, so it can't be the tap of a hold-tap`, slotOf(slot)));
+      out.push(issue("qmk_modtap_basic", `${where}: ${b.tap.code} is not a QMK basic keycode, so it can't be the tap of a hold-tap`,
+        `${slot ? keyOn(doc, slot) : "A combo"}: this firmware can only tap a plain key (a letter, number or similar) from a hold-tap.`, slotOf(slot)));
     }
     if ("mods" in b.hold) {
       const left = b.hold.mods.filter((m) => LEFT_MODS.includes(m)).length;
       if (left > 0 && left < b.hold.mods.length) {
-        out.push(issue("qmk_modtap_mixed_hands", `${where}: a QMK mod-tap can't mix left and right modifiers (${b.hold.mods.join("+")}); one right-hand modifier makes all of them right-handed`, slotOf(slot)));
+        out.push(issue("qmk_modtap_mixed_hands", `${where}: a QMK mod-tap can't mix left and right modifiers (${b.hold.mods.join("+")}); one right-hand modifier makes all of them right-handed`,
+          `${slot ? keyOn(doc, slot) : "A combo"}: this firmware can't hold left-hand and right-hand modifiers together on one key. Use modifiers from one side.`, slotOf(slot)));
       }
     }
   }
@@ -142,7 +159,8 @@ export function layerLimit(doc: Layout): Issue[] {
   const eightBit = doc.settings.some((s) => s.firmware === "qmk" && s.key === "LAYER_STATE_8BIT" && isOn(s.value));
   const limit = eightBit ? QMK_8BIT_LIMIT : QMK_LAYER_LIMIT;
   if (doc.layers.length <= limit) return [];
-  return [issue("layer_limit", `${doc.layers.length} layers, but the limit is ${limit}${eightBit ? " because LAYER_STATE_8BIT is set" : ""}`)];
+  return [issue("layer_limit", `${doc.layers.length} layers, but the limit is ${limit}${eightBit ? " because LAYER_STATE_8BIT is set" : ""}`,
+    `This layout has ${doc.layers.length} layers, and this firmware allows ${limit}.`)];
 }
 
 /** `layer_unreachable`: a layer nobody can get to is every function on it lost. */
@@ -151,13 +169,15 @@ export function layerUnreachable(doc: Layout): Issue[] {
   const reachable = reachableLayers(doc);
   return doc.layers
     .filter((l) => !reachable.has(l.id))
-    .map((l) => issue("layer_unreachable", `layer "${l.id}" can't be reached from the base layer "${base}": nothing switches to it`));
+    .map((l) => ({ ...issue("layer_unreachable", `layer "${l.id}" can't be reached from the base layer "${base}": nothing switches to it`, `${l.name} can't be reached: no key switches to it from ${doc.layers[0]?.name ?? "the base layer"}.`), layerId: l.id }));
 }
 
 /** `layer_trap`: see `trappedLayers` for the reading of "leads back". */
 export function layerTrap(doc: Layout): Issue[] {
   return trappedLayers(doc).map(({ layerId, entered }) =>
-    issue("layer_trap", `layer "${layerId}" is entered with toggle or to but has no key that leads back to the base layer`, entered.flatMap((e) => (e.slot ? [e.slot] : []))));
+    issue("layer_trap", `layer "${layerId}" is entered with toggle or to but has no key that leads back to the base layer`,
+      `${layerName(doc, layerId)} has no key that gets back to ${doc.layers[0]?.name ?? "the base layer"}, so you could get stuck on it.`,
+      entered.flatMap((e) => (e.slot ? [e.slot] : []))));
 }
 
 /** The rules that look at one document; the relational ones below also need the document before. */
@@ -189,10 +209,11 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
     if (b.kind === "native" && !known.has(nativeKey(b))) {
-      out.push(issue("native_edit", `${where}: ${b.source} is firmware source keyloom did not import; replace the key with a modelled binding instead`, slotOf(slot)));
+      out.push(issue("native_edit", `${where}: ${b.source} is firmware source keyloom did not import; replace the key with a modelled binding instead`,
+        `${slot ? keyOn(after, slot) : "A key"} would get custom behaviour keyloom didn't import and can't write. Use a regular key instead.`, slotOf(slot)));
     }
   }
-  if (!deepEqual(before.passthrough, after.passthrough)) out.push(issue("native_edit", "a change touched a passthrough block; keyloom keeps those verbatim"));
+  if (!deepEqual(before.passthrough, after.passthrough)) out.push(issue("native_edit", "a change touched a passthrough block; keyloom keeps those verbatim", "This change touches custom code that keyloom keeps exactly as it is."));
   return out;
 }
 
@@ -208,7 +229,8 @@ export function passthroughLayerIndex(before: Layout, after: Layout): Issue[] {
   const moved = before.layers.some((l, i) => after.layers[i]?.id !== l.id);
   if (!moved) return [];
   const where = pinned.map((p) => `${p.file} ${p.anchor}`).join(", ");
-  return [issue("passthrough_layer_index", `this change removes or reorders layers, but ${where} refers to layers by number and would point at the wrong ones`)];
+  return [issue("passthrough_layer_index", `this change removes or reorders layers, but ${where} refers to layers by number and would point at the wrong ones`,
+    "Your custom code refers to layers by number, and this change would move layers so it points at the wrong ones.")];
 }
 
 const slotText = (s: Slot) => `layer "${s.layerId}", position ${s.position}`;
@@ -227,7 +249,8 @@ export function functionLost(before: Layout, after: Layout, ops: readonly Change
     if (reason !== undefined) dropped.push({ function: lost.function, reason });
     else {
       const where = lost.was.length ? ` (was at ${lost.was.map(slotText).join("; ")})` : "";
-      errors.push(issue("function_lost", `${lost.function} is reachable before this change and not after${where}; keep it somewhere or add a dropFunction op`, lost.was));
+      errors.push({ ...issue("function_lost", `${lost.function} is reachable before this change and not after${where}; keep it somewhere or add a dropFunction op`,
+        "Something on your keyboard won't be there any more. Put it on another key first, or choose to drop it.", lost.was), function: lost.function });
     }
   }
   return { errors, dropped };
@@ -253,7 +276,8 @@ export function doubledLetterTapdance(doc: Layout): Issue[] {
     const body = start ? (source.slice(start.index + start[0].length).split(/\nvoid\b/)[0] ?? "") : "";
     const letter = /case\s+SINGLE_TAP:\s*(?:register|tap)_code(?:16)?\(\s*KC_([A-Z])\s*\)/.exec(body)?.[1];
     if (letter && DOUBLING_LETTERS.has(letter)) {
-      out.push(issue("doubled_letter_tapdance", `${where}: a tap dance on ${letter}, which doubles in common words ("class"); a second tap meaning something else makes typing it twice unreliable`, slotOf(slot)));
+      out.push(issue("doubled_letter_tapdance", `${where}: a tap dance on ${letter}, which doubles in common words ("class"); a second tap meaning something else makes typing it twice unreliable`,
+        `${slot ? keyOn(doc, slot) : "A key"} is a tap dance on ${letter}, which doubles in words like "class". A second meaning on a double tap makes typing it twice unreliable.`, slotOf(slot)));
     }
   }
   return out;

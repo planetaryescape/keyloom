@@ -23,6 +23,7 @@ export function outsideSelection(before: Layout, changed: readonly Slot[], selec
   return [{
     code: "outside_selection",
     message: `This change edits ${outside.length} ${outside.length === 1 ? "key" : "keys"} you did not select: ${named}${more}`,
+    plain: `This change edits ${outside.length} ${outside.length === 1 ? "key" : "keys"} you did not select: ${named}${more}.`,
     slots: [...outside],
   }];
 }

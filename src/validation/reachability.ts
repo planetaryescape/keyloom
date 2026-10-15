@@ -75,7 +75,7 @@ function zmkLayerTarget(source: string, doc: Layout, depth = 0): { layerId: stri
 }
 
 /** The layer a binding switches to, if it does. A layer-tap's hold is a momentary layer (its tap is a plain key). */
-function layerTarget(b: Binding, doc: Layout): { layerId: string; action: LayerAction } | undefined {
+export function layerTarget(b: Binding, doc: Layout): { layerId: string; action: LayerAction } | undefined {
   if (b.kind === "layer") return { layerId: b.layerId, action: b.action };
   if (b.kind === "holdTap" && "layerId" in b.hold) return { layerId: b.hold.layerId, action: "momentary" };
   if (b.kind === "native") return nativeLayerTarget(b, doc);

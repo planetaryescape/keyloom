@@ -47,6 +47,7 @@ export function movedPinned(
     out.push({
       code: "moved_pinned",
       message: `You asked to keep this where it is ("${pin.statement}"), and this change moves it: ${slots.map((s) => slotText(before, s)).join("; ")}`,
+      plain: `You asked to keep this where it is ("${pin.statement}"), and this change moves it: ${slots.map((s) => slotText(before, s)).join("; ")}.`,
       slots,
     });
   }
@@ -59,5 +60,6 @@ export function largeRelearn(relearnCount: number): Issue[] {
   return [{
     code: "large_relearn",
     message: `${relearnCount} functions change position, which is a lot of muscle memory to relearn; choose this knowingly`,
+    plain: `${relearnCount} things on your keyboard change place. That is a lot to relearn, so be sure you want it.`,
   }];
 }

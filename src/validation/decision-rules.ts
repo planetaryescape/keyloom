@@ -4,6 +4,7 @@
 import type { Slot } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
 import { slotKey, slotText } from "./priority-rules.ts";
+import { keyIn } from "./words.ts";
 import type { DecisionReminder, Issue } from "./result.ts";
 
 /** An active `choice` decision reduced to what the check needs; the app builds these from stored decisions. */
@@ -73,6 +74,7 @@ export function contradictsDecision(before: Layout, touched: readonly Touched[])
     warnings.push({
       code: "contradicts_decision",
       message: `You set this up earlier for "${fact.goal}": ${fact.reason.replace(/[.\s]+$/, "")}. ${STATUS_NOTE[fact.status]} This change alters ${slots.map((s) => slotText(before, s)).join("; ")}.`,
+      plain: `You set this up earlier for "${fact.goal}": ${fact.reason.replace(/[.\s]+$/, "")}. ${STATUS_NOTE[fact.status]} This change alters ${slots.map((s) => keyIn(before, s)).join("; ")}.`,
       slots,
     });
   }

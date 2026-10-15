@@ -484,3 +484,12 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 
 ### D-111: A conversation is pinned to the provider and model that started it, and stored blocks become provider-neutral. (Claude, from the research)
 - **Option rejected:** switching provider mid-conversation, which loses tool results and thinking blocks, and which Codex can't take at all.
+
+### D-112: Each validator issue carries a `plain` sentence beside its raw `message`, and the editor shows only the sentence. (Claude, building D-101)
+- **Option rejected:** rewriting `message`. The CLI's JSON and the logs keep the precise text with layer IDs and positions; `plain` is an added optional field, so stored results and old callers still parse.
+- **Where:** each rule writes its sentence next to its message (`src/validation/rules.ts`, `hold-tap-rules.ts` and the others), using layer names and one-based key numbers from `src/validation/words.ts`. A stored result without `plain` falls back to the raw message.
+
+### D-113: A lost function is asked about one row at a time, and only for keys the draft touches. (Claude, building D-092)
+- **Rows:** "Drop F16" adds a `dropFunction` op with a generated reason ("Replaced by F17 on key 7 of Layer 0"); "Put F16 somewhere first" enters place mode, and the next key clicked gets the binding F16 came from. Both land in one change set, so undo is one step.
+- **Layer keys:** when a layer key is the only way to a layer, Drop is not offered, because no `dropFunction` licenses an unreachable layer. The rest of that layer's keys are summarised as one line, since they return once the layer key is kept.
+- **Chain:** putting F16 on a key displaces what was there, which raises the same question for that key.

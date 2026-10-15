@@ -53,16 +53,16 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   for (const [i, op] of ops.entries()) {
     const r = ChangeOpSchema.safeParse(op);
     if (r.success) clean.push(r.data);
-    else opErrors.push({ code: "schema", message: `op ${i}: ${r.error.issues.map((x) => `${x.path.join(".") || "op"} ${x.message}`).join("; ")}` });
+    else opErrors.push({ code: "schema", message: `op ${i}: ${r.error.issues.map((x) => `${x.path.join(".") || "op"} ${x.message}`).join("; ")}`, plain: "keyloom couldn't read part of this change." });
   }
   if (opErrors.length) return failed(opErrors);
 
   const applied = applyOps(before, clean);
-  if (!applied.ok) return failed([{ code: applied.error.code, message: `op ${applied.error.index}: ${applied.error.message}` }]);
+  if (!applied.ok) return failed([{ code: applied.error.code, message: `op ${applied.error.index}: ${applied.error.message}`, plain: "This change refers to something that isn't in the layout." }]);
 
   const schema = LayoutSchema.safeParse(applied.layout);
   if (!schema.success) {
-    return failed(schema.error.issues.map((x) => ({ code: "schema", message: `${x.path.join(".") || "document"}: ${x.message}` })));
+    return failed(schema.error.issues.map((x) => ({ code: "schema", message: `${x.path.join(".") || "document"}: ${x.message}`, plain: "This change would leave the layout in a shape keyloom can't save." })));
   }
   const after = schema.data;
 
@@ -72,7 +72,7 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
   for (const i of documentRules(board, after)) {
-    if (existing.has(issueKey(i))) warnings.push({ ...i, message: `${i.message} (already so before this change)` });
+    if (existing.has(issueKey(i))) warnings.push({ ...i, message: `${i.message} (already so before this change)`, ...(i.plain === undefined ? {} : { plain: `${i.plain} It was already like this before your change.` }) });
     else errors.push(i);
   }
   errors.push(...nativeEdit(before, after), ...passthroughLayerIndex(before, after));
