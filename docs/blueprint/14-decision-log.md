@@ -293,7 +293,6 @@ Change a decision only by adding a new entry that replaces the old one.
 - **Why this wording.** BK's right home row on the Moonlander has plain D and A on the left, so K and ; would stay plain: a selection of all five can only change three. The demo and the live eval select the keys that have a mod on the left (Moonlander H, J, L; Glove80 J, K, L, ;) so that `diff.changed` equals the selection as a set.
 - **Starting state.** BK's own Moonlander already has mods on the right (H/Hyper, J/r⌘, L/r⌥), which leaves nothing to mirror. The demo and eval take them off first with an editor change (`test/helpers/home-row.ts`); the Glove80 template has no hold-taps, so the left home row is given them with a profile that lists the right hand's keys.
 - **Not changed.** Selection stays a click-to-toggle on one layer and is cleared when the message is sent (D-012). Drag-select (09) is still to come; nothing in rung 7 needed it.
-||||||| parent of aedb098 (docs: describe emulate and record D-075 to D-079)
 
 
 ### D-075: `keyloom emulate` runs the firmware itself, with a mock keyboard, and doesn't model it. (Claude, building rung 6 emulation)
@@ -324,3 +323,23 @@ Change a decision only by adding a new entry that replaces the old one.
 - **How:** the files travel as base64 lines on stdin and are written to the container's `/tmp`; the build is in `/tmp` too. Only the Corne's west workspace is mounted, and keyloom never rewrites a file in it (`config/west.yml` is written only when it differs).
 - **Cache:** the firmware is deterministic, so the log is stored by a hash of the firmware pin, the image, the scripts and the native keymap and conf (the events are in it). 40 are kept.
 
+
+### D-080: QMK emulation compiles the generated `keymap.c` into QMK's own host test harness, with Oryx's output-only code stubbed. (Claude, building the QMK emulator)
+- **Why:** the promise is what the real QMK core would send. `make test:<name>` already builds action processing, tap-hold, layers, one-shot, combos, tap dance and `SEND_STRING` for the host. Compiling the generated `keymap.c` unchanged means the emulator tests the code keyloom generated, including its chordal-hold table, tapping callbacks and macros, not a second description of it.
+- **How:** the test platform's keyboard is generic, so the board's `LAYOUT_*` macros come from `qmk generate-keyboard-h` and its config from `qmk generate-config-h`, both run in the pinned image. Positions map to matrix cells by calling the real layout macro with `1..N`. A stand-in `QMK_KEYBOARD_H` header supplies what `moonlander.h` and the Oryx module give the keymap (keyboard config, `rawhid_state`, RGB calls, ZSA's keycodes from `modules/zsa/defaults`).
+- **Option rejected:** the fixture's `set_keymap` from keycodes keyloom generates. It would skip `keymap.c`, so combos, tap dance, macros and the chordal-hold table (all in `keymap.c`) would need separate handling.
+- **Found while building:** BK's Moonlander holds S as `MT(MOD_LALT, KC_S)`, and with `CHORDAL_HOLD` on, S held and then E (same hand) sends S then E, not Alt+E. S held and then U (other hand) sends Alt+U on release of U. A model written from the layout would have got this wrong.
+
+### D-081: Each emulation gets its own folder in the pinned checkout, deletes it inside the container, and returns the result on stdout. (Claude, building the QMK emulator)
+- **Why:** with Docker on Colima, a container read a file the host had just rewritten in place cut to the previous run's length. `events.txt` went from 25 bytes to 54; the container saw 25, so a hold-and-tap script lost its last events and ended with Alt+U held. It happened in one of three full runs of the Docker tests and not when a test ran alone. The layer responsible (the mount, the VM's file cache) was not isolated. A new folder per run has no earlier size to disagree with, so the fix does not depend on finding it. The cleanup runs in the container (as `build.ts` already does for objects) and the output is printed between markers instead of read from a file, for the same reason.
+- **Cost:** QMK's objects are rebuilt each run, about 12 s warm; googletest's objects in `.build/gtest` are reused.
+- **Checkout change:** the emulator adds `lib/googletest` to the submodules it initialises. The firmware build is unchanged and ignores it.
+
+### D-082: The emulator carries an allowlist of rules.mk features and config.h verbatim; everything else in `rules.mk` is hardware and is reported. (Claude, building the QMK emulator)
+- **Why:** `config.h` holds what changes behaviour (`TAPPING_TERM`, `CHORDAL_HOLD`, `PERMISSIVE_HOLD`, `COMBO_COUNT`, layer-state width), so it goes in as generated. `rules.mk` mixes behaviour (`COMBO_ENABLE`, `TAP_DANCE_ENABLE`) with hardware (`ORYX_ENABLE`, `RGB_MATRIX_CUSTOM_KB`) the host build can't use. A denylist would break on the next hardware flag; an allowlist (`CARRIED_FEATURES` in `emulate-harness.ts`) fails soft, and each line it leaves out appears in `warnings`.
+- **Always on:** `EXTRAKEY_ENABLE` and `MOUSEKEY_ENABLE`, because every board the project supports has them and a layout can use media and mouse keys without the rules saying so. NKRO stays off, so reports are the 6-key kind.
+
+### D-083: Reports use QMK's own key names and a 1 ms scan clock, and a script ends one second after its last event. (Claude, building the QMK emulator)
+- **Names:** the harness prints `get_keycode_string()` for keys and, for media keys, the name of the keycode whose `KEYCODE2CONSUMER` value matches the usage. `fromQmk` maps those to keyloom's names. keyloom has no usage table to join on and the harness already knows QMK's mapping. A key keyloom doesn't name is shown by QMK's name and warned about.
+- **Time:** the fixture's own loop runs `keyboard_task()` once per millisecond. Each event is applied at its time and scanned at that millisecond; events with the same time are applied one millisecond apart in the order given. Reports are stamped with the simulated time, relative to the first event.
+- **Settle:** `settleMs` (default 1000) runs after the last event so a pending tap-hold or one-shot resolves. A script that ends with a key still down stays down.

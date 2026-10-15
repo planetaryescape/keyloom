@@ -80,6 +80,25 @@ This is the `docker run` behind QMK's `util/docker_build.sh`, called directly. T
 
 Failure handling matches [06](06-firmware-zmk.md#build-runs-the-moergo-template-in-docker): Docker checked first, the log tail shown, compiler errors mapped back to a layer and position where the line is in a `LAYOUT(...)` call.
 
+## Emulate runs the generated keymap on QMK's own core
+
+`keyloom emulate` answers "what would my Moonlander type for these key presses?" without the keyboard. The generated `keymap.c` is compiled into QMK's host test harness (`platforms/test`, `tests/test_common`, gtest), which builds the real action, tap-hold, layer, one-shot, combo, tap-dance and macro code for this machine and captures the HID reports. Nothing is reimplemented, so chordal hold, permissive hold and `TAPPING_TERM` behave as they do on the board (D-080).
+
+The code is `src/firmware/qmk/emulate.ts` (orchestration), `emulate-harness.ts` (the C, C++ and make files it adds) and `emulate-reports.ts` (output to the contract in `src/firmware/emulate/types.ts`). It runs in the same pinned image and checkout as the build, under the same lock:
+
+1. keyloom writes a folder `tests/keyloom_emu_<target>_<run>/` in the checkout: the generated `keymap.c` and `config.h` unchanged, a `test.mk` with the features that change what keys send (D-082), and a harness test (`emu.cpp`) that plays the events and prints every report.
+2. In the container, `qmk generate-keyboard-h` and `qmk generate-config-h` produce the board's layout macros and `info_config.h`, the same inputs a real build uses. `make -j4 test:keyloom_emu_...` builds and runs the harness. A cold run takes about 12 s once the checkout and image exist.
+3. A position becomes a matrix cell through the board's own `LAYOUT` macro, called with the arguments `1..N`, so no table of wiring is kept in keyloom (D-080).
+4. Events play on a 1 ms scan, each event seen by the scan at its own time; after the last one QMK runs a further second, so a pending tap-hold or one-shot resolves (D-083).
+
+What is replaced, and said in the result's `warnings`:
+
+- **Oryx's output-only code.** The Oryx keymap calls RGB, layer-LED, raw HID and keyboard-config code that only exists on the keyboard. A stand-in header and `stubs.c` give those no-ops, and the keymap itself is not edited. A symbol with no stand-in fails at link time with a message naming it.
+- **Hardware features in `rules.mk`.** Only the feature flags in `CARRIED_FEATURES` reach the harness. `ORYX_ENABLE`, RGB and the rest are listed in the warnings.
+- **Scanning, debounce, USB and the host.** QMK sees each event on a 1 ms tick. Key repeat, mouse movement and Caps Lock state belong to the host, so they are not shown.
+
+The pinned fork's report header uses `_Static_assert`, which the C++ tests can't compile, so the harness defines it as `static_assert` for C++ only. googletest is a submodule the firmware build never fetches; the emulator adds `lib/googletest` to the checkout's submodules.
+
 ## Flash uses ZSA's Zapp CLI
 
 ZSA's flashing routes are Chrome (WebUSB from Oryx), Keymapp (a desktop app) and Zapp (an open-source CLI). Zapp v1.0.2 supports "Moonlander MK1 (rev A and rev B)". `zapp flash firmware.bin` waits for a board in bootloader mode and flashes it. It installs with `brew install zapp`. keyloom shells out to it (D-043):
