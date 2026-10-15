@@ -1,0 +1,285 @@
+/* The decisions view: what keyloom remembers. Quiet cards in a list, tokens only. */
+.decisions {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.decisions-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-5) 0;
+  color: var(--color-text-muted);
+}
+
+.decisions-empty strong {
+  color: var(--color-text);
+  font-size: var(--text-lg);
+}
+
+.decisions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-page);
+}
+
+/* Pointing at one lights its keys on the board, so the card says which one the board is showing. */
+.decision:hover,
+.decision:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.decision[data-status="superseded"] {
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.decision-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.decision-status {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font-weight: var(--weight-medium);
+}
+
+.decision-status[data-status="tried_helpful"] {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.decision-status[data-status="tried_unhelpful"] {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.decision h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.decision p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.decision-choice {
+  font-size: var(--text-sm);
+}
+
+/* A small label to the left of each fact, so a card reads as a short table of reasons. */
+.decision-reason,
+.decision-keys,
+.decision-outcome {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.decision-reason > span,
+.decision-keys > span,
+.decision-outcome > span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1.7;
+}
+
+.decision-when {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.decision-confirm p {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.decision-confirm .decision-actions {
+  margin-top: var(--space-2);
+}
+
+.decision-problem {
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
+
+.decision-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.decision-edit label {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.decision-edit textarea,
+.decision-edit select {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.decision-edit textarea {
+  resize: vertical;
+}
+
+.decision-edit .decision-actions {
+  margin-top: var(--space-2);
+}
+
+.decisions-replaced summary {
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.decisions-replaced[open] summary {
+  margin-bottom: var(--space-3);
+}
+
+/* The prompt that asks whether a choice worked out, above the chat log. */
+.outcome-ask {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-bg);
+}
+
+.outcome-ask p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.outcome-ask .outcome-title {
+  font-weight: var(--weight-semibold);
+}
+
+.outcome-ask .outcome-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.outcome-ask form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.outcome-ask input {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.outcome-ask .outcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* What BK set up earlier, shown beside a change that touches it. */
+.reminders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reminder {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.reminder > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.reminder-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.reminder-body p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reminder-lead {
+  font-weight: var(--weight-semibold);
+}
+
+.reminder-status {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

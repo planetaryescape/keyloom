@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ProposalCard } from "../../src/api/http.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
-import { marksOn, previewProposal } from "../../src/web/chat/preview.ts";
+import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "../../src/web/chat/preview.ts";
 import { keyLabel, replacedNatives, slotName } from "../../src/web/chat/proposal-facts.ts";
 import { evaluate } from "../../src/validation/validate.ts";
 import { loadFixture } from "../server/fixture.ts";
@@ -74,5 +74,22 @@ describe("proposal facts", () => {
     const card = proposal([optionOn("base", 57)]);
     card.validation.diff.displaced = [{ function: "native:qmk:RGB_TOG", from: { layerId: "base", position: 57 }, to: { layerId: "base", position: 58 } }];
     expect(replacedNatives(withNative, card)).toEqual([]);
+  });
+});
+
+describe("remembered reasons on the board (rung 6)", () => {
+  test("a proposal that touches a remembered key marks it, using the reminders stored with the proposal", () => {
+    const card = proposal([optionOn("base", 57)]);
+    card.validation.diff.reminders = [{ decisionId: "dec_1", goal: "g", choice: "c", reason: "r", status: "hypothesis", slots: [{ layerId: "base", position: 57 }, { layerId: "nav", position: 3 }] }];
+    const preview = previewProposal(board, head, card, "base");
+    expect(preview.reminded).toEqual([{ layerId: "base", position: 57 }, { layerId: "nav", position: 3 }]);
+    expect([...rememberedOn(preview, null, "base")]).toEqual([57]);
+    expect([...rememberedOn(preview, null, "nav")]).toEqual([3]);
+    expect(otherMarkedLayers(preview, "base")).toEqual(new Set(["nav"]));
+  });
+
+  test("a decision being pointed at marks its keys on the layer on screen, with or without a preview", () => {
+    expect([...rememberedOn(null, [{ layerId: "base", position: 4 }, { layerId: "nav", position: 9 }], "base")]).toEqual([4]);
+    expect(rememberedOn(null, null, "base").size).toBe(0);
   });
 });

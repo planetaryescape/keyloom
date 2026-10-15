@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding } from "../layout/schema.ts";
+import type { Slot } from "../layout/change.ts";
 import type { ApplyResponse, ChatSelection, LayoutDetail, ProposalCard } from "../api/http.ts";
 import { describeKey, type KeyDescription } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
@@ -8,11 +9,13 @@ import { undoChange } from "./api-write.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
-import { arrowsOn, marksOn, otherMarkedLayers, previewProposal } from "./chat/preview.ts";
+import { arrowsOn, marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
+import { Reminders } from "./decisions/Reminders.tsx";
 import { BindingEditor, type DraftState } from "./editor/BindingEditor.tsx";
 import { withBinding } from "./editor/draft.ts";
 import { RepeatPanel } from "./editor/RepeatPanel.tsx";
 import type { LastChange } from "./editor/repeat-plan.ts";
+import { ProfileTuner } from "./editor/ProfileTuner.tsx";
 import { RevisionBar } from "./history/RevisionBar.tsx";
 import { Inspector } from "./inspector/Inspector.tsx";
 import { Legend } from "./inspector/Legend.tsx";
@@ -57,6 +60,8 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
   // The editor's last applied change, and whether the panel that repeats it on the selection is open.
   const [lastChange, setLastChange] = useState<LastChange | null>(null);
   const [repeating, setRepeating] = useState(false);
+  // The keys of the decision being pointed at in the decisions list.
+  const [decisionFocus, setDecisionFocus] = useState<Slot[] | null>(null);
   const stage = useRef<HTMLElement>(null);
   const keyboard = useRef<KeyboardHandle>(null);
   const editorBox = useRef<HTMLDivElement>(null);
@@ -71,7 +76,12 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     () => (proposal === null || editing !== null ? null : previewProposal(board, layout, proposal, layout.layers[headIndex]?.id ?? "")),
     [proposal, editing, board, layout, headIndex],
   );
-  const layer = layout.layers.find((candidate) => candidate.id === preview?.layerId) ?? layout.layers[headIndex];
+  // Pointing at a decision shows the layer its keys are on, unless the layer on screen has one of them.
+  const focusLayerId =
+    decisionFocus === null || decisionFocus.length === 0
+      ? null
+      : (decisionFocus.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? decisionFocus[0])?.layerId ?? null;
+  const layer = layout.layers.find((candidate) => candidate.id === (preview?.layerId ?? focusLayerId)) ?? layout.layers[headIndex];
 
   // While a draft is complete the board shows it, so the key reads as it will once applied.
   const shown = useMemo(() => {
@@ -89,6 +99,8 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
   const marks = useMemo(() => marksOn(preview, layer?.id ?? ""), [preview, layer]);
   const arrows = useMemo(() => arrowsOn(preview, layer?.id ?? ""), [preview, layer]);
   const markedLayers = useMemo(() => otherMarkedLayers(preview, layer?.id ?? ""), [preview, layer]);
+  const remembered = useMemo(() => rememberedOn(preview, decisionFocus, layer?.id ?? ""), [preview, decisionFocus, layer]);
+  const reminders = preview !== null && proposal !== null ? proposal.validation.diff.reminders : [];
   const chatSelected = useMemo(
     () => (chatSelection !== null && chatSelection.layerId === layer?.id ? new Set(chatSelection.positions) : NONE),
     [chatSelection, layer],
@@ -265,6 +277,15 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     }
   }
 
+  // A selected hold-tap can have its feel tuned; the panel shows only for the saved layout, never over a preview.
+  const selectedBinding = selected === null || preview !== null ? undefined : layer.bindings[selected];
+  const tunable = selectedBinding?.kind === "holdTap" ? selectedBinding : null;
+
+  async function onTuned(summary: string) {
+    await onChanged();
+    setNotice({ kind: "success", message: "Applied", detail: summary });
+  }
+
   const undoBlock = editing !== null && draft.dirty ? "Apply or cancel the key you are editing first" : null;
 
   return (
@@ -308,6 +329,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
             appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
             chatSelected={chatSelected}
             marks={marks}
+            remembered={remembered}
             arrows={arrows}
             onToggle={toggleChatKey}
             onSelect={select}
@@ -316,6 +338,11 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
           />
           <Legend firmware={layout.firmware} />
         </section>
+        {reminders.length === 0 ? null : (
+          <section className="card remembered-card" aria-label="Remembered reasons">
+            <Reminders reminders={reminders} layout={layout} />
+          </section>
+        )}
         {editing !== null ? (
           <div ref={editorBox}>
             <BindingEditor
@@ -355,6 +382,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
             />
           </div>
         ) : (
+          <>
           <Inspector
             description={description}
             position={inspected}
@@ -364,6 +392,19 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
             onOpenLayer={chooseLayer}
             {...(selected === null ? {} : { onEdit: () => openEditor(selected) })}
           />
+          {tunable === null || selected === null ? null : (
+            <ProfileTuner
+              token={token}
+              layoutRef={layoutRef}
+              layout={layout}
+              revisionId={revision.id}
+              slot={{ layerId: layer.id, position: selected }}
+              binding={tunable}
+              onApplied={onTuned}
+              onStale={onStale}
+            />
+          )}
+          </>
         )}
       </div>
       <ChatPanel
@@ -371,6 +412,8 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
         layoutRef={layoutRef}
         layout={layout}
         board={board}
+        revisionId={revision.id}
+        onHighlightDecision={setDecisionFocus}
         selection={chatSelection}
         onRemoveKey={removeChatKey}
         onClearSelection={() => setChatSelection(null)}

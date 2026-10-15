@@ -19,6 +19,8 @@ export interface Preview {
   homes: Slot[];
   /** Each displaced function's old key and new home, for arrows on the board. */
   moves: { from: Slot; to: Slot }[];
+  /** Keys an earlier decision placed that this change touches (08), marked beside their stored reason. */
+  reminded: Slot[];
 }
 
 export function previewProposal(board: BoardDefinition, head: Layout, proposal: ProposalCard, currentLayerId: string): Preview {
@@ -30,7 +32,16 @@ export function previewProposal(board: BoardDefinition, head: Layout, proposal: 
   const layerId = changed.some((slot) => slot.layerId === currentLayerId) ? currentLayerId : (changed[0]?.layerId ?? currentLayerId);
   const homes = diff.displaced.flatMap((moved) => (moved.to === null ? [] : [moved.to]));
   const moves = diff.displaced.flatMap((moved) => (moved.to === null ? [] : [{ from: moved.from, to: moved.to }]));
-  return { layout: evaluation.after ?? head, layerId, changed, homes, moves };
+  // The browser's own validation knows no decisions, so the reminders are the ones stored with the proposal.
+  const reminded = proposal.validation.diff.reminders.flatMap((reminder) => reminder.slots).filter((slot) => known.has(slot.layerId));
+  return { layout: evaluation.after ?? head, layerId, changed, homes, moves, reminded };
+}
+
+/** Keys to flag as "something is remembered here" on `layerId`: those a previewed change would override, or a decision being pointed at. */
+export function rememberedOn(preview: Preview | null, focus: readonly Slot[] | null, layerId: string): Set<number> {
+  const positions = new Set<number>();
+  for (const slot of [...(preview?.reminded ?? []), ...(focus ?? [])]) if (slot.layerId === layerId) positions.add(slot.position);
+  return positions;
 }
 
 /** The marks to draw on `layerId`: a changed key outranks a displaced function's new home. */
@@ -61,6 +72,6 @@ export function arrowsOn(preview: Preview | null, layerId: string): { from: numb
 export function otherMarkedLayers(preview: Preview | null, layerId: string): Set<string> {
   const layers = new Set<string>();
   if (preview === null) return layers;
-  for (const slot of [...preview.changed, ...preview.homes]) if (slot.layerId !== layerId) layers.add(slot.layerId);
+  for (const slot of [...preview.changed, ...preview.homes, ...preview.reminded]) if (slot.layerId !== layerId) layers.add(slot.layerId);
   return layers;
 }

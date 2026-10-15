@@ -2,6 +2,7 @@ import { CircleCheck, CircleX, Info, LoaderCircle, TriangleAlert } from "lucide-
 import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { Issue, ValidationResult } from "../../validation/result.ts";
+import { Reminders } from "../decisions/Reminders.tsx";
 import { functionLabel } from "./function-label.ts";
 import type { CheckState } from "./useCheck.ts";
 
@@ -46,9 +47,10 @@ function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" 
 }
 
 function diffLine({ diff }: ValidationResult): string {
-  const { changed, relearnCount } = diff;
-  if (changed.length === 0) return "";
-  return `Changes ${changed.length} ${changed.length === 1 ? "key" : "keys"}${relearnCount > 0 ? `, ${relearnCount} to relearn` : ""}`;
+  const { changed, relearnCount, retuned } = diff;
+  const retunes = retuned.length === 0 ? "" : `retunes ${retuned.length} hold-tap ${retuned.length === 1 ? "key" : "keys"}`;
+  if (changed.length === 0) return retunes === "" ? "" : `${retunes[0]?.toUpperCase()}${retunes.slice(1)}`;
+  return `Changes ${changed.length} ${changed.length === 1 ? "key" : "keys"}${relearnCount > 0 ? `, ${relearnCount} to relearn` : ""}${retunes === "" ? "" : `, ${retunes}`}`;
 }
 
 // Functions that move or disappear are worth their own lines; the headline count is not.
@@ -113,9 +115,12 @@ export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves
       </div>
     );
   } else {
-    const { errors, warnings } = state.result;
+    const { errors } = state.result;
+    // A reminder is shown in full below, with the reason quoted, so its warning is not listed twice.
+    const warnings = state.result.warnings.filter((w) => w.code !== "contradicts_decision");
     body = (
       <>
+        <Reminders reminders={state.result.diff.reminders} layout={layout} />
         {errors.length === 0 && warnings.length === 0 ? (
           <p className="validation-note validation-ok">
             <CircleCheck size={16} aria-hidden="true" />

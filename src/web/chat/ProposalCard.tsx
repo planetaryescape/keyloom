@@ -134,6 +134,13 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         </div>
       </div>
 
+      {proposal.decisionDraft === null || !open ? null : (
+        <div className="proposal-remembers">
+          <h4>keyloom will remember</h4>
+          <p>{proposal.decisionDraft.reason}</p>
+        </div>
+      )}
+
       <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} showMoves={false} />
 
       {open ? (

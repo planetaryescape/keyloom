@@ -1,7 +1,7 @@
 import {
   ArrowRight, Ban, Cpu, Keyboard, Layers, LoaderCircle, Play, SquareDashed, Timer, TriangleAlert, X, ChevronUp,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { describeKey } from "../../layout/describe.ts";
 import { bindingLegend } from "../../layout/legend.ts";
 import type { Binding, Layout } from "../../layout/schema.ts";
@@ -84,6 +84,9 @@ export function BindingEditor({
   const [wantFocus, setWantFocus] = useState(autoFocus);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  // Optional: typed here, it becomes a decision a later change to this key brings back (08).
+  const [reason, setReason] = useState("");
+  const reasonId = useId();
   // Replacing a native binding drops behaviour keyloom cannot rebuild, so it takes a second click.
   const [confirmingNative, setConfirmingNative] = useState(false);
   useEffect(() => setWantFocus(false), []);
@@ -139,6 +142,7 @@ export function BindingEditor({
         baseRevisionId: revisionId,
         ops: [{ op: "setBinding", at: slot, binding }],
         summary,
+        ...(reason.trim() === "" ? {} : { reason: reason.trim() }),
       });
       await onApplied(summary, { before: original, after: binding });
     } catch (error) {
@@ -216,6 +220,19 @@ export function BindingEditor({
         <div className="editor-form">
           <Form draft={draft} layout={layout} layerId={layerId} autoFocus={formFocus} update={update} />
           <Validation layout={layout} slot={slot} idleNote={idleNote} state={check.state} onRecheck={check.recheck} />
+          {binding === null ? null : (
+            <div className="editor-reason">
+              <label htmlFor={reasonId}>Why this change? <span className="muted">Optional</span></label>
+              <input
+                id={reasonId}
+                value={reason}
+                maxLength={300}
+                placeholder="So you remember it later"
+                onChange={(event) => setReason(event.target.value)}
+              />
+              <p className="muted">keyloom keeps your reason and brings it up if you change this key again.</p>
+            </div>
+          )}
         </div>
       </fieldset>
 

@@ -731,3 +731,139 @@
 .repeat-change strong {
   color: var(--color-accent);
 }
+
+/* The optional reason, under the validation: a single line, so a typo fix stays a quick edit. */
+.editor-reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.editor-reason label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.editor-reason input {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.editor-reason p {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+/* Tuning a hold-tap's feel: a short form of numbers beside what each one does. */
+.tuner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tuner-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.tuner-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.tuner-head p {
+  margin: var(--space-1) 0 0;
+}
+
+.tuner-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tuner-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+.tuner-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.tuner-field label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.tuner-field p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.tuner-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.tuner-input input,
+.tuner-field select {
+  width: 104px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.tuner-field select {
+  width: auto;
+  max-width: 200px;
+}
+
+.tuner-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  justify-self: end;
+}
+
+.tuner-problem {
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
+
+.tuner-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tuner-foot p {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+}

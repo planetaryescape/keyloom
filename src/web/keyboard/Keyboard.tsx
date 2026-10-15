@@ -53,12 +53,14 @@ interface KeyboardProps {
   onToggle?: (index: number) => void;
   /** Keys a hovered proposal changes, and where a displaced function lands. */
   marks?: ReadonlyMap<number, "changed" | "home">;
+  /** Keys where keyloom remembers a reason: an earlier decision a previewed change would override, or one being pointed at. */
+  remembered?: ReadonlySet<number>;
   /** Arrows from a displaced function's old key to its new home, for the hovered proposal. */
   arrows?: ReadonlyArray<{ from: number; to: number }>;
   handle?: Ref<KeyboardHandle>;
 }
 
-function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined): string {
+function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined, remembered = false): string {
   // The headline carries the meaning in words; the printed legend can be a symbol a screen
   // reader says badly.
   const parts = [`Key ${index + 1}`, description.headline];
@@ -68,6 +70,7 @@ function ariaLabel(index: number, description: KeyDescription, finger: string | 
   if (pending) parts.push("Draft change, not applied yet");
   if (mark === "changed") parts.push("Proposed change, not applied yet");
   if (mark === "home") parts.push("Where a moved function would go");
+  if (remembered) parts.push("keyloom remembers why this key is set up this way");
   return parts.join(". ");
 }
 
@@ -88,6 +91,7 @@ export function Keyboard({
   chatSelected,
   onToggle,
   marks,
+  remembered,
   arrows = [],
   handle,
 }: KeyboardProps) {
@@ -158,13 +162,14 @@ export function Keyboard({
               {...(Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? { legendTurn: -rect.rotate } : {})}
               style={keyStyle(rect, unit)}
               tabIndex={index === tabStop ? 0 : -1}
-              aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index, marks?.get(index))}
+              aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index, marks?.get(index), remembered?.has(index))}
               // Pressed means "in the chat selection"; `data-current` is the key the inspector shows.
               aria-pressed={chatSelected?.has(index) ?? false}
               data-current={selected === index}
               data-partner={partners.has(index)}
               data-pending={pendingIndex === index || marks?.get(index) === "changed"}
               data-home={marks?.get(index) === "home"}
+              data-remembered={remembered?.has(index) ?? false}
               data-applied={appliedIndex === index}
               onDoubleClick={() => onActivate?.(index)}
               onFocus={() => onSelect(index)}

@@ -1,9 +1,13 @@
-import { History as HistoryIcon, SquarePen } from "lucide-react";
+import { History as HistoryIcon, ScrollText, SquarePen } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatSelection, ProposalCard } from "../../api/http.ts";
+import type { Slot } from "../../layout/change.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { applyChangeSet } from "../api-write.ts";
+import { DecisionsView } from "../decisions/DecisionsView.tsx";
+import { OutcomeQuestions } from "../decisions/OutcomeQuestions.tsx";
+import { useDecisions, useOutcomeQuestions } from "../decisions/useDecisions.ts";
 import { Composer, type SelectedKeys } from "./Composer.tsx";
 import { ConversationList } from "./ConversationList.tsx";
 import { EmptyChat, ProblemNotice } from "./ChatStates.tsx";
@@ -17,6 +21,10 @@ interface Props {
   layoutRef: string;
   layout: Layout;
   board: BoardDefinition;
+  /** The head the page shows; a new one means a change was applied and the decisions may have changed. */
+  revisionId: string;
+  /** Lights the keys of the decision being pointed at in the decisions view. */
+  onHighlightDecision: (slots: Slot[] | null) => void;
   /** The keys the person clicked on the board, sent with the next message (D-012). */
   selection: ChatSelection | null;
   onRemoveKey: (position: number) => void;
@@ -35,11 +43,13 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ token, layoutRef, layout, board, selection, onRemoveKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
+export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
   const chat = useChat(token, layoutRef);
   const { transcript, streaming } = chat;
   const [draft, setDraft] = useState("");
-  const [view, setView] = useState<"chat" | "history">("chat");
+  const [view, setView] = useState<"chat" | "history" | "decisions">("chat");
+  const decisions = useDecisions(token, layoutRef, revisionId, view === "decisions");
+  const outcomes = useOutcomeQuestions(token, layoutRef);
   const input = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -109,6 +119,11 @@ export function ChatPanel({ token, layoutRef, layout, board, selection, onRemove
     void chat.loadHistory();
   }
 
+  // The keys of a decision are only lit while its list is open.
+  useEffect(() => {
+    if (view !== "decisions") onHighlightDecision(null);
+  }, [view, onHighlightDecision]);
+
   const empty = transcript.turns.length === 0;
   const retryDraft = draft.trim() === "" ? undefined : () => send(draft);
 
@@ -117,6 +132,10 @@ export function ChatPanel({ token, layoutRef, layout, board, selection, onRemove
       <header className="chat-head">
         <h2>Chat</h2>
         <div className="chat-head-actions">
+          <button type="button" className="button" aria-pressed={view === "decisions"} onClick={() => setView(view === "decisions" ? "chat" : "decisions")}>
+            <ScrollText size={14} aria-hidden="true" />
+            Decisions
+          </button>
           <button type="button" className="button" aria-pressed={view === "history"} onClick={() => (view === "history" ? setView("chat") : showHistory())}>
             <HistoryIcon size={14} aria-hidden="true" />
             History
@@ -138,7 +157,22 @@ export function ChatPanel({ token, layoutRef, layout, board, selection, onRemove
         </div>
       </header>
 
-      {view === "history" ? (
+      {view === "decisions" ? (
+        <DecisionsView
+          state={decisions.state}
+          layout={layout}
+          onBack={() => setView("chat")}
+          onReload={decisions.reload}
+          onHighlight={onHighlightDecision}
+          onEdit={decisions.edit}
+          onRetire={decisions.retire}
+          onOpenConversation={async (id) => {
+            const error = await chat.open(id);
+            if (error === null) setView("chat");
+            return error;
+          }}
+        />
+      ) : view === "history" ? (
         <ConversationList
           history={chat.history}
           currentId={transcript.conversationId}
@@ -153,6 +187,7 @@ export function ChatPanel({ token, layoutRef, layout, board, selection, onRemove
       ) : (
         <>
           <p className="sr-only" role="status">{streaming ? "keyloom is replying" : ""}</p>
+          <OutcomeQuestions questions={outcomes.questions} onAnswer={outcomes.answer} />
           <div
             ref={log}
             className="chat-log"

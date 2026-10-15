@@ -179,6 +179,24 @@ button.cap[data-home="true"] {
   outline-offset: 2px;
 }
 
+/* A key where keyloom remembers a reason: an inner ring and a corner square, apart from the dashed "not applied" mark, so both can show on one key. */
+button.cap[data-remembered="true"] {
+  --cap-ring: inset 0 0 0 3px var(--color-warning);
+}
+
+button.cap[data-remembered="true"]::before {
+  content: "";
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-warning);
+  box-shadow: 0 0 0 2px var(--color-panel);
+}
+
 /* The key an apply just changed rings once and fades. */
 button.cap[data-applied="true"] {
   animation: applied 1.6s var(--ease-out) forwards;

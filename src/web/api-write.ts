@@ -21,7 +21,7 @@ import type { ValidationResult } from "../validation/result.ts";
 import { ApiError } from "./api.ts";
 
 export async function request<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH",
   path: string,
   token: string,
   schema: z.ZodType<T>,
