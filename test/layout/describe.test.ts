@@ -72,7 +72,7 @@ describe("describeKey", () => {
       { label: "Hold", value: "Left Alt" },
       { label: "Profile", value: "Home-row mods" },
     ]);
-    expect(d?.options).toEqual(["PERMISSIVE_HOLD: true"]);
+    expect(d?.options).toEqual(["Permissive hold"]);
   });
 
   test("a layer key gives its action, its layer, and the layer it points at", () => {

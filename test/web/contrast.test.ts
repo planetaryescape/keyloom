@@ -120,3 +120,60 @@ describe("token contrast", () => {
     expect([...themes.light.keys()].sort()).toEqual([...themes.dark.keys()].sort());
   });
 });
+
+// Non-text contrast (WCAG 1.4.11, D-100): the shapes that carry meaning on the board must be seen against
+// what they sit on, and kinds must not rely on a fill that looks like its neighbour's.
+const keyboardCss = await Bun.file(new URL("../../src/web/keyboard/keyboard.css", import.meta.url)).text();
+
+describe("non-text contrast", () => {
+  const themeList = [
+    ["light", themes.light],
+    ["dark", themes.dark],
+  ] as const;
+  const need = (values: Map<string, string>, name: string): string => {
+    const value = values.get(name);
+    if (value === undefined) throw new Error(`tokens.css does not declare --${name}`);
+    return value;
+  };
+
+  // The border the CSS really draws on a cap, not a token this test assumes it uses.
+  test("every cap's border, as keyboard.css draws it, is at least 3:1 against the stage in both themes", () => {
+    const rule = /\n\.cap \{[^}]*?border:\s*1px solid var\(--([a-z0-9-]+)\)/s.exec(keyboardCss);
+    expect(rule).not.toBeNull();
+    const token = rule?.[1] as string;
+    for (const [theme, values] of themeList) {
+      expect({ theme, ratio: Math.round(ratio(need(values, token), need(values, "color-panel")) * 100) / 100 >= 3 }).toEqual({ theme, ratio: true });
+    }
+  });
+
+  test("a plain key and every other kind of cap differ by at least 1.5:1 in both themes", () => {
+    const failures: string[] = [];
+    for (const [theme, values] of themeList) {
+      for (const kind of ["modifier", "hold", "layer", "macro", "native"]) {
+        const got = ratio(need(values, "cap-key"), need(values, `cap-${kind}`));
+        if (got < 1.5) failures.push(`${theme}: cap-${kind} against cap-key is ${got.toFixed(2)}:1`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  test("a layer key's edge colours stand out from the layer fill and the plain key fill by 3:1", () => {
+    const failures: string[] = [];
+    for (const [theme, values] of themeList) {
+      for (let n = 1; n <= 6; n++) {
+        for (const fill of ["cap-layer", "cap-key"]) {
+          const got = ratio(need(values, `layer-${n}`), need(values, fill));
+          if (got < 3) failures.push(`${theme}: layer-${n} on ${fill} is ${got.toFixed(2)}:1`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  test("the six layer colours differ from each other, so two layers are not told apart by one hue", () => {
+    for (const [, values] of themeList) {
+      const colours = [1, 2, 3, 4, 5, 6].map((n) => need(values, `layer-${n}`));
+      expect(new Set(colours).size).toBe(6);
+    }
+  });
+});

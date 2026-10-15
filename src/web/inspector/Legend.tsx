@@ -1,5 +1,4 @@
 import { Cap, type Tone } from "../keyboard/Cap.tsx";
-import "./inspector.css";
 
 interface Entry {
   tone: Tone;
@@ -15,12 +14,12 @@ function entries(firmware: string): Entry[] {
     { tone: "key", tap: "A", name: "Key", note: "Sends one key" },
     { tone: "modifier", tap: "⇧", name: "Modifier", note: "Held while pressed" },
     { tone: "holdTap", tap: "S", hold: "⌥", name: "Hold-tap", note: "Tap and hold do different things" },
-    { tone: "layer", tap: "L1", hold: "hold", name: "Layer", note: "Switches layer" },
+    { tone: "layer", tap: "NAV", hold: "hold", name: "Layer", note: "Switches layer" },
     { tone: "macro", tap: "M0", hold: "macro", name: "Macro", note: "Runs a sequence of keys" },
     {
       tone: "native",
-      tap: "TD0",
-      name: "Native",
+      tap: "Boot",
+      name: "Custom",
       note: `A ${firmware.toUpperCase()} code keyloom passes through`,
     },
     { tone: "transparent", tap: "A", name: "Transparent", note: "Uses the key beneath it, shown faded" },
@@ -40,7 +39,8 @@ const GLYPHS: readonly (readonly [string, string])[] = [
 
 export function Legend({ firmware }: { firmware: string }) {
   return (
-    <footer className="legend" aria-label="Legend">
+    <section className="legend" aria-label="Key kinds">
+      <h3>Key kinds</h3>
       <ul className="legend-list">
         {entries(firmware).map((entry) => (
           <li key={entry.name} className="legend-item">
@@ -68,6 +68,6 @@ export function Legend({ firmware }: { firmware: string }) {
           </div>
         ))}
       </dl>
-    </footer>
+    </section>
   );
 }

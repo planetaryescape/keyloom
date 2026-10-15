@@ -29,6 +29,8 @@ interface Props {
   /** The keys the person clicked on the board, sent with the next message (D-012). */
   selection: ChatSelection | null;
   onRemoveKey: (position: number) => void;
+  /** Opens a chip's key in the key panel. */
+  onOpenKey?: (position: number) => void;
   onClearSelection: () => void;
   /** Puts a selection back after a message was refused, so pointing at keys isn't lost with it. */
   onRestoreSelection: (selection: ChatSelection) => void;
@@ -44,7 +46,7 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
+export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
@@ -245,6 +247,7 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
             streaming={streaming}
             selection={chips}
             onRemoveKey={onRemoveKey}
+            {...(onOpenKey === undefined ? {} : { onOpenKey })}
             onClearSelection={onClearSelection}
             inputRef={input}
           />

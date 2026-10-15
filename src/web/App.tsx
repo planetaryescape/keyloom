@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
-import { Header, type HeaderFacts } from "./shell/Header.tsx";
+import { Header } from "./shell/Header.tsx";
 import { EmptyState, ErrorState, Loading } from "./shell/States.tsx";
-import { ReleaseButton } from "./release/ReleaseButton.tsx";
 import { ReleaseDialog } from "./release/ReleaseDialog.tsx";
-import { releaseStatus } from "./release/status.ts";
+import { releaseStatus, type ReleaseStatus } from "./release/status.ts";
 import { useNow } from "./release/useNow.ts";
 import { useRelease } from "./release/useRelease.ts";
 import { Viewer } from "./Viewer.tsx";
@@ -89,34 +88,20 @@ export function App({ token }: { token: string }) {
 
   const summary = layouts.find((layout) => layout.id === selectedId) ?? layouts[0];
   if (summary === undefined) return null;
-  const picker =
-    layouts.length > 1 ? (
-      <select
-        className="layout-picker"
-        aria-label="Layout"
-        value={summary.id}
-        onChange={(event) => setSelectedId(event.target.value)}
-      >
-        {layouts.map((layout) => (
-          <option key={layout.id} value={layout.id}>
-            {layout.name}
-          </option>
-        ))}
-      </select>
-    ) : undefined;
+  const menu = { layouts, selectedId: summary.id, onSelect: setSelectedId };
 
   // A view for an earlier selection is ignored until the new one arrives.
   const current = view !== null && view.id === summary.id ? view : null;
   if (current === null) {
     return (
-      <Shell picker={picker}>
+      <Shell menu={menu}>
         <Loading>Loading layout…</Loading>
       </Shell>
     );
   }
   if ("error" in current) {
     return (
-      <Shell picker={picker}>
+      <Shell menu={menu}>
         <ErrorState title="Can't show this layout" {...(current.error.retryable ? { onRetry: retry } : {})}>
           {current.error.message}
         </ErrorState>
@@ -130,7 +115,7 @@ export function App({ token }: { token: string }) {
       token={token}
       summary={summary}
       detail={current.detail}
-      picker={picker}
+      menu={menu}
       onChanged={refresh}
     />
   );
@@ -140,13 +125,13 @@ function LayoutPage({
   token,
   summary,
   detail,
-  picker,
+  menu,
   onChanged,
 }: {
   token: string;
   summary: LayoutSummary;
   detail: LayoutDetail;
-  picker: ReactNode;
+  menu: HeaderMenu;
   onChanged: () => Promise<void>;
 }) {
   const { document: layout, board, geometry } = detail;
@@ -164,27 +149,13 @@ function LayoutPage({
     }
   }, [geometry.keys, board.display]);
 
-  const facts: HeaderFacts = {
-    layoutName: summary.name,
-    board: `${board.vendor} ${board.name}`,
-    firmware: layout.firmware,
-    keyCount: board.keyCount,
-    layerCount: layout.layers.length,
-    createdAt: summary.createdAt,
-    revisionId: detail.revision.id,
-  };
-
   const failure = problem ?? ("error" in rotated ? rotated.error : null);
   return (
-    <Shell
-      facts={facts}
-      picker={picker}
-      actions={failure === null ? <ReleaseButton status={status} onOpen={() => setReleaseOpen(true)} /> : undefined}
-    >
+    <Shell menu={menu} release={failure === null ? { status, onOpen: () => setReleaseOpen(true) } : undefined} fill>
       {failure !== null || !("keys" in rotated) ? (
         <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
       ) : (
-        <Viewer detail={detail} keys={rotated.keys} token={token} layoutRef={summary.id} onChanged={onChanged} onOpenRelease={() => setReleaseOpen(true)} />
+        <Viewer detail={detail} summary={summary} keys={rotated.keys} token={token} layoutRef={summary.id} onChanged={onChanged} onOpenRelease={() => setReleaseOpen(true)} />
       )}
       <ReleaseDialog
         open={releaseOpen}
@@ -212,20 +183,23 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
   return null;
 }
 
+type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void };
+
+// `fill` is the layout page, which is exactly the window tall so the board and its panel never scroll the page.
 function Shell({
-  facts,
-  picker,
-  actions,
+  menu,
+  release,
+  fill = false,
   children,
 }: {
-  facts?: HeaderFacts;
-  picker?: ReactNode;
-  actions?: ReactNode;
+  menu?: HeaderMenu;
+  release?: { status: ReleaseStatus; onOpen: () => void } | undefined;
+  fill?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <div className="app">
-      <Header {...(facts === undefined ? {} : { facts })} picker={picker} actions={actions} />
+    <div className="app" data-fill={fill}>
+      <Header {...(menu ?? {})} {...(release === undefined ? {} : { release })} />
       <main className="app-main">{children}</main>
     </div>
   );

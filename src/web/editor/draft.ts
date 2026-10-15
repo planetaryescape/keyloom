@@ -207,7 +207,7 @@ const ACTION_WORD: Record<LayerAction, string> = {
   oneShot: "One-shot",
 };
 
-function keyWords(code: string, mods: readonly Mod[] | undefined): string {
+export function keyWords(code: string, mods: readonly Mod[] | undefined): string {
   const key = keyCodeLabel(code);
   return mods === undefined || mods.length === 0 ? key : `${modsWords(sortMods(mods))} + ${key}`;
 }

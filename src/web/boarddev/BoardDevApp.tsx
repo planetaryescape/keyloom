@@ -96,7 +96,7 @@ export function BoardDevApp({ token }: { token: string }) {
         </button>
       </div>
 
-      <section className="card">
+      <section className="card boarddev-stage">
         <Keyboard
           keys={keys}
           hands={view.hands}
@@ -107,6 +107,7 @@ export function BoardDevApp({ token }: { token: string }) {
           partners={partners}
           comboKeys={NONE}
           onSelect={setSelected}
+          onPress={setSelected}
           onHover={setHovered}
         />
       </section>

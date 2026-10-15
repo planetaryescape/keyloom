@@ -3,8 +3,10 @@ import { importOryxSource } from "../../src/firmware/qmk/import.ts";
 import { describeKey } from "../../src/layout/describe.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import type { GeometryKey } from "../../src/boards/schema.ts";
-import { CAP_INSET, HOLD_SIZE, TAP_SIZE, fitLegend, textEm } from "../../src/web/keyboard/fit.ts";
+import { CAP_INSET, HOLD_SIZE, LEGEND_FLOOR_PX, TAP_SIZE, fitLegend, widestPieceEm } from "../../src/web/keyboard/fit.ts";
+import { importZmkSource } from "../../src/firmware/zmk/import.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
+import { TEMPLATE_FIXTURE, glove80 } from "../helpers/zmk.ts";
 import { loadFixture } from "../server/fixture.ts";
 
 // Every legend of every layer, checked the way the viewer draws it: at the size fitLegend
@@ -13,7 +15,7 @@ import { loadFixture } from "../server/fixture.ts";
 // `strict` is for real layouts: nothing may need wrapping. The hand-written sample uses key names
 // outside the keycode table, which are shown as written and may be long; those only have to be
 // flagged for wrapping, never clipped.
-function checkAll(layout: Layout, keys: readonly GeometryKey[], strict: boolean): string[] {
+function checkAll(layout: Layout, keys: readonly GeometryKey[], strict: boolean, unit?: number): string[] {
   const failures: string[] = [];
   let checked = 0;
   layout.layers.forEach((layer, layerIndex) => {
@@ -28,14 +30,15 @@ function checkAll(layout: Layout, keys: readonly GeometryKey[], strict: boolean)
         checked += 1;
         const where = `${layer.name} key ${index + 1} ${role} "${text}"`;
         if (/…|\.\.\./.test(text)) failures.push(`${where} contains an ellipsis`);
-        const fit = fitLegend(text, key.w, range);
+        const fit = fitLegend(text, key.w, range, unit === undefined ? undefined : { unit });
         if (!fit.fits && strict)
           failures.push(
-            `${where} needs ${textEm(text).toFixed(2)}em but only ${(key.w - CAP_INSET).toFixed(2)}u is free`,
+            `${where} needs ${widestPieceEm(text).toFixed(2)}em but only ${(key.w - CAP_INSET).toFixed(2)}u is free`,
           );
         if (fit.size < range.min - 1e-9) failures.push(`${where} is below the legible minimum`);
+        if (unit !== undefined && fit.size * unit < LEGEND_FLOOR_PX - 1e-9) failures.push(`${where} is drawn at ${(fit.size * unit).toFixed(1)} px, under the ${LEGEND_FLOOR_PX} px floor`);
         // The estimate itself must hold: text at this size is no wider than the cap's free width.
-        if (fit.fits && fit.size * textEm(text) > key.w - CAP_INSET + 1e-9)
+        if (fit.fits && fit.size * widestPieceEm(text) > key.w - CAP_INSET + 1e-9)
           failures.push(`${where} overflows at size ${fit.size}`);
       }
     });
@@ -54,6 +57,28 @@ describe("legends fit their keycaps", () => {
   test("the viewer's sample layout never clips a legend, even with key names outside the table", async () => {
     const { document, geometry } = await loadFixture();
     expect(checkAll(document, geometry.keys, false)).toEqual([]);
+  });
+});
+
+describe("the 11 px legend floor", () => {
+  // The laptop window (1440 x 900) draws the Glove80 at about 49 px per key unit, the Moonlander at about 53.
+  test("no legend of the Moonlander or the Glove80 is drawn under the floor or needs wrapping at the laptop unit", async () => {
+    const board = await moonlander();
+    const { layout } = await importOryxSource(FIXTURE_DIR, board.definition);
+    expect(checkAll(layout, board.geometry.keys, true, 49)).toEqual([]);
+    const glove = await glove80();
+    const imported = await importZmkSource(TEMPLATE_FIXTURE, glove.definition);
+    expect(checkAll(imported.layout, glove.geometry.keys, true, 49)).toEqual([]);
+  });
+
+  test("the floor turns a would-be smaller legend into a wrapping one instead of a tiny one", () => {
+    const fit = fitLegend("Navigation", 1, TAP_SIZE, { unit: 49 });
+    expect(fit.fits).toBe(false);
+    expect(fit.size * 49).toBeGreaterThanOrEqual(LEGEND_FLOOR_PX);
+  });
+
+  test("a bigger unit leaves the legend its own size range", () => {
+    expect(fitLegend("A", 1, TAP_SIZE, { unit: 90 })).toEqual({ size: TAP_SIZE.max, fits: true });
   });
 });
 

@@ -11,10 +11,6 @@ import "./keyboard.css";
 // Space between neighbouring caps, and the margin around the board, in key units.
 const GAP = 0.09;
 const MARGIN = 0.3;
-// Vertical room the header, tabs, inspector and page padding take (px), so the board and the
-// inspector fit in one window.
-const RESERVED_HEIGHT = 380;
-
 const ARROWS: Record<string, Direction> = {
   ArrowLeft: "left",
   ArrowRight: "right",
@@ -42,15 +38,20 @@ interface KeyboardProps {
   comboKeys: ReadonlySet<number>;
   onSelect: (index: number | null) => void;
   onHover: (index: number | null) => void;
-  /** Enter or a double-click on a key: open it for editing. */
-  onActivate?: (index: number) => void;
+  /** A click or Enter on a key. Whether it opens the key's panel or adds it to the chat is the caller's rule (D-099). */
+  onPress: (index: number, via: "pointer" | "keyboard") => void;
+  /** The key whose panel is open, drawn with an outline; `selected` still decides the one tab stop. */
+  current?: number | null;
+  /** Replaces a key's legend, for the Advanced view's firmware names. */
+  legendOverrides?: readonly ({ tap: string; hold?: string } | undefined)[] | undefined;
+  /** For a layer key, which of the six layer colours its edge takes. */
+  layerColors?: ReadonlyMap<number, number>;
   /** The key whose draft is not applied yet, drawn with a pending mark. */
   pendingIndex?: number | null;
   /** The key just changed by an apply, which pulses once. */
   appliedIndex?: number | null;
-  /** Keys clicked to be sent with the next chat message (D-012); a click toggles one. */
+  /** Keys in the chat's "Asking about" chips. */
   chatSelected?: ReadonlySet<number>;
-  onToggle?: (index: number) => void;
   /** Keys a hovered proposal changes, and where a displaced function lands. */
   marks?: ReadonlyMap<number, "changed" | "home">;
   /** Keys where keyloom remembers a reason: an earlier decision a previewed change would override, or one being pointed at. */
@@ -85,11 +86,13 @@ export function Keyboard({
   comboKeys,
   onSelect,
   onHover,
-  onActivate,
+  onPress,
+  current = null,
+  legendOverrides,
+  layerColors,
   pendingIndex = null,
   appliedIndex = null,
   chatSelected,
-  onToggle,
   marks,
   remembered,
   arrows = [],
@@ -102,11 +105,7 @@ export function Keyboard({
     width: bounds.width + 2 * MARGIN,
     height: bounds.height + 2 * MARGIN,
   };
-  const { ref, unit, overflowing } = useFitUnit({
-    width: canvas.width,
-    height: canvas.height,
-    reservedHeight: RESERVED_HEIGHT,
-  });
+  const { ref, unit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   useImperativeHandle(handle, () => ({ focusKey: (index) => buttons.current[index]?.focus() }), []);
 
@@ -114,14 +113,10 @@ export function Keyboard({
   const tabStop = selected ?? 0;
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>, index: number) {
-    if (event.key === "Escape") {
-      onSelect(null);
-      return;
-    }
-    if (event.key === "Enter" && onActivate !== undefined) {
-      // Stops the button's own click, so Enter opens the editor without a second select.
+    if (event.key === "Enter") {
+      // Stops the button's own click, so Enter presses the key once.
       event.preventDefault();
-      onActivate(index);
+      onPress(index, "keyboard");
       return;
     }
     const direction = ARROWS[event.key];
@@ -133,7 +128,6 @@ export function Keyboard({
 
   return (
     <div ref={ref} className="keyboard-well" data-overflowing={overflowing}>
-      {overflowing ? <p className="scroll-hint">Scroll sideways to see the right half.</p> : null}
       <div
         className="keyboard"
         role="group"
@@ -154,7 +148,12 @@ export function Keyboard({
                 buttons.current[index] = element;
               }}
               tone={description.kind}
-              legend={description.legend}
+              legend={legendOverrides?.[index] ?? description.legend}
+              breakable={legendOverrides?.[index] !== undefined}
+              layerColor={layerColors?.get(index) ?? 1}
+              pending={pendingIndex === index || marks?.get(index) === "changed"}
+              remembered={remembered?.has(index) ?? false}
+              title={description.headline}
               unit={unit}
               width={geometryKey.w}
               combo={comboKeys.has(index)}
@@ -163,20 +162,18 @@ export function Keyboard({
               style={keyStyle(rect, unit)}
               tabIndex={index === tabStop ? 0 : -1}
               aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index, marks?.get(index), remembered?.has(index))}
-              // Pressed means "in the chat selection"; `data-current` is the key the inspector shows.
+              // Pressed means "in the chat's Asking about chips"; `data-current` is the key whose panel is open.
               aria-pressed={chatSelected?.has(index) ?? false}
-              data-current={selected === index}
+              data-current={current === index}
               data-partner={partners.has(index)}
               data-pending={pendingIndex === index || marks?.get(index) === "changed"}
               data-home={marks?.get(index) === "home"}
-              data-remembered={remembered?.has(index) ?? false}
               data-applied={appliedIndex === index}
-              onDoubleClick={() => onActivate?.(index)}
               onFocus={() => onSelect(index)}
               onClick={() => {
                 // Safari doesn't focus a button on click, so the click selects as well as the focus.
                 onSelect(index);
-                onToggle?.(index);
+                onPress(index, "pointer");
               }}
               onKeyDown={(event) => onKeyDown(event, index)}
               onPointerEnter={(event) => {

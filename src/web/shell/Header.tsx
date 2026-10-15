@@ -1,22 +1,120 @@
-import { Keyboard } from "lucide-react";
-import type { ReactNode } from "react";
+import { Ellipsis, Hammer, Keyboard, Monitor, Moon, Sun, ChevronDown, Check } from "lucide-react";
+import type { LayoutSummary } from "../../api/http.ts";
+import type { ReleaseStatus } from "../release/status.ts";
+import { Menu } from "./Menu.tsx";
+import { useTheme, type ThemeChoice } from "./theme.ts";
 
-const importedAt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
-
-export interface HeaderFacts {
-  layoutName: string;
-  board: string;
-  firmware: string;
-  keyCount: number;
-  layerCount: number;
-  createdAt: number;
-  revisionId: string;
+/** "zsa/moonlander" is "Moonlander"; the vendor is in the layout summary, and a menu group needs only the board. */
+export function boardTitle(boardId: string): string {
+  const name = boardId.split("/").at(-1) ?? boardId;
+  return name.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
 
-// The ULID's random tail tells revisions apart; its head is a timestamp shared by neighbours.
-const shortRevision = (id: string): string => id.slice(-6);
+interface LayoutMenuProps {
+  layouts: readonly LayoutSummary[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}
 
-export function Header({ facts, picker, actions }: { facts?: HeaderFacts; picker?: ReactNode; actions?: ReactNode }) {
+// Layouts grouped by the board they are for, in the order the boards first appear.
+function LayoutMenu({ layouts, selectedId, onSelect }: LayoutMenuProps) {
+  const selected = layouts.find((layout) => layout.id === selectedId);
+  const groups = new Map<string, LayoutSummary[]>();
+  for (const layout of layouts) groups.set(layout.boardId, [...(groups.get(layout.boardId) ?? []), layout]);
+  return (
+    <Menu
+      label="Choose a layout"
+      triggerClassName="layout-trigger"
+      trigger={
+        <>
+          <span className="layout-trigger-board">{selected === undefined ? "" : boardTitle(selected.boardId)}</span>
+          <span className="layout-trigger-name">{selected?.name ?? "Layout"}</span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </>
+      }
+    >
+      {(close) =>
+        [...groups].map(([boardId, group]) => (
+          <div key={boardId} role="group" aria-label={boardTitle(boardId)} className="menu-group">
+            <p className="menu-heading" aria-hidden="true">{boardTitle(boardId)}</p>
+            {group.map((layout) => (
+              <button
+                key={layout.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={layout.id === selectedId}
+                className="menu-item"
+                onClick={() => {
+                  onSelect(layout.id);
+                  close();
+                }}
+              >
+                <span className="menu-item-label">{layout.name}</span>
+                {layout.id === selectedId ? <Check size={14} aria-hidden="true" /> : null}
+              </button>
+            ))}
+          </div>
+        ))
+      }
+    </Menu>
+  );
+}
+
+const THEMES: readonly { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "auto", label: "Match system", icon: Monitor },
+];
+
+function ThemeToggle({ value, onChange }: { value: ThemeChoice; onChange: (value: ThemeChoice) => void }) {
+  return (
+    <div className="theme-toggle" role="radiogroup" aria-label="Theme">
+      {THEMES.map(({ value: choice, label, icon: Icon }) => (
+        <button key={choice} type="button" role="radio" aria-checked={value === choice} aria-label={label} title={label} onClick={() => onChange(choice)}>
+          <Icon size={16} aria-hidden="true" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReleaseMenu({ status, onOpen }: { status: ReleaseStatus; onOpen: () => void }) {
+  return (
+    <div className="release-menu">
+      {status.tone === "idle" ? null : (
+        <span className="release-status" data-tone={status.tone} role="status">{status.label}</span>
+      )}
+      <Menu label="Build and flash" align="end" trigger={<Ellipsis size={18} aria-hidden="true" />} triggerClassName="icon-button">
+        {(close) => (
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close();
+              onOpen();
+            }}
+          >
+            <Hammer size={14} aria-hidden="true" />
+            <span className="menu-item-label">Build and flash…</span>
+          </button>
+        )}
+      </Menu>
+    </div>
+  );
+}
+
+export interface HeaderProps {
+  layouts?: readonly LayoutSummary[];
+  selectedId?: string;
+  onSelect?: (id: string) => void;
+  release?: { status: ReleaseStatus; onOpen: () => void };
+}
+
+// The header carries identity and state: which board and layout, the theme, and the way to build.
+// Everything else about the layout lives in the summary panel.
+export function Header({ layouts, selectedId, onSelect, release }: HeaderProps) {
+  const [theme, setTheme] = useTheme();
   return (
     <header className="app-header">
       <div className="brand">
@@ -25,28 +123,13 @@ export function Header({ facts, picker, actions }: { facts?: HeaderFacts; picker
         </span>
         keyloom
       </div>
-      {facts === undefined ? null : (
-        <div className="identity">
-          <div className="identity-main">
-            <h1 className="layout-name" title={facts.layoutName}>
-              {facts.layoutName}
-            </h1>
-            <ul className="meta">
-              <li>{facts.board}</li>
-              <li>{facts.firmware.toUpperCase()}</li>
-              <li>
-                {facts.keyCount} keys, {facts.layerCount} layers
-              </li>
-            </ul>
-          </div>
-          <ul className="meta">
-            <li>Imported {importedAt.format(facts.createdAt)}</li>
-            <li title={facts.revisionId}>Revision {shortRevision(facts.revisionId)}</li>
-          </ul>
-        </div>
+      {layouts === undefined || selectedId === undefined || onSelect === undefined ? null : (
+        <LayoutMenu layouts={layouts} selectedId={selectedId} onSelect={onSelect} />
       )}
-      {picker}
-      {actions === undefined ? null : <div className="header-actions">{actions}</div>}
+      <div className="header-end">
+        <ThemeToggle value={theme} onChange={setTheme} />
+        {release === undefined ? null : <ReleaseMenu status={release.status} onOpen={release.onOpen} />}
+      </div>
     </header>
   );
 }

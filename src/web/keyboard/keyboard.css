@@ -1,14 +1,5 @@
 .keyboard {
   position: relative;
-  margin-inline: auto;
-}
-
-.scroll-hint {
-  position: sticky;
-  left: 0;
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
 }
 
 /* A faint tray under each half, so the two halves read as one board and not 72 loose keys. */
@@ -28,20 +19,18 @@
   justify-content: center;
   margin: 0;
   padding: 0;
-  border: 0;
+  /* Every cap has a border at 3:1 against the stage (test/web/contrast.test.ts), so an empty key is still a key. */
+  border: 1px solid var(--color-border-strong);
   background: var(--cap);
   color: var(--cap-ink);
   font-family: var(--font-ui);
   line-height: 1.1;
   text-align: center;
   user-select: none;
-  /* A lit top edge, a darker lower lip and a short drop shadow: enough to read as a keycap. */
+  /* Flat: a lit top edge and a 2px lower lip, no drop shadow. */
   box-shadow:
-    var(--cap-ring, inset 0 0 0 0 transparent),
     inset 0 1px 0 var(--cap-highlight),
-    inset 0 -3px 0 var(--cap-shadow-edge),
-    0 1px 0 var(--cap-shadow-edge),
-    0 5px 6px -4px var(--cap-shadow-drop);
+    inset 0 -2px 0 var(--cap-shadow-edge);
 }
 
 .cap[data-tone="modifier"] {
@@ -65,22 +54,34 @@
   --cap-ink: var(--cap-native-ink);
 }
 
-/* Transparent keys keep their place but give up the fill; the dashed edge says "see through". */
+/* Transparent keys keep their place but give up the fill; the dashed edge says "see through" and the legend of
+   the key beneath shows through at 40%. */
 .cap[data-tone="transparent"] {
   --cap: transparent;
-  --cap-ink: var(--color-text-muted);
-  border: 1.5px dashed var(--color-border-strong);
-  box-shadow: var(--cap-ring, none);
+  --cap-ink: var(--color-text);
+  border-style: dashed;
+  box-shadow: none;
 }
 
+.cap[data-tone="transparent"] .cap-tap,
+.cap[data-tone="transparent"] .cap-hold {
+  opacity: 0.4;
+}
+
+/* None keys do nothing and say so with hatching on a solid edge. */
 .cap[data-tone="none"] {
   --cap: transparent;
-  border: 1.5px dotted var(--color-border);
-  box-shadow: var(--cap-ring, none);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    color-mix(in srgb, var(--color-text) 22%, transparent) 5px 6px
+  );
+  box-shadow: none;
 }
 
 .cap-tap {
   max-width: 100%;
+  padding-inline: 2px;
   font-weight: var(--weight-semibold);
   white-space: nowrap;
 }
@@ -88,12 +89,64 @@
 .cap-tap[data-wrap="true"] {
   white-space: normal;
   overflow-wrap: anywhere;
+  line-height: 1;
 }
 
+/* The hold sits bottom-left on a hold-tap. A layer key's or macro's one-word action sits under its label instead. */
 .cap-hold {
-  max-width: 100%;
-  font-weight: var(--weight-medium);
+  position: absolute;
+  bottom: 4px;
+  left: 5px;
+  font-weight: var(--weight-semibold);
+  max-width: calc(100% - 10px);
+  line-height: 1;
   white-space: nowrap;
+  opacity: 0.9;
+}
+
+.cap-hold[data-wrap="true"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.cap[data-tone="layer"] .cap-hold,
+.cap[data-tone="macro"] .cap-hold,
+.cap[data-tone="native"] .cap-hold {
+  position: static;
+  margin-top: 1px;
+  font-weight: var(--weight-regular);
+}
+
+/* A hold-tap's kind shape: a band along the bottom. */
+.cap-band {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  border-radius: 0 0 5px 5px;
+  background: var(--cap-ink);
+  opacity: 0.55;
+}
+
+/* A layer key's kind shape: an edge on the left in the colour of the layer it goes to. */
+.cap-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  border-radius: 5px 0 0 5px;
+}
+
+/* A macro's kind shape: the play mark, top-left. */
+.cap-glyph {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  line-height: 1;
+  opacity: 0.8;
 }
 
 .cap-combo {
@@ -111,59 +164,56 @@ button.cap {
 }
 
 button.cap:hover {
-  background: color-mix(in srgb, var(--cap) 86%, var(--color-text));
+  background-color: color-mix(in srgb, var(--cap) 86%, var(--color-text));
 }
 
 button.cap[data-tone="transparent"]:hover,
 button.cap[data-tone="none"]:hover {
-  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  background-color: color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 
 button.cap:active {
   transform: translateY(1px);
 }
 
-/* The key the inspector is showing. */
+/* The key whose panel is open. */
 button.cap[data-current="true"] {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-/* In the chat selection: an accent ring inside the cap, a tint and a tick, so it never relies on colour alone
-   and stays apart from the current key (outline), a draft (dashed, dot) and a move's landing (dotted). */
+/* Selection (asked about in the chat): a 2px accent outline and a tick badge top-right. The fill keeps its kind colour. */
 button.cap[aria-pressed="true"] {
-  --cap-ring: inset 0 0 0 3px var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 30%, var(--cap));
-}
-
-button.cap[aria-pressed="true"]::before {
-  content: "";
-  position: absolute;
-  right: 18%;
-  bottom: 14%;
-  width: 22%;
-  height: 12%;
-  border-bottom: 3px solid var(--color-accent);
-  border-left: 3px solid var(--color-accent);
-  transform: rotate(-45deg);
-  pointer-events: none;
-}
-
-/* The other keys of a chord light up when one of them is inspected. */
-button.cap[data-partner="true"] {
-  outline: 2px dashed var(--color-combo);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
-/* A draft that is not applied: a dashed accent ring and a dot, so it never reads as saved. */
+.cap-mark {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.cap-mark-selected {
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-page);
+  box-shadow: 0 0 0 2px var(--color-panel);
+}
+
+/* A draft that is not applied: a dashed accent outline and a dot top-left, so it never reads as saved. */
 button.cap[data-pending="true"] {
   outline: 2px dashed var(--color-accent);
   outline-offset: 2px;
 }
 
-button.cap[data-pending="true"]::after {
-  content: "";
-  position: absolute;
+.cap-mark-draft {
   top: -6px;
   left: -6px;
   width: 10px;
@@ -179,22 +229,15 @@ button.cap[data-home="true"] {
   outline-offset: 2px;
 }
 
-/* A key where keyloom remembers a reason: an inner ring and a corner square, apart from the dashed "not applied" mark, so both can show on one key. */
-button.cap[data-remembered="true"] {
-  --cap-ring: inset 0 0 0 3px var(--color-warning);
+/* A key where keyloom remembers a reason: a bookmark inside the cap, top-left, apart from the draft's dot. */
+.cap-mark-remembered {
+  top: 3px;
+  left: 3px;
+  color: var(--color-warning);
 }
 
-button.cap[data-remembered="true"]::before {
-  content: "";
-  position: absolute;
-  right: -5px;
-  bottom: -5px;
-  z-index: 1;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--color-warning);
-  box-shadow: 0 0 0 2px var(--color-panel);
+.cap-mark-remembered svg {
+  fill: currentColor;
 }
 
 /* The key an apply just changed rings once and fades. */
@@ -227,6 +270,8 @@ button.cap[data-applied="true"] {
 
 /* Wraps the tap and hold legends when they are turned back upright on a steeply rotated key. */
 .cap-legend {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -258,35 +303,6 @@ button.cap[data-applied="true"] {
   stroke: currentColor;
   stroke-width: 2.5;
   stroke-linecap: round;
-}
-
-/* The selection's size and actions, in a fixed-height row under the layer tabs so selecting never moves the board. */
-.selection-bar {
-  display: flex;
-  min-height: 48px;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.selection-count {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
-
-.selection-count[data-empty="true"] {
-  color: var(--color-text-muted);
-  font-weight: var(--weight-regular);
-}
-
-.selection-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
 }
 
 /* Place mode: the next click on a key chooses where a kept function goes. */

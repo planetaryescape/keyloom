@@ -4,11 +4,16 @@ import { BoardDevApp } from "./boarddev/BoardDevApp.tsx";
 import { tokenFromSearch } from "./api.ts";
 import { Header } from "./shell/Header.tsx";
 import { ErrorState } from "./shell/States.tsx";
+import { applyTheme, readTheme } from "./shell/theme.ts";
 import "./tokens.css";
 import "./app.css";
+import "./shell/shell.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("keyloom: missing #root element");
+
+// Before the first paint, so a stored dark theme never flashes light.
+applyTheme(readTheme());
 
 const token = tokenFromSearch(window.location.search);
 createRoot(root).render(

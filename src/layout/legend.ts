@@ -27,13 +27,24 @@ const GLYPH: Readonly<Record<string, string>> = {
   DOWN: "↓",
 };
 
-const GLYPH_WITH_MODS: Readonly<Record<string, string>> = { ...GLYPH, SPACE: "SPC" };
+// The open-box mark for Space, so Hyper+Space is "Hyp␣" and not a six-letter legend that has to shrink or wrap.
+const GLYPH_WITH_MODS: Readonly<Record<string, string>> = { ...GLYPH, SPACE: "␣" };
 
+// Native labels the importers made that are longer than a keycap holds at the legend floor. Short labels
+// come from a table, never from shrinking the type (18#legends).
+const NATIVE_SHORT: Readonly<Record<string, string>> = { LyrCol: "LyrC" };
+
+function shortNative(label: string): string {
+  const button = /^MSBTN(\d)$/.exec(label);
+  return button ? `Btn${button[1]}` : (NATIVE_SHORT[label] ?? label);
+}
+
+// One word each, so the action fits under a layer's short label at the legend floor (18#legends).
 const LAYER_ACTION_WORD = {
   momentary: "hold",
   toggle: "toggle",
-  to: "go to",
-  oneShot: "one-shot",
+  to: "go",
+  oneShot: "once",
 } as const satisfies Record<Extract<Binding, { kind: "layer" }>["action"], string>;
 
 // "Space" is wide, so with modifiers in front (Hyp+Space) the shared short label takes over.
@@ -45,12 +56,32 @@ function capText(code: string, mods?: readonly Mod[]): string {
   return `${mods ? modsText(mods) : ""}${key}`;
 }
 
-/** "L2" for a layer still called "Layer 2", the name for any other; an unknown id is shown as is. */
+// Up to four letters: initials of a name with several words ("Left Hand" is LH), a short word as it
+// is, and the first three letters of a long one ("Navigate" is NAV).
+function shortName(name: string): string {
+  const numbered = /^layer\s+(\d+)$/i.exec(name.trim());
+  if (numbered) return `L${numbered[1]}`;
+  const words = name.trim().split(/[\s_-]+/).filter((word) => word !== "");
+  const first = words[0];
+  if (first === undefined) return "?";
+  if (words.length > 1) return words.map((word) => word.charAt(0)).join("").slice(0, 4).toUpperCase();
+  return (first.length <= 4 ? first : first.slice(0, 3)).toUpperCase();
+}
+
+/**
+ * The short label a layer's key prints: never the whole name. Two layers that would print the same
+ * letters get four letters, and a pair that still match fall back to their positions ("L2", "L5").
+ */
 export function layerLegend(layerId: string, ctx: GridContext): string {
   const index = ctx.layers.findIndex((layer) => layer.id === layerId);
   const layer = ctx.layers[index];
   if (layer === undefined) return layerId;
-  return layer.name === `Layer ${index}` ? `L${index}` : layer.name;
+  const label = shortName(layer.name);
+  const clash = (other: string) => ctx.layers.some((candidate) => candidate.id !== layer.id && shortName(candidate.name) === other);
+  if (!clash(label)) return label;
+  const longer = layer.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase();
+  const longerClash = ctx.layers.some((candidate) => candidate.id !== layer.id && candidate.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() === longer);
+  return longerClash ? `L${index}` : longer;
 }
 
 export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
@@ -75,8 +106,12 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
       const index = ctx.macros.findIndex((macro) => macro.id === binding.macroId);
       return { kind: "macro", tap: index < 0 ? "M?" : `M${index}`, hold: "macro" };
     }
-    case "native":
-      return { kind: "native", tap: binding.label };
+    case "native": {
+      // A kept hold-tap is labelled "tap/hold" ("Enter/OSL2"); two short halves fit a cap where the whole would not.
+      const [tap, hold, ...more] = binding.label.split("/");
+      if (binding.label.length > 5 && tap !== undefined && tap !== "" && hold !== undefined && hold !== "" && more.length === 0) return { kind: "native", tap, hold };
+      return { kind: "native", tap: shortNative(binding.label) };
+    }
     case "transparent":
       return { kind: "transparent", tap: "" };
     case "none":

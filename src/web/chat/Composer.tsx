@@ -14,13 +14,15 @@ interface Props {
   streaming: boolean;
   selection: SelectedKeys | null;
   onRemoveKey: (position: number) => void;
+  /** Opens a chip's key in the key panel (D-099: a key's panel opens from its chip while the chat is open). */
+  onOpenKey?: (position: number) => void;
   onClearSelection: () => void;
   inputRef: Ref<HTMLTextAreaElement>;
 }
 
 const MAX_HEIGHT = 160;
 
-export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onClearSelection, inputRef }: Props) {
+export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onOpenKey, onClearSelection, inputRef }: Props) {
   const canSend = value.trim() !== "" && !streaming;
 
   // Grows with the text up to a cap, then scrolls; setting "auto" first lets it shrink again.
@@ -47,11 +49,17 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
     >
       {selection === null ? null : (
         <div className="composer-selection">
-          <span className="composer-selection-label">Selected on {selection.layerName}</span>
+          <span className="composer-selection-label">Asking about, on {selection.layerName}</span>
           <ul aria-label="Keys sent with your next message">
             {selection.keys.map((key) => (
               <li key={key.position} className="selected-chip">
-                <span title={`Key ${key.position + 1}`}>{key.label}</span>
+                {onOpenKey === undefined ? (
+                  <span title={`Key ${key.position + 1}`}>{key.label}</span>
+                ) : (
+                  <button type="button" className="chip-open" title={`Open key ${key.position + 1}`} onClick={() => onOpenKey(key.position)}>
+                    {key.label}
+                  </button>
+                )}
                 <button type="button" className="chip-remove" aria-label={`Remove key ${key.position + 1}, ${key.label}`} onClick={() => onRemoveKey(key.position)}>
                   <X size={12} aria-hidden="true" />
                 </button>

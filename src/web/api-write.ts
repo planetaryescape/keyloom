@@ -7,6 +7,7 @@ import {
   BuildSchema,
   CheckResponseSchema,
   FlashSchema,
+  ParseBindingResponseSchema,
   UndoResponseSchema,
   type ApplyRequest,
   type ApplyResponse,
@@ -14,6 +15,8 @@ import {
   type BuildRequest,
   type CheckRequest,
   type Flash,
+  type ParseBindingRequest,
+  type ParseBindingResponse,
   type UndoRequest,
   type UndoResponse,
 } from "../api/http.ts";
@@ -76,6 +79,11 @@ export async function checkChange(
   token: string, ref: string, body: CheckRequest, signal: AbortSignal,
 ): Promise<ValidationResult> {
   return (await request("POST", layoutPath(ref, "check"), token, CheckResponseSchema, signal, body)).validation;
+}
+
+// Reads a QMK or ZMK expression the person typed; nothing is written.
+export function parseBinding(token: string, ref: string, body: ParseBindingRequest, signal: AbortSignal): Promise<ParseBindingResponse> {
+  return request("POST", layoutPath(ref, "parse-binding"), token, ParseBindingResponseSchema, signal, body);
 }
 
 export function applyChange(token: string, ref: string, body: ApplyRequest): Promise<ApplyResponse> {

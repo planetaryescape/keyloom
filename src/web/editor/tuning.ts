@@ -1,6 +1,7 @@
 // Tuning a hold-tap's feel from the editor (D-017): the fields each firmware exposes, and the ops
 // that turn what was typed into a profile change. Pure, so the rules are tested without a browser.
 import type { ChangeOp, Slot } from "../../layout/change.ts";
+import { optionLabel } from "../../layout/option-words.ts";
 import type { Binding, Firmware, HoldTapProfile, Layout } from "../../layout/schema.ts";
 
 export type HoldTap = Extract<Binding, { kind: "holdTap" }>;
@@ -13,16 +14,16 @@ export type OptionSpec =
 // The options each firmware takes per profile (05, 06). Anything else a profile holds is carried through untouched.
 export const OPTIONS: Record<Firmware, readonly OptionSpec[]> = {
   qmk: [
-    { key: "TAPPING_TERM", label: "Tapping term", kind: "number", unit: "ms", hint: "How long a hold takes. Lower is quicker to trigger the hold, and easier to trigger it by accident." },
-    { key: "QUICK_TAP_TERM", label: "Quick tap term", kind: "number", unit: "ms", hint: "A tap this soon after another press of the key repeats the letter instead of holding." },
-    { key: "PERMISSIVE_HOLD", label: "Permissive hold", kind: "flag", hint: "Pressing another key and releasing it while this one is down counts as a hold." },
-    { key: "HOLD_ON_OTHER_KEY_PRESS", label: "Hold on other key press", kind: "flag", hint: "Pressing another key while this one is down counts as a hold at once." },
+    { key: "TAPPING_TERM", label: optionLabel("TAPPING_TERM"), kind: "number", unit: "ms", hint: "How long a hold takes. Lower is quicker to trigger the hold, and easier to trigger it by accident." },
+    { key: "QUICK_TAP_TERM", label: optionLabel("QUICK_TAP_TERM"), kind: "number", unit: "ms", hint: "A tap this soon after another press of the key repeats the letter instead of holding." },
+    { key: "PERMISSIVE_HOLD", label: optionLabel("PERMISSIVE_HOLD"), kind: "flag", hint: "Pressing another key and releasing it while this one is down counts as a hold." },
+    { key: "HOLD_ON_OTHER_KEY_PRESS", label: optionLabel("HOLD_ON_OTHER_KEY_PRESS"), kind: "flag", hint: "Pressing another key while this one is down counts as a hold at once." },
   ],
   zmk: [
-    { key: "flavor", label: "Flavor", kind: "choice", choices: ["hold-preferred", "balanced", "tap-preferred", "tap-unless-interrupted"], hint: "When another key press decides tap or hold." },
-    { key: "tapping-term-ms", label: "Tapping term", kind: "number", unit: "ms", hint: "How long a hold takes. Lower is quicker to trigger the hold, and easier to trigger it by accident." },
-    { key: "quick-tap-ms", label: "Quick tap", kind: "number", unit: "ms", hint: "A tap this soon after another press of the key repeats the letter instead of holding." },
-    { key: "require-prior-idle-ms", label: "Require prior idle", kind: "number", unit: "ms", hint: "A key pressed within this time after typing is always a tap, so fast typing never triggers a modifier." },
+    { key: "flavor", label: optionLabel("flavor"), kind: "choice", choices: ["hold-preferred", "balanced", "tap-preferred", "tap-unless-interrupted"], hint: "When another key press decides tap or hold." },
+    { key: "tapping-term-ms", label: optionLabel("tapping-term-ms"), kind: "number", unit: "ms", hint: "How long a hold takes. Lower is quicker to trigger the hold, and easier to trigger it by accident." },
+    { key: "quick-tap-ms", label: optionLabel("quick-tap-ms"), kind: "number", unit: "ms", hint: "A tap this soon after another press of the key repeats the letter instead of holding." },
+    { key: "require-prior-idle-ms", label: optionLabel("require-prior-idle-ms"), kind: "number", unit: "ms", hint: "A key pressed within this time after typing is always a tap, so fast typing never triggers a modifier." },
   ],
 };
 

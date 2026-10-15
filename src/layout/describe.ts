@@ -1,6 +1,7 @@
 // A binding in plain words, for the viewer's inspector and for screen readers. Pure; it reads
 // only the layout document, so the same sentences can serve the CLI and the agent later.
 import { keyCodeLabel } from "./keycodes.ts";
+import { profileWords } from "./option-words.ts";
 import { type Legend, bindingLegend } from "./legend.ts";
 import type { Binding, Layout, MacroStep, Mod } from "./schema.ts";
 
@@ -23,7 +24,7 @@ export type KeyDescription = {
   fields: Field[];
   /** Macro steps, one per line. */
   steps: string[];
-  /** Hold-tap profile options such as "CHORDAL_HOLD: true". */
+  /** Hold-tap profile options in plain words, such as "Chordal hold" or "Tapping term 200 ms". */
   options: string[];
   combos: ComboUse[];
   /** For a layer key: the layer it points at, so the viewer can offer to open it. */
@@ -103,7 +104,7 @@ function describeBinding(binding: Binding, layout: Layout): Omit<KeyDescription,
           { label: "Hold", value: hold },
           { label: "Profile", value: profile?.name ?? binding.profileId },
         ],
-        options: Object.entries(profile?.options ?? {}).map(([key, value]) => `${key}: ${String(value)}`),
+        options: profile === undefined ? [] : profileWords(profile),
       };
     }
     case "layer": {

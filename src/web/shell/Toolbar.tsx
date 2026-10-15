@@ -1,0 +1,53 @@
+import { LoaderCircle, Redo2, Undo2 } from "lucide-react";
+import type { ReactNode } from "react";
+import type { RevisionInfo } from "../../api/http.ts";
+
+interface Props {
+  tabs: ReactNode;
+  revision: RevisionInfo;
+  busy: boolean;
+  /** Why undo and redo are unavailable right now, shown as the button's tooltip. */
+  blockedReason: string | null;
+  onUndo: () => void;
+  advanced: boolean;
+  onAdvanced: (value: boolean) => void;
+}
+
+// An undo is itself a revision, so undoing it puts the change back: with the head an undo, the
+// Undo button is off and Redo is on, and the other way round otherwise. Both call the same route.
+export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, advanced, onAdvanced }: Props) {
+  const canRedo = revision.origin === "undo" && revision.undoable;
+  const canUndo = revision.origin !== "undo" && revision.undoable;
+  const icon = (Icon: typeof Undo2) => (busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <Icon size={16} aria-hidden="true" />);
+  const reason = (action: string) => blockedReason ?? action;
+  return (
+    <div className="toolbar">
+      <div className="toolbar-tabs">{tabs}</div>
+      <div className="toolbar-actions">
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Undo"
+          disabled={!canUndo || busy || blockedReason !== null}
+          title={canUndo ? reason(`Undo: ${revision.summary}`) : "Nothing to undo"}
+          onClick={onUndo}
+        >
+          {icon(Undo2)}
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Redo"
+          disabled={!canRedo || busy || blockedReason !== null}
+          title={canRedo ? reason("Put the undone change back") : "Nothing to redo"}
+          onClick={onUndo}
+        >
+          {icon(Redo2)}
+        </button>
+        <button type="button" className="toggle-button" aria-pressed={advanced} onClick={() => onAdvanced(!advanced)} title="Show firmware names such as KC_A on keys and in the panel">
+          Advanced view
+        </button>
+      </div>
+    </div>
+  );
+}

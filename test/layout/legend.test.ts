@@ -38,21 +38,36 @@ describe("bindingLegend", () => {
         { kind: "holdTap", tap: { code: "SPACE" }, hold: { layerId: "nav" }, profileId: "p" },
         ctx,
       ).hold,
-    ).toBe("Navigation");
+    ).toBe("NAV");
   });
 
   test("a layer key names its layer and says what the key does", () => {
     expect(bindingLegend({ kind: "layer", action: "momentary", layerId: "nav" }, ctx)).toEqual({
       kind: "layer",
-      tap: "Navigation",
+      tap: "NAV",
       hold: "hold",
     });
-    expect(bindingLegend({ kind: "layer", action: "oneShot", layerId: "base" }, ctx).hold).toBe("one-shot");
+    expect(bindingLegend({ kind: "layer", action: "oneShot", layerId: "base" }, ctx).hold).toBe("once");
   });
 
   test("macros are numbered like the terminal grid, and an unknown one shows M?", () => {
     expect(bindingLegend({ kind: "macro", macroId: "m-one" }, ctx).tap).toBe("M0");
     expect(bindingLegend({ kind: "macro", macroId: "gone" }, ctx).tap).toBe("M?");
+  });
+
+  test("a long native label is shortened from a table, and a kept hold-tap splits into tap and hold", () => {
+    const native = (label: string) => bindingLegend({ kind: "native", firmware: "qmk", source: "X", label }, ctx);
+    expect(native("MSBTN2").tap).toBe("Btn2");
+    expect(native("LyrCol").tap).toBe("LyrC");
+    expect(native("Enter/OSL2")).toEqual({ kind: "native", tap: "Enter", hold: "OSL2" });
+    // A short label with a slash is left whole, and so is a label that has more than one.
+    expect(native("A/B").tap).toBe("A/B");
+    expect(native("one/two/three").tap).toBe("one/two/three");
+  });
+
+  test("Space with modifiers is the open-box mark, so Hyper+Space fits a cap", () => {
+    expect(bindingLegend({ kind: "key", code: "SPACE", mods: ["LCTL", "LSFT", "LALT", "LGUI"] }, ctx).tap).toBe("Hyp␣");
+    expect(bindingLegend({ kind: "key", code: "SPACE" }, ctx).tap).toBe("Space");
   });
 
   test("native shows its own label; transparent and none print nothing", () => {
@@ -65,13 +80,26 @@ describe("bindingLegend", () => {
 });
 
 describe("layerLegend", () => {
-  test("a layer still named for its position is shortened; a renamed one keeps its name", () => {
+  test("a layer prints at most four letters, never its whole name", () => {
     expect(layerLegend("base", ctx)).toBe("L0");
-    expect(layerLegend("nav", ctx)).toBe("Navigation");
+    expect(layerLegend("nav", ctx)).toBe("NAV");
+    expect(layerLegend("odd", ctx)).toBe("L7");
   });
 
-  test("a default-looking name that doesn't match the position is kept, not guessed", () => {
-    expect(layerLegend("odd", ctx)).toBe("Layer 7");
+  test("several words give their initials, and a short word stays whole", () => {
+    const named = { layers: [{ id: "a", name: "Left Hand" }, { id: "b", name: "Fn" }, { id: "c", name: "Symbols" }], macros: [] };
+    expect(layerLegend("a", named)).toBe("LH");
+    expect(layerLegend("b", named)).toBe("FN");
+    expect(layerLegend("c", named)).toBe("SYM");
+  });
+
+  test("layers that would print the same letters are told apart, by four letters or by position", () => {
+    const four = { layers: [{ id: "a", name: "Navigate" }, { id: "b", name: "Nav" }], macros: [] };
+    expect(layerLegend("a", four)).toBe("NAVI");
+    expect(layerLegend("b", four)).toBe("NAV");
+    const same = { layers: [{ id: "a", name: "Numbers" }, { id: "b", name: "Numbers" }], macros: [] };
+    expect(layerLegend("a", same)).toBe("L0");
+    expect(layerLegend("b", same)).toBe("L1");
   });
 
   test("an unknown id, including one shaped like an Object property, shows as written", () => {
