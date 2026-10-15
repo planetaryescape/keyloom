@@ -3,6 +3,9 @@ name: ci
 on:
   push:
   pull_request:
+  # release.yml dispatches this on release-please's branch: the PR that bot opens with the
+  # default token never starts pull_request workflows (docs/issues/release-pr-ci-never-runs.md).
+  workflow_dispatch:
 
 permissions:
   contents: read
