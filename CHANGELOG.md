@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0](https://github.com/planetaryescape/keyloom/compare/v0.8.0...v0.9.0) (2026-10-15)
+
+
+### Features
+
+* emulate a layout on ZMK's native_posix_64 build ([e2fe161](https://github.com/planetaryescape/keyloom/commit/e2fe16147de5509d790921f8369e19f56909bc73))
+* emulate a QMK layout on QMK's host test harness ([ee448c4](https://github.com/planetaryescape/keyloom/commit/ee448c4a9f3fc744101a9f012aea096d7e4b18ca))
+* hands-free flash in keyloom flash, the web dialog and keyloom doctor ([4aaaa42](https://github.com/planetaryescape/keyloom/commit/4aaaa42084b2e6b94292cce9df3cb3a18b70fb79))
+* keyloom emulate runs QMK boards on QMK's host test harness, and the ZMK log fixtures are committed ([c2b885f](https://github.com/planetaryescape/keyloom/commit/c2b885f3fb725252f3cb02a67fd39fe62abecd94))
+* put a build marker and a bootloader command in ZSA firmware builds ([7a1f885](https://github.com/planetaryescape/keyloom/commit/7a1f885dc7d71b9e99fc2a9d39ea02791eddc04e))
+* restart a keyboard into its bootloader over raw HID and verify the flash ([20355e2](https://github.com/planetaryescape/keyloom/commit/20355e2d8707ec70d68e01d1c5eb50e8c052f704))
+
+
+### Bug Fixes
+
+* don't record a priority again when a remembered one already covers what it names ([b48f7d5](https://github.com/planetaryescape/keyloom/commit/b48f7d5f2c43f9c611891d2e307e16b8fe338ff2))
+* keep the validation verdict on one line with the change count under it ([8b8ea86](https://github.com/planetaryescape/keyloom/commit/8b8ea8641a7dec38c924be76b3056680cba6a90d))
+* stop make failing on a userspace folder the QMK image doesn't have ([885301c](https://github.com/planetaryescape/keyloom/commit/885301c956936fcebb2f7bd8ffe6d6b48efc69f8))
+
 ## [0.8.0](https://github.com/planetaryescape/keyloom/compare/v0.7.0...v0.8.0) (2026-10-15)
 
 
