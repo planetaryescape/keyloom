@@ -46,7 +46,8 @@ export function Cap({ tone, legend, unit, width, as = "button", combo = false, s
   const capStyle: CSSProperties = { borderRadius: unit * 0.14, ...style };
   if (as === "span") {
     return (
-      <span className="cap" data-tone={tone} style={capStyle}>
+      // A swatch only illustrates; whatever it sits beside carries the words.
+      <span className="cap" data-tone={tone} style={capStyle} aria-hidden="true">
         {children}
       </span>
     );

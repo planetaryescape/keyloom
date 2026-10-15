@@ -43,7 +43,7 @@ export function Legend({ firmware }: { firmware: string }) {
     <footer className="legend" aria-label="Legend">
       <ul className="legend-list">
         {entries(firmware).map((entry) => (
-          <li key={entry.name} className="legend-item" title={entry.note}>
+          <li key={entry.name} className="legend-item">
             <Cap
               as="span"
               tone={entry.tone}
@@ -53,7 +53,10 @@ export function Legend({ firmware }: { firmware: string }) {
               combo={entry.combo === true}
               style={{ width: 32, height: 32 }}
             />
-            <span className="legend-name">{entry.name}</span>
+            <span className="legend-name">
+              {entry.name}
+              <span className="sr-only">: {entry.note}</span>
+            </span>
           </li>
         ))}
       </ul>

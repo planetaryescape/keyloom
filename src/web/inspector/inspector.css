@@ -169,7 +169,7 @@
   }
 }
 
-/* Legend: one strip under the keyboard; the full note on each item is its tooltip. */
+/* Legend: one strip under the keyboard; each item's note is read out but not drawn. */
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -188,6 +188,15 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .legend-item {
