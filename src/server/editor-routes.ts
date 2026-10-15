@@ -9,6 +9,8 @@ import {
   CheckRequestSchema,
   CheckResponseSchema,
   FlashSchema,
+  ParseBindingRequestSchema,
+  ParseBindingResponseSchema,
   UndoRequestSchema,
   UndoResponseSchema,
   type ApiErrorBody,
@@ -30,6 +32,7 @@ type Route = {
 // Route patterns over the path segments after /api. The one `:` segment is captured, URL-decoded.
 const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["layouts/:/check", { method: "POST", run: (b, ref, r) => check(b, ref, r) }],
+  ["layouts/:/parse-binding", { method: "POST", run: (b, ref, r) => parseBinding(b, ref, r) }],
   ["layouts/:/apply", { method: "POST", run: (b, ref, r) => apply(b, ref, r) }],
   ["change-sets/:/apply", { method: "POST", run: (b, id, r) => applyChangeSet(b, id, r) }],
   ["layouts/:/undo", { method: "POST", run: (b, ref, r) => undo(b, ref, r) }],
@@ -137,6 +140,12 @@ async function check(backend: EditorBackend, ref: string, request: Request): Pro
   if (body instanceof Response) return body;
   const validation = await backend.check(ref, body);
   return Response.json(CheckResponseSchema.parse({ validation }));
+}
+
+async function parseBinding(backend: EditorBackend, ref: string, request: Request): Promise<Response> {
+  const body = await readBody(request, ParseBindingRequestSchema);
+  if (body instanceof Response) return body;
+  return Response.json(ParseBindingResponseSchema.parse(await backend.parseBinding(ref, body)));
 }
 
 async function apply(backend: EditorBackend, ref: string, request: Request): Promise<Response> {

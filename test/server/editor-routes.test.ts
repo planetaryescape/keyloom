@@ -116,6 +116,19 @@ describe("bodies are parsed with the shared schemas", () => {
   });
 });
 
+describe("parse-binding (the Any field)", () => {
+  test("answers a binding, needs JSON and POST, and refuses a body without an expression", async () => {
+    const { call } = start(quick());
+    const ok = await call("POST", "/api/layouts/moonlander-daily/parse-binding", { expression: "LCTL_T(KC_A)", position: 3 });
+    expect(ok.status).toBe(200);
+    expect(ParseBindingResponseSchema.parse(await ok.json()).ok).toBe(true);
+    const missing = await call("POST", "/api/layouts/moonlander-daily/parse-binding", {});
+    expect(missing.status).toBe(400);
+    expect((await call("GET", "/api/layouts/moonlander-daily/parse-binding")).status).toBe(405);
+    expect((await call("POST", "/api/layouts/moonlander-daily/parse-binding", "x=1", { "content-type": "application/x-www-form-urlencoded" })).status).toBe(415);
+  });
+});
+
 describe("the edit journey", () => {
   test("check, apply, undo and a stale undo", async () => {
     const { call } = start(quick());

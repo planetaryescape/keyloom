@@ -4,6 +4,7 @@ export { BusyError, ModelError, NotFoundError, StaleBaseError, UsageError, Valid
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
+export { type ParsedBinding, parseBindingExpression } from "./binding-expression.ts";
 export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, importLayout, listLayouts } from "./layouts.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";

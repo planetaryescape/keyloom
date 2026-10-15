@@ -1,7 +1,7 @@
 // The server's write interface over the app's use cases (rung 2). The server stays ignorant of
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
-  type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange,
+  type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
   ValidationResultSchema, getBuild, getFlash, startBuild, startFlash, undo,
 } from "../app/index.ts";
 import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
@@ -48,6 +48,7 @@ async function orNull<T>(fn: () => Promise<T>): Promise<T | null> {
 export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs"> = {}): EditorBackend {
   return {
     check: (ref, request) => translate(() => checkChange(app, ref, request)),
+    parseBinding: (ref, request) => translate(() => parseBindingExpression(app, ref, request)),
     apply: (ref, request) => translate(() => applyOps(app, ref, request)),
     applyChangeSet: (changeSetId) => translate(() => applyChange(app, changeSetId)),
     undo: (ref, request) => translate(() => ({ revisionId: undo(app, ref, request).revision.id })),

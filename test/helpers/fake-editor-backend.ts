@@ -4,7 +4,7 @@
 import {
   KEYCODES,
 } from "../../src/layout/keycodes.ts";
-import type { ApplyRequest, ApplyResponse, Build, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
+import type { ApplyRequest, ApplyResponse, Build, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
 import type { Binding, Layout } from "../../src/layout/schema.ts";
 import type { ChangeOp, Slot } from "../../src/layout/change.ts";
 import { applyOps } from "../../src/layout/apply-ops.ts";
@@ -95,6 +95,13 @@ export class FakeEditor implements EditorBackend {
   detail(): LayoutDetail {
     const { document, ...revision } = this.head;
     return { ...this.base, revision, document: structuredClone(document) };
+  }
+
+  // The fake knows one spelling: everything else is kept as written, which is all the routes need to be exercised.
+  async parseBinding(_ref: string, request: ParseBindingRequest): Promise<ParseBindingResponse> {
+    const text = request.expression.trim();
+    if (text === "") return { ok: false, message: "Type an expression." };
+    return { ok: true, native: true, binding: { kind: "native", firmware: "qmk", source: text, label: text.slice(0, 6) } };
   }
 
   async check(_ref: string, request: CheckRequest): Promise<ValidationResult> {

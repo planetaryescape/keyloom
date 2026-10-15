@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { BoardDefinitionSchema, GeometrySchema } from "../boards/schema.ts";
 import { ChangeOpSchema, DecisionDraftSchema, SlotSchema } from "../layout/change.ts";
-import { LayoutSchema } from "../layout/schema.ts";
+import { BindingSchema, LayoutSchema } from "../layout/schema.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 
 export const LayoutSummarySchema = z.object({
@@ -43,6 +43,7 @@ export type LayoutDetail = z.infer<typeof LayoutDetailSchema>;
 // Editing, building and flashing (rung 2). Every route below takes and returns JSON, needs the
 // session token like the reads, and reports failure with ApiErrorBody.
 //   POST /api/layouts/:ref/check        CheckRequest  -> CheckResponse
+//   POST /api/layouts/:ref/parse-binding ParseBindingRequest -> ParseBindingResponse (reads a typed QMK or ZMK expression; writes nothing)
 //   POST /api/layouts/:ref/apply        ApplyRequest  -> ApplyResponse     (409 on stale_base or invalid ops)
 //   POST /api/layouts/:ref/undo         UndoRequest   -> UndoResponse      (409 when the head moved)
 //   POST /api/layouts/:ref/builds       BuildRequest  -> Build             (202; poll GET /api/builds/:id)
@@ -65,6 +66,22 @@ export type CheckRequest = z.infer<typeof CheckRequestSchema>;
 
 export const CheckResponseSchema = z.object({ validation: ValidationResultSchema });
 export type CheckResponse = z.infer<typeof CheckResponseSchema>;
+
+// The editor's Any field: a firmware expression such as `LCTL_T(KC_A)` or `&mt LCTRL A`, read as the
+// importers read one. An expression keyloom doesn't model comes back as a native binding; text that
+// isn't an expression at all comes back as ok: false, with a sentence to show.
+export const ParseBindingRequestSchema = z.object({
+  expression: z.string().max(500),
+  // The key it is for, which decides the profile of a QMK mod-tap (home row or not).
+  position: z.number().int().nonnegative().optional(),
+});
+export type ParseBindingRequest = z.infer<typeof ParseBindingRequestSchema>;
+
+export const ParseBindingResponseSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), binding: BindingSchema, native: z.boolean(), note: z.string().optional() }),
+  z.object({ ok: z.literal(false), message: z.string().min(1) }),
+]);
+export type ParseBindingResponse = z.infer<typeof ParseBindingResponseSchema>;
 
 export const ApplyRequestSchema = CheckRequestSchema.extend({
   // One line for the revision history, such as "Layer 2, key 31: Left Alt".

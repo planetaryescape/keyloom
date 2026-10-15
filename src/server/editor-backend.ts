@@ -1,5 +1,5 @@
 import type {
-  ApplyRequest, ApplyResponse, Build, BuildRequest, CheckRequest, Flash, UndoRequest, UndoResponse,
+  ApplyRequest, ApplyResponse, Build, BuildRequest, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 
@@ -7,6 +7,8 @@ import type { ValidationResult } from "../validation/result.ts";
 // implementation, so the server knows nothing about storage, Docker or Zapp.
 export interface EditorBackend {
   check(ref: string, request: CheckRequest): Promise<ValidationResult>;
+  /** Reads a firmware expression typed in the editor's Any field; it writes nothing. */
+  parseBinding(ref: string, request: ParseBindingRequest): Promise<ParseBindingResponse>;
   apply(ref: string, request: ApplyRequest): Promise<ApplyResponse>;
   /** Applies a stored proposal by id, re-validating it against the head. */
   applyChangeSet(changeSetId: string): Promise<ApplyResponse>;
