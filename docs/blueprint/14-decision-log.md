@@ -907,3 +907,46 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 
 ### D-254: On a phone, the Moonlander's left half scrolls sideways by a few pixels. (Claude)
 - **Why:** the tilted cluster makes a half about 9 units wide, and the board stops shrinking at 44px a unit (18). Scrolling is the existing fallback for a board that is too wide. Shrinking the keys below 44px would cost more than the scroll.
+
+## Rung 20: the MacBook keyboard through kanata (2026-10-16)
+
+### D-240: A software remapper is a board, not a new kind of board file. Its revision names the kanata release, a `kanata-config` build, a `kanata-reload` flash and a `device` matcher. (Claude, building D-230)
+- **Why:** `build`, `flash` and `source` already carry what a revision needs; adding variants kept `BoardDefinition` one type, so the roughly 40 places that read a board didn't each grow a second shape. `source` pins kanata's own release (`jtroo/kanata` v1.12.0, `02242ef`), which also pins the key names. `detect` stays `null` and `device.name` carries the product string, because the built-in keyboard has USB IDs of 0.
+- **Geometry:** hand-authored, with `source.kind: "hand-authored"` and a `verified` flag. `boards check` skips the firmware-tree comparison, checks that no two keys overlap, and warns while `verified` is false (S36). `mirror` stays empty, because a staggered unibody has no mirror image.
+- **`physicalKeys`:** a software board lists the key each position is on, because kanata grabs keys by name. `FN` is the one entry that isn't a KeyCode.
+
+### D-241: kanata key names come from kanata's own source at a pinned SHA, joined to the key table on the HID usage macOS sends. (Claude)
+- `scripts/gen-keycodes.ts` reads `parser/src/keys/mod.rs` and `macos.rs` at `02242ef` (v1.12.0), takes the name arms that a macOS build accepts (a `#[cfg]` that leaves macOS out, such as `prtsc`, is skipped), and joins them to the existing keys on usage. 136 of 197 keys have a name; the 61 without are keys kanata has no macOS name for. Names only: no kanata code is copied (LGPL-3.0).
+- **Tested:** every key the MacBook board uses has a name, and `kanata --check` accepts every name the generator writes.
+
+### D-242: Hold-tap profiles reach kanata through a written translation table, and what has no equivalent is reported. (Claude)
+- A kanata profile holds a `variant` (kanata's own tap-hold names), `hold-ms`, `tap-repress-ms` and optionally `require-prior-idle-ms`. The table in [21](21-macbook-keyboard.md#hold-tap-translation) maps QMK's `PERMISSIVE_HOLD`, `HOLD_ON_OTHER_KEY_PRESS`, `CHORDAL_HOLD`, `FLOW_TAP_TERM`, `TAPPING_TERM` and `QUICK_TAP_TERM`, and ZMK's flavors, `tapping-term-ms`, `quick-tap-ms`, `require-prior-idle-ms` and an opposite-hand `hold-trigger-key-positions`. `RETRO_TAPPING`, `retro-tap` and a trigger list that isn't "the other hand" have no kanata form and come back as notes the agent tells BK.
+- "Roll equals tap" (BK's Karabiner home-row rule, ZMK's `tap-preferred`) is `tap-hold-tap-keys` over every key: another key's press makes the held key a tap, and only the time makes it a hold.
+- **Not yet proved:** the rows marked (S6) in `src/layout/kanata/profiles.ts` are inferences from the docs. kanata's v1.12.0 release carries no simulator binary, so the differential tests (S33) wait for a build from source.
+
+### D-243: `keyloom.kbd` is written whole, with a header, a hash and a revision marker, and the generator refuses what kanata can't say. (Claude)
+- The header names the layout and revision and hashes everything after it, so a file BK edited by hand is "not keyloom's". A virtual key `keyloom-<revision id>` is the marker `RequestFakeKeyNames` reports. `safe.kbd` is the identity map with the marker `keyloom-safe`.
+- **Refused, not dropped (D-024):** a tap dance with a hold or tap-then-hold slot (kanata's tap-dance counts taps), a macro that holds a key that isn't a modifier, a QMK or ZMK `native` binding with no kanata form, and any kept kanata source with a `cmd` action, `danger-enable-cmd`, `include` or text that would change the config's structure. The validator reports each as `firmware_unsupported` before Apply.
+
+### D-244: Apply checks the candidate first, replaces the file atomically, reloads with `wait`, reads back, and undoes a failed reload. (Claude)
+- Order: write the candidate under its own name, `kanata --check` it, write `safe.kbd`, rename the candidate over `keyloom.kbd`, send `ReloadFile` with `wait: true`, then compare `RequestLayerNames` and `RequestFakeKeyNames` with what was written. A refused reload puts the previous file back. A `keyloom.kbd` that keyloom didn't write is left alone unless the person asks (`--overwrite`), and a copy is kept.
+- **Measured:** a sync on the demo (real `kanata --check`, fake TCP server) took 219 ms from the start of the write to the verified read-back.
+
+### D-245: The MacBook uses the sync engine's states, with `remapping_off` as one more reason for "behind", and auto-apply waits for the exit-chord proof. (Claude, from D-235 and 17)
+- There is no build and no flash: the engine's remapper path runs one apply, then re-reads kanata. States come from kanata's TCP port: not running is "Not connected", another config is "Not keyloom's", `safe.kbd` loaded is "Remapping is off".
+- Auto-apply turns on only after `keyloom remap confirm-exit-chord`, which BK runs after holding Left Control + Space + Escape and seeing kanata stop. "Disable remapping" is in the header menu, `keyloom remap disable`, and `POST /api/sync/disable-remapping`. Auto-apply never undoes it.
+- `keyloom remap setup` writes the LaunchDaemon plist and an identity `keyloom.kbd` into keyloom's own folder, so the daemon has something to start on, and prints the one root command. keyloom never runs it.
+
+### D-246: The doctor only reads. (Claude)
+- It reports the kanata version, the driver version and its protocol (6.x is 5, 8.x is 7), the built-in keyboard's product string, whether Karabiner's config still lets it grab the built-in keyboard, the daemon, the TCP port and the file's header. It says macOS keeps Input Monitoring and Accessibility out of reach, and warns that a Karabiner-Elements 16.x upgrade replaces the driver with one kanata 1.12 can't use. `keyloom doctor` includes it as warnings, so a machine that never set it up doesn't fail.
+
+### D-247: On the MacBook the validator requires Escape and a Control key to be reachable. (Claude, D-235)
+- `remapper_lockout` is an error in the document rules. kanata's exit chord reads raw keys, so this protects the keys, not the chord. A layer's way back is already `layer_trap`.
+
+### D-248: The Karabiner importer reads five shapes, imports a rule whole or not at all, and hands BK the disable edit as text. (Claude, D-232 and D-233)
+- **Read:** the Space-hold layer (a `set_variable` pair with a `variable_if` sibling set), hold-taps (`to_if_held_down` with `to_if_alone`), `simultaneous` combos, a plain key-to-key remap, and `simple_modifications` and `fn_function_keys`. The last two go beyond the brief's list because they are exact and BK's file uses both (Caps Lock to Backspace, F6 to F13).
+- **Not read:** anything else, including a rule with one unreadable manipulator among readable ones, stays in Karabiner and is listed. A rule switched off in Karabiner is listed and not imported.
+- **The edit:** an `ignore: true` entry for vendor 0, product 0 in the profile's `devices`, printed with the instruction to confirm the identifiers with `karabiner_cli --list-connected-devices`. keyloom never applies it, and never writes the file. Rules not imported stop applying to the built-in keyboard once it is ignored, and the report says so.
+
+### D-249: Copying onto the MacBook offers hold keys instead of forcing them. (Claude, D-234 and 20)
+- `board.json` can list `holdKeyPreference`: positions where a layer or hold key lands first when the board it came from had more thumb keys. The MacBook lists Space, Caps Lock and right Option. `map_keys` shows them for each layer key with no counterpart and says to ask BK, suggesting the first. A hold-tap copied onto a kanata board gets a translated kanata profile (D-242).

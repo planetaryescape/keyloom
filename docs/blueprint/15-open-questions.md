@@ -73,6 +73,18 @@ The combined `glove80.uf2` holds two images at the same addresses with different
 
 Yes. Flash `fl_01M5067Z2Y2JT3EDYD3JCY0NSC` copied keyloom's combined `glove80.uf2` (build `bld_01M4ZXEWMANN3V3H25Y28EC6JP`, BK's `42-key-map` keymap) to `GLV80RHBOOT` and then to the left half's boot drive with `keyloom flash --wait 15` (v0.10.1). Each bootloader took its own image and rebooted, both halves came back on USB as "Glove80 Right" and "Glove80 Left", and BK typed on the board: "typing works as you can see." An earlier attempt, `fl_01M5066BDXSVVD2CF3ZJT0JMN5`, failed with `EACCES` on the copy because the agent's sandbox blocked writes to `/Volumes`. A flash now explains that error, since macOS raises the same one for an app without Removable Volumes access.
 
+### S35 result (2026-10-16)
+
+Yes. A synthetic Karabiner file with BK's patterns imports as a Space-hold layer, hold-taps (home-row mods and Hyper), combos and key remaps; a switched-off rule and one keyloom can't read are listed. BK's own file was imported once, read-only, with the same result. The file was read and never written. See [../research/spikes/S35.md](../research/spikes/S35.md).
+
+### S33 result, not run (2026-10-16)
+
+kanata's v1.12.0 macOS release has no `kanata_simulated_input` binary, so the differential tests wait for a build from source. `kanata --check` passes on every generated fixture. See [../research/spikes/S33.md](../research/spikes/S33.md).
+
+### S30, S31, S32 and S36: runbooks written, not run (2026-10-16)
+
+[S30](../research/spikes/S30.md) and [S31](../research/spikes/S31.md) need BK at the keyboard and an administrator password. [S32](../research/spikes/S32.md) and [S36](../research/spikes/S36.md) need him to press keys under `kanata -d`. The MacBook board's geometry says `verified: false` until S36, and the F-row and fn names are assumptions until S32.
+
 ### S21 result (2026-10-15)
 
 No. At `ce69e85` the Glove80's underglow fills one buffer with one effect, and the only per-LED colours are fixed status LEDs on the left half, with a magenta layer indicator. A key's own colour on a layer exists only in the open community pull request `moergo-sc/zmk#36`, which is on another base and unmerged. The Glove80 therefore gets no lighting model; the board says why and the agent says it plainly. See [../research/spikes/S21.md](../research/spikes/S21.md).

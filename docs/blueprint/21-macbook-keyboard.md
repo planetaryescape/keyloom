@@ -63,3 +63,29 @@ Rung 19's cross-board mapping ([20](20-cross-board.md)) does the work.
 ## Karabiner-Elements later
 
 A second target in the same family, with the same editor (D-231). keyloom would own a separate Karabiner profile, not BK's tracked file. It's built only if kanata fails S30 or S31, or BK asks for it.
+
+## Hold-tap translation
+
+Hold-tap profiles from QMK and ZMK boards become kanata ones with this table (D-242). The code is `src/layout/kanata/profiles.ts`. kanata's variants are from `docs/config.adoc` at `jtroo/kanata@02242ef` (v1.12.0). The QMK and ZMK sides are the research's reading of their options; rows marked (S6) await the differential tests.
+
+| From | To kanata |
+|---|---|
+| QMK `TAPPING_TERM` | `hold-ms` (default 200) |
+| QMK `QUICK_TAP_TERM` | `tap-repress-ms` (QMK defaults it to the tapping term) |
+| QMK `PERMISSIVE_HOLD` | `tap-hold-release` |
+| QMK `HOLD_ON_OTHER_KEY_PRESS` | `tap-hold-press`; it wins when both are on, as in QMK |
+| QMK `CHORDAL_HOLD` | `tap-hold-opposite-hand`, or `-release` with `PERMISSIVE_HOLD` (S6) |
+| QMK `FLOW_TAP_TERM` | `require-prior-idle-ms` |
+| ZMK flavor `hold-preferred` | `tap-hold-press` |
+| ZMK flavor `balanced` | `tap-hold-release` |
+| ZMK flavor `tap-preferred` | `tap-hold-tap-keys` over every key (S6) |
+| ZMK flavor `tap-unless-interrupted` | `tap-hold-press-timeout` with the tap as the timeout action |
+| ZMK `tapping-term-ms`, `quick-tap-ms`, `require-prior-idle-ms` | `hold-ms`, `tap-repress-ms`, `require-prior-idle-ms` |
+| ZMK `hold-trigger-key-positions` that are the other hand's keys and thumbs | `tap-hold-opposite-hand`, or `-release` with `balanced` or `hold-trigger-on-release` |
+| QMK `RETRO_TAPPING`, ZMK `retro-tap`, any other trigger list | no kanata form: reported, not carried |
+
+The opposite-hand variants are written with `(timeout hold)` and `(same-hand tap)`: a key held past the time is a hold, as on QMK and ZMK, and a same-hand key makes it a tap.
+
+## Built in rung 20
+
+The board, the key names, the generator, apply with verify and "Disable remapping", the setup doctor, the validator rule and the Karabiner import are built and tested against a fake kanata server and the real `kanata --check` (v1.12.0). Nothing here has run on the keyboard BK types on: S30 and S31 (the install and coexistence) are runbooks in [../research/spikes/S30.md](../research/spikes/S30.md) and [S31.md](../research/spikes/S31.md), and S32 and S36 (key capture) in [S32.md](../research/spikes/S32.md) and [S36.md](../research/spikes/S36.md).
