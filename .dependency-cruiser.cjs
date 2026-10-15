@@ -14,10 +14,10 @@ const ALLOWED = {
   memory: ["layout", "persistence"],
   persistence: ["layout"],
   app: ["layout", "validation", "boards", "firmware", "agent", "memory", "persistence"],
-  api: ["layout", "boards"], // the HTTP wire contract shared by server and web
-  server: ["app", "api", "layout", "boards", "web"], // web: the bundled HTML entry it serves; layout/boards: schema types
+  api: ["layout", "boards", "validation"], // the HTTP wire contract shared by server and web
+  server: ["app", "api", "layout", "boards", "validation", "web"], // web: the bundled HTML entry it serves; layout/boards/validation: schema types
   cli: ["app", "server"], // the CLI entry point composes the server (keyloom serve)
-  web: ["layout", "boards", "api"],
+  web: ["layout", "boards", "validation", "api"], // validation runs in the browser for instant feedback
   // Ambient module declarations; nothing imports them.
   types: [],
 };

@@ -21,7 +21,13 @@ export function appLayoutSource(app: App): LayoutSource {
     async get(ref) {
       try {
         const view = getLayout(app, ref);
-        return { document: view.document, board: view.board.definition, geometry: view.board.geometry };
+        const r = view.revision;
+        return {
+          revision: { id: r.id, parentId: r.parentId, origin: r.origin, summary: r.summary, createdAt: r.createdAt, undoable: r.parentId !== null },
+          document: view.document,
+          board: view.board.definition,
+          geometry: view.board.geometry,
+        };
       } catch (err) {
         // An unknown ref is the server's 404; anything else is a real failure (500).
         if (err instanceof NotFoundError) return null;

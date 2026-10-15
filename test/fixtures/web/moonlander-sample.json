@@ -1,4 +1,12 @@
 {
+  "revision": {
+    "id": "rev_sample",
+    "parentId": null,
+    "origin": "import",
+    "summary": "Sample layout for tests",
+    "createdAt": 1760486400000,
+    "undoable": false
+  },
   "document": {
     "schemaVersion": 1,
     "boardId": "zsa/moonlander",
