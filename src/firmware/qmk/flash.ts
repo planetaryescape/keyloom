@@ -4,11 +4,11 @@
 // until it has flashed a real board, so this reads its exit code first and everything else loosely,
 // and keeps the raw output in the log.
 import { existsSync } from "node:fs";
-import type { FlashResult, FlashState } from "../toolchain/flash-state.ts";
+import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
 import { dfuProblem } from "./dfu.ts";
 
-export type { FlashResult, FlashState } from "../toolchain/flash-state.ts";
+export type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 
 export const BOOTLOADER_WAIT_MS = 120_000;
 export const WRITE_TIMEOUT_MS = 180_000;
@@ -35,7 +35,7 @@ export type FlashInput = {
   bootloader: string;
   log: LogSink;
   /** Called on every state change; `instruction` is what the person must do now. */
-  onState: (state: FlashState, instruction: string | null) => void;
+  onState: (state: FlashState, instruction: string | null, note?: FlashNote) => void;
   onLine?: (line: string) => void;
   /** The zapp executable; found on PATH when omitted. Tests always pass a fake. */
   zapp?: string;
@@ -93,7 +93,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   };
 
   input.log.line(`keyloom: ${zapp} flash ${input.artifactPath}`);
-  input.onState("waiting_for_bootloader", input.enterBootloader ? HANDS_FREE_INSTRUCTION : resetInstruction(input.bootloaderWaitMs));
+  input.onState("waiting_for_bootloader", input.enterBootloader ? HANDS_FREE_INSTRUCTION : resetInstruction(input.bootloaderWaitMs), input.enterBootloader ? undefined : { needsHand: true });
   arm(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS, "bootloader");
 
   const result = await run({
@@ -116,12 +116,12 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
                 rebooted = r.ok;
                 if (!r.ok) {
                   input.log.line(`keyloom: couldn't restart the keyboard itself: ${r.reason}`);
-                  input.onState("waiting_for_bootloader", `keyloom couldn't restart the keyboard by itself (${r.reason}). ${resetInstruction(input.bootloaderWaitMs)}`);
+                  input.onState("waiting_for_bootloader", `keyloom couldn't restart the keyboard by itself (${r.reason}). ${resetInstruction(input.bootloaderWaitMs)}`, { needsHand: true });
                 }
               },
               (err: unknown) => {
                 input.log.line(`keyloom: couldn't restart the keyboard itself: ${err instanceof Error ? err.message : String(err)}`);
-                input.onState("waiting_for_bootloader", resetInstruction(input.bootloaderWaitMs));
+                input.onState("waiting_for_bootloader", resetInstruction(input.bootloaderWaitMs), { needsHand: true });
               },
             );
           }
@@ -157,13 +157,14 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   if (result.exitCode === 0) {
     input.log.line("keyloom: zapp exited 0");
     if (input.verify) {
-      input.onState("writing", "Written. Waiting for the keyboard to restart so keyloom can confirm it.");
+      input.onState("writing", "Written. Waiting for the keyboard to restart so keyloom can confirm it.", { verifying: true });
       const verified = await input.verify();
       if (!verified.ok) return fail(verified.error, output);
       input.log.line(`keyloom: ${verified.message}`);
     }
     input.onState("succeeded", null);
-    return { state: "succeeded", error: null, output };
+    // Hands-free means keyloom put the keyboard in its bootloader and then saw it come back as the new build.
+    return { state: "succeeded", error: null, output, handsFree: rebooted && input.verify !== undefined };
   }
   const why = result.exitCode === null ? `was stopped by ${result.signalCode}` : `exited with code ${result.exitCode}`;
   const last = output.filter((l) => l.trim()).slice(-2).join(" | ");

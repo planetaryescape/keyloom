@@ -126,3 +126,24 @@ export function successfulFlashes(db: Database, layoutId: string): { buildStarte
     .all(layoutId) as { build_started_at: number; flashed_at: number }[];
   return rows.map((r) => ({ buildStartedAt: r.build_started_at, flashedAt: r.flashed_at }));
 }
+
+/** The newest successful build of exactly this revision for this board revision, so a sync that failed after its build can flash it again instead of building twice. */
+export function latestSuccessfulBuildOfRevision(db: Database, revisionId: string, boardRevision: string): BuildRow | undefined {
+  const row = db
+    .query(
+      `SELECT b.*, r.layout_id FROM builds b JOIN revisions r ON r.id = b.revision_id
+       WHERE b.revision_id = ? AND b.board_revision = ? AND b.status = 'succeeded' ORDER BY b.finished_at DESC, b.id DESC LIMIT 1`,
+    )
+    .get(revisionId, boardRevision) as BuildDb | null;
+  return row ? toBuild(row) : undefined;
+}
+
+/**
+ * The build a keyboard's marker names. A marker holds only the last 12 characters of the build's ID (src/firmware/qmk/handsfree.ts),
+ * which are random, so a match is the build unless two collide; then none is returned, because naming the wrong one would sync against the wrong revision.
+ */
+export function findBuildByKey(db: Database, key: string): BuildRow | undefined {
+  if (!/^[0-9A-Z]{12}$/.test(key)) return undefined;
+  const rows = db.query("SELECT b.*, r.layout_id FROM builds b JOIN revisions r ON r.id = b.revision_id WHERE substr(b.id, -12) = ? LIMIT 2").all(key) as BuildDb[];
+  return rows.length === 1 ? toBuild(rows[0] as BuildDb) : undefined;
+}

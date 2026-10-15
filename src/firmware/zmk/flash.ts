@@ -7,7 +7,7 @@ import { open, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
 import type { FlashStep } from "../../boards/recipes.ts";
-import type { FlashResult, FlashState } from "../toolchain/flash-state.ts";
+import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import type { LogSink } from "../toolchain/run.ts";
 import { type Uf2Shape, describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import type { VolumeFinder } from "./volumes.ts";
@@ -22,7 +22,8 @@ export const WRITING_INSTRUCTION = "Don't unplug or switch off the half. Writing
 
 export type { FlashStep } from "../../boards/recipes.ts";
 
-export type EnterResult = { ok: true } | { ok: false; reason: string };
+/** `alreadyThere`: the half was in its bootloader before keyloom tried, so keyloom proved nothing about reaching it. */
+export type EnterResult = { ok: true; alreadyThere?: true } | { ok: false; reason: string };
 export type VerifyResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** What hands-free flashing adds to each step (src/firmware/zmk/handsfree-flash.ts); without it the person puts every half in its bootloader. */
@@ -48,7 +49,7 @@ export type Uf2FlashInput = {
   hooks?: StepHooks;
   log: LogSink;
   /** Called on every state change; `instruction` is what the person must do now. */
-  onState: (state: FlashState, instruction: string | null) => void;
+  onState: (state: FlashState, instruction: string | null, note?: FlashNote) => void;
   onLine?: (line: string) => void;
   bootloaderWaitMs?: number;
   unmountWaitMs?: number;
@@ -121,9 +122,11 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
   if ("error" in files) return fail(files.error);
 
   const verified: string[] = [];
+  let allRestarted = true;
   for (const [i, step] of input.steps.entries()) {
     let instruction = instructionFor(step, i, input.steps.length, waitMs);
     let restarted = false;
+    let byKeyloom = false;
     if (input.hooks?.enterBootloader) {
       const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text));
       if (!entered.ok) {
@@ -131,10 +134,12 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
         instruction = `keyloom couldn't restart the ${step.label} by itself: ${entered.reason}. ${instruction}`;
       }
       restarted = entered.ok;
+      byKeyloom = entered.ok && entered.alreadyThere !== true;
     }
     say(`keyloom: waiting for ${step.volume} (${step.label}, step ${i + 1} of ${input.steps.length})`);
     // A half keyloom restarted needs nothing from the person; its drive is already there.
-    if (!restarted) input.onState("waiting_for_bootloader", instruction);
+    if (!restarted) input.onState("waiting_for_bootloader", instruction, { needsHand: true });
+    allRestarted &&= byKeyloom;
 
     let mount: string | null = null;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
@@ -186,7 +191,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
 
     if (input.hooks?.verify) {
       say(`keyloom: waiting for the ${step.label} to come back`);
-      input.onState("writing", `The ${step.label} is restarting. Don't unplug it; keyloom is checking it came back.`);
+      input.onState("writing", `The ${step.label} is restarting. Don't unplug it; keyloom is checking it came back.`, { verifying: true });
       const checked = await input.hooks.verify(step, i, files[i] as Uint8Array);
       if (!checked.ok) return fail(checked.error);
       verified.push(checked.message);
@@ -196,5 +201,5 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
   say(`keyloom: ${input.steps.map((s) => s.label).join(" and ")} flashed`);
   if (verified.length > 0) say(`keyloom: Verified: ${verified.join(", and ")}.`);
   input.onState("succeeded", null);
-  return { state: "succeeded", error: null, output };
+  return { state: "succeeded", error: null, output, handsFree: allRestarted && verified.length === input.steps.length };
 }

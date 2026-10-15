@@ -36,7 +36,7 @@ const hexId = (n: number): string => `0x${n.toString(16).padStart(4, "0")}`;
 
 const isKeyboard = (d: UsbDevice, t: KeyboardTarget): boolean => d.vendorId === hexId(ZSA_VENDOR_ID) && d.productId === t.productId;
 
-const inBootloader = (devices: UsbDevice[], t: KeyboardTarget): boolean => {
+export const inBootloader = (devices: UsbDevice[], t: KeyboardTarget): boolean => {
   const [vendor, product] = t.bootloader.split(":");
   return devices.some((d) => d.vendorId === `0x${vendor}` && d.productId === `0x${product}`);
 };

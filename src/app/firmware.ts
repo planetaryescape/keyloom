@@ -7,7 +7,7 @@ import { writeSource } from "../firmware/qmk/write-source.ts";
 import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import { dockerStatus } from "../firmware/toolchain/docker.ts";
-import type { FlashState } from "../firmware/toolchain/flash-state.ts";
+import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
@@ -15,6 +15,7 @@ import {
   type BuildRow, type FlashRow, activeFlashes, createBuild, createFlash, finishBuild, finishFlash, findBuild, findFlash, latestSuccessfulBuild,
   newBuildId, newFlashId, setFlashProgress,
 } from "../persistence/builds.ts";
+import { recordHandsFreeProof } from "../persistence/syncs.ts";
 import { findLayoutRow, listLayoutRows } from "../persistence/layouts.ts";
 import { cacheDir } from "../persistence/paths.ts";
 import { showBoard } from "./boards.ts";
@@ -223,6 +224,18 @@ export async function getBuild(app: App, id: string): Promise<BuildView> {
   return toBuildView(app, reapBuild(app, row));
 }
 
+/** Waits for a build started in this process to finish; resolves at once for one that has already finished or runs elsewhere. */
+export async function waitForBuild(app: App, id: string): Promise<BuildView> {
+  await buildTasks.get(id);
+  return getBuild(app, id);
+}
+
+/** Whether a build is running in this process or a flash is in progress anywhere: a sync waits for this, because only one board can be in its bootloader at a time and two builds in one checkout overwrite each other. */
+export function firmwareBusy(app: App): boolean {
+  if (buildTasks.size > 0) return true;
+  return activeFlashes(app.db).map((f) => reapFlash(app, f)).some((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
+}
+
 /** Builds and waits. Throws BuildFailedError (exit 7) when the build fails. */
 export async function buildAndWait(app: App, ref: string, opts: BuildOptions = {}): Promise<BuildView> {
   const started = await startBuild(app, ref, opts);
@@ -279,6 +292,8 @@ export type FlashOptions = {
   onProgress?: (line: string) => void;
   /** Called when the flash changes state, including the first state. */
   onState?: (flash: FlashView) => void;
+  /** Called with the flasher's own word on each state change, including whether the person must act and whether it is verifying; keyboard sync reads it. */
+  onFlasherState?: (state: FlashState, instruction: string | null, note: FlashNote | undefined) => void;
   /** Aborting stops the flasher, so nothing is left waiting for the keyboard. */
   signal?: AbortSignal;
   /** How long to wait for the keyboard to enter its bootloader (default 2 minutes). Short values are for tests. */
@@ -350,7 +365,8 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
       ...(opts.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: opts.bootloaderWaitMs }),
       ...(opts.volumesRoot === undefined ? {} : { volumesRoot: opts.volumesRoot }),
       ...(opts.signal ? { signal: opts.signal } : {}),
-      onState: (state: FlashState, instruction: string | null) => {
+      onState: (state: FlashState, instruction: string | null, note?: FlashNote) => {
+        opts.onFlasherState?.(state, instruction, note);
         if (state === "waiting_for_bootloader" || state === "writing") {
           flashInstructions.set(row.id, instruction);
           setFlashProgress(app.db, row.id, state);
@@ -359,6 +375,8 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
       },
     });
     finishFlash(app.db, row.id, result.state === "succeeded" ? null : { error: result.error ?? "the flash failed" });
+    // Auto-sync may turn on only for a board keyloom has reached without hands, and this is the one place that knows (D-160).
+    if (result.state === "succeeded" && result.handsFree) recordHandsFreeProof(app.db, board.definition.id, row.buildId);
   } catch (err) {
     log.line(`keyloom: unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     finishFlash(app.db, row.id, { error: `Unexpected error: ${err instanceof Error ? err.message : String(err)}` });
@@ -373,6 +391,12 @@ export async function getFlash(app: App, id: string): Promise<FlashView> {
   const row = findFlash(app.db, id);
   if (!row) throw new NotFoundError(`no flash "${id}"`);
   return toFlashView(app, reapFlash(app, row));
+}
+
+/** Waits for a flash started in this process to finish, and returns it. */
+export async function waitForFlash(app: App, id: string): Promise<FlashView> {
+  await flashTasks.get(id);
+  return getFlash(app, id);
 }
 
 /** Flashes and waits. Throws FlashFailedError (exit 8) when the flash fails or no bootloader appears. */

@@ -14,7 +14,7 @@ import { buildZmkWest } from "../firmware/zmk/build-west.ts";
 import { BOOTLOADER_WAIT_MS, type FlashStep, ZMK_CHECKING_INSTRUCTION, flashUf2Drives, instructionFor } from "../firmware/zmk/flash.ts";
 import { GenerateError as ZmkGenerateError, generateZmkSource } from "../firmware/zmk/generate.ts";
 import { defaultVolumeFinder, volumeFinderAt } from "../firmware/zmk/volumes.ts";
-import type { FlashResult, FlashState } from "../firmware/toolchain/flash-state.ts";
+import type { FlashNote, FlashResult, FlashState } from "../firmware/toolchain/flash-state.ts";
 import type { LogSink } from "../firmware/toolchain/run.ts";
 import { portOfAnotherBoard } from "./zmk-ports.ts";
 import type { LayoutView } from "./layouts.ts";
@@ -52,7 +52,7 @@ export type FlashArgs = {
   buildId: string;
   artifactPath: string;
   log: LogSink;
-  onState: (state: FlashState, instruction: string | null) => void;
+  onState: (state: FlashState, instruction: string | null, note?: FlashNote) => void;
   onLine?: (line: string) => void;
   signal?: AbortSignal;
   bootloaderWaitMs?: number;
@@ -128,8 +128,28 @@ const qmk: FirmwareDriver = {
       deps: realHandsFreeDeps(a.handsFree), board: a.board.definition, rev, buildId: a.buildId, log: a.log,
       artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))),
     });
+    // The same last good image the ZMK flash keeps, for the same reason: only an image the keyboard was seen to run (D-165).
+    const verify = hooks.verify;
+    const keep = a.lastGoodDir;
+    const keepingVerify: typeof verify =
+      verify && keep !== undefined
+        ? async () => {
+            const result = await verify();
+            if (result.ok) {
+              try {
+                const dir = join(keep, a.board.definition.id.replace("/", "-"));
+                await mkdir(dir, { recursive: true });
+                await Bun.write(join(dir, `${a.boardRevision}.${artifactKind(rev.build)}`), Bun.file(a.artifactPath));
+              } catch (err) {
+                a.log.line(`keyloom: couldn't keep this image as the last good one: ${(err as Error).message}`);
+              }
+            }
+            return result;
+          }
+        : verify;
     return flashWithZapp({
       ...hooks,
+      ...(keepingVerify ? { verify: keepingVerify } : {}),
       artifactPath: a.artifactPath, bootloader: flash.bootloader, log: a.log, onState: a.onState,
       ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
       ...(a.signal ? { signal: a.signal } : {}),

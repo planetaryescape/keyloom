@@ -114,7 +114,7 @@ export async function restartHalf(opts: {
     // A drive that is already there is a half already in its bootloader, which is where this is trying to get it.
     if (await opts.findVolume(t.step.volume)) {
       log(`keyloom: ${t.step.volume} is already mounted, so the ${label} is already in its bootloader`);
-      return { ok: true };
+      return { ok: true, alreadyThere: true };
     }
 
     const transport = await deps.serial();
