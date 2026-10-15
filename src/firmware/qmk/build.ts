@@ -86,7 +86,7 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
         );
       }
       const cmd = [
-        ...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), "-e", "SKIP_GIT=1", "-e", "MAKEFLAGS=-j4",
+        ...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), "-e", "SKIP_GIT=1", "-e", "MAKEFLAGS=-j4", "-e", "QMK_USERSPACE=",
         rev.build.image, "make", `${rev.qmkTarget}:${input.source.keymapName}`,
       ];
       say(`keyloom: building ${rev.qmkTarget}:${input.source.keymapName} in ${rev.build.image.split("@")[0]}`);
