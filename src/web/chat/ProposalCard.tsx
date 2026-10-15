@@ -115,14 +115,14 @@ export function ProposalCard({ proposal, layout, board, pinned, onPreview, onPin
       )}
 
       <div className="tradeoffs">
-        <section aria-label="Gains">
+        <div>
           <h4>Gains</h4>
           <ul>{gains.map((text) => <li key={text}>{text}</li>)}</ul>
-        </section>
-        <section aria-label="Costs">
+        </div>
+        <div>
           <h4>Costs</h4>
           <ul>{costs.map((text) => <li key={text}>{text}</li>)}</ul>
-        </section>
+        </div>
       </div>
 
       <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} />

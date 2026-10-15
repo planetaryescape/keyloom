@@ -121,11 +121,11 @@
   font-weight: var(--weight-semibold);
 }
 
-.tradeoffs section:first-child h4 {
+.tradeoffs > div:first-child h4 {
   color: var(--color-success);
 }
 
-.tradeoffs section:last-child h4 {
+.tradeoffs > div:last-child h4 {
   color: var(--color-warning);
 }
 
