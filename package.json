@@ -15,11 +15,12 @@
     "gen:keycodes": "bun scripts/gen-keycodes.ts"
   },
   "dependencies": {
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "@anthropic-ai/sdk": "0.132.1",
     "commander": "15.0.0",
     "fflate": "0.8.3",
     "lucide-react": "1.52.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "tree-sitter-c": "0.24.1",
     "ulid": "3.0.2",
     "web-tree-sitter": "0.27.0",

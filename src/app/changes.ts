@@ -5,7 +5,7 @@ import { type Layout } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import { type StaleConflict, staleConflicts } from "../layout/stale.ts";
 import {
-  type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, findChangeSet, insertChangeSet, listChangeSets, markApplied, markRejected,
+  type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, type Tradeoffs, findChangeSet, insertChangeSet, listChangeSets, markApplied, markRejected,
 } from "../persistence/change-sets.ts";
 import { type RevisionRow, findRevision } from "../persistence/layouts.ts";
 import { appendRevision } from "../persistence/revisions.ts";
@@ -72,11 +72,14 @@ const requireText = (value: string, what: string) => {
   if (!value.trim()) throw new UsageError(`${what} must not be empty`);
 };
 
+/** What an agent proposal carries beyond the ops: a card heading, trade-offs, and the conversation and alternatives group it belongs to. */
+export type ProposalMeta = { title?: string; tradeoffs?: Tradeoffs; conversationId?: string; proposalGroup?: string };
+
 /** Saves a valid change set against the current head without applying it. Invalid ops are refused, not stored. */
 export function proposeChange(
   app: App,
   ref: string,
-  input: { ops: ChangeOp[]; explanation: string; source: ChangeSetSource },
+  input: { ops: ChangeOp[]; explanation: string; source: ChangeSetSource } & ProposalMeta,
 ): ChangeSetView {
   requireText(input.explanation, "the explanation");
   return transact(app.db, () => {
@@ -85,6 +88,10 @@ export function proposeChange(
     return toView(insertChangeSet(app.db, {
       layoutId: view.layout.id, baseRevisionId: view.revision.id, source: input.source, ops: input.ops, explanation: input.explanation,
       validation: result, status: "proposed",
+      ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.tradeoffs === undefined ? {} : { tradeoffs: input.tradeoffs }),
+      ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+      ...(input.proposalGroup === undefined ? {} : { proposalGroup: input.proposalGroup }),
     }));
   });
 }

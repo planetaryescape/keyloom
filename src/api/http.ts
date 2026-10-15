@@ -118,3 +118,97 @@ export const FlashSchema = z.object({
   logTail: z.array(z.string()),
 });
 export type Flash = z.infer<typeof FlashSchema>;
+
+// Chat (rung 3). Same token and error conventions as above.
+//   POST /api/layouts/:ref/chat           ChatRequest -> text/event-stream of ChatEvent
+//                                         (400 usage, 404 not_found, 409 busy, 429/502/503 model failures, as ApiErrorBody, before the stream opens)
+//   GET  /api/layouts/:ref/conversations              -> ConversationListResponse
+//   GET  /api/conversations/:id                       -> ConversationDetail
+// The stream is Server-Sent Events frames (`event: <type>` and `data: <ChatEvent JSON>`) read from a
+// fetch response, because EventSource cannot POST. It always ends with `done` or `error`.
+
+export const ChatSelectionSchema = z.object({
+  layerId: z.string().min(1),
+  positions: z.array(z.number().int().nonnegative()).min(1).max(500),
+});
+export type ChatSelection = z.infer<typeof ChatSelectionSchema>;
+
+export const ChatRequestSchema = z.object({
+  // Omitted to start a conversation; its id comes back in the `start` event.
+  conversationId: z.string().min(1).optional(),
+  message: z.string().min(1).max(8000),
+  // The keys selected in the editor when the message was sent (D-012).
+  selection: ChatSelectionSchema.optional(),
+});
+export type ChatRequest = z.infer<typeof ChatRequestSchema>;
+
+export const ProposalCardSchema = z.object({
+  changeSetId: z.string().min(1),
+  title: z.string().min(1),
+  explanation: z.string(),
+  tradeoffs: z.object({ gains: z.array(z.string()), costs: z.array(z.string()) }),
+  status: z.enum(["proposed", "applied", "rejected", "superseded"]),
+  validation: ValidationResultSchema,
+  ops: z.array(ChangeOpSchema),
+});
+export type ProposalCard = z.infer<typeof ProposalCardSchema>;
+
+export const ChatUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative(),
+  cacheCreationTokens: z.number().int().nonnegative(),
+});
+
+// `refused`: the model declined even after the server-side fallback. `truncated`, `context_full` and
+// `iteration_limit` mean the reply is incomplete; the panel should say so.
+export const ChatOutcomeSchema = z.object({
+  conversationId: z.string().min(1),
+  messageIds: z.array(z.string().min(1)),
+  status: z.enum(["complete", "refused", "truncated", "context_full", "iteration_limit"]),
+  text: z.string(),
+  proposals: z.array(ProposalCardSchema),
+  model: z.string(),
+  effort: z.string(),
+  usage: ChatUsageSchema,
+  iterations: z.number().int().nonnegative(),
+});
+export type ChatOutcome = z.infer<typeof ChatOutcomeSchema>;
+
+export const ChatEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("start"), conversationId: z.string().min(1), messageId: z.string().min(1) }),
+  z.object({ type: z.literal("text"), delta: z.string() }),
+  // A tool the agent is running ("get_layout", "propose_changes"), for a progress line.
+  z.object({ type: z.literal("tool"), name: z.string().min(1) }),
+  z.object({ type: z.literal("proposal"), proposal: ProposalCardSchema }),
+  z.object({ type: z.literal("done"), outcome: ChatOutcomeSchema }),
+  z.object({ type: z.literal("error"), code: z.string().min(1), message: z.string().min(1) }),
+]);
+export type ChatEvent = z.infer<typeof ChatEventSchema>;
+
+export const ConversationSummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  createdAt: z.number().finite(),
+});
+export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
+
+export const ConversationListResponseSchema = z.object({ conversations: z.array(ConversationSummarySchema) });
+export type ConversationListResponse = z.infer<typeof ConversationListResponseSchema>;
+
+export const ChatMessageSchema = z.object({
+  id: z.string().min(1),
+  role: z.enum(["user", "assistant"]),
+  text: z.string(),
+  toolCalls: z.array(z.string()),
+  selection: ChatSelectionSchema.nullable(),
+  createdAt: z.number().finite(),
+});
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+export const ConversationDetailSchema = z.object({
+  conversation: ConversationSummarySchema.extend({ layoutId: z.string().min(1) }),
+  messages: z.array(ChatMessageSchema),
+  proposals: z.array(ProposalCardSchema),
+});
+export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;

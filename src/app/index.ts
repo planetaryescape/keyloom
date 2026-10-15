@@ -1,6 +1,6 @@
 // The only module src/cli (and src/server) may import (01#modules).
 export { type App, closeApp, openApp } from "./context.ts";
-export { NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { BusyError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, listChanges, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
@@ -21,3 +21,10 @@ export { type ValidationResult, ValidationResultSchema } from "../validation/res
 export type { ChangeSetSource, ChangeSetStatus } from "../persistence/change-sets.ts";
 export type { LayoutRow, RevisionRow } from "../persistence/layouts.ts";
 export { logsDir } from "../persistence/paths.ts";
+export {
+  type ChatEvent, type ChatOutcome, type ConversationView, type DisplayMessage, type ProposalCard, type SendMessageInput,
+  listConversationSummaries, sendMessage, showConversation,
+} from "./conversations.ts";
+export { defaultAgentModel } from "./chat-model.ts";
+export type { AgentModel } from "../agent/model.ts";
+export type { ConversationRow } from "../persistence/conversations.ts";

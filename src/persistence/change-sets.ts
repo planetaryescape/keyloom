@@ -25,6 +25,8 @@ export type ChangeSetRow = {
   validation: unknown;
   status: ChangeSetStatus;
   conversationId: string | null;
+  /** The proposal card's heading; null for editor change sets. */
+  title: string | null;
   createdAt: number;
   decidedAt: number | null;
 };
@@ -32,7 +34,7 @@ export type ChangeSetRow = {
 type Db = {
   id: string; layout_id: string; base_revision_id: string; proposal_group: string | null; source: ChangeSetSource;
   ops: string; explanation: string; tradeoffs: string; validation: string; status: ChangeSetStatus;
-  conversation_id: string | null; created_at: number; decided_at: number | null;
+  conversation_id: string | null; title: string | null; created_at: number; decided_at: number | null;
 };
 
 const toRow = (r: Db): ChangeSetRow => ({
@@ -47,6 +49,7 @@ const toRow = (r: Db): ChangeSetRow => ({
   validation: JSON.parse(r.validation),
   status: r.status,
   conversationId: r.conversation_id,
+  title: r.title,
   createdAt: r.created_at,
   decidedAt: r.decided_at,
 });
@@ -62,6 +65,8 @@ export type InsertChangeSetInput = {
   status: "proposed" | "applied";
   proposalGroup?: string;
   tradeoffs?: Tradeoffs;
+  title?: string;
+  conversationId?: string;
   now?: number;
 };
 
@@ -69,11 +74,11 @@ export function insertChangeSet(db: Database, input: InsertChangeSetInput): Chan
   const now = input.now ?? Date.now();
   const id = newId("cs");
   db.query(
-    `INSERT INTO change_sets (id, layout_id, base_revision_id, proposal_group, source, ops, explanation, tradeoffs, validation, status, created_at, decided_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO change_sets (id, layout_id, base_revision_id, proposal_group, source, ops, explanation, tradeoffs, validation, status, conversation_id, title, created_at, decided_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id, input.layoutId, input.baseRevisionId, input.proposalGroup ?? null, input.source, JSON.stringify(input.ops), input.explanation,
-    JSON.stringify(input.tradeoffs ?? { gains: [], costs: [] }), JSON.stringify(input.validation), input.status, now, input.status === "applied" ? now : null,
+    JSON.stringify(input.tradeoffs ?? { gains: [], costs: [] }), JSON.stringify(input.validation), input.status, input.conversationId ?? null, input.title ?? null, now, input.status === "applied" ? now : null,
   );
   return findChangeSet(db, id) as ChangeSetRow;
 }
@@ -88,6 +93,12 @@ export function listChangeSets(db: Database, layoutId: string, opts: { status?: 
   const rows = opts.status
     ? db.query("SELECT * FROM change_sets WHERE layout_id = ? AND status = ? ORDER BY created_at DESC, id DESC").all(layoutId, opts.status)
     : db.query("SELECT * FROM change_sets WHERE layout_id = ? ORDER BY created_at DESC, id DESC").all(layoutId);
+  return (rows as Db[]).map(toRow);
+}
+
+/** Oldest first. The conversation's proposals, for the chat panel's cards. */
+export function listConversationChangeSets(db: Database, conversationId: string): ChangeSetRow[] {
+  const rows = db.query("SELECT * FROM change_sets WHERE conversation_id = ? ORDER BY created_at ASC, id ASC").all(conversationId);
   return (rows as Db[]).map(toRow);
 }
 
