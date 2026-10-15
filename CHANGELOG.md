@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/planetaryescape/keyloom/compare/v0.2.0...v0.3.0) (2026-10-15)
+
+
+### Features
+
+* apply a stored proposal by id with POST /api/change-sets/:id/apply ([e47558a](https://github.com/planetaryescape/keyloom/commit/e47558a48ae4346d7946877bddfd4d4afd8f6282))
+* chat panel with streamed replies, key selection, proposal cards and apply ([1f58616](https://github.com/planetaryescape/keyloom/commit/1f5861687b9af639c86a936989e6884ed846fd40))
+
+
+### Bug Fixes
+
+* keep the chat stream open with SSE keep-alives and land on the first proposal ([70a787c](https://github.com/planetaryescape/keyloom/commit/70a787cb854368000fed80c7b382569928615afe))
+* name keys as the editor does in agent replies and diff lines ([9262b09](https://github.com/planetaryescape/keyloom/commit/9262b09caa093cac1de41105ab69caa7ea8930b4))
+* use plain groups for gains and costs so cards add no duplicate landmarks ([2a22422](https://github.com/planetaryescape/keyloom/commit/2a22422319cb8b2e9fd09aba4463e969b29daac3))
+
 ## [0.2.0](https://github.com/planetaryescape/keyloom/compare/v0.1.0...v0.2.0) (2026-10-15)
 
 
