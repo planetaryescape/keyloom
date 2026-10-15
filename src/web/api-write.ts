@@ -11,6 +11,7 @@ import {
   type ApplyRequest,
   type ApplyResponse,
   type Build,
+  type BuildRequest,
   type CheckRequest,
   type Flash,
   type UndoRequest,
@@ -85,8 +86,9 @@ export function undoChange(token: string, ref: string, body: UndoRequest): Promi
   return request("POST", layoutPath(ref, "undo"), token, UndoResponseSchema, undefined, body);
 }
 
-export function startBuild(token: string, ref: string, revisionId: string): Promise<Build> {
-  return request("POST", layoutPath(ref, "builds"), token, BuildSchema, undefined, { revisionId });
+export function startBuild(token: string, ref: string, revisionId: string, boardRevision?: string): Promise<Build> {
+  const body: BuildRequest = { revisionId, ...(boardRevision === undefined ? {} : { boardRevision }) };
+  return request("POST", layoutPath(ref, "builds"), token, BuildSchema, undefined, body);
 }
 
 export function fetchBuild(token: string, id: string, signal: AbortSignal): Promise<Build> {

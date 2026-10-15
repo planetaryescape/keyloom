@@ -4,6 +4,7 @@
 //   bun scripts/dev-editor.ts [port]          # default 4490
 //
 // Environment: KEYLOOM_FAKE_FAIL_BUILD=1 or KEYLOOM_FAKE_FAIL_FLASH=1 make that step fail;
+// KEYLOOM_FAKE_NO_KEYBOARD=0 makes the fake detect a keyboard (the default asks for Rev A or B);
 // KEYLOOM_FAKE_BUILD_MS and KEYLOOM_FAKE_FLASH_STEP_MS change how long they take.
 // Edits live in memory and vanish when the process stops. Ctrl-C stops it.
 import { FakeEditor } from "../test/helpers/fake-editor-backend.ts";
@@ -15,6 +16,7 @@ const fixture = await loadFixture();
 const fake = new FakeEditor(fixture, {
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
   failFlash: process.env.KEYLOOM_FAKE_FAIL_FLASH === "1",
+  needsBoardRevision: process.env.KEYLOOM_FAKE_NO_KEYBOARD !== "0",
   buildMs: Number(process.env.KEYLOOM_FAKE_BUILD_MS ?? 10_000),
   flashStepMs: Number(process.env.KEYLOOM_FAKE_FLASH_STEP_MS ?? 5_000),
 });

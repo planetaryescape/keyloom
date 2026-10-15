@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, Hammer, LoaderCircle, TriangleAlert, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
+import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { LogTail } from "./LogTail.tsx";
 import { elapsedOf, type ReleaseStatus } from "./status.ts";
 import type { Release } from "./useRelease.ts";
@@ -135,7 +136,24 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
                     ? "The last build was of an earlier version of this layout. Build again to include the latest change."
                     : "Compiles the layout into firmware. Nothing is sent to your keyboard yet."}
                 </p>
-                <button type="button" className="button button-primary" disabled={starting !== null} onClick={() => release.buildNow(head.id)}>
+                {release.needsBoardRevision ? (
+                  <ChoiceGroup
+                    legend="Which Moonlander is this?"
+                    variant="cards"
+                    value={release.boardRevision}
+                    choices={[
+                      { value: "reva", label: "Rev A", hint: "Bought before mid-December 2025" },
+                      { value: "revb", label: "Rev B", hint: "Bought after mid-December 2025" },
+                    ]}
+                    onChange={release.chooseBoardRevision}
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  className="button button-primary"
+                  disabled={starting !== null || (release.needsBoardRevision && release.boardRevision === null)}
+                  onClick={() => release.buildNow(head.id)}
+                >
                   {starting === "build" ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Hammer size={14} aria-hidden="true" />}
                   {starting === "build" ? "Starting" : "Build firmware"}
                 </button>

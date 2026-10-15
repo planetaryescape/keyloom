@@ -17,6 +17,8 @@ export interface FakeOptions {
   flashStepMs?: number;
   failBuild?: boolean;
   failFlash?: boolean;
+  /** Answer 400 usage to a build with no boardRevision, as the real backend does with no keyboard connected. */
+  needsBoardRevision?: boolean;
 }
 
 type Revision = RevisionInfo & { document: Layout };
@@ -52,7 +54,7 @@ export class FakeEditor implements EditorBackend {
     private readonly base: LayoutDetail,
     options: FakeOptions = {},
   ) {
-    this.options = { buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, ...options };
+    this.options = { buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, ...options };
     this.revisions = [{ ...base.revision, document: structuredClone(base.document) }];
   }
 
@@ -113,6 +115,9 @@ export class FakeEditor implements EditorBackend {
   }
 
   async startBuild(_ref: string, request: BuildRequest): Promise<Build> {
+    if (this.options.needsBoardRevision && request.boardRevision === undefined) {
+      throw new EditorError(400, "usage", "No Moonlander is connected, so keyloom can't tell which revision to build for. Choose Rev A or Rev B.");
+    }
     if (!this.revisions.some((r) => r.id === request.revisionId)) {
       throw new EditorError(404, "not_found", "No such revision.");
     }

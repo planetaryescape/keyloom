@@ -84,6 +84,8 @@ export function BindingEditor({
   const [wantFocus, setWantFocus] = useState(autoFocus);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  // Replacing a native binding drops behaviour keyloom cannot rebuild, so it takes a second click.
+  const [confirmingNative, setConfirmingNative] = useState(false);
   useEffect(() => setWantFocus(false), []);
 
   const draftBinding = draft === null ? null : bindingFromDraft(draft, layout);
@@ -110,6 +112,7 @@ export function BindingEditor({
 
   const update = (patch: Partial<Draft>) => {
     setApplyError(null);
+    setConfirmingNative(false);
     setDraft((previous) => (previous === null ? previous : { ...previous, ...patch }));
   };
   const idleNote =
@@ -121,9 +124,14 @@ export function BindingEditor({
   const result = check.state.status === "done" ? check.state.result : null;
   const canApply = binding !== null && result !== null && result.ok && !applying;
   const warnings = result?.warnings.length ?? 0;
+  const replacesNative = original.kind === "native" && binding !== null && binding.kind !== "native";
 
   async function apply() {
     if (!canApply || binding === null || summary === null) return;
+    if (replacesNative && !confirmingNative) {
+      setConfirmingNative(true);
+      return;
+    }
     setApplying(true);
     setApplyError(null);
     try {
@@ -163,7 +171,7 @@ export function BindingEditor({
   const kindChoices = draft.native === null ? KINDS : [NATIVE_KIND, ...KINDS];
   const formFocus = wantFocus && FOCUSES_FORM.has(draft.kind);
   const where = [layer.name, finger === undefined ? undefined : `${finger.replace("-", " ")} finger`].filter(Boolean).join(" · ");
-  const applyLabel = applying ? "Applying" : warnings > 0 ? `Apply with ${warnings} ${warnings === 1 ? "warning" : "warnings"}` : "Apply change";
+  const applyLabel = applying ? "Applying" : confirmingNative ? "Replace and apply" : warnings > 0 ? `Apply with ${warnings} ${warnings === 1 ? "warning" : "warnings"}` : "Apply change";
   const whyNot = binding === null ? (dirty ? idleNote : "Change the binding first.") : check.state.status === "checking" ? "Checking the change." : result !== null && !result.ok ? "Fix the errors above first." : null;
 
   return (
@@ -201,6 +209,7 @@ export function BindingEditor({
           autoFocus={wantFocus && !FOCUSES_FORM.has(draft.kind)}
           onChange={(kind) => {
             setApplyError(null);
+            setConfirmingNative(false);
             setDraft((previous) => (previous === null ? previous : switchKind(previous, kind)));
           }}
         />
@@ -212,7 +221,12 @@ export function BindingEditor({
 
       <footer className="editor-foot">
         <div className="editor-foot-note" aria-live="polite">
-          {blocked ? (
+          {confirmingNative ? (
+            <p className="blocked" role="alert">
+              <TriangleAlert size={16} aria-hidden="true" />
+              keyloom can&apos;t edit this key&apos;s custom behaviour. Replacing it removes that behaviour.
+            </p>
+          ) : blocked ? (
             <p className="blocked">
               <TriangleAlert size={16} aria-hidden="true" />
               Apply or cancel this change before editing another key.

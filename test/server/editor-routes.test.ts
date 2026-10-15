@@ -208,6 +208,15 @@ describe("build and flash", () => {
     expect(finished.status).toBe("succeeded");
   });
 
+  test("a build with no board revision can be refused 400 usage, and succeeds once one is sent", async () => {
+    const { call } = start(new FakeEditor(fixture, { buildMs: 200, needsBoardRevision: true }));
+    const refused = await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id });
+    expect(refused.status).toBe(400);
+    expect(ApiErrorBodySchema.parse(await refused.json()).error.code).toBe("usage");
+    const accepted = await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id, boardRevision: "revb" });
+    expect(accepted.status).toBe(202);
+  });
+
   test("unknown build and flash ids are 404 with ApiErrorBody", async () => {
     const { call } = start(quick());
     for (const path of ["/api/builds/nope", "/api/flashes/nope"]) {

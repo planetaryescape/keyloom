@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Build, Flash } from "../../api/http.ts";
+import { ApiError } from "../api.ts";
 import { fetchBuild, fetchFlash, startBuild, startFlash } from "../api-write.ts";
 
 const POLL_MS = 1000;
@@ -12,6 +13,11 @@ export interface Release {
   starting: "build" | "flash" | null;
   /** Why starting a build or flash failed, or why polling gave up. */
   error: string | null;
+  /** True once the server has asked which board revision to build for. */
+  needsBoardRevision: boolean;
+  /** The revision chosen this session, such as "reva"; kept until the page is reloaded. */
+  boardRevision: string | null;
+  chooseBoardRevision: (revision: string) => void;
   buildNow: (revisionId: string) => void;
   flashNow: () => void;
   /** Polls again after the server could not be reached. */
@@ -26,6 +32,8 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [starting, setStarting] = useState<Release["starting"]>(null);
   const [error, setError] = useState<string | null>(null);
   const [resumes, setResumes] = useState(0);
+  const [needsBoardRevision, setNeeds] = useState(false);
+  const [boardRevision, setBoardRevision] = useState<string | null>(null);
 
   const buildRunning = build?.status === "running";
   const flashActive = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
@@ -44,15 +52,19 @@ export function useRelease(token: string, layoutRef: string): Release {
     (revisionId: string) => {
       setStarting("build");
       setError(null);
-      startBuild(token, layoutRef, revisionId)
+      startBuild(token, layoutRef, revisionId, boardRevision ?? undefined)
         .then((started) => {
           setBuild(started);
           setFlash(null);
         })
-        .catch((e: unknown) => setError(e instanceof Error ? e.message : "The build could not start."))
+        .catch((e: unknown) => {
+          // No keyboard to detect: not a failure, a question the panel asks next to the Build button.
+          if (e instanceof ApiError && e.code === "usage") setNeeds(true);
+          else setError(e instanceof Error ? e.message : "The build could not start.");
+        })
         .finally(() => setStarting(null));
     },
-    [token, layoutRef],
+    [token, layoutRef, boardRevision],
   );
 
   const flashNow = useCallback(() => {
@@ -70,7 +82,7 @@ export function useRelease(token: string, layoutRef: string): Release {
     setResumes((n) => n + 1);
   }, []);
 
-  return { build, flash, starting, error, buildNow, flashNow, resume };
+  return { build, flash, starting, error, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, resume };
 }
 
 // Calls `fetchNext` every POLL_MS until `isDone`. Returns the cleanup that stops it.
