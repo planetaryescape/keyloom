@@ -2,7 +2,7 @@
 // label (a nice!nano shows up as NICENANO every time). A temporary directory stands in for /Volumes.
 import { describe, expect, test } from "bun:test";
 import { zipSync } from "fflate";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { type FlashStep, flashUf2Drives } from "../../../src/firmware/zmk/flash.ts";
@@ -24,10 +24,19 @@ function fakeNiceNano(root: string, times: number) {
   const names: string[] = [];
   const drive = join(root, LABEL);
   mkdirSync(drive, { recursive: true });
+  // A real bootloader acts once the whole file is in. Taking it at first sight raced the copy on a
+  // slow CI runner (seen 2026-10-15), so wait until its size holds still across two ticks.
+  let lastSize = -1;
   const timer = setInterval(() => {
-    const file = join(drive, "firmware.uf2");
     const other = readdirNames(drive);
-    if (existsSync(file) || other.length > 0) {
+    if (other.length === 0) return;
+    const size = statSync(join(drive, other[0] as string)).size;
+    if (size === 0 || size !== lastSize) {
+      lastSize = size;
+      return;
+    }
+    lastSize = -1;
+    {
       names.push(...other);
       received.push(new Uint8Array(readFileSync(join(drive, other[0] as string))));
       rmSync(drive, { recursive: true, force: true });
@@ -48,7 +57,7 @@ async function setup(artifact: Uint8Array, name = "bld.zip") {
   const flash = (over: Partial<Parameters<typeof flashUf2Drives>[0]> = {}) =>
     flashUf2Drives({
       artifactPath: path, steps, findVolume: volumes.volumeFinderAt(root), log: new LogSink(join(dir, "f.log")), onState: () => {},
-      onLine: (l) => lines.push(l), pollMs: 10, bootloaderWaitMs: 2000, unmountWaitMs: 500, driveFileName: "firmware.uf2", ...over,
+      onLine: (l) => lines.push(l), pollMs: 10, bootloaderWaitMs: 4000, unmountWaitMs: 3000, driveFileName: "firmware.uf2", ...over,
     });
   return { root, flash, lines };
 }
