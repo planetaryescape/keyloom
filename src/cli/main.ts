@@ -8,6 +8,7 @@ import {
 import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, registerChatCommands } from "./commands/chat.ts";
 import { registerDecisionCommands } from "./commands/decisions.ts";
+import { registerEmulateCommand } from "./commands/emulate.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
@@ -206,6 +207,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     });
 
   registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp });
+  registerEmulateCommand(program, { io, format, quiet: () => globals().quiet === true, withApp });
 
   program
     .command("doctor")

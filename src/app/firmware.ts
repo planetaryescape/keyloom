@@ -105,7 +105,7 @@ async function resolveBoardRevision(board: Board, requested: string | undefined)
 
 // --- generate -------------------------------------------------------------------------------
 
-function sourceFor(view: LayoutView, boardRevisionId: string): GeneratedSource {
+export function sourceFor(view: LayoutView, boardRevisionId: string): GeneratedSource {
   const driver = driverFor(view.board);
   try {
     return driver.generate(view, boardRevisionId);

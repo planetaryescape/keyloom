@@ -26,6 +26,8 @@ export type RunOptions = {
   cmd: string[];
   cwd?: string;
   env?: Record<string, string | undefined>;
+  /** Text written to the process's standard input, which is then closed. Without it the process gets no input. */
+  stdin?: string;
   log?: LogSink;
   /** SIGTERM after this long; SIGKILL `killGraceMs` later if it is still running. */
   timeoutMs?: number;
@@ -80,10 +82,14 @@ export async function run(opts: RunOptions): Promise<RunResult> {
     ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
     // Explicit, because Bun.spawn's default is the environment the process started with.
     env: { ...process.env, ...opts.env },
-    stdin: "ignore",
+    stdin: opts.stdin === undefined ? "ignore" : "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
+  if (opts.stdin !== undefined) {
+    proc.stdin?.write(opts.stdin);
+    void proc.stdin?.end();
+  }
 
   let timedOut = false;
   let aborted = false;

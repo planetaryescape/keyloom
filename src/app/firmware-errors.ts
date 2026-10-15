@@ -15,3 +15,11 @@ export class FlashFailedError extends Error {
     super(message);
   }
 }
+
+/** The emulator couldn't build or run the keymap, or the key script isn't one it can run. Exits 7 like a build. */
+export class EmulateFailedError extends Error {
+  override name = "EmulateFailedError";
+  constructor(message: string, readonly logPath: string | null = null) {
+    super(message);
+  }
+}

@@ -12,7 +12,9 @@ export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
   getBuild, getFlash, startBuild, startFlash,
 } from "./firmware.ts";
-export { BuildFailedError, FlashFailedError } from "./firmware-errors.ts";
+export { BuildFailedError, EmulateFailedError, FlashFailedError } from "./firmware-errors.ts";
+export { type EmulateOptions, type EmulateOutcome, emulateLayout } from "./emulate.ts";
+export { SCRIPT_HELP } from "../firmware/emulate/script.ts";
 export type { ImportReport } from "../layout/import-report.ts";
 export type { Layout } from "../layout/schema.ts";
 export { type ChangeOp, ChangeOpSchema } from "../layout/change.ts";

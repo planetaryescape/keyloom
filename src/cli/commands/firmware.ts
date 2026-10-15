@@ -13,7 +13,7 @@ export type FirmwareCommandDeps = {
 };
 
 /** Ctrl-C aborts the work instead of killing keyloom and leaving docker or zapp running on its own. */
-async function untilInterrupted<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+export async function untilInterrupted<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   process.once("SIGINT", abort);
@@ -27,7 +27,7 @@ async function untilInterrupted<T>(fn: (signal: AbortSignal) => Promise<T>): Pro
 }
 
 /** One line that rewrites itself, so a build of thousands of lines shows where it is without scrolling. */
-function progressLine(io: Io): { write: (line: string) => void; end: () => void } {
+export function progressLine(io: Io): { write: (line: string) => void; end: () => void } {
   if (!io.isTTY) return { write: () => undefined, end: () => undefined };
   const width = Math.max(20, (process.stderr.columns ?? 100) - 1);
   let drawn = false;
