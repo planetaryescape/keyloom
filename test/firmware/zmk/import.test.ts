@@ -100,15 +100,17 @@ describe("a Layout Editor style keymap", () => {
     expect(l.passthrough.find((p) => p.anchor === "top:sk")?.source).toBe("&sk {\n    release-after-ms = <900>;\n};");
   });
 
-  test("macros step through press, tap and release modes and a wait", () => {
+  test("macros step through press, tap and release modes, and a wait time applies to the bindings after it", () => {
     expect(l.macros.find((m) => m.id === "paste_twice")).toEqual({
       id: "paste_twice", name: "PASTE_TWICE",
       steps: [
         { op: "press", mods: ["LSFT"] },
         { op: "tap", code: "V", mods: ["LGUI"] },
-        { op: "waitMs", ms: 40 },
+        // `&macro_wait_time 40` is a setting, so it is the delay after every binding that follows it.
         { op: "release", mods: ["LSFT"] },
+        { op: "waitMs", ms: 40 },
         { op: "tap", code: "V", mods: ["LGUI"] },
+        { op: "waitMs", ms: 40 },
       ],
     });
     expect(l.layers[0]?.bindings[71]).toEqual({ kind: "macro", macroId: "opt_opt" });

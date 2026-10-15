@@ -4,7 +4,7 @@ import type { HoldTapProfile, Macro, MacroStep } from "../../layout/schema.ts";
 import { parseCalls } from "./cells.ts";
 import { type Defines, evalInt } from "./defines.ts";
 import type { DtNode } from "./dts.ts";
-import type { HoldKind } from "./builtins.ts";
+import { type HoldKind, ZMK_MACRO_DEFAULT_WAIT_MS } from "./builtins.ts";
 import { parseKeyExpr } from "./key-expr.ts";
 import { type OptionValue, cellsOf, optionOf, propOf, stringOf } from "./props.ts";
 
@@ -53,6 +53,12 @@ export function importMacro(n: DtNode, defines: Defines): Macro | string {
   if (!propOf(n, "bindings")) return "it has no bindings";
   const steps: MacroStep[] = [];
   let mode: "tap" | "press" | "release" = "tap";
+  // ZMK's wait time is a setting that lasts until it is changed, and is the delay after each binding; a step is
+  // "a pause of N ms" only for the bindings that run while it is not ZMK's default (see renderMacro).
+  let wait = ZMK_MACRO_DEFAULT_WAIT_MS;
+  const pause = () => {
+    if (wait !== ZMK_MACRO_DEFAULT_WAIT_MS) steps.push({ op: "waitMs", ms: wait });
+  };
   for (const cell of cellsOf(n, "bindings")) {
     const { calls, leading } = parseCalls(cell);
     if (leading.length > 0) return "its bindings contain something other than behaviours";
@@ -63,11 +69,15 @@ export function importMacro(n: DtNode, defines: Defines): Macro | string {
       } else if (c.name === "macro_wait_time" && c.params.length === 1) {
         const ms = evalInt(c.params[0] as string, defines);
         if (ms === undefined || ms < 0) return "a wait time isn't a plain number";
-        steps.push({ op: "waitMs", ms });
+        wait = ms;
+      } else if (c.name === "none" && c.params.length === 0) {
+        // Only ever a carrier for a pause (renderMacro), so it has no step of its own.
+        pause();
       } else if (c.name === "kp" && c.params.length === 1) {
         const e = parseKeyExpr(c.params[0] as string, defines);
         if (!e) return `&kp ${c.params[0]} isn't a key keyloom models`;
         steps.push({ op: mode, ...(e.key ? { code: e.key.name } : {}), ...(e.mods.length ? { mods: e.mods } : {}) });
+        pause();
       } else return `it uses &${c.name}, which keyloom doesn't model in macros`;
     }
   }

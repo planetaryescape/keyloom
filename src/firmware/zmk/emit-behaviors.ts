@@ -3,7 +3,7 @@
 import type { Combo, HoldTapProfile, Macro, SlotAction, TapDance } from "../../layout/schema.ts";
 import { textKeys } from "../../layout/text-keys.ts";
 import type { OptionValue } from "./props.ts";
-import { BUILTIN_OPTIONS, BUILTIN_PROFILES } from "./builtins.ts";
+import { BUILTIN_OPTIONS, BUILTIN_PROFILES, ZMK_MACRO_DEFAULT_WAIT_MS } from "./builtins.ts";
 import { type EmitContext, bindingToDts, labelOf } from "./emit-binding.ts";
 import { GenerateError } from "./generate-error.ts";
 import { keyExprText } from "./key-expr.ts";
@@ -62,13 +62,26 @@ export function renderBuiltinOverride(profile: HoldTapProfile): string[] {
 
 export const isBuiltin = (id: string): boolean => BUILTIN_PROFILES.has(id);
 
+/**
+ * `&macro_wait_time N` is not a pause: behavior_macro.c queues every binding with the current wait time as the delay
+ * after it, so the setting lasts for everything that follows. A one-off pause of N ms after a binding is therefore
+ * `&macro_wait_time N`, that binding, then `&macro_wait_time <default>` (same file, queue_macro, and
+ * behavior_queue.c, which sleeps `wait` ms after invoking an item). A pause with no binding before it is carried by
+ * a `&none` press, whose only delay is that wait.
+ */
 export function renderMacro(m: Macro): string[] {
   const label = labelOf(m.id);
-  const cells: string[] = [];
+  const items: Array<{ cell: string; waitMs?: number }> = [];
   let mode: "tap" | "press" | "release" = "tap";
   for (const s of m.steps) {
     if (s.op === "waitMs") {
-      cells.push(`&macro_wait_time ${s.ms}`);
+      let last = items[items.length - 1];
+      if (!last) {
+        items.push({ cell: `${mode === "press" ? "" : "&macro_press "}&none` });
+        mode = "press";
+        last = items[0] as (typeof items)[number];
+      }
+      last.waitMs = (last.waitMs ?? 0) + s.ms;
       continue;
     }
     if (s.op === "text") {
@@ -76,7 +89,7 @@ export function renderMacro(m: Macro): string[] {
       const typed = textKeys(s.text);
       if (!typed.ok) throw new GenerateError(`macro "${m.id}": "${typed.char}" can't be typed by a text step; keyloom types US-layout letters, digits and punctuation`);
       for (const k of typed.keys) {
-        cells.push(`${mode === "tap" ? "" : "&macro_tap "}&kp ${keyExprText({ code: k.code, ...(k.shift ? { mods: ["LSFT" as const] } : {}) })}`);
+        items.push({ cell: `${mode === "tap" ? "" : "&macro_tap "}&kp ${keyExprText({ code: k.code, ...(k.shift ? { mods: ["LSFT" as const] } : {}) })}` });
         mode = "tap";
       }
       continue;
@@ -84,8 +97,10 @@ export function renderMacro(m: Macro): string[] {
     if (s.code === undefined && (s.mods?.length ?? 0) === 0) throw new GenerateError(`macro "${m.id}" has a ${s.op} step with no key`);
     const switchTo = s.op !== mode ? `&macro_${s.op} ` : "";
     mode = s.op;
-    cells.push(`${switchTo}&kp ${keyExprText({ ...(s.code === undefined ? {} : { code: s.code }), ...(s.mods ? { mods: s.mods } : {}) })}`);
+    items.push({ cell: `${switchTo}&kp ${keyExprText({ ...(s.code === undefined ? {} : { code: s.code }), ...(s.mods ? { mods: s.mods } : {}) })}` });
   }
+  const cells = items.flatMap((i) =>
+    i.waitMs === undefined ? [i.cell] : [`&macro_wait_time ${i.waitMs}`, i.cell, `&macro_wait_time ${ZMK_MACRO_DEFAULT_WAIT_MS}`]);
   return [
     `${label}: ${label} {`,
     '    compatible = "zmk,behavior-macro";',

@@ -138,8 +138,14 @@ async function emulateMacro(boardDir: string, keymap: string, positions: [number
 const expectMacros = (r: Awaited<ReturnType<typeof emulateMacro>>) => {
   const chords = r.reports.filter((x) => x.kind === "keyboard" && x.keys.length > 0 && x.at < 3000).map((x) => (x.kind === "keyboard" ? [...x.mods, ...x.keys].join("+") : ""));
   expect(chords).toEqual(["LGUI+C", "LGUI+TAB", "LGUI+V"]);
-  // The 100 and 300 ms waits are not asserted: ZMK writes a waitMs step as `&macro_wait_time`, which sets the pause between the bindings after it
-  // and is not a one-off pause (47 ms between the first two chords in the run that found this; docs/issues/zmk-macro-wait-is-not-a-pause.md).
+  // The pause is the time with nothing down between one chord's release and the next chord's press. ZMK's own 15 ms
+  // wait is what it is without a waitMs step, so the gaps must come out at the step's 100 and 300 ms, not at 15.
+  const kb = r.reports.flatMap((x) => (x.kind === "keyboard" && x.at < 3000 ? [x] : []));
+  const downs = kb.filter((x) => x.keys.length > 0);
+  const gaps = downs.slice(1).map((d, i) => d.at - (kb.find((x) => x.at > (downs[i] as { at: number }).at && x.keys.length === 0) as { at: number }).at);
+  expect(gaps.length).toBe(2);
+  expect(Math.abs((gaps[0] as number) - 100)).toBeLessThanOrEqual(5);
+  expect(Math.abs((gaps[1] as number) - 300)).toBeLessThanOrEqual(5);
   expect(r.text).toBe('Thanks, "BK"!');
 };
 

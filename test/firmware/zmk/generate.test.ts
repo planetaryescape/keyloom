@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { KEYCODES } from "../../../src/layout/keycodes.ts";
-import type { Binding, Layout, Mod } from "../../../src/layout/schema.ts";
+import type { Binding, Layout, Macro, Mod } from "../../../src/layout/schema.ts";
 import { GenerateError, generateZmkSource } from "../../../src/firmware/zmk/generate.ts";
 import { importZmk, importZmkSource } from "../../../src/firmware/zmk/import.ts";
 import { STYLE_FIXTURE, TEMPLATE_FIXTURE, glove80 } from "../../helpers/zmk.ts";
@@ -72,6 +72,18 @@ describe("the generated files", () => {
 });
 
 describe("editing the layout and writing it again", () => {
+  test("a wait is a one-off pause: it sits around the step it follows, rides a &none press at the start, and adds up in a row", async () => {
+    const { layout } = await importZmkSource(TEMPLATE_FIXTURE, def);
+    const withSteps = (steps: Macro["steps"]): Layout => ({ ...layout, macros: [{ id: "m", name: "M", steps }] });
+    const macroText = (l: Layout) => (files(l)["glove80.keymap"] as string).split("\n").map((x) => x.trim()).join(" ");
+    expect(macroText(withSteps([{ op: "waitMs", ms: 100 }, { op: "tap", code: "A" }])))
+      .toContain("<&macro_wait_time 100>, <&macro_press &none>, <&macro_wait_time 15>, <&macro_tap &kp A>;");
+    expect(macroText(withSteps([{ op: "tap", code: "A" }, { op: "waitMs", ms: 100 }, { op: "waitMs", ms: 200 }, { op: "tap", code: "B" }])))
+      .toContain("<&macro_wait_time 300>, <&kp A>, <&macro_wait_time 15>, <&kp B>;");
+    const steps: Macro["steps"] = [{ op: "waitMs", ms: 100 }, { op: "tap", code: "A" }, { op: "waitMs", ms: 300 }, { op: "press", code: "B" }, { op: "waitMs", ms: 50 }, { op: "release", code: "B" }, { op: "tap", code: "C" }];
+    expect((await reimport(withSteps(steps))).macros[0]?.steps).toEqual(steps);
+  });
+
   test("a changed key, a new macro and a new hold-tap profile come back as what was written", async () => {
     const { layout } = await importZmkSource(TEMPLATE_FIXTURE, def);
     const edited: Layout = {
@@ -97,8 +109,8 @@ describe("editing the layout and writing it again", () => {
     expect(text).toContain("&mo 1");
     expect(text).toContain("&kp LC(LS(N1))");
     expect(text).toContain("<&kp LALT>,\n");
-    expect(text).toContain("<&macro_wait_time 30>");
-    expect(text).toContain("<&macro_press &kp LALT>");
+    // The pause sits around the binding it follows and the default comes back after it.
+    expect(text.replace(/\s+/g, " ")).toContain("<&macro_wait_time 30>, <&kp LALT>, <&macro_wait_time 15>, <&macro_press &kp LALT>");
     const back = await reimport(edited);
     expect(back.layers[0]?.bindings.slice(35, 39)).toEqual([
       { kind: "holdTap", tap: { code: "A" }, hold: { mods: ["LGUI"] }, profileId: "home_row_mods" },
