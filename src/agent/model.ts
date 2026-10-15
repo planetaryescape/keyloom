@@ -4,8 +4,16 @@
 import type { z } from "zod";
 import type { ProviderId } from "./provider.ts";
 
-/** An Anthropic content block, carried as the provider sent it. keyloom stores and replays these unchanged. */
-export type ContentBlock = { type: string; [key: string]: unknown };
+/**
+ * A stored content block, neutral between providers (D-111). `providerData` is the provider's own
+ * block, opaque to everything but that provider's adapter: it replays it unchanged, which models
+ * with thinking blocks require. An `opaque` block has nothing neutral to say (a thinking block).
+ */
+export type ContentBlock =
+  | { type: "text"; text: string; providerData?: unknown }
+  | { type: "tool_use"; id: string; name: string; input: unknown; providerData?: unknown }
+  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean; providerData?: unknown }
+  | { type: "opaque"; providerData: unknown };
 
 export type ModelMessage = { role: "user" | "assistant"; content: ContentBlock[] };
 

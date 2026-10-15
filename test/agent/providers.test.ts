@@ -10,7 +10,7 @@ import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
 import { tempDir } from "../helpers/tmp.ts";
 
-const request = { system: "s", messages: [{ role: "user" as const, content: [{ type: "text", text: "hi" }] }], tools: [], maxIterations: 3 };
+const request = { system: "s", messages: [{ role: "user" as const, content: [{ type: "text" as const, text: "hi" }] }], tools: [], maxIterations: 3 };
 
 describe("OpenRouter through the Anthropic adapter", () => {
   test("sends a bearer token to OpenRouter's model ID without the Anthropic-only fallback fields", async () => {

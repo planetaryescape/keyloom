@@ -115,7 +115,7 @@ export class FakeChat implements ChatBackend {
     const found = this.conversations.get(id);
     if (found === undefined) return null;
     return {
-      conversation: { ...found.summary, layoutId: found.layoutId },
+      conversation: { ...found.summary, layoutId: found.layoutId, provider: "openrouter", model: "anthropic/claude-opus-5.5" },
       messages: found.messages,
       proposals: found.proposals.map(({ id: changeSetId, card }) => ({ ...card, status: this.editor.proposalStatus(changeSetId) ?? card.status })),
       priorities: [],

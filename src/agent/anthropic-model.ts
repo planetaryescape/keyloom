@@ -6,8 +6,9 @@ import { transformJSONSchema } from "@anthropic-ai/sdk/lib/transform-json-schema
 import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { z } from "zod";
 import {
-  type AgentModel, type ContentBlock, type ModelErrorKind, type ModelMessage, type ModelTool, type Usage, addUsage, emptyUsage,
+  type AgentModel, type ModelErrorKind, type ModelMessage, type ModelTool, type Usage, addUsage, emptyUsage,
 } from "./model.ts";
+import { neutralBlock, wireBlock } from "./blocks.ts";
 import { DEFAULT_MODELS } from "./provider.ts";
 
 export type { ModelErrorKind } from "./model.ts";
@@ -78,7 +79,7 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
           model,
           max_tokens: MAX_TOKENS,
           system: request.system,
-          messages: request.messages as BetaMessageParam[],
+          messages: request.messages.map(toWire),
           tools: request.tools.map(toRunnable),
           stream: true,
           max_iterations: request.maxIterations,
@@ -116,17 +117,20 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         stopReason = message.stop_reason;
       }
       // The runner's own copy of the conversation now holds the assistant turns and tool results it added.
-      const added = runner.params.messages.slice(request.messages.length) as ModelMessage[];
-      return { messages: added.map(toStored), stopReason: stopReason ?? "end_turn", iterations, usage, ...(costUsd === undefined ? {} : { costUsd }) };
+      const added = runner.params.messages.slice(request.messages.length);
+      return { messages: added.map((m) => toStored(m as { role: "user" | "assistant"; content: unknown })), stopReason: stopReason ?? "end_turn", iterations, usage, ...(costUsd === undefined ? {} : { costUsd }) };
     },
   };
 }
 
-/** A user turn's content may be a bare string in the SDK's types; storage keeps blocks. */
+/** A user turn's content may be a bare string in the SDK's types; storage keeps neutral blocks (D-111). */
 function toStored(m: { role: "user" | "assistant"; content: unknown }): ModelMessage {
-  const content = typeof m.content === "string" ? [{ type: "text", text: m.content }] : (m.content as ContentBlock[]);
-  return { role: m.role, content };
+  const raw = typeof m.content === "string" ? [{ type: "text", text: m.content }] : (m.content as Array<{ type: string }>);
+  return { role: m.role, content: raw.map(neutralBlock) };
 }
+
+/** Anthropic blocks are replayed exactly as the API sent them: models with thinking reject an edited history. */
+const toWire = (m: ModelMessage): BetaMessageParam => ({ role: m.role, content: m.content.map(wireBlock) as BetaMessageParam["content"] });
 
 // Anthropic reports an empty balance as a 400 whose text says so; OpenRouter uses 402 "Insufficient credits".
 const NO_CREDITS = /credit balance is too low|insufficient credits|billing_error/i;

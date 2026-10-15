@@ -1,13 +1,18 @@
-// Repository for conversations and their messages (02#database). A message's content is the
-// Anthropic content-block array exactly as sent or received, because current models reject
-// edited history that carries thinking blocks; nothing here rewrites a stored message.
+// Repository for conversations and their messages (02#database). A message's content is an array of
+// content blocks that keeps each provider's own block as `providerData`, because current models reject
+// edited history that carries thinking blocks; nothing here rewrites a stored message. Rows written
+// before blocks were neutral (D-111) hold the Anthropic blocks directly; src/agent/blocks.ts reads both.
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import { newId } from "./ids.ts";
 
-export type ConversationRow = { id: string; layoutId: string; title: string; createdAt: number };
+export const CONVERSATION_PROVIDERS = ["anthropic", "openrouter", "codex"] as const;
+export type ConversationProvider = (typeof CONVERSATION_PROVIDERS)[number];
 
-// Loose on purpose: the blocks are the SDK's, and keyloom only needs to carry them back unchanged.
+/** `provider` and `model` are what started the conversation and answer it for good (D-111); `model` is null for a conversation from before it was recorded. */
+export type ConversationRow = { id: string; layoutId: string; title: string; provider: ConversationProvider; model: string | null; createdAt: number };
+
+// Loose on purpose: the blocks are the provider's (or neutral ones that wrap them), and keyloom only needs to carry them back unchanged.
 const ContentBlockSchema = z.looseObject({ type: z.string().min(1) });
 export type ContentBlock = z.infer<typeof ContentBlockSchema>;
 const ContentSchema = z.array(ContentBlockSchema);
@@ -28,10 +33,10 @@ export type MessageRow = {
   createdAt: number;
 };
 
-type ConversationDb = { id: string; layout_id: string; title: string; created_at: number };
+type ConversationDb = { id: string; layout_id: string; title: string; provider: ConversationProvider; model: string | null; created_at: number };
 type MessageDb = { id: string; conversation_id: string; role: "user" | "assistant"; content: string; selection: string | null; created_at: number };
 
-const toConversation = (r: ConversationDb): ConversationRow => ({ id: r.id, layoutId: r.layout_id, title: r.title, createdAt: r.created_at });
+const toConversation = (r: ConversationDb): ConversationRow => ({ id: r.id, layoutId: r.layout_id, title: r.title, provider: r.provider, model: r.model, createdAt: r.created_at });
 const toMessage = (r: MessageDb): MessageRow => ({
   id: r.id,
   conversationId: r.conversation_id,
@@ -41,9 +46,14 @@ const toMessage = (r: MessageDb): MessageRow => ({
   createdAt: r.created_at,
 });
 
-export function insertConversation(db: Database, input: { layoutId: string; title: string; now?: number }): ConversationRow {
+export function insertConversation(
+  db: Database,
+  input: { layoutId: string; title: string; provider?: ConversationProvider; model?: string; now?: number },
+): ConversationRow {
   const id = newId("conv");
-  db.query("INSERT INTO conversations (id, layout_id, title, created_at) VALUES (?, ?, ?, ?)").run(id, input.layoutId, input.title, input.now ?? Date.now());
+  db.query("INSERT INTO conversations (id, layout_id, title, provider, model, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+    id, input.layoutId, input.title, input.provider ?? "anthropic", input.model ?? null, input.now ?? Date.now(),
+  );
   return findConversation(db, id) as ConversationRow;
 }
 

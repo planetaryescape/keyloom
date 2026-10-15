@@ -1,5 +1,6 @@
 // Use cases for talking to the agent: send a message, list and show conversations (03, 10).
 import { type AgentModel, type ModelMessage } from "../agent/model.ts";
+import { neutralBlock } from "../agent/blocks.ts";
 import type { ProviderId } from "../agent/provider.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
 import { typedText, userMessageText } from "../agent/prompt.ts";
@@ -133,18 +134,22 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   if (!input.message.trim()) throw new UsageError("the message must not be empty");
   const view = getLayout(app, ref);
   const selection = resolveSelection(app, ref, input.selection);
-  // Before anything is stored, so a missing key doesn't leave an empty conversation behind.
-  const model = input.model ?? defaultAgentModel(app.dataDir, input.provider ? { provider: input.provider } : {});
-
-  let conversation: ConversationRow;
-  if (input.conversationId === undefined) {
-    conversation = insertConversation(app.db, { layoutId: view.layout.id, title: input.message.trim().replace(/\s+/g, " ").slice(0, TITLE_LENGTH) });
-  } else {
-    const found = findConversation(app.db, input.conversationId);
-    if (!found) throw new NotFoundError(`no conversation "${input.conversationId}"`);
-    if (found.layoutId !== view.layout.id) throw new UsageError(`conversation ${found.id} belongs to another layout`);
-    conversation = found;
+  // A conversation stays on the provider and model that started it (D-111); only a new one takes the flag or config.
+  let existing: ConversationRow | undefined;
+  if (input.conversationId !== undefined) {
+    existing = findConversation(app.db, input.conversationId);
+    if (!existing) throw new NotFoundError(`no conversation "${input.conversationId}"`);
+    if (existing.layoutId !== view.layout.id) throw new UsageError(`conversation ${existing.id} belongs to another layout`);
+    const wanted = input.model?.provider ?? input.provider;
+    if (wanted !== undefined && wanted !== existing.provider) {
+      throw new UsageError(`conversation ${existing.id} was started on ${existing.provider}, so it stays there; start a new conversation to use ${wanted}`);
+    }
   }
+  // Before anything is stored, so a missing key doesn't leave an empty conversation behind.
+  const model = input.model ?? defaultAgentModel(app.dataDir, existing ? { provider: existing.provider, ...(existing.model ? { model: existing.model } : {}) } : input.provider ? { provider: input.provider } : {});
+
+  const conversation: ConversationRow =
+    existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: input.message.trim().replace(/\s+/g, " ").slice(0, TITLE_LENGTH), provider: model.provider, model: model.model });
   if (answering.has(conversation.id)) throw new BusyError(`conversation ${conversation.id} is still answering the last message`);
   answering.add(conversation.id);
 
@@ -157,7 +162,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
     });
     input.onEvent?.({ type: "start", conversationId: conversation.id, messageId: userMessage.id });
 
-    const history: ModelMessage[] = listMessages(app.db, conversation.id).map((m) => ({ role: m.role, content: m.content }));
+    const history: ModelMessage[] = listMessages(app.db, conversation.id).map((m) => ({ role: m.role, content: m.content.map(neutralBlock) }));
     let outcome: TurnOutcome;
     try {
       outcome = await runAgentTurn({

@@ -100,7 +100,7 @@ describe("applying a proposal", () => {
 
 describe("fromConversation", () => {
   const detail: ConversationDetail = {
-    conversation: { id: "c9", layoutId: "l", title: "t", createdAt: 1 },
+    conversation: { id: "c9", layoutId: "l", title: "t", provider: "anthropic", model: null, createdAt: 1 },
     messages: [
       { id: "m1", role: "user", text: "hi", toolCalls: [], selection: null, createdAt: 1 },
       { id: "m2", role: "assistant", text: "hello", toolCalls: ["get_layout"], selection: null, createdAt: 2 },
@@ -144,7 +144,7 @@ describe("priority chips", () => {
 
   test("a reopened conversation puts each chip under the first reply after the message it came from", () => {
     const detail: ConversationDetail = {
-      conversation: { id: "c9", layoutId: "l", title: "t", createdAt: 1 },
+      conversation: { id: "c9", layoutId: "l", title: "t", provider: "anthropic", model: null, createdAt: 1 },
       messages: [
         { id: "m1", role: "user", text: "hi", toolCalls: [], selection: null, createdAt: 1 },
         { id: "m2", role: "assistant", text: "which?", toolCalls: [], selection: null, createdAt: 2 },

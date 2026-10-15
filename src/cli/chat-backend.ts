@@ -26,7 +26,8 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
           ...(request.conversationId ? { conversationId: request.conversationId } : {}),
           ...(request.selection ? { selection: { layer: request.selection.layerId, positions: request.selection.positions } } : {}),
           ...(opts.model ? { model: opts.model } : {}),
-          ...(opts.provider ? { provider: opts.provider } : {}),
+          // The serve flag picks the provider for new conversations; an older one stays where it started (D-111).
+          ...(opts.provider && !request.conversationId ? { provider: opts.provider } : {}),
           signal,
           onEvent: emit,
         });
@@ -49,7 +50,10 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
       try {
         const v = showConversation(app, id);
         return {
-          conversation: { id: v.conversation.id, layoutId: v.conversation.layoutId, title: v.conversation.title, createdAt: v.conversation.createdAt },
+          conversation: {
+            id: v.conversation.id, layoutId: v.conversation.layoutId, title: v.conversation.title, createdAt: v.conversation.createdAt,
+            provider: v.conversation.provider, model: v.conversation.model,
+          },
           messages: v.messages,
           proposals: v.proposals,
           priorities: v.priorities,

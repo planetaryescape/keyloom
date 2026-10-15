@@ -256,7 +256,8 @@ export const ChatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 export const ConversationDetailSchema = z.object({
-  conversation: ConversationSummarySchema.extend({ layoutId: z.string().min(1) }),
+  // The provider and model it started on and stays on (D-111); model is null for one from before it was recorded.
+  conversation: ConversationSummarySchema.extend({ layoutId: z.string().min(1), provider: ChatProviderIdSchema, model: z.string().nullable() }),
   messages: z.array(ChatMessageSchema),
   proposals: z.array(ProposalCardSchema),
   priorities: z.array(PriorityCardSchema),

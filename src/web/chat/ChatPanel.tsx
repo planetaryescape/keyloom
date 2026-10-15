@@ -134,7 +134,7 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
       <header className="chat-head">
         <div className="chat-title">
           <h2>Chat</h2>
-          <ProviderLine status={provider.status} />
+          <ProviderLine status={provider.status} pinned={transcript.pinned} />
         </div>
         <div className="chat-head-actions">
           <button type="button" className="button" aria-pressed={view === "decisions"} onClick={() => setView(view === "decisions" ? "chat" : "decisions")}>

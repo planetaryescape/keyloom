@@ -20,9 +20,11 @@ export type AssistantTurn = {
   ending: ChatOutcome["status"] | null;
 };
 export type Turn = UserTurn | AssistantTurn;
-export type Transcript = { conversationId: string | null; turns: Turn[] };
+/** The provider and model a conversation started on and stays on (D-111). Null before the first reply, and for one from before it was recorded. */
+export type Pinned = { provider: ChatOutcome["provider"]; model: string | null };
+export type Transcript = { conversationId: string | null; pinned: Pinned | null; turns: Turn[] };
 
-export const EMPTY: Transcript = { conversationId: null, turns: [] };
+export const EMPTY: Transcript = { conversationId: null, pinned: null, turns: [] };
 
 export type Action =
   | { type: "sent"; userId: string; assistantId: string; text: string; selection: ChatSelection | null }
@@ -68,7 +70,7 @@ function onEvent(state: Transcript, event: ChatEvent): Transcript {
     case "priority":
       return updateLast(state, (turn) => ({ ...turn, priorities: withPriority(turn.priorities, event.priority) }));
     case "done":
-      return updateLast({ ...state, conversationId: event.outcome.conversationId }, (turn) => ({
+      return updateLast({ ...state, conversationId: event.outcome.conversationId, pinned: { provider: event.outcome.provider, model: event.outcome.model } }, (turn) => ({
         ...turn,
         // The streamed text is what the person watched; the outcome's is the fallback if none streamed.
         text: turn.text === "" ? event.outcome.text : turn.text,
@@ -157,7 +159,7 @@ export function fromConversation(detail: ConversationDetail): Transcript {
     const turn = turns[index];
     if (turn?.kind === "assistant") turns[index] = { ...turn, priorities: withPriority(turn.priorities, card) };
   }
-  return { conversationId: detail.conversation.id, turns };
+  return { conversationId: detail.conversation.id, pinned: { provider: detail.conversation.provider, model: detail.conversation.model }, turns };
 }
 
 export const isStreaming = (state: Transcript): boolean => state.turns.some((turn) => turn.kind === "assistant" && turn.phase === "streaming");

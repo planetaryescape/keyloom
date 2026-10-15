@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { importOryxSource } from "../../src/firmware/qmk/import.ts";
 import { migrate } from "../../src/persistence/db.ts";
 import { findChangeSet, insertChangeSet } from "../../src/persistence/change-sets.ts";
-import { insertConversation, insertMessage } from "../../src/persistence/conversations.ts";
+import { insertMessage } from "../../src/persistence/conversations.ts";
 import {
   findDecision, insertChoice, insertPriority, listConversationPriorities, listDecisions, updateDecision,
 } from "../../src/persistence/decisions.ts";
@@ -24,7 +24,9 @@ function databaseAtVersion4() {
   }
   db.run("PRAGMA foreign_keys = ON");
   const created = createLayout(db, { name: "old", layout, summary: "import", origin: "import" });
-  const conversation = insertConversation(db, { layoutId: created.layout.id, title: "talk" });
+  // Raw SQL: at version 4 the table has no provider column, which the repository now writes.
+  const conversation = { id: "conv_old" };
+  db.query("INSERT INTO conversations (id, layout_id, title, created_at) VALUES (?, ?, 'talk', 1)").run(conversation.id, created.layout.id);
   const message = insertMessage(db, { conversationId: conversation.id, role: "user", content: [{ type: "text", text: "keep Backspace" }] });
   const changeSet = insertChangeSet(db, {
     layoutId: created.layout.id, baseRevisionId: created.revision.id, source: "agent", ops: [], explanation: "kept", validation: { ok: true },
