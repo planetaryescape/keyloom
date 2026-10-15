@@ -43,7 +43,9 @@ export function parseUsbDevices(json: unknown): UsbDevice[] {
 }
 
 export async function listUsbDevices(): Promise<UsbDevice[]> {
-  if (process.platform !== "darwin" || !which("system_profiler")) return [];
+  // system_profiler exists only on macOS, so finding it is the platform check; tests rely on that to
+  // put a fake one on PATH on Linux CI.
+  if (!which("system_profiler")) return [];
   // Newer macOS answers the old data type with an empty report rather than an error, so try the new
   // one first and fall back only when it finds nothing.
   for (const dataType of ["SPUSBHostDataType", "SPUSBDataType"]) {
