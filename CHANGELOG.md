@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.1](https://github.com/planetaryescape/keyloom/compare/v0.10.0...v0.10.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* a flash with --wait says that wait from its first instruction ([f242098](https://github.com/planetaryescape/keyloom/commit/f242098a8acfed1c6626e8c14994e15f35e520a1))
+* keep the two hands' trays apart where a split board's halves nearly meet ([08ce2ed](https://github.com/planetaryescape/keyloom/commit/08ce2eddb388c147c6408ad21a55bcea4afe5914))
+* retry a missed raw HID lookup before asking for the bootloader key, and say what the lookup saw ([31b69b6](https://github.com/planetaryescape/keyloom/commit/31b69b619d899a082629f2cefb43a2aea928c40c))
+* write the Corne's ZMK keymap in its four physical rows, not lines of ten ([9529e85](https://github.com/planetaryescape/keyloom/commit/9529e8597b86af8bb83bcc8fa6e9cd6770f84cf1))
+
 ## [0.10.0](https://github.com/planetaryescape/keyloom/compare/v0.9.0...v0.10.0) (2026-10-15)
 
 
