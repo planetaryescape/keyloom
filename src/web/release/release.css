@@ -235,6 +235,10 @@
 .callout-warning > svg {
   color: var(--color-warning);
 }
+/* The text asks for a readable line, so on a phone the button drops below it instead of squeezing it into a column. */
+.callout-warning p {
+  flex: 1 1 200px;
+}
 .callout-success {
   border-color: var(--color-success);
   background: var(--color-success-bg);

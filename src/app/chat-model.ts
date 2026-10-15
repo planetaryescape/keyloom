@@ -109,12 +109,12 @@ export async function providerStatus(dataDir: string, choice: ModelChoice = {}, 
   } catch (err) {
     if (!(err instanceof ModelError)) throw err;
   }
-  const lockedBy = choice.provider ? "--provider" : envProviderSafe(env) ? "KEYLOOM_PROVIDER" : null;
+  const lockedBy = choice.provider ? "--provider" : hasEnvProvider(env) ? "KEYLOOM_PROVIDER" : null;
   return { active, lockedBy, providers: PROVIDERS.map((id) => ({ id, defaultModel: DEFAULT_MODELS[id], ready: ready.has(id), ...SETUP[id] })) };
 }
 
 // A bad KEYLOOM_PROVIDER already surfaces as a UsageError from chooseProvider; the lock only needs to know whether a valid one is set.
-const envProviderSafe = (env: Env): boolean => isProviderId(env.KEYLOOM_PROVIDER?.trim());
+const hasEnvProvider = (env: Env): boolean => isProviderId(env.KEYLOOM_PROVIDER?.trim());
 
 /** The picker's save: validated by the caller's schema, written to the data directory's config, and applied from the next conversation (D-111). */
 export async function chooseNextProvider(dataDir: string, choice: { provider: ProviderId; model?: string | undefined }, current: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {

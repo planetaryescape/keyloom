@@ -1,7 +1,6 @@
 import { Cpu } from "lucide-react";
 import { useId, useState } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
-import { ApiError } from "../api.ts";
 import { chooseProvider } from "./api-chat.ts";
 import type { Pinned } from "./transcript.ts";
 
@@ -52,7 +51,7 @@ export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
       setOpen(false);
       setSaved(next.active === null ? null : `Next conversation: ${NAMES[next.active.provider]}, ${next.active.model}.`);
     } catch (error) {
-      setProblem(error instanceof ApiError || error instanceof Error ? error.message : "Couldn't save the choice.");
+      setProblem(error instanceof Error ? error.message : "Couldn't save the choice.");
     } finally {
       setSaving(false);
     }
@@ -98,7 +97,7 @@ export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
                   checked={provider === candidate.id}
                   onChange={() => {
                     setProvider(candidate.id);
-                    setModel(candidate.id === status.active?.provider ? (status.active.model) : "");
+                    setModel(candidate.id === status.active?.provider ? status.active.model : "");
                   }}
                 />
                 <span className="provider-choice-text">

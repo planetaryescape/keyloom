@@ -408,6 +408,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         if (chatOpen) setChatOpen(false);
         else if (editing !== null) closeEditor(true);
         else if (repeating) setRepeating(false);
+        else if (historyOpen) setHistoryOpen(false);
         return;
       }
       // 1 to 9 switch layers. With a key's panel open a digit is a key to type, so it goes to the panel instead.

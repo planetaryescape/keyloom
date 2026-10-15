@@ -98,6 +98,10 @@
   margin: 0;
 }
 
+.dropzone .button {
+  color: var(--color-text);
+}
+
 .dropzone[data-over="true"] {
   border-color: var(--color-accent);
   background: var(--color-accent-bg);

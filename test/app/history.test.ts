@@ -6,6 +6,8 @@ import {
   type App, NotFoundError, StaleBaseError, UsageError, applyOps, closeApp, getLayout, importLayout, listLayouts, listRevisions, openApp, undo,
 } from "../../src/app/index.ts";
 import { importUpload } from "../../src/app/import-upload.ts";
+import { ValidationFailedError } from "../../src/app/index.ts";
+import { appendRevision } from "../../src/persistence/revisions.ts";
 import { safeFilename } from "../../src/app/import-upload.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
 import { setKey } from "../helpers/ops.ts";
@@ -69,6 +71,39 @@ describe("undo to an earlier revision", () => {
     closeApp(app);
   });
 
+  test("two go-backs from the same head: the second finds the head moved and writes nothing", async () => {
+    const { app, ref, revisions } = await setup();
+    const head = revisions[3] as string;
+    undo(app, ref, { revisionId: head, to: revisions[0] as string });
+    expect(() => undo(app, ref, { revisionId: head, to: revisions[1] as string })).toThrow(StaleBaseError);
+    expect(listRevisions(app, ref)).toHaveLength(5);
+    closeApp(app);
+  });
+
+  test("a revision with a problem the head doesn't have is refused, and one the head shares is not", async () => {
+    const { app, ref, revisions } = await setup();
+    const view = getLayout(app, ref);
+    const broken = structuredClone(view.document);
+    broken.layers[0]!.bindings[6] = { kind: "key", code: "NOT_A_KEY" };
+    const bad = appendRevision(app.db, { layoutId: view.layout.id, expectedHeadId: revisions[3] as string, layout: broken, origin: "editor", summary: "broken on purpose" });
+    const fixed = appendRevision(app.db, { layoutId: view.layout.id, expectedHeadId: bad.id, layout: view.document, origin: "editor", summary: "fixed again" });
+    const refused = (() => {
+      try {
+        undo(app, ref, { revisionId: fixed.id, to: bad.id });
+      } catch (err) {
+        return err;
+      }
+      throw new Error("expected a refusal");
+    })();
+    expect(refused).toBeInstanceOf(ValidationFailedError);
+    expect((refused as ValidationFailedError).details).toMatchObject({ ok: false, errors: [{ code: "firmware_unsupported" }] });
+    expect(listRevisions(app, ref)[0]?.id).toBe(fixed.id);
+    // The head itself has the problem: restoring a revision with the same one is allowed, so an imported flaw never traps BK.
+    const again = appendRevision(app.db, { layoutId: view.layout.id, expectedHeadId: fixed.id, layout: broken, origin: "editor", summary: "broken again" });
+    expect(() => undo(app, ref, { revisionId: again.id, to: bad.id })).not.toThrow();
+    closeApp(app);
+  });
+
   test("a stale head is refused and writes nothing", async () => {
     const { app, ref, revisions } = await setup();
     expect(() => undo(app, ref, { revisionId: revisions[2] as string, to: revisions[0] as string })).toThrow(StaleBaseError);
@@ -119,6 +154,7 @@ describe("safeFilename", () => {
   test("keeps the extension, drops directories and odd characters", () => {
     expect(safeFilename("../../etc/My Layout (1).KEYMAP")).toBe("My_Layout_1_.keymap");
     expect(safeFilename("C:\\Users\\bk\\export.zip")).toBe("export.zip");
+    expect(safeFilename("Export.ZIP")).toBe("Export.zip");
     expect(() => safeFilename("..")).toThrow(UsageError);
     expect(() => safeFilename("layout")).toThrow(UsageError);
   });

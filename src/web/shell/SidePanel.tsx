@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { clampSheet, nearestSize, shorter, taller, type SheetSize } from "./sheet.ts";
+import { SHEET_SIZES, clampSheet, nearestSize, shorter, taller, type SheetSize } from "./sheet.ts";
 
 export type PanelMode = "summary" | "key" | "chat" | "repeat" | "history";
 
@@ -65,8 +65,8 @@ export function SidePanel({ mode, summary, key_, chat, repeat, history, size, vi
           aria-orientation="horizontal"
           aria-label={`Resize the panel, now ${NAMES[size]}. Drag, or use the arrow keys.`}
           aria-valuemin={0}
-          aria-valuemax={2}
-          aria-valuenow={["peek", "half", "full"].indexOf(size)}
+          aria-valuemax={SHEET_SIZES.length - 1}
+          aria-valuenow={SHEET_SIZES.indexOf(size)}
           aria-valuetext={NAMES[size]}
           tabIndex={0}
           onPointerDown={start}

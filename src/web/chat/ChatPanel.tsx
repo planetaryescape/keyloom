@@ -132,8 +132,9 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
   const empty = transcript.turns.length === 0;
   // A new conversation can't start without a credential for the provider it would use, so say so before anything is typed.
   // A conversation already going keeps working on its own provider.
-  const activeReady = provider.status?.active == null ? false : (provider.status.providers.find((p) => p.id === provider.status?.active?.provider)?.ready ?? false);
-  const needsModel = provider.status !== null && transcript.pinned === null && !activeReady;
+  const status = provider.status;
+  const activeReady = status?.active != null && status.providers.some((p) => p.id === status.active?.provider && p.ready);
+  const needsModel = status !== null && transcript.pinned === null && !activeReady;
   const retryDraft = draft.trim() === "" ? undefined : () => send(draft);
 
   return (
@@ -213,8 +214,8 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
               stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
             }}
           >
-            {needsModel && chat.problem === null && provider.status !== null ? (
-              <MissingKey providers={provider.status.providers} onRetry={provider.reload} retryLabel="Check again" />
+            {needsModel && chat.problem === null ? (
+              <MissingKey providers={status.providers} onRetry={provider.reload} retryLabel="Check again" />
             ) : empty && chat.problem === null ? (
               <EmptyChat
                 onPick={(prompt) => {

@@ -16,8 +16,8 @@ describe("sheet heights", () => {
     expect(sheetHeight("half", 2000)).toBe(460);
   });
 
-  test("full leaves room for the header", () => {
-    expect(sheetHeight("full", 844)).toBeLessThan(844 - 100);
+  test("full stops at the header, leaving it and the chat bar", () => {
+    expect(sheetHeight("full", 844)).toBe(844 - 54 - 44);
   });
 });
 

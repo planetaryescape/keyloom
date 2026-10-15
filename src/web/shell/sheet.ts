@@ -3,17 +3,19 @@
 export const SHEET_SIZES = ["peek", "half", "full"] as const;
 export type SheetSize = (typeof SHEET_SIZES)[number];
 
-// Peek shows the grabber and the panel's title row; half leaves the board above it; full leaves the header.
+// Peek shows the grabber and the panel's title row; half leaves the board above it; full reaches up to the header's
+// bottom edge (the header and the chat bar below the sheet are 54 and 44 px), so it never stops halfway through the toolbar.
 const PEEK_PX = 112;
 const HALF_RATIO = 0.46;
 const HALF_MAX_PX = 460;
-const FULL_RATIO = 0.86;
+const HEADER_PX = 54;
+const CHAT_BAR_PX = 44;
 
 export function sheetHeight(size: SheetSize, viewportHeight: number): number {
   switch (size) {
     case "peek": return PEEK_PX;
     case "half": return Math.round(Math.min(viewportHeight * HALF_RATIO, HALF_MAX_PX));
-    case "full": return Math.round(viewportHeight * FULL_RATIO);
+    case "full": return Math.max(Math.round(viewportHeight - HEADER_PX - CHAT_BAR_PX), PEEK_PX);
   }
 }
 
