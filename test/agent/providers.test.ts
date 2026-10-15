@@ -4,9 +4,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { anthropicModel, classifyModelError, openRouterClientFromEnv } from "../../src/agent/anthropic-model.ts";
-import { chooseProvider, credentialedProviders, defaultAgentModel, providerStatus } from "../../src/app/chat-model.ts";
+import { NO_CODEX } from "../helpers/no-credentials.ts";
+import { chooseProvider, defaultAgentModel, keyedProviders, providerStatus } from "../../src/app/chat-model.ts";
 import { ModelError, UsageError, sendMessage } from "../../src/app/index.ts";
 import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
+import { fakeCodex } from "../helpers/fake-codex.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
 import { tempDir } from "../helpers/tmp.ts";
 
@@ -90,59 +92,76 @@ describe("running out of credits", () => {
 });
 
 describe("choosing the provider", () => {
-  const keys = { ANTHROPIC_API_KEY: "a", OPENROUTER_API_KEY: "o" };
+  // KEYLOOM_CODEX_BIN points at nothing, so none of these depend on whether the developer's codex is signed in.
+  const base = { KEYLOOM_CODEX_BIN: NO_CODEX };
+  const keys = { ...base, ANTHROPIC_API_KEY: "a", OPENROUTER_API_KEY: "o" };
 
-  test("with no flag, variable or config the first provider with a credential wins", () => {
-    expect(chooseProvider({}, {}, keys)).toBe("anthropic");
-    expect(chooseProvider({}, {}, { OPENROUTER_API_KEY: "o" })).toBe("openrouter");
-    expect(credentialedProviders({ OPENROUTER_API_KEY: "  " })).toEqual([]);
+  test("with no flag, variable or config the first provider with a credential wins", async () => {
+    expect(await chooseProvider({}, {}, keys)).toBe("anthropic");
+    expect(await chooseProvider({}, {}, { ...base, OPENROUTER_API_KEY: "o" })).toBe("openrouter");
+    expect(keyedProviders({ OPENROUTER_API_KEY: "  " })).toEqual([]);
   });
 
-  test("the flag beats KEYLOOM_PROVIDER, which beats the config, which beats the default", () => {
-    expect(chooseProvider({ provider: "openrouter" }, { provider: "codex" }, { ...keys, KEYLOOM_PROVIDER: "anthropic" })).toBe("openrouter");
-    expect(chooseProvider({}, { provider: "openrouter" }, { ...keys, KEYLOOM_PROVIDER: "anthropic" })).toBe("anthropic");
-    expect(chooseProvider({}, { provider: "openrouter" }, keys)).toBe("openrouter");
+  test("a signed-in codex is the last resort, and a key still beats it", async () => {
+    const fake = fakeCodex({ loggedIn: true });
+    expect(await chooseProvider({}, {}, { KEYLOOM_CODEX_BIN: fake.bin })).toBe("codex");
+    expect(await chooseProvider({}, {}, { KEYLOOM_CODEX_BIN: fake.bin, OPENROUTER_API_KEY: "o" })).toBe("openrouter");
+    expect(await chooseProvider({}, {}, { KEYLOOM_CODEX_BIN: fakeCodex({ loggedIn: false }).bin }).catch((e) => e)).toBeInstanceOf(ModelError);
+    expect(await chooseProvider({}, {}, { CODEX_API_KEY: "c", KEYLOOM_CODEX_BIN: NO_CODEX })).toBe("codex");
   });
 
-  test("a bad KEYLOOM_PROVIDER is a usage error and nothing configured is a missing_key ModelError", () => {
-    expect(() => chooseProvider({}, {}, { KEYLOOM_PROVIDER: "openai" })).toThrow(UsageError);
-    const err = (() => { try { chooseProvider({}, {}, {}); } catch (e) { return e; } })();
+  test("the flag beats KEYLOOM_PROVIDER, which beats the config, which beats the default", async () => {
+    expect(await chooseProvider({ provider: "openrouter" }, { provider: "codex" }, { ...keys, KEYLOOM_PROVIDER: "anthropic" })).toBe("openrouter");
+    expect(await chooseProvider({}, { provider: "openrouter" }, { ...keys, KEYLOOM_PROVIDER: "anthropic" })).toBe("anthropic");
+    expect(await chooseProvider({}, { provider: "openrouter" }, keys)).toBe("openrouter");
+  });
+
+  test("a bad KEYLOOM_PROVIDER is a usage error and nothing configured is a missing_key ModelError", async () => {
+    expect(await chooseProvider({}, {}, { ...base, KEYLOOM_PROVIDER: "openai" }).catch((e) => e)).toBeInstanceOf(UsageError);
+    const err = await chooseProvider({}, {}, base).catch((e) => e);
     expect(err).toBeInstanceOf(ModelError);
-    expect((err as ModelError).kind).toBe("missing_key");
+    expect(err.kind).toBe("missing_key");
   });
 
-  test("the data directory's config picks the provider and model, and a malformed one names the file", () => {
+  test("the data directory's config picks the provider and model, and a malformed one names the file", async () => {
     const dir = tempDir("keyloom-config-");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "config.json"), JSON.stringify({ agent: { provider: "openrouter", model: "anthropic/claude-sonnet-5.5", effort: "high" } }));
-    const model = defaultAgentModel(dir, {}, keys);
-    expect(model).toMatchObject({ provider: "openrouter", model: "anthropic/claude-sonnet-5.5", effort: "high" });
+    expect(await defaultAgentModel(dir, {}, keys)).toMatchObject({ provider: "openrouter", model: "anthropic/claude-sonnet-5.5", effort: "high" });
 
     // The config's model belongs to the config's provider; --provider anthropic must not get an OpenRouter ID.
-    expect(defaultAgentModel(dir, { provider: "anthropic" }, keys)).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5" });
+    expect(await defaultAgentModel(dir, { provider: "anthropic" }, keys)).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5" });
 
     writeFileSync(join(dir, "config.json"), "{ nope");
-    expect(() => defaultAgentModel(dir, {}, keys)).toThrow(/config\.json is not valid JSON/);
+    await expect(defaultAgentModel(dir, {}, keys)).rejects.toThrow(/config\.json is not valid JSON/);
     writeFileSync(join(dir, "config.json"), JSON.stringify({ agent: { provider: "gemini" } }));
-    expect(() => defaultAgentModel(dir, {}, keys)).toThrow(/not a valid keyloom config/);
+    await expect(defaultAgentModel(dir, {}, keys)).rejects.toThrow(/not a valid keyloom config/);
   });
 
-  test("a missing credential for the chosen provider names that provider's variable", () => {
+  test("a missing credential for the chosen provider names that provider's variable or login", async () => {
     const dir = tempDir("keyloom-config-");
-    expect(() => defaultAgentModel(dir, { provider: "openrouter" }, { ANTHROPIC_API_KEY: "a" })).toThrow(/OPENROUTER_API_KEY is not set/);
+    await expect(defaultAgentModel(dir, { provider: "openrouter" }, { ...base, ANTHROPIC_API_KEY: "a" })).rejects.toThrow(/OPENROUTER_API_KEY is not set/);
+    await expect(defaultAgentModel(dir, { provider: "codex" }, { KEYLOOM_CODEX_BIN: fakeCodex({ loggedIn: false }).bin })).rejects.toThrow(/codex login/);
+    await expect(defaultAgentModel(dir, { provider: "codex" }, base)).rejects.toThrow(/not installed/);
   });
 });
 
 describe("provider status for the chat panel", () => {
-  test("names the active provider and model, and which providers are ready", () => {
-    const status = providerStatus(tempDir("keyloom-status-"), {}, { OPENROUTER_API_KEY: "o" });
+  test("names the active provider and model, and which providers are ready", async () => {
+    const status = await providerStatus(tempDir("keyloom-status-"), {}, { KEYLOOM_CODEX_BIN: NO_CODEX, OPENROUTER_API_KEY: "o" });
     expect(status.active).toEqual({ provider: "openrouter", model: "anthropic/claude-opus-5.5", effort: "medium" });
     expect(status.providers.map((p) => [p.id, p.ready])).toEqual([["anthropic", false], ["openrouter", true], ["codex", false]]);
   });
 
-  test("with nothing set up there is no active provider and all three ways to set one up are listed", () => {
-    const status = providerStatus(tempDir("keyloom-status-"), {}, {});
+  test("with nothing set up there is no active provider and all three ways to set one up are listed", async () => {
+    const status = await providerStatus(tempDir("keyloom-status-"), {}, { KEYLOOM_CODEX_BIN: NO_CODEX });
     expect(status.active).toBeNull();
     expect(status.providers.map((p) => p.command)).toEqual(["ANTHROPIC_API_KEY=<your key> keyloom serve", "OPENROUTER_API_KEY=<your key> keyloom serve", "codex login"]);
+  });
+
+  test("a signed-in codex shows as ready", async () => {
+    const status = await providerStatus(tempDir("keyloom-status-"), {}, { KEYLOOM_CODEX_BIN: fakeCodex({ loggedIn: true }).bin });
+    expect(status.active?.provider).toBe("codex");
+    expect(status.providers.find((p) => p.id === "codex")?.ready).toBe(true);
   });
 });

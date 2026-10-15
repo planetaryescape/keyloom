@@ -3,7 +3,10 @@
 // credential. Keys come from the environment and are never stored (03#model-and-sdk).
 import { type AgentModel } from "../agent/model.ts";
 import { DEFAULT_EFFORT, anthropicModel, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
-import { CREDENTIAL_HINT, DEFAULT_MODELS, PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
+import { codexModel } from "../agent/codex-model.ts";
+import { LOGIN_HINT } from "../agent/codex/errors.ts";
+import { checkCodexLogin } from "../agent/codex/login.ts";
+import { DEFAULT_MODELS, PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
 import { type AgentConfig, readAgentConfig } from "./agent-config.ts";
 import { ModelError, UsageError } from "./errors.ts";
 
@@ -23,8 +26,8 @@ const MISSING: Record<"anthropic" | "openrouter", string> = {
 
 const hasEnv = (env: Env, name: string) => Boolean(env[name]?.trim());
 
-/** What is set up on this machine, in the order the default is picked. */
-export function credentialedProviders(env: Env = process.env): ProviderId[] {
+/** The providers whose key is in the environment, in the order the default is picked. */
+export function keyedProviders(env: Env = process.env): ProviderId[] {
   return PROVIDERS.filter((p) => (p === "anthropic" ? hasEnv(env, "ANTHROPIC_API_KEY") : p === "openrouter" ? hasEnv(env, "OPENROUTER_API_KEY") : false));
 }
 
@@ -36,20 +39,22 @@ function envProvider(env: Env): ProviderId | undefined {
 }
 
 /** Which provider this message uses, and where that came from. Throws a missing_key ModelError when nothing is set up. */
-export function chooseProvider(choice: ModelChoice, config: AgentConfig, env: Env = process.env): ProviderId {
+export async function chooseProvider(choice: ModelChoice, config: AgentConfig, env: Env = process.env): Promise<ProviderId> {
   const explicit = choice.provider ?? envProvider(env) ?? config.provider;
   if (explicit) return explicit;
-  const first = credentialedProviders(env)[0];
+  const first = keyedProviders(env)[0];
   if (first) return first;
+  // Asking Codex runs a process, so it is the last resort.
+  if ((await checkCodexLogin(env)).ready) return "codex";
   throw new ModelError(
     "missing_key",
     `No model provider is set up. Set ANTHROPIC_API_KEY, set OPENROUTER_API_KEY, or run \`codex login\`, for example: op run -- keyloom chat <layout>`,
   );
 }
 
-export function defaultAgentModel(dataDir: string, choice: ModelChoice = {}, env: Env = process.env): AgentModel {
+export async function defaultAgentModel(dataDir: string, choice: ModelChoice = {}, env: Env = process.env): Promise<AgentModel> {
   const config = readAgentConfig(dataDir);
-  const provider = chooseProvider(choice, config, env);
+  const provider = await chooseProvider(choice, config, env);
   // A pinned conversation keeps its model; otherwise the config's model applies only to the provider it was written for.
   const model = choice.model ?? (config.provider === undefined || config.provider === provider ? config.model : undefined) ?? DEFAULT_MODELS[provider];
   const effort = config.effort;
@@ -65,8 +70,13 @@ export function defaultAgentModel(dataDir: string, choice: ModelChoice = {}, env
       if (!client) throw new ModelError("missing_key", MISSING.openrouter);
       return anthropicModel(client, { ...opts, provider: "openrouter" });
     }
-    case "codex":
-      throw new ModelError("missing_key", `The codex provider needs ${CREDENTIAL_HINT.codex}`);
+    case "codex": {
+      const login = await checkCodexLogin(env);
+      if (!login.ready) {
+        throw new ModelError("missing_key", login.reason === "not_installed" ? "The Codex CLI is not installed. Install it, then run `codex login`." : `Codex is not signed in. ${LOGIN_HINT}`);
+      }
+      return codexModel({ ...opts, env });
+    }
   }
 }
 
@@ -83,12 +93,13 @@ const SETUP: Record<ProviderId, { label: string; setup: string; command: string 
 };
 
 /** For the chat panel: which provider answers, and what each one still needs. Never throws on a missing credential. */
-export function providerStatus(dataDir: string, choice: ModelChoice = {}, env: Env = process.env): ProviderStatus {
+export async function providerStatus(dataDir: string, choice: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {
   const config = readAgentConfig(dataDir);
-  const ready = new Set(credentialedProviders(env));
+  const ready = new Set<ProviderId>(keyedProviders(env));
+  if ((await checkCodexLogin(env)).ready) ready.add("codex");
   let active: ProviderStatus["active"] = null;
   try {
-    const provider = chooseProvider(choice, config, env);
+    const provider = await chooseProvider(choice, config, env);
     const model = (config.provider === undefined || config.provider === provider ? config.model : undefined) ?? DEFAULT_MODELS[provider];
     // An explicit choice with no credential is still shown as active: the panel then says what is missing.
     active = { provider, model, effort: config.effort ?? DEFAULT_EFFORT };

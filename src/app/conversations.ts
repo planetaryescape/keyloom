@@ -146,7 +146,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
     }
   }
   // Before anything is stored, so a missing key doesn't leave an empty conversation behind.
-  const model = input.model ?? defaultAgentModel(app.dataDir, existing ? { provider: existing.provider, ...(existing.model ? { model: existing.model } : {}) } : input.provider ? { provider: input.provider } : {});
+  const model = input.model ?? await defaultAgentModel(app.dataDir, existing ? { provider: existing.provider, ...(existing.model ? { model: existing.model } : {}) } : input.provider ? { provider: input.provider } : {});
 
   const conversation: ConversationRow =
     existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: input.message.trim().replace(/\s+/g, " ").slice(0, TITLE_LENGTH), provider: model.provider, model: model.model });

@@ -36,7 +36,7 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
       }
     },
     async provider() {
-      return providerStatus(app.dataDir, opts.provider ? { provider: opts.provider } : {});
+      return await providerStatus(app.dataDir, opts.provider ? { provider: opts.provider } : {});
     },
     async list(ref) {
       try {

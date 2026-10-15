@@ -11,10 +11,3 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
   openrouter: "anthropic/claude-opus-5.5",
   codex: "gpt-6.1-sol",
 };
-
-/** What a person sets or logs in with, named in the missing-credential messages. */
-export const CREDENTIAL_HINT: Record<ProviderId, string> = {
-  anthropic: "ANTHROPIC_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-  codex: "`codex login`",
-};
