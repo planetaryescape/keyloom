@@ -1,6 +1,7 @@
 // Use cases for layouts: import, list, get (01#modules).
 import type { Board } from "../boards/load.ts";
 import { ImportError, importOryxSource } from "../firmware/qmk/import.ts";
+import { KarabinerImportError, importKarabiner } from "../firmware/kanata/karabiner.ts";
 import { ZmkImportError, importZmkSource } from "../firmware/zmk/import.ts";
 import type { ImportReport } from "../layout/import-report.ts";
 import type { Layout } from "../layout/schema.ts";
@@ -27,6 +28,12 @@ type Imported = { layout: Layout; report: ImportReport; suggestedName: string };
 type Importer = (path: string, board: Board) => Promise<Imported>;
 const qmkKeymap: Importer = (path, board) => importOryxSource(path, board.definition);
 const zmkKeymap: Importer = (path, board) => importZmkSource(path, board.definition);
+// Read-only: the file is BK's, tracked in his dotfiles, and keyloom never writes to it (D-233).
+const karabinerJson: Importer = async (path, board) => {
+  const file = Bun.file(path);
+  if (!(await file.exists())) throw new KarabinerImportError(`${path} doesn't exist`);
+  return importKarabiner(await file.text(), board.definition, "karabiner.json");
+};
 
 // `qmk-keymap` and `zmk-keymap` are the neutral names for boards whose users aren't on Oryx or the Layout
 // Editor: the readers take any QMK keymap folder (keymap.c) or ZMK .keymap file, whoever wrote it.
@@ -35,6 +42,7 @@ const IMPORTERS = new Map<string, Importer>([
   ["qmk-keymap", qmkKeymap],
   ["zmk-layout-editor-keymap", zmkKeymap],
   ["zmk-keymap", zmkKeymap],
+  ["karabiner-json", karabinerJson],
 ]);
 
 export async function importLayout(app: App, input: ImportInput): Promise<ImportOutcome> {
@@ -50,7 +58,7 @@ export async function importLayout(app: App, input: ImportInput): Promise<Import
   try {
     result = await importer(input.source, board);
   } catch (err) {
-    if (err instanceof ImportError || err instanceof ZmkImportError) throw new UsageError(err.message);
+    if (err instanceof ImportError || err instanceof ZmkImportError || err instanceof KarabinerImportError) throw new UsageError(err.message);
     throw err;
   }
   const { layout, report, suggestedName } = result;

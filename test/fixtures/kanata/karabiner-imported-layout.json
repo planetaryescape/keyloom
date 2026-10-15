@@ -1,0 +1,695 @@
+{
+  "schemaVersion": 1,
+  "boardId": "apple/macbook-ansi",
+  "firmware": "kanata",
+  "layers": [
+    {
+      "id": "base",
+      "name": "Base",
+      "bindings": [
+        {
+          "kind": "key",
+          "code": "ESCAPE"
+        },
+        {
+          "kind": "key",
+          "code": "F1"
+        },
+        {
+          "kind": "key",
+          "code": "F2"
+        },
+        {
+          "kind": "key",
+          "code": "F3"
+        },
+        {
+          "kind": "key",
+          "code": "F4"
+        },
+        {
+          "kind": "key",
+          "code": "F14"
+        },
+        {
+          "kind": "key",
+          "code": "F6"
+        },
+        {
+          "kind": "key",
+          "code": "F7"
+        },
+        {
+          "kind": "key",
+          "code": "F8"
+        },
+        {
+          "kind": "key",
+          "code": "F9"
+        },
+        {
+          "kind": "key",
+          "code": "F10"
+        },
+        {
+          "kind": "key",
+          "code": "F11"
+        },
+        {
+          "kind": "key",
+          "code": "F12"
+        },
+        {
+          "kind": "key",
+          "code": "GRAVE"
+        },
+        {
+          "kind": "key",
+          "code": "N1"
+        },
+        {
+          "kind": "key",
+          "code": "N2"
+        },
+        {
+          "kind": "key",
+          "code": "N3"
+        },
+        {
+          "kind": "key",
+          "code": "N4"
+        },
+        {
+          "kind": "key",
+          "code": "N5"
+        },
+        {
+          "kind": "key",
+          "code": "N6"
+        },
+        {
+          "kind": "key",
+          "code": "N7"
+        },
+        {
+          "kind": "key",
+          "code": "N8"
+        },
+        {
+          "kind": "key",
+          "code": "N9"
+        },
+        {
+          "kind": "key",
+          "code": "N0"
+        },
+        {
+          "kind": "key",
+          "code": "MINUS"
+        },
+        {
+          "kind": "key",
+          "code": "EQUAL"
+        },
+        {
+          "kind": "key",
+          "code": "BACKSPACE"
+        },
+        {
+          "kind": "key",
+          "code": "TAB"
+        },
+        {
+          "kind": "key",
+          "code": "Q"
+        },
+        {
+          "kind": "key",
+          "code": "W"
+        },
+        {
+          "kind": "key",
+          "code": "E"
+        },
+        {
+          "kind": "key",
+          "code": "R"
+        },
+        {
+          "kind": "holdTap",
+          "tap": {
+            "code": "T"
+          },
+          "hold": {
+            "mods": [
+              "LSFT",
+              "LCTL",
+              "LALT",
+              "LGUI"
+            ]
+          },
+          "profileId": "home-row-250"
+        },
+        {
+          "kind": "holdTap",
+          "tap": {
+            "code": "Y"
+          },
+          "hold": {
+            "mods": [
+              "LSFT",
+              "LCTL",
+              "LALT",
+              "LGUI"
+            ]
+          },
+          "profileId": "home-row-250"
+        },
+        {
+          "kind": "key",
+          "code": "U"
+        },
+        {
+          "kind": "key",
+          "code": "I"
+        },
+        {
+          "kind": "key",
+          "code": "O"
+        },
+        {
+          "kind": "key",
+          "code": "P"
+        },
+        {
+          "kind": "key",
+          "code": "LEFT_BRACKET"
+        },
+        {
+          "kind": "key",
+          "code": "RIGHT_BRACKET"
+        },
+        {
+          "kind": "key",
+          "code": "BACKSLASH"
+        },
+        {
+          "kind": "key",
+          "code": "ESCAPE"
+        },
+        {
+          "kind": "holdTap",
+          "tap": {
+            "code": "A"
+          },
+          "hold": {
+            "mods": [
+              "LSFT"
+            ]
+          },
+          "profileId": "home-row-250"
+        },
+        {
+          "kind": "key",
+          "code": "S"
+        },
+        {
+          "kind": "holdTap",
+          "tap": {
+            "code": "D"
+          },
+          "hold": {
+            "mods": [
+              "LGUI"
+            ]
+          },
+          "profileId": "home-row-250"
+        },
+        {
+          "kind": "key",
+          "code": "F"
+        },
+        {
+          "kind": "key",
+          "code": "G"
+        },
+        {
+          "kind": "key",
+          "code": "H"
+        },
+        {
+          "kind": "key",
+          "code": "J"
+        },
+        {
+          "kind": "holdTap",
+          "tap": {
+            "code": "K"
+          },
+          "hold": {
+            "mods": [
+              "RGUI"
+            ]
+          },
+          "profileId": "home-row-250"
+        },
+        {
+          "kind": "key",
+          "code": "L"
+        },
+        {
+          "kind": "holdTap",
+          "tap": {
+            "code": "SEMICOLON"
+          },
+          "hold": {
+            "mods": [
+              "RSFT"
+            ]
+          },
+          "profileId": "home-row-250"
+        },
+        {
+          "kind": "key",
+          "code": "QUOTE"
+        },
+        {
+          "kind": "key",
+          "code": "ENTER"
+        },
+        {
+          "kind": "key",
+          "code": "LEFT_SHIFT"
+        },
+        {
+          "kind": "key",
+          "code": "Z"
+        },
+        {
+          "kind": "key",
+          "code": "X"
+        },
+        {
+          "kind": "key",
+          "code": "C"
+        },
+        {
+          "kind": "key",
+          "code": "V"
+        },
+        {
+          "kind": "key",
+          "code": "B"
+        },
+        {
+          "kind": "key",
+          "code": "N"
+        },
+        {
+          "kind": "key",
+          "code": "M"
+        },
+        {
+          "kind": "key",
+          "code": "COMMA"
+        },
+        {
+          "kind": "key",
+          "code": "DOT"
+        },
+        {
+          "kind": "key",
+          "code": "SLASH"
+        },
+        {
+          "kind": "key",
+          "code": "RIGHT_SHIFT"
+        },
+        {
+          "kind": "native",
+          "firmware": "kanata",
+          "source": "fn",
+          "label": "fn"
+        },
+        {
+          "kind": "key",
+          "code": "LEFT_CTRL"
+        },
+        {
+          "kind": "key",
+          "code": "LEFT_ALT"
+        },
+        {
+          "kind": "key",
+          "code": "LEFT_GUI"
+        },
+        {
+          "kind": "holdTap",
+          "tap": {
+            "code": "SPACE"
+          },
+          "hold": {
+            "layerId": "nav-mode"
+          },
+          "profileId": "space-1000"
+        },
+        {
+          "kind": "key",
+          "code": "RIGHT_GUI"
+        },
+        {
+          "kind": "key",
+          "code": "RIGHT_ALT"
+        },
+        {
+          "kind": "key",
+          "code": "LEFT"
+        },
+        {
+          "kind": "key",
+          "code": "UP"
+        },
+        {
+          "kind": "key",
+          "code": "DOWN"
+        },
+        {
+          "kind": "key",
+          "code": "RIGHT"
+        }
+      ]
+    },
+    {
+      "id": "nav-mode",
+      "name": "Nav mode",
+      "bindings": [
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "key",
+          "code": "UP"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "key",
+          "code": "LEFT"
+        },
+        {
+          "kind": "key",
+          "code": "DOWN"
+        },
+        {
+          "kind": "key",
+          "code": "RIGHT"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        }
+      ]
+    }
+  ],
+  "macros": [],
+  "tapDances": [],
+  "combos": [
+    {
+      "id": "combo-q-w",
+      "name": "q + w",
+      "positions": [
+        28,
+        29
+      ],
+      "layerIds": "all",
+      "output": {
+        "kind": "key",
+        "code": "ESCAPE"
+      },
+      "timeoutMs": 40
+    },
+    {
+      "id": "combo-u-i",
+      "name": "u + i",
+      "positions": [
+        34,
+        35
+      ],
+      "layerIds": "all",
+      "output": {
+        "kind": "key",
+        "code": "MINUS"
+      },
+      "timeoutMs": 40
+    },
+    {
+      "id": "combo-n-m",
+      "name": "n + m",
+      "positions": [
+        60,
+        61
+      ],
+      "layerIds": "all",
+      "output": {
+        "kind": "key",
+        "code": "Z",
+        "mods": [
+          "LGUI"
+        ]
+      },
+      "timeoutMs": 40
+    }
+  ],
+  "holdTapProfiles": [
+    {
+      "id": "space-1000",
+      "name": "Space layer (1000 ms)",
+      "firmware": "kanata",
+      "options": {
+        "variant": "tap-hold-press",
+        "hold-ms": 1000
+      }
+    },
+    {
+      "id": "home-row-250",
+      "name": "Home-row mods (250 ms)",
+      "firmware": "kanata",
+      "options": {
+        "variant": "tap-hold-tap-keys",
+        "hold-ms": 250
+      }
+    }
+  ],
+  "settings": [],
+  "passthrough": []
+}

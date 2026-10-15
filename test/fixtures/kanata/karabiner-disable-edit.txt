@@ -1,0 +1,12 @@
+To stop Karabiner-Elements and kanata both grabbing the built-in keyboard, add this to the "devices" array of the profile in your karabiner.json
+(the copy in your dotfiles; keyloom never edits it). Your rules stay in the file, so removing the entry switches them back on:
+
+  {
+    "identifiers": { "is_keyboard": true, "product_id": 0, "vendor_id": 0 },
+    "ignore": true
+  }
+
+The identifiers are what `ioreg` shows for the built-in keyboard (vendor 0, product 0). Karabiner's own list is authoritative: with Karabiner running,
+`karabiner_cli --list-connected-devices` prints the built-in keyboard's identifiers; use those if they differ.
+
+Rules keyloom did not import (1) stop applying to the built-in keyboard once it is ignored; they are listed above.

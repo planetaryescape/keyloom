@@ -1,0 +1,74 @@
+;; keyloom generated this file. Edits are overwritten the next time you Apply; change the layout in keyloom instead.
+;; keyloom-layout: lay_SYN
+;; keyloom-revision: rev_SYN
+;; keyloom-body-sha256: 4cdde6990431a5b5790034313fc0d9a946872f22d0217a64a2d4b26ab342bdde
+;; ---- body ----
+(defcfg
+  ;; Keys keyloom doesn't list still reach the Mac.
+  process-unmapped-keys yes
+  ;; Transparent keys on a switched layer fall back to the first layer, as QMK's do.
+  delegate-to-first-layer yes
+  ;; Required by defchordsv2.
+  concurrent-tap-hold yes
+  ;; The built-in keyboard only: BK's external boards stay with their own firmware.
+  macos-dev-names-include ("Apple Internal Keyboard / Trackpad")
+)
+
+(defvar
+  ;; Every key, for hold-taps where another key's press makes the held key a tap.
+  all-keys (esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 grv 1 2 3 4 5 6 7 8 9 0 min eql bspc tab q w e r t y u i o p lbrc rbrc bksl caps a s d f g h j k l scln apo ret lshift z x c v b n m comm Period Slash rshift fn lctrl lalt lmeta spc rmeta ralt lft up down rght)
+)
+
+(defsrc
+  esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+  grv 1 2 3 4 5 6 7 8 9 0 min eql bspc
+  tab q w e r t y u i o p lbrc rbrc bksl
+  caps a s d f g h j k l scln apo ret
+  lshift z x c v b n m comm Period Slash rshift
+  fn lctrl lalt lmeta spc rmeta ralt lft up down rght
+)
+
+(defvirtualkeys
+  keyloom-rev_SYN XX
+)
+
+(defalias
+  ;; T taps, LSFT+LCTL+LALT+LGUI holds (profile home-row-250)
+  ht-1 (tap-hold-tap-keys 0 250 t (multi lctrl lshift lalt lmeta) $all-keys)
+  ;; Y taps, LSFT+LCTL+LALT+LGUI holds (profile home-row-250)
+  ht-2 (tap-hold-tap-keys 0 250 y (multi lctrl lshift lalt lmeta) $all-keys)
+  ;; A taps, LSFT holds (profile home-row-250)
+  ht-3 (tap-hold-tap-keys 0 250 a lshift $all-keys)
+  ;; D taps, LGUI holds (profile home-row-250)
+  ht-4 (tap-hold-tap-keys 0 250 d lmeta $all-keys)
+  ;; K taps, RGUI holds (profile home-row-250)
+  ht-5 (tap-hold-tap-keys 0 250 k rmeta $all-keys)
+  ;; SEMICOLON taps, RSFT holds (profile home-row-250)
+  ht-6 (tap-hold-tap-keys 0 250 scln rshift $all-keys)
+  ;; SPACE taps, layer nav-mode holds (profile space-1000)
+  ht-7 (tap-hold-press 0 1000 spc (layer-while-held nav-mode))
+)
+
+(deflayer base
+  esc f1 f2 f3 f4 f14 f6 f7 f8 f9 f10 f11 f12
+  grv 1 2 3 4 5 6 7 8 9 0 min eql bspc
+  tab q w e r @ht-1 @ht-2 u i o p lbrc rbrc bksl
+  esc @ht-3 s @ht-4 f g h j @ht-5 l @ht-6 apo ret
+  lshift z x c v b n m comm Period Slash rshift
+  fn lctrl lalt lmeta @ht-7 rmeta ralt lft up down rght
+)
+
+(deflayer nav-mode
+  _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ up _ _ _ _ _ _ _ _ _ _ _
+  _ lft down rght _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _ _
+  _ _ _ _ _ _ _ _ _ _ _
+)
+
+(defchordsv2
+  (q w) esc 40 first-release ()
+  (u i) min 40 first-release ()
+  (n m) M-z 40 first-release ()
+)

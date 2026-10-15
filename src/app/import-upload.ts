@@ -10,14 +10,14 @@ import { UsageError } from "./errors.ts";
 export type UploadInput = { board: string; filename: string; bytes: Uint8Array; name?: string | undefined };
 
 // The importers decide what a file is from its extension, so it is kept; everything else about the name is not trusted.
-const EXTENSIONS = new Set([".zip", ".keymap"]);
+const EXTENSIONS = new Set([".zip", ".keymap", ".json"]);
 
 export function safeFilename(filename: string): string {
   const leaf = filename.split(/[\\/]/).at(-1) ?? "";
   const cleaned = leaf.replace(/[^\w.@+-]+/g, "_").replace(/^\.+/, "");
   const dot = cleaned.lastIndexOf(".");
   const extension = dot < 0 ? "" : cleaned.slice(dot).toLowerCase();
-  if (!EXTENSIONS.has(extension)) throw new UsageError(`${leaf || "That file"} is not a .zip or a .keymap file`);
+  if (!EXTENSIONS.has(extension)) throw new UsageError(`${leaf || "That file"} is not a .zip, .keymap or .json file`);
   return `${cleaned.slice(0, dot)}${extension}`;
 }
 

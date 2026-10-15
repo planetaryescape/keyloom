@@ -23,6 +23,12 @@ const GUIDES: Record<string, ExportGuide> = {
     accepts: ".keymap",
     extensions: [".keymap"],
   },
+  "karabiner-json": {
+    tool: "Karabiner-Elements",
+    steps: "Drop a copy of ~/.config/karabiner/karabiner.json. keyloom only reads it: your rules stay in the file, and keyloom shows the edit that stops Karabiner grabbing the built-in keyboard.",
+    accepts: ".json",
+    extensions: [".json"],
+  },
   "qmk-keymap": {
     tool: "your QMK keymap",
     steps: "Zip your keymap folder, the one with keymap.c in it, and drop the .zip.",

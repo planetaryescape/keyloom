@@ -19,4 +19,6 @@ export type ImportReport = {
   native: NativeItem[];
   passthrough: PassthroughItem[];
   warnings: string[];
+  /** Steps the person has to take outside keyloom, as text to read and apply: the Karabiner edit that frees the built-in keyboard (21). */
+  instructions?: string;
 };

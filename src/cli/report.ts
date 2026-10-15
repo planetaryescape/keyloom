@@ -24,5 +24,6 @@ export function importTable(o: ImportOutcome): string {
   for (const p of r.passthrough) lines.push(`  ${p.file} ${p.anchor}${p.refersToLayerIndices ? "  (refers to layer numbers, so layer order is fixed)" : ""}`);
 
   if (r.warnings.length > 0) lines.push("", "warnings:", ...r.warnings.map((w) => `  ${w}`));
+  if (r.instructions) lines.push("", "to do yourself:", ...r.instructions.split("\n").map((l) => `  ${l}`));
   return lines.join("\n");
 }
