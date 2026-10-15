@@ -19,10 +19,10 @@ keyloom
   layout delete <layout>
 
   change check <layout> --ops <file|->     validate ops against head; prints the ValidationResult (07)
-  change propose <layout> --ops <file|-> --explain <text>   save an editor-style change set
+  change propose <layout> --ops <file|-> --explain <text> [--reason <text>]   save an editor-style change set; --reason is remembered when it is applied
   change list <layout> [--status proposed]
   change show <cs>                         ops, explanation, trade-offs, validation, reminders
-  change apply <cs> [--reason <text>]
+  change apply <cs>                        prints the decision it wrote, if any
   change reject <cs>
   undo <layout> [--rev R]                  undo the head revision (or R)
 
@@ -34,6 +34,9 @@ keyloom
   decisions show <dec>
   decisions edit <dec> [--goal …] [--choice …] [--reason …] [--status …]
   decisions retire <dec>
+  decisions outcome <dec> --status tried_helpful|tried_unhelpful --note <text>
+  decisions due <layout> [--now <time>]    choices a week old that have not been asked about (Q6)
+  decisions dismiss <dec>                  stop asking whether it worked out
 
   generate <layout> [--rev R] [--board-rev B] --out <dir>  write firmware source without building
   build <layout> [--rev R] [--board-rev B] generate and build; prints the build ID and artifact path

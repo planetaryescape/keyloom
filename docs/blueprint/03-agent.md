@@ -35,7 +35,7 @@ Each tool is a `betaZodTool` in `src/agent/tools/`, one file per tool.
 | `propose_changes` | `{ alternatives: Proposal[] }` (1–3) | For each alternative: its change set ID and validation result | The only way a proposal reaches BK. Invalid alternatives come back with errors so the agent can fix them |
 | `mirror_keys` | `{ positions: number[], layer: string }` | For each position, the key at its mirror position, the binding this position should hold to match it (its own letter, the right hand's modifiers, a mirrored ZMK profile where the original lists the other hand's keys), and ops covering exactly the keys that change, validated | "The same as the other hand, mirrored" without the model counting positions or guessing hands (D-060) |
 | `record_priority` | `{ subject, priorityKind, statement, reason? }` | The new priority's ID | Captures "keep Backspace where it is" or "I barely use Caps Lock" as a decision of kind `priority` (D-021). It shows in the chat as a chip BK can remove |
-| `update_decision_outcome` | `{ decisionId, status, note }` | The updated decision | Records "that fixed it" or "that feels slow" against an earlier decision (D-018) |
+| `update_decision_outcome` | `{ decisionId, status: "tried_helpful" \| "tried_unhelpful", note }` | A line confirming it | Records "that fixed it" or "that feels slow" against an earlier decision, in BK's words (D-018). It refuses a priority and a decision that no longer applies (D-055) |
 
 ```ts
 type Proposal = {

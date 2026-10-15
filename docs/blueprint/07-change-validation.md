@@ -14,10 +14,12 @@ type ValidationResult = {
     displaced: { function: string; from: Slot; to: Slot | null }[];
     dropped: { function: string; reason: string }[];
     relearnCount: number;              // functions that moved position
+    retuned: Slot[];                   // hold-tap keys whose binding is unchanged but whose feel changed (D-052)
     reminders: DecisionReminder[];     // 08
   };
 };
 type Issue = { code: string; message: string; slots?: Slot[] };
+type DecisionReminder = { decisionId: string; goal: string; choice: string; reason: string; status: "hypothesis" | "tried_helpful"; slots: Slot[] };
 ```
 
 Both the agent (`analyse_change`, `propose_changes`) and the editor call it. The CLI exposes it as `keyloom change check`.
@@ -35,7 +37,7 @@ Errors make the change set invalid. The codes are stable strings that the agent 
 | `function_lost` | Every function reachable before is reachable after, unless a `dropFunction` op names it | Principle 5: nothing gets lost silently (D-020) |
 | `layer_unreachable` | Every layer can be reached from the base layer through layer actions, layer-taps or combos | A layer nobody can reach is a lost function |
 | `layer_trap` | A layer entered with `toggle` or `to` has a binding that leads back | Otherwise the keyboard gets stuck on it |
-| `firmware_unsupported` | Every binding kind and option exists in the board's firmware ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)) | D-024. The firmware decides what's expressible |
+| `firmware_unsupported` | Every binding kind and option exists in the board's firmware ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)). That includes hold-tap profile options: on QMK only `TAPPING_TERM`, `QUICK_TAP_TERM`, `PERMISSIVE_HOLD` and `HOLD_ON_OTHER_KEY_PRESS` can differ per profile, and keys with the same tap and hold must agree; on ZMK the flavor, millisecond and trigger-position values must be valid (D-057) | D-024. The firmware decides what's expressible |
 | `qmk_modtap_basic` | On QMK, a hold-tap's tap side is a basic keycode with no mods | QMK limits `MT()` to basic keycodes (qmk/qmk_firmware `7a1bbf3` `docs/mod_tap.md:65`) |
 | `qmk_modtap_mixed_hands` | On QMK, a mod-tap's mods are all left-hand or all right-hand | One right-hand mod makes all of them right-handed (same source) |
 | `combo_conflict` | Two combos on the same layers don't use the same set of positions | Only one could fire |
@@ -58,9 +60,9 @@ Warnings appear in the preview beside the trade-offs. They don't block apply.
 | Code | Rule | Why |
 |---|---|---|
 | `doubled_letter_tapdance` | A multi-tap behaviour on a letter that doubles in common English words (`l s e o t f p r m c n d g b z`) | "class" would break. This is why double-tap S was rejected for Option–Option (D-019) |
-| `homerow_same_hand_mods` | A hold-tap on a home-row letter has no opposite-hand constraint (QMK Chordal Hold or ZMK `hold-trigger-key-positions`) | Rolling same-hand letters triggers the modifier by accident (D-017) |
+| `homerow_same_hand_mods` | A hold-tap on a home-row letter that holds a modifier has no opposite-hand constraint: QMK `CHORDAL_HOLD` off, or ZMK `hold-trigger-key-positions` empty or naming the key's own hand beyond the thumbs. One warning per profile, only for what the change adds (D-058) | Rolling same-hand letters triggers the modifier by accident (D-017) |
 | `moved_pinned` | The change moves a slot or function covered by a `pinned` priority | BK said to keep it there (D-021). It's a reminder, not a block (D-023) |
-| `contradicts_decision` | The change undoes or moves something an active decision placed deliberately | It surfaces the old reason (D-022) |
+| `contradicts_decision` | The change alters, retunes or removes the layer of keys an active `choice` decision placed, unless BK marked it `tried_unhelpful`. The `DecisionReminder` carries the stored goal, choice, reason and status | It surfaces the old reason (D-022, D-053) |
 | `outside_selection` | The message carried a selection, and the change edits a key that isn't in it (another position, or the same position on another layer) | BK pointed at the keys he meant. Editing others is sometimes necessary, but he should see it (D-062) |
 | `large_relearn` | `relearnCount` is above 6 | Muscle memory cost. BK should choose it knowingly |
 | `identifier_clash` | A layer, macro, combo or profile ID would generate a name that collides with a firmware identifier (a ZMK behaviour label, a QMK keycode) | Generated firmware would fail to compile or bind the wrong thing. Taken from keymap-editor's warnings ([../research/keymap-editor.md](../research/keymap-editor.md)) |

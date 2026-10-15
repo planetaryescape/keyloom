@@ -48,6 +48,8 @@ This is keymap-editor's model, about 40 lines in `app/src/key-units.js` and `key
 | Double-click a key, or press Enter with one key selected | Opens the binding editor for that key | Adapted: keymap-editor edits on a single click, but in keyloom a single click selects for chat |
 | Binding editor | Kind tabs (Key, Modifier, Hold-tap, Layer, Macro, None, Transparent). The key picker for codes. Modifier toggles beside it, so `Shift+1` is a key with mods, not a macro. For a hold-tap: tap, hold and profile | Modifier toggles, adopted |
 | Key picker | Keyboard-first fuzzy search over names, aliases, labels and categories from the generated keycode table ([02](02-layout-model.md#keycode-is-keylooms-own-name-set)). Arrow keys, Enter, Escape, autofocus. A real ARIA listbox | keymap-editor's picker, adopted |
+| Why this change | After a binding is chosen, an optional one-line "Why this change?" is sent with the apply. If BK types one, applying writes a decision with it (08, D-052) | keyloom (rung 6) |
+| Tune a hold-tap | Selecting a hold-tap key shows its timing profile: tapping term, quick tap, and the firmware's other per-profile options. A scope choice edits the shared profile or gives this key a profile of its own. It goes through the same check and apply as every other change (D-017, D-057) | keyloom (rung 6) |
 | Change kind, keep parameters | Switching a hold-tap's profile, or between hold-tap and plain key, keeps the tap and hold values where the kinds match | Adopted (keymap-editor issue #225) |
 | Quick assign | With keys selected, "Quick assign" takes typed keystrokes and assigns them to the selected keys in order. The result is one change set, so it undoes as one | Adopted, with undo added |
 | Selection bar | A row under the layer tabs says how many keys are selected and on which layer, with Clear selection and Repeat last change. A selected key shows an accent ring, a tint and a tick, so it differs from the current key (outline), a draft (dashed, dot) and a move's landing (dotted) without relying on colour. It works on rotated thumb keys | keyloom (rung 7) |
@@ -66,7 +68,7 @@ Each proposal from the agent ([03](03-agent.md#the-loop-for-one-message)) shows 
 
 ## Decisions view
 
-The decisions view lists the layout's decisions, as described in [08](08-decision-memory.md#inspecting-and-correcting). It filters by status and kind. Hovering highlights the keys a decision covers. Each decision links to the conversation message it came from.
+The decisions view lists the layout's decisions, as described in [08](08-decision-memory.md#inspecting-and-correcting). It sits in the chat panel beside History (D-059). Active decisions come first, with replaced ones folded away. Hovering a decision highlights the keys it covers and shows their layer. Each can be edited, retired, or opened at the conversation it came from. A previewed proposal that touches a remembered key shows the stored reason in the card, in a strip under the board, and as a mark on the keys.
 
 ## What keymap-editor does that keyloom doesn't
 
