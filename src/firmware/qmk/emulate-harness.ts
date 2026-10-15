@@ -35,8 +35,14 @@ export function carriedRules(rulesMk: string | undefined): RulesSplit {
   return { carried: `${lines.join("\n")}${lines.length > 0 ? "\n" : ""}`, dropped };
 }
 
-/** QMK's test names can't contain `-`, and two boards' harness folders must not share objects. */
-export const harnessName = (qmkTarget: string): string => `keyloom_emu_${qmkTarget.replace(/[^A-Za-z0-9]/g, "_")}`;
+/**
+ * QMK's test names can't contain `-`. Each run gets a folder of its own: on Colima a container read a rewritten
+ * events.txt cut to the previous run's length (14-decision-log.md D-081).
+ */
+export const harnessName = (qmkTarget: string, runId: string): string => `keyloom_emu_${qmkTarget.replace(/[^A-Za-z0-9]/g, "_")}_${runId}`;
+
+export const OUTPUT_BEGIN = "@@keyloom-emulate-output-begin";
+export const OUTPUT_END = "@@keyloom-emulate-output-end";
 
 export type HarnessInput = {
   name: string;
@@ -228,14 +234,20 @@ export function harnessScript(name: string, qmkTarget: string): string {
   return [
     "set -e",
     `D=tests/${name}`,
+    // A run that was killed leaves its folder behind; runs are serialised by the checkout lock, so any other one is dead.
+    `for old in tests/keyloom_emu_* .build/test_obj/keyloom_emu_* .build/test/keyloom_emu_*; do case "$old" in *${name}*) ;; *) rm -rf "$old";; esac; done`,
     "mkdir -p $D/gen",
     `qmk generate-keyboard-h -kb ${qmkTarget} -o $D/gen/keyboard.h > /dev/null`,
     `qmk generate-config-h -kb ${qmkTarget} -o $D/gen/info_config.h > /dev/null`,
     // The keyboard's own header (moonlander.h) pulls in drivers that don't exist on the host; only the layout macros are wanted.
     `sed '/^#include "/{/"quantum.h"/!d;}' $D/gen/keyboard.h > $D/keyloom_layout.h`,
     "cp $D/gen/info_config.h $D/info_config.h",
-    // Stale objects go inside the container: deleting them from the host leaves Colima's mount with a stale view (see build.ts).
-    `rm -rf .build/test_obj/${name} .build/test/${name}.elf`,
+    // Cleaning up happens inside the container too: the host deleting a folder leaves Colima's mount with a stale view of it (see build.ts).
+    `trap 'rm -rf $D .build/test_obj/${name} .build/test/${name}.elf' EXIT`,
     `make -j4 test:${name}`,
+    // The result comes back on stdout: reading a file the container just wrote through Colima's mount can show a stale view of it.
+    `echo ${OUTPUT_BEGIN}`,
+    "cat $D/out.txt",
+    `echo ${OUTPUT_END}`,
   ].join("\n");
 }

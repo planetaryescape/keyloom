@@ -10,7 +10,7 @@ import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
 import { qmkRevision } from "./board-config.ts";
-import { carriedRules, harnessFiles, harnessName, harnessScript, rulesWithDefaults } from "./emulate-harness.ts";
+import { OUTPUT_BEGIN, OUTPUT_END, carriedRules, harnessFiles, harnessName, harnessScript, rulesWithDefaults } from "./emulate-harness.ts";
 import { parseHarnessOutput, typedText } from "./emulate-reports.ts";
 import { type GeneratedSource, generateQmkSource } from "./generate.ts";
 import { describeLocated, locateCompileError } from "./locate-error.ts";
@@ -57,7 +57,7 @@ export function scriptFor(events: readonly EmulatorEvent[], keyCount: number): s
 const UNDEFINED = /undefined reference to `([^']+)'/;
 
 /** A message fit for a person, from the tail of a failed compile or link. */
-function failureMessage(output: readonly string[], name: string, keymapC: string, board: BoardDefinition): string {
+export function failureMessage(output: readonly string[], name: string, keymapC: string, board: BoardDefinition): string {
   const link = output.map((l) => UNDEFINED.exec(l)).find((m) => m !== null);
   if (link) return `The emulator can't link the generated keymap: it uses \`${link[1]}\`, which only exists on the keyboard itself.`;
   // The compile error locator expects the path a real build prints.
@@ -79,7 +79,7 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
   if (!source) throw new BuildFailure("emulateQmk needs a layout or its generated source.");
   const script = scriptFor(input.events, board.keyCount);
 
-  const name = harnessName(rev.qmkTarget);
+  const name = harnessName(rev.qmkTarget, `${Date.now().toString(36)}${process.pid}`);
   const rules = carriedRules(source.files.find((f) => f.path === "rules.mk")?.content);
   const files = harnessFiles(
     {
@@ -109,8 +109,6 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
       const dir = join(input.checkoutDir, "tests", name);
       await writeSource(dir, { keymapName: name, files: files });
       await Bun.write(join(dir, "events.txt"), script);
-      // A leftover result from an earlier run must not pass for this one.
-      await Bun.write(join(dir, "out.txt"), "");
 
       const inContainer = `/qmk_firmware/tests/${name}`;
       const uid = process.getuid?.() ?? 1000;
@@ -139,8 +137,9 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
       if (result.timedOut) throw new BuildFailure(`The emulator took longer than ${Math.round(timeoutMs / 60_000)} minutes and was stopped.`);
       if (result.aborted) throw new BuildFailure("The emulation was cancelled.");
 
-      const out = await Bun.file(join(dir, "out.txt")).text();
-      if (result.exitCode !== 0 || out === "") {
+      const begin = output.indexOf(OUTPUT_BEGIN);
+      const end = output.indexOf(OUTPUT_END);
+      if (result.exitCode !== 0 || begin < 0 || end < begin) {
         if (output.some((l) => /Cannot connect to the Docker daemon/i.test(l))) throw new BuildFailure("Docker isn't running. Start Docker Desktop and try again.");
         // gtest says why the script itself failed (a position that is not on the matrix).
         const assertion = output.findIndex((l) => /Failure$/.test(l));
@@ -148,7 +147,7 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
         throw new BuildFailure(failureMessage(output, name, source.files.find((f) => f.path === "keymap.c")?.content ?? "", board));
       }
 
-      const parsed = parseHarnessOutput(out);
+      const parsed = parseHarnessOutput(output.slice(begin + 1, end).join("\n"));
       const warnings = [
         ...(board.vendor === "ZSA" ? ["Oryx's RGB, layer LED and raw HID code is replaced by no-ops. It never changes what keys send."] : []),
         ...(rules.dropped.length > 0 ? [`rules.mk settings that are hardware only were not applied: ${rules.dropped.slice(0, 6).join("; ")}${rules.dropped.length > 6 ? "; ..." : ""}`] : []),
