@@ -1,0 +1,93 @@
+// Repositories for layouts and revisions (02). Every document read is parsed with zod; a row
+// that fails to parse is a bug and throws (02#conventions).
+import type { Database } from "bun:sqlite";
+import { type Layout, LayoutSchema } from "../layout/schema.ts";
+import { newId } from "./ids.ts";
+
+export type Origin = "import" | "editor" | "agent" | "undo";
+
+export type LayoutRow = {
+  id: string;
+  boardId: string;
+  name: string;
+  headRevisionId: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type RevisionRow = {
+  id: string;
+  layoutId: string;
+  parentId: string | null;
+  origin: Origin;
+  summary: string;
+  createdAt: number;
+};
+
+export class NameTakenError extends Error {
+  override name = "NameTakenError";
+}
+
+type LayoutDb = {
+  id: string; board_id: string; name: string; head_revision_id: string; created_at: number; updated_at: number;
+};
+type RevisionDb = {
+  id: string; layout_id: string; parent_id: string | null; origin: Origin; summary: string; created_at: number; document?: string;
+};
+
+const toLayout = (r: LayoutDb): LayoutRow => ({
+  id: r.id, boardId: r.board_id, name: r.name, headRevisionId: r.head_revision_id, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+const toRevision = (r: RevisionDb): RevisionRow => ({
+  id: r.id, layoutId: r.layout_id, parentId: r.parent_id, origin: r.origin, summary: r.summary, createdAt: r.created_at,
+});
+
+const isUniqueViolation = (err: unknown): boolean => (err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE";
+
+/** Creates a layout and its first revision in one transaction. */
+export function createLayout(
+  db: Database,
+  input: { name: string; layout: Layout; summary: string; origin: Origin; now?: number },
+): { layout: LayoutRow; revision: RevisionRow } {
+  const now = input.now ?? Date.now();
+  const layoutId = newId("lay");
+  const revisionId = newId("rev");
+  try {
+    db.transaction(() => {
+      // layouts.head_revision_id and revisions.layout_id reference each other; check both at commit.
+      db.run("PRAGMA defer_foreign_keys = ON");
+      db.query("INSERT INTO layouts (id, board_id, name, head_revision_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+        layoutId, input.layout.boardId, input.name, revisionId, now, now,
+      );
+      db.query(
+        "INSERT INTO revisions (id, layout_id, parent_id, document, origin, summary, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)",
+      ).run(revisionId, layoutId, JSON.stringify(input.layout), input.origin, input.summary, now);
+    }).immediate();
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new NameTakenError(`a layout named "${input.name}" already exists`);
+    throw err;
+  }
+  return {
+    layout: { id: layoutId, boardId: input.layout.boardId, name: input.name, headRevisionId: revisionId, createdAt: now, updatedAt: now },
+    revision: { id: revisionId, layoutId, parentId: null, origin: input.origin, summary: input.summary, createdAt: now },
+  };
+}
+
+/** Oldest first; the explicit tiebreak keeps the order stable when two layouts share a millisecond. */
+export function listLayoutRows(db: Database): LayoutRow[] {
+  return (db.query("SELECT * FROM layouts ORDER BY created_at, id").all() as LayoutDb[]).map(toLayout);
+}
+
+/** `ref` is a `lay_` ID or an exact name. An ID wins, so a layout can't hide another by its name. */
+export function findLayoutRow(db: Database, ref: string): LayoutRow | undefined {
+  const row = (db.query("SELECT * FROM layouts WHERE id = ?").get(ref) ??
+    db.query("SELECT * FROM layouts WHERE name = ?").get(ref)) as LayoutDb | null;
+  return row ? toLayout(row) : undefined;
+}
+
+/** A revision of `layoutId`, with its parsed document. */
+export function findRevision(db: Database, layoutId: string, revisionId: string): { revision: RevisionRow; layout: Layout } | undefined {
+  const row = db.query("SELECT * FROM revisions WHERE id = ? AND layout_id = ?").get(revisionId, layoutId) as RevisionDb | null;
+  if (!row?.document) return undefined;
+  return { revision: toRevision(row), layout: LayoutSchema.parse(JSON.parse(row.document)) };
+}
