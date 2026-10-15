@@ -42,10 +42,39 @@ keyloom
   build <layout> [--rev R] [--board-rev B] generate and build; prints the build ID and artifact path
                                            (--board-rev reva|revb; detected from a connected keyboard when omitted)
   flash [--build B] [--layout L]           flash the newest successful build of L, or B
+  emulate <layout> (--keys "<script>" | --script <file>) [--rev R] [--board-rev B]
+                                           run the real firmware logic and print what the keyboard would send
   doctor                                   Docker, toolchain images, pinned checkouts, API key, database
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
+
+## Emulate prints what a layout types for a sequence of key presses
+
+`keyloom emulate g80 --keys "hold 39 300 then tap 30"` runs the layout's firmware on this machine and prints the HID reports the keyboard would send, with the time of each in ms from the first key, then the text a US text field would show, then the warnings: behaviours the emulator replaced because they need hardware ([06](06-firmware-zmk.md#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard) has the list). It needs Docker, like `build`, and no keyboard. ZMK boards work today; QMK boards say "emulating QMK boards isn't available yet" until its emulator lands (exit 2).
+
+```
+   281 ms  LSFT
+   300 ms  LSFT + U
+   340 ms  LSFT
+   360 ms  (nothing down)
+text: "U"
+```
+
+`--format json` prints `{ layout_id, revision_id, firmware, reports, text, warnings, log_path }`; each report is `{ at, kind: "keyboard", mods, keys }` or `{ at, kind: "consumer", usages }`, with keyloom's own key names (`A`, `BACKSPACE`, `AUDIO_VOL_UP`) and modifier names (`LCTL LSFT LALT LGUI RCTL RSFT RALT RGUI`). `jsonl` prints one report per line. A failed emulation exits 7, like a build.
+
+The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor does (position + 1). Steps are separated by `then`, `;` or new lines, and `#` starts a comment in a `--script` file:
+
+| Step | Meaning |
+|---|---|
+| `tap 31` | press key 31 and let go 40 ms later; the next step starts 20 ms after that |
+| `tap 31+32` | press both together and let go together, for a chord or combo |
+| `hold 31 [ms]` | press key 31 and keep it down; the next step starts `ms` later (default 400) |
+| `release 31` | let go of a held key; keys still down at the end are released, last pressed first |
+| `wait 200` | let 200 ms pass |
+| `@500 tap 31` | start the step at 500 ms instead of right after the previous one |
+
+`hold 31 300 then tap 32` holds key 31 for 300 ms, taps key 32 while 31 is down, then lets go of 31. The same text is in `keyloom emulate --help`.
 
 ## Global flags
 

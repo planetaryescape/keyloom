@@ -1,5 +1,5 @@
 // Runs a generated keymap on this machine: ZMK built for Zephyr's native_posix_64 board with a mock kscan that
-// replays the key events, in the same Docker images the real builds use (06#emulate). Upstream boards (Corne)
+// replays the key events, in the same Docker images the real builds use (06#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard). Upstream boards (Corne)
 // build in ZMK's own image against the west workspace the real build keeps; the Glove80 builds in the
 // MoErgo image, whose Nix store already holds Zephyr and the modules and also has a host gcc.
 import { mkdir, readdir, rm, stat } from "node:fs/promises";

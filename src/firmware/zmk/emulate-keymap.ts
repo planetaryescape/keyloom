@@ -1,4 +1,4 @@
-// The generated keymap -> the keymap ZMK's native_posix_64 build runs (06#emulate). ZMK's own test suite
+// The generated keymap -> the keymap ZMK's native_posix_64 build runs (06#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard). ZMK's own test suite
 // does the same: a mock kscan replays key events, and the log says what the firmware did. The board's
 // matrix is replaced by one row of keys numbered by position, so a keyloom position is a column and the
 // board's real wiring (which the keymap already abstracts away) is left out.

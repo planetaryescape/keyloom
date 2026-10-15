@@ -1,4 +1,4 @@
-// Use case: what would this layout type for a sequence of key presses, run on the real firmware logic (10#emulate).
+// Use case: what would this layout type for a sequence of key presses, run on the real firmware logic (10#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses).
 import { join } from "node:path";
 import { EmulationError } from "../firmware/emulate/error.ts";
 import { ScriptError, parseScript } from "../firmware/emulate/script.ts";
@@ -17,7 +17,7 @@ import { EmulateFailedError } from "./firmware-errors.ts";
 import { getLayout } from "./layouts.ts";
 
 export type EmulateOptions = {
-  /** The key script (10#emulate), such as "hold 31 300 then tap 32". */
+  /** The key script (10#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses), such as "hold 31 300 then tap 32". */
   script: string;
   /** A layout revision ID; the head when omitted. */
   revisionId?: string;

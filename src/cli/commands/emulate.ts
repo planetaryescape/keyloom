@@ -1,4 +1,4 @@
-// emulate (10#emulate): what a layout would type for a sequence of key presses. Thin: one use case in src/app.
+// emulate (10#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses): what a layout would type for a sequence of key presses. Thin: one use case in src/app.
 import { readFile } from "node:fs/promises";
 import type { Command } from "commander";
 import { type App, SCRIPT_HELP, UsageError, emulateLayout } from "../../app/index.ts";

@@ -47,6 +47,27 @@ keyloom builds with its own lean image, `infra/glove80/Dockerfile`, not the temp
 
 Rejected: building in MoErgo's cloud Layout Editor, because it needs an account, has unpublished build limits, and takes the build off BK's machine (D-028). Rejected: GitHub Actions in a user config repo, because it needs a repo and a push for every change and takes minutes per round trip.
 
+## Emulate runs ZMK itself on the host, with a mock keyboard
+
+`keyloom emulate <layout> --keys "<script>"` says what the keyboard would send for a sequence of key presses, without the keyboard ([10](10-cli.md#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses)). It runs ZMK itself (D-075): the layout's generated keymap is built for Zephyr's `native_posix_64` board, with a mock kscan that replays the key events, which is how ZMK's own test suite (`app/tests`) works. `src/firmware/zmk/emulate.ts` does it in the images the real builds use:
+
+- **Corne and other upstream boards** build in ZMK's `zmk-build-arm` image, against the west workspace the real build keeps in `$XDG_CACHE_HOME/keyloom/build/<board>/`. Only a workspace that is missing or not at the pinned SHA runs `west update`.
+- **Glove80** builds in the MoErgo image (`infra/glove80/Dockerfile`), inside the `nix-shell -A zmk` that image already has. Zephyr and the modules are in its Nix store, and so is the gcc that Nix's stdenv was bootstrapped with, which `native_posix_64` needs as a host compiler. The image needs no change.
+
+What the generated source becomes (`src/firmware/zmk/emulate-keymap.ts`, D-076):
+
+1. The keyboard is one row of N keys, so a keyloom position is a column and the board's wiring is out of the picture. A `zmk,matrix-transform` chosen in an appended overlay maps `RC(0,p)` to position p, so combos' `key-positions` and layer bindings mean what they do on the keyboard.
+2. Bindings that need hardware the host lacks (`&bt`, `&out`, `&rgb_ug`, `&bl`, `&ext_power`, `&bootloader`, `&sys_reset`, `&soft_off`, `&studio_unlock`) or send mouse reports (`&mkp`, `&mmv`, `&msc`) are replaced with `&none`, wherever they appear: layers, macros, hold-tap bindings. Each replaced behaviour is a line in the result's `warnings`. Line breaks are kept.
+3. Of the conf, only the settings that change what keys do (combo, macro, report-type and behaviour settings) are applied; the rest (sleep, Bluetooth power, the keyboard's name) are listed in `warnings`.
+
+The firmware's debug log is the output (`src/firmware/zmk/emulate-log.ts`, D-077). ZMK logs each keycode it presses or releases, each change of the modifier byte (`Modifiers set to 0x02`, after implicit, explicit and masked modifiers are applied) and each report it sends (`zmk_endpoints_send_report: usage page 0x07`). The parser replays them with hid.c's own rules: six key slots filled first-free (or NKRO's usage-ordered bitmap when the conf selects it), a key pressed while already down released first, and a report recorded at each send. Each report differs from the last of its kind. A log with dropped lines or with fewer key events than were sent is refused rather than shown.
+
+The mock's clock needs handling (D-078). Its delay for event k is the wait before event k+1, and the first event's delay is also used before the first event, so an unmapped event goes first and each event carries the gap to the next, less one tick because Zephyr adds one to a relative timeout. The binary runs with `-no-rt`, so the simulated clock runs as fast as the host can and times in the log are deterministic: a report's `at` is its log time minus the first key event's, so a hold-tap that decides on its 280 ms term reports at 281.
+
+The container gets the native keymap and conf on standard input, builds in its own `/tmp`, and prints a marker line before running the binary; the output after it is the log (D-079). The saved log of a finished run is kept in `$XDG_CACHE_HOME/keyloom/emulate/<board>/runs/`, keyed by a hash of the firmware pin, image, scripts, native keymap and conf, so asking the same question twice answers in a fraction of a second. Measured on 2026-10-15 on an M-series Mac under Colima: about 7 s per Glove80 run and 25 s per Corne run once the image and workspace exist.
+
+Not modelled: anything that needs a radio, LEDs or sleep, and mouse reports (the report contract has keyboard and consumer reports only). Key repeat is the host's and isn't simulated. QMK has its own emulator behind the same command ([05](05-firmware-qmk.md)).
+
 ## Flash copies the UF2 to each half's boot drive
 
 Each half has a UF2 bootloader that appears as a USB drive: `GLV80RHBOOT` for the right and `GLV80LHBOOT` for the left. Both halves take the same combined file. MoErgo says to flash the right half first (D-038).

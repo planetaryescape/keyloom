@@ -1,4 +1,4 @@
-// The native_posix_64 firmware's debug log -> the HID reports it would have sent (06#emulate). ZMK logs
+// The native_posix_64 firmware's debug log -> the HID reports it would have sent (06#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard). ZMK logs
 // every keycode it presses or releases, every change to the modifier byte, and every report it sends
 // (the `zmk_endpoints_send_report` line); replaying those against the same slot rules hid.c uses gives
 // the reports a host would have seen. With no USB or Bluetooth in the build, the send itself fails with

@@ -293,3 +293,34 @@ Change a decision only by adding a new entry that replaces the old one.
 - **Why this wording.** BK's right home row on the Moonlander has plain D and A on the left, so K and ; would stay plain: a selection of all five can only change three. The demo and the live eval select the keys that have a mod on the left (Moonlander H, J, L; Glove80 J, K, L, ;) so that `diff.changed` equals the selection as a set.
 - **Starting state.** BK's own Moonlander already has mods on the right (H/Hyper, J/r⌘, L/r⌥), which leaves nothing to mirror. The demo and eval take them off first with an editor change (`test/helpers/home-row.ts`); the Glove80 template has no hold-taps, so the left home row is given them with a profile that lists the right hand's keys.
 - **Not changed.** Selection stays a click-to-toggle on one layer and is cleared when the message is sent (D-012). Drag-select (09) is still to come; nothing in rung 7 needed it.
+||||||| parent of aedb098 (docs: describe emulate and record D-075 to D-079)
+
+
+### D-075: `keyloom emulate` runs the firmware itself, with a mock keyboard, and doesn't model it. (Claude, building rung 6 emulation)
+- **Why:** hold-tap flavours, `require-prior-idle-ms`, quick-tap, tap dances, combos and sticky keys are the behaviours BK's two problems turn on (D-025). A TypeScript model of them would be a second implementation to keep equal to ZMK's, and would agree with whoever wrote it. ZMK's own tests run the firmware on the host (Zephyr's `native_posix_64` board with a `zmk,kscan-mock` driver replaying `ZMK_MOCK_PRESS/RELEASE` events), so the same route answers "what would my Glove80 type" with the real code.
+- **How:** the layout's generated keymap is built for `native_posix_64` in the images the real builds use (06#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard). The Glove80 runs in the MoErgo image's Nix store with the gcc already there, so no new image or download; the Corne runs in `zmk-build-arm` against the west workspace the build keeps.
+- **Cost:** a build per distinct question (7 s Glove80, 25 s Corne), because a new keymap changes the devicetree everything includes. A saved log answers a repeat.
+- **Option rejected:** reimplementing the behaviours in TypeScript, for the divergence above.
+
+### D-076: The mock keyboard is one row of keys numbered by position, and hardware behaviours become `&none` with a warning. (Claude, building rung 6 emulation)
+- **Why:** the bindings in a generated keymap are already in position order, so a one-row matrix whose column p is position p makes the board's real wiring irrelevant and works for any ZMK board without reading its transform. Combos' `key-positions` mean the same. (The brief said to map through the board's transform; that is the same mapping with an extra file to read.)
+- **Replaced with `&none`:** `&bt`, `&out`, `&rgb_ug`, `&bl`, `&ext_power`, `&bootloader`, `&sys_reset`, `&soft_off`, `&studio_unlock` (no radio, LEDs or power switch on the host) and `&mkp`, `&mmv`, `&msc` (the report contract carries no mouse reports). Every call in every cell array is replaced, so macros that press `&bt BT_SEL 0` and hold-taps that call them still compile. Each is listed in `warnings`.
+- **Settings:** only conf settings that change what keys do are applied; the others would fail Kconfig on a board without the hardware and are listed in `warnings`.
+- **Revisit:** if a layout's behaviour depends on a replaced binding (a macro that toggles RGB and then types), the warning is the only sign.
+
+### D-077: Reports are read from the firmware's debug log, not from a patched ZMK or a virtual USB device. (Claude, building rung 6 emulation)
+- **Why:** ZMK at upstream v0.3.0 and at MoErgo's `ce69e85` both log each keycode state change, each change of the modifier byte (already the sum of explicit, implicit and masked modifiers) and each `zmk_endpoints_send_report`. That is enough to rebuild every report with hid.c's slot rules, and needs nothing added to either tree. A USB/IP device would need the USB stack ZMK's native build leaves out; a `--wrap` shim would be C that has to track `zmk_hid_*` internals across forks.
+- **Dedup:** a report equal to the last of its kind (keyboard or consumer) is dropped, the first against an empty report, so the list is the changes a host would see.
+- **Guards:** a log with dropped lines, or fewer key events than were sent, is an error, not a partial answer. Errors the firmware prints on every run (`USB endpoint is not supported`) are ignored; any other is a warning.
+- **Revisit:** if a ZMK change drops these log lines, the parser's fixtures (captured from real runs) fail first.
+
+### D-078: Time is the firmware's simulated clock, and the mock's delays are compensated so a script's times come back unchanged. (Claude, building rung 6 emulation)
+- **Found by running it:** the mock kscan's delay for event k is the wait before event k+1, the first event's delay is also used before event 0, and Zephyr adds one tick to a relative timeout. Used as written, every gap is 1 ms long and the first two events are tied together.
+- **How:** an unmapped event (a column past the matrix) goes first and only starts the clock; each real event carries the gap to the next, minus one tick; the last carries a 2 s settle time so tapping terms and sticky-key timers can fire. The binary runs with `-no-rt`, so the clock is simulated and a run takes milliseconds. A report's `at` is its log time minus the first key event's.
+- **Limit:** a gap of 32 767 ms or more can't be encoded and is refused; two events 1 ms apart arrive together.
+
+### D-079: Keymap and conf go to the container on standard input, the build lives in the container, and finished runs are cached. (Claude, building rung 6 emulation)
+- **Found by running it, twice, on Colima (2026-10-15):** a keymap rewritten on the mounted folder reached the container cut off at the old length (a devicetree parse error mid-file); and a build folder kept on the mount made ninja treat the previous run's binary as current, so a run replayed the last run's keys. Both come from the mount's timestamps and sizes lagging the host.
+- **How:** the files travel as base64 lines on stdin and are written to the container's `/tmp`; the build is in `/tmp` too. Only the Corne's west workspace is mounted, and keyloom never rewrites a file in it (`config/west.yml` is written only when it differs).
+- **Cache:** the firmware is deterministic, so the log is stored by a hash of the firmware pin, the image, the scripts and the native keymap and conf (the events are in it). 40 are kept.
+
