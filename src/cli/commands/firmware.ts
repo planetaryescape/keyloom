@@ -112,6 +112,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .option("--layout <layout>", "flash the newest successful build of this layout")
     .action(async (opts: { build?: string; layout?: string }) => {
       if (opts.build !== undefined && opts.layout !== undefined) throw new UsageError("pass --build or --layout, not both");
+      let shown: string | null = null;
       const f = await untilInterrupted((signal) =>
         withApp((app) =>
           flashAndWait(app, {
@@ -120,7 +121,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
             signal,
             // The instruction is the point: it goes to stderr whatever the format, so a script's stdout stays parseable.
             onState: (flash) => {
-              if (flash.instruction) io.err(`${flash.instruction}\n`);
+              if (flash.instruction && flash.instruction !== shown) io.err(`${(shown = flash.instruction)}\n`);
             },
           }),
         ),

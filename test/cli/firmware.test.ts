@@ -90,6 +90,7 @@ describe("keyloom flash", () => {
       const r = await cli(["flash", "--layout", "synchronized", "--data-dir", e.dataDir, "--format", "json"]);
       expect(r.code).toBe(0);
       expect(r.err).toContain("Press the reset button on the Moonlander");
+      expect(r.err.match(/Press the reset button/g)).toHaveLength(1); // not repeated for the same state
       expect(json(r)).toMatchObject({ schema_version: 1, status: "succeeded", build_id: b.build_id, error: null });
       expect(await Bun.file(e.vars.ZAPP_CALLS).text()).toBe("ran\n");
 
