@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/planetaryescape/keyloom/compare/v0.4.0...v0.5.0) (2026-10-15)
+
+
+### Features
+
+* add the foostan Corne (ZMK) ([#6](https://github.com/planetaryescape/keyloom/issues/6)) ([8741ad3](https://github.com/planetaryescape/keyloom/commit/8741ad34da56fcb71a3b09d3a672a1167d039a7c))
+* board recipes are strict, data-driven build and flash for mainline QMK and upstream ZMK ([78b0a34](https://github.com/planetaryescape/keyloom/commit/78b0a3471dacbc4bd45313bb2ad38a8ef679ac7c))
+* contributor guide, board template, board-dev overlay and CI board check ([00965f7](https://github.com/planetaryescape/keyloom/commit/00965f77e3c9d29c9bc280444a9da10cd2df49a0))
+
+
+### Bug Fixes
+
+* set the board check's cache directory from a step, where the runner context exists ([b490519](https://github.com/planetaryescape/keyloom/commit/b49051962b8006d407d1a43d465d5ba8a486bc9d))
+
 ## [0.4.0](https://github.com/planetaryescape/keyloom/compare/v0.3.0...v0.4.0) (2026-10-15)
 
 
