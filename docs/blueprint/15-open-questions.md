@@ -33,6 +33,10 @@ BK's layout "Synchronized" (`QxKPz`, revision `zLQ3Md`, `qmkVersion` 25.0) is pu
 
 Both revisions build from BK's unchanged Oryx source with `docker run … ghcr.io/qmk/qmk_cli@sha256:b7d7fa8f… make zsa/moonlander/<rev>:<keymap>`, in about 100 s each. The binaries aren't byte-identical to Oryx's: keyloom skips the git and version info, and the keymap name differs. Behaviour equivalence is S9. See [../research/spikes/S5.md](../research/spikes/S5.md).
 
+### S11 result, partial (2026-10-15)
+
+Zapp 1.0.2 rejects a non-DFU file before it looks for a device (exit 1). With a valid file it prints `Firmware loaded: …` and waits silently, with no timeout, and only SIGTERM ends it. keyloom wraps it with a 120 s timeout. Success and failure output still need BK's keyboard. See [../research/spikes/S11.md](../research/spikes/S11.md).
+
 ## Product questions for BK
 
 | # | Question | Status |
