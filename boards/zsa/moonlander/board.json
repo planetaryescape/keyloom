@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "id": "zsa/moonlander",
+  "name": "Moonlander",
+  "vendor": "ZSA",
+  "firmware": "qmk",
+  "keyCount": 72,
+  "revisions": [
+    {
+      "id": "reva",
+      "source": {
+        "repo": "https://github.com/zsa/qmk_firmware",
+        "ref": "firmware25",
+        "sha": "93b2b9ec3368f86c5eb5a2e3f934049f8daef885"
+      },
+      "qmkTarget": "zsa/moonlander/reva",
+      "build": {
+        "kind": "qmk-docker"
+      },
+      "flash": {
+        "kind": "zapp"
+      },
+      "detect": {
+        "usbProductId": "0x1969"
+      }
+    },
+    {
+      "id": "revb",
+      "source": {
+        "repo": "https://github.com/zsa/qmk_firmware",
+        "ref": "firmware25",
+        "sha": "93b2b9ec3368f86c5eb5a2e3f934049f8daef885"
+      },
+      "qmkTarget": "zsa/moonlander/revb",
+      "build": {
+        "kind": "qmk-docker"
+      },
+      "flash": {
+        "kind": "zapp"
+      },
+      "detect": {
+        "usbProductId": "0x1972"
+      }
+    }
+  ],
+  "hands": {
+    "left": [0, 1, 2, 3, 4, 5, 6, 14, 15, 16, 17, 18, 19, 20, 28, 29, 30, 31, 32, 33, 34, 42, 43, 44, 45, 46, 47, 54, 55, 56, 57, 58, 59, 66, 67, 68],
+    "right": [7, 8, 9, 10, 11, 12, 13, 21, 22, 23, 24, 25, 26, 27, 35, 36, 37, 38, 39, 40, 41, 48, 49, 50, 51, 52, 53, 60, 61, 62, 63, 64, 65, 69, 70, 71]
+  },
+  "fingers": {
+    "0": "left-pinky",
+    "1": "left-pinky",
+    "2": "left-ring",
+    "3": "left-middle",
+    "4": "left-index",
+    "5": "left-index",
+    "6": "left-index",
+    "7": "right-index",
+    "8": "right-index",
+    "9": "right-index",
+    "10": "right-middle",
+    "11": "right-ring",
+    "12": "right-pinky",
+    "13": "right-pinky",
+    "14": "left-pinky",
+    "15": "left-pinky",
+    "16": "left-ring",
+    "17": "left-middle",
+    "18": "left-index",
+    "19": "left-index",
+    "20": "left-index",
+    "21": "right-index",
+    "22": "right-index",
+    "23": "right-index",
+    "24": "right-middle",
+    "25": "right-ring",
+    "26": "right-pinky",
+    "27": "right-pinky",
+    "28": "left-pinky",
+    "29": "left-pinky",
+    "30": "left-ring",
+    "31": "left-middle",
+    "32": "left-index",
+    "33": "left-index",
+    "34": "left-index",
+    "35": "right-index",
+    "36": "right-index",
+    "37": "right-index",
+    "38": "right-middle",
+    "39": "right-ring",
+    "40": "right-pinky",
+    "41": "right-pinky",
+    "42": "left-pinky",
+    "43": "left-pinky",
+    "44": "left-ring",
+    "45": "left-middle",
+    "46": "left-index",
+    "47": "left-index",
+    "48": "right-index",
+    "49": "right-index",
+    "50": "right-middle",
+    "51": "right-ring",
+    "52": "right-pinky",
+    "53": "right-pinky",
+    "54": "left-pinky",
+    "55": "left-pinky",
+    "56": "left-ring",
+    "57": "left-middle",
+    "58": "left-index",
+    "59": "left-thumb",
+    "60": "right-thumb",
+    "61": "right-index",
+    "62": "right-middle",
+    "63": "right-ring",
+    "64": "right-pinky",
+    "65": "right-pinky",
+    "66": "left-thumb",
+    "67": "left-thumb",
+    "68": "left-thumb",
+    "69": "right-thumb",
+    "70": "right-thumb",
+    "71": "right-thumb"
+  },
+  "rows": {
+    "number": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    "top": [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27],
+    "home": [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41],
+    "bottom": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53],
+    "lower": [54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
+    "thumb": [66, 67, 68, 69, 70, 71]
+  },
+  "mirror": {
+    "0": 13,
+    "1": 12,
+    "2": 11,
+    "3": 10,
+    "4": 9,
+    "5": 8,
+    "6": 7,
+    "14": 27,
+    "15": 26,
+    "16": 25,
+    "17": 24,
+    "18": 23,
+    "19": 22,
+    "20": 21,
+    "28": 41,
+    "29": 40,
+    "30": 39,
+    "31": 38,
+    "32": 37,
+    "33": 36,
+    "34": 35,
+    "42": 53,
+    "43": 52,
+    "44": 51,
+    "45": 50,
+    "46": 49,
+    "47": 48,
+    "54": 65,
+    "55": 64,
+    "56": 63,
+    "57": 62,
+    "58": 61,
+    "59": 60,
+    "66": 71,
+    "67": 70,
+    "68": 69
+  },
+  "importers": [
+    "oryx-source"
+  ]
+}
