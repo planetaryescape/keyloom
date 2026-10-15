@@ -86,7 +86,12 @@ export type UndoRequest = z.infer<typeof UndoRequestSchema>;
 export const UndoResponseSchema = z.object({ revisionId: z.string().min(1) });
 export type UndoResponse = z.infer<typeof UndoResponseSchema>;
 
-export const BuildRequestSchema = z.object({ revisionId: z.string().min(1) });
+export const BuildRequestSchema = z.object({
+  revisionId: z.string().min(1),
+  // The board revision to build for, such as "revb". Omitted, keyloom detects the connected keyboard
+  // and answers 400 `usage` when none is connected, so the editor can ask.
+  boardRevision: z.string().min(1).optional(),
+});
 export type BuildRequest = z.infer<typeof BuildRequestSchema>;
 
 export const BuildSchema = z.object({
