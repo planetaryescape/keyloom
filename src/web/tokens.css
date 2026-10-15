@@ -36,6 +36,8 @@
   --cap-layer-ink: #14286b;
   --cap-macro: #e6c2f6;
   --cap-macro-ink: #4e1869;
+  --cap-dance: #f7c6d6;
+  --cap-dance-ink: #6a1230;
   --cap-native: #a4ddd2;
   --cap-native-ink: #06453c;
   --color-combo: #3f7d1a;
@@ -83,6 +85,8 @@
     --cap-layer-ink: #dbe5ff;
     --cap-macro: #6a3a82;
     --cap-macro-ink: #f6dcff;
+    --cap-dance: #7a2e4a;
+    --cap-dance-ink: #ffdbe7;
     --cap-native: #1f6b66;
     --cap-native-ink: #c9f6ee;
     --color-combo: #a5e06a;
@@ -129,6 +133,8 @@
   --cap-layer-ink: #dbe5ff;
   --cap-macro: #6a3a82;
   --cap-macro-ink: #f6dcff;
+  --cap-dance: #7a2e4a;
+  --cap-dance-ink: #ffdbe7;
   --cap-native: #1f6b66;
   --cap-native-ink: #c9f6ee;
   --color-combo: #a5e06a;

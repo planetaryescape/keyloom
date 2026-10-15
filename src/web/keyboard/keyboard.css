@@ -49,6 +49,10 @@
   --cap: var(--cap-macro);
   --cap-ink: var(--cap-macro-ink);
 }
+.cap[data-tone="tapDance"] {
+  --cap: var(--cap-dance);
+  --cap-ink: var(--cap-dance-ink);
+}
 .cap[data-tone="native"] {
   --cap: var(--cap-native);
   --cap-ink: var(--cap-native-ink);
@@ -481,4 +485,44 @@ button.cap[data-dragging="true"] {
 .selection-bar[data-mode="quick"] {
   border-bottom-color: var(--color-accent);
   background: var(--color-accent-bg);
+}
+
+/* A tap dance's double-tap, bottom-right, after the double-arrow mark (18#a-keycap-shows-every-slot-it-has). */
+.cap-double {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  display: inline-flex;
+  align-items: baseline;
+  max-width: calc(50% - 4px);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.cap-double-mark {
+  opacity: 0.8;
+}
+
+/* A tapped-then-held slot: three dots at the top, centred, clear of the corner marks. */
+.cap-dots {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  display: flex;
+  transform: translateX(-50%);
+}
+
+.cap-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--cap-ink, currentColor);
+  opacity: 0.7;
+}
+
+/* A tap dance's kind shape is the double-arrow mark, so it has no band. */
+.cap[data-tone="tapDance"] .cap-hold {
+  max-width: calc(50% - 4px);
 }

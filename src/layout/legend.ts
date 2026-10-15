@@ -2,8 +2,8 @@
 // draws keys share it. The names come from the same places the terminal grid uses (shortKeyLabel,
 // modsText); this module only adds the two things a cap can do that a terminal cell can't: use
 // symbols for the keys that have one, and split a binding into a tap legend and a hold legend.
-import { type GridContext, modsText, shortKeyLabel, slotLabel } from "./render-grid.ts";
-import type { Binding, Mod } from "./schema.ts";
+import { type GridContext, modsText, shortKeyLabel } from "./render-grid.ts";
+import type { Binding, Mod, SlotAction } from "./schema.ts";
 
 export type Legend = {
   kind: Binding["kind"];
@@ -11,6 +11,10 @@ export type Legend = {
   tap: string;
   /** The small legend under it: what holding does, or what a layer key does. */
   hold?: string;
+  /** A tap dance's double-tap, bottom-right; the cap draws the ⇈ mark before it (18#a-keycap-shows-every-slot-it-has). */
+  double?: string;
+  /** A tap dance with a tapped-then-held slot: the cap draws a cluster of dots. */
+  tapHold?: true;
 };
 
 // Only keys whose symbol is better known than their name. Everything else keeps the shared label.
@@ -87,6 +91,19 @@ export function layerLegend(layerId: string, ctx: GridContext): string {
   return longerClash ? `L${index}` : longer;
 }
 
+/** What one tap dance slot prints in a corner of its cap: the same short forms the main legend uses. */
+function slotCap(a: SlotAction, ctx: GridContext): string {
+  switch (a.kind) {
+    case "key": return capText(a.code, a.mods);
+    case "modifier": return modsText(a.mods);
+    case "layer": return layerLegend(a.layerId, ctx);
+    case "macro": {
+      const index = ctx.macros.findIndex((macro) => macro.id === a.macroId);
+      return index < 0 ? "M?" : `M${index}`;
+    }
+  }
+}
+
 export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
   switch (binding.kind) {
     case "key":
@@ -119,14 +136,13 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
     case "tapDance": {
       const td = ctx.tapDances?.find((t) => t.id === binding.tapDanceId);
       if (!td) return { kind: "tapDance", tap: "TD?" };
-      const extra = [
-        td.hold ? slotLabel(td.hold, ctx) : "",
-        td.doubleTap ? `2×${slotLabel(td.doubleTap, ctx)}` : "",
-        td.tapThenHold ? `2×hold ${slotLabel(td.tapThenHold, ctx)}` : "",
-      ].filter((t) => t !== "");
-      // A long tap ("HypSPC") would be drawn under the legend size floor, so the cap names the dance instead; the panel lists the slots.
-      const tap = slotLabel(td.tap, ctx);
-      return { kind: "tapDance", tap: tap.length > 5 ? `TD${ctx.tapDances?.indexOf(td)}` : tap, ...(extra.length ? { hold: extra.join(" ") } : {}) };
+      return {
+        kind: "tapDance",
+        tap: slotCap(td.tap, ctx),
+        ...(td.hold ? { hold: slotCap(td.hold, ctx) } : {}),
+        ...(td.doubleTap ? { double: slotCap(td.doubleTap, ctx) } : {}),
+        ...(td.tapThenHold ? { tapHold: true as const } : {}),
+      };
     }
     case "transparent":
       return { kind: "transparent", tap: "" };

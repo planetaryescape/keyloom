@@ -7,7 +7,7 @@ export type Tone = Legend["kind"];
 
 interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"> {
   tone: Tone;
-  legend: Pick<Legend, "tap" | "hold">;
+  legend: Pick<Legend, "tap" | "hold" | "double" | "tapHold">;
   /** Pixels per key unit. */
   unit: number;
   /** The smallest legend, in px; phones allow 10 (18#legends-stay-readable). */
@@ -48,6 +48,7 @@ export function Cap({
   // (a "toggl / e" legend broke mid-word on a phone, fixed in rung 15, D-187), so its table entry has to be short enough to fit.
   const wraps = (value: string, size: number) => breakable || (/[_+(]/.test(value) && textEm(value) * size > width - CAP_INSET);
   const tapWraps = wraps(legend.tap, tap.size);
+  const double = legend.double === undefined ? null : fitLegend(legend.double, width / 2 + 0.1, HOLD_SIZE, { unit, ...floor });
   const holdWraps = legend.hold !== undefined && hold !== null && wraps(legend.hold, hold.size);
   const words = (
     <>
@@ -56,6 +57,17 @@ export function Cap({
           {tapWraps ? breakAtSeams(legend.tap) : legend.tap}
         </span>
       )}
+      {legend.double === undefined || double === null ? null : (
+        <span className="cap-double" style={{ fontSize: double.size * unit }}>
+          <span className="cap-double-mark" aria-hidden="true">⇈</span>
+          {legend.double}
+        </span>
+      )}
+      {legend.tapHold === true ? (
+        <span className="cap-dots" aria-hidden="true" style={{ gap: Math.max(2, unit * 0.04) }}>
+          <i /><i /><i />
+        </span>
+      ) : null}
       {legend.hold === undefined || hold === null ? null : (
         <span className="cap-hold" data-wrap={holdWraps} style={{ fontSize: hold.size * unit }}>
           {holdWraps ? breakAtSeams(legend.hold) : legend.hold}

@@ -95,8 +95,9 @@ describe("reading a tap dance", () => {
   });
 
   test("a cap shows the tap large and the other slots small", () => {
-    expect(bindingLegend({ kind: "tapDance", tapDanceId: "esc-caps" }, ctx)).toEqual({ kind: "tapDance", tap: "Esc", hold: "2×CAPS" });
-    expect(bindingLegend({ kind: "tapDance", tapDanceId: "full" }, ctx).hold).toBe("⌃⇧ 2×TG1 2×hold M0");
+    expect(bindingLegend({ kind: "tapDance", tapDanceId: "esc-caps" }, ctx)).toEqual({ kind: "tapDance", tap: "Esc", double: "⇪" });
+    // Each slot has its own corner: the hold bottom-left, the double-tap bottom-right, and dots for tapped-then-held.
+    expect(bindingLegend({ kind: "tapDance", tapDanceId: "full" }, ctx)).toEqual({ kind: "tapDance", tap: "⇧A", hold: "⌃⇧", double: "NUM", tapHold: true });
     expect(bindingLegend({ kind: "tapDance", tapDanceId: "ghost" }, ctx)).toEqual({ kind: "tapDance", tap: "TD?" });
   });
 

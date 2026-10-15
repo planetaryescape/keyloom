@@ -28,20 +28,23 @@ function checkAll(layout: Layout, keys: readonly GeometryKey[], strict: boolean,
       for (const [role, text, range] of [
         ["tap", description.legend.tap, TAP_SIZE],
         ["hold", description.legend.hold ?? "", HOLD_SIZE],
+        // The double-tap shares the cap's bottom edge with the hold, so each gets half the width and the ⇈ mark.
+        ["double-tap", description.legend.double === undefined ? "" : `⇈${description.legend.double}`, HOLD_SIZE],
       ] as const) {
         if (text === "") continue;
         checked += 1;
         const where = `${layer.name} key ${index + 1} ${role} "${text}"`;
         if (/…|\.\.\./.test(text)) failures.push(`${where} contains an ellipsis`);
-        const fit = fitLegend(text, key.w, range, unit === undefined ? undefined : { unit });
+        const width = role === "double-tap" ? key.w / 2 + 0.1 : key.w;
+        const fit = fitLegend(text, width, range, unit === undefined ? undefined : { unit });
         if (!fit.fits && strict)
           failures.push(
-            `${where} needs ${widestPieceEm(text).toFixed(2)}em but only ${(key.w - CAP_INSET).toFixed(2)}u is free`,
+            `${where} needs ${widestPieceEm(text).toFixed(2)}em but only ${(width - CAP_INSET).toFixed(2)}u is free`,
           );
         if (fit.size < range.min - 1e-9) failures.push(`${where} is below the legible minimum`);
         if (unit !== undefined && fit.size * unit < LEGEND_FLOOR_PX - 1e-9) failures.push(`${where} is drawn at ${(fit.size * unit).toFixed(1)} px, under the ${LEGEND_FLOOR_PX} px floor`);
         // The estimate itself must hold: text at this size is no wider than the cap's free width.
-        if (fit.fits && fit.size * widestPieceEm(text) > key.w - CAP_INSET + 1e-9)
+        if (fit.fits && fit.size * widestPieceEm(text) > width - CAP_INSET + 1e-9)
           failures.push(`${where} overflows at size ${fit.size}`);
       }
     });

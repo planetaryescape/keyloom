@@ -10,7 +10,7 @@ import { homerowSameHandMods, retunedSlots } from "./hold-tap-rules.ts";
 import type { Issue, ValidationResult } from "./result.ts";
 import { type PinnedPriority, largeRelearn, movedPinned } from "./priority-rules.ts";
 import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
-import { tapDanceWarnings } from "./tap-dance-rules.ts";
+import { macroSecrets, tapDanceWarnings } from "./tap-dance-rules.ts";
 import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex } from "./rules.ts";
 import { type SelectionScope, outsideSelection } from "./selection-rules.ts";
 
@@ -94,8 +94,8 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   warnings.push(...doubledLetterTapdance(after).filter((i) => !knownDances.has(issueKey(i))));
 
   // The same for a tap dance that does less than it looks like: only one this change adds or alters is news.
-  const knownSame = new Set(tapDanceWarnings(before).map(issueKey));
-  warnings.push(...tapDanceWarnings(after).filter((i) => !knownSame.has(issueKey(i))));
+  const knownSame = new Set([...tapDanceWarnings(before), ...macroSecrets(before)].map(issueKey));
+  warnings.push(...[...tapDanceWarnings(after), ...macroSecrets(after)].filter((i) => !knownSame.has(issueKey(i))));
 
   const changed = changedSlots(before, after);
   const beforeHomes = functionHomes(before, reachableLayers(before));

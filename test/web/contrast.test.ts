@@ -67,6 +67,7 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["cap-hold-ink", "cap-hold", TEXT],
   ["cap-layer-ink", "cap-layer", TEXT],
   ["cap-macro-ink", "cap-macro", TEXT],
+  ["cap-dance-ink", "cap-dance", TEXT],
   ["cap-native-ink", "cap-native", TEXT],
   // Transparent keys are drawn with muted text straight on the panel.
   ["color-text-muted", "color-panel", TEXT],
@@ -86,6 +87,7 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["color-accent", "cap-hold", UI],
   ["color-accent", "cap-layer", UI],
   ["color-accent", "cap-macro", UI],
+  ["color-accent", "cap-dance", UI],
   ["color-accent", "cap-native", UI],
   // The preview marks (dashed ring and dot) sit on the board's panel.
   ["color-accent", "color-panel", UI],

@@ -1,7 +1,7 @@
 // The binding editor's working state. One Draft holds the parameters of every kind at once, so
 // switching Key to Hold-tap and back keeps what was typed (keymap-editor issue #225, 09-web-editor).
 // Pure, so the rules are tested without a browser.
-import type { Binding, Layout, Mod } from "../../layout/schema.ts";
+import type { Binding, Layout, Macro, Mod, SlotAction, TapDance } from "../../layout/schema.ts";
 import { modsWords } from "../../layout/describe.ts";
 import { keyCodeLabel } from "../../layout/keycodes.ts";
 
@@ -24,9 +24,23 @@ export type Draft = {
   macroId: string | null;
   /** Kept so a native key can be left alone; keyloom can't build one. */
   native: NativeBinding | null;
-  /** Kept so a tap dance key can be left alone until the key panel (rung 11) edits its slots. */
+  /** Kept so a tap dance whose slots the panel can't show (a toggle on the hold, say) is left alone, not rebuilt wrongly. */
   tapDance: TapDanceBinding | null;
+  /** The slots that make a key a tap dance (16#tap-dance-is-a-key-with-a-double-tap-slot). Either one filled is a dance. */
+  doubleTap: SlotAction | null;
+  tapThenHold: SlotAction | null;
+  /** The tap dance entry this key edits, or the id a new one will get. */
+  danceId: string | null;
+  /** The dance's own tapping term; null falls back to the firmware's. */
+  danceTermMs: number | null;
+  /** The dance is used by other keys: false changes a copy for this key only, true changes it for every key. */
+  danceForAll: boolean;
+  /** Macros made or edited in the picker, saved with the change. */
+  pendingMacros: Macro[];
 };
+
+/** Either extra slot filled makes the key a tap dance. */
+export const isDance = (draft: Draft): boolean => draft.doubleTap !== null || draft.tapThenHold !== null;
 
 // Left side first, then right, the order the toggles are drawn in.
 export const MOD_ORDER: readonly Mod[] = ["LCTL", "LSFT", "LALT", "LGUI", "RCTL", "RSFT", "RALT", "RGUI"];
@@ -58,6 +72,12 @@ export function draftFromBinding(binding: Binding, layout: Layout, currentLayerI
     macroId: layout.macros[0]?.id ?? null,
     native: null,
     tapDance: null,
+    doubleTap: null,
+    tapThenHold: null,
+    danceId: null,
+    danceTermMs: null,
+    danceForAll: false,
+    pendingMacros: [],
   };
   switch (binding.kind) {
     case "key":
@@ -91,14 +111,50 @@ export function draftFromBinding(binding: Binding, layout: Layout, currentLayerI
     case "native":
       draft.native = binding;
       break;
-    case "tapDance":
+    case "tapDance": {
+      const entry = layout.tapDances.find((candidate) => candidate.id === binding.tapDanceId);
+      const expanded = entry === undefined ? null : expandDance(draft, entry);
+      if (expanded !== null) return expanded;
       draft.tapDance = binding;
       break;
+    }
     case "transparent":
     case "none":
       break;
   }
   return draft;
+}
+
+/**
+ * A tap dance as the panel's slots, or null when a slot holds something the panel can't show (a hold that
+ * toggles a layer, a macro on the hold): that dance is left as it is rather than rebuilt without the part.
+ */
+function expandDance(base: Draft, td: TapDance): Draft | null {
+  const next: Draft = { ...base, kind: "key", doubleTap: td.doubleTap ?? null, tapThenHold: td.tapThenHold ?? null, danceId: td.id, danceTermMs: td.termMs ?? null };
+  switch (td.tap.kind) {
+    case "key":
+      next.key = { code: td.tap.code, mods: sortMods(td.tap.mods ?? []) };
+      next.tap = { ...next.key };
+      break;
+    case "modifier":
+      next.kind = "modifier";
+      next.modifier = sortMods(td.tap.mods);
+      break;
+    case "layer":
+      next.kind = "layer";
+      next.layerAction = td.tap.action;
+      next.layerId = td.tap.layerId;
+      break;
+    case "macro":
+      next.kind = "macro";
+      next.macroId = td.tap.macroId;
+      break;
+  }
+  if (td.hold === undefined) return next;
+  if (td.tap.kind !== "key") return null;
+  if (td.hold.kind === "modifier") return { ...next, kind: "holdTap", holdType: "mods", holdMods: sortMods(td.hold.mods) };
+  if (td.hold.kind === "layer" && td.hold.action === "momentary") return { ...next, kind: "holdTap", holdType: "layer", holdLayerId: td.hold.layerId };
+  return null;
 }
 
 /** Changes kind and carries over what the two kinds share: the key, and the modifiers. */
@@ -121,6 +177,7 @@ export function switchKind(draft: Draft, kind: Binding["kind"]): Draft {
 
 /** Why the draft can't be turned into a binding yet, in words for the person; null when it can. */
 export function incompleteReason(draft: Draft, layout: Layout): string | null {
+  if (isDance(draft) && draft.danceId === null) return "Pick what a tap does.";
   switch (draft.kind) {
     case "key":
       return draft.key.code === null ? "Pick a key." : null;
@@ -130,7 +187,8 @@ export function incompleteReason(draft: Draft, layout: Layout): string | null {
       if (draft.tap.code === null) return "Pick the key to send on a tap.";
       if (draft.holdType === "mods" && draft.holdMods.length === 0) return "Turn on at least one modifier for the hold.";
       if (draft.holdType === "layer" && draft.holdLayerId === null) return "Pick the layer to hold.";
-      if (draft.profileId === null) {
+      // A tap dance times its hold itself, so it needs no hold-tap profile.
+      if (draft.profileId === null && !isDance(draft)) {
         return layout.holdTapProfiles.length === 0
           ? "This layout has no hold-tap profile yet, so a hold-tap can't be made here."
           : "Pick a hold-tap profile.";
@@ -158,6 +216,7 @@ const withMods = (choice: KeyChoice & { code: string }) =>
 /** The binding the draft stands for, or null while it is incomplete. */
 export function bindingFromDraft(draft: Draft, layout: Layout): Binding | null {
   if (incompleteReason(draft, layout) !== null) return null;
+  if (isDance(draft)) return { kind: "tapDance", tapDanceId: draft.danceId as string };
   switch (draft.kind) {
     case "key":
       return { kind: "key", ...withMods(draft.key as KeyChoice & { code: string }) };

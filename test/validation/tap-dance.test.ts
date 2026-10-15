@@ -195,3 +195,21 @@ describe("text steps", () => {
     expect(codes(validate(tinyBoard, tiny(), [macro("")]).errors)).toEqual(["schema"]);
   });
 });
+
+describe("a macro that looks like a password", () => {
+  const macro = (text: string): ChangeOp => ({ op: "upsertMacro", macro: { id: "t", name: "Login", steps: [{ op: "text", text }] } });
+
+  test("warns, once, for text of eight or more characters with no spaces and a mix of kinds", () => {
+    const w = validate(tinyBoard, tiny(), [macro("Tr0ub4dor&3")]).warnings.filter((x) => x.code === "macro_looks_like_secret");
+    expect(w.map((x) => x.plain)).toEqual(['The macro "Login" types text that looks like a password. Anyone who has your keyboard could replay it.']);
+    // Another change to the same layout does not repeat what it already had.
+    const l = tiny({ macros: [{ id: "t", name: "Login", steps: [{ op: "text", text: "Tr0ub4dor&3" }] }] });
+    expect(codes(validate(tinyBoard, l, [set("base", 1, key("C")), { op: "dropFunction", function: "key:B", reason: "t" }]).warnings)).not.toContain("macro_looks_like_secret");
+  });
+
+  test("ordinary text does not", () => {
+    for (const text of ["git status", "Thanks, BK", "hello", "password", "ls -la ~/code", "https://example.com"]) {
+      expect({ text, warned: codes(validate(tinyBoard, tiny(), [macro(text)]).warnings).includes("macro_looks_like_secret") }).toEqual({ text, warned: false });
+    }
+  });
+});

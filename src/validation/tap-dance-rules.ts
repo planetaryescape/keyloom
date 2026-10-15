@@ -4,6 +4,7 @@
 import { slotFunction, tapDanceSlots } from "../layout/functions.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode } from "../layout/keycodes.ts";
+import { looksLikeSecret } from "../layout/secret.ts";
 import { textKeys } from "../layout/text-keys.ts";
 import type { Layout, Mod, SlotAction, TapDance } from "../layout/schema.ts";
 import type { Issue } from "./result.ts";
@@ -130,4 +131,14 @@ export function tapDanceWarnings(doc: Layout): Issue[] {
     }
   }
   return out;
+}
+
+/** `macro_looks_like_secret`: a text step that looks like a password (07#warnings). */
+export function macroSecrets(doc: Layout): Issue[] {
+  return doc.macros.flatMap((macro) =>
+    macro.steps.some((step) => step.op === "text" && looksLikeSecret(step.text))
+      ? [issue("macro_looks_like_secret", `macro "${macro.id}" types text that looks like a password; firmware isn't a safe place for a secret, since anyone with the keyboard can replay it`,
+          `The macro "${macro.name}" types text that looks like a password. Anyone who has your keyboard could replay it.`)]
+      : [],
+  );
 }
