@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/planetaryescape/keyloom/compare/v0.14.0...v0.15.0) (2026-10-15)
+
+
+### Features
+
+* tap dance model, QMK and ZMK generators, and the Oryx tap dance importer ([c2106e3](https://github.com/planetaryescape/keyloom/commit/c2106e3be647e6817cfdc4f2c37d834a967903a0))
+* tap dance validation, text steps and docs; fix the QMK emulator clock ([d6ace6c](https://github.com/planetaryescape/keyloom/commit/d6ace6c3b2bebd33f900110fbdbe7486d453ab6b))
+
+
+### Bug Fixes
+
+* read C labels from maps and drop an unused export ([5a6cee1](https://github.com/planetaryescape/keyloom/commit/5a6cee1be4bc3352ec16093c2fbe93729bf57cfb))
+* tap dance kind in the new key panel, legend and where-else ([f09d809](https://github.com/planetaryescape/keyloom/commit/f09d809a0d6770ed655b058a93465ebd7fca15ce))
+
 ## [0.14.0](https://github.com/planetaryescape/keyloom/compare/v0.13.0...v0.14.0) (2026-10-15)
 
 
