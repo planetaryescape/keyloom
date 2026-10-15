@@ -1,7 +1,7 @@
 // The server's write interface over the app's use cases (rung 2). The server stays ignorant of
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
-  type App, type BuildView, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange,
+  type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange,
   ValidationResultSchema, getBuild, getFlash, startBuild, startFlash, undo,
 } from "../app/index.ts";
 import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
@@ -44,7 +44,8 @@ async function orNull<T>(fn: () => Promise<T>): Promise<T | null> {
   }
 }
 
-export function appEditorBackend(app: App): EditorBackend {
+/** `flash` carries what a flash needs beyond the build: tests point `volumesRoot` at a temporary directory and shorten the wait. */
+export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs"> = {}): EditorBackend {
   return {
     check: (ref, request) => translate(() => checkChange(app, ref, request)),
     apply: (ref, request) => translate(() => applyOps(app, ref, request)),
@@ -58,7 +59,7 @@ export function appEditorBackend(app: App): EditorBackend {
         })),
       ),
     getBuild: async (id) => orNull(async () => toBuild(await getBuild(app, id))),
-    startFlash: (buildId) => translate(async () => toFlash(await startFlash(app, { buildId }))),
+    startFlash: (buildId) => translate(async () => toFlash(await startFlash(app, { buildId, ...flash }))),
     getFlash: async (id) => orNull(async () => toFlash(await getFlash(app, id))),
   };
 }

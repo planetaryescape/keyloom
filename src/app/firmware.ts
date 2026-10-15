@@ -3,13 +3,11 @@
 // app does. The CLI waits with buildAndWait / flashAndWait.
 import { join, resolve } from "node:path";
 import type { Board } from "../boards/load.ts";
-import { qmkRevision } from "../firmware/qmk/board-config.ts";
-import { BuildFailure, buildQmk } from "../firmware/qmk/build.ts";
-import { type FlashState, RESET_INSTRUCTION, flashWithZapp } from "../firmware/qmk/flash.ts";
-import { GenerateError, type GeneratedSource, generateQmkSource } from "../firmware/qmk/generate.ts";
 import { writeSource } from "../firmware/qmk/write-source.ts";
+import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import { dockerStatus } from "../firmware/toolchain/docker.ts";
+import type { FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
@@ -22,6 +20,7 @@ import { cacheDir } from "../persistence/paths.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
+import { type GeneratedSource, SourceError, driverFor } from "./firmware-drivers.ts";
 import { BuildFailedError, FlashFailedError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 
@@ -38,7 +37,7 @@ export type BuildView = {
   finishedAt: number | null;
   /** The last lines of the build log, oldest first. */
   logTail: string[];
-  /** Absolute path of the .bin once the build has succeeded. */
+  /** Absolute path of the firmware file (.bin or .uf2) once the build has succeeded. */
   artifactPath: string | null;
   /** Absolute path of the full log. */
   logPath: string;
@@ -59,6 +58,11 @@ export type FlashView = {
 
 const LOG_TAIL_LINES = 30;
 const WRITING_INSTRUCTION = "Don't unplug the keyboard. Flashing takes a few seconds.";
+
+// What the person must do now, as the flasher last said it. A UF2 flash asks for two different things in a row
+// (the right half, then the left), so the text can't come from the status alone. Held in memory because the
+// flash runs in this process; a row whose process has gone is reaped, and its text is no longer needed.
+const flashInstructions = new Map<string, string | null>();
 
 const buildTasks = new Map<string, Promise<void>>();
 const flashTasks = new Map<string, Promise<void>>();
@@ -101,30 +105,27 @@ async function resolveBoardRevision(board: Board, requested: string | undefined)
 
 // --- generate -------------------------------------------------------------------------------
 
-function sourceFor(view: LayoutView, boardRevisionId?: string): GeneratedSource {
+function sourceFor(view: LayoutView, boardRevisionId: string): GeneratedSource {
+  const driver = driverFor(view.board);
   try {
-    return generateQmkSource({
-      layout: view.document,
-      board: view.board.definition,
-      revisionId: view.revision.id,
-      ...(boardRevisionId === undefined ? {} : { boardRevisionId }),
-    });
+    return driver.generate(view, boardRevisionId);
   } catch (err) {
-    if (err instanceof GenerateError) throw new ValidationFailedError(`this layout can't be written as QMK source: ${err.message}`, { reason: err.message });
+    if (err instanceof SourceError) throw new ValidationFailedError(`this layout can't be written as ${driver.name} source: ${err.message}`, { reason: err.message });
     throw err;
   }
 }
 
 export type GenerateOutcome = { layoutId: string; revisionId: string; dir: string; files: string[] };
 
-/** Writes the QMK source for a layout revision into `out`, without building it. */
+/** Writes the firmware source for a layout revision into `out`, without building it. */
 export async function generateFirmware(
   app: App,
   ref: string,
   opts: { rev?: string; out: string; boardRevision?: string },
 ): Promise<GenerateOutcome> {
   const view = getLayout(app, ref, opts.rev);
-  const source = sourceFor(view, opts.boardRevision);
+  // No hardware detection here: generating needs no connected keyboard, so the first revision stands in unless one is named.
+  const source = sourceFor(view, opts.boardRevision ?? (view.board.definition.revisions[0] as { id: string }).id);
   const dir = resolve(opts.out);
   await writeSource(dir, source);
   return { layoutId: view.layout.id, revisionId: view.revision.id, dir, files: source.files.map((f) => f.path) };
@@ -187,16 +188,18 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     // Before the checkout: a missing Docker should not first cost a multi-gigabyte clone.
     const docker = await dockerStatus();
     if (!docker.ok) throw new BuildFailure(docker.reason);
+    const driver = driverFor(view.board);
     let source: GeneratedSource;
     try {
-      source = generateQmkSource({ layout: view.document, board: view.board.definition, revisionId: view.revision.id, boardRevisionId: row.boardRevision });
+      source = driver.generate(view, row.boardRevision);
     } catch (err) {
-      if (err instanceof GenerateError) throw new BuildFailure(`This layout can't be written as QMK source: ${err.message}`);
+      if (err instanceof SourceError) throw new BuildFailure(`This layout can't be written as ${driver.name} source: ${err.message}`);
       throw err;
     }
-    const artifactRel = `artifacts/${row.id}.bin`;
-    await buildQmk({
-      board: view.board.definition, boardRevisionId: row.boardRevision, source, checkoutDir: checkoutDirFor(view.board),
+    const artifactRel = `artifacts/${row.id}.${driver.artifactExtension}`;
+    const checkoutDir = checkoutDirFor(view.board);
+    await driver.build({
+      view, boardRevision: row.boardRevision, source, checkoutDir, imageContextDir: join(cacheDir(), "images", view.board.definition.id.replace("/", "-")),
       artifactPath: absolute(app, artifactRel), log, containerName: `keyloom-${row.id}`, ...(onProgress ? { onLine: onProgress } : {}),
       ...(signal ? { signal } : {}),
     });
@@ -229,15 +232,25 @@ export async function buildAndWait(app: App, ref: string, opts: BuildOptions = {
 
 // --- flash ----------------------------------------------------------------------------------
 
-function instructionFor(status: FlashState): string | null {
-  return status === "waiting_for_bootloader" ? RESET_INSTRUCTION : status === "writing" ? WRITING_INSTRUCTION : null;
+function instructionFor(row: FlashRow, board: Board | undefined): string | null {
+  if (row.status !== "waiting_for_bootloader" && row.status !== "writing") return null;
+  const said = flashInstructions.get(row.id);
+  if (said !== undefined) return said;
+  return row.status === "writing" ? WRITING_INSTRUCTION : board ? driverFor(board).waitingInstruction(board) : null;
+}
+
+/** The board a flash is for: flash -> build -> layout -> board. Undefined only if a row refers to something deleted. */
+function boardOfFlash(app: App, row: FlashRow): Board | undefined {
+  const build = findBuild(app.db, row.buildId);
+  const layout = build ? findLayoutRow(app.db, build.layoutId) : undefined;
+  return layout ? showBoard(layout.boardId) : undefined;
 }
 
 async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
   const logPath = absolute(app, row.logPath);
   return {
     id: row.id, buildId: row.buildId, status: row.status, error: row.error, startedAt: row.startedAt, finishedAt: row.finishedAt,
-    instruction: instructionFor(row.status), logTail: await tailOf(logPath), logPath,
+    instruction: instructionFor(row, boardOfFlash(app, row)), logTail: await tailOf(logPath), logPath,
   };
 }
 
@@ -257,10 +270,12 @@ export type FlashOptions = {
   onProgress?: (line: string) => void;
   /** Called when the flash changes state, including the first state. */
   onState?: (flash: FlashView) => void;
-  /** Aborting stops zapp, so nothing is left waiting for the keyboard. */
+  /** Aborting stops the flasher, so nothing is left waiting for the keyboard. */
   signal?: AbortSignal;
   /** How long to wait for the keyboard to enter its bootloader (default 2 minutes). Short values are for tests. */
   bootloaderWaitMs?: number;
+  /** Where a UF2 keyboard's boot drives appear (default: the machine's own, `/Volumes` on macOS). Tests pass a temporary directory. */
+  volumesRoot?: string;
 };
 
 function chooseBuild(app: App, opts: FlashOptions): BuildRow {
@@ -298,17 +313,16 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
 
   const layout = findLayoutRow(app.db, build.layoutId);
   const board = showBoard(layout?.boardId ?? "");
-  const rev = qmkRevision(board.definition, build.boardRevision);
 
   const id = newFlashId();
   const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });
-  const task = runFlash(app, row, artifact, rev.flash.bootloader, opts);
+  const task = runFlash(app, row, board, build.boardRevision, artifact, opts);
   flashTasks.set(id, task);
   void task.finally(() => flashTasks.delete(id));
   return toFlashView(app, row);
 }
 
-async function runFlash(app: App, row: FlashRow, artifact: string, bootloader: string, opts: FlashOptions): Promise<void> {
+async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: string, artifact: string, opts: FlashOptions): Promise<void> {
   const log = new LogSink(absolute(app, row.logPath));
   const notify = () => {
     const current = findFlash(app.db, row.id);
@@ -317,12 +331,14 @@ async function runFlash(app: App, row: FlashRow, artifact: string, bootloader: s
   try {
     log.line(`keyloom: flash ${row.id} of build ${row.buildId}`);
     notify();
-    const result = await flashWithZapp({
-      artifactPath: artifact, bootloader, log, ...(opts.onProgress ? { onLine: opts.onProgress } : {}),
+    const result = await driverFor(board).flash({
+      board, boardRevision, artifactPath: artifact, log, ...(opts.onProgress ? { onLine: opts.onProgress } : {}),
       ...(opts.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: opts.bootloaderWaitMs }),
+      ...(opts.volumesRoot === undefined ? {} : { volumesRoot: opts.volumesRoot }),
       ...(opts.signal ? { signal: opts.signal } : {}),
-      onState: (state) => {
+      onState: (state: FlashState, instruction: string | null) => {
         if (state === "waiting_for_bootloader" || state === "writing") {
+          flashInstructions.set(row.id, instruction);
           setFlashProgress(app.db, row.id, state);
           notify();
         }
@@ -333,6 +349,7 @@ async function runFlash(app: App, row: FlashRow, artifact: string, bootloader: s
     log.line(`keyloom: unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     finishFlash(app.db, row.id, { error: `Unexpected error: ${err instanceof Error ? err.message : String(err)}` });
   } finally {
+    flashInstructions.delete(row.id);
     log.close();
     notify();
   }

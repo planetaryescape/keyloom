@@ -59,11 +59,11 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
 
   program
     .command("generate")
-    .description("write the QMK source for a layout without building it")
+    .description("write the firmware source for a layout without building it (QMK keymap files, or the Glove80's glove80.keymap and glove80.conf)")
     .argument("<layout>", "layout ID or name")
-    .requiredOption("--out <dir>", "directory to write keymap.c, config.h, rules.mk and keymap.json into")
+    .requiredOption("--out <dir>", "directory to write the source files into")
     .option("--rev <revision>", "a revision ID instead of the head")
-    .option("--board-rev <revision>", "board revision, such as reva or revb")
+    .option("--board-rev <revision>", "board revision, such as reva or revb (QMK boards with several)")
     .action(async (ref: string, opts: { out: string; rev?: string; boardRev?: string }) => {
       const r = await withApp((app) =>
         generateFirmware(app, ref, { out: opts.out, ...(opts.rev ? { rev: opts.rev } : {}), ...(opts.boardRev ? { boardRevision: opts.boardRev } : {}) }),
@@ -107,10 +107,11 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
 
   program
     .command("flash")
-    .description("flash the newest successful build of a layout, or a given build, with zapp")
+    .description("flash the newest successful build of a layout, or a given build (with zapp, or by copying to a UF2 boot drive per half)")
     .option("--build <build>", "a build ID")
     .option("--layout <layout>", "flash the newest successful build of this layout")
-    .action(async (opts: { build?: string; layout?: string }) => {
+    .option("--volumes-root <dir>", "the folder UF2 boot drives appear in (default: /Volumes on macOS, found with lsblk on Linux); Glove80 only")
+    .action(async (opts: { build?: string; layout?: string; volumesRoot?: string }) => {
       if (opts.build !== undefined && opts.layout !== undefined) throw new UsageError("pass --build or --layout, not both");
       let shown: string | null = null;
       const f = await untilInterrupted((signal) =>
@@ -118,6 +119,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
           flashAndWait(app, {
             ...(opts.build ? { buildId: opts.build } : {}),
             ...(opts.layout ? { layout: opts.layout } : {}),
+            ...(opts.volumesRoot ? { volumesRoot: opts.volumesRoot } : {}),
             signal,
             // The instruction is the point: it goes to stderr whatever the format, so a script's stdout stays parseable.
             onState: (flash) => {

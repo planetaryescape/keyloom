@@ -2,6 +2,8 @@
 import { existsSync } from "node:fs";
 import { Database } from "bun:sqlite";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
+import { zmkRevision } from "../firmware/zmk/board-config.ts";
+import { imageTag } from "../firmware/zmk/image.ts";
 import { type CheckoutSpec, checkoutState } from "../firmware/toolchain/checkout.ts";
 import { LOW_DISK_BYTES, dockerFreeSpace, dockerStatus } from "../firmware/toolchain/docker.ts";
 import { capture, which } from "../firmware/toolchain/run.ts";
@@ -55,10 +57,13 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
   checks.push({ name: "docker", ok: docker.ok, detail: docker.ok ? `running, server ${docker.version}` : docker.reason });
 
   const qmkBoards = listBoardDefinitions().filter((b) => b.definition.firmware === "qmk");
+  const zmkBoards = listBoardDefinitions().filter((b) => b.definition.firmware === "zmk");
   const images = [...new Set(qmkBoards.flatMap((b) => b.definition.revisions.map((r) => (r.build as { image?: string }).image)).filter((i): i is string => typeof i === "string"))];
+  // A ZMK board's image is built by keyloom, named for the firmware ref it holds.
+  const zmkImages = [...new Set(zmkBoards.map((b) => imageTag(zmkRevision(b.definition).source.sha)))];
 
   if (docker.ok) {
-    const disk = await dockerFreeSpace(["alpine", ...images]);
+    const disk = await dockerFreeSpace(["alpine", ...images, ...zmkImages]);
     if ("unknown" in disk) {
       checks.push({ name: "docker disk", ok: true, detail: disk.unknown });
     } else {
@@ -74,6 +79,10 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
       const present = (await capture(["docker", "image", "inspect", image], { timeoutMs: 15_000 })).exitCode === 0;
       checks.push({ name: "build image", ok: true, detail: present ? `${image.split("@")[0]} is pulled` : `${image.split("@")[0]} is not pulled yet; the first build downloads it` });
     }
+    for (const image of zmkImages) {
+      const present = (await capture(["docker", "image", "inspect", image], { timeoutMs: 15_000 })).exitCode === 0;
+      checks.push({ name: "firmware image", ok: true, detail: present ? `${image} is built` : `${image} is not built yet; the first Glove80 build makes it (a few minutes, about 5 GB)` });
+    }
   }
 
   const zapp = which("zapp");
@@ -84,12 +93,21 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     detail: zapp ?? "not on PATH; install it with `brew install zapp` to flash from keyloom",
   });
 
-  for (const board of qmkBoards) {
-    const rev = board.definition.revisions[0];
-    if (!rev) continue;
-    const q = qmkRevision(board.definition, rev.id);
-    const spec: CheckoutSpec = { dir: checkoutDirFor(board), repo: q.source.repo, sha: q.source.sha, submodules: q.build.submodules };
-    const name = `checkout ${board.definition.id}`;
+  const specs: Array<{ board: string; spec: CheckoutSpec }> = [
+    ...qmkBoards.flatMap((board) => {
+      const rev = board.definition.revisions[0];
+      if (!rev) return [];
+      const q = qmkRevision(board.definition, rev.id);
+      return [{ board: board.definition.id, spec: { dir: checkoutDirFor(board), repo: q.source.repo, sha: q.source.sha, submodules: q.build.submodules } }];
+    }),
+    // A ZMK board builds from MoErgo's template repository; the firmware itself is inside the image.
+    ...zmkBoards.map((board) => {
+      const t = zmkRevision(board.definition).build.template;
+      return { board: board.definition.id, spec: { dir: checkoutDirFor(board), repo: t.repo, sha: t.sha, submodules: [] } };
+    }),
+  ];
+  for (const { board, spec } of specs) {
+    const name = `checkout ${board}`;
     try {
       const state = await checkoutState(spec);
       if (!state.present) checks.push({ name, ok: true, detail: `${spec.dir} doesn't exist yet; the first build creates it` });

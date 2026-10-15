@@ -2,6 +2,7 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
+import { BuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
@@ -13,10 +14,7 @@ import { writeSource } from "./write-source.ts";
 
 export const BUILD_TIMEOUT_MS = 20 * 60_000;
 
-/** The build did not produce a usable binary; `message` is fit to show a person. */
-export class BuildFailure extends Error {
-  override name = "BuildFailure";
-}
+export { BuildFailure } from "../toolchain/build-failure.ts";
 
 export type QmkBuildInput = {
   board: BoardDefinition;
