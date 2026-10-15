@@ -1,6 +1,6 @@
 // The legend a cap prints in the Advanced view (D-101): the firmware's own names, such as KC_A or
 // MO(1), where the default view prints plain labels. Pure, so the names are tested without a browser.
-import { keyCodeInfo } from "../../layout/keycodes.ts";
+import { isKeyCode, keyCodeInfo } from "../../layout/keycodes.ts";
 import type { Legend } from "../../layout/legend.ts";
 import type { Binding, Firmware, Layout, Mod } from "../../layout/schema.ts";
 
@@ -8,7 +8,9 @@ const QMK_WRAP: Readonly<Record<Mod, string>> = { LCTL: "LCTL", LSFT: "LSFT", LA
 const ZMK_WRAP: Readonly<Record<Mod, string>> = { LCTL: "LC", LSFT: "LS", LALT: "LA", LGUI: "LG", RCTL: "RC", RSFT: "RS", RALT: "RA", RGUI: "RG" };
 
 const keyName = (code: string, firmware: Firmware): string => {
-  const info = keyCodeInfo(code as never);
+  // A code outside the table (a hand-written layout) is shown as written.
+  if (!isKeyCode(code)) return code;
+  const info = keyCodeInfo(code);
   return (firmware === "qmk" ? info.qmk[0] : info.zmk[0]) ?? code;
 };
 

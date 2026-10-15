@@ -291,7 +291,8 @@ export function KeyPanel(props: Props) {
   const holdText = holdSlotText(draft, layout);
   const selectedTap = new Set(selectedIdsFor("tap", draft));
   const selectedHold = new Set(selectedIdsFor("hold", draft));
-  const advancedText = advanced && (binding ?? draftBinding) !== null ? advancedLegend((binding ?? draftBinding) as Binding, layout) : null;
+  const shownBinding = binding ?? draftBinding;
+  const advancedText = advanced && shownBinding !== null ? advancedLegend(shownBinding, layout) : null;
 
   return (
     <section ref={root} tabIndex={-1} className="key-panel" aria-label={`Key ${position + 1}`} onKeyDown={onKeyDown}>
