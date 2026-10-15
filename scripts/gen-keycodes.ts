@@ -15,6 +15,10 @@ const ZMK_REPO = "zmkfirmware/zmk";
 const ZMK_SHA = "4dd95d7840eb3d5a3f59bb29fbf1ab054715ef85";
 const QMK_REPO = "qmk/qmk_firmware";
 const QMK_SHA = "7a1bbf37c5c07da4ea0a162bb139083a46ef40a1";
+// kanata v1.12.0, the release the MacBook board pins (docs/blueprint/21, D-231). LGPL-3.0 source is read for key *names* only;
+// no kanata code is copied.
+const KANATA_REPO = "jtroo/kanata";
+const KANATA_SHA = "02242ef761ef43b860eac30067ce86904be7d466";
 
 const raw = (repo: string, sha: string, path: string) => `https://raw.githubusercontent.com/${repo}/${sha}/${path}`;
 
@@ -168,6 +172,54 @@ function parseQmkReportUsages(source: string): Map<string, number> {
   return out;
 }
 
+// --- kanata ------------------------------------------------------------------------------------
+
+/**
+ * kanata's key names that work on macOS, by the HID usage macOS sends for them. `str_to_oscode` (parser/src/keys/mod.rs) maps a
+ * name to an OsCode, and `TryFrom<OsCode> for PageCode` (parser/src/keys/macos.rs) maps an OsCode to its HID page and usage.
+ * Arms behind a `#[cfg(...)]` that doesn't include macOS (`prtsc`, `power`, `kana`) are skipped, so a name here is one a macOS
+ * build of kanata accepts.
+ */
+function parseKanata(modRs: string, macosRs: string): Map<number, string[]> {
+  const start = modRs.indexOf("pub fn str_to_oscode");
+  const end = modRs.indexOf("_ => return None", start);
+  if (start < 0 || end < 0) throw new Error("kanata keys/mod.rs: str_to_oscode not found");
+  const namesOf = new Map<string, string[]>();
+  let gate: string | undefined;
+  for (const line of modRs.slice(start, end).split("\n")) {
+    const cfg = /^\s*#\[cfg\((.*)\)\]\s*$/.exec(line);
+    if (cfg) {
+      gate = cfg[1];
+      continue;
+    }
+    const arm = /^\s*((?:"[^"]*"\s*\|?\s*)+)=>\s*OsCode::(\w+)/.exec(line);
+    if (!arm?.[1] || !arm[2]) continue;
+    const thisGate = gate;
+    gate = undefined;
+    if (thisGate !== undefined && !thisGate.includes('target_os = "macos"')) continue;
+    const names = [...arm[1].matchAll(/"([^"]*)"/g)].map((m) => m[1] as string);
+    namesOf.set(arm[2], [...(namesOf.get(arm[2]) ?? []), ...names]);
+  }
+  const usageOfCode = new Map<string, number>();
+  for (const m of macosRs.matchAll(/OsCode::(\w+) => Ok\(PageCode \{\s*page: (0x[0-9A-Fa-f]+),\s*code: (0x[0-9A-Fa-f]+),?\s*\}\)/g)) {
+    if (m[1] && m[2] && m[3] && !usageOfCode.has(m[1])) usageOfCode.set(m[1], usageOf(Number(m[2]), Number(m[3])));
+  }
+  const out = new Map<number, string[]>();
+  for (const [osCode, names] of namesOf) {
+    const usage = usageOfCode.get(osCode);
+    if (usage === undefined) continue;
+    out.set(usage, [...(out.get(usage) ?? []), ...names]);
+  }
+  return out;
+}
+
+/** The names a person would type, preferred first: short lowercase ones (`ret`, `bspc`), then any ASCII name (`Period`). */
+function kanataOrder(names: string[]): string[] {
+  const ascii = names.filter((n) => /^[\x21-\x7e]+$/.test(n) && !/[;()"]/.test(n));
+  const plain = ascii.filter((n) => /^[a-z0-9]+$/.test(n));
+  return [...new Set([...plain, ...ascii])];
+}
+
 // --- Join --------------------------------------------------------------------------------------
 
 type Category =
@@ -201,6 +253,7 @@ type Joined = {
   label: string;
   category: Category;
   qmkBasic: boolean;
+  kanata: string[]; // kanata names that work on macOS, preferred first; empty when kanata has no name for the key
   usage: number;
 };
 
@@ -214,11 +267,13 @@ function keyloomName(qmkKey: string): string {
 
 async function build(): Promise<string> {
   const zmkPath = (f: string) => raw(ZMK_REPO, ZMK_SHA, `app/include/dt-bindings/zmk/${f}`);
-  const [keysH, usageH, pagesH, report, ...qmkTexts] = await Promise.all([
+  const [keysH, usageH, pagesH, report, kanataMod, kanataMacos, ...qmkTexts] = await Promise.all([
     fetchText(zmkPath("keys.h")),
     fetchText(zmkPath("hid_usage.h")),
     fetchText(zmkPath("hid_usage_pages.h")),
     fetchText(raw(QMK_REPO, QMK_SHA, "tmk_core/protocol/report.h")),
+    fetchText(raw(KANATA_REPO, KANATA_SHA, "parser/src/keys/mod.rs")),
+    fetchText(raw(KANATA_REPO, KANATA_SHA, "parser/src/keys/macos.rs")),
     ...QMK_FILES.map((f) => fetchText(raw(QMK_REPO, QMK_SHA, `data/constants/keycodes/${f}`))),
     fetchText(raw(QMK_REPO, QMK_SHA, "data/constants/keycodes/extras/keycodes_us_0.0.1.hjson")),
   ]);
@@ -228,6 +283,7 @@ async function build(): Promise<string> {
   const zmk = parseZmk(keysH, usageH, pagesH);
   const qmk = parseQmk(files);
   const reportUsages = parseQmkReportUsages(report);
+  const kanataByUsage = parseKanata(kanataMod, kanataMacos);
 
   // QMK keycode -> usage. Keyboard-page codes are the HID usage id itself; the media block
   // (0xA5-0xDF) maps through QMK's own consumer/system tables.
@@ -261,6 +317,7 @@ async function build(): Promise<string> {
       label: q.label,
       category: categoryOf(usage),
       qmkBasic: q.code <= 0xff,
+      kanata: kanataOrder(kanataByUsage.get(usage) ?? []),
       usage,
     });
   }
@@ -290,7 +347,7 @@ const list = (xs: readonly string[]) => `[${xs.map(q).join(", ")}]`;
 
 function render(joined: Joined[], shifted: Shifted[]): string {
   const rows = joined.map(
-    (j) => `  [${q(j.name)}, ${list(j.qmk)}, ${list(j.zmk)}, ${q(j.label)}, ${q(j.category)}, ${j.qmkBasic}],`,
+    (j) => `  [${q(j.name)}, ${list(j.qmk)}, ${list(j.zmk)}, ${q(j.label)}, ${q(j.category)}, ${j.qmkBasic}, ${list(j.kanata)}],`,
   );
   const shiftedRows = shifted.map((s) => `  [${q(s.code)}, ${list(s.qmk)}, ${list(s.zmk)}, ${q(s.label)}],`);
   return `// GENERATED by scripts/gen-keycodes.ts. Do not edit; run \`bun scripts/gen-keycodes.ts\`.
@@ -303,6 +360,7 @@ function render(joined: Joined[], shifted: Shifted[]): string {
 //        (docs/src/data/hid.js is deliberately not used: it is CC-BY-NC-SA-4.0)
 //   QMK  ${QMK_REPO}@${QMK_SHA}  data/constants/keycodes/keycodes_*.hjson, extras/keycodes_us_0.0.1.hjson,
 //        tmk_core/protocol/report.h (consumer/system usages for the media block)
+//   kanata  ${KANATA_REPO}@${KANATA_SHA} (v1.12.0)  parser/src/keys/{mod,macos}.rs, joined on the HID usage macOS sends (names only; LGPL-3.0 code is not copied)
 //
 // Naming: the keyloom name is QMK's canonical key without the KC_ prefix (ENTER, SPACE, LEFT_BRACKET),
 // with digits written N0..N9. Every other QMK alias and every ZMK name resolves to it.
@@ -321,9 +379,11 @@ export type KeyCodeInfo = {
   category: KeyCodeCategory;
   /** True when QMK's keycode fits in 8 bits, the only kind a mod-tap's tap side accepts. */
   qmkBasic: boolean;
+  /** kanata names that a macOS build accepts, preferred first; empty when kanata has no name for the key (21). */
+  kanata: readonly string[];
 };
 
-// [name, qmk, zmk, label, category, qmkBasic]
+// [name, qmk, zmk, label, category, qmkBasic, kanata]
 const ROWS = [
 ${rows.join("\n")}
 ] as const;
@@ -335,19 +395,21 @@ ${shiftedRows.join("\n")}
 
 export type KeyCode = (typeof ROWS)[number][0];
 
-export const KEYCODES: readonly KeyCodeInfo[] = ROWS.map(([name, qmk, zmk, label, category, qmkBasic]) => ({
+export const KEYCODES: readonly KeyCodeInfo[] = ROWS.map(([name, qmk, zmk, label, category, qmkBasic, kanata]) => ({
   name,
   qmk,
   zmk,
   label,
   category,
   qmkBasic,
+  kanata,
 }));
 
 // Maps, not objects: a layer or macro named "constructor" must never hit Object.prototype.
 const byName = new Map<string, KeyCodeInfo>(KEYCODES.map((k) => [k.name, k]));
 const byQmk = new Map<string, KeyCodeInfo>(KEYCODES.flatMap((k) => k.qmk.map((n) => [n, k] as const)));
 const byZmk = new Map<string, KeyCodeInfo>(KEYCODES.flatMap((k) => k.zmk.map((n) => [n, k] as const)));
+const byKanata = new Map<string, KeyCodeInfo>(KEYCODES.flatMap((k) => k.kanata.map((n) => [n, k] as const)));
 
 export type ShiftedKey = { code: KeyCode; mods: readonly ["LSFT"]; label: string };
 const shiftedByQmk = new Map<string, ShiftedKey>();
@@ -390,6 +452,16 @@ export function fromQmkShifted(name: string): ShiftedKey | undefined {
 /** ZMK shifted symbols (EXCLAMATION, LBRC...) to base key plus Left Shift. */
 export function fromZmkShifted(name: string): ShiftedKey | undefined {
   return shiftedByZmk.get(name);
+}
+
+/** A kanata key name (any alias a macOS build accepts) to its keyloom key. */
+export function fromKanata(name: string): KeyCodeInfo | undefined {
+  return byKanata.get(name);
+}
+
+/** The name to write for this key in a kanata config, or undefined when kanata has none on macOS. */
+export function kanataName(code: KeyCode): string | undefined {
+  return keyCodeInfo(code).kanata[0];
 }
 
 export function qmkName(code: KeyCode): string {

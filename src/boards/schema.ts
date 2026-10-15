@@ -1,7 +1,7 @@
 // Board definition and generated geometry (docs/blueprint/04-boards-and-contributions.md).
 import { z } from "zod";
 import { FirmwareSchema } from "../layout/schema.ts";
-import { BuildRecipeSchema, FlashRecipeSchema } from "./recipes.ts";
+import { BuildRecipeSchema, DeviceMatcherSchema, FlashRecipeSchema } from "./recipes.ts";
 
 // One key in binding order, in key units. Generated from the pinned firmware tree (D-045).
 export const GeometryKeySchema = z.object({
@@ -15,15 +15,29 @@ export const GeometryKeySchema = z.object({
 });
 export type GeometryKey = z.infer<typeof GeometryKeySchema>;
 
+// A firmware board's geometry is derived from a pinned file in its firmware tree. A software remapper's keyboard has no
+// such file, so its geometry is written by hand and says so, including whether anyone has measured it against the device.
+export const FirmwareGeometrySourceSchema = z.object({ repo: z.string().url(), sha: z.string().regex(/^[0-9a-f]{40}$/), path: z.string().min(1) });
+export const HandAuthoredGeometrySourceSchema = z.strictObject({
+  kind: z.literal("hand-authored"),
+  note: z.string().min(1),
+  /** False until the key order and widths have been confirmed on the device (S36). */
+  verified: z.boolean(),
+});
+export type HandAuthoredGeometrySource = z.infer<typeof HandAuthoredGeometrySourceSchema>;
+
 export const GeometrySchema = z.object({
   schemaVersion: z.literal(1),
-  source: z.object({ repo: z.string().url(), sha: z.string().regex(/^[0-9a-f]{40}$/), path: z.string().min(1) }),
+  source: z.union([FirmwareGeometrySourceSchema, HandAuthoredGeometrySourceSchema]),
   keys: z.array(GeometryKeySchema).min(1),
 });
 export type Geometry = z.infer<typeof GeometrySchema>;
+export type FirmwareGeometry = Geometry & { source: z.infer<typeof FirmwareGeometrySourceSchema> };
 
-/** The ids `importLayout` can run (src/app/layouts.ts); the first two read QMK sources, the others ZMK ones. */
-export const IMPORTER_IDS = ["oryx-source", "qmk-keymap", "zmk-layout-editor-keymap", "zmk-keymap"] as const;
+export const isHandAuthored = (g: Geometry): g is Geometry & { source: HandAuthoredGeometrySource } => "kind" in g.source;
+
+/** The ids `importLayout` can run (src/app/layouts.ts); the first two read QMK sources, the next two ZMK ones, and `karabiner-json` reads a Karabiner-Elements config. */
+export const IMPORTER_IDS = ["oryx-source", "qmk-keymap", "zmk-layout-editor-keymap", "zmk-keymap", "karabiner-json"] as const;
 
 const positions = z.array(z.number().int().nonnegative());
 
@@ -38,6 +52,8 @@ export const RevisionSchema = z.strictObject({
   build: BuildRecipeSchema,
   flash: FlashRecipeSchema,
   detect: z.object({ usbProductId: z.string().regex(/^0x[0-9a-f]{4}$/i) }).nullable(),
+  // How a software remapper finds the keyboard it should take; the built-in keyboard has no USB IDs (21). Absent on firmware boards.
+  device: DeviceMatcherSchema.optional(),
 });
 export type BoardRevision = z.infer<typeof RevisionSchema>;
 
@@ -55,6 +71,13 @@ export const BoardDefinitionSchema = z.strictObject({
   hands: z.object({ left: positions, right: positions }),
   fingers: z.record(z.string(), z.string().min(1)),
   rows: z.record(z.string(), positions),
+  // The key each position is on the device, in binding order: KeyCode names, plus "FN" for the Apple fn/globe key, which has no KeyCode.
+  // A software remapper needs it because it grabs physical keys by name (`defsrc`); a firmware board's keymap needs no such list.
+  physicalKeys: z.array(z.string().min(1)).optional(),
+  // Positions where a layer or hold key lands first when the board it came from had more thumb keys than this one has, best first (D-234:
+  // Space-hold, then Caps Lock, then right Option on the MacBook). The key keeps its own tap; BK picks among them (D-019's "make room").
+  holdKeyPreference: z.array(z.number().int().nonnegative()).optional(),
+  // A firmware board's keys come in mirrored pairs; a staggered laptop keyboard has none, so a software board may leave this empty.
   mirror: z.record(z.string(), z.number().int().nonnegative()),
   importers: z.array(z.enum(IMPORTER_IDS)).min(1),
   // Per-key RGB (D-190): `ledPositions[i]` is the key position LED number i sits under. Absent means the board has no per-key lighting keyloom writes.
@@ -76,3 +99,6 @@ export const BoardDefinitionSchema = z.strictObject({
     .optional(),
 });
 export type BoardDefinition = z.infer<typeof BoardDefinitionSchema>;
+
+/** A board whose "firmware" is a software remapper's config file: nothing to build in Docker or flash (21). */
+export const isRemapperBoard = (def: Pick<BoardDefinition, "firmware">): boolean => def.firmware === "kanata";

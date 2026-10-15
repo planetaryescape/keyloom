@@ -273,9 +273,12 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.targets` | `zmk-west-docker` | One west build per half, in the order built. |
 | `revisions[].build.targets[].id` | `zmk-west-docker` | A short name, such as `left`. Names the half's UF2. |
 | `revisions[].build.targets[].shield` | `zmk-west-docker` | The `-DSHIELD` value, such as `corne_left`. |
+| `revisions[].build.kanataVersion` | `kanata-config` | The kanata release the generated config targets, such as `1.12.0`. Software-remapper boards only; `source.ref` must be `v<version>`. |
 | `revisions[].flash` | all | The flash recipe. |
-| `revisions[].flash.kind` | all | `zapp`, `uf2-drives` or `manual`. |
+| `revisions[].flash.kind` | all | `zapp`, `uf2-drives`, `manual` or, for a software remapper, `kanata-reload`. |
 | `revisions[].flash.bootloader` | `zapp` | The bootloader's USB `VID:PID`, such as `0483:df11`. |
+| `revisions[].flash.tcpPort` | `kanata-reload` | The loopback port the daemon starts kanata's TCP server on. |
+| `revisions[].flash.driverVersions` | `kanata-reload` | The Karabiner VirtualHID driver versions this kanata release can use. |
 | `revisions[].flash.steps` | `uf2-drives` | The boot drives to flash, in order. |
 | `revisions[].flash.steps[].volume` | `uf2-drives` | The drive's volume label, such as `NICENANO`. |
 | `revisions[].flash.steps[].label` | `uf2-drives` | What to call this part, such as `left half`. |
@@ -295,12 +298,17 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.instructions` | `manual` | What to tell the person: which tool flashes the file, and how to enter the bootloader. |
 | `revisions[].detect` | all | `null`, or an object that names the USB device. |
 | `revisions[].detect.usbProductId` | all | The board's USB product ID, such as `0x1969`. keyloom uses it to tell hardware revisions apart. |
+| `revisions[].device` | `kanata-config`, optional | How a software remapper finds the keyboard to take. A board with no USB IDs (a laptop's own) has `detect: null` and this. |
+| `revisions[].device.kind` | `device` | `macos-product-name`. |
+| `revisions[].device.name` | `device` | The exact product string `kanata --list` prints, such as `Apple Internal Keyboard / Trackpad`. |
 | `hands` | all | Which positions are under each hand. |
 | `hands.left` | all | The left hand's positions. |
 | `hands.right` | all | The right hand's positions. |
 | `fingers` | all | An object from every position number, as a string, to a finger name such as `left-index`. |
 | `rows` | all | An object from a row name to its positions. Every position is in exactly one row. |
 | `mirror` | all | An object from each left-hand position to the right-hand position it mirrors to. |
+| `physicalKeys` | `kanata-config`, optional | The key each position is on the device, in binding order: KeyCode names, plus `FN` for the Apple fn/globe key. A software remapper grabs keys by name. |
+| `holdKeyPreference` | optional | Positions where a layer or hold key lands first when the board it came from had more thumb keys, best first. |
 | `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
 | `lighting` | qmk | Optional. Present on a board with per-key RGB that keyloom writes layer colours for. |
 | `lighting.ledPositions` | qmk | For each LED number, the key position it sits under. Read it from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates. |

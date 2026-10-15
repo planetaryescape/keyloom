@@ -36,6 +36,20 @@ function checkPartition(label: string, keyCount: number, groups: Array<[string, 
 /** The recipe fields are validated by the schema; these are the rules that span fields. */
 function checkRecipes(def: BoardDefinition, rev: BoardRevision, err: (message: string) => void): void {
   const at = `revision "${rev.id}"`;
+  if (def.firmware === "kanata") {
+    // A software remapper's recipes are its config file and its reload (21); none of the firmware fields apply.
+    if (rev.build.kind !== "kanata-config") err(`${at}: a kanata board builds with kanata-config, not ${rev.build.kind}`);
+    if (rev.flash.kind !== "kanata-reload") err(`${at}: a kanata board applies with kanata-reload, not ${rev.flash.kind}`);
+    if (rev.qmkTarget) err(`${at}: qmkTarget is for QMK boards`);
+    if (rev.detect !== null) err(`${at}: a kanata board is found by device.name, not a USB product ID`);
+    if (!rev.device) err(`${at} needs a device, so kanata is told which keyboard to take`);
+    if (rev.build.kind === "kanata-config" && rev.source.ref !== `v${rev.build.kanataVersion}`) {
+      err(`${at}: source.ref ${rev.source.ref} must be v${rev.build.kanataVersion}, the kanata release the config targets`);
+    }
+    return;
+  }
+  if (rev.build.kind === "kanata-config" || rev.flash.kind === "kanata-reload") err(`${at}: kanata recipes are for kanata boards`);
+  if (rev.device) err(`${at}: device is for kanata boards`);
   if (def.firmware === "qmk") {
     if (!rev.qmkTarget) err(`${at} needs a qmkTarget`);
     if (rev.build.kind !== "qmk-docker") err(`${at}: a QMK board builds with qmk-docker, not ${rev.build.kind}`);
@@ -59,6 +73,30 @@ function checkRecipes(def: BoardDefinition, rev: BoardRevision, err: (message: s
   }
   if (rev.build.kind === "zmk-moergo-template" && rev.flash.kind === "uf2-drives" && rev.flash.steps.some((s) => s.target !== undefined)) {
     err(`${at}: flash steps name a target, but zmk-moergo-template makes one UF2 for every step`);
+  }
+}
+
+/** A hand-written geometry has no firmware file to be checked against, so it is checked for what can be seen: no two keys on top of each other, and a warning while nobody has measured it. */
+function checkHandAuthored(board: Board, issues: CheckIssue[]): void {
+  const { geometry } = board;
+  if (!("kind" in geometry.source)) {
+    if (board.definition.firmware === "kanata") issues.push({ level: "error", message: "a kanata board's geometry.json must say it is hand-authored" });
+    return;
+  }
+  if (board.definition.firmware !== "kanata") issues.push({ level: "error", message: "hand-authored geometry is for software-remapper boards; firmware boards derive it from their pinned tree" });
+  if (!geometry.source.verified) issues.push({ level: "warning", message: "geometry.json is hand-authored and not yet checked against the device (S36)" });
+  const keys = geometry.keys;
+  for (let a = 0; a < keys.length; a++) {
+    for (let b = a + 1; b < keys.length; b++) {
+      const p = keys[a];
+      const q = keys[b];
+      if (!p || !q) continue;
+      // A small tolerance, so keys that touch edge to edge don't count as overlapping.
+      const eps = 1e-6;
+      if (p.x < q.x + q.w - eps && q.x < p.x + p.w - eps && p.y < q.y + q.h - eps && q.y < p.y + p.h - eps) {
+        issues.push({ level: "error", message: `geometry.json keys ${a} and ${b} overlap` });
+      }
+    }
   }
 }
 
@@ -95,13 +133,22 @@ function checkFacts(board: Board, dir: string, issues: CheckIssue[]): void {
   // A display override that points past the geometry would otherwise only fail when someone opens the editor.
   const drawn = [...(def.display?.rotate ?? []).flatMap((r) => r.positions), ...(def.display?.shift ?? []).flatMap((r) => r.positions), ...Object.keys(def.display?.keycaps ?? {}).map(Number)];
   for (const p of drawn) if (p >= def.keyCount) err(`display refers to position ${p}, but keyCount is ${def.keyCount}`);
-  for (const p of def.hands.left) {
-    if (!(String(p) in def.mirror)) issues.push({ level: "warning", message: `left position ${p} has no mirror entry` });
+  // A staggered laptop keyboard has no mirror image, so a software board may leave the map empty (21).
+  if (def.firmware !== "kanata") {
+    for (const p of def.hands.left) {
+      if (!(String(p) in def.mirror)) issues.push({ level: "warning", message: `left position ${p} has no mirror entry` });
+    }
+  } else if (Object.keys(def.mirror).length > 0) {
+    err("a kanata board has no mirrored pairs; leave mirror empty");
   }
 
+  const importerFirmware = (id: string) => (id === "karabiner-json" ? "kanata" : id.startsWith("zmk") ? "zmk" : "qmk");
   for (const id of def.importers) {
-    if (id.startsWith(def.firmware === "qmk" ? "zmk" : "qmk") || (def.firmware === "zmk" && id === "oryx-source")) err(`importer "${id}" reads ${def.firmware === "qmk" ? "ZMK" : "QMK"} sources, but the board is ${def.firmware}`);
+    // Oryx exports are QMK-only, and a ZMK keymap is not read by the QMK importers.
+    const reads = id === "oryx-source" ? "qmk" : importerFirmware(id);
+    if (reads !== def.firmware) err(`importer "${id}" reads ${reads.toUpperCase()} sources, but the board is ${def.firmware}`);
   }
+  checkHandAuthored(board, issues);
 
   const ids = new Set<string>();
   for (const rev of def.revisions) {
@@ -127,7 +174,7 @@ async function checkGeometryDrift(board: Board, opts: CheckOptions, issues: Chec
     if (serializeGeometry(regenerated) !== serializeGeometry(geometry)) {
       issues.push({
         level: "error",
-        message: `geometry.json differs from ${regenerated.source.path} at ${first.source.sha}; run: keyloom boards geometry ${def.id}`,
+        message: `geometry.json differs from ${"path" in regenerated.source ? regenerated.source.path : "its source"} at ${first.source.sha}; run: keyloom boards geometry ${def.id}`,
       });
     }
     // geometry.json is shared by all revisions, which is only right while the revisions agree.
@@ -154,6 +201,6 @@ export async function checkBoardDir(dir: string, opts: CheckOptions = {}): Promi
     return { ok: false, issues: [{ level: "error", message: (err as Error).message }] };
   }
   checkFacts(board, dir, issues);
-  if (!opts.offline) await checkGeometryDrift(board, opts, issues);
+  if (!opts.offline && board.definition.firmware !== "kanata") await checkGeometryDrift(board, opts, issues);
   return { ok: !issues.some((i) => i.level === "error"), issues };
 }

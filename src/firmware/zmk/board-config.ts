@@ -18,7 +18,7 @@ export class ZmkBoardConfigError extends Error {
 export function zmkRevision(board: BoardDefinition, revisionId?: string): ZmkBoardRevision {
   const rev = revisionId === undefined ? board.revisions[0] : board.revisions.find((r) => r.id === revisionId);
   if (!rev) throw new ZmkBoardConfigError(`${board.id} has no revision "${revisionId}" (it has ${board.revisions.map((r) => r.id).join(", ")})`);
-  if (rev.build.kind === "qmk-docker") throw new ZmkBoardConfigError(`${board.id} ${rev.id} build: a ZMK board builds with zmk-moergo-template or zmk-west-docker, not ${rev.build.kind}`);
+  if (rev.build.kind === "qmk-docker" || rev.build.kind === "kanata-config") throw new ZmkBoardConfigError(`${board.id} ${rev.id} build: a ZMK board builds with zmk-moergo-template or zmk-west-docker, not ${rev.build.kind}`);
   if (rev.flash.kind !== "uf2-drives") throw new ZmkBoardConfigError(`${board.id} ${rev.id} flash: a ZMK board flashes with uf2-drives, not ${rev.flash.kind}`);
   return { id: rev.id, source: rev.source, build: rev.build, flash: rev.flash };
 }

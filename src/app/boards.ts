@@ -55,10 +55,12 @@ export async function regenerateGeometry(ref: string): Promise<{ path: string; k
     if (err instanceof BoardNotFoundError) throw new NotFoundError(err.message);
     throw err;
   }
+  // A software remapper's geometry is written by hand; there is no firmware tree to derive it from.
+  if (definition.firmware === "kanata") throw new UsageError(`${definition.id} is a software remapper: its geometry.json is written by hand, so there is nothing to regenerate`);
   const first = definition.revisions[0];
   if (!first) throw new UsageError("board has no revisions");
   const geometry = await generateGeometry(definition, first, geometryCache());
   const path = join(dir, "geometry.json");
   await Bun.write(path, serializeGeometry(geometry));
-  return { path, keyCount: geometry.keys.length, source: `${geometry.source.path} @ ${geometry.source.sha}` };
+  return { path, keyCount: geometry.keys.length, source: "path" in geometry.source ? `${geometry.source.path} @ ${geometry.source.sha}` : geometry.source.note };
 }

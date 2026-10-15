@@ -26,6 +26,7 @@ function githubSlug(repo: string): string {
 
 export function geometryPath(rev: BoardRevision): string {
   // A ZMK board names the file holding its `zmk,physical-layout`; a QMK board's is derived from its target unless it names one.
+  if (rev.build.kind === "kanata-config") throw new GeometryError(`revision ${rev.id}: a software remapper's geometry is written by hand, not derived from a firmware tree`);
   if (rev.build.kind !== "qmk-docker") return rev.build.physicalLayout;
   if (rev.build.layoutFile) return rev.build.layoutFile;
   if (!rev.qmkTarget) throw new GeometryError(`revision ${rev.id} has no qmkTarget`);
@@ -56,6 +57,7 @@ export type GeometryOptions = { fetchText?: TextFetcher; cacheDir?: string | und
 
 /** Geometry for one revision of a QMK board: `layouts.LAYOUT.layout`, in binding order. */
 export async function generateGeometry(board: BoardDefinition, rev: BoardRevision, opts: GeometryOptions = {}): Promise<Geometry> {
+  if (board.firmware === "kanata") throw new GeometryError(`${board.id} is a software remapper: its geometry.json is written by hand, so there is nothing to regenerate`);
   const path = geometryPath(rev);
   const text = await fetchPinned(rev, path, opts.fetchText ?? defaultFetcher, opts.cacheDir);
   if (board.firmware === "zmk") {

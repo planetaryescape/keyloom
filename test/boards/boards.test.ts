@@ -44,7 +44,7 @@ describe("Moonlander geometry", () => {
     const b = await generateGeometry(definition, revb, { fetchText: offlineFetch });
     expect(a.keys).toEqual(b.keys);
     expect(a.keys).toHaveLength(72);
-    expect(a.source.path).toBe("keyboards/zsa/moonlander/reva/keyboard.json");
+    expect("path" in a.source && a.source.path).toBe("keyboards/zsa/moonlander/reva/keyboard.json");
   });
 
   test("the committed geometry.json is byte-identical to what the generator writes", async () => {

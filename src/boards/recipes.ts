@@ -58,7 +58,18 @@ export const ZmkWestDockerBuildSchema = z.strictObject({
 });
 export type ZmkWestDockerBuild = z.infer<typeof ZmkWestDockerBuildSchema>;
 
-export const BuildRecipeSchema = z.discriminatedUnion("kind", [QmkDockerBuildSchema, ZmkMoergoTemplateBuildSchema, ZmkWestDockerBuildSchema]);
+/**
+ * A software remapper has nothing to compile: its "build" is writing the config file the remapper reads (21, D-230),
+ * checked with the remapper's own validator before anything is loaded.
+ */
+export const KanataConfigBuildSchema = z.strictObject({
+  kind: z.literal("kanata-config"),
+  /** The kanata release the generated syntax targets and the doctor expects (S30). */
+  kanataVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+});
+export type KanataConfigBuild = z.infer<typeof KanataConfigBuildSchema>;
+
+export const BuildRecipeSchema = z.discriminatedUnion("kind", [QmkDockerBuildSchema, ZmkMoergoTemplateBuildSchema, ZmkWestDockerBuildSchema, KanataConfigBuildSchema]);
 export type BuildRecipe = z.infer<typeof BuildRecipeSchema>;
 
 // --- flashes --------------------------------------------------------------------------------
@@ -141,5 +152,24 @@ export const ManualFlashSchema = z.strictObject({
 });
 export type ManualFlash = z.infer<typeof ManualFlashSchema>;
 
-export const FlashRecipeSchema = z.discriminatedUnion("kind", [ZappFlashSchema, Uf2DrivesFlashSchema, ManualFlashSchema]);
+/** The remapper's "flash" is a reload: tell the running process to read the file again, over its loopback TCP port. */
+export const KanataReloadSchema = z.strictObject({
+  kind: z.literal("kanata-reload"),
+  /** The loopback port the LaunchDaemon starts kanata's TCP server on (`-p 127.0.0.1:<port>`). */
+  tcpPort: z.number().int().min(1024).max(65535),
+  /** Karabiner-DriverKit-VirtualHIDDevice versions this kanata release can use. The driver's protocol moved from 5 to 7 at 8.0.0 (research/software-remappers.md). */
+  driverVersions: z.array(z.string().regex(/^\d+\.\d+\.\d+$/)).min(1),
+});
+export type KanataReload = z.infer<typeof KanataReloadSchema>;
+
+export const FlashRecipeSchema = z.discriminatedUnion("kind", [ZappFlashSchema, Uf2DrivesFlashSchema, ManualFlashSchema, KanataReloadSchema]);
 export type FlashRecipe = z.infer<typeof FlashRecipeSchema>;
+
+
+/** How a software remapper is told which keyboard to take: a product string, because the built-in keyboard reports vendor 0 and product 0. */
+export const DeviceMatcherSchema = z.strictObject({
+  kind: z.literal("macos-product-name"),
+  /** The exact product string `kanata --list` prints and `defcfg macos-dev-names-include` compares against. */
+  name: z.string().min(1),
+});
+export type DeviceMatcher = z.infer<typeof DeviceMatcherSchema>;

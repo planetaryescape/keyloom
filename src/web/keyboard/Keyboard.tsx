@@ -7,7 +7,7 @@ import { MoveArrows } from "./MoveArrows.tsx";
 import { LEGEND_FLOOR_PX } from "./fit.ts";
 import { useKeyDrag } from "./useKeyDrag.ts";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
-import { boardBounds, growBounds, handTrays, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
+import { boardBounds, growBounds, handTrays, keyRect, MAX_SPLIT_OVERLAP, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { useFitUnit } from "./useFitUnit.ts";
 import "./keyboard.css";
@@ -291,7 +291,10 @@ function trays(keys: readonly GeometryKey[], hands: { left: readonly number[]; r
   if (half !== null) return [growBounds(boardBounds(hands[half].flatMap((p) => keys[p] ?? [])), pad)];
   const [left, right] = [hands.left, hands.right].map((ps) => ps.flatMap((p) => keys[p] ?? []));
   if (!left?.length || !right?.length) return [left, right].flatMap((k) => (k?.length ? [growBounds(boardBounds(k), pad)] : []));
-  return handTrays(boardBounds(left), boardBounds(right), pad, GAP * 2);
+  const [lb, rb] = [boardBounds(left), boardBounds(right)];
+  // One body with both hands' keys interleaved (a laptop keyboard) is drawn as one tray, not two that cross.
+  if (lb.minX + lb.width - rb.minX > MAX_SPLIT_OVERLAP) return [growBounds(boardBounds([...left, ...right]), pad)];
+  return handTrays(lb, rb, pad, GAP * 2);
 }
 
 function Tray({ tray, canvas, unit }: { tray: Bounds; canvas: Bounds; unit: number }) {

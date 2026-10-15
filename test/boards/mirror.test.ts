@@ -10,7 +10,8 @@ const centre = (k: Parameters<typeof rotatedCorners>[0]) => {
 };
 
 describe("mirror maps of the shipped boards", () => {
-  for (const board of listBoards()) {
+  // A staggered laptop keyboard has no mirror image, so a software-remapper board leaves its mirror map empty (21).
+  for (const board of listBoards().filter((b) => Object.keys(b.definition.mirror).length > 0)) {
     const { definition: d, geometry } = board;
     test(`${d.id}: every position has exactly one partner, on the other hand`, () => {
       const partners = mirrorPartners(d);

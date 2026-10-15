@@ -124,7 +124,7 @@ export function applyDisplayRotation(
  * grown trays would overlap (the Corne's tilted inner thumbs nearly meet), each stops `gap / 2` short
  * of the midpoint between the two hands' keys instead.
  */
-const MAX_SPLIT_OVERLAP = 0.5;
+export const MAX_SPLIT_OVERLAP = 0.5;
 
 export const growBounds = (b: Bounds, pad: number): Bounds => ({ minX: b.minX - pad, minY: b.minY - pad, width: b.width + 2 * pad, height: b.height + 2 * pad });
 

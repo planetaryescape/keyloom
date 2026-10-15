@@ -3,7 +3,8 @@
 // read from storage, the agent or the browser is parsed with them.
 import { z } from "zod";
 
-export const FirmwareSchema = z.enum(["qmk", "zmk"]);
+// "kanata" is a software remapper on a laptop, not firmware: its "build" is a config file and its "flash" is a reload (docs/blueprint/21, D-230).
+export const FirmwareSchema = z.enum(["qmk", "zmk", "kanata"]);
 export type Firmware = z.infer<typeof FirmwareSchema>;
 
 export const ModSchema = z.enum(["LCTL", "LSFT", "LALT", "LGUI", "RCTL", "RSFT", "RALT", "RGUI"]);

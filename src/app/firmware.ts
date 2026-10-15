@@ -87,6 +87,7 @@ export const checkoutDirFor = (board: Board): string => join(cacheDir(), "build"
 
 /** Rev A and rev B need different binaries, so the build must know which one is on the desk. */
 async function resolveBoardRevision(board: Board, requested: string | undefined): Promise<string> {
+  if (board.definition.firmware === "kanata") throw new UsageError(`${board.definition.name} is applied by writing a config file, not built and flashed; use \`keyloom sync\``);
   const ids = board.definition.revisions.map((r) => r.id);
   if (requested !== undefined) {
     if (!ids.includes(requested)) throw new UsageError(`${board.definition.id} has no revision "${requested}"; use one of: ${ids.join(", ")}`);

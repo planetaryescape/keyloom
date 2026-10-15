@@ -31,7 +31,7 @@ export type EmulateOutcome = EmulationResult & { layoutId: string; revisionId: s
 export async function emulateLayout(app: App, ref: string, opts: EmulateOptions): Promise<EmulateOutcome> {
   const view = getLayout(app, ref, opts.revisionId);
   const board = view.board.definition;
-  const emulator = EMULATORS[board.firmware];
+  const emulator = board.firmware === "kanata" ? undefined : EMULATORS[board.firmware];
   if (!emulator) throw new UsageError(`emulating ${board.firmware.toUpperCase()} boards isn't available yet`);
   let events;
   try {
