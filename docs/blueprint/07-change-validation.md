@@ -61,6 +61,7 @@ Warnings appear in the preview beside the trade-offs. They don't block apply.
 | `homerow_same_hand_mods` | A hold-tap on a home-row letter has no opposite-hand constraint (QMK Chordal Hold or ZMK `hold-trigger-key-positions`) | Rolling same-hand letters triggers the modifier by accident (D-017) |
 | `moved_pinned` | The change moves a slot or function covered by a `pinned` priority | BK said to keep it there (D-021). It's a reminder, not a block (D-023) |
 | `contradicts_decision` | The change undoes or moves something an active decision placed deliberately | It surfaces the old reason (D-022) |
+| `outside_selection` | The message carried a selection, and the change edits a key that isn't in it (another position, or the same position on another layer) | BK pointed at the keys he meant. Editing others is sometimes necessary, but he should see it (D-062) |
 | `large_relearn` | `relearnCount` is above 6 | Muscle memory cost. BK should choose it knowingly |
 | `identifier_clash` | A layer, macro, combo or profile ID would generate a name that collides with a firmware identifier (a ZMK behaviour label, a QMK keycode) | Generated firmware would fail to compile or bind the wrong thing. Taken from keymap-editor's warnings ([../research/keymap-editor.md](../research/keymap-editor.md)) |
 | `macro_looks_like_secret` | A macro types a long run of plain characters with no modifiers, which looks like a password | Firmware isn't a safe place for a secret: anyone with the keyboard can replay it. Taken from keymap-editor's warnings |
