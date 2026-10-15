@@ -371,6 +371,19 @@ button.cap[data-applied="true"] {
   stroke-width: 2;
 }
 
+/* Ties a label that had to move off its line's middle back to the line. */
+.combo-leader {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+/* A legend a label could not avoid: faded so the label is read on its own. */
+[data-combo-under] {
+  opacity: 0.2;
+}
+
 .combo-hit {
   stroke: transparent;
   stroke-width: 14;
