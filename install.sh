@@ -72,13 +72,18 @@ case "$asset" in
   *) die "no keyloom release binary for ${os}-${arch} (available: darwin-arm64, darwin-x64, linux-x64)" ;;
 esac
 
-if [ -n "$VERSION" ]; then
-  release_url="${BASE}/download/${VERSION}"
-else
-  release_url="${BASE}/latest/download"
-fi
-
 command -v curl >/dev/null 2>&1 || die "curl is required"
+
+# Resolve "latest" to a tag first, so the binary and SHA256SUMS come from the same release
+# even if a new one is published mid-install, and so the output names the version.
+if [ -z "$VERSION" ]; then
+  latest_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' "${BASE}/latest")" ||
+    die "could not find the latest release at ${BASE}/latest"
+  VERSION="${latest_url##*/}"
+  printf '%s\n' "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' ||
+    die "the latest release resolved to an unexpected tag: $VERSION"
+fi
+release_url="${BASE}/download/${VERSION}"
 
 if command -v sha256sum >/dev/null 2>&1; then
   sha256_of() { sha256sum "$1" | awk '{print $1}'; }
@@ -92,12 +97,11 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 fetch() {
-  # Prints the final URL after redirects, so the release tag can be named in the output.
-  curl -fsSL -o "$2" -w '%{url_effective}' "$1" || die "download failed: $1"
+  curl -fsSL -o "$2" "$1" || die "download failed: $1"
 }
 
-final_url="$(fetch "${release_url}/${asset}" "$tmp/$asset")"
-fetch "${release_url}/SHA256SUMS" "$tmp/SHA256SUMS" >/dev/null
+fetch "${release_url}/${asset}" "$tmp/$asset"
+fetch "${release_url}/SHA256SUMS" "$tmp/SHA256SUMS"
 
 expected_lines="$(awk -v name="$asset" '$2 == name { print $1 }' "$tmp/SHA256SUMS")"
 expected_count="$(printf '%s' "$expected_lines" | grep -c . || true)"
@@ -108,12 +112,7 @@ if [ "$actual" != "$expected" ]; then
   die "checksum mismatch for ${asset}: expected ${expected}, got ${actual}. Nothing was installed."
 fi
 
-if [ -n "$VERSION" ]; then
-  installed_version="$VERSION"
-else
-  installed_version="$(printf '%s' "$final_url" | sed -n 's#.*/download/\(v[0-9][^/]*\)/.*#\1#p')"
-  installed_version="${installed_version:-latest}"
-fi
+installed_version="$VERSION"
 
 mkdir -p "$INSTALL_DIR"
 dest="${INSTALL_DIR}/keyloom"

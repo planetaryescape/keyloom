@@ -169,6 +169,12 @@ describe("exit codes", () => {
     expect(r.out).toContain("import");
   });
 
+  test("--version prints the package version", async () => {
+    const r = await cli(["--version"]);
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
   test("an unexpected error is 1 and names a log file", async () => {
     const dir = tempDir();
     // A data dir that is a file makes the database impossible to open: not the user's mistake in the CLI's eyes.

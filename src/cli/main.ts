@@ -9,6 +9,7 @@ import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
 import { importTable } from "./report.ts";
+import pkg from "../../package.json" with { type: "json" };
 
 const stdIo = (): Io => ({
   out: (t) => void process.stdout.write(t),
@@ -21,6 +22,7 @@ type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: b
 export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
+    .version(pkg.version, "-V, --version", "print the keyloom version")
     .addOption(new Option("--format <format>", "output format (default: table on a TTY, json otherwise)").choices(FORMATS))
     .option("--data-dir <path>", "use this directory instead of $XDG_DATA_HOME/keyloom")
     .option("--quiet", "print only what was asked for")
