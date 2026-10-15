@@ -2,7 +2,7 @@
 export { type App, closeApp, openApp } from "./context.ts";
 export { BusyError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
-  type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, listChanges, proposeChange, rejectChange, showChange, undo,
+  type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
 export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, importLayout, listLayouts } from "./layouts.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";

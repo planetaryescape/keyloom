@@ -1,7 +1,10 @@
-// `keyloom decisions list|show|edit|retire` (10#command-tree). Only priorities exist so far (08).
+// `keyloom decisions list|show|edit|retire|outcome|due|dismiss` (10#command-tree, 08).
 import type { Command } from "commander";
 import { Option } from "commander";
-import { type DecisionRow, type DecisionStatus, UsageError, editDecision, listDecisions, retireDecision, showDecision } from "../../app/index.ts";
+import {
+  type DecisionRow, type DecisionStatus, UsageError, dismissOutcome, editDecision, listDecisions, outcomeQuestions, recordOutcome, retireDecision,
+  showDecision,
+} from "../../app/index.ts";
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
 
@@ -28,6 +31,7 @@ const decisionJson = (d: DecisionRow) => ({
   conversation_id: d.conversationId,
   source_message_ids: d.sourceMessageIds,
   superseded_by: d.supersededBy,
+  outcome_asked_at: d.outcomeAskedAt,
   created_at: d.createdAt,
   updated_at: d.updatedAt,
 });
@@ -39,6 +43,8 @@ const decisionTable = (d: DecisionRow): string =>
     `goal:   ${d.goal}`,
     `choice: ${d.choice}`,
     `reason: ${d.reason}`,
+    ...(d.outcomeNote ? [`outcome: ${d.outcomeNote}`] : []),
+    ...(d.status === "superseded" ? [`superseded by: ${d.supersededBy ?? "a change with no reason recorded"}`] : []),
     ...(d.conversationId ? [`from:   ${d.conversationId} ${d.sourceMessageIds.join(" ")}`.trimEnd()] : []),
   ].join("\n");
 
@@ -104,5 +110,43 @@ export function registerDecisionCommands(program: Command, ctx: CliContext): voi
     .action(async (id: string) => {
       const d = await ctx.withApp((app) => retireDecision(app, id));
       print(ctx.io, ctx.format(), { json: { decision_id: d.id, status: d.status }, ids: [d.id], table: `${d.id}\nretired` });
+    });
+
+  decisions
+    .command("outcome")
+    .description("record how a choice turned out, in your words; the agent quotes it before proposing to undo something that helped")
+    .argument("<decision>", "decision ID")
+    .addOption(new Option("--status <status>", "how it went").choices(["tried_helpful", "tried_unhelpful"]).makeOptionMandatory())
+    .requiredOption("--note <text>", "what you noticed")
+    .action(async (id: string, opts: { status: "tried_helpful" | "tried_unhelpful"; note: string }) => {
+      const d = await ctx.withApp((app) => recordOutcome(app, id, { status: opts.status, note: opts.note }));
+      print(ctx.io, ctx.format(), { json: { decision: decisionJson(d) }, ids: [d.id], table: decisionTable(d) });
+    });
+
+  decisions
+    .command("due")
+    .description("choices you have had on your keyboard for a week and not been asked about")
+    .argument("<layout>", "layout ID or name")
+    .option("--now <time>", "pretend it is this ISO time, to see what would be due then")
+    .action(async (ref: string, opts: { now?: string }) => {
+      const now = opts.now === undefined ? Date.now() : Date.parse(opts.now);
+      if (Number.isNaN(now)) throw new UsageError(`--now must be a time such as 2026-11-01T09:00:00Z, got "${opts.now}"`);
+      const due = await ctx.withApp((app) => outcomeQuestions(app, ref, now));
+      print(ctx.io, ctx.format(), {
+        json: { due: due.map((q) => ({ ...decisionJson(q.decision), flashed_at: q.flashedAt })) },
+        ids: due.map((q) => q.decision.id),
+        table: due.length === 0
+          ? "nothing to ask about"
+          : columns([["ID", "FLASHED", "CHOICE"], ...due.map((q) => [q.decision.id, new Date(q.flashedAt).toISOString(), q.decision.choice])]),
+      });
+    });
+
+  decisions
+    .command("dismiss")
+    .description("stop asking whether a choice worked out; it stays a hypothesis")
+    .argument("<decision>", "decision ID")
+    .action(async (id: string) => {
+      const d = await ctx.withApp((app) => dismissOutcome(app, id));
+      print(ctx.io, ctx.format(), { json: { decision: decisionJson(d) }, ids: [d.id], table: `${d.id}\nwill not be asked about again` });
     });
 }

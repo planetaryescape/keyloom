@@ -2,7 +2,7 @@
 import type { Command } from "commander";
 import { Option } from "commander";
 import {
-  type ChangeSetStatus, ValidationFailedError, applyChange, checkChange, listChanges, proposeChange, rejectChange,
+  type ChangeSetStatus, ValidationFailedError, applyChange, checkChange, editorDraft, listChanges, proposeChange, rejectChange,
   showChange,
 } from "../../app/index.ts";
 import { changeSetJson, changeSetTable, validationTable } from "../change-report.ts";
@@ -48,10 +48,12 @@ export function registerChangeCommands(program: Command, ctx: CliContext): void 
     .argument("<layout>", "layout ID or name")
     .requiredOption("--ops <file>", "JSON ops, or - for stdin")
     .requiredOption("--explain <text>", "why, in one line; it becomes the revision summary")
-    .action(async (ref: string, opts: { ops: string; explain: string }) => {
+    .option("--reason <text>", "why you want this, to remember: applying it writes a decision that later changes to these keys bring up")
+    .action(async (ref: string, opts: { ops: string; explain: string; reason?: string }) => {
       const ops = await readOps(opts.ops);
+      const draft = editorDraft(opts.explain, opts.reason);
       const cs = await printingValidationFailure(ctx, () =>
-        ctx.withApp((app) => proposeChange(app, ref, { ops, explanation: opts.explain, source: "editor" })),
+        ctx.withApp((app) => proposeChange(app, ref, { ops, explanation: opts.explain, source: "editor", ...(draft ? { decisionDraft: draft } : {}) })),
       );
       print(ctx.io, ctx.format(), { json: { change_set_id: cs.id, change_set: changeSetJson(cs) }, ids: [cs.id], table: changeSetTable(cs) });
     });
@@ -89,9 +91,9 @@ export function registerChangeCommands(program: Command, ctx: CliContext): void 
     .action(async (id: string) => {
       const out = await printingValidationFailure(ctx, () => ctx.withApp((app) => applyChange(app, id)));
       print(ctx.io, ctx.format(), {
-        json: { revision_id: out.revisionId, change_set_id: out.changeSetId, validation: out.validation },
+        json: { revision_id: out.revisionId, change_set_id: out.changeSetId, decision_id: out.decisionId, validation: out.validation },
         ids: [out.revisionId],
-        table: `${out.revisionId}\napplied ${out.changeSetId}\n${validationTable(out.validation)}`,
+        table: `${out.revisionId}\napplied ${out.changeSetId}${out.decisionId ? `\nremembered as ${out.decisionId}` : ""}\n${validationTable(out.validation)}`,
       });
     });
 

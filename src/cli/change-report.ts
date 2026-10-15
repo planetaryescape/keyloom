@@ -27,6 +27,8 @@ export function validationTable(v: ValidationResult): string {
   const lines = [v.ok ? "ok: the change is valid" : "invalid: the change can't be applied"];
   if (v.errors.length) lines.push(`errors (${v.errors.length}):`, ...v.errors.map(issue));
   if (v.warnings.length) lines.push(`warnings (${v.warnings.length}):`, ...v.warnings.map(issue));
+  if (v.diff.reminders.length) lines.push(`reminders (${v.diff.reminders.length}):`, ...v.diff.reminders.map((r) => `  ${r.decisionId} (${r.status}): ${r.goal}: ${r.reason}`));
+  if (v.diff.retuned.length) lines.push(`retunes ${v.diff.retuned.length} hold-tap${v.diff.retuned.length === 1 ? "" : "s"}: ${v.diff.retuned.map(slot).join(" ")}`);
   const n = v.diff.changed.length;
   lines.push(`changes ${n} slot${n === 1 ? "" : "s"}${n ? `: ${v.diff.changed.map(slot).join(" ")}` : ""}`);
   return lines.join("\n");
@@ -39,6 +41,7 @@ export const changeSetJson = (cs: ChangeSetView) => ({
   source: cs.source,
   status: cs.status,
   explanation: cs.explanation,
+  decision_draft: cs.decisionDraft,
   ops: cs.ops,
   validation: cs.validation,
   created_at: cs.createdAt,

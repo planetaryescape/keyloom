@@ -48,6 +48,7 @@ function proposalText(p: ChatOutcome["proposals"][number]): string {
     ...list("gains", p.tradeoffs.gains),
     ...list("costs", p.tradeoffs.costs),
     ...warnings,
+    ...(p.decisionDraft ? [`  remembers: ${p.decisionDraft.reason}`] : []),
     "  ops:",
     ...p.ops.map((o) => `    ${opLine(o)}`),
     `  apply with: keyloom change apply ${p.changeSetId}`,
