@@ -15,10 +15,16 @@
       },
       "qmkTarget": "zsa/moonlander/reva",
       "build": {
-        "kind": "qmk-docker"
+        "kind": "qmk-docker",
+        "image": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
+        "layoutMacro": "LAYOUT_moonlander",
+        "keymapsDir": "keyboards/zsa/moonlander/keymaps",
+        "submodules": ["lib/chibios", "lib/chibios-contrib", "lib/printf", "lib/lufa", "modules/zsa"],
+        "modules": ["zsa/oryx", "zsa/defaults"]
       },
       "flash": {
-        "kind": "zapp"
+        "kind": "zapp",
+        "bootloader": "0483:df11"
       },
       "detect": {
         "usbProductId": "0x1969"
@@ -33,10 +39,16 @@
       },
       "qmkTarget": "zsa/moonlander/revb",
       "build": {
-        "kind": "qmk-docker"
+        "kind": "qmk-docker",
+        "image": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
+        "layoutMacro": "LAYOUT_moonlander",
+        "keymapsDir": "keyboards/zsa/moonlander/keymaps",
+        "submodules": ["lib/chibios", "lib/chibios-contrib", "lib/printf", "lib/lufa", "modules/zsa"],
+        "modules": ["zsa/oryx", "zsa/defaults"]
       },
       "flash": {
-        "kind": "zapp"
+        "kind": "zapp",
+        "bootloader": "3297:2003"
       },
       "detect": {
         "usbProductId": "0x1972"
