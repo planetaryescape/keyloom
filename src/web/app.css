@@ -1,0 +1,239 @@
+/* Semantic tokens. Components use the --color-* names, never a palette value. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-page: #f4f4f1;
+  --color-panel: #ebebe7;
+  --color-key: #ffffff;
+  --color-border: #cfcfc8;
+  --color-text: #1c1c1a;
+  --color-text-muted: #5f5f58;
+  --color-text-faded: #8f8f87;
+  --color-accent: #2453c7;
+  --color-badge-bg: #dfe8fb;
+  --color-badge-text: #1f3f8f;
+  --color-focus: #2453c7;
+  --color-error: #a51d12;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-page: #111113;
+    --color-panel: #19191c;
+    --color-key: #26262b;
+    --color-border: #3a3a42;
+    --color-text: #ececea;
+    --color-text-muted: #a3a3ab;
+    --color-text-faded: #6b6b74;
+    --color-accent: #8ab4ff;
+    --color-badge-bg: #22304f;
+    --color-badge-text: #c5d8ff;
+    --color-focus: #8ab4ff;
+    --color-error: #ff8b83;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-page: #111113;
+  --color-panel: #19191c;
+  --color-key: #26262b;
+  --color-border: #3a3a42;
+  --color-text: #ececea;
+  --color-text-muted: #a3a3ab;
+  --color-text-faded: #6b6b74;
+  --color-accent: #8ab4ff;
+  --color-badge-bg: #22304f;
+  --color-badge-text: #c5d8ff;
+  --color-focus: #8ab4ff;
+  --color-error: #ff8b83;
+}
+
+/* Spacing scale (4px base) and type scale. Nothing outside these values. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --text-badge: 9px;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: var(--text-md);
+  line-height: 1.45;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.layout-name,
+.board-name {
+  color: var(--color-text-muted);
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+}
+
+.app-message {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.app-error {
+  color: var(--color-error);
+}
+
+select {
+  font: inherit;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-key);
+  color: var(--color-text);
+}
+
+/* Tabs keep one font weight, so selecting a tab changes colour and border only. */
+.layer-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.layer-tab {
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.layer-tab:hover {
+  color: var(--color-text);
+}
+
+.layer-tab-selected {
+  border-color: var(--color-accent);
+  background: var(--color-badge-bg);
+  color: var(--color-accent);
+}
+
+select:focus-visible,
+.layer-tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The canvas sits in a panel so the keyboard reads as one object on the page. */
+.keyboard-frame {
+  max-width: 100%;
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+
+.keyboard {
+  position: relative;
+}
+
+.key {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-key);
+  overflow: hidden;
+  text-align: center;
+  user-select: none;
+}
+
+/* Tap is the primary label; hold sits under it in a smaller, muted line. */
+.key-main {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+}
+
+.key-sub {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.2;
+}
+
+.key-badge {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-badge-bg);
+  color: var(--color-badge-text);
+  font-size: var(--text-badge);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+}
+
+/* Transparent keys keep their shape but drop to the faded colour with a dashed edge. */
+.key-faded {
+  border-style: dashed;
+  color: var(--color-text-faded);
+}
+
+.key-faded .key-sub {
+  color: var(--color-text-faded);
+}
