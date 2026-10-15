@@ -5,7 +5,7 @@ import { migrate } from "../../src/persistence/db.ts";
 import { findChangeSet, insertChangeSet } from "../../src/persistence/change-sets.ts";
 import { insertConversation, insertMessage } from "../../src/persistence/conversations.ts";
 import {
-  findDecision, insertPriority, listConversationPriorities, listDecisions, updateDecision,
+  findDecision, insertChoice, insertPriority, listConversationPriorities, listDecisions, updateDecision,
 } from "../../src/persistence/decisions.ts";
 import { createLayout } from "../../src/persistence/layouts.ts";
 import { MIGRATIONS } from "../../src/persistence/migrations.ts";
@@ -108,5 +108,34 @@ describe("decision repository", () => {
     const row = insertPriority(db, { layoutId, priorityKind: "pinned", subject: { functions: ["key:A"] }, goal: "a", choice: "c", reason: "r", now: 5 });
     updateDecision(db, row.id, { reason: "new reason", goal: "new goal" }, 9);
     expect(findDecision(db, row.id)).toMatchObject({ reason: "new reason", goal: "new goal", choice: "c", createdAt: 5, updatedAt: 9 });
+  });
+});
+
+describe("migration 0006", () => {
+  test("adds the lifecycle columns to a database that already holds priorities, which read back as before", () => {
+    const { db, layoutId } = databaseAtVersion4();
+    for (const m of MIGRATIONS.slice(4, 5)) {
+      db.exec(m.sql);
+      db.query("INSERT INTO schema_migrations VALUES (?, ?, 0)").run(m.version, m.name);
+    }
+    const old = insertPriority(db, { layoutId, priorityKind: "pinned", subject: { functions: ["key:A"] }, goal: "a", choice: "c", reason: "r", now: 1 });
+
+    migrate(db);
+
+    expect(db.query("SELECT MAX(version) AS v FROM schema_migrations").get()).toEqual({ v: MIGRATIONS.length });
+    expect(findDecision(db, old.id)).toMatchObject({ goal: "a", kind: "priority", status: "hypothesis", statusBefore: null, outcomeAskedAt: null });
+  });
+
+  test("a choice keeps the pointer to its successor in the row but reports it only while superseded", () => {
+    const base = databaseAtVersion4();
+    migrate(base.db);
+    const { db, layoutId, changeSetId } = base;
+    const a = insertChoice(db, { layoutId, subject: {}, goal: "g", choice: "c", reason: "r", scope: { apps: [], habits: [] }, changeSetId });
+    const b = insertChoice(db, { layoutId, subject: {}, goal: "g2", choice: "c2", reason: "r2", scope: { apps: [], habits: [] }, changeSetId });
+    updateDecision(db, a.id, { status: "superseded", statusBefore: "hypothesis", supersededBy: b.id });
+    expect(findDecision(db, a.id)).toMatchObject({ status: "superseded", supersededBy: b.id, statusBefore: "hypothesis" });
+    updateDecision(db, a.id, { status: "hypothesis", statusBefore: null });
+    expect(findDecision(db, a.id)).toMatchObject({ status: "hypothesis", supersededBy: null });
+    expect((db.query("SELECT superseded_by FROM decisions WHERE id = ?").get(a.id) as { superseded_by: string }).superseded_by).toBe(b.id);
   });
 });

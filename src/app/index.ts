@@ -26,7 +26,8 @@ export {
   listConversationSummaries, sendMessage, showConversation,
 } from "./conversations.ts";
 export {
-  type DecisionRow, type DecisionStatus, editDecision, listDecisions, recordPriority, retireDecision, retirePriority, showDecision,
+  type DecisionRow, type DecisionStatus, type OutcomeQuestion, type OutcomeStatus, dismissOutcome, editDecision, listDecisions, outcomeQuestions,
+  recordOutcome, recordPriority, retireDecision, retirePriority, showDecision,
 } from "./decisions.ts";
 export { defaultAgentModel } from "./chat-model.ts";
 export type { AgentModel } from "../agent/model.ts";
