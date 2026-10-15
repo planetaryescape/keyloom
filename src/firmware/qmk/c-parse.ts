@@ -62,7 +62,8 @@ export function toExpr(node: Node): Expr {
       const fn = node.childForFieldName("function");
       const args = node.childForFieldName("arguments");
       if (fn?.type !== "identifier" || !args) return { kind: "other", text };
-      return { kind: "call", name: fn.text, args: args.namedChildren.map(toExpr), text };
+      // Hand-written keymaps draw each half in comments inside LAYOUT(...); Oryx's never have any.
+      return { kind: "call", name: fn.text, args: args.namedChildren.filter((n) => n.type !== "comment").map(toExpr), text };
     }
     case "binary_expression": {
       if (node.childForFieldName("operator")?.text !== "|") return { kind: "other", text };

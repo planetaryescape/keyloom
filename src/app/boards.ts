@@ -1,5 +1,6 @@
 // Use cases for board definitions: list, show, check, geometry (04, 10).
 import { join, resolve } from "node:path";
+import { type BoardDevView, loadBoardDev } from "../boards/dev.ts";
 import { type CheckOptions, type CheckResult, checkBoardDir } from "../boards/check.ts";
 import { type GeometryOptions, generateGeometry, serializeGeometry } from "../boards/geometry.ts";
 import { type Board, BoardNotFoundError, loadDefinitionDir } from "../boards/load.ts";
@@ -32,6 +33,16 @@ export function checkBoard(dir: string, opts: Pick<CheckOptions, "offline"> = {}
 function boardFolder(ref: string): string {
   const asPath = resolve(ref);
   return /^[a-z0-9-]+\/[a-z0-9-]+$/.test(ref) ? join(resolve("boards"), ref) : asPath;
+}
+
+/** The board `ref` names, read afresh from disk for `serve --board-dev`; the contributor edits board.json while it runs. */
+export async function boardDevView(ref: string): Promise<BoardDevView> {
+  try {
+    return await loadBoardDev(boardFolder(ref));
+  } catch (err) {
+    if (err instanceof BoardNotFoundError) throw new NotFoundError(err.message);
+    throw err;
+  }
 }
 
 /** Regenerates `geometry.json` for a board folder from its pinned firmware tree and writes it. */

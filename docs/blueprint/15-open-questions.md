@@ -66,7 +66,7 @@ The combined `glove80.uf2` holds two images at the same addresses with different
 | Q7 | Layouts in SQLite, or as files in a git repo BK can diff? | Open; blueprint assumes SQLite with `layout export` (D-032) |
 | Q8 | After import, does keyloom own the layout, so BK stops editing in Oryx and the Layout Editor, with no write-back? | Open; blueprint assumes yes. Re-importing creates a new layout, not a merge |
 | Q9 | Is BK's current Glove80 layout in MoErgo's Layout Editor, or in his own config repo? | Open; blueprint assumes the Layout Editor, so import reads its `.keymap` export (D-037) |
-| Q10 | Which firmware is BK's Corne on, and should it be the first board added through the contribution format? | Open; blueprint assumes it's the first contributed board, after the car |
+| Q10 | Which firmware is BK's Corne on, and should it be the first board added through the contribution format? | Open; blueprint assumes it's the first contributed board. Rung 8's recipes (D-049, D-050) cover a Corne on either firmware with data only |
 | Q11 | Which apps need Option–Option, and which shortcuts is Command–Shift for? | Open; rungs 3 and 4 need the real answers for their demos. The agent asks for them during the demo, so the blueprint doesn't assume any |
 | Q12 | Is Docker an acceptable hard requirement for building? | Open; blueprint assumes yes ([01](01-architecture.md#firmware-toolchains)) |
 | Q13 | v1 tested on macOS only? | Open; blueprint assumes macOS, with Linux expected to work but untested |

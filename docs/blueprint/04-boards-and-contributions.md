@@ -14,6 +14,9 @@ boards/
     board.json
     geometry.json
     SKILL.md
+  _template/           the folders a contributor copies; never a board (D-051)
+    qmk/board.json
+    zmk/board.json
 ```
 
 The board ID is the folder path: `zsa/moonlander`, `moergo/glove80`. That's the same `<vendor>/<board>` shape QMK uses.
@@ -66,7 +69,7 @@ Fields keyloom checks (`keyloom boards check`, [10](10-cli.md)):
 - **`firmware`** is `qmk` or `zmk`. It decides the importer, generator and validator rules.
 - **`keyCount`** equals the number of keys in `geometry.json`, and every position from `0` to `keyCount - 1` appears in exactly one hand, one finger and one row group.
 - **`revisions[].source`** names a repo and a full SHA. A `ref` is informational; the SHA is what's checked out ([01](01-architecture.md#firmware-toolchains)).
-- **`build.kind` and `flash.kind`** are recipes keyloom already implements: `qmk-docker` and `zmk-moergo-template` for builds, `zapp` and `uf2-drives` for flashing. A board that needs a new recipe needs code, and that's the one case a contribution is more than data. Most QMK and ZMK boards fit an existing recipe. Generic recipes (`zmk-west-docker` for upstream ZMK user configs, `uf2-drives` for nice!nano-style boards) are added when the first such board arrives (Q10), not before.
+- **`build.kind` and `flash.kind`** are recipes keyloom implements, declared as strict schemas in `src/boards/recipes.ts` (D-049). A misspelled or unknown field is an error. Builds: `qmk-docker` for any QMK tree (mainline or a fork), `zmk-west-docker` for upstream ZMK with one `west build` per shield, and `zmk-moergo-template` for the Glove80. Flashes: `zapp` for ZSA boards, `uf2-drives` for UF2 boot drives (ZMK, and QMK on RP2040), and `manual` for boards keyloom can't flash yet (D-050). A board that needs a flasher or builder that doesn't exist needs code, and that is the one case a contribution is more than data.
 - **`hands`, `fingers`, `rows` and `mirror`** feed the agent ([03](03-agent.md#what-the-agent-sees)), the validator's opposite-hand warning ([07](07-change-validation.md#warnings)), and "do that here too" mirroring (rung 7). They're the board facts the firmware doesn't carry.
 
 ## `geometry.json` is generated from the firmware tree
@@ -88,14 +91,14 @@ It's limited to 400 lines. `boards check` warns past that, because every agent t
 
 ## Contributing a board
 
-`CONTRIBUTING.md` (rung 8) walks a contributor through:
+`CONTRIBUTING.md` (rung 8) walks a contributor through the steps below. It is the guide; this section is the outline. The guide's `board.json` field reference is checked against the zod schema by a test, so it can't drift.
 
 1. Find the firmware tree that builds the board and pin a SHA.
 2. Write `board.json`, choosing existing build and flash recipes.
 3. Run `keyloom boards geometry <board>` to generate `geometry.json`.
-4. Fill in `hands`, `fingers`, `rows` and `mirror` with the editor's position overlay (`keyloom serve --board-dev <board>` shows position numbers on each key).
+4. Fill in `hands`, `fingers`, `rows` and `mirror` with the editor's position overlay (`keyloom serve --board-dev <board>` shows position numbers on each key, and what `board.json` says about the key under the pointer; it reads the folder afresh, so it works on an unfinished one).
 5. Optionally write `SKILL.md`.
 6. Run `keyloom boards check boards/<vendor>/<board>`, then import a real layout, build it, and flash their own board.
-7. Open a PR with the folder. CI runs `boards check` on every board.
+7. Open a PR with the folder. CI runs `boards check` on every board, fetching each pinned firmware file (cached by SHA) to compare geometry.
 
 BK reviews board PRs for format only. He can't test hardware he doesn't own, so the PR description must say the contributor built and flashed it, with the keyloom version used.

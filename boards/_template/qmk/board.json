@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "vendor/board",
+  "name": "Board name",
+  "vendor": "Vendor",
+  "firmware": "qmk",
+  "keyCount": 4,
+  "revisions": [
+    {
+      "id": "default",
+      "source": {
+        "repo": "https://github.com/qmk/qmk_firmware",
+        "ref": "master",
+        "sha": "0000000000000000000000000000000000000000"
+      },
+      "qmkTarget": "vendor/board",
+      "build": {
+        "kind": "qmk-docker",
+        "image": "ghcr.io/qmk/qmk_cli@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "layoutMacro": "LAYOUT",
+        "keymapsDir": "keyboards/vendor/board/keymaps",
+        "submodules": [],
+        "layoutFile": "keyboards/vendor/board/info.json",
+        "artifact": "hex"
+      },
+      "flash": {
+        "kind": "manual",
+        "instructions": "Flash the built file with QMK Toolbox, or put the board in its bootloader and run: qmk flash <file>."
+      },
+      "detect": null
+    }
+  ],
+  "hands": {
+    "left": [
+      0,
+      1
+    ],
+    "right": [
+      2,
+      3
+    ]
+  },
+  "fingers": {
+    "0": "left-pinky",
+    "1": "left-ring",
+    "2": "right-ring",
+    "3": "right-pinky"
+  },
+  "rows": {
+    "home": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "mirror": {
+    "0": 3,
+    "1": 2
+  },
+  "importers": [
+    "qmk-keymap"
+  ]
+}

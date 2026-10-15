@@ -22,6 +22,9 @@ export const GeometrySchema = z.object({
 });
 export type Geometry = z.infer<typeof GeometrySchema>;
 
+/** The ids `importLayout` can run (src/app/layouts.ts); the first two read QMK sources, the others ZMK ones. */
+export const IMPORTER_IDS = ["oryx-source", "qmk-keymap", "zmk-layout-editor-keymap", "zmk-keymap"] as const;
+
 const positions = z.array(z.number().int().nonnegative());
 
 export const RevisionSchema = z.strictObject({
@@ -50,7 +53,7 @@ export const BoardDefinitionSchema = z.strictObject({
   fingers: z.record(z.string(), z.string().min(1)),
   rows: z.record(z.string(), positions),
   mirror: z.record(z.string(), z.number().int().nonnegative()),
-  importers: z.array(z.string().min(1)).min(1),
+  importers: z.array(z.enum(IMPORTER_IDS)).min(1),
   // Display-only rotation; never affects positions or generation (04).
   display: z
     .strictObject({

@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
+import { BoardDevApp } from "./boarddev/BoardDevApp.tsx";
 import { tokenFromSearch } from "./api.ts";
 import { Header } from "./shell/Header.tsx";
 import { ErrorState } from "./shell/States.tsx";
@@ -21,6 +22,7 @@ createRoot(root).render(
       </main>
     </div>
   ) : (
-    <App token={token} />
+    // `keyloom serve --board-dev` puts the mode in the link it prints.
+    new URLSearchParams(window.location.search).get("mode") === "board-dev" ? <BoardDevApp token={token} /> : <App token={token} />
   ),
 );

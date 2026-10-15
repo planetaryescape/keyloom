@@ -9,15 +9,18 @@ export function readBoards(): EmbeddedBoard[] {
   const root = join(import.meta.dir, "..", "..", "boards");
   const out: EmbeddedBoard[] = [];
   for (const vendor of readdirSync(root, { withFileTypes: true })) {
-    if (!vendor.isDirectory()) continue;
+    // `_template` holds the folders a contributor copies; it is not a vendor.
+    if (!vendor.isDirectory() || vendor.name.startsWith("_")) continue;
     for (const board of readdirSync(join(root, vendor.name), { withFileTypes: true })) {
       if (!board.isDirectory()) continue;
       const dir = join(root, vendor.name, board.name);
       const skillFile = join(dir, "SKILL.md");
       const entry: EmbeddedBoard = {
         dir: `${vendor.name}/${board.name}`,
-        board: readFileSync(join(dir, "board.json"), "utf8"),
-        geometry: readFileSync(join(dir, "geometry.json"), "utf8"),
+        // A folder still being written (no board.json or geometry.json yet) is embedded as empty text; the
+        // registry skips it with a warning, so `keyloom boards geometry` and `boards check` can still run.
+        board: existsSync(join(dir, "board.json")) ? readFileSync(join(dir, "board.json"), "utf8") : "",
+        geometry: existsSync(join(dir, "geometry.json")) ? readFileSync(join(dir, "geometry.json"), "utf8") : "",
       };
       if (existsSync(skillFile)) entry.skill = readFileSync(skillFile, "utf8");
       out.push(entry);

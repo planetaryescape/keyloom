@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "vendor/board",
+  "name": "Board name",
+  "vendor": "Vendor",
+  "firmware": "zmk",
+  "keyCount": 4,
+  "revisions": [
+    {
+      "id": "default",
+      "source": {
+        "repo": "https://github.com/zmkfirmware/zmk",
+        "ref": "v0.3.0",
+        "sha": "0000000000000000000000000000000000000000"
+      },
+      "build": {
+        "kind": "zmk-west-docker",
+        "image": "zmkfirmware/zmk-build-arm@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "board": "nice_nano_v2",
+        "keymapName": "board",
+        "physicalLayout": "app/dts/layouts/vendor/board/layout.dtsi",
+        "targets": [
+          {
+            "id": "left",
+            "shield": "board_left"
+          },
+          {
+            "id": "right",
+            "shield": "board_right"
+          }
+        ]
+      },
+      "flash": {
+        "kind": "uf2-drives",
+        "steps": [
+          {
+            "volume": "NICENANO",
+            "label": "left half",
+            "target": "left",
+            "enter": "Plug in the left half and double-tap its reset button."
+          },
+          {
+            "volume": "NICENANO",
+            "label": "right half",
+            "target": "right",
+            "enter": "Plug in the right half and double-tap its reset button."
+          }
+        ]
+      },
+      "detect": null
+    }
+  ],
+  "hands": {
+    "left": [
+      0,
+      1
+    ],
+    "right": [
+      2,
+      3
+    ]
+  },
+  "fingers": {
+    "0": "left-pinky",
+    "1": "left-ring",
+    "2": "right-ring",
+    "3": "right-pinky"
+  },
+  "rows": {
+    "home": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "mirror": {
+    "0": 3,
+    "1": 2
+  },
+  "importers": [
+    "zmk-keymap"
+  ]
+}

@@ -2,14 +2,14 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
+  type App, type ImportOutcome, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
   regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runToolchainChecks, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, registerChatCommands } from "./commands/chat.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { EXIT, classify } from "./errors.ts";
-import { DEFAULT_PORT, serve } from "./serve.ts";
+import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
 import { importTable } from "./report.ts";
 import pkg from "../../package.json" with { type: "json" };
@@ -171,26 +171,36 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .description("start the local web app and open it in the browser")
     .option("--port <port>", "port on 127.0.0.1", String(DEFAULT_PORT))
     .option("--no-open", "don't open the browser")
-    .action(async (opts: { port: string; open: boolean }) => {
+    .option("--board-dev <board>", "contributors: show a board's keys with their position numbers instead of your layouts; takes a board ID under ./boards or a board folder")
+    .action(async (opts: { port: string; open: boolean; boardDev?: string }) => {
       const port = Number(opts.port);
       if (!Number.isInteger(port) || port < 1 || port > 65535) throw new UsageError(`--port must be 1-65535, got "${opts.port}"`);
-      await withApp(async (app) => {
-        let running;
+      const start = (app: App | undefined) => {
         try {
-          running = serve(app, { port, open: opts.open });
+          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
         } catch (err) {
           if ((err as { code?: string }).code === "EADDRINUSE") throw new UsageError(`port ${port} is in use; pass --port`);
           throw err;
         }
+      };
+      // Serve until interrupted; withApp closes the database after the server stops.
+      const untilInterrupted = async (app: App | undefined) => {
+        const running = start(app);
         io.err(`keyloom is running at ${running.url}\nPress Ctrl-C to stop.\n`);
-        // Serve until interrupted; withApp closes the database after the server stops.
         await new Promise<void>((resolve) => {
           const stop = () => resolve();
           process.once("SIGINT", stop);
           process.once("SIGTERM", stop);
         });
         running.stop();
-      });
+      };
+      if (opts.boardDev !== undefined) {
+        // Fails now, with the fix, rather than on the first request.
+        await boardDevView(opts.boardDev);
+        await untilInterrupted(undefined);
+      } else {
+        await withApp(untilInterrupted);
+      }
     });
 
   registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp });

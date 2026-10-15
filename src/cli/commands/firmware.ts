@@ -59,7 +59,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
 
   program
     .command("generate")
-    .description("write the firmware source for a layout without building it (QMK keymap files, or the Glove80's glove80.keymap and glove80.conf)")
+    .description("write the firmware source for a layout without building it (QMK keymap files, or ZMK's <name>.keymap and <name>.conf)")
     .argument("<layout>", "layout ID or name")
     .requiredOption("--out <dir>", "directory to write the source files into")
     .option("--rev <revision>", "a revision ID instead of the head")
@@ -110,7 +110,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .description("flash the newest successful build of a layout, or a given build (with zapp, or by copying to a UF2 boot drive per half)")
     .option("--build <build>", "a build ID")
     .option("--layout <layout>", "flash the newest successful build of this layout")
-    .option("--volumes-root <dir>", "the folder UF2 boot drives appear in (default: /Volumes on macOS, found with lsblk on Linux); Glove80 only")
+    .option("--volumes-root <dir>", "the folder UF2 boot drives appear in (default: /Volumes on macOS, found with lsblk on Linux); boards that flash to UF2 drives only")
     .action(async (opts: { build?: string; layout?: string; volumesRoot?: string }) => {
       if (opts.build !== undefined && opts.layout !== undefined) throw new UsageError("pass --build or --layout, not both");
       let shown: string | null = null;

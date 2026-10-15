@@ -1,5 +1,5 @@
 // `keyloom serve`: the local web app over the same use cases the CLI calls (01#server-and-transport).
-import { type App, NotFoundError, getLayout, listLayouts } from "../app/index.ts";
+import { type App, NotFoundError, boardDevView, getLayout, listLayouts } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import { appChatBackend } from "./chat-backend.ts";
@@ -37,6 +37,12 @@ export function appLayoutSource(app: App): LayoutSource {
       }
     },
   };
+}
+
+/** `keyloom serve --board-dev <board>`: no layouts and no database, just the board's keys with their position numbers. */
+export function serveBoardDev(dir: string, opts: { port: number; open: boolean }): RunningServer {
+  const none: LayoutSource = { list: async () => [], get: async () => null };
+  return startServer({ port: opts.port, source: none, boardDev: () => boardDevView(dir), open: opts.open });
 }
 
 export function serve(app: App, opts: { port: number; open: boolean }): RunningServer {

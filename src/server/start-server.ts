@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import type { BoardDevView } from "../boards/dev.ts";
+import { BoardDevViewSchema } from "../boards/dev.ts";
 import type { ChatBackend } from "./chat-backend.ts";
 import { handleChatRoute } from "./chat-routes.ts";
 import type { EditorBackend } from "./editor-backend.ts";
@@ -15,6 +17,8 @@ export interface ServerOptions {
   editor?: EditorBackend;
   /** The rung 3 chat side. Without it the chat routes fall through to the layout routes' 404. */
   chat?: ChatBackend;
+  /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
+  boardDev?: () => Promise<BoardDevView>;
   token?: string;
   open?: boolean;
 }
@@ -25,12 +29,13 @@ export interface RunningServer {
   stop: () => void;
 }
 
+const BOARD_DEV_PATH = "/api/board-dev";
 const LIST_PATH = "/api/layouts";
 const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -47,7 +52,7 @@ export function startServer({ port, source, editor, chat, token, open = false }:
         const chatResponse = await handleChatRoute(request, url.pathname, chat, sessionToken);
         if (chatResponse !== null) return chatResponse;
       }
-      if (url.pathname === LIST_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
+      if (url.pathname === LIST_PATH || url.pathname === BOARD_DEV_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);
       }
       return page(request, url.pathname);
@@ -72,6 +77,10 @@ export function startServer({ port, source, editor, chat, token, open = false }:
     if (request.method !== "GET") {
       return new Response("method not allowed", { status: 405, headers: { allow: "GET" } });
     }
+    if (pathname === BOARD_DEV_PATH) {
+      if (boardDev === undefined) return Response.json({ error: "not found" }, { status: 404 });
+      return respond(async () => Response.json(BoardDevViewSchema.parse(await boardDev())));
+    }
     if (pathname === LIST_PATH) {
       return respond(async () =>
         Response.json(LayoutListResponseSchema.parse({ layouts: await source.list() })),
@@ -95,7 +104,8 @@ export function startServer({ port, source, editor, chat, token, open = false }:
     });
   }
 
-  const url = `http://127.0.0.1:${boundPort()}/?t=${sessionToken}`;
+  // The page picks its mode from the link, so a board-dev server never shows the layout app.
+  const url = `http://127.0.0.1:${boundPort()}/?t=${sessionToken}${boardDev ? "&mode=board-dev" : ""}`;
   if (open && process.platform === "darwin") {
     Bun.spawn(["open", url], { stdout: "ignore", stderr: "ignore" });
   }

@@ -24,9 +24,17 @@ export type ImportOutcome = { layoutId: string; revisionId: string; name: string
 
 type Imported = { layout: Layout; report: ImportReport; suggestedName: string };
 
-const IMPORTERS = new Map<string, (path: string, board: Board) => Promise<Imported>>([
-  ["oryx-source", (path, board) => importOryxSource(path, board.definition)],
-  ["zmk-layout-editor-keymap", (path, board) => importZmkSource(path, board.definition)],
+type Importer = (path: string, board: Board) => Promise<Imported>;
+const qmkKeymap: Importer = (path, board) => importOryxSource(path, board.definition);
+const zmkKeymap: Importer = (path, board) => importZmkSource(path, board.definition);
+
+// `qmk-keymap` and `zmk-keymap` are the neutral names for boards whose users aren't on Oryx or the Layout
+// Editor: the readers take any QMK keymap folder (keymap.c) or ZMK .keymap file, whoever wrote it.
+const IMPORTERS = new Map<string, Importer>([
+  ["oryx-source", qmkKeymap],
+  ["qmk-keymap", qmkKeymap],
+  ["zmk-layout-editor-keymap", zmkKeymap],
+  ["zmk-keymap", zmkKeymap],
 ]);
 
 export async function importLayout(app: App, input: ImportInput): Promise<ImportOutcome> {

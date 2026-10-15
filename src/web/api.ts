@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { BoardDevViewSchema, type BoardDevView } from "../boards/dev.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import {
   LayoutDetailSchema,
@@ -54,4 +55,8 @@ export async function fetchLayouts(token: string, signal: AbortSignal): Promise<
 
 export function fetchLayout(token: string, ref: string, signal: AbortSignal): Promise<LayoutDetail> {
   return getJson(`/api/layouts/${encodeURIComponent(ref)}`, token, LayoutDetailSchema, signal);
+}
+
+export function fetchBoardDev(token: string, signal: AbortSignal): Promise<BoardDevView> {
+  return getJson("/api/board-dev", token, BoardDevViewSchema, signal);
 }

@@ -1229,7 +1229,7 @@
       "68": 69
     },
     "importers": [
-      "oryx"
+      "oryx-source"
     ]
   },
   "geometry": {

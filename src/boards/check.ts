@@ -2,6 +2,7 @@
 import { basename, dirname, resolve } from "node:path";
 import { type GeometryOptions, generateGeometry, serializeGeometry } from "./geometry.ts";
 import { type Board, loadBoardDir } from "./load.ts";
+import type { BoardDefinition, BoardRevision } from "./schema.ts";
 
 export type CheckIssue = { level: "error" | "warning"; message: string };
 export type CheckResult = { ok: boolean; issues: CheckIssue[] };
@@ -30,6 +31,35 @@ function checkPartition(label: string, keyCount: number, groups: Array<[string, 
   const missing: number[] = [];
   for (let p = 0; p < keyCount; p++) if (!seen.has(p)) missing.push(p);
   if (missing.length > 0) issues.push({ level: "error", message: `${label} is missing positions: ${missing.join(", ")}` });
+}
+
+/** The recipe fields are validated by the schema; these are the rules that span fields. */
+function checkRecipes(def: BoardDefinition, rev: BoardRevision, err: (message: string) => void): void {
+  const at = `revision "${rev.id}"`;
+  if (def.firmware === "qmk") {
+    if (!rev.qmkTarget) err(`${at} needs a qmkTarget`);
+    if (rev.build.kind !== "qmk-docker") err(`${at}: a QMK board builds with qmk-docker, not ${rev.build.kind}`);
+    if (rev.flash.kind === "uf2-drives" && rev.build.kind === "qmk-docker" && rev.build.artifact !== "uf2") err(`${at}: uf2-drives flashing needs build.artifact "uf2"`);
+    if (rev.flash.kind === "zapp" && rev.build.kind === "qmk-docker" && (rev.build.artifact ?? "bin") !== "bin") err(`${at}: zapp flashing needs build.artifact "bin"`);
+    return;
+  }
+  if (rev.build.kind === "qmk-docker") err(`${at}: a ZMK board builds with zmk-moergo-template or zmk-west-docker, not qmk-docker`);
+  if (rev.flash.kind !== "uf2-drives") err(`${at}: a ZMK board flashes with uf2-drives, not ${rev.flash.kind}`);
+  if (rev.qmkTarget) err(`${at}: qmkTarget is for QMK boards`);
+  if (rev.build.kind === "zmk-west-docker" && rev.flash.kind === "uf2-drives") {
+    const targets = new Set(rev.build.targets.map((t) => t.id));
+    if (targets.size !== rev.build.targets.length) err(`${at}: two build targets have the same id`);
+    const flashed = new Set<string>();
+    for (const step of rev.flash.steps) {
+      if (step.target === undefined) err(`${at}: flash step "${step.label}" needs a target, because a west build makes one UF2 per target`);
+      else if (!targets.has(step.target)) err(`${at}: flash step "${step.label}" names target "${step.target}", which the build doesn't have`);
+      else flashed.add(step.target);
+    }
+    for (const t of targets) if (!flashed.has(t)) err(`${at}: build target "${t}" has no flash step`);
+  }
+  if (rev.build.kind === "zmk-moergo-template" && rev.flash.kind === "uf2-drives" && rev.flash.steps.some((s) => s.target !== undefined)) {
+    err(`${at}: flash steps name a target, but zmk-moergo-template makes one UF2 for every step`);
+  }
 }
 
 function checkFacts(board: Board, dir: string, issues: CheckIssue[]): void {
@@ -66,11 +96,15 @@ function checkFacts(board: Board, dir: string, issues: CheckIssue[]): void {
     if (!(String(p) in def.mirror)) issues.push({ level: "warning", message: `left position ${p} has no mirror entry` });
   }
 
+  for (const id of def.importers) {
+    if (id.startsWith(def.firmware === "qmk" ? "zmk" : "qmk") || (def.firmware === "zmk" && id === "oryx-source")) err(`importer "${id}" reads ${def.firmware === "qmk" ? "ZMK" : "QMK"} sources, but the board is ${def.firmware}`);
+  }
+
   const ids = new Set<string>();
   for (const rev of def.revisions) {
     if (ids.has(rev.id)) err(`revision id "${rev.id}" appears twice`);
     ids.add(rev.id);
-    if (def.firmware === "qmk" && !rev.qmkTarget) err(`revision "${rev.id}" needs a qmkTarget`);
+    checkRecipes(def, rev, err);
   }
 
   if (board.skill !== undefined) {

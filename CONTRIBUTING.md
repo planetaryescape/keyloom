@@ -1,0 +1,333 @@
+# Adding a keyboard to keyloom
+
+A board is a folder in this repo. You add one with a pull request that holds only that folder. You don't write code.
+
+You need the keyboard on your desk. keyloom's maintainer can't test hardware he doesn't own, so your PR must say you built the firmware and flashed it to your own board.
+
+The folder is `boards/<vendor>/<board>/`. The board ID is the folder path, such as `foostan/corne`. Use lowercase letters, digits and dashes.
+
+## Before you start
+
+You need these installed:
+
+- [bun](https://bun.sh).
+- Docker. On macOS with Colima, Docker only sees folders under your home directory. keyloom keeps its build files in `~/.cache/keyloom`, which is fine. Set `XDG_CACHE_HOME` to a folder under your home directory if you moved it.
+- git.
+
+Clone this repo and install its packages:
+
+```sh
+git clone https://github.com/planetaryescape/keyloom
+cd keyloom
+bun install
+```
+
+Run keyloom from the clone, because a new board is only known to a keyloom started from a clone that has its folder. Wherever this guide says `keyloom`, run this instead:
+
+```sh
+bun src/cli/main.ts
+```
+
+Check that it works:
+
+```sh
+bun src/cli/main.ts --version
+bun src/cli/main.ts doctor
+```
+
+`doctor` shows whether Docker is running. It warns about `zapp`. Ignore that warning unless your board is a ZSA board.
+
+Use a scratch data directory for your own layouts, so test imports don't mix with real ones. Add `--data-dir /tmp/keyloom-test` to any command that imports, builds or flashes.
+
+## The seven steps
+
+### 1. Find the firmware tree and pin it
+
+keyloom builds from an exact commit of the firmware source. Find the repo that builds your board.
+
+For QMK, that is usually [`qmk/qmk_firmware`](https://github.com/qmk/qmk_firmware). Find your keyboard under `keyboards/`. Some boards have a revision folder, such as `keyboards/crkbd/rev1`.
+
+For ZMK, that is [`zmkfirmware/zmk`](https://github.com/zmkfirmware/zmk). Find your board's shield under `app/boards/shields/<name>/`. A split board lists its two halves in `<name>.zmk.yml` under `siblings`, such as `corne_left` and `corne_right`.
+
+Pin a commit. Use a release tag so the pin means something:
+
+```sh
+git ls-remote https://github.com/zmkfirmware/zmk refs/tags/v0.3.0
+```
+
+The 40-character hash is the `sha`. The tag is the `ref`. For QMK you can pin a recent commit of `master`:
+
+```sh
+git ls-remote https://github.com/qmk/qmk_firmware refs/heads/master
+```
+
+Next, pin the Docker image that builds it. keyloom wants a digest so the image can't change under you:
+
+```sh
+docker pull zmkfirmware/zmk-build-arm:stable
+docker inspect --format '{{index .RepoDigests 0}}' zmkfirmware/zmk-build-arm:stable
+```
+
+For QMK use `ghcr.io/qmk/qmk_cli:latest` in the same two commands. Put the whole result, including `@sha256:...`, in `build.image`.
+
+### 2. Write `board.json`
+
+Pick a template and copy it:
+
+```sh
+mkdir -p boards/foostan
+cp -r boards/_template/zmk boards/foostan/corne     # or boards/_template/qmk
+```
+
+Open `boards/foostan/corne/board.json` and replace every value. The template is a four-key toy board, so you will replace the key facts too. [How to pick a recipe](#how-to-pick-a-recipe) says which build and flash recipe to use. [The field reference](#boardjson-field-reference) says what each field means.
+
+Leave `hands`, `fingers`, `rows` and `mirror` as they are for now. Step 4 fills them in. Set `keyCount` to the number of keys on the board, counting both halves.
+
+### 3. Generate `geometry.json`
+
+keyloom draws your board from `geometry.json`. You never write this file. keyloom generates it from the pinned firmware tree:
+
+```sh
+keyloom boards geometry boards/foostan/corne
+```
+
+It fetches one file from GitHub at your pinned commit and writes `geometry.json` beside `board.json`. For QMK it reads the `layouts` entry named by `build.layoutMacro`, from `build.layoutFile` when you set it, and else from `keyboards/<qmkTarget>/keyboard.json`. For ZMK it reads the `zmk,physical-layout` node in `build.physicalLayout`.
+
+The keys come out in the firmware's binding order. Position 0 is the first key the firmware's keymap lists. That order matters for everything that follows.
+
+If this fails, the message says what is wrong. The usual causes are a wrong path, a wrong `layoutMacro`, or a `keyCount` that differs from the file.
+
+### 4. Fill in hands, fingers, rows and mirror
+
+keyloom's agent and validator need to know which hand and finger each key belongs to. The firmware doesn't say. Open the position overlay:
+
+```sh
+keyloom serve --board-dev foostan/corne
+```
+
+It prints a link. Open it. Each key shows its position number, counted from 0. Those are the numbers `board.json` uses.
+
+Hover or select a key to see what `board.json` says about it. The page reads `board.json` again when you press **Reload board.json**, so edit the file and reload to check your work. The panel counts how many positions each fact covers.
+
+Fill in these four fields. Every position from 0 to `keyCount - 1` must appear exactly once in `hands`, once in `fingers` and once in `rows`.
+
+- `hands` has `left` and `right`, each a list of positions.
+- `fingers` maps every position to a name. Use `left-pinky`, `left-ring`, `left-middle`, `left-index`, `left-thumb`, and the same with `right-`.
+- `rows` maps a row name to its positions. Use names like `number`, `top`, `home`, `bottom`, `thumb`.
+- `mirror` maps each left-hand position to the right-hand key at the mirrored spot. It lets keyloom answer "do that on the other hand too". Every left position needs an entry, or `boards check` warns.
+
+The overlay keeps going without a `board.json`, so you can open it before step 2 is done.
+
+### 5. Optionally write `SKILL.md`
+
+`SKILL.md` is plain Markdown that keyloom adds to the agent's context for your board. Write what the facts can't say: which key opens a vendor's system layer and must stay reachable, which thumb keys are easiest to press, how the factory layout is organised.
+
+Write only what you know from using the board. Keep it under 400 lines. `boards check` warns past that, because every agent turn pays for it. Skip this step if you have nothing to add.
+
+### 6. Check, import, build and flash
+
+Check the folder:
+
+```sh
+keyloom boards check boards/foostan/corne
+```
+
+It must report `ok`. It checks the fields, then fetches the firmware file again and fails if `geometry.json` differs from it. CI runs the same command.
+
+Then prove the board works end to end with your own layout. [Test the board end to end](#test-the-board-end-to-end) has the commands.
+
+### 7. Open the pull request
+
+Put only `boards/<vendor>/<board>/` in the PR. Do not change any other file.
+
+The PR description must say all of this:
+
+- The keyloom version, from `keyloom --version`.
+- That you built the firmware with keyloom and flashed it to your own board, and that the board then typed correctly.
+- Which board and revision you own, and which firmware tree and commit you pinned.
+- Which layout you imported. Say if it was a stock keymap or your own.
+- The output of `keyloom boards check`.
+
+Commit messages use `type: description`, such as `feat: add the foostan/corne board`.
+
+The maintainer reviews the format only. He can't test your hardware, so he relies on what you state.
+
+## How to pick a recipe
+
+A recipe says how keyloom builds and flashes a board. It is the `kind` of `build` and of `flash` in `board.json`.
+
+| Your board | `build.kind` | `flash.kind` |
+| --- | --- | --- |
+| ZSA Moonlander, Voyager or another ZSA board built from ZSA's QMK fork | `qmk-docker` | `zapp` |
+| QMK board on STM32 or similar, from any QMK tree | `qmk-docker` | `manual` |
+| QMK board on AVR (Pro Micro, Elite-C), from any QMK tree | `qmk-docker` with `artifact: "hex"` | `manual` |
+| QMK board on RP2040 with a UF2 bootloader | `qmk-docker` with `artifact: "uf2"` | `uf2-drives` |
+| ZMK split board from upstream ZMK, such as the Corne on a nice!nano | `zmk-west-docker` | `uf2-drives` |
+| MoErgo Glove80 | `zmk-moergo-template` | `uf2-drives` |
+
+Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds from is the `source` of the revision, so mainline QMK and a vendor's fork both work.
+
+`manual` means keyloom builds the file but can't flash it. `keyloom flash` then fails with the file's path and your `instructions`. Flash the file yourself with QMK Toolbox, `qmk flash`, `dfu-util` or `avrdude`, and say so in the PR. Only `zapp` and `uf2-drives` flash from keyloom today. A new flasher needs code, and that is the one case where a board PR is more than data. Open an issue first.
+
+### QMK: `qmk-docker`
+
+- `qmkTarget` is what you give `make`, such as `crkbd/rev1`. It is the folder under `keyboards/`.
+- `layoutMacro` is the `LAYOUT_*` name the keymap is written with, such as `LAYOUT_split_3x6_3`. Find it in the board's `keymap.c` or its `info.json`.
+- `layoutFile` is the JSON file that holds the board's `layouts`. Mainline QMK keeps it in the keyboard's own `info.json`, such as `keyboards/crkbd/info.json`, which is one folder above the revision. Leave it out when the layouts are in `keyboards/<qmkTarget>/keyboard.json`.
+- `keymapsDir` is the folder keyloom writes its keymap into, such as `keyboards/crkbd/keymaps`.
+- `submodules` lists the git submodules the build needs, such as `lib/lufa` for AVR boards. Other submodules are skipped to keep the checkout small. If the build fails on a missing file under `lib/`, add that submodule here.
+- `artifact` is `bin` (the default), `hex` or `uf2`. It is the file `make` produces.
+- Each revision of a board with several hardware revisions is its own entry in `revisions`. keyloom can pick one from a connected keyboard when you set `detect.usbProductId`. Otherwise people pass `--board-rev`.
+
+### ZMK: `zmk-west-docker`
+
+- `board` is the `west build -b` board, such as `nice_nano_v2`.
+- `targets` has one entry per half. `shield` is the `-DSHIELD` value, such as `corne_left`. `id` is a short name, such as `left`.
+- `keymapName` is the shield name without `_left` or `_right`. keyloom writes `config/<keymapName>.keymap` and `config/<keymapName>.conf`.
+- `physicalLayout` is the file in the ZMK tree that holds the `zmk,physical-layout` node. Look in `app/dts/layouts/` for your board, such as `app/dts/layouts/foostan/corne/6column.dtsi`. Boards with several layouts, such as 5-column and 6-column, have several files. Pick the one that matches the `keymap` your keyboard's shield uses, and whose key count equals `keyCount`.
+- Each flash step has a `target` that names a build target. `volume` is the label of the boot drive. A nice!nano shows up as `NICENANO`. `enter` is how to put that half into its bootloader. For a nice!nano that is a double tap on the reset button.
+
+keyloom builds in the Docker image with `west`. The first build downloads Zephyr and ZMK's modules into `~/.cache/keyloom/build/<board>`, so it takes several minutes. Later builds reuse them. The Docker image's Zephyr must match your pinned ZMK. Use the `stable` image for a stable ZMK release.
+
+## Test the board end to end
+
+Import a real layout. Use a stock keymap if you have no layout of your own.
+
+```sh
+# ZMK: a folder with one .keymap file, or the file itself
+keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/config
+# QMK: a folder with keymap.c, such as keyboards/crkbd/keymaps/default
+keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/keymap-folder
+```
+
+The importer reads the `importers` you named. Use `qmk-keymap` for QMK and `zmk-keymap` for ZMK. Oryx exports (`oryx-source`) and Layout Editor exports (`zmk-layout-editor-keymap`) go through the same readers.
+
+The import prints a report. Bindings it can't model are kept as they were written, under `native`. That is expected. A layer with the wrong number of keys is an error, and means `keyCount` or the import is wrong.
+
+Look at it:
+
+```sh
+keyloom --data-dir /tmp/keyloom-test layout list
+keyloom --data-dir /tmp/keyloom-test layout show <layout>
+keyloom --data-dir /tmp/keyloom-test serve
+```
+
+Check that the drawn keyboard looks like yours and that each legend sits on the key the keymap file puts it on.
+
+Build it. This needs Docker to be running:
+
+```sh
+keyloom --data-dir /tmp/keyloom-test build <layout>
+```
+
+It prints the artifact's path. A ZMK build makes a `.zip` that holds one UF2 per half. A QMK build makes a `.bin`, `.hex` or `.uf2`.
+
+Flash it. This overwrites the firmware on your keyboard. Keep a copy of your current layout first.
+
+```sh
+keyloom --data-dir /tmp/keyloom-test flash --layout <layout>
+```
+
+keyloom tells you what to do for each half. For `uf2-drives`, double-tap reset when it asks. It waits for the boot drive, copies the file, and waits for the drive to go away. That is how it knows the write worked. Then check that the keyboard types what the layout says.
+
+For `manual`, `flash` fails and prints the file's path. Flash it yourself.
+
+## `board.json` field reference
+
+Every field below is checked by the schema in `src/boards/schema.ts` and `src/boards/recipes.ts`. A test fails if this table and the schema disagree. A field that isn't in the table is rejected by `boards check`.
+
+Paths ending in `[]` are lists. The "For" column says which recipe uses the field.
+
+| Field | For | What it holds |
+| --- | --- | --- |
+| `schemaVersion` | all | Always `1`. |
+| `id` | all | `<vendor>/<board>`. Must equal the folder path. |
+| `name` | all | The board's name as people say it, such as `Corne`. |
+| `vendor` | all | The maker, such as `foostan`. |
+| `firmware` | all | `qmk` or `zmk`. It decides the importer, the generator and the validator rules. |
+| `keyCount` | all | The number of keys. It must equal the number of keys in `geometry.json`. |
+| `revisions` | all | A list of hardware revisions. One entry when there is only one. |
+| `revisions[].id` | all | A short name, such as `default` or `rev1`. Unique in the board. |
+| `revisions[].source` | all | The pinned firmware tree. |
+| `revisions[].source.repo` | all | A `github.com` repo URL. |
+| `revisions[].source.ref` | all | The tag or branch name. Informational. |
+| `revisions[].source.sha` | all | The full 40-character commit. This is what is checked out. |
+| `revisions[].qmkTarget` | QMK | The `make` target, such as `crkbd/rev1`. Required for QMK, not allowed for ZMK. |
+| `revisions[].build` | all | The build recipe. |
+| `revisions[].build.kind` | all | `qmk-docker`, `zmk-west-docker` or `zmk-moergo-template`. |
+| `revisions[].build.image` | `qmk-docker`, `zmk-west-docker` | The Docker image, pinned by `@sha256:` digest. |
+| `revisions[].build.layoutMacro` | `qmk-docker` | The `LAYOUT_*` macro the keymap uses. Geometry is read from the layout of the same name. |
+| `revisions[].build.keymapsDir` | `qmk-docker` | Where keyloom writes the keymap, relative to the QMK tree. |
+| `revisions[].build.submodules` | `qmk-docker` | Submodules the build needs. May be empty. |
+| `revisions[].build.modules` | `qmk-docker` | QMK community modules to write into `keymap.json`. ZSA boards use it. Leave it out otherwise. |
+| `revisions[].build.layoutFile` | `qmk-docker` | The JSON file with `layouts`, when it isn't `keyboards/<qmkTarget>/keyboard.json`. |
+| `revisions[].build.artifact` | `qmk-docker` | `bin` (default), `hex` or `uf2`. |
+| `revisions[].build.template` | `zmk-moergo-template` | MoErgo's config template. Only the Glove80 uses it. |
+| `revisions[].build.template.repo` | `zmk-moergo-template` | The template's repo URL. |
+| `revisions[].build.template.sha` | `zmk-moergo-template` | The template's pinned commit. |
+| `revisions[].build.physicalLayout` | ZMK | The file in the ZMK tree with the `zmk,physical-layout`. Geometry is generated from it. |
+| `revisions[].build.board` | `zmk-west-docker` | The `west build -b` board, such as `nice_nano_v2`. |
+| `revisions[].build.keymapName` | `zmk-west-docker` | The base name of `config/<name>.keymap` and `.conf`. |
+| `revisions[].build.targets` | `zmk-west-docker` | One west build per half, in the order built. |
+| `revisions[].build.targets[].id` | `zmk-west-docker` | A short name, such as `left`. Names the half's UF2. |
+| `revisions[].build.targets[].shield` | `zmk-west-docker` | The `-DSHIELD` value, such as `corne_left`. |
+| `revisions[].flash` | all | The flash recipe. |
+| `revisions[].flash.kind` | all | `zapp`, `uf2-drives` or `manual`. |
+| `revisions[].flash.bootloader` | `zapp` | The bootloader's USB `VID:PID`, such as `0483:df11`. |
+| `revisions[].flash.steps` | `uf2-drives` | The boot drives to flash, in order. |
+| `revisions[].flash.steps[].volume` | `uf2-drives` | The drive's volume label, such as `NICENANO`. |
+| `revisions[].flash.steps[].label` | `uf2-drives` | What to call this part, such as `left half`. |
+| `revisions[].flash.steps[].enter` | `uf2-drives` | How to put it into its bootloader. keyloom shows it while it waits. |
+| `revisions[].flash.steps[].target` | `zmk-west-docker` | The build target whose UF2 this step writes. |
+| `revisions[].flash.instructions` | `manual` | What to tell the person: which tool flashes the file, and how to enter the bootloader. |
+| `revisions[].detect` | all | `null`, or an object that names the USB device. |
+| `revisions[].detect.usbProductId` | all | The board's USB product ID, such as `0x1969`. keyloom uses it to tell hardware revisions apart. |
+| `hands` | all | Which positions are under each hand. |
+| `hands.left` | all | The left hand's positions. |
+| `hands.right` | all | The right hand's positions. |
+| `fingers` | all | An object from every position number, as a string, to a finger name such as `left-index`. |
+| `rows` | all | An object from a row name to its positions. Every position is in exactly one row. |
+| `mirror` | all | An object from each left-hand position to the right-hand position it mirrors to. |
+| `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
+| `display` | all | Optional. Changes how the board is drawn, never what positions mean. |
+| `display.rotate` | all | A list of rotations to draw. |
+| `display.rotate[].positions` | all | The keys to turn. |
+| `display.rotate[].r` | all | The angle in degrees. |
+| `display.rotate[].rx` | all | The x of the point to turn around, in key units. |
+| `display.rotate[].ry` | all | The y of the point to turn around, in key units. |
+
+Use `display.rotate` only when the firmware's own geometry doesn't tilt keys that really tilt. The Moonlander's thumbs are the example.
+
+## What `boards check` does
+
+It runs on a board folder:
+
+```sh
+keyloom boards check boards/foostan/corne
+```
+
+It fails when:
+
+- `board.json` or `geometry.json` is missing, or doesn't match the schema. A misspelled field is an error.
+- The `id` differs from the folder path.
+- `keyCount` differs from the number of keys in `geometry.json`.
+- A position is missing from `hands`, `fingers` or `rows`, or appears twice.
+- A `mirror` entry points the wrong way: its source must be a left key and its target a right key.
+- The recipes don't fit the firmware, or the flash steps and build targets don't line up.
+- `geometry.json` differs from what the pinned firmware file generates. Run `keyloom boards geometry` again.
+
+It warns when a left-hand key has no mirror entry, or when `SKILL.md` is past 400 lines.
+
+CI runs it on every board in `boards/`. It checks the format. It can't check that your board builds or flashes. You do that in step 6.
+
+`--offline` skips the fetch and the geometry comparison. Use it only for a quick check of the fields.
+
+## If something fails
+
+- `skipping boards/...` when you start keyloom: that folder's `board.json` or `geometry.json` is unfinished or invalid. keyloom ignores it so other commands still run. `keyloom boards check` on the folder says what is wrong.
+- `has no layout named ...`: `build.layoutMacro` or `build.layoutFile` is wrong. The message lists the layout names the file has.
+- `Docker can't see ...`: Docker doesn't share the cache folder. Put `XDG_CACHE_HOME` under your home directory.
+- A QMK build that ends with `was not produced`: set `build.artifact` to the file type your board builds.
+- A QMK build that stops on a missing `lib/...` path: add that submodule to `build.submodules`.
+- `... didn't appear within 120 s`: the boot drive's label differs from `volume`. Look at the drive's name while the board is in its bootloader, and use that.
+- The build log is in the keyloom data directory under `logs/`. The path is printed when a build fails.
