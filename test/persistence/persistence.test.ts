@@ -10,6 +10,7 @@ import { MIGRATIONS } from "../../src/persistence/migrations.ts";
 import { dataDir, databasePath } from "../../src/persistence/paths.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 const board = await moonlander();
 const { layout } = await importOryxSource(FIXTURE_DIR, board.definition);
@@ -44,7 +45,7 @@ describe("migrations", () => {
       expect(r.code).toBe(0);
       expect(r.out).toBe(String(MIGRATIONS.length));
     }
-  });
+  }, SLOW_RUNNER_MS);
 
   test("the database is in WAL mode with foreign keys on", () => {
     const db = openDatabase(tempDir());
@@ -159,7 +160,7 @@ describe("layouts and revisions", () => {
     expect(db.query("SELECT COUNT(*) AS n FROM layouts").get()).toEqual({ n: 75 });
     expect(db.query("SELECT COUNT(*) AS n FROM revisions").get()).toEqual({ n: 75 });
     db.close();
-  });
+  }, SLOW_RUNNER_MS);
 });
 
 describe("paths", () => {

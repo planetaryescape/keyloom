@@ -6,6 +6,7 @@ import type { Io } from "../../src/cli/output.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
 import { dropFunctions, setKey } from "../helpers/ops.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 type Result = { code: number; out: string; err: string };
 
@@ -151,5 +152,5 @@ describe("--ops -", () => {
     p.stdin.end();
     expect(await p.exited).toBe(0);
     expect(JSON.parse(await new Response(p.stdout).text()).ok).toBe(true);
-  });
+  }, SLOW_RUNNER_MS);
 });

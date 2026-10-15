@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
 import { FIXTURE_DIR, MOONLANDER_DIR } from "../helpers/board.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 import { tempDir } from "../helpers/tmp.ts";
 
 type Result = { code: number; out: string; err: string };
@@ -64,7 +65,7 @@ describe("the rung 1 demo", () => {
     const show = await run("layout", "show", "synchronized", "--format", "table");
     expect(show.code).toBe(0);
     expect(show.out).toContain("Layer 5 (layer-5)");
-  });
+  }, SLOW_RUNNER_MS);
 
   test("concurrent imports from separate processes all land with distinct names", async () => {
     const dir = tempDir();
@@ -76,7 +77,7 @@ describe("the rung 1 demo", () => {
     expect(codes).toEqual([0, 0, 0]);
     const list = json(await cli(["layout", "list", "--data-dir", dir]));
     expect(list.layouts.map((l: { name: string }) => l.name).sort()).toEqual(["synchronized", "synchronized-2", "synchronized-3"]);
-  });
+  }, SLOW_RUNNER_MS);
 });
 
 describe("output formats", () => {
@@ -101,7 +102,7 @@ describe("output formats", () => {
     expect(rows[0].schema_version).toBe(1);
     const single = await cli(["doctor", "--format", "ids", "--data-dir", dir]);
     expect(single.code).toBe(2);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("--quiet prints only the id after an import", async () => {
     const r = await cli(["import", "--board", "zsa/moonlander", FIXTURE_DIR, "--data-dir", tempDir(), "--quiet"], { tty: true });

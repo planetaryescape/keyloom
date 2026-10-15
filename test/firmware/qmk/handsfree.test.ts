@@ -8,6 +8,7 @@ import {
   BOOTLOADER_COMMAND, BOOTLOADER_MAGIC, RAW_HID_REPORT_SIZE, WRAPPER_SYMBOL, bootloaderPacket, buildMarker, markerInFirmware, markerOf, serialIsBuild, wrapperSource,
 } from "../../../src/firmware/qmk/handsfree.ts";
 import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
+import { SLOW_RUNNER_MS } from "../../helpers/timeouts.ts";
 
 const BUILD = "bld_01JABCDEFGHJKMNPQRSTVWXYZ0";
 const board = await moonlander();
@@ -107,7 +108,7 @@ int main(int argc, char **argv) {
   test("the right packet resets the keyboard and is not passed on", async () => {
     await build();
     expect(await run(bootloaderPacket())).toEqual({ resets: 1, forwarded: 0 });
-  });
+  }, SLOW_RUNNER_MS);
 
   test("anything else is passed to Oryx and resets nothing", async () => {
     const wrongMagic = bootloaderPacket();

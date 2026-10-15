@@ -5,6 +5,7 @@ import { dfuProblem, readDfuSuffix } from "../../../src/firmware/qmk/dfu.ts";
 import { HANDS_FREE_INSTRUCTION, RESET_INSTRUCTION, type FlashState, flashWithZapp, resetInstruction } from "../../../src/firmware/qmk/flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { dfuImage, fakeBinDir } from "../../helpers/fake-bin.ts";
+import { SLOW_RUNNER_MS } from "../../helpers/timeouts.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
 const REVB = "3297:2003";
@@ -71,13 +72,14 @@ describe("flashWithZapp (fake zapp)", () => {
   test("Ctrl-C stops zapp, so it can't be left waiting to flash whenever the board next enters its bootloader", async () => {
     const s = await setup('echo $$ > "$0.pid"; echo "Firmware loaded: STM32 DFU (80 bytes)"; exec sleep 600');
     const c = new AbortController();
-    setTimeout(() => c.abort(), 300);
-    const r = await s.flash({ signal: c.signal });
+    // zapp's own "Firmware loaded" line means it is up and waiting (its pid is written before it); a fixed delay
+    // aborted before the script had started on a loaded machine.
+    const r = await s.flash({ signal: c.signal, onLine: (line) => void (line.includes("Firmware loaded") && c.abort()) });
     expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
     const pid = Number(await Bun.file(join(s.bin as string, "zapp.pid")).text());
     expect(pid).toBeGreaterThan(0);
     expect(() => process.kill(pid, 0)).toThrow(); // gone
-  });
+  }, SLOW_RUNNER_MS);
 
   test("zapp rejecting the file is a failure that carries its message", async () => {
     const s = await setup('echo "Invalid firmware: not a valid firmware file" >&2; exit 1');
