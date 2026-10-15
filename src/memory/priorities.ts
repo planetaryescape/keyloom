@@ -17,10 +17,19 @@ export const PRIORITY_WORDS: Record<PriorityKind, string> = {
 /** Used when BK gave no reason (08). */
 export const STATED_BY_BK = "stated by BK";
 
-/** Two statements about the same thing in the same way are one priority, however the model spelled the subject. */
-function subjectKey(subject: Subject): string {
-  const slots = [...(subject.slots ?? [])].map((s) => `${s.layerId}:${s.position}`).sort();
-  return JSON.stringify([slots, [...(subject.functions ?? [])].sort()]);
+/**
+ * A new statement is already remembered when an active priority of the same kind covers everything it
+ * names. The model sometimes names Backspace by its key, sometimes by key and function, so an exact
+ * match would stack up duplicate chips.
+ */
+function covers(existing: Subject, next: Subject): boolean {
+  const slotKey = (s: { layerId: string; position: number }) => `${s.layerId}:${s.position}`;
+  const slots = new Set((existing.slots ?? []).map(slotKey));
+  const functions = new Set(existing.functions ?? []);
+  const nextSlots = next.slots ?? [];
+  const nextFunctions = next.functions ?? [];
+  if (nextSlots.length + nextFunctions.length === 0) return false;
+  return nextSlots.every((s) => slots.has(slotKey(s))) && nextFunctions.every((f) => functions.has(f));
 }
 
 export type RecordPriorityInput = {
@@ -35,9 +44,8 @@ export type RecordPriorityInput = {
 
 /** `created` is false when an active priority already said the same, so a repeated statement doesn't stack up chips. */
 export function recordPriority(db: Database, input: RecordPriorityInput): { decision: DecisionRow; created: boolean } {
-  const key = subjectKey(input.subject);
   const existing = listDecisions(db, input.layoutId, { kind: "priority", active: true }).find(
-    (d) => d.priorityKind === input.priorityKind && subjectKey(d.subject) === key,
+    (d) => d.priorityKind === input.priorityKind && covers(d.subject, input.subject),
   );
   if (existing) return { decision: existing, created: false };
   const reason = input.reason?.trim();

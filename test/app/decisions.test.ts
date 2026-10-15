@@ -38,6 +38,18 @@ describe("recording priorities", () => {
     expect(listDecisions(app, ref)).toHaveLength(2);
   });
 
+  test("a statement already covered by a remembered priority adds nothing, but one naming more is new", async () => {
+    const { app, ref } = await setup();
+    const withSlot = { ...BACKSPACE, subject: { slots: [{ layerId: "layer-0", position: 28 }], functions: ["key:BACKSPACE"] } };
+    expect(recordPriority(app, ref, withSlot).created).toBe(true);
+    // Said again, named by function only or by key only: the same priority.
+    expect(recordPriority(app, ref, BACKSPACE).created).toBe(false);
+    expect(recordPriority(app, ref, { ...BACKSPACE, subject: { slots: [{ layerId: "layer-0", position: 28 }] } }).created).toBe(false);
+    // Backspace and Tab says more than the stored one, so it is stored.
+    expect(recordPriority(app, ref, { ...BACKSPACE, subject: { functions: ["key:BACKSPACE", "key:TAB"] } }).created).toBe(true);
+    expect(listDecisions(app, ref, { kind: "priority" })).toHaveLength(2);
+  });
+
   test("refuses an empty statement or a subject with nothing in it", async () => {
     const { app, ref } = await setup();
     expect(() => recordPriority(app, ref, { ...BACKSPACE, statement: "  " })).toThrow(UsageError);
