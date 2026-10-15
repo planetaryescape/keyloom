@@ -86,7 +86,8 @@ describe("keyloom doctor with a Glove80 board", () => {
     await e.run(async () => {
       const r = json(await cli(["doctor", "--data-dir", e.dataDir]));
       const checks = r.checks as Array<{ name: string; ok: boolean; detail: string }>;
-      expect(checks.find((c) => c.name === "firmware image")?.detail).toMatch(/^keyloom-glove80:ce69e85f585c-[0-9a-f]{10} is built$/);
+      // Contributed ZMK boards add their own image lines; the Glove80's must be among them.
+      expect(checks.filter((c) => c.name === "firmware image").map((c) => c.detail)).toContainEqual(expect.stringMatching(/^keyloom-glove80:ce69e85f585c-[0-9a-f]{10} is built$/));
       const checkout = checks.find((c) => c.name === "checkout moergo/glove80");
       expect(checkout).toMatchObject({ ok: true });
       expect(checkout?.detail).toContain("pinned at 34888be8c");
