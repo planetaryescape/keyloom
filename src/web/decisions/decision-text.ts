@@ -2,6 +2,8 @@
 import type { DecisionCard } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
+import { KEYCODES } from "../../layout/keycodes.ts";
+import { functionLabel } from "../editor/function-label.ts";
 
 export const STATUS_WORDS: Record<DecisionCard["status"], string> = {
   hypothesis: "Not tested yet",
@@ -31,9 +33,18 @@ const MAX_NAMED = 4;
 /** The keys a decision is about, named, with the rest counted so a big rearrangement stays one line. */
 export function keysLine(layout: Layout, d: Pick<DecisionCard, "subject">): string {
   const slots = d.subject.slots ?? [];
-  if (slots.length === 0) return (d.subject.functions ?? []).join(", ");
+  // A priority about a thing (Caps Lock) rather than a place names it the way the proposal diff does.
+  if (slots.length === 0) return (d.subject.functions ?? []).map((fn) => subjectName(fn, layout)).join(", ");
   const named = slots.slice(0, MAX_NAMED).map((s) => slotName(layout, s));
   return slots.length > MAX_NAMED ? `${named.join("; ")} and ${slots.length - MAX_NAMED} more` : named.join("; ");
+}
+
+const KEY_NAMES = new Map(KEYCODES.map((k) => [k.name, k.label]));
+
+/** A plain key reads by its full name in a list ("Caps Lock", not "CAPS"); anything else as the proposal diff names it. */
+function subjectName(fn: string, layout: Layout): string {
+  const plain = /^key:([A-Z0-9_]+)$/.exec(fn)?.[1];
+  return (plain === undefined ? undefined : KEY_NAMES.get(plain)) ?? functionLabel(fn, layout);
 }
 
 /** Active decisions first (newest first, as the server sends them), then the ones that were replaced. */

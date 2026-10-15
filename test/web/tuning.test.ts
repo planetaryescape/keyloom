@@ -83,7 +83,8 @@ describe("decision text", () => {
     expect(slotName(head, { layerId: "base", position: 4 })).toBe("Base, key 5");
     const slots = [0, 1, 2, 3, 4, 5].map((position) => ({ layerId: "base", position }));
     expect(keysLine(head, card({ subject: { slots } }))).toBe("Base, key 1; Base, key 2; Base, key 3; Base, key 4 and 2 more");
-    expect(keysLine(head, card({ subject: { functions: ["key:BACKSPACE"] } }))).toBe("key:BACKSPACE");
+    expect(keysLine(head, card({ subject: { functions: ["key:BACKSPACE", "key:CAPS_LOCK"] } }))).toBe("Backspace, Caps Lock");
+    expect(keysLine(head, card({ subject: { functions: ["mod:LGUI+LSFT"] } }))).toBe("Hold ⌘⇧");
   });
 
   test("replaced decisions are separated from active ones, and the successor is found", () => {
