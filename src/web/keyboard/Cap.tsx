@@ -14,15 +14,17 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   /** Which kind of element to draw: a real button on the board, a plain swatch elsewhere. */
   as?: "button" | "span";
   combo?: boolean;
+  /** Degrees to turn the legend back by, so a steeply rotated key still reads upright. */
+  legendTurn?: number;
   style?: CSSProperties;
   ref?: Ref<HTMLButtonElement>;
 }
 
 // One keycap: used on the board as a button and in the legend and inspector as a swatch.
-export function Cap({ tone, legend, unit, width, as = "button", combo = false, style, ...rest }: CapProps) {
+export function Cap({ tone, legend, unit, width, as = "button", combo = false, legendTurn, style, ...rest }: CapProps) {
   const tap = fitLegend(legend.tap, width, TAP_SIZE);
   const hold = legend.hold === undefined ? null : fitLegend(legend.hold, width, HOLD_SIZE);
-  const children = (
+  const words = (
     <>
       {legend.tap === "" ? null : (
         <span className="cap-tap" data-wrap={!tap.fits} style={{ fontSize: tap.size * unit }}>
@@ -34,6 +36,11 @@ export function Cap({ tone, legend, unit, width, as = "button", combo = false, s
           {legend.hold}
         </span>
       )}
+    </>
+  );
+  const children = (
+    <>
+      {legendTurn === undefined ? words : <span className="cap-legend" style={{ transform: `rotate(${legendTurn}deg)` }}>{words}</span>}
       {combo ? (
         <span
           className="cap-combo"

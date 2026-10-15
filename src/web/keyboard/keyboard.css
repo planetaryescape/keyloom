@@ -192,3 +192,11 @@ button.cap[data-applied="true"] {
     transform: none;
   }
 }
+
+/* Wraps the tap and hold legends when they are turned back upright on a steeply rotated key. */
+.cap-legend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}

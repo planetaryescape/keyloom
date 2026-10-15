@@ -150,6 +150,8 @@ export function Keyboard({
               unit={unit}
               width={geometryKey.w}
               combo={comboKeys.has(index)}
+              // The Moonlander's thumbs tilt a little and read fine; the Glove80's fan out to 60 degrees.
+              {...(Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? { legendTurn: -rect.rotate } : {})}
               style={keyStyle(rect, unit)}
               tabIndex={index === tabStop ? 0 : -1}
               aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index, marks?.get(index))}
@@ -194,6 +196,8 @@ function Tray({ keys, canvas, unit }: { keys: readonly GeometryKey[]; canvas: Bo
   };
   return <div className="keyboard-half" aria-hidden="true" style={style} />;
 }
+
+const UPRIGHT_ABOVE_DEG = 20;
 
 // The gap shrinks each box and keeps the rotation origin on the same point, because the
 // origin is measured from the box's top-left.
