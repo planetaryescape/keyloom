@@ -13,6 +13,8 @@ export const analyseChangeTool = (ports: AgentPorts, recorder: TurnRecorder) =>
     description:
       "Validate change ops against the layout's head without saving anything. Use it to test an idea before propose_changes. Errors mean the ops cannot be applied; warnings are things to tell BK about.",
     inputSchema: InputSchema,
+    // The ChangeOp union makes a strict grammar the API rejects as too large; zod checks the input instead.
+    strict: false,
     run: ({ ops }) => {
       const result = ports.check(ops);
       recorder.validation("analyse_change", result);

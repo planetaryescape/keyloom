@@ -35,6 +35,8 @@ export const proposeChangesTool = (ports: AgentPorts, recorder: TurnRecorder, on
     description:
       "Give BK one to three alternative change sets. This is the only way a proposal reaches him. Each alternative is validated against the head: valid ones are saved for BK to apply, invalid ones come back with errors for you to repair. You never apply anything.",
     inputSchema: InputSchema,
+    // The ChangeOp union makes a strict grammar the API rejects as too large; zod checks the input instead.
+    strict: false,
     run: ({ alternatives }) => {
       if (failedAttempts >= MAX_FAILED_PROPOSALS) return STOP;
       const results = ports.propose(alternatives);

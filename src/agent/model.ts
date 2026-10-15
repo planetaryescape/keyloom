@@ -13,6 +13,8 @@ export type ModelTool = {
   name: string;
   description: string;
   inputSchema: z.ZodObject;
+  /** Send the schema as `strict`. The API refuses a grammar that is too large, which the ChangeOp union is. Defaults to true. */
+  strict?: boolean;
   run: (rawInput: unknown) => Promise<string> | string;
 };
 

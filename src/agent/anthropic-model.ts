@@ -32,7 +32,7 @@ function toRunnable(tool: ModelTool) {
   return {
     ...base,
     input_schema: transformJSONSchema(z.toJSONSchema(tool.inputSchema, { reused: "ref" })),
-    strict: true,
+    strict: tool.strict ?? true,
     eager_input_streaming: true,
     // The runner would parse with zod before `run`; defineTool does it so a bad input is recorded and explained.
     parse: (raw: unknown) => raw,

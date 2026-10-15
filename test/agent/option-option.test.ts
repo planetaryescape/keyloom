@@ -109,7 +109,8 @@ describe("the Option-Option conversation with a scripted model", () => {
       tool_choice: { type: "auto" }, fallbacks: "default", cache_control: { type: "ephemeral" },
     });
     expect(body.tools.map((t: any) => t.name)).toEqual(["get_layout", "find_function", "analyse_change", "propose_changes"]);
-    expect(body.tools.every((t: any) => t.strict === true && t.eager_input_streaming === true)).toBe(true);
+    expect(body.tools.map((t: any) => t.strict)).toEqual([true, true, false, false]);
+    expect(body.tools.every((t: any) => t.eager_input_streaming === true)).toBe(true);
     expect(body.system).toContain("never apply");
     expect(body.system).toContain("zsa/moonlander");
     // The first question and its answer are in the history the second turn sent.
