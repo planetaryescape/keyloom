@@ -1,0 +1,5 @@
+# The chat route SSE test failed once in five full runs
+
+`test/server/chat-routes.test.ts` › "POST streams start, text, tool, proposal and done as SSE" failed once (23 ms) in a full `bun test` run on branch `rung5/integration` at `d084282`, 2026-10-15. It passed alone three times and in four further full runs, so the error text wasn't captured.
+
+What would settle it: run the full suite in a loop with `--bail` and keep the first failing output. Suspects worth checking first: the shared `servers` list and port reuse across test files, and the fake Anthropic script ordering when other files load the machine.
