@@ -124,4 +124,29 @@ describe("parsers", () => {
     expect(parseUsbDevices({ SPUSBDataType: [] })).toEqual([]);
     expect(parseUsbDevices(null)).toEqual([]);
   });
+
+  test("parseUsbDevices reads the SPUSBHostDataType report newer macOS prints", () => {
+    // Shape captured from a real Glove80 on Darwin 27 (serial and location fields dropped).
+    const json = {
+      SPUSBHostDataType: [
+        {
+          _name: "USB31Bus",
+          _items: [
+            {
+              _name: "4-Port USB 2.0 Hub",
+              _items: [
+                {
+                  _name: "Glove80 Left",
+                  USBDeviceKeyProductID: "0x27db",
+                  USBDeviceKeyVendorID: "0x16c0",
+                  USBDeviceKeyVendorName: "MoErgo",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(parseUsbDevices(json)).toEqual([{ productId: "0x27db", vendorId: "0x16c0", name: "Glove80 Left", maker: "MoErgo" }]);
+  });
 });
