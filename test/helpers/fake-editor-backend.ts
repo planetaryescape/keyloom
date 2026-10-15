@@ -305,6 +305,7 @@ export class FakeEditor implements EditorBackend {
       startedAt,
       finishedAt: failed ? startedAt + flashStepMs * 1.5 : succeeded ? startedAt + writeEnd : null,
       instruction: status === "waiting_for_bootloader" ? "Press the reset button on the Moonlander." : null,
+      note: succeeded ? `Verified: the keyboard is running build ${buildId}.` : null,
       logTail: lines,
     };
   }

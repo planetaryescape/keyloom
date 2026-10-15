@@ -4,7 +4,8 @@ import type { Board } from "../boards/load.ts";
 import { artifactKind } from "../firmware/qmk/artifact.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { buildQmk } from "../firmware/qmk/build.ts";
-import { RESET_INSTRUCTION, flashWithZapp } from "../firmware/qmk/flash.ts";
+import { CHECKING_INSTRUCTION, RESET_INSTRUCTION, flashWithZapp } from "../firmware/qmk/flash.ts";
+import { type HandsFreeDeps, handsFreeHooks, keyboardTarget, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { GenerateError as QmkGenerateError, generateQmkSource } from "../firmware/qmk/generate.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { buildZmk } from "../firmware/zmk/build.ts";
@@ -40,6 +41,8 @@ export type BuildArgs = {
 export type FlashArgs = {
   board: Board;
   boardRevision: string;
+  /** The build being flashed; a hands-free flash checks the keyboard comes back running it. */
+  buildId: string;
   artifactPath: string;
   log: LogSink;
   onState: (state: FlashState, instruction: string | null) => void;
@@ -48,6 +51,8 @@ export type FlashArgs = {
   bootloaderWaitMs?: number;
   /** Where UF2 boot drives appear. Only the Glove80 flow reads it; tests pass a temporary directory. */
   volumesRoot?: string;
+  /** How a ZSA keyboard is found and restarted. Tests pass fakes; otherwise the machine's own USB and raw HID are used. */
+  handsFree?: Partial<HandsFreeDeps>;
 };
 
 export type FirmwareDriver = {
@@ -55,7 +60,8 @@ export type FirmwareDriver = {
   name: string;
   /** `bin`, `hex` or `uf2` for a single firmware file; `zip` for a bundle with one UF2 per half. */
   artifactExtension(board: Board, boardRevision: string): string;
-  generate(view: LayoutView, boardRevision: string): GeneratedSource;
+  /** `buildId`, when the source is for a build, lets the firmware carry that build's marker (D-070). */
+  generate(view: LayoutView, boardRevision: string, buildId?: string): GeneratedSource;
   build(args: BuildArgs): Promise<void>;
   flash(args: FlashArgs): Promise<FlashResult>;
   /** What to tell the person about a flash that is waiting, before the flasher has said anything itself. */
@@ -68,11 +74,19 @@ const qmk: FirmwareDriver = {
   waitingInstruction(board) {
     const flash = qmkRevision(board.definition).flash;
     if (flash.kind === "uf2-drives") return instructionFor(flash.steps[0] as FlashStep, 0, flash.steps.length, BOOTLOADER_WAIT_MS);
-    return flash.kind === "manual" ? flash.instructions : RESET_INSTRUCTION;
+    if (flash.kind === "manual") return flash.instructions;
+    // Until the flasher has looked at the keyboard, the person can't be told to press anything: if it runs keyloom's
+    // firmware there is nothing to press (D-070), and a wrong "press reset" for the few seconds it takes to look is worse than none.
+    return keyboardTarget(board.definition, qmkRevision(board.definition)) ? CHECKING_INSTRUCTION : RESET_INSTRUCTION;
   },
-  generate(view, boardRevision) {
+  generate(view, boardRevision, buildId) {
+    const rev = qmkRevision(view.board.definition, boardRevision);
     try {
-      return generateQmkSource({ layout: view.document, board: view.board.definition, revisionId: view.revision.id, boardRevisionId: boardRevision });
+      return generateQmkSource({
+        layout: view.document, board: view.board.definition, revisionId: view.revision.id, boardRevisionId: boardRevision,
+        // Only a ZSA board flashed by Zapp has the Oryx raw-HID endpoint the bootloader command rides on.
+        ...(buildId !== undefined && view.board.definition.vendor === "ZSA" && rev.flash.kind === "zapp" ? { handsFree: { buildId } } : {}),
+      });
     } catch (err) {
       if (err instanceof QmkGenerateError) throw new SourceError(err.message);
       throw err;
@@ -100,7 +114,13 @@ const qmk: FirmwareDriver = {
         ...(a.signal ? { signal: a.signal } : {}),
       });
     }
+    const rev = qmkRevision(a.board.definition, a.boardRevision);
+    const hooks = await handsFreeHooks({
+      deps: realHandsFreeDeps(a.handsFree), board: a.board.definition, rev, buildId: a.buildId, log: a.log,
+      artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))),
+    });
     return flashWithZapp({
+      ...hooks,
       artifactPath: a.artifactPath, bootloader: flash.bootloader, log: a.log, onState: a.onState,
       ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
       ...(a.signal ? { signal: a.signal } : {}),

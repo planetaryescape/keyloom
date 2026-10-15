@@ -119,6 +119,8 @@ export const FlashSchema = z.object({
   finishedAt: z.number().finite().nullable(),
   // What the person must do now, such as "Press the reset button on the Moonlander".
   instruction: z.string().nullable(),
+  // What keyloom confirmed after a successful flash, such as "Verified: the keyboard is running build bld_...".
+  note: z.string().nullable(),
   logTail: z.array(z.string()),
 });
 export type Flash = z.infer<typeof FlashSchema>;

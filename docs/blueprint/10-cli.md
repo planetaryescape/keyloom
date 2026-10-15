@@ -42,7 +42,8 @@ keyloom
   build <layout> [--rev R] [--board-rev B] generate and build; prints the build ID and artifact path
                                            (--board-rev reva|revb; detected from a connected keyboard when omitted)
   flash [--build B] [--layout L]           flash the newest successful build of L, or B
-  doctor                                   Docker, toolchain images, pinned checkouts, API key, database
+  flash --reboot-only [--board B]          only restart the attached keyboard into its bootloader (keyloom firmware only)
+  doctor                                   Docker, toolchain images, pinned checkouts, attached keyboard and its firmware, API key, database
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.

@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
-  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runToolchainChecks, selectLayers, showBoard, UsageError, ValidationFailedError,
+  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, registerChatCommands } from "./commands/chat.ts";
@@ -23,7 +23,8 @@ const stdIo = (): Io => ({
 
 type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: boolean };
 
-export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}): Command {
+/** `handsFree` replaces how USB and raw HID are read; tests pass fakes. */
+export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: Partial<HandsFreeDeps>): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
     .version(pkg.version, "-V, --version", "print the keyloom version")
@@ -205,7 +206,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       }
     });
 
-  registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp });
+  registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}) });
 
   program
     .command("doctor")
@@ -214,6 +215,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       const checks = [
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),
         ...(await runToolchainChecks()),
+        ...(await runKeyboardChecks(handsFree)),
       ];
       print(io, format(), {
         json: { ok: checks.every((c) => c.ok), checks },
@@ -230,9 +232,9 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 });
 
 /** Runs the CLI and returns the exit code; never throws. */
-export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}): Promise<number> {
+export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: Partial<HandsFreeDeps>): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
-  const program = buildProgram(io, state, chat);
+  const program = buildProgram(io, state, chat, handsFree);
   let jsonErrors = false;
   try {
     await program.parseAsync(argv, { from: "user" });

@@ -173,7 +173,9 @@ describe("startFlash / flashAndWait (fake zapp)", () => {
       expect(f).toMatchObject({ status: "succeeded", error: null, buildId: b.id, instruction: null });
       expect(f.id).toMatch(/^fl_[0-9A-Z]{26}$/);
       expect(seen[0]?.[0]).toBe("waiting_for_bootloader");
-      expect(seen[0]?.[1]).toContain("Press the reset button on the Moonlander");
+      // The flasher first checks whether the keyboard can be restarted by keyloom; with none attached it asks for the key.
+      expect(seen[0]?.[1]).toContain("checking whether it can restart the keyboard");
+      expect(seen.some(([, i]) => i?.includes("Press the reset button on the Moonlander"))).toBe(true);
       expect(seen.map(([s]) => s)).toContain("writing");
       expect(seen.at(-1)?.[0]).toBe("succeeded");
       expect(() => FlashSchema.parse(f)).not.toThrow();
@@ -187,7 +189,7 @@ describe("startFlash / flashAndWait (fake zapp)", () => {
     await e.run(async () => {
       const f = await startFlash(e.app, { layout: "synchronized" });
       expect(f.status).toBe("waiting_for_bootloader");
-      expect(f.instruction).toContain("reset button");
+      expect(f.instruction).toContain("checking whether it can restart the keyboard");
       const done = await until(() => getFlash(e.app, f.id), (x) => x.status === "succeeded" || x.status === "failed");
       expect(done.status).toBe("succeeded");
     });

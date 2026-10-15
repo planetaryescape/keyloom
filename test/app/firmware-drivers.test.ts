@@ -19,7 +19,8 @@ describe("QMK driver", () => {
     const board = await loadBoardDir(MOONLANDER_DIR);
     const d = driverFor(board);
     expect(d.artifactExtension(board, "reva")).toBe("bin");
-    expect(d.waitingInstruction(board)).toContain("reset button on the Moonlander");
+    // Before the flasher has looked at the keyboard nothing is asked of the person: with keyloom's firmware on it, nothing is needed.
+    expect(d.waitingInstruction(board)).toContain("checking whether it can restart the keyboard");
   });
 
   test("the artifact extension is the one the recipe names", async () => {
@@ -32,7 +33,7 @@ describe("QMK driver", () => {
     const dir = tempDir();
     const states: string[] = [];
     const r = await driverFor(board).flash({
-      board, boardRevision: "default", artifactPath: join(dir, "a.hex"), log: new LogSink(join(dir, "f.log")), onState: (s) => states.push(s),
+      board, buildId: "bld_test", boardRevision: "default", artifactPath: join(dir, "a.hex"), log: new LogSink(join(dir, "f.log")), onState: (s) => states.push(s),
     });
     expect(r.state).toBe("failed");
     expect(r.error).toContain(join(dir, "a.hex"));
@@ -60,7 +61,7 @@ describe("QMK driver", () => {
       }
     }, 10);
     const r = await driverFor(board).flash({
-      board, boardRevision: "default", artifactPath: artifact, log: new LogSink(join(dir, "f.log")), onState: () => {}, volumesRoot: root, bootloaderWaitMs: 2000,
+      board, buildId: "bld_test", boardRevision: "default", artifactPath: artifact, log: new LogSink(join(dir, "f.log")), onState: () => {}, volumesRoot: root, bootloaderWaitMs: 2000,
     });
     clearInterval(timer);
     expect(r).toMatchObject({ state: "succeeded", error: null });
@@ -111,7 +112,7 @@ describe("ZMK driver", () => {
       }
     }, 10);
     const r = await driverFor(west).flash({
-      board: west, boardRevision: "default", artifactPath: artifact, log: new LogSink(join(dir, "f.log")), onState: () => {}, volumesRoot: root, bootloaderWaitMs: 3000,
+      board: west, buildId: "bld_test", boardRevision: "default", artifactPath: artifact, log: new LogSink(join(dir, "f.log")), onState: () => {}, volumesRoot: root, bootloaderWaitMs: 3000,
     });
     clearInterval(timer);
     expect(r.state).toBe("succeeded");

@@ -1,7 +1,7 @@
 // generate, build and flash (10#commands). Thin: each calls one use case in src/app.
 import type { Command } from "commander";
 import {
-  type App, type BuildView, type FlashView, buildAndWait, flashAndWait, generateFirmware, UsageError,
+  type App, type BuildView, type FlashView, type HandsFreeDeps, buildAndWait, flashAndWait, generateFirmware, rebootKeyboard, UsageError,
 } from "../../app/index.ts";
 import { type Format, type Io, columns, print } from "../output.ts";
 
@@ -10,6 +10,8 @@ export type FirmwareCommandDeps = {
   format: () => Format;
   quiet: () => boolean;
   withApp: <T>(fn: (app: App) => Promise<T> | T) => Promise<T>;
+  /** How a ZSA keyboard is found and restarted; tests pass fakes. */
+  handsFree?: Partial<HandsFreeDeps>;
 };
 
 /** Ctrl-C aborts the work instead of killing keyloom and leaving docker or zapp running on its own. */
@@ -51,11 +53,11 @@ const buildJson = (b: BuildView) => ({
 });
 
 const flashJson = (f: FlashView) => ({
-  flash_id: f.id, build_id: f.buildId, status: f.status, error: f.error, log_path: f.logPath, started_at: f.startedAt, finished_at: f.finishedAt,
+  flash_id: f.id, build_id: f.buildId, status: f.status, error: f.error, note: f.note, log_path: f.logPath, started_at: f.startedAt, finished_at: f.finishedAt,
 });
 
 export function registerFirmwareCommands(program: Command, deps: FirmwareCommandDeps): void {
-  const { io, format, quiet, withApp } = deps;
+  const { io, format, quiet, withApp, handsFree } = deps;
 
   program
     .command("generate")
@@ -111,8 +113,20 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .option("--build <build>", "a build ID")
     .option("--layout <layout>", "flash the newest successful build of this layout")
     .option("--volumes-root <dir>", "the folder UF2 boot drives appear in (default: /Volumes on macOS, found with lsblk on Linux); boards that flash to UF2 drives only")
-    .action(async (opts: { build?: string; layout?: string; volumesRoot?: string }) => {
+    .option("--reboot-only", "only restart the attached keyboard into its bootloader (it must be running a keyloom build); flashes nothing, and the keyboard stays in the bootloader until it is flashed or unplugged")
+    .option("--board <board>", "with --reboot-only: which board, when more than one is attached")
+    .action(async (opts: { build?: string; layout?: string; volumesRoot?: string; rebootOnly?: boolean; board?: string }) => {
       if (opts.build !== undefined && opts.layout !== undefined) throw new UsageError("pass --build or --layout, not both");
+      if (opts.rebootOnly) {
+        if (opts.build !== undefined || opts.layout !== undefined) throw new UsageError("--reboot-only flashes nothing; leave out --build and --layout");
+        const r = await rebootKeyboard({ ...(opts.board ? { board: opts.board } : {}), ...(handsFree ? { handsFree } : {}), onLine: (line) => io.err(`${line}\n`) });
+        print(io, format(), {
+          json: { board: r.board, board_revision: r.revision, previous_firmware: r.previousFirmware, bootloader: r.bootloader },
+          table: quiet() ? r.board : `${r.board} ${r.revision} is in its bootloader (${r.bootloader}); it was running ${r.previousFirmware}. Flash it, or unplug it and plug it in again to leave the bootloader.`,
+          ids: [r.board],
+        });
+        return;
+      }
       let shown: string | null = null;
       const f = await untilInterrupted((signal) =>
         withApp((app) =>
@@ -120,6 +134,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
             ...(opts.build ? { buildId: opts.build } : {}),
             ...(opts.layout ? { layout: opts.layout } : {}),
             ...(opts.volumesRoot ? { volumesRoot: opts.volumesRoot } : {}),
+            ...(handsFree ? { handsFree } : {}),
             signal,
             // The instruction is the point: it goes to stderr whatever the format, so a script's stdout stays parseable.
             onState: (flash) => {
@@ -130,7 +145,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
       );
       print(io, format(), {
         json: flashJson(f),
-        table: quiet() ? f.id : columns([["flash", f.id], ["build", f.buildId], ["status", f.status], ["log", f.logPath]]),
+        table: quiet() ? f.id : columns([["flash", f.id], ["build", f.buildId], ["status", f.status], ...(f.note ? [["result", f.note] as [string, string]] : []), ["log", f.logPath]]),
         ids: [f.id],
       });
     });

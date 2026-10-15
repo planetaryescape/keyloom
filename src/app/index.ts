@@ -7,12 +7,13 @@ export {
 export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, importLayout, listLayouts } from "./layouts.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
-export { type DoctorCheck, runDoctor, runToolchainChecks } from "./doctor.ts";
+export { type DoctorCheck, runDoctor, runKeyboardChecks, runToolchainChecks } from "./doctor.ts";
+export { type HandsFreeDeps, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
   getBuild, getFlash, startBuild, startFlash,
 } from "./firmware.ts";
-export { BuildFailedError, FlashFailedError } from "./firmware-errors.ts";
+export { BuildFailedError, FlashFailedError, RebootFailedError } from "./firmware-errors.ts";
 export type { ImportReport } from "../layout/import-report.ts";
 export type { Layout } from "../layout/schema.ts";
 export { type ChangeOp, ChangeOpSchema } from "../layout/change.ts";

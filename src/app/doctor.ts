@@ -10,7 +10,9 @@ import { capture, which } from "../firmware/toolchain/run.ts";
 import { MIGRATIONS } from "../persistence/migrations.ts";
 import { databasePath, dataDir as resolveDataDir } from "../persistence/paths.ts";
 import { listBoardDefinitions } from "./boards.ts";
+import { type HandsFreeDeps, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { checkoutDirFor } from "./firmware.ts";
+import { attachedKeyboards, rawHidFinding } from "./keyboard.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
 export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean };
@@ -120,6 +122,32 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
       else checks.push({ name, ok: true, detail: `pinned at ${spec.sha.slice(0, 9)} (${spec.dir})` });
     } catch (err) {
       checks.push({ name, ok: false, detail: (err as Error).message });
+    }
+  }
+  return checks;
+}
+
+/** Which keyboards are attached and whether keyloom's own firmware is on them, which decides if a flash needs a keypress. */
+export async function runKeyboardChecks(over: Partial<HandsFreeDeps> = {}): Promise<DoctorCheck[]> {
+  const deps = realHandsFreeDeps(over);
+  let attached: Awaited<ReturnType<typeof attachedKeyboards>>;
+  try {
+    attached = await attachedKeyboards(deps);
+  } catch (err) {
+    return [{ name: "keyboard", ok: true, warn: true, detail: `couldn't read the USB devices: ${(err as Error).message}` }];
+  }
+  if (attached.length === 0) return [{ name: "keyboard", ok: true, detail: "no keyboard keyloom can flash is attached" }];
+  const checks: DoctorCheck[] = [];
+  for (const k of attached) {
+    const name = `keyboard ${k.boardId} ${k.revisionId}`;
+    if (k.firmware.state === "keyloom") {
+      const hid = await rawHidFinding(deps, k);
+      checks.push({
+        name, ok: true, ...(hid.includes("visible") ? {} : { warn: true }),
+        detail: `running keyloom build ${k.firmware.serial}; the next flash needs no keypress (${hid})`,
+      });
+    } else if (k.firmware.state === "other") {
+      checks.push({ name, ok: true, detail: `running firmware keyloom didn't build (USB serial ${k.firmware.serial ?? "unavailable"}); the first flash needs the bootloader key, and flashes after it need none` });
     }
   }
   return checks;

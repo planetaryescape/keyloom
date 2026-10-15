@@ -9,6 +9,7 @@ import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import { dockerStatus } from "../firmware/toolchain/docker.ts";
 import type { FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
+import type { HandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
 import {
@@ -52,6 +53,8 @@ export type FlashView = {
   finishedAt: number | null;
   /** What the person must do now, such as pressing the reset button. */
   instruction: string | null;
+  /** What keyloom confirmed after the flash (read from its log, so it survives a restart), or null. */
+  note: string | null;
   logTail: string[];
   logPath: string;
 };
@@ -191,7 +194,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     const driver = driverFor(view.board);
     let source: GeneratedSource;
     try {
-      source = driver.generate(view, row.boardRevision);
+      source = driver.generate(view, row.boardRevision, row.id);
     } catch (err) {
       if (err instanceof SourceError) throw new BuildFailure(`This layout can't be written as ${driver.name} source: ${err.message}`);
       throw err;
@@ -246,11 +249,18 @@ function boardOfFlash(app: App, row: FlashRow): Board | undefined {
   return layout ? showBoard(layout.boardId) : undefined;
 }
 
+const VERIFIED = /^keyloom: (Verified: .+)$/;
+
 async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
   const logPath = absolute(app, row.logPath);
+  // Read before the first await: the instruction a state change carries must be the one in force when it was announced.
+  const instruction = instructionFor(row, boardOfFlash(app, row));
+  const logTail = await tailOf(logPath);
   return {
     id: row.id, buildId: row.buildId, status: row.status, error: row.error, startedAt: row.startedAt, finishedAt: row.finishedAt,
-    instruction: instructionFor(row, boardOfFlash(app, row)), logTail: await tailOf(logPath), logPath,
+    instruction,
+    note: row.status === "succeeded" ? (logTail.map((l) => VERIFIED.exec(l)?.[1]).findLast((n) => n !== undefined) ?? null) : null,
+    logTail, logPath,
   };
 }
 
@@ -276,6 +286,8 @@ export type FlashOptions = {
   bootloaderWaitMs?: number;
   /** Where a UF2 keyboard's boot drives appear (default: the machine's own, `/Volumes` on macOS). Tests pass a temporary directory. */
   volumesRoot?: string;
+  /** How a ZSA keyboard is found and restarted (default: this machine's USB and raw HID). Tests pass fakes. */
+  handsFree?: Partial<HandsFreeDeps>;
 };
 
 function chooseBuild(app: App, opts: FlashOptions): BuildRow {
@@ -332,7 +344,8 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
     log.line(`keyloom: flash ${row.id} of build ${row.buildId}`);
     notify();
     const result = await driverFor(board).flash({
-      board, boardRevision, artifactPath: artifact, log, ...(opts.onProgress ? { onLine: opts.onProgress } : {}),
+      board, boardRevision, buildId: row.buildId, artifactPath: artifact, log,
+      ...(opts.handsFree ? { handsFree: opts.handsFree } : {}), ...(opts.onProgress ? { onLine: opts.onProgress } : {}),
       ...(opts.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: opts.bootloaderWaitMs }),
       ...(opts.volumesRoot === undefined ? {} : { volumesRoot: opts.volumesRoot }),
       ...(opts.signal ? { signal: opts.signal } : {}),

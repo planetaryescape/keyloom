@@ -15,7 +15,7 @@ const toBuild = (b: BuildView): Build => ({
 
 const toFlash = (f: FlashView): Flash => ({
   id: f.id, buildId: f.buildId, status: f.status, error: f.error, startedAt: f.startedAt, finishedAt: f.finishedAt,
-  instruction: f.instruction, logTail: f.logTail,
+  instruction: f.instruction, note: f.note, logTail: f.logTail,
 });
 
 /** Turns the app's typed errors into the status and code the browser acts on; anything else stays a 500. */
