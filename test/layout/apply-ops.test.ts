@@ -62,9 +62,9 @@ describe("applyOps", () => {
 
     const combo = { id: "c1", name: "C", positions: [0, 1], layerIds: "all" as const, output: key("ESCAPE") };
     const withCombo = run([{ op: "upsertCombo", combo }]);
-    expect(withCombo.combos).toEqual([combo]);
-    expect(run([{ op: "upsertCombo", combo: { ...combo, name: "C2" } }], withCombo).combos[0]?.name).toBe("C2");
-    expect(run([{ op: "removeCombo", comboId: "c1" }], withCombo).combos).toEqual([]);
+    expect(withCombo.combos.at(-1)).toEqual(combo);
+    expect(run([{ op: "upsertCombo", combo: { ...combo, name: "C2" } }], withCombo).combos.at(-1)?.name).toBe("C2");
+    expect(run([{ op: "removeCombo", comboId: "c1" }], withCombo).combos).toEqual(tiny().combos);
 
     const profile = { id: "p", name: "P2", firmware: "qmk" as const, options: { x: 1 } };
     expect(run([{ op: "upsertHoldTapProfile", profile }]).holdTapProfiles).toEqual([profile]);

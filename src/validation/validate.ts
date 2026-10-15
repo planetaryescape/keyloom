@@ -6,7 +6,8 @@ import { type ChangeOp, ChangeOpSchema, type Slot } from "../layout/change.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { type Layout, LayoutSchema } from "../layout/schema.ts";
 import type { Issue, ValidationResult } from "./result.ts";
-import { documentRules, nativeEdit, passthroughLayerIndex } from "./rules.ts";
+import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
+import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex } from "./rules.ts";
 
 const NO_DIFF: ValidationResult["diff"] = { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] };
 
@@ -65,13 +66,29 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   }
   errors.push(...nativeEdit(before, after), ...passthroughLayerIndex(before, after));
 
+  const lost = functionLost(before, after, clean);
+  errors.push(...lost.errors);
+  // Only a tap dance this change adds or moves is news; one already in the layout isn't the change's doing.
+  const knownDances = new Set(doubledLetterTapdance(before).map(issueKey));
+  warnings.push(...doubledLetterTapdance(after).filter((i) => !knownDances.has(issueKey(i))));
+
+  const changed = changedSlots(before, after);
+  const beforeHomes = functionHomes(before, reachableLayers(before));
+  const afterHomes = functionHomes(after, reachableLayers(after));
+
   return {
     result: {
       ok: errors.length === 0,
       errors,
       warnings,
-      // displaced, dropped, relearnCount and reminders need the function graph (rung 3: reachability.ts) and decisions (rung 6).
-      diff: { ...NO_DIFF, changed: changedSlots(before, after) },
+      // reminders need decisions (rung 6).
+      diff: {
+        ...NO_DIFF,
+        changed,
+        displaced: displacedFunctions(before, after, changed, beforeHomes, afterHomes),
+        dropped: lost.dropped,
+        relearnCount: relearned(beforeHomes, afterHomes),
+      },
     },
     after,
   };
