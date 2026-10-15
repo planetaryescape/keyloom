@@ -1,0 +1,191 @@
+// The rung 2 error rules (07#errors). Each takes a whole document so the same rule can run on
+// the layout before and after a change; validate.ts reports only what the change made worse.
+// Reachability rules (function_lost, layer_unreachable, layer_trap) and the warnings arrive in rung 3.
+import type { BoardDefinition } from "../boards/schema.ts";
+import { deepEqual } from "../layout/equal.ts";
+import type { Slot } from "../layout/change.ts";
+import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
+import type { Binding, Layout, Mod } from "../layout/schema.ts";
+import type { Issue } from "./result.ts";
+
+const issue = (code: string, message: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, slots } : { code, message });
+
+/** Every binding in the document with where it lives; combo outputs have no slot. */
+function* bindingsOf(doc: Layout): Generator<{ binding: Binding; slot?: Slot; where: string }> {
+  for (const layer of doc.layers) {
+    for (const [position, binding] of layer.bindings.entries()) {
+      yield { binding, slot: { layerId: layer.id, position }, where: `layer "${layer.id}", position ${position}` };
+    }
+  }
+  for (const combo of doc.combos) yield { binding: combo.output, where: `output of combo "${combo.id}"` };
+}
+
+const slotOf = (s?: Slot): Slot[] | undefined => (s ? [s] : undefined);
+
+/** `schema`: ids are how everything refers to layers, macros, combos and profiles, so they must be unique. */
+export function duplicateIds(doc: Layout): Issue[] {
+  const out: Issue[] = [];
+  const check = (what: string, ids: string[]) => {
+    for (const id of new Set(ids.filter((id, i) => ids.indexOf(id) !== i))) out.push(issue("schema", `${what} id "${id}" is used more than once`));
+  };
+  check("layer", doc.layers.map((l) => l.id));
+  check("macro", doc.macros.map((m) => m.id));
+  check("combo", doc.combos.map((c) => c.id));
+  check("hold-tap profile", doc.holdTapProfiles.map((p) => p.id));
+  check("firmware setting", doc.settings.map((s) => `${s.firmware}:${s.key}`));
+  return out;
+}
+
+/** `binding_count`: generated firmware would not compile with a short or long layer. */
+export function bindingCount(board: BoardDefinition, doc: Layout): Issue[] {
+  return doc.layers
+    .filter((l) => l.bindings.length !== board.keyCount)
+    .map((l) => issue("binding_count", `layer "${l.id}" has ${l.bindings.length} bindings, ${board.id} has ${board.keyCount} keys`));
+}
+
+/** `unknown_ref`: layers, macros, profiles and combo positions must exist. */
+export function unknownRefs(board: BoardDefinition, doc: Layout): Issue[] {
+  const layers = new Set(doc.layers.map((l) => l.id));
+  const macros = new Set(doc.macros.map((m) => m.id));
+  const profiles = new Set(doc.holdTapProfiles.map((p) => p.id));
+  const out: Issue[] = [];
+  for (const { binding: b, slot, where } of bindingsOf(doc)) {
+    const missing: string[] = [];
+    if (b.kind === "layer" && !layers.has(b.layerId)) missing.push(`layer "${b.layerId}"`);
+    if (b.kind === "macro" && !macros.has(b.macroId)) missing.push(`macro "${b.macroId}"`);
+    if (b.kind === "holdTap") {
+      if ("layerId" in b.hold && !layers.has(b.hold.layerId)) missing.push(`layer "${b.hold.layerId}"`);
+      if (!profiles.has(b.profileId)) missing.push(`hold-tap profile "${b.profileId}"`);
+    }
+    for (const m of missing) out.push(issue("unknown_ref", `${where} refers to ${m}, which does not exist`, slotOf(slot)));
+  }
+  for (const combo of doc.combos) {
+    for (const p of combo.positions.filter((p) => p >= board.keyCount)) {
+      out.push(issue("unknown_ref", `combo "${combo.id}" uses position ${p}, but ${board.id} has ${board.keyCount} keys`));
+    }
+    if (combo.layerIds !== "all") {
+      for (const id of combo.layerIds.filter((id) => !layers.has(id))) out.push(issue("unknown_ref", `combo "${combo.id}" is on layer "${id}", which does not exist`));
+    }
+  }
+  return out;
+}
+
+/**
+ * `firmware_unsupported`: every key must exist in the generated table (D-044), and nothing may
+ * belong to the other firmware. The table holds only names both firmwares send, so presence in it
+ * is what "exists in this layout's firmware" means.
+ */
+export function firmwareSupport(board: BoardDefinition, doc: Layout): Issue[] {
+  const out: Issue[] = [];
+  if (doc.firmware !== board.firmware) out.push(issue("firmware_unsupported", `the layout is ${doc.firmware} but ${board.id} runs ${board.firmware}`));
+  const unknownKey = (code: string, where: string, slot?: Slot) => {
+    if (!isKeyCode(code)) out.push(issue("firmware_unsupported", `${where}: "${code}" is not a keycode keyloom knows`, slotOf(slot)));
+  };
+  for (const { binding: b, slot, where } of bindingsOf(doc)) {
+    if (b.kind === "key") unknownKey(b.code, where, slot);
+    if (b.kind === "holdTap") unknownKey(b.tap.code, where, slot);
+    if (b.kind === "native" && b.firmware !== doc.firmware) {
+      out.push(issue("firmware_unsupported", `${where} is a ${b.firmware} native binding in a ${doc.firmware} layout`, slotOf(slot)));
+    }
+  }
+  for (const macro of doc.macros) {
+    for (const step of macro.steps) if ("code" in step && step.code !== undefined) unknownKey(step.code, `macro "${macro.id}"`);
+  }
+  for (const p of doc.holdTapProfiles.filter((p) => p.firmware !== doc.firmware)) {
+    out.push(issue("firmware_unsupported", `hold-tap profile "${p.id}" is for ${p.firmware}, not ${doc.firmware}`));
+  }
+  for (const s of doc.settings.filter((s) => s.firmware !== doc.firmware)) {
+    out.push(issue("firmware_unsupported", `setting ${s.key} is for ${s.firmware}, not ${doc.firmware}`));
+  }
+  return out;
+}
+
+const LEFT_MODS: readonly Mod[] = ["LCTL", "LSFT", "LALT", "LGUI"];
+
+/**
+ * QMK `MT()` and `LT()` take a basic keycode with no modifiers on the tap side, and one right-hand
+ * modifier makes the whole mod-tap right-handed (qmk/qmk_firmware 7a1bbf3 docs/mod_tap.md:65).
+ * Both rules run on every hold-tap in a QMK layout, whatever its hold side, except mixed hands,
+ * which only a modifier hold can have.
+ */
+export function qmkHoldTap(doc: Layout): Issue[] {
+  if (doc.firmware !== "qmk") return [];
+  const out: Issue[] = [];
+  for (const { binding: b, slot, where } of bindingsOf(doc)) {
+    if (b.kind !== "holdTap") continue;
+    if (b.tap.mods?.length) out.push(issue("qmk_modtap_basic", `${where}: QMK hold-taps can't tap a modified key (${b.tap.code} with ${b.tap.mods.join("+")})`, slotOf(slot)));
+    // An unknown code is firmware_unsupported already; saying it isn't basic as well would repeat it.
+    else if (isKeyCode(b.tap.code) && !keyCodeInfo(b.tap.code).qmkBasic) {
+      out.push(issue("qmk_modtap_basic", `${where}: ${b.tap.code} is not a QMK basic keycode, so it can't be the tap of a hold-tap`, slotOf(slot)));
+    }
+    if ("mods" in b.hold) {
+      const left = b.hold.mods.filter((m) => LEFT_MODS.includes(m)).length;
+      if (left > 0 && left < b.hold.mods.length) {
+        out.push(issue("qmk_modtap_mixed_hands", `${where}: a QMK mod-tap can't mix left and right modifiers (${b.hold.mods.join("+")}); one right-hand modifier makes all of them right-handed`, slotOf(slot)));
+      }
+    }
+  }
+  return out;
+}
+
+const QMK_LAYER_LIMIT = 32; // Oryx's documented limit (05), not QMK's own
+const QMK_8BIT_LIMIT = 8;
+
+const isOn = (v: string | number | boolean) => v !== false && v !== 0 && v !== "0" && v !== "";
+
+/** `layer_limit`: 32 layers on QMK, 8 when `LAYER_STATE_8BIT` is set (S3: the importer stores `#define LAYER_STATE_8BIT` as true). */
+export function layerLimit(doc: Layout): Issue[] {
+  if (doc.firmware !== "qmk") return [];
+  const eightBit = doc.settings.some((s) => s.firmware === "qmk" && s.key === "LAYER_STATE_8BIT" && isOn(s.value));
+  const limit = eightBit ? QMK_8BIT_LIMIT : QMK_LAYER_LIMIT;
+  if (doc.layers.length <= limit) return [];
+  return [issue("layer_limit", `${doc.layers.length} layers, but the limit is ${limit}${eightBit ? " because LAYER_STATE_8BIT is set" : ""}`)];
+}
+
+/** The rules that look at one document; the relational ones below also need the document before. */
+export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
+  ...duplicateIds(doc),
+  ...bindingCount(board, doc),
+  ...unknownRefs(board, doc),
+  ...firmwareSupport(board, doc),
+  ...qmkHoldTap(doc),
+  ...layerLimit(doc),
+];
+
+const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b.firmware, b.source, b.label]);
+
+/**
+ * `native_edit`: keyloom can't reason about source it doesn't model (D-024), so a native binding
+ * may be moved, swapped, copied or replaced whole by a modelled binding, but the document may
+ * never gain a native binding it did not already have. That also covers "edit the C in a native
+ * key", which is a replacement by a different native binding. No op edits `passthrough`, so a
+ * difference there can only be a bug; it is checked anyway because the cost of missing it is a
+ * keymap that silently stops matching its custom C.
+ */
+export function nativeEdit(before: Layout, after: Layout): Issue[] {
+  const known = new Set<string>();
+  for (const { binding: b } of bindingsOf(before)) if (b.kind === "native") known.add(nativeKey(b));
+  const out: Issue[] = [];
+  for (const { binding: b, slot, where } of bindingsOf(after)) {
+    if (b.kind === "native" && !known.has(nativeKey(b))) {
+      out.push(issue("native_edit", `${where}: ${b.source} is firmware source keyloom did not import; replace the key with a modelled binding instead`, slotOf(slot)));
+    }
+  }
+  if (!deepEqual(before.passthrough, after.passthrough)) out.push(issue("native_edit", "a change touched a passthrough block; keyloom keeps those verbatim"));
+  return out;
+}
+
+/**
+ * `passthrough_layer_index`: custom code that names layers by number keeps working only while
+ * every existing layer keeps its index. That holds exactly when the old layer order is a prefix of
+ * the new one, so adding at the end passes and removing, inserting or reordering does not, however
+ * the ops got there.
+ */
+export function passthroughLayerIndex(before: Layout, after: Layout): Issue[] {
+  const pinned = before.passthrough.filter((p) => p.refersToLayerIndices);
+  if (pinned.length === 0) return [];
+  const moved = before.layers.some((l, i) => after.layers[i]?.id !== l.id);
+  if (!moved) return [];
+  const where = pinned.map((p) => `${p.file} ${p.anchor}`).join(", ");
+  return [issue("passthrough_layer_index", `this change removes or reorders layers, but ${where} refers to layers by number and would point at the wrong ones`)];
+}
