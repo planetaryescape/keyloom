@@ -128,7 +128,7 @@ function Decision({
       ) : (
         <>
           <h3 id={titleId}>{d.goal}</h3>
-          {d.kind === "choice" ? <p className="decision-choice">{d.choice}</p> : null}
+          {d.kind === "choice" && d.choice !== d.goal ? <p className="decision-choice">{d.choice}</p> : null}
           <p className="decision-reason"><span>Why</span>{d.reason}</p>
           {keys === "" ? null : <p className="decision-keys"><span>Keys</span>{keys}</p>}
           {d.scope.apps.length + d.scope.habits.length === 0 ? null : (

@@ -55,7 +55,7 @@ describe("writing a choice on apply", () => {
     expect(silent.decisionId).toBeNull();
 
     const typed = applyOps(app, layoutId, { baseRevisionId: getLayout(app, layoutId).revision.id, ops: cmdShift, summary: "Command-Shift on key 43", reason: "I kept missing it" });
-    expect(showDecision(app, typed.decisionId as string)).toMatchObject({ kind: "choice", goal: "Changed by hand in the editor", choice: "Command-Shift on key 43", reason: "I kept missing it" });
+    expect(showDecision(app, typed.decisionId as string)).toMatchObject({ kind: "choice", goal: "Command-Shift on key 43", choice: "Command-Shift on key 43", reason: "I kept missing it" });
     expect(listDecisions(app, layoutId, { kind: "choice" })).toHaveLength(1);
   });
 

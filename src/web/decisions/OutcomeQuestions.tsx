@@ -49,8 +49,9 @@ function Ask({ decision, flashedAt, onAnswer }: { decision: DecisionCard; flashe
 
   return (
     <section className="outcome-ask" aria-label="Has this worked out?">
-      <p className="outcome-title">Has this worked out? {decision.choice}</p>
-      <p className="outcome-meta">You flashed it on {when.format(flashedAt)}. Reason at the time: {decision.reason}</p>
+      <p className="outcome-title">Has this worked out?</p>
+      <p>{decision.choice}</p>
+      <p className="outcome-meta">You flashed it on {when.format(flashedAt)}. Your reason then: {decision.reason}</p>
       {verdict === null ? (
         <div className="outcome-actions">
           <button type="button" className="button" disabled={busy} onClick={() => setVerdict("tried_helpful")}>It helped</button>

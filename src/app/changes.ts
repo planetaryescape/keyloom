@@ -151,12 +151,12 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
 
 /**
  * What an editor change remembers: only a reason BK typed, because a typo fix needs no memory (08).
- * The goal says it was done by hand; the summary is the choice; his words are the reason.
+ * The summary says what was done, so it is both the goal and the choice; his words are the reason.
  */
 export function editorDraft(summary: string, reason: string | undefined): StoredDraft | undefined {
   const why = reason?.trim();
   if (!why) return undefined;
-  return { goal: "Changed by hand in the editor", choice: summary.trim(), reason: why, scope: { apps: [], habits: [] }, sourceMessageIds: [] };
+  return { goal: summary.trim(), choice: summary.trim(), reason: why, scope: { apps: [], habits: [] }, sourceMessageIds: [] };
 }
 
 /** The editor path: records an editor change set and applies it in one transaction. A `reason` BK typed is remembered. */
