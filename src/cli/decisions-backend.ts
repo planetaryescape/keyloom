@@ -4,8 +4,10 @@ import {
   type App, type DecisionRow, NotFoundError, UsageError, dismissOutcome, editDecision, listDecisions, outcomeQuestions, recordOutcome, retireDecision,
   showDecision,
 } from "../app/index.ts";
-import type { DecisionCard } from "../api/http.ts";
 import { DecisionError, type DecisionsBackend } from "../server/decisions-backend.ts";
+
+// The wire shape lives in src/api, which the CLI may not import; the backend interface carries it.
+type DecisionCard = Awaited<ReturnType<DecisionsBackend["update"]>>;
 
 export const toDecisionCard = (d: DecisionRow): DecisionCard => ({
   id: d.id, kind: d.kind, priorityKind: d.priorityKind, status: d.status, goal: d.goal, choice: d.choice, reason: d.reason, scope: d.scope, subject: d.subject,
