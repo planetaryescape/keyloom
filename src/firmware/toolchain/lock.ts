@@ -2,7 +2,7 @@
 // each other's keymap and outputs. mkdir is atomic, and the owner's pid lets a lock left by a
 // crashed process be taken over.
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 /** Whether a process with this pid exists (we may not be allowed to signal it, which still means it exists). */
 export const processAlive = (pid: number): boolean => {
@@ -25,6 +25,8 @@ export async function withLock<T>(
 ): Promise<T> {
   const deadline = Date.now() + opts.timeoutMs;
   let announced = false;
+  // The first build on a machine has no cache directory yet; only the lock itself must be created atomically.
+  await mkdir(dirname(dir), { recursive: true });
   for (;;) {
     try {
       await mkdir(dir);

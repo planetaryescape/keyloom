@@ -91,6 +91,11 @@ describe("withLock", () => {
     expect(waited).toBe(process.ppid);
   });
 
+  test("the first use on a machine, when the parent directory doesn't exist yet", async () => {
+    const dir = join(tempDir(), "no", "such", "parent", "x.lock");
+    expect(await withLock(dir, async () => "ok", { timeoutMs: 1000 })).toBe("ok");
+  });
+
   test("the lock is released when the work throws", async () => {
     const dir = join(tempDir(), "x.lock");
     await expect(withLock(dir, async () => { throw new Error("boom"); }, { timeoutMs: 1000 })).rejects.toThrow("boom");
