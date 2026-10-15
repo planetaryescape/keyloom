@@ -17,3 +17,14 @@ export class ValidationFailedError extends Error {
     super(message);
   }
 }
+
+/**
+ * The head moved since the change set's base, and the ops touch something that changed (02), or
+ * an undo named a revision that is no longer the head: exit 5. `conflicts` names what differs.
+ */
+export class StaleBaseError extends Error {
+  override name = "StaleBaseError";
+  constructor(message: string, readonly conflicts: string[] = []) {
+    super(message);
+  }
+}
