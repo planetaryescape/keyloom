@@ -108,3 +108,28 @@ export function applyDisplayRotation(
   }
   return out;
 }
+
+/**
+ * The two hands' trays, each its keys' bounds grown by `pad`. When the halves sit so close that the
+ * grown trays would overlap (the Corne's tilted inner thumbs nearly meet), each stops `gap / 2` short
+ * of the midpoint between the two hands' keys instead.
+ */
+const MAX_SPLIT_OVERLAP = 0.5;
+
+export const growBounds = (b: Bounds, pad: number): Bounds => ({ minX: b.minX - pad, minY: b.minY - pad, width: b.width + 2 * pad, height: b.height + 2 * pad });
+
+export function handTrays(left: Bounds, right: Bounds, pad: number, gap: number): [Bounds, Bounds] {
+  const l = growBounds(left, pad);
+  const r = growBounds(right, pad);
+  const leftKeysEnd = left.minX + left.width;
+  // Tilted thumbs can overlap a hair in x without touching (the Corne's do, by 0.007 keys); halves that
+  // truly interleave are left alone, since no vertical split separates them.
+  if (l.minX + l.width + gap <= r.minX || leftKeysEnd - right.minX > MAX_SPLIT_OVERLAP) return [l, r];
+  const split = (leftKeysEnd + right.minX) / 2;
+  const lEnd = split - gap / 2;
+  const rStart = split + gap / 2;
+  return [
+    { ...l, width: lEnd - l.minX },
+    { ...r, minX: rStart, width: r.minX + r.width - rStart },
+  ];
+}

@@ -3,7 +3,7 @@ import type { GeometryKey } from "../../boards/schema.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "./Cap.tsx";
 import { MoveArrows } from "./MoveArrows.tsx";
-import { boardBounds, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
+import { boardBounds, growBounds, handTrays, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { useFitUnit } from "./useFitUnit.ts";
 import "./keyboard.css";
@@ -140,8 +140,8 @@ export function Keyboard({
         aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}
         style={{ width: canvas.width * unit, height: canvas.height * unit }}
       >
-        {[hands.left, hands.right].map((positions, side) => (
-          <Tray key={side} keys={positions.flatMap((p) => keys[p] ?? [])} canvas={canvas} unit={unit} />
+        {trays(keys, hands).map((tray, side) => (
+          <Tray key={side} tray={tray} canvas={canvas} unit={unit} />
         ))}
         {keys.map((geometryKey, index) => {
           const description = descriptions[index];
@@ -192,16 +192,20 @@ export function Keyboard({
   );
 }
 
-// Tray behind one hand: the bounding box of its rotated keys, a little larger.
-function Tray({ keys, canvas, unit }: { keys: readonly GeometryKey[]; canvas: Bounds; unit: number }) {
-  if (keys.length === 0) return null;
-  const hand = boardBounds(keys);
+// Trays behind each hand: the bounding box of its rotated keys, a little larger, kept apart where the halves nearly meet.
+function trays(keys: readonly GeometryKey[], hands: { left: readonly number[]; right: readonly number[] }): Bounds[] {
   const pad = MARGIN * 0.6;
+  const [left, right] = [hands.left, hands.right].map((ps) => ps.flatMap((p) => keys[p] ?? []));
+  if (!left?.length || !right?.length) return [left, right].flatMap((k) => (k?.length ? [growBounds(boardBounds(k), pad)] : []));
+  return handTrays(boardBounds(left), boardBounds(right), pad, GAP * 2);
+}
+
+function Tray({ tray, canvas, unit }: { tray: Bounds; canvas: Bounds; unit: number }) {
   const style: CSSProperties = {
-    left: (hand.minX - pad - canvas.minX) * unit,
-    top: (hand.minY - pad - canvas.minY) * unit,
-    width: (hand.width + 2 * pad) * unit,
-    height: (hand.height + 2 * pad) * unit,
+    left: (tray.minX - canvas.minX) * unit,
+    top: (tray.minY - canvas.minY) * unit,
+    width: tray.width * unit,
+    height: tray.height * unit,
     borderRadius: unit * 0.5,
   };
   return <div className="keyboard-half" aria-hidden="true" style={style} />;
