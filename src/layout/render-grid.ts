@@ -39,6 +39,10 @@ const same = (a: readonly Mod[], b: readonly Mod[]) => a.length === b.length && 
 
 /** ⌘⇧ for a set of modifiers; the two sets people name get their names. */
 export function modsText(mods: readonly Mod[]): string {
+  // All right-hand: one "r" in front reads better than one per modifier (rHyp, not r⌃r⇧r⌥r⌘).
+  if (mods.length > 1 && mods.every((m) => m.startsWith("R"))) {
+    return `r${modsText(mods.map((m) => `L${m.slice(1)}` as Mod))}`;
+  }
   if (same(mods, ["LCTL", "LSFT", "LALT", "LGUI"])) return "Hyp";
   if (same(mods, ["LCTL", "LSFT", "LALT"])) return "Meh";
   return mods.map((m) => MOD_SYMBOL[m]).join("");
