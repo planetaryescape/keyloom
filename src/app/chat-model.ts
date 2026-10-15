@@ -3,7 +3,6 @@
 // credential. Keys come from the environment and are never stored (03#model-and-sdk).
 import { type AgentModel } from "../agent/model.ts";
 import { DEFAULT_EFFORT, anthropicModel, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
-import { codexModel } from "../agent/codex-model.ts";
 import { LOGIN_HINT } from "../agent/codex/errors.ts";
 import { checkCodexLogin } from "../agent/codex/login.ts";
 import { DEFAULT_MODELS, PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
@@ -75,6 +74,8 @@ export async function defaultAgentModel(dataDir: string, choice: ModelChoice = {
       if (!login.ready) {
         throw new ModelError("missing_key", login.reason === "not_installed" ? "The Codex CLI is not installed. Install it, then run `codex login`." : `Codex is not signed in. ${LOGIN_HINT}`);
       }
+      // Loaded here, not at startup: it brings the MCP SDK, which every CLI invocation would otherwise pay for.
+      const { codexModel } = await import("../agent/codex-model.ts");
       return codexModel({ ...opts, env });
     }
   }

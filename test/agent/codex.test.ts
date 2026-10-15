@@ -2,7 +2,9 @@
 // (S20 covers the real binary). What matters here is the lockdown, the transcript, and that the
 // validator is still the only way a change set comes into being (D-108, D-110).
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { codexModel } from "../../src/agent/codex-model.ts";
 import { startToolServer } from "../../src/agent/codex/tool-server.ts";
@@ -21,15 +23,23 @@ const alt = (title: string, ops: unknown[]) => ({
 const good = { op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "modifier", mods: ["LALT"] } };
 const bad = { op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "key", code: "OPTION" } };
 
-async function run(steps: FakeStep[], opts: { maxIterations?: number; message?: string; usage?: Record<string, number>; timeoutMs?: number } = {}) {
+async function run(steps: FakeStep[], opts: { maxIterations?: number; message?: string; usage?: Record<string, number>; timeoutMs?: number; env?: Record<string, string> } = {}) {
   const ctx = await optionOptionApp();
   const fake = fakeCodex({ steps, ...(opts.usage ? { usage: opts.usage } : {}) });
-  const model = codexModel({ env: { ...process.env, KEYLOOM_CODEX_BIN: fake.bin }, ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}) });
+  // CODEX_HOME is always set, so no test depends on whether the machine running it has signed in to Codex.
+  const model = codexModel({ env: { ...process.env, CODEX_HOME: fakeCodexHome(true), ...opts.env, KEYLOOM_CODEX_BIN: fake.bin }, ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}) });
   const events: string[] = [];
   const outcome = await sendMessage(ctx.app, ctx.layoutId, {
     message: opts.message ?? "Option is on S", model, ...(opts.maxIterations ? { maxIterations: opts.maxIterations } : {}), onEvent: (e) => events.push(e.type === "text" ? `text:${e.delta}` : e.type),
   });
   return { ...ctx, fake, outcome, events };
+}
+
+/** A stand-in for ~/.codex: a directory, with or without a sign-in file in it. */
+function fakeCodexHome(signedInWithFile: boolean): string {
+  const dir = mkdtempSync(join(tmpdir(), "fake-codex-home-"));
+  if (signedInWithFile) writeFileSync(join(dir, "auth.json"), "{}");
+  return dir;
 }
 
 const changeSetCount = (db: { query: (sql: string) => { get: () => unknown } }) => (db.query("SELECT COUNT(*) AS n FROM change_sets").get() as { n: number }).n;
@@ -48,7 +58,14 @@ describe("a Codex turn", () => {
     expect(outcome.text).toBe("Hold layer 2 and tap S twice.");
     expect(outcome.proposals).toHaveLength(1);
     expect(outcome.proposals[0]).toMatchObject({ title: "Plain Option on layer 2", status: "proposed", validation: { ok: true } });
-    expect(events).toEqual(["start", "text:Let me look at the layout.", "tool", "tool", "proposal", "text:\n\nHold layer 2 and tap S twice.", "done"]);
+    // Tool events come from the in-process handlers and text from Codex's output stream, two channels that
+    // race, so only what each guarantees is asserted: the frame, each channel's own order, and proposal after its tool.
+    expect(events[0]).toBe("start");
+    expect(events.at(-1)).toBe("done");
+    expect(events.filter((e) => e.startsWith("text:"))).toEqual(["text:Let me look at the layout.", "text:\n\nHold layer 2 and tap S twice."]);
+    expect(events.filter((e) => e === "tool")).toHaveLength(2);
+    expect(events.indexOf("proposal")).toBeGreaterThan(events.lastIndexOf("tool"));
+    expect(events.filter((e) => e === "proposal")).toHaveLength(1);
 
     // The stored transcript has the same shape the Anthropic loop leaves: assistant tool_use, then a user tool_result.
     const stored = listMessages(app.db, outcome.conversationId).map((m) => [m.role, m.content.map((b) => b.type)]);
@@ -141,6 +158,25 @@ describe("the lockdown", () => {
         else process.env[k] = v;
       }
     }
+  });
+
+  test("the sign-in is linked in as a file, so Codex works and keyloom never reads it", async () => {
+    const real = fakeCodexHome(true);
+    const { fake } = await run([{ say: "ok" }], { env: { CODEX_HOME: real } });
+    const rec = fake.record()!;
+    expect(rec.authLink).toBe(join(real, "auth.json"));
+    expect(rec.env.CODEX_HOME).not.toBe(real);
+    // The link is gone with the scratch directory, and the real file was not touched.
+    expect(existsSync(join(real, "auth.json"))).toBe(true);
+  });
+
+  test("with no auth.json to link (a keyring sign-in) the real CODEX_HOME is used, and HOME is still scratch", async () => {
+    const real = fakeCodexHome(false);
+    const { fake } = await run([{ say: "ok" }], { env: { CODEX_HOME: real } });
+    const rec = fake.record()!;
+    expect(rec.env.CODEX_HOME).toBe(real);
+    expect(rec.authLink).toBeNull();
+    expect(rec.env.HOME).toMatch(/keyloom-codex-.*\/home$/);
   });
 
   test("the schema of propose_changes reaches Codex whole", async () => {
