@@ -44,6 +44,7 @@ keyloom
   flash [--build B] [--layout L]           flash the newest successful build of L, or B
   emulate <layout> (--keys "<script>" | --script <file>) [--rev R] [--board-rev B]
                                            run the real firmware logic and print what the keyboard would send
+  flash ... --wait <minutes>                how long to wait for a bootloader key press (1 to 60, default 2)
   flash --reboot-only [--board B]          only restart the attached keyboard into its bootloader (keyloom firmware only)
   doctor                                   Docker, toolchain images, pinned checkouts, attached keyboard and its firmware, API key, database
 ```

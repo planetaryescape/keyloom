@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { dfuProblem, readDfuSuffix } from "../../../src/firmware/qmk/dfu.ts";
-import { HANDS_FREE_INSTRUCTION, RESET_INSTRUCTION, type FlashState, flashWithZapp } from "../../../src/firmware/qmk/flash.ts";
+import { HANDS_FREE_INSTRUCTION, RESET_INSTRUCTION, type FlashState, flashWithZapp, resetInstruction } from "../../../src/firmware/qmk/flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { dfuImage, fakeBinDir } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
@@ -205,3 +205,13 @@ describe("flashWithZapp, hands-free", () => {
     expect(verified).toBe(false);
   });
 });
+
+describe("resetInstruction", () => {
+  test("says how long keyloom waits, in minutes when whole and seconds otherwise", () => {
+    expect(RESET_INSTRUCTION).toEndWith("keyloom waits 2 minutes.");
+    expect(resetInstruction(60_000)).toEndWith("keyloom waits 1 minute.");
+    expect(resetInstruction(30 * 60_000)).toEndWith("keyloom waits 30 minutes.");
+    expect(resetInstruction(90_000)).toEndWith("keyloom waits 90 seconds.");
+  });
+});
+

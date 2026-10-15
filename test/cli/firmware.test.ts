@@ -120,6 +120,16 @@ describe("keyloom flash", () => {
   });
 });
 
+describe("keyloom flash --wait", () => {
+  test("takes 1 to 60 minutes; anything else is a usage error before anything is flashed", async () => {
+    for (const bad of ["0", "61", "soon"]) {
+      const r = await cli(["flash", "--layout", "x", "--wait", bad]);
+      expect(r.code).toBe(2);
+      expect(r.err).toContain("--wait takes minutes from 1 to 60");
+    }
+  });
+});
+
 describe("keyloom doctor", () => {
   test("reports Docker, its disk, the image, zapp and the pinned checkout", async () => {
     const e = await toolchainEnv();

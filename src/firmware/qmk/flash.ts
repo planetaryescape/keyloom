@@ -17,8 +17,17 @@ export const CHECKING_INSTRUCTION = "keyloom is checking whether it can restart 
 
 export const HANDS_FREE_INSTRUCTION = "keyloom is restarting the keyboard into its bootloader. There is nothing to press.";
 
-export const RESET_INSTRUCTION =
-  "Press the reset button on the Moonlander (the small hole on its back; use a paperclip), or press its Reset key if the layout has one. keyloom waits 2 minutes.";
+const waitText = (ms: number): string => {
+  const minutes = ms / 60_000;
+  if (Number.isInteger(minutes)) return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  return `${Math.round(ms / 1000)} seconds`;
+};
+
+/** What to press, with how long keyloom will wait for it (the CLI's --wait changes that). */
+export const resetInstruction = (waitMs: number = BOOTLOADER_WAIT_MS): string =>
+  `Press the reset button on the Moonlander (the small hole on its back; use a paperclip), or press its Reset key if the layout has one. keyloom waits ${waitText(waitMs)}.`;
+
+export const RESET_INSTRUCTION = resetInstruction();
 
 export type FlashInput = {
   artifactPath: string;
@@ -84,7 +93,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   };
 
   input.log.line(`keyloom: ${zapp} flash ${input.artifactPath}`);
-  input.onState("waiting_for_bootloader", input.enterBootloader ? HANDS_FREE_INSTRUCTION : RESET_INSTRUCTION);
+  input.onState("waiting_for_bootloader", input.enterBootloader ? HANDS_FREE_INSTRUCTION : resetInstruction(input.bootloaderWaitMs));
   arm(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS, "bootloader");
 
   const result = await run({
@@ -107,12 +116,12 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
                 rebooted = r.ok;
                 if (!r.ok) {
                   input.log.line(`keyloom: couldn't restart the keyboard itself: ${r.reason}`);
-                  input.onState("waiting_for_bootloader", `keyloom couldn't restart the keyboard by itself (${r.reason}). ${RESET_INSTRUCTION}`);
+                  input.onState("waiting_for_bootloader", `keyloom couldn't restart the keyboard by itself (${r.reason}). ${resetInstruction(input.bootloaderWaitMs)}`);
                 }
               },
               (err: unknown) => {
                 input.log.line(`keyloom: couldn't restart the keyboard itself: ${err instanceof Error ? err.message : String(err)}`);
-                input.onState("waiting_for_bootloader", RESET_INSTRUCTION);
+                input.onState("waiting_for_bootloader", resetInstruction(input.bootloaderWaitMs));
               },
             );
           }
