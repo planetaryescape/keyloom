@@ -39,7 +39,7 @@ export function keysLine(layout: Layout, d: Pick<DecisionCard, "subject">): stri
   return slots.length > MAX_NAMED ? `${named.join("; ")} and ${slots.length - MAX_NAMED} more` : named.join("; ");
 }
 
-const KEY_NAMES = new Map(KEYCODES.map((k) => [k.name, k.label]));
+const KEY_NAMES = new Map<string, string>(KEYCODES.map((k) => [k.name, k.label]));
 
 /** A plain key reads by its full name in a list ("Caps Lock", not "CAPS"); anything else as the proposal diff names it. */
 function subjectName(fn: string, layout: Layout): string {
