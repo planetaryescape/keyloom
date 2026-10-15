@@ -11,12 +11,13 @@ import "./boarddev.css";
 
 const NONE: ReadonlySet<number> = new Set();
 
-// A key's cap prints its position, which is the number board.json uses (counted from 0).
+// A key's cap prints the number a person counts by (from 1), like the editor does; board.json's own
+// 0-based position is shown beside it, labelled as the file position.
 function describePosition(position: number): KeyDescription {
   return {
     kind: "key",
-    legend: { kind: "key", tap: String(position) },
-    headline: `Position ${position}`,
+    legend: { kind: "key", tap: String(position + 1) },
+    headline: `Key ${position + 1}`,
     fields: [],
     steps: [],
     options: [],
@@ -86,7 +87,7 @@ export function BoardDevApp({ token }: { token: string }) {
           <ul className="meta">
             <li>{view.id === "" ? "no id yet" : view.id}</li>
             <li>{view.geometry.keys.length} keys</li>
-            <li>Position numbers start at 0</li>
+            <li>Keys are numbered from 1; board.json counts from 0</li>
           </ul>
         </div>
         <button type="button" className="button" onClick={load}>
@@ -116,11 +117,12 @@ export function BoardDevApp({ token }: { token: string }) {
             <p className="boarddev-idle">Hover or select a key to see what board.json says about it.</p>
           ) : (
             <dl className="fields">
-              <Fact label="Position" value={String(shown)} code />
+              <Fact label="Key" value={String(shown + 1)} />
+              <Fact label="Position in board.json" value={String(shown)} code />
               <Fact label="Hand" value={facts.hand} />
               <Fact label="Finger" value={facts.finger} />
               <Fact label="Row" value={facts.row} />
-              <Fact label="Mirror" value={facts.mirror === null ? null : `position ${facts.mirror}`} />
+              <Fact label="Mirror" value={facts.mirror === null ? null : `key ${facts.mirror + 1}`} />
             </dl>
           )}
         </div>

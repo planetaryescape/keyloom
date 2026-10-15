@@ -65,7 +65,8 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
       if (error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale")) onStale();
       else if (error instanceof ApiError) {
         if (error.validation !== undefined) check.show(error.validation);
-        setProblem(error.message);
+        // The server's message quotes the validator's own text; the problems are listed in words above.
+        setProblem(error.validation === undefined ? error.message : "This change has problems, listed above. Nothing was saved.");
       } else setProblem("The change could not be applied.");
     } finally {
       setApplying(false);

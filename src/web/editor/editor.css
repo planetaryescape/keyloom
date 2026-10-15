@@ -874,3 +874,107 @@
   margin: 0;
   font-size: var(--text-sm);
 }
+
+/* Functions the draft would lose: one row each, with the two ways forward beside the sentence. */
+.lost {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.lost-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lost-row {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-error);
+  border-radius: var(--radius-sm);
+  background: var(--color-error-bg);
+}
+
+.lost-row > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-error);
+}
+
+.lost-row p {
+  margin: 0;
+}
+
+.lost-body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.lost-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.lost-actions .button,
+.lost-all {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+
+.lost-all {
+  align-self: flex-start;
+}
+
+/* Waiting for a click on the board: the accent says the next click means something else. */
+.lost-row[data-waiting="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+}
+.lost-row[data-waiting="true"] > svg {
+  color: var(--color-accent);
+}
+
+/* A choice already made, and a note: settled, so no alarm colour. */
+.lost-done,
+.lost-note {
+  border-color: var(--color-border-strong);
+  background: var(--color-panel);
+}
+.lost-done > svg,
+.lost-note > svg {
+  color: var(--color-text-muted);
+}
+
+/* Above the board while place mode waits for a click, so it reads next to the keys it is about. */
+.place-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-bg);
+}
+
+.place-banner > svg {
+  flex: none;
+  color: var(--color-accent);
+}
+
+.place-banner span {
+  flex: 1;
+}

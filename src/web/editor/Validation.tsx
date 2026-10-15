@@ -16,6 +16,8 @@ interface Props {
   onRecheck: () => void;
   /** A card that lists moves itself passes false, so they aren't said twice. */
   showMoves?: boolean;
+  /** The editor asks about lost functions itself (LostFunctions), so they aren't listed a second time. */
+  hideLost?: boolean;
 }
 
 function slotName(layout: Layout, slot: Slot): string {
@@ -32,7 +34,7 @@ function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" 
       <div>
         <p>
           <span className="sr-only">{kind === "error" ? "Error: " : "Warning: "}</span>
-          {issue.message}
+          {issue.plain ?? issue.message}
         </p>
         {others.length === 0 ? null : (
           <ul className="slot-chips" aria-label="Keys involved">
@@ -86,7 +88,7 @@ function Summary({ result, layout, showMoves }: { result: ValidationResult; layo
 
 // Everything the validator said about the draft, in the order it matters: errors block Apply,
 // warnings don't, and a clean pass says so rather than staying silent.
-export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves = true }: Props) {
+export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves = true, hideLost = false }: Props) {
   let body;
   if (state.status === "idle") {
     body = (
@@ -115,13 +117,15 @@ export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves
       </div>
     );
   } else {
-    const { errors } = state.result;
+    const all = state.result.errors;
+    const errors = hideLost ? all.filter((issue) => issue.code !== "function_lost") : all;
+    const hiddenLost = all.length - errors.length;
     // A reminder is shown in full below, with the reason quoted, so its warning is not listed twice.
     const warnings = state.result.warnings.filter((w) => w.code !== "contradicts_decision");
     body = (
       <>
         <Reminders reminders={state.result.diff.reminders} layout={layout} />
-        {errors.length === 0 && warnings.length === 0 ? (
+        {errors.length === 0 && warnings.length === 0 && hiddenLost > 0 ? null : errors.length === 0 && warnings.length === 0 ? (
           <p className="validation-note validation-ok">
             <CircleCheck size={16} aria-hidden="true" />
             <span className="validation-ok-label">No problems found</span>

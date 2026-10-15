@@ -1,3 +1,4 @@
+import { MousePointerClick } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding } from "../layout/schema.ts";
@@ -11,8 +12,10 @@ import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
 import { arrowsOn, marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
 import { Reminders } from "./decisions/Reminders.tsx";
-import { BindingEditor, type DraftState } from "./editor/BindingEditor.tsx";
+import { BindingEditor, type DraftState, type PlaceRequest } from "./editor/BindingEditor.tsx";
 import { withBinding } from "./editor/draft.ts";
+import { functionName } from "./editor/function-label.ts";
+import type { Placement } from "./editor/lost-functions.ts";
 import { RepeatPanel } from "./editor/RepeatPanel.tsx";
 import type { LastChange } from "./editor/repeat-plan.ts";
 import { ProfileTuner } from "./editor/ProfileTuner.tsx";
@@ -50,6 +53,9 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
   const [editing, setEditing] = useState<Editing | null>(null);
   const [draft, setDraft] = useState<DraftState>(CLEAN);
   const [blocked, setBlocked] = useState(false);
+  // Place mode (D-092): a lost function waiting for the next key clicked on the board, and the keys already chosen.
+  const [placing, setPlacing] = useState<PlaceRequest | null>(null);
+  const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [applied, setApplied] = useState<{ layerId: string; position: number } | null>(null);
   const [undoing, setUndoing] = useState(false);
@@ -86,8 +92,13 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
   // While a draft is complete the board shows it, so the key reads as it will once applied.
   const shown = useMemo(() => {
     const base = preview?.layout ?? layout;
-    return editing !== null && draft.binding !== null ? withBinding(base, editing.layerId, editing.position, draft.binding) : base;
-  }, [layout, preview, editing, draft.binding]);
+    if (editing === null || draft.binding === null) return base;
+    // The board shows both keys of the change: the edited one and every key a kept function was put on.
+    return placements.reduce(
+      (acc, placement) => withBinding(acc, placement.slot.layerId, placement.slot.position, placement.binding),
+      withBinding(base, editing.layerId, editing.position, draft.binding),
+    );
+  }, [layout, preview, editing, draft.binding, placements]);
   const layerIndex = Math.max(
     0,
     shown.layers.findIndex((candidate) => candidate.id === layer?.id),
@@ -96,7 +107,13 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     () => keys.map((_, index) => describeKey(shown, layerIndex, index)),
     [shown, layerIndex, keys],
   );
-  const marks = useMemo(() => marksOn(preview, layer?.id ?? ""), [preview, layer]);
+  const marks = useMemo(() => {
+    const own = marksOn(preview, layer?.id ?? "");
+    if (placements.length === 0) return own;
+    const withPlaced = new Map(own);
+    for (const placement of placements) if (placement.slot.layerId === layer?.id) withPlaced.set(placement.slot.position, "home");
+    return withPlaced;
+  }, [preview, layer, placements]);
   const arrows = useMemo(() => arrowsOn(preview, layer?.id ?? ""), [preview, layer]);
   const markedLayers = useMemo(() => otherMarkedLayers(preview, layer?.id ?? ""), [preview, layer]);
   const remembered = useMemo(() => rememberedOn(preview, decisionFocus, layer?.id ?? ""), [preview, decisionFocus, layer]);
@@ -129,6 +146,25 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     return () => window.clearTimeout(timer);
   }, [applied]);
 
+  // Escape leaves place mode before it can close the editor, wherever focus is.
+  useEffect(() => {
+    if (placing === null) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setPlacing(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [placing]);
+
+  // A draft that goes back to no change takes its kept functions with it.
+  useEffect(() => {
+    if (draft.binding !== null) return;
+    setPlacements((previous) => (previous.length === 0 ? previous : []));
+    setPlacing(null);
+  }, [draft.binding]);
+
   // A freshly opened editor can start below the fold on a short window; bring it into view.
   useEffect(() => {
     if (editing?.focus !== true) return;
@@ -139,7 +175,35 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
   if (layer === undefined) return null;
   const editingHere = editing !== null && editing.layerId === layer.id;
 
+  // In place mode a click on the board chooses where the kept function goes, not which key is selected.
+  function placeOn(index: number) {
+    if (placing === null || editing === null || layer === undefined) return;
+    if (layer.id === editing.layerId && index === editing.position) {
+      setNotice({ kind: "info", message: "Choose a different key", detail: "This is the key you are changing." });
+      return;
+    }
+    setNotice(null);
+    setPlacements((previous) => [
+      ...previous.filter((candidate) => candidate.function !== placing.function),
+      { function: placing.function, slot: { layerId: layer.id, position: index }, binding: placing.binding },
+    ]);
+    setPlacing(null);
+  }
+
+  function startPlacing(request: PlaceRequest | null) {
+    setPlacing(request);
+    // The board is above the editor, so the click target has to be brought into view.
+    if (request === null) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    stage.current?.scrollIntoView({ block: "start", behavior: calm ? "auto" : "smooth" });
+  }
+
   function select(index: number | null) {
+    if (placing !== null) {
+      // A click on empty board space must not end the editor and lose the draft while a key is awaited.
+      if (index !== null) placeOn(index);
+      return;
+    }
     // A draft is the person's work; moving to another key doesn't get to discard it silently.
     if (editing !== null && draft.dirty && index !== editing.position) {
       setBlocked(true);
@@ -152,6 +216,11 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
   }
 
   function chooseLayer(id: string) {
+    // A kept function can go on any layer, so place mode lets the board show another one.
+    if (placing !== null) {
+      setLayerId(id);
+      return;
+    }
     if (editing !== null && draft.dirty) {
       setBlocked(true);
       return;
@@ -166,6 +235,8 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     setNotice(null);
     setBlocked(false);
     setDraft(CLEAN);
+    setPlacing(null);
+    setPlacements([]);
     setRepeating(false);
     setEditing({ layerId: layer.id, position, focus: true });
   }
@@ -174,6 +245,8 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     const position = editing?.position ?? null;
     setEditing(null);
     setDraft(CLEAN);
+    setPlacing(null);
+    setPlacements([]);
     setBlocked(false);
     if (refocus && position !== null) keyboard.current?.focusKey(position);
   }
@@ -292,7 +365,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     <div className="workspace">
       <div className="workspace-main">
         {notice === null ? null : <Notice {...notice} onDismiss={() => setNotice(null)} />}
-        <section className="stage" aria-label="Layout" ref={stage}>
+        <section className="stage" aria-label="Layout" ref={stage} data-placing={placing !== null}>
           <div className="stage-bar">
             <LayerTabs layers={layout.layers} selectedId={layer.id} onSelect={chooseLayer} marked={markedLayers} />
             {preview !== null && proposal !== null ? (
@@ -315,6 +388,13 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
             onRepeat={lastChange === null ? null : () => setRepeating((open) => !open)}
             repeatBlocked={editing !== null ? "Close the key you are editing first" : null}
           />
+          {placing === null ? null : (
+            <p className="place-banner" role="status">
+              <MousePointerClick size={16} aria-hidden="true" />
+              <span>Click the key that should get {functionName(placing.function, layout)}. Escape cancels.</span>
+              <button type="button" className="button" onClick={() => setPlacing(null)}>Cancel</button>
+            </p>
+          )}
           <Keyboard
             handle={keyboard}
             keys={keys}
@@ -334,7 +414,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
             onToggle={toggleChatKey}
             onSelect={select}
             onHover={setHovered}
-            onActivate={openEditor}
+            onActivate={placing === null ? openEditor : placeOn}
           />
           <Legend firmware={layout.firmware} />
         </section>
@@ -360,6 +440,10 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
                 setDraft(next);
                 setBlocked(false);
               }}
+              placements={placements}
+              placing={placing}
+              onPlace={startPlacing}
+              onUnplace={(fn) => setPlacements((previous) => previous.filter((candidate) => candidate.function !== fn))}
               onClose={() => closeEditor(true)}
               onApplied={onApplied}
               onStale={onStale}

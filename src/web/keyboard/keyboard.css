@@ -288,3 +288,8 @@ button.cap[data-applied="true"] {
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* Place mode: the next click on a key chooses where a kept function goes. */
+.stage[data-placing="true"] button.cap {
+  cursor: crosshair;
+}
