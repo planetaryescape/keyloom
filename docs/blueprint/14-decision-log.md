@@ -493,7 +493,6 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 - **Rows:** "Drop F16" adds a `dropFunction` op with a generated reason ("Replaced by F17 on key 7 of Layer 0"); "Put F16 somewhere first" enters place mode, and the next key clicked gets the binding F16 came from. Both land in one change set, so undo is one step.
 - **Layer keys:** when a layer key is the only way to a layer, Drop is not offered, because no `dropFunction` licenses an unreachable layer. The rest of that layer's keys are summarised as one line, since they return once the layer key is kept.
 - **Chain:** putting F16 on a key displaces what was there, which raises the same question for that key.
-||||||| parent of 3c0062a (docs: S19 and S20 results, D-120..D-124, eval reports; provider line under the chat header)
 
 
 ### D-120: The provider comes from `--provider`, then `KEYLOOM_PROVIDER`, then `<data dir>/config.json`, then the first provider with a credential. (Claude, rung 10)
@@ -557,9 +556,7 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 ### D-136: `handsFree` is a block of the `uf2-drives` flash recipe, naming halves by their flash step's label. (Claude, building rung 12; refines the blueprint's example)
 - **Why on the recipe, not the board:** a revision has its own flash steps, and a half is only meaningful beside the step that writes it. The blueprint example repeated each step's `volume`; naming the step's `label` removes the second copy that could drift. The schema rejects a half whose label no step has, two centrals, a repeated marker letter, a relayed central and a `serialTail` that doesn't end in 16 hex characters.
 - **Fields:** `trigger` (`cdc-1200`), `usbVendorId?`, `halves[] { role, step, marker, usbProductId?, relay? }`, `serialMarker` (`usb-sn-template` | `usb-sn-override`), `serialTail`. The Glove80 gives its IDs (vendor `0x16c0`, left `0x27db`, right `0x27d9`, observed with `ioreg` on 2026-10-15). The Corne gives none.
-||||||| parent of 1033f93 (feat: decisions, spacing guard and non-text contrast tests for the key panel)
 
-||||||| parent of 6c1546d (feat: decisions, spacing guard and non-text contrast tests for the key panel)
 
 
 ### D-140: The side column has one width in every mode, and the board is sized to the stage beside it, so a panel opening cannot move the board. (Claude, building D-098)
@@ -648,9 +645,7 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 ### D-169: Every sync records the times from Apply to a verified flash, so rung 17 is decided by measurement. (Claude, building rung 13; D-096)
 - **Recorded:** per sync, the revision's Apply time, the start, the end of the build, the start of the flash and the end. `keyloom sync status --format json` shows the last as `timings_s` (wait, build, flash, apply to verified); `logs/sync-<id>.log` has a line per step with the milliseconds since Apply.
 - **Meaning:** the number that decides rung 17 is `apply_to_verified`, over a week of BK's use. A build that is reused (a retry) shows a build time near zero.
-||||||| parent of cf03c56 (feat: tap dance validation, text steps and docs; fix the QMK emulator clock)
 
-||||||| parent of aa1754b (feat: tap dance validation, text steps and docs; fix the QMK emulator clock)
 
 
 ### D-150: `Layout.tapDances` is a new array, `schemaVersion` stays 1, and an old document reads as `[]`. (Claude, building rung 14)
