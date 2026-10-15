@@ -1,6 +1,8 @@
 import { Ellipsis, Hammer, Keyboard, Monitor, Moon, Sun, ChevronDown, Check } from "lucide-react";
 import type { LayoutSummary } from "../../api/http.ts";
 import type { ReleaseStatus } from "../release/status.ts";
+import { SyncStatus } from "../sync/SyncStatus.tsx";
+import type { SyncApi } from "../sync/useSync.ts";
 import { Menu } from "./Menu.tsx";
 import { useTheme, type ThemeChoice } from "./theme.ts";
 
@@ -109,11 +111,13 @@ export interface HeaderProps {
   selectedId?: string;
   onSelect?: (id: string) => void;
   release?: { status: ReleaseStatus; onOpen: () => void };
+  /** The keyboard's sync state for the layout on screen (17). */
+  sync?: { api: SyncApi; layoutId: string; boardId: string; onOpenRelease: () => void };
 }
 
 // The header carries identity and state: which board and layout, the theme, and the way to build.
 // Everything else about the layout lives in the summary panel.
-export function Header({ layouts, selectedId, onSelect, release }: HeaderProps) {
+export function Header({ layouts, selectedId, onSelect, release, sync }: HeaderProps) {
   const [theme, setTheme] = useTheme();
   return (
     <header className="app-header">
@@ -127,6 +131,7 @@ export function Header({ layouts, selectedId, onSelect, release }: HeaderProps) 
         <LayoutMenu layouts={layouts} selectedId={selectedId} onSelect={onSelect} />
       )}
       <div className="header-end">
+        {sync === undefined ? null : <SyncStatus sync={sync.api} layoutId={sync.layoutId} boardId={sync.boardId} onOpenRelease={sync.onOpenRelease} />}
         <ThemeToggle value={theme} onChange={setTheme} />
         {release === undefined ? null : <ReleaseMenu status={release.status} onOpen={release.onOpen} />}
       </div>

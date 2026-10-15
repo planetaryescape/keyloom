@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
-import { Header } from "./shell/Header.tsx";
+import { Header, type HeaderProps } from "./shell/Header.tsx";
 import { EmptyState, ErrorState, Loading } from "./shell/States.tsx";
 import { ReleaseDialog } from "./release/ReleaseDialog.tsx";
 import { releaseStatus, type ReleaseStatus } from "./release/status.ts";
 import { useNow } from "./release/useNow.ts";
 import { useRelease } from "./release/useRelease.ts";
+import { useSync, type SyncApi } from "./sync/useSync.ts";
 import { Viewer } from "./Viewer.tsx";
 
 type Failure = { message: string; retryable: boolean };
@@ -20,6 +21,8 @@ export function App({ token }: { token: string }) {
   const [view, setView] = useState<View | null>(null);
   // Bumping this refetches the list; it backs the "Check again" and "Try again" buttons.
   const [attempt, setAttempt] = useState(0);
+  // Where each keyboard stands against its layout's head; the server's engine does the work and this follows it (17).
+  const sync = useSync(token);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -116,6 +119,7 @@ export function App({ token }: { token: string }) {
       summary={summary}
       detail={current.detail}
       menu={menu}
+      sync={sync}
       onChanged={refresh}
     />
   );
@@ -126,12 +130,14 @@ function LayoutPage({
   summary,
   detail,
   menu,
+  sync,
   onChanged,
 }: {
   token: string;
   summary: LayoutSummary;
   detail: LayoutDetail;
   menu: HeaderMenu;
+  sync: SyncApi;
   onChanged: () => Promise<void>;
 }) {
   const { document: layout, board, geometry } = detail;
@@ -151,11 +157,16 @@ function LayoutPage({
 
   const failure = problem ?? ("error" in rotated ? rotated.error : null);
   return (
-    <Shell menu={menu} release={failure === null ? { status, onOpen: () => setReleaseOpen(true) } : undefined} fill>
+    <Shell
+      menu={menu}
+      release={failure === null ? { status, onOpen: () => setReleaseOpen(true) } : undefined}
+      sync={{ api: sync, layoutId: summary.id, boardId: summary.boardId, onOpenRelease: () => setReleaseOpen(true) }}
+      fill
+    >
       {failure !== null || !("keys" in rotated) ? (
         <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
       ) : (
-        <Viewer detail={detail} summary={summary} keys={rotated.keys} token={token} layoutRef={summary.id} onChanged={onChanged} onOpenRelease={() => setReleaseOpen(true)} />
+        <Viewer detail={detail} summary={summary} keys={rotated.keys} token={token} layoutRef={summary.id} sync={sync} onChanged={onChanged} onOpenRelease={() => setReleaseOpen(true)} />
       )}
       <ReleaseDialog
         open={releaseOpen}
@@ -189,17 +200,19 @@ type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSel
 function Shell({
   menu,
   release,
+  sync,
   fill = false,
   children,
 }: {
   menu?: HeaderMenu;
   release?: { status: ReleaseStatus; onOpen: () => void } | undefined;
+  sync?: HeaderProps["sync"];
   fill?: boolean;
   children?: ReactNode;
 }) {
   return (
     <div className="app" data-fill={fill}>
-      <Header {...(menu ?? {})} {...(release === undefined ? {} : { release })} />
+      <Header {...(menu ?? {})} {...(release === undefined ? {} : { release })} {...(sync === undefined ? {} : { sync })} />
       <main className="app-main">{children}</main>
     </div>
   );

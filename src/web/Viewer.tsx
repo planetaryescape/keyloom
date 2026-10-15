@@ -28,6 +28,8 @@ import { SidePanel, type PanelMode } from "./shell/SidePanel.tsx";
 import { readStored, writeStored } from "./shell/storage.ts";
 import { Toasts, useToasts } from "./shell/Toasts.tsx";
 import { Toolbar } from "./shell/Toolbar.tsx";
+import type { SyncApi } from "./sync/useSync.ts";
+import { useSyncToasts } from "./sync/useSyncToasts.ts";
 
 interface ViewerProps {
   detail: LayoutDetail;
@@ -41,6 +43,8 @@ interface ViewerProps {
   onChanged: () => Promise<void>;
   /** Opens the Build and flash dialog, which the chat points at after an apply. */
   onOpenRelease: () => void;
+  /** The keyboard's sync state, for the toasts that say a change reached it or didn't. */
+  sync: SyncApi;
 }
 
 type Editing = { layerId: string; position: number; focus: boolean };
@@ -52,7 +56,7 @@ const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
-export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease }: ViewerProps) {
+export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, sync }: ViewerProps) {
   const { document: layout, board, revision } = detail;
   const [layerId, setLayerId] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -64,6 +68,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [placing, setPlacing] = useState<PlaceRequest | null>(null);
   const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const toasts = useToasts();
+  useSyncToasts(sync, toasts.show);
   const [applied, setApplied] = useState<{ layerId: string; position: number } | null>(null);
   const [undoing, setUndoing] = useState(false);
   // The chat drawer. Open, a click on a key adds it to the "Asking about" chips; closed, it opens the key's panel (D-099).
