@@ -99,6 +99,7 @@ export function BoardDevApp({ token }: { token: string }) {
       <section className="card boarddev-stage">
         <Keyboard
           keys={keys}
+          keycaps={view.display?.keycaps}
           hands={view.hands}
           descriptions={descriptions}
           fingers={view.fingers}

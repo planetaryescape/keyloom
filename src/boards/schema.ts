@@ -41,6 +41,9 @@ export const RevisionSchema = z.strictObject({
 });
 export type BoardRevision = z.infer<typeof RevisionSchema>;
 
+export const KEYCAP_COLOURS = ["red"] as const;
+export type KeycapColour = (typeof KEYCAP_COLOURS)[number];
+
 export const BoardDefinitionSchema = z.strictObject({
   schemaVersion: z.literal(1),
   id: z.string().regex(/^[a-z0-9-]+\/[a-z0-9-]+$/),
@@ -64,7 +67,11 @@ export const BoardDefinitionSchema = z.strictObject({
   // Display-only rotation; never affects positions or generation (04).
   display: z
     .strictObject({
-      rotate: z.array(z.strictObject({ positions, r: z.number(), rx: z.number(), ry: z.number() })),
+      rotate: z.array(z.strictObject({ positions, r: z.number(), rx: z.number(), ry: z.number() })).optional(),
+      // Slides keys sideways, in key units, after rotation. QMK's Moonlander halves are 4u apart, too close for the thumb clusters to tilt inward without meeting.
+      shift: z.array(z.strictObject({ positions, dx: z.number() })).optional(),
+      // The physical keycap's colour where it is not the board's usual one (the Moonlander's red thumb keys), by position.
+      keycaps: z.record(z.string().regex(/^\d+$/), z.enum(KEYCAP_COLOURS)).optional(),
     })
     .optional(),
 });

@@ -889,3 +889,21 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - **Stays manual:** the first flash of any new board, and naming a ZMK board when its product string doesn't settle it.
 
 ### D-237: Two corrections from the new-keyboard research: VIA has no bootloader-jump command (only Vial does), and the keyboard-state reader's ZSA-only vendor check is generalised in rung 21. (Claude, from the research)
+
+### D-250: The Moonlander's thumb clusters are drawn at 30 degrees, with the red key above the three-key arc, from ZSA's own renderings. (BK's report, Claude)
+- **Why:** QMK's `keyboard.json` has no rotation, so the 2u red key sat on the bottom row beside the board and the three thumb keys stood upright. Oryx's rendering (`docs/research/configurators/oryx/17-swap-keys.png`, measured: the key edges run at 30 degrees, the three keys step 1u apart, the red key sits over the first two) and ZSA's top-down product image of the right half (`moonlander/legacy/3-columnar.webp` on zsa.io, checked 2026-10-16: rotating it 33 degrees puts all four keys upright) agree. The old 15 degrees was a guess.
+- **Shape:** the red key is drawn as a 2u by 1u rectangle. ZSA's is a hexagon with one cut corner and a little taller; a polygon would need a second shape model for one key.
+
+### D-251: Looks the firmware doesn't carry go in `display` in `board.json`, applied only when drawing, and a test ties them to the generated geometry. (Claude)
+- **Why:** BK asked that generated output not be hand-edited. `display.rotate` already existed for this; `display.shift` is added because QMK's 4u gap between the halves is too small for clusters tilted inward (they overlapped in the first render). `boards check` rejects positions past `keyCount`, and `test/boards/display-overrides.test.ts` checks that the overridden keys are the 2u and 1.5u keys they were measured against, that the two halves mirror, and that no key overlaps another as drawn.
+- **Rejected:** a second geometry file with the corrected numbers. It would be a copy of generated output that can drift in silence.
+
+### D-252: A physical keycap colour is `display.keycaps` and is drawn as a rim and a 12% tint, never as the kind's fill. (BK's report, Claude)
+- **Why:** kind is carried by fill and shape (18, D-100). A red fill would hide hold-tap, layer and macro on the very keys BK uses most. A 2px red rim plus a faint tint says "this is the red key" and leaves the legend at the contrast the kind fills were tested for. `test/web/contrast.test.ts` holds the rim at 3:1 and every kind's ink at 4.5:1 on the tinted fill, in both themes. The palette has one colour, `red`, because no other board needs one.
+
+### D-253: Glove80 and Corne keep their generated geometry. (Claude)
+- **Why:** both come from vendor-authored ZMK physical layouts (MoErgo's `glove80-layouts.dtsi`, upstream ZMK's `foostan/corne/6column.dtsi`), not from QMK data that lacks rotation. The Corne's tall inner thumb keys match QMK's `crkbd/info.json` (`h: 1.5` on the innermost thumb). Nothing in the pictures contradicts the real boards' shape.
+- **Not checked:** a top-down product photo of either board. Neither vendor publishes one that could be fetched; the comparison is against the vendors' own layout data.
+
+### D-254: On a phone, the Moonlander's left half scrolls sideways by a few pixels. (Claude)
+- **Why:** the tilted cluster makes a half about 9 units wide, and the board stops shrinking at 44px a unit (18). Scrolling is the existing fallback for a board that is too wide. Shrinking the keys below 44px would cost more than the scroll.

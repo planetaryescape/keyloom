@@ -124,6 +124,16 @@
   font-weight: var(--weight-regular);
 }
 
+/* A physical keycap colour (the Moonlander's red thumb keys, D-252): a 2px rim and a 12% tint laid over the kind's fill, so the key is
+   recognisable as that physical key while the fill still says what it does. test/web/contrast.test.ts holds the legend and rim contrast. */
+.cap[data-keycap="red"] {
+  border-color: var(--keycap-red);
+  background-image: linear-gradient(color-mix(in srgb, var(--keycap-red) 12%, transparent), color-mix(in srgb, var(--keycap-red) 12%, transparent));
+  box-shadow:
+    inset 0 0 0 1px var(--keycap-red),
+    inset 0 -2px 0 var(--cap-shadow-edge);
+}
+
 /* A hold-tap's kind shape: a band along the bottom. */
 .cap-band {
   position: absolute;

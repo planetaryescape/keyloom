@@ -1,5 +1,5 @@
 import { useImperativeHandle, useMemo, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type Ref } from "react";
-import type { GeometryKey } from "../../boards/schema.ts";
+import type { GeometryKey, KeycapColour } from "../../boards/schema.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "./Cap.tsx";
 import { ComboLines, type ComboLine } from "./ComboLines.tsx";
@@ -32,6 +32,8 @@ interface KeyboardProps {
   /** Already has display rotation applied, so keys[i] is the i-th binding's key. */
   keys: readonly GeometryKey[];
   hands: { left: readonly number[]; right: readonly number[] };
+  /** Physical keycap colours by key position, where a cap is not the usual colour (the Moonlander's red thumb keys). */
+  keycaps?: Readonly<Record<string, KeycapColour>> | undefined;
   /** One description per key, for the current layer. */
   descriptions: readonly (KeyDescription | null)[];
   /** Finger names by key position, for accessible names. */
@@ -101,6 +103,7 @@ function ariaLabel(index: number, description: KeyDescription, finger: string | 
 
 export function Keyboard({
   keys,
+  keycaps,
   hands,
   descriptions,
   fingers,
@@ -215,6 +218,7 @@ export function Keyboard({
                 buttons.current[index] = element;
               }}
               tone={description.kind}
+              {...(keycaps?.[String(index)] === undefined ? {} : { keycap: keycaps[String(index)] as KeycapColour })}
               legend={legendOverrides?.[index] ?? description.legend}
               breakable={legendOverrides?.[index] !== undefined}
               layerColor={layerColors?.get(index) ?? 1}

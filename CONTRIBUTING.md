@@ -308,11 +308,15 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `limits.lighting` | all | Why the board can't show per-key colours, such as "its lights are underglow, which shows one effect across the whole strip". Set it on a board with no `lighting`. |
 | `settingDefaults` | all | Optional. An object from a setting's name to the value this board has by default when that differs from the firmware's, such as `"MOUSEKEY_ENABLE": true`. |
 | `display` | all | Optional. Changes how the board is drawn, never what positions mean. |
-| `display.rotate` | all | A list of rotations to draw. |
+| `display.rotate` | all | Optional. A list of rotations to draw. |
 | `display.rotate[].positions` | all | The keys to turn. |
 | `display.rotate[].r` | all | The angle in degrees. |
 | `display.rotate[].rx` | all | The x of the point to turn around, in key units. |
 | `display.rotate[].ry` | all | The y of the point to turn around, in key units. |
+| `display.shift` | all | Optional. A list of sideways slides to draw, applied after rotation. |
+| `display.shift[].positions` | all | The keys to slide. |
+| `display.shift[].dx` | all | How far to slide them, in key units. Use it when a split board's halves are drawn too close for their tilted thumb clusters. |
+| `display.keycaps` | all | Optional. An object from a position, as a string, to the physical keycap colour where it is not the board's usual one. Only `red` exists, for the Moonlander's two big thumb keys. |
 
 Use `display.rotate` only when the firmware's own geometry doesn't tilt keys that really tilt. The Moonlander's thumbs are the example.
 

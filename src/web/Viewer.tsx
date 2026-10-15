@@ -990,6 +990,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           <Keyboard
             handle={keyboard}
             keys={keys}
+            keycaps={board.display?.keycaps}
             hands={board.hands}
             descriptions={descriptions}
             fingers={board.fingers}

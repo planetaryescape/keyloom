@@ -1,6 +1,7 @@
 import { Bookmark, Check } from "lucide-react";
 import type { ButtonHTMLAttributes, CSSProperties, Ref } from "react";
 import type { Legend } from "../../layout/legend.ts";
+import type { KeycapColour } from "../../boards/schema.ts";
 import { CAP_INSET, fitLegend, HOLD_SIZE, TAP_SIZE, textEm } from "./fit.ts";
 
 export type Tone = Legend["kind"];
@@ -23,6 +24,8 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   layerColor?: number;
   /** The key's LED colour on this layer as a hex, drawn as a faint wash and a bar along the top edge (D-192). */
   led?: string;
+  /** The physical keycap's colour, drawn as a rim and a faint tint so the key is recognisable without changing its kind's fill. */
+  keycap?: KeycapColour;
   /** The draft mark: this key's change is not applied yet. */
   pending?: boolean;
   /** The remembered mark: keyloom keeps a reason for this key. */
@@ -41,7 +44,7 @@ const breakAtSeams = (text: string) => text.replace(/[_+(]/g, (seam) => `${seam}
 // dashes, a none key's hatching) as well as by fill, and the selection, draft and remembered marks
 // are each their own element so they can show together.
 export function Cap({
-  tone, legend, unit, floorPx, width, as = "button", combo = false, legendTurn, layerColor, led, pending = false, remembered = false, breakable = false, style, ...rest
+  tone, legend, unit, floorPx, width, as = "button", combo = false, legendTurn, layerColor, keycap, led, pending = false, remembered = false, breakable = false, style, ...rest
 }: CapProps) {
   const floor = floorPx === undefined ? {} : { floor: floorPx };
   const tap = fitLegend(legend.tap, width, TAP_SIZE, { unit, ...floor });
@@ -109,13 +112,13 @@ export function Cap({
   if (as === "span") {
     return (
       // A swatch only illustrates; whatever it sits beside carries the words.
-      <span className="cap" data-tone={tone} data-led={led !== undefined} style={capStyle} aria-hidden="true">
+      <span className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} style={capStyle} aria-hidden="true">
         {children}
       </span>
     );
   }
   return (
-    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} style={capStyle} {...rest}>
+    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} style={capStyle} {...rest}>
       {children}
     </button>
   );

@@ -149,6 +149,21 @@ describe("boards check", () => {
     expect(errors(await checkBoardDir(dir, { offline: true }))).toContain("keyCount is 70, but geometry.json has 72 keys");
   });
 
+  test("a display override or keycap colour past the last position is an error", async () => {
+    const dir = await boardCopy((b) => {
+      b.display.rotate[0].positions.push(72);
+      b.display.keycaps["80"] = "red";
+    });
+    const e = errors(await checkBoardDir(dir, { offline: true }));
+    expect(e).toContain("display refers to position 72, but keyCount is 72");
+    expect(e).toContain("display refers to position 80, but keyCount is 72");
+  });
+
+  test("a keycap colour outside the palette is rejected", async () => {
+    const dir = await boardCopy((b) => { b.display.keycaps["59"] = "chartreuse"; });
+    expect((await checkBoardDir(dir, { offline: true })).issues.some((i) => i.level === "error")).toBe(true);
+  });
+
   test("a mirror that points at the wrong hand or reuses a target is an error", async () => {
     const dir = await boardCopy((b) => { b.mirror["0"] = 1; b.mirror["1"] = 1; });
     const e = errors(await checkBoardDir(dir, { offline: true }));

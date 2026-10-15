@@ -92,6 +92,20 @@ describe("applyDisplayRotation", () => {
     expect(out[2]).toMatchObject({ rx: 2, ry: 1 });
   });
 
+  test("shift slides only the listed positions, with their rotation pivot", () => {
+    const out = applyDisplayRotation(keys, {
+      rotate: [{ positions: [1], r: 10, rx: 1, ry: 1 }],
+      shift: [{ positions: [1, 2], dx: 2 }],
+    });
+    expect(out.map((k) => k.x)).toEqual([0, 3, 4]);
+    expect(out[1]).toMatchObject({ r: 10, rx: 3, ry: 1 });
+    expect(out[0]).toMatchObject({ rx: 0 });
+  });
+
+  test("a shift past the geometry throws", () => {
+    expect(() => applyDisplayRotation(keys, { shift: [{ positions: [9], dx: 1 }] })).toThrow(/key 9/);
+  });
+
   test("the input keys are not mutated", () => {
     applyDisplayRotation(keys, { rotate: [{ positions: [0], r: 30, rx: 0, ry: 0 }] });
     expect(keys[0]?.r).toBe(0);

@@ -115,7 +115,7 @@ Rejected alternatives:
 
 ## Physical layout
 
-The fork's `keyboards/zsa/moonlander/<rev>/keyboard.json` gives 72 keys with `x`, `y`, `w` and `h`, in the order `LAYOUT(...)` takes them. No key is rotated, so the angled thumb cluster draws straight. The board definition copies this geometry. It adds an optional display-only rotation for the thumb keys, so the editor looks like the real board. Rotation never affects positions or generation ([04](04-boards-and-contributions.md)).
+The fork's `keyboards/zsa/moonlander/<rev>/keyboard.json` gives 72 keys with `x`, `y`, `w` and `h`, in the order `LAYOUT(...)` takes them. No key is rotated, so the angled thumb cluster draws straight. The board definition copies this geometry. It adds display-only overrides so the editor looks like the real board: the thumb cluster and the two red keys turn 30 degrees about a point under the cluster, the right half slides 2 units away from the left so the tilted clusters don't meet, and the red keys carry a physical keycap colour (D-250 to D-252). Rotation never affects positions or generation ([04](04-boards-and-contributions.md)).
 
 ## Capabilities the agent is told about
 

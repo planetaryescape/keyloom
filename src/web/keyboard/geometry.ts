@@ -106,6 +106,16 @@ export function applyDisplayRotation(
       key.ry = rotation.ry;
     }
   }
+  for (const move of display?.shift ?? []) {
+    for (const position of move.positions) {
+      const key = out[position];
+      if (key === undefined) {
+        throw new Error(`display shift refers to key ${position}, but the board has ${keys.length} keys`);
+      }
+      key.x += move.dx;
+      key.rx += move.dx;
+    }
+  }
   return out;
 }
 

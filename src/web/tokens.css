@@ -41,6 +41,8 @@
   --cap-native: #a4ddd2;
   --cap-native-ink: #06453c;
   --color-combo: #3f7d1a;
+  /* The physical red of a Moonlander thumb keycap: a rim and a faint tint, never a kind fill (18, D-252). */
+  --keycap-red: #c62a1f;
 
   /* A layer key's left edge, by the layer it points at (base is the first). */
   --layer-1: #475569;
@@ -93,6 +95,7 @@
     --cap-native: #1f6b66;
     --cap-native-ink: #c9f6ee;
     --color-combo: #a5e06a;
+    --keycap-red: #ff6b5e;
 
     --layer-1: #b6c0cf;
     --layer-2: #9db8ff;
@@ -141,6 +144,7 @@
   --cap-native: #1f6b66;
   --cap-native-ink: #c9f6ee;
   --color-combo: #a5e06a;
+  --keycap-red: #ff6b5e;
 
   --layer-1: #b6c0cf;
   --layer-2: #9db8ff;

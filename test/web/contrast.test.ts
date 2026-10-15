@@ -89,6 +89,9 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["color-accent", "cap-macro", UI],
   ["color-accent", "cap-dance", UI],
   ["color-accent", "cap-native", UI],
+  // A physical keycap colour's rim (D-252) is read against the stage and the plain key it sits on.
+  ["keycap-red", "color-panel", UI],
+  ["keycap-red", "cap-key", UI],
   // The preview marks (dashed ring and dot) sit on the board's panel.
   ["color-accent", "color-panel", UI],
 ];
@@ -178,4 +181,35 @@ describe("non-text contrast", () => {
       expect(new Set(colours).size).toBe(6);
     }
   });
+});
+
+// A physical keycap colour tints the kind's fill (D-252); the legend must keep its text contrast on the tinted fill, and the tint must stay
+// the 12% keyboard.css draws, so a stronger wash fails here.
+describe("physical keycap tint", () => {
+  const mix = (a: string, b: string, share: number): string => {
+    const channel = (offset: number) => Math.round(Number.parseInt(a.slice(offset, offset + 2), 16) * share + Number.parseInt(b.slice(offset, offset + 2), 16) * (1 - share));
+    return `#${[1, 3, 5].map((offset) => channel(offset).toString(16).padStart(2, "0")).join("")}`;
+  };
+
+  test("keyboard.css tints at 12%", () => {
+    const rule = /\.cap\[data-keycap="red"\] \{[^}]*color-mix\(in srgb, var\(--keycap-red\) (\d+)%/s.exec(keyboardCss);
+    expect(rule?.[1]).toBe("12");
+  });
+
+  for (const [theme, values] of [
+    ["light", themes.light],
+    ["dark", themes.dark],
+  ] as const) {
+    test(`${theme}: every kind's ink stays at 4.5:1 on its fill with the red tint`, () => {
+      const red = values.get("keycap-red") as string;
+      const failures: string[] = [];
+      for (const kind of ["key", "modifier", "hold", "layer", "macro", "dance", "native"]) {
+        const fill = values.get(`cap-${kind}`) as string;
+        const ink = values.get(`cap-${kind}-ink`) as string;
+        const got = ratio(ink, mix(red, fill, 0.12));
+        if (got < TEXT) failures.push(`${kind}: ${got.toFixed(2)}:1`);
+      }
+      expect(failures).toEqual([]);
+    });
+  }
 });
