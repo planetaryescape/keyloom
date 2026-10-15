@@ -1,0 +1,1870 @@
+{
+  "document": {
+    "schemaVersion": 1,
+    "boardId": "zsa/moonlander",
+    "firmware": "qmk",
+    "layers": [
+      {
+        "id": "base",
+        "name": "Base",
+        "bindings": [
+          {
+            "kind": "key",
+            "code": "5"
+          },
+          {
+            "kind": "key",
+            "code": "6"
+          },
+          {
+            "kind": "key",
+            "code": "1"
+          },
+          {
+            "kind": "key",
+            "code": "ESCAPE"
+          },
+          {
+            "kind": "key",
+            "code": "2"
+          },
+          {
+            "kind": "key",
+            "code": "3"
+          },
+          {
+            "kind": "key",
+            "code": "4"
+          },
+          {
+            "kind": "key",
+            "code": "9"
+          },
+          {
+            "kind": "key",
+            "code": "0"
+          },
+          {
+            "kind": "key",
+            "code": "7"
+          },
+          {
+            "kind": "key",
+            "code": "6"
+          },
+          {
+            "kind": "key",
+            "code": "8"
+          },
+          {
+            "kind": "key",
+            "code": "MINUS"
+          },
+          {
+            "kind": "key",
+            "code": "BSPACE"
+          },
+          {
+            "kind": "key",
+            "code": "T"
+          },
+          {
+            "kind": "key",
+            "code": "LBRACKET"
+          },
+          {
+            "kind": "key",
+            "code": "Q"
+          },
+          {
+            "kind": "key",
+            "code": "TAB"
+          },
+          {
+            "kind": "key",
+            "code": "W"
+          },
+          {
+            "kind": "key",
+            "code": "E"
+          },
+          {
+            "kind": "key",
+            "code": "R"
+          },
+          {
+            "kind": "key",
+            "code": "O"
+          },
+          {
+            "kind": "key",
+            "code": "P"
+          },
+          {
+            "kind": "key",
+            "code": "U"
+          },
+          {
+            "kind": "key",
+            "code": "Y"
+          },
+          {
+            "kind": "key",
+            "code": "I"
+          },
+          {
+            "kind": "key",
+            "code": "RBRACKET"
+          },
+          {
+            "kind": "key",
+            "code": "BSLASH"
+          },
+          {
+            "kind": "key",
+            "code": "G"
+          },
+          {
+            "kind": "key",
+            "code": "MINUS"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "A"
+            },
+            "hold": {
+              "mods": [
+                "LCTL"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "key",
+            "code": "CAPSLOCK"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "S"
+            },
+            "hold": {
+              "mods": [
+                "LALT"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "D"
+            },
+            "hold": {
+              "mods": [
+                "LGUI"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "F"
+            },
+            "hold": {
+              "mods": [
+                "LSFT"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "L"
+            },
+            "hold": {
+              "mods": [
+                "RALT"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "key",
+            "code": "SCOLON"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "J"
+            },
+            "hold": {
+              "mods": [
+                "RSFT"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "H"
+            },
+            "hold": {
+              "mods": [
+                "RCTL"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "holdTap",
+            "tap": {
+              "code": "K"
+            },
+            "hold": {
+              "mods": [
+                "RGUI"
+              ]
+            },
+            "profileId": "home-row"
+          },
+          {
+            "kind": "key",
+            "code": "QUOTE"
+          },
+          {
+            "kind": "key",
+            "code": "ENTER"
+          },
+          {
+            "kind": "key",
+            "code": "V"
+          },
+          {
+            "kind": "key",
+            "code": "B"
+          },
+          {
+            "kind": "key",
+            "code": "Z"
+          },
+          {
+            "kind": "modifier",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "X"
+          },
+          {
+            "kind": "key",
+            "code": "C"
+          },
+          {
+            "kind": "key",
+            "code": "DOT"
+          },
+          {
+            "kind": "key",
+            "code": "M"
+          },
+          {
+            "kind": "key",
+            "code": "N"
+          },
+          {
+            "kind": "key",
+            "code": "COMMA"
+          },
+          {
+            "kind": "key",
+            "code": "SLASH"
+          },
+          {
+            "kind": "modifier",
+            "mods": [
+              "RSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "BSPACE"
+          },
+          {
+            "kind": "layer",
+            "action": "momentary",
+            "layerId": "numbers"
+          },
+          {
+            "kind": "key",
+            "code": "SPACE"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "native",
+            "firmware": "qmk",
+            "source": "RGB_TOG",
+            "label": "RGB"
+          },
+          {
+            "kind": "macro",
+            "macroId": "option-twice"
+          },
+          {
+            "kind": "key",
+            "code": "RALT"
+          },
+          {
+            "kind": "key",
+            "code": "ENTER"
+          },
+          {
+            "kind": "layer",
+            "action": "momentary",
+            "layerId": "nav"
+          },
+          {
+            "kind": "key",
+            "code": "ESCAPE"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "none"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "key",
+            "code": "LCTRL"
+          },
+          {
+            "kind": "key",
+            "code": "LALT"
+          },
+          {
+            "kind": "key",
+            "code": "RCTRL"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "none"
+          }
+        ]
+      },
+      {
+        "id": "numbers",
+        "name": "Numbers",
+        "bindings": [
+          {
+            "kind": "key",
+            "code": "5"
+          },
+          {
+            "kind": "key",
+            "code": "6"
+          },
+          {
+            "kind": "key",
+            "code": "1"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "key",
+            "code": "2"
+          },
+          {
+            "kind": "key",
+            "code": "3"
+          },
+          {
+            "kind": "key",
+            "code": "4"
+          },
+          {
+            "kind": "key",
+            "code": "0"
+          },
+          {
+            "kind": "key",
+            "code": "MINUS"
+          },
+          {
+            "kind": "key",
+            "code": "8"
+          },
+          {
+            "kind": "key",
+            "code": "7"
+          },
+          {
+            "kind": "key",
+            "code": "9"
+          },
+          {
+            "kind": "key",
+            "code": "EQUAL"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "key",
+            "code": "5",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "key",
+            "code": "1",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "key",
+            "code": "2",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "3",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "4",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "9",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "0",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "7",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "6",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "key",
+            "code": "8",
+            "mods": [
+              "LSFT"
+            ]
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          }
+        ]
+      },
+      {
+        "id": "nav",
+        "name": "Nav",
+        "bindings": [
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "key",
+            "code": "RIGHT"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "key",
+            "code": "DOWN"
+          },
+          {
+            "kind": "key",
+            "code": "LEFT"
+          },
+          {
+            "kind": "key",
+            "code": "UP"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          },
+          {
+            "kind": "transparent"
+          }
+        ]
+      }
+    ],
+    "macros": [
+      {
+        "id": "option-twice",
+        "name": "Option twice",
+        "steps": [
+          {
+            "op": "press",
+            "mods": [
+              "LALT"
+            ]
+          },
+          {
+            "op": "tap",
+            "code": "O"
+          },
+          {
+            "op": "release",
+            "mods": [
+              "LALT"
+            ]
+          }
+        ]
+      }
+    ],
+    "combos": [],
+    "holdTapProfiles": [
+      {
+        "id": "home-row",
+        "name": "Home row mods",
+        "firmware": "qmk",
+        "options": {
+          "tapping_term": 180,
+          "permissive_hold": true
+        }
+      }
+    ],
+    "settings": [],
+    "passthrough": []
+  },
+  "board": {
+    "schemaVersion": 1,
+    "id": "zsa/moonlander",
+    "name": "Moonlander",
+    "vendor": "ZSA",
+    "firmware": "qmk",
+    "keyCount": 72,
+    "revisions": [
+      {
+        "id": "reva",
+        "source": {
+          "repo": "https://github.com/zsa/qmk_firmware",
+          "ref": "93b2b9ec3368f86c5eb5a2e3f934049f8daef885",
+          "sha": "93b2b9ec3368f86c5eb5a2e3f934049f8daef885"
+        },
+        "qmkTarget": "zsa/moonlander/reva",
+        "build": {
+          "kind": "qmk-docker"
+        },
+        "flash": {
+          "kind": "zapp"
+        },
+        "detect": null
+      }
+    ],
+    "hands": {
+      "left": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        66,
+        67,
+        68
+      ],
+      "right": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        69,
+        70,
+        71
+      ]
+    },
+    "fingers": {
+      "0": "left-pinky",
+      "1": "left-ring",
+      "2": "left-middle",
+      "3": "left-index",
+      "4": "left-index",
+      "5": "left-index",
+      "6": "left-index",
+      "7": "right-index",
+      "8": "right-index",
+      "9": "right-index",
+      "10": "right-index",
+      "11": "right-middle",
+      "12": "right-ring",
+      "13": "right-pinky",
+      "14": "left-pinky",
+      "15": "left-ring",
+      "16": "left-middle",
+      "17": "left-index",
+      "18": "left-index",
+      "19": "left-index",
+      "20": "left-index",
+      "21": "right-index",
+      "22": "right-index",
+      "23": "right-index",
+      "24": "right-index",
+      "25": "right-middle",
+      "26": "right-ring",
+      "27": "right-pinky",
+      "28": "left-pinky",
+      "29": "left-ring",
+      "30": "left-middle",
+      "31": "left-index",
+      "32": "left-index",
+      "33": "left-index",
+      "34": "left-index",
+      "35": "right-index",
+      "36": "right-index",
+      "37": "right-index",
+      "38": "right-index",
+      "39": "right-middle",
+      "40": "right-ring",
+      "41": "right-pinky",
+      "42": "left-pinky",
+      "43": "left-ring",
+      "44": "left-middle",
+      "45": "left-index",
+      "46": "left-index",
+      "47": "left-index",
+      "48": "right-index",
+      "49": "right-index",
+      "50": "right-index",
+      "51": "right-middle",
+      "52": "right-ring",
+      "53": "right-pinky",
+      "54": "left-thumb",
+      "55": "left-thumb",
+      "56": "left-thumb",
+      "57": "left-thumb",
+      "58": "left-thumb",
+      "59": "left-thumb",
+      "60": "right-thumb",
+      "61": "right-thumb",
+      "62": "right-thumb",
+      "63": "right-thumb",
+      "64": "right-thumb",
+      "65": "right-thumb",
+      "66": "left-thumb",
+      "67": "left-thumb",
+      "68": "left-thumb",
+      "69": "right-thumb",
+      "70": "right-thumb",
+      "71": "right-thumb"
+    },
+    "rows": {
+      "number": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "top": [
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "home": [
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41
+      ],
+      "bottom": [
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53
+      ],
+      "thumb": [
+        54,
+        55,
+        56,
+        57,
+        58,
+        61,
+        62,
+        63,
+        64,
+        65
+      ],
+      "outer-thumb": [
+        59,
+        60,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71
+      ]
+    },
+    "mirror": {
+      "0": 13,
+      "1": 12,
+      "2": 11,
+      "3": 10,
+      "4": 9,
+      "5": 8,
+      "6": 7,
+      "14": 27,
+      "15": 26,
+      "16": 25,
+      "17": 24,
+      "18": 23,
+      "19": 22,
+      "20": 21,
+      "28": 41,
+      "29": 40,
+      "30": 39,
+      "31": 38,
+      "32": 37,
+      "33": 36,
+      "34": 35,
+      "42": 53,
+      "43": 52,
+      "44": 51,
+      "45": 50,
+      "46": 49,
+      "47": 48,
+      "54": 65,
+      "55": 64,
+      "56": 63,
+      "57": 62,
+      "58": 61,
+      "59": 71,
+      "66": 60,
+      "67": 70,
+      "68": 69
+    },
+    "importers": [
+      "oryx"
+    ]
+  },
+  "geometry": {
+    "schemaVersion": 1,
+    "source": {
+      "repo": "https://github.com/zsa/qmk_firmware",
+      "sha": "93b2b9ec3368f86c5eb5a2e3f934049f8daef885",
+      "path": "keyboards/zsa/moonlander/reva/keyboard.json"
+    },
+    "keys": [
+      {
+        "x": 0,
+        "y": 0.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 1,
+        "y": 0.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 2,
+        "y": 0.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 3,
+        "y": 0,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 4,
+        "y": 0.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 5,
+        "y": 0.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 6,
+        "y": 0.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 10,
+        "y": 0.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 11,
+        "y": 0.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 12,
+        "y": 0.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 13,
+        "y": 0,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 14,
+        "y": 0.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 15,
+        "y": 0.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 16,
+        "y": 0.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 0,
+        "y": 1.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 1,
+        "y": 1.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 2,
+        "y": 1.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 3,
+        "y": 1,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 4,
+        "y": 1.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 5,
+        "y": 1.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 6,
+        "y": 1.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 10,
+        "y": 1.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 11,
+        "y": 1.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 12,
+        "y": 1.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 13,
+        "y": 1,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 14,
+        "y": 1.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 15,
+        "y": 1.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 16,
+        "y": 1.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 0,
+        "y": 2.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 1,
+        "y": 2.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 2,
+        "y": 2.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 3,
+        "y": 2,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 4,
+        "y": 2.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 5,
+        "y": 2.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 6,
+        "y": 2.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 10,
+        "y": 2.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 11,
+        "y": 2.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 12,
+        "y": 2.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 13,
+        "y": 2,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 14,
+        "y": 2.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 15,
+        "y": 2.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 16,
+        "y": 2.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 0,
+        "y": 3.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 1,
+        "y": 3.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 2,
+        "y": 3.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 3,
+        "y": 3,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 4,
+        "y": 3.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 5,
+        "y": 3.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 11,
+        "y": 3.25,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 12,
+        "y": 3.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 13,
+        "y": 3,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 14,
+        "y": 3.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 15,
+        "y": 3.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 16,
+        "y": 3.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 0,
+        "y": 4.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 1,
+        "y": 4.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 2,
+        "y": 4.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 3,
+        "y": 4,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 4,
+        "y": 4.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 5,
+        "y": 4.5,
+        "w": 2,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 10,
+        "y": 4.5,
+        "w": 2,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 12,
+        "y": 4.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 13,
+        "y": 4,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 14,
+        "y": 4.125,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 15,
+        "y": 4.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 16,
+        "y": 4.375,
+        "w": 1,
+        "h": 1,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 5,
+        "y": 5.5,
+        "w": 1,
+        "h": 1.5,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 6,
+        "y": 5.5,
+        "w": 1,
+        "h": 1.5,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 7,
+        "y": 5.5,
+        "w": 1,
+        "h": 1.5,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 9,
+        "y": 5.5,
+        "w": 1,
+        "h": 1.5,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 10,
+        "y": 5.5,
+        "w": 1,
+        "h": 1.5,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      },
+      {
+        "x": 11,
+        "y": 5.5,
+        "w": 1,
+        "h": 1.5,
+        "r": 0,
+        "rx": 0,
+        "ry": 0
+      }
+    ]
+  }
+}
