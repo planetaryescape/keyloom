@@ -1,0 +1,29 @@
+config KEYLOOM_HANDSFREE
+    bool "keyloom hands-free flash"
+    default y
+    select USB
+    select USB_DEVICE_STACK
+    select USB_CDC_ACM
+    select SERIAL
+    select UART_LINE_CTRL
+    select UART_INTERRUPT_DRIVEN
+    help
+      Adds a USB serial port that keyloom opens at 1200 baud (and closes) to restart this half into its
+      UF2 bootloader. On the central half, 1201 baud restarts the peripherals instead.
+
+# Zephyr's default serial number is the chip ID alone. keyloom needs its build marker in front of it. A board that
+# already has its own usb_update_sn_string_descriptor (the Glove80) fills a template itself, and a second definition
+# would not link, so keyloom turns this on only for boards that have none.
+config KEYLOOM_SERIAL_OVERRIDE
+    bool "Put keyloom's build marker in the USB serial number"
+    depends on KEYLOOM_HANDSFREE
+    select HWINFO
+    help
+      CONFIG_USB_DEVICE_SN is the template, "keyloom/<12 characters of the build ID>-L:<16 placeholder characters>".
+      The firmware replaces the letter with L for the central half and R for a peripheral, and the last 16
+      characters with the chip ID.
+
+config KEYLOOM_HANDSFREE_STACK_SIZE
+    int "Stack size of the thread that watches the serial port"
+    depends on KEYLOOM_HANDSFREE
+    default 2048

@@ -34,7 +34,17 @@
             "label": "left half",
             "enter": "With the left half switched off and its USB cable connected, hold Magic + E and switch it on. A slowly pulsing red light by the power switch means it's ready. On a running layout, Magic + Esc does the same."
           }
-        ]
+        ],
+        "handsFree": {
+          "trigger": "cdc-1200",
+          "usbVendorId": "0x16c0",
+          "halves": [
+            { "role": "central", "step": "left half", "marker": "L", "usbProductId": "0x27db" },
+            { "role": "peripheral", "step": "right half", "marker": "R", "usbProductId": "0x27d9", "relay": true }
+          ],
+          "serialMarker": "usb-sn-template",
+          "serialTail": ":GLV80-0123456789ABCDEF"
+        }
       },
       "detect": {
         "usbProductId": "0x27db"

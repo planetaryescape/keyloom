@@ -10,7 +10,9 @@ import { type LogSink, run } from "../toolchain/run.ts";
 import { zmkRevision } from "./board-config.ts";
 import type { GeneratedSource } from "./generate.ts";
 import { ImageBuildError, ensureImage } from "./image.ts";
+import { GLOVE80_NIX, halfConfFile, moduleReport } from "./handsfree.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
+import { writeModule } from "./module.ts";
 import { CONF_FILE, KEYMAP_FILE } from "./files.ts";
 import { describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 
@@ -70,7 +72,6 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
 
       // The template's build reads config/glove80.keymap and config/glove80.conf (default.nix).
       for (const f of input.source.files) await Bun.write(join(input.checkoutDir, "config", f.path), f.content);
-
       const uid = process.getuid?.() ?? 1000;
       const gid = process.getgid?.() ?? 1000;
       const mount = ["-v", `${input.checkoutDir}:/config`];
@@ -85,6 +86,19 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       });
       if (visible.exitCode !== 0) {
         throw new BuildFailure(`Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
+      }
+
+      const handsFree = rev.flash.handsFree;
+      // After the probe, which is about the template's own default.nix: this replaces it.
+      if (handsFree) {
+        await writeModule(input.checkoutDir);
+        // The Nix expression reads one serial-number conf per half. A source made without a build ID has none, and a file left from
+        // an earlier build must not be used in its place.
+        for (const half of handsFree.halves) {
+          const path = halfConfFile(half.marker);
+          if (!input.source.files.some((f) => f.path === path)) await Bun.write(join(input.checkoutDir, "config", path), "# keyloom: no build marker\n");
+        }
+        await Bun.write(join(input.checkoutDir, "config", "default.nix"), GLOVE80_NIX);
       }
 
       const output: string[] = [];
@@ -125,6 +139,8 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       const problem = uf2Problem(bytes);
       if (problem) throw new BuildFailure(`The build produced a file that can't be flashed: ${problem}.`);
 
+      const carried = moduleReport(input.source.files, bytes);
+      if (carried) say(carried);
       await mkdir(dirname(input.artifactPath), { recursive: true });
       await copyFile(file.name as string, input.artifactPath);
       const info = inspectUf2(bytes);

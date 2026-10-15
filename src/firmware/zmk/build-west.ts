@@ -12,6 +12,8 @@ import { run } from "../toolchain/run.ts";
 import { describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import { zmkRevision } from "./board-config.ts";
 import { BUILD_TIMEOUT_MS, type ZmkBuildInput, type ZmkBuildResult, hint } from "./build.ts";
+import { moduleReport } from "./handsfree.ts";
+import { MODULE_DIR, OVERLAY_FILE, writeModule } from "./module.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
 
 /** The user config's manifest: ZMK at the pinned SHA, with its own `app/west.yml` for Zephyr and the modules. */
@@ -19,15 +21,18 @@ export function westManifest(repo: string, sha: string): string {
   return `manifest:\n  projects:\n    - name: zmk\n      url: ${repo}\n      revision: ${sha}\n      import: app/west.yml\n  self:\n    path: config\n`;
 }
 
+/** What a build with keyloom's module adds to `west build`: the module, and the overlay that gives it a serial port (a module can't add an overlay itself). */
+export const moduleFlags = (): string => `-DZMK_EXTRA_MODULES=/work/${MODULE_DIR} -DEXTRA_DTC_OVERLAY_FILE=/work/${MODULE_DIR}/${OVERLAY_FILE}`;
+
 /** One shell script for the whole build, so the container starts once. `set -e` stops at the first failing target. */
-export function westScript(build: ZmkWestDockerBuild): string {
+export function westScript(build: ZmkWestDockerBuild, withModule = false): string {
   const lines = [
     "set -e",
     "rm -rf build",
     "[ -d .west ] || west init -l config",
     "west update --fetch-opt=--filter=tree:0",
     "west zephyr-export",
-    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${build.board} -- -DSHIELD=${t.shield} -DZMK_CONFIG=/work/config`),
+    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${build.board} -- -DSHIELD=${t.shield} -DZMK_CONFIG=/work/config${withModule ? ` ${moduleFlags()}` : ""}`),
   ];
   return lines.join("\n");
 }
@@ -51,6 +56,8 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       for (const f of await readdir(config)) if (/\.(keymap|conf)$/.test(f)) await rm(join(config, f));
       await Bun.write(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha));
       for (const f of input.source.files) await Bun.write(join(config, f.path), f.content);
+      const handsFree = rev.flash.handsFree !== undefined;
+      if (handsFree) await writeModule(input.checkoutDir);
 
       const uid = process.getuid?.() ?? 1000;
       const gid = process.getgid?.() ?? 1000;
@@ -68,7 +75,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       const output: string[] = [];
       say(`keyloom: building ${build.targets.map((t) => t.shield).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads Zephyr and takes a while`);
       const result = await run({
-        cmd: [...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), build.image, "sh", "-c", westScript(build)],
+        cmd: [...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
         log: input.log,
         timeoutMs: input.timeoutMs ?? BUILD_TIMEOUT_MS,
         ...(input.signal ? { signal: input.signal } : {}),
@@ -110,6 +117,8 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       }
 
       const zip = zipSync(bundle);
+      const carried = moduleReport(input.source.files, zip);
+      if (carried) say(carried);
       await mkdir(dirname(input.artifactPath), { recursive: true });
       await Bun.write(input.artifactPath, zip);
       say(`keyloom: wrote ${input.artifactPath} (${build.targets.map((t) => `${t.id}.uf2`).join(", ")})`);

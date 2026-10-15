@@ -82,11 +82,56 @@ export const FlashStepSchema = z.strictObject({
 });
 export type FlashStep = z.infer<typeof FlashStepSchema>;
 
-export const Uf2DrivesFlashSchema = z.strictObject({
-  kind: z.literal("uf2-drives"),
-  /** In the order to flash: MoErgo says the right half first (D-038). */
-  steps: z.array(FlashStepSchema).min(1),
+const usbId = z.string().regex(/^0x[0-9a-f]{4}$/i);
+
+/** One half of a split board, as keyloom's ZMK module knows it (firmware/zmk/keyloom-zmk, D-095). */
+export const HandsFreeHalfSchema = z.strictObject({
+  /** The central half owns the keymap and the host link; a peripheral is reached over the split link. */
+  role: z.enum(["central", "peripheral"]),
+  /** The `label` of the flash step that writes this half. Halves that mount under one volume name (the Corne's) are told apart by this and by the serial marker. */
+  step: z.string().min(1),
+  /** The letter after the build ID in this half's USB serial number: the central is `L`, a peripheral `R`. */
+  marker: z.enum(["L", "R"]),
+  /** The half's USB product ID while it runs, when known; without it any keyloom marker with this letter is taken to be the half. */
+  usbProductId: usbId.optional(),
+  /** The central can restart this half over the split link when the half has no serial port of its own (first keyloom flash of a half whose cable is plugged in). */
+  relay: z.boolean().optional(),
 });
+export type HandsFreeHalf = z.infer<typeof HandsFreeHalfSchema>;
+
+export const HandsFreeSchema = z
+  .strictObject({
+    /** A close at 1200 baud on a half's USB serial port restarts that half into its UF2 bootloader. */
+    trigger: z.literal("cdc-1200"),
+    /** The board's USB vendor ID while it runs, when known. */
+    usbVendorId: usbId.optional(),
+    halves: z.array(HandsFreeHalfSchema).min(1),
+    /**
+     * How the build marker gets into the USB serial number. `usb-sn-template`: the board has its own function that fills
+     * the end of CONFIG_USB_DEVICE_SN with the chip ID (the Glove80), so keyloom writes one template per half.
+     * `usb-sn-override`: the module provides that function and picks the half's letter itself.
+     */
+    serialMarker: z.enum(["usb-sn-template", "usb-sn-override"]),
+    /** What follows `keyloom/<12>-<L|R>` in the template. It must end in the 16 characters the chip ID replaces. */
+    serialTail: z.string().regex(/^:.*[0-9A-F]{16}$/),
+  })
+  .refine((h) => h.halves.filter((x) => x.role === "central").length === 1, { message: "exactly one half must be the central" })
+  .refine((h) => new Set(h.halves.map((x) => x.marker)).size === h.halves.length, { message: "each half needs its own marker letter" })
+  .refine((h) => h.halves.every((x) => x.role === "peripheral" || x.relay !== true), { message: "only a peripheral can be relayed to" });
+export type HandsFree = z.infer<typeof HandsFreeSchema>;
+
+export const Uf2DrivesFlashSchema = z
+  .strictObject({
+    kind: z.literal("uf2-drives"),
+    /** In the order to flash: MoErgo says the right half first (D-038). */
+    steps: z.array(FlashStepSchema).min(1),
+    /** Present when the board's ZMK build carries keyloom's module, so a flash needs no keypress after the first one (D-095). */
+    handsFree: HandsFreeSchema.optional(),
+  })
+  .refine((f) => f.handsFree === undefined || f.handsFree.halves.every((h) => f.steps.some((s) => s.label === h.step)), {
+    message: "every handsFree half must name the label of a flash step",
+    path: ["handsFree"],
+  });
 export type Uf2DrivesFlash = z.infer<typeof Uf2DrivesFlashSchema>;
 
 export const ManualFlashSchema = z.strictObject({

@@ -45,7 +45,16 @@
             "target": "right",
             "enter": "Plug in the right half and double-tap its reset button."
           }
-        ]
+        ],
+        "handsFree": {
+          "trigger": "cdc-1200",
+          "halves": [
+            { "role": "central", "step": "left half", "marker": "L" },
+            { "role": "peripheral", "step": "right half", "marker": "R", "relay": true }
+          ],
+          "serialMarker": "usb-sn-override",
+          "serialTail": ":0123456789ABCDEF"
+        }
       },
       "detect": null
     }

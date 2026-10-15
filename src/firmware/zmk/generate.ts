@@ -2,12 +2,14 @@
 // Pure: it returns text, so the same layout always gives the same bytes and the round-trip test runs
 // without a filesystem.
 import type { BoardDefinition, Geometry } from "../../boards/schema.ts";
+import type { HandsFree } from "../../boards/recipes.ts";
 import type { Layout, Passthrough } from "../../layout/schema.ts";
 import { BUILTIN_PROFILES } from "./builtins.ts";
 import { settingLine } from "./conf.ts";
 import { type EmitContext, labelOf } from "./emit-binding.ts";
 import { comboNodeName, renderBuiltinOverride, renderCombo, renderMacro, renderProfile } from "./emit-behaviors.ts";
 import { renderLayers } from "./emit-keymap.ts";
+import { handsFreeConf } from "./handsfree.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
 import { GenerateError } from "./generate-error.ts";
 
@@ -22,6 +24,8 @@ export type GenerateInput = {
   revisionId: string;
   /** Base name of the written files, `<name>.keymap` and `<name>.conf`; the build recipe decides it (default `glove80`). */
   keymapName?: string;
+  /** For a build: puts the build's marker in the halves' USB serial numbers, so a flash can find and verify them (D-095). */
+  handsFree?: { buildId: string; config: HandsFree };
 };
 
 export type GeneratedFile = { path: string; content: string };
@@ -133,10 +137,12 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     ...sources("top"),
   ]);
 
+  const marker = input.handsFree ? handsFreeConf(input.handsFree.config, input.handsFree.buildId) : undefined;
   const confLines = [
     header(input.revisionId, "#"),
     ...layout.settings.filter((s) => s.firmware === "zmk").map(settingLine),
     ...layout.passthrough.filter((p) => p.file === CONF_FILE).map((p) => p.source),
+    ...(marker?.shared ?? []),
   ];
 
   // KEYMAP_FILE and CONF_FILE label the layout's passthrough (they are stored in saved layouts); the
@@ -147,6 +153,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     files: [
       { path: `${name}.keymap`, content: `${keymapText.join("\n")}\n` },
       { path: `${name}.conf`, content: `${confLines.join("\n")}\n` },
+      ...(marker?.perHalf ?? []),
     ],
   };
 }

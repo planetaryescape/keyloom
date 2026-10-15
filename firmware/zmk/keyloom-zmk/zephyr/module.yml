@@ -1,0 +1,4 @@
+name: keyloom-zmk
+build:
+  cmake: .
+  kconfig: Kconfig

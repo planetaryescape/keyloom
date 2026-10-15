@@ -1,0 +1,5 @@
+&zephyr_udc0 {
+    keyloom_cdc_acm: keyloom_cdc_acm {
+        compatible = "zephyr,cdc-acm-uart";
+    };
+};
