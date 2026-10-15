@@ -10,9 +10,11 @@ import { capture, which } from "../firmware/toolchain/run.ts";
 import { MIGRATIONS } from "../persistence/migrations.ts";
 import { databasePath, dataDir as resolveDataDir } from "../persistence/paths.ts";
 import { listBoardDefinitions } from "./boards.ts";
-import { type HandsFreeDeps, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
+import { realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { checkoutDirFor } from "./firmware.ts";
-import { attachedKeyboards, rawHidFinding } from "./keyboard.ts";
+import { realZmkHandsFreeDeps } from "../firmware/zmk/handsfree-flash.ts";
+import type { HandsFreeOverrides } from "./firmware-drivers.ts";
+import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
 export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean };
@@ -128,7 +130,7 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
 }
 
 /** Which keyboards are attached and whether keyloom's own firmware is on them, which decides if a flash needs a keypress. */
-export async function runKeyboardChecks(over: Partial<HandsFreeDeps> = {}): Promise<DoctorCheck[]> {
+export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<DoctorCheck[]> {
   const deps = realHandsFreeDeps(over);
   let attached: Awaited<ReturnType<typeof attachedKeyboards>>;
   try {
@@ -136,7 +138,6 @@ export async function runKeyboardChecks(over: Partial<HandsFreeDeps> = {}): Prom
   } catch (err) {
     return [{ name: "keyboard", ok: true, warn: true, detail: `couldn't read the USB devices: ${(err as Error).message}` }];
   }
-  if (attached.length === 0) return [{ name: "keyboard", ok: true, detail: "no keyboard keyloom can flash is attached" }];
   const checks: DoctorCheck[] = [];
   for (const k of attached) {
     const name = `keyboard ${k.boardId} ${k.revisionId}`;
@@ -150,5 +151,19 @@ export async function runKeyboardChecks(over: Partial<HandsFreeDeps> = {}): Prom
       checks.push({ name, ok: true, detail: `running firmware keyloom didn't build (USB serial ${k.firmware.serial ?? "unavailable"}); the first flash needs the bootloader key, and flashes after it need none` });
     }
   }
+  // A ZMK half reports through its serial port, so the halves are read apart from the QMK keyboards above.
+  try {
+    for (const h of await attachedZmkHalves(realZmkHandsFreeDeps({ usb: deps.usb, ...over.zmk }))) {
+      const name = `keyboard ${h.boardId} ${h.label}`;
+      if (h.firmware.state === "keyloom") {
+        checks.push({ name, ok: true, detail: `running keyloom build ${h.firmware.key} (serial port ${h.firmware.path}); the next flash needs no keypress` });
+      } else if (h.firmware.state === "other") {
+        checks.push({ name, ok: true, detail: `running firmware without keyloom's module (USB serial ${h.firmware.serial ?? "unavailable"}); the first flash needs the bootloader key, and flashes after it need none` });
+      }
+    }
+  } catch (err) {
+    checks.push({ name: "keyboard serial ports", ok: true, warn: true, detail: `couldn't read the USB serial ports: ${(err as Error).message}` });
+  }
+  if (checks.length === 0) return [{ name: "keyboard", ok: true, detail: "no keyboard keyloom can flash is attached" }];
   return checks;
 }

@@ -8,7 +8,7 @@ export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, impor
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type DoctorCheck, runDoctor, runKeyboardChecks, runToolchainChecks } from "./doctor.ts";
-export { type HandsFreeDeps, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
+export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
   getBuild, getFlash, startBuild, startFlash,

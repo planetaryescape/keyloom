@@ -98,7 +98,7 @@ describe("flash", () => {
   test("flashes the right half and then the left into the volumes directory, telling the person what to do for each", async () => {
     const e = await zmkEnv();
     const b = await built(e);
-    const boot = fakeBootloaders(e.volumes, [RIGHT, LEFT], { mountAfterMs: [100, 700] });
+    const boot = fakeBootloaders(e.volumes, [RIGHT, LEFT], { mountAfterMs: [100, 2500] });
     const seen: string[] = [];
     const f = await flashAndWait(e.app, {
       buildId: b.id, volumesRoot: e.volumes, bootloaderWaitMs: 5000,
@@ -109,7 +109,9 @@ describe("flash", () => {
     boot.stop();
     expect(f.status).toBe("succeeded");
     expect(boot.written).toEqual([RIGHT, LEFT]);
-    expect(seen[0]).toContain("Flash the right half (1 of 2)");
+    // Before the flasher has looked at the serial ports nothing can be asked of the person; these halves run no keyloom firmware, so then the key combo is.
+    expect(seen[0]).toContain("checking whether it can restart");
+    expect(seen.find((s) => s.includes("right half"))).toContain("Flash the right half (1 of 2)");
     expect(seen.some((s) => s.includes("Don't unplug"))).toBe(true);
     expect(seen.find((s) => s.includes("left half"))).toContain("Flash the left half (2 of 2)");
     expect(f.instruction).toBeNull();
@@ -121,7 +123,7 @@ describe("flash", () => {
     const b = await built(e);
     const started = await startFlash(e.app, { buildId: b.id, volumesRoot: e.volumes, bootloaderWaitMs: 400 });
     expect(started.status).toBe("waiting_for_bootloader");
-    const polled = await until(() => getFlash(e.app, started.id), (v) => v.instruction !== null);
+    const polled = await until(() => getFlash(e.app, started.id), (v) => v.instruction?.includes("Flash the right half") === true);
     expect(polled.instruction).toContain("Flash the right half (1 of 2)");
     const done = await until(() => getFlash(e.app, started.id), (v) => v.status === "failed");
     expect(done.error).toContain("GLV80RHBOOT didn't appear");

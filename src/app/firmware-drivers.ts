@@ -8,14 +8,18 @@ import { CHECKING_INSTRUCTION, flashWithZapp, resetInstruction } from "../firmwa
 import { type HandsFreeDeps, handsFreeHooks, keyboardTarget, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { GenerateError as QmkGenerateError, generateQmkSource } from "../firmware/qmk/generate.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
+import { type ZmkHandsFreeDeps, realZmkHandsFreeDeps, zmkHandsFreeHooks } from "../firmware/zmk/handsfree-flash.ts";
 import { buildZmk } from "../firmware/zmk/build.ts";
 import { buildZmkWest } from "../firmware/zmk/build-west.ts";
-import { BOOTLOADER_WAIT_MS, type FlashStep, flashUf2Drives, instructionFor } from "../firmware/zmk/flash.ts";
+import { BOOTLOADER_WAIT_MS, type FlashStep, ZMK_CHECKING_INSTRUCTION, flashUf2Drives, instructionFor } from "../firmware/zmk/flash.ts";
 import { GenerateError as ZmkGenerateError, generateZmkSource } from "../firmware/zmk/generate.ts";
 import { defaultVolumeFinder, volumeFinderAt } from "../firmware/zmk/volumes.ts";
 import type { FlashResult, FlashState } from "../firmware/toolchain/flash-state.ts";
 import type { LogSink } from "../firmware/toolchain/run.ts";
+import { portOfAnotherBoard } from "./zmk-ports.ts";
 import type { LayoutView } from "./layouts.ts";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 export type GeneratedSource = { keymapName: string; files: Array<{ path: string; content: string }> };
 
@@ -38,6 +42,9 @@ export type BuildArgs = {
   signal?: AbortSignal;
 };
 
+/** How a keyboard is found and restarted: USB and raw HID for a ZSA board, serial ports for a ZMK one. Tests pass fakes; otherwise the machine's own are used. */
+export type HandsFreeOverrides = Partial<HandsFreeDeps> & { zmk?: Partial<ZmkHandsFreeDeps> };
+
 export type FlashArgs = {
   board: Board;
   boardRevision: string;
@@ -51,8 +58,9 @@ export type FlashArgs = {
   bootloaderWaitMs?: number;
   /** Where UF2 boot drives appear. Only the Glove80 flow reads it; tests pass a temporary directory. */
   volumesRoot?: string;
-  /** How a ZSA keyboard is found and restarted. Tests pass fakes; otherwise the machine's own USB and raw HID are used. */
-  handsFree?: Partial<HandsFreeDeps>;
+  handsFree?: HandsFreeOverrides;
+  /** Where the last image that was flashed and verified is kept, per board and half; nothing is kept without it. */
+  lastGoodDir?: string;
 };
 
 export type FirmwareDriver = {
@@ -134,15 +142,20 @@ const zmk: FirmwareDriver = {
   artifactExtension: (board) => (zmkRevision(board.definition).build.kind === "zmk-west-docker" ? "zip" : "uf2"),
   // A flash starts at the first step, so that is what the person should be doing until the flasher says otherwise.
   waitingInstruction(board, waitMs = BOOTLOADER_WAIT_MS) {
-    const steps = zmkRevision(board.definition).flash.steps;
+    const flash = zmkRevision(board.definition).flash;
+    // Until the flasher has looked at the serial ports the person can't be told to press anything: if the halves run keyloom's firmware there is nothing to press.
+    if (flash.handsFree) return ZMK_CHECKING_INSTRUCTION;
+    const steps = flash.steps;
     return instructionFor(steps[0] as FlashStep, 0, steps.length, waitMs);
   },
-  generate(view) {
-    const build = zmkRevision(view.board.definition).build;
+  generate(view, boardRevision, buildId) {
+    const rev = zmkRevision(view.board.definition, boardRevision);
+    const build = rev.build;
     try {
       return generateZmkSource({
         layout: view.document, board: view.board.definition, geometry: view.board.geometry, revisionId: view.revision.id,
         ...(build.kind === "zmk-west-docker" ? { keymapName: build.keymapName } : {}),
+        ...(buildId !== undefined && rev.flash.handsFree ? { handsFree: { buildId, config: rev.flash.handsFree } } : {}),
       });
     } catch (err) {
       if (err instanceof ZmkGenerateError) throw new SourceError(err.message);
@@ -156,13 +169,27 @@ const zmk: FirmwareDriver = {
       log: a.log, containerName: a.containerName, ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.signal ? { signal: a.signal } : {}),
     });
   },
-  flash(a) {
+  async flash(a) {
+    const rev = zmkRevision(a.board.definition, a.boardRevision);
+    // Without a root the real machine's mount root is used, which a test's preload refuses (test/helpers/no-real-flash.ts).
+    const findVolume = a.volumesRoot === undefined ? defaultVolumeFinder() : volumeFinderAt(a.volumesRoot);
+    const handsFree = rev.flash.handsFree;
+    const hooks = handsFree
+      ? zmkHandsFreeHooks({
+          deps: realZmkHandsFreeDeps(a.handsFree?.zmk), board: a.board.definition, handsFree, steps: rev.flash.steps, buildId: a.buildId, findVolume, foreign: portOfAnotherBoard(a.board.definition.id),
+          artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))), log: (line) => a.log.line(line),
+          ...(a.lastGoodDir === undefined ? {} : { saveLastGood: async (half, image) => {
+            const dir = join(a.lastGoodDir as string, a.board.definition.id.replace("/", "-"));
+            await mkdir(dir, { recursive: true });
+            await Bun.write(join(dir, `${half}.uf2`), image);
+          } }),
+        })
+      : undefined;
     return flashUf2Drives({
-      artifactPath: a.artifactPath, steps: zmkRevision(a.board.definition, a.boardRevision).flash.steps,
+      artifactPath: a.artifactPath, steps: rev.flash.steps,
       // The Glove80's one file holds both halves; a west build's bundle holds one image per half.
-      ...(zmkRevision(a.board.definition).build.kind === "zmk-moergo-template" ? { driveFileName: "glove80.uf2" } : { driveFileName: "firmware.uf2" }), log: a.log, onState: a.onState,
-      // Without a root the real machine's mount root is used, which a test's preload refuses (test/helpers/no-real-flash.ts).
-      findVolume: a.volumesRoot === undefined ? defaultVolumeFinder() : volumeFinderAt(a.volumesRoot),
+      ...(rev.build.kind === "zmk-moergo-template" ? { driveFileName: "glove80.uf2" } : { driveFileName: "firmware.uf2" }), log: a.log, onState: a.onState,
+      findVolume, ...(hooks ? { hooks } : {}),
       ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
       ...(a.signal ? { signal: a.signal } : {}),
     });

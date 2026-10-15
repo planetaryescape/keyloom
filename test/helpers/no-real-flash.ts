@@ -8,6 +8,8 @@ import { mock } from "bun:test";
 import * as hid from "../../src/firmware/toolchain/hid.ts";
 import * as hidDefault from "../../src/firmware/toolchain/hid-default.ts";
 import * as hidMacos from "../../src/firmware/toolchain/hid-macos.ts";
+import * as serial from "../../src/firmware/toolchain/serial.ts";
+import * as serialDefault from "../../src/firmware/toolchain/serial-default.ts";
 import * as volumes from "../../src/firmware/zmk/volumes.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "keyloom-no-flash-"));
@@ -53,3 +55,19 @@ mock.module("../../src/firmware/toolchain/hid-default.ts", () => ({
 // The real function is kept first, for the reason given at realVolumeFinderAt above.
 const realMacosHid = hidMacos.macosHid;
 mock.module("../../src/firmware/toolchain/hid-macos.ts", () => ({ ...hidMacos, macosHid: () => readOnly(realMacosHid()) }));
+
+// A half running keyloom's firmware reboots into its bootloader when its serial port is closed at 1200 baud, so no test may touch a
+// real port. Touching a path under /dev is refused; a test's fake stty on a temporary path still runs. Listing is replaced by an empty
+// bus, so a keyboard on the desk can't change a test's outcome; tests inject fakes (ZmkHandsFreeDeps) to see any port.
+const realTouch = serial.touchWithStty;
+mock.module("../../src/firmware/toolchain/serial.ts", () => ({
+  ...serial,
+  touchWithStty: async (path: string, baud: number, platform?: NodeJS.Platform) => {
+    if (path.startsWith("/dev/")) refuse(`touchWithStty(${path})`);
+    return realTouch(path, baud, platform);
+  },
+}));
+mock.module("../../src/firmware/toolchain/serial-default.ts", () => ({
+  ...serialDefault,
+  defaultSerialTransport: async () => ({ list: async () => [], touch: async (path: string) => refuse(`SerialTransport.touch(${path})`) }),
+}));

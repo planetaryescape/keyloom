@@ -16,9 +16,25 @@ export const BOOTLOADER_WAIT_MS = 120_000;
 export const UNMOUNT_WAIT_MS = 30_000;
 export const POLL_MS = 500;
 
+export const ZMK_CHECKING_INSTRUCTION = "keyloom is checking whether it can restart the keyboard's halves into their bootloaders itself.";
+
 export const WRITING_INSTRUCTION = "Don't unplug or switch off the half. Writing takes a few seconds, and the drive disappears when it is done.";
 
 export type { FlashStep } from "../../boards/recipes.ts";
+
+export type EnterResult = { ok: true } | { ok: false; reason: string };
+export type VerifyResult = { ok: true; message: string } | { ok: false; error: string };
+
+/** What hands-free flashing adds to each step (src/firmware/zmk/handsfree-flash.ts); without it the person puts every half in its bootloader. */
+export type StepHooks = {
+  /**
+   * Gets the half into its bootloader without a keypress. `announce` says what the person should know once a restart is under way.
+   * A failure is a reason, and the flash goes on by asking for the key combo.
+   */
+  enterBootloader?: (step: FlashStep, index: number, announce: (instruction: string) => void) => Promise<EnterResult>;
+  /** Called with the image just written, after the drive has unmounted: did the half come back running it? A failure stops the flash. */
+  verify?: (step: FlashStep, index: number, image: Uint8Array) => Promise<VerifyResult>;
+};
 
 export type Uf2FlashInput = {
   artifactPath: string;
@@ -29,6 +45,7 @@ export type Uf2FlashInput = {
   driveFileName?: string;
   /** Always passed in: tests give a finder over a temporary directory, so nothing here can reach a real keyboard by default. */
   findVolume: VolumeFinder;
+  hooks?: StepHooks;
   log: LogSink;
   /** Called on every state change; `instruction` is what the person must do now. */
   onState: (state: FlashState, instruction: string | null) => void;
@@ -103,10 +120,21 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
   const files = await payloads(input, say);
   if ("error" in files) return fail(files.error);
 
+  const verified: string[] = [];
   for (const [i, step] of input.steps.entries()) {
-    const instruction = instructionFor(step, i, input.steps.length, waitMs);
+    let instruction = instructionFor(step, i, input.steps.length, waitMs);
+    let restarted = false;
+    if (input.hooks?.enterBootloader) {
+      const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text));
+      if (!entered.ok) {
+        say(`keyloom: couldn't restart the ${step.label} by itself: ${entered.reason}`);
+        instruction = `keyloom couldn't restart the ${step.label} by itself: ${entered.reason}. ${instruction}`;
+      }
+      restarted = entered.ok;
+    }
     say(`keyloom: waiting for ${step.volume} (${step.label}, step ${i + 1} of ${input.steps.length})`);
-    input.onState("waiting_for_bootloader", instruction);
+    // A half keyloom restarted needs nothing from the person; its drive is already there.
+    if (!restarted) input.onState("waiting_for_bootloader", instruction);
 
     let mount: string | null = null;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
@@ -155,9 +183,18 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       await sleep(poll, input.signal);
     }
     say(`keyloom: ${step.volume} unmounted; the ${step.label} is flashed`);
+
+    if (input.hooks?.verify) {
+      say(`keyloom: waiting for the ${step.label} to come back`);
+      input.onState("writing", `The ${step.label} is restarting. Don't unplug it; keyloom is checking it came back.`);
+      const checked = await input.hooks.verify(step, i, files[i] as Uint8Array);
+      if (!checked.ok) return fail(checked.error);
+      verified.push(checked.message);
+    }
   }
 
   say(`keyloom: ${input.steps.map((s) => s.label).join(" and ")} flashed`);
+  if (verified.length > 0) say(`keyloom: Verified: ${verified.join(", and ")}.`);
   input.onState("succeeded", null);
   return { state: "succeeded", error: null, output };
 }

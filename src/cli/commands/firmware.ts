@@ -1,7 +1,7 @@
 // generate, build and flash (10#commands). Thin: each calls one use case in src/app.
 import type { Command } from "commander";
 import {
-  type App, type BuildView, type FlashView, type HandsFreeDeps, buildAndWait, flashAndWait, generateFirmware, rebootKeyboard, UsageError,
+  type App, type BuildView, type FlashView, type HandsFreeOverrides, buildAndWait, flashAndWait, generateFirmware, rebootKeyboard, UsageError,
 } from "../../app/index.ts";
 import { type Format, type Io, columns, print } from "../output.ts";
 
@@ -10,8 +10,8 @@ export type FirmwareCommandDeps = {
   format: () => Format;
   quiet: () => boolean;
   withApp: <T>(fn: (app: App) => Promise<T> | T) => Promise<T>;
-  /** How a ZSA keyboard is found and restarted; tests pass fakes. */
-  handsFree?: Partial<HandsFreeDeps>;
+  /** How a keyboard is found and restarted; tests pass fakes. */
+  handsFree?: HandsFreeOverrides;
 };
 
 /** Ctrl-C aborts the work instead of killing keyloom and leaving docker or zapp running on its own. */

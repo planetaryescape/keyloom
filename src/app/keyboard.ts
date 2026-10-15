@@ -1,6 +1,9 @@
 // What is attached and what it is running (`keyloom doctor`), and restarting it into its bootloader
 // (`keyloom flash --reboot-only`). Both read USB and, for the restart, raw HID through HandsFreeDeps.
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
+import { zmkRevision } from "../firmware/zmk/board-config.ts";
+import { portOfAnotherBoard } from "./zmk-ports.ts";
+import { type HalfFirmware, type ZmkHandsFreeDeps, halfTargets, readHalf } from "../firmware/zmk/handsfree-flash.ts";
 import { type HandsFreeDeps, type KeyboardTarget, type RunningFirmware, keyboardTarget, readRunningFirmware, realHandsFreeDeps, rebootToBootloader } from "../firmware/qmk/handsfree-flash.ts";
 import { ZSA_VENDOR_ID } from "../firmware/qmk/handsfree.ts";
 import type { HidTransport } from "../firmware/toolchain/hid.ts";
@@ -9,6 +12,7 @@ import { UsageError } from "./errors.ts";
 import { RebootFailedError } from "./firmware-errors.ts";
 
 export type { HandsFreeDeps };
+export type { HandsFreeOverrides } from "./firmware-drivers.ts";
 
 export type AttachedKeyboard = { boardId: string; boardName: string; revisionId: string; target: KeyboardTarget; firmware: RunningFirmware };
 
@@ -25,6 +29,29 @@ export async function attachedKeyboards(deps: HandsFreeDeps = realHandsFreeDeps(
       if (!target) continue;
       const firmware = await readRunningFirmware(cached, target);
       if (firmware.state !== "absent") found.push({ boardId: board.definition.id, boardName: board.definition.name, revisionId: r.id, target, firmware });
+    }
+  }
+  return found;
+}
+
+export type AttachedZmkHalf = { boardId: string; boardName: string; label: string; firmware: HalfFirmware };
+
+/**
+ * Every half of a ZMK board with a hands-free recipe that is attached and shows itself: by keyloom's marker in its serial
+ * number, or (where the board's USB IDs are known) as a USB device without one. A half that is absent is left out.
+ */
+export async function attachedZmkHalves(deps: ZmkHandsFreeDeps): Promise<AttachedZmkHalf[]> {
+  const ports = await (await deps.serial()).list();
+  const found: AttachedZmkHalf[] = [];
+  for (const board of listBoardDefinitions()) {
+    if (board.definition.firmware !== "zmk") continue;
+    for (const r of board.definition.revisions) {
+      const rev = zmkRevision(board.definition, r.id);
+      if (!rev.flash.handsFree) continue;
+      for (const target of halfTargets(board.definition, rev.flash.handsFree, rev.flash.steps, portOfAnotherBoard(board.definition.id))) {
+        const firmware = await readHalf(deps, target, ports);
+        if (firmware.state !== "absent") found.push({ boardId: board.definition.id, boardName: board.definition.name, label: target.step.label, firmware });
+      }
     }
   }
   return found;

@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
-  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
+  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runToolchainChecks, type HandsFreeOverrides, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, parseProvider, registerChatCommands } from "./commands/chat.ts";
@@ -24,8 +24,8 @@ const stdIo = (): Io => ({
 
 type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: boolean };
 
-/** `handsFree` replaces how USB and raw HID are read; tests pass fakes. */
-export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: Partial<HandsFreeDeps>): Command {
+/** `handsFree` replaces how USB, raw HID and serial ports are read; tests pass fakes. */
+export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
     .version(pkg.version, "-V, --version", "print the keyloom version")
@@ -236,7 +236,7 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 });
 
 /** Runs the CLI and returns the exit code; never throws. */
-export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: Partial<HandsFreeDeps>): Promise<number> {
+export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
   const program = buildProgram(io, state, chat, handsFree);
   let jsonErrors = false;

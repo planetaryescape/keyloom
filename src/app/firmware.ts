@@ -9,7 +9,6 @@ import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import { dockerStatus } from "../firmware/toolchain/docker.ts";
 import type { FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
-import type { HandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
 import {
@@ -21,7 +20,7 @@ import { cacheDir } from "../persistence/paths.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
-import { type GeneratedSource, SourceError, driverFor } from "./firmware-drivers.ts";
+import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor } from "./firmware-drivers.ts";
 import { BuildFailedError, FlashFailedError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 
@@ -286,8 +285,8 @@ export type FlashOptions = {
   bootloaderWaitMs?: number;
   /** Where a UF2 keyboard's boot drives appear (default: the machine's own, `/Volumes` on macOS). Tests pass a temporary directory. */
   volumesRoot?: string;
-  /** How a ZSA keyboard is found and restarted (default: this machine's USB and raw HID). Tests pass fakes. */
-  handsFree?: Partial<HandsFreeDeps>;
+  /** How a keyboard is found and restarted (default: this machine's USB, raw HID and serial ports). Tests pass fakes. */
+  handsFree?: HandsFreeOverrides;
 };
 
 function chooseBuild(app: App, opts: FlashOptions): BuildRow {
@@ -346,7 +345,7 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
     log.line(`keyloom: flash ${row.id} of build ${row.buildId}`);
     notify();
     const result = await driverFor(board).flash({
-      board, boardRevision, buildId: row.buildId, artifactPath: artifact, log,
+      board, boardRevision, buildId: row.buildId, artifactPath: artifact, log, lastGoodDir: absolute(app, "firmware/last-good"),
       ...(opts.handsFree ? { handsFree: opts.handsFree } : {}), ...(opts.onProgress ? { onLine: opts.onProgress } : {}),
       ...(opts.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: opts.bootloaderWaitMs }),
       ...(opts.volumesRoot === undefined ? {} : { volumesRoot: opts.volumesRoot }),
