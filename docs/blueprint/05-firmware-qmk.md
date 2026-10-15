@@ -103,7 +103,9 @@ The pinned fork's report header uses `_Static_assert`, which the C++ tests can't
 
 ZSA's flashing routes are Chrome (WebUSB from Oryx), Keymapp (a desktop app) and Zapp (an open-source CLI). Zapp v1.0.2 supports "Moonlander MK1 (rev A and rev B)". `zapp flash firmware.bin` waits for a board in bootloader mode and flashes it. It installs with `brew install zapp`. keyloom shells out to it (D-043):
 
-`keyloom flash` → check `zapp` is on `PATH` (`keyloom doctor` does too) → tell BK to press the reset button with a paperclip or use the reset key (`QK_BOOT`, or Oryx's Reset key) → run `zapp flash <artifact>.bin` and stream its output → record the outcome.
+`keyloom flash` → check `zapp` is on `PATH` (`keyloom doctor` does too) → run `zapp flash <artifact>.bin` and stream its output → get the board into its bootloader → record the outcome.
+
+Getting into the bootloader needs no keypress once the keyboard runs a keyloom build (D-070 to D-072). Every ZSA build keyloom makes carries `keyloom/<build id tail>` as its USB serial number and a raw-HID command that reboots into the bootloader. When the running firmware has such a serial, keyloom sends that command after Zapp starts waiting, then checks the keyboard comes back with the new build's serial. On any other firmware (Oryx's, the first time) it tells BK to press the reset button with a paperclip or use the reset key (`QK_BOOT`, or Oryx's Reset key), as before. `keyloom flash --reboot-only` and `keyloom doctor` let the restart be tried on its own.
 
 Rejected alternatives:
 

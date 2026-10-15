@@ -44,7 +44,8 @@ keyloom
   flash [--build B] [--layout L]           flash the newest successful build of L, or B
   emulate <layout> (--keys "<script>" | --script <file>) [--rev R] [--board-rev B]
                                            run the real firmware logic and print what the keyboard would send
-  doctor                                   Docker, toolchain images, pinned checkouts, API key, database
+  flash --reboot-only [--board B]          only restart the attached keyboard into its bootloader (keyloom firmware only)
+  doctor                                   Docker, toolchain images, pinned checkouts, attached keyboard and its firmware, API key, database
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.

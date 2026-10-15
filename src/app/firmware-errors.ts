@@ -23,3 +23,11 @@ export class EmulateFailedError extends Error {
     super(message);
   }
 }
+
+/** The keyboard could not be restarted into its bootloader. It is a flash failure to callers (exit 8): the flash cannot start. */
+export class RebootFailedError extends FlashFailedError {
+  override name = "RebootFailedError";
+  constructor(message: string) {
+    super(message, "", "");
+  }
+}

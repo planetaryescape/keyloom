@@ -7,7 +7,9 @@ import { checkoutDirFor } from "../../../src/app/firmware.ts";
 import { dfuProblem } from "../../../src/firmware/qmk/dfu.ts";
 import { buildQmk } from "../../../src/firmware/qmk/build.ts";
 import { generateQmkSource } from "../../../src/firmware/qmk/generate.ts";
+import { markerInFirmware, buildMarker } from "../../../src/firmware/qmk/handsfree.ts";
 import { importOryxSource } from "../../../src/firmware/qmk/import.ts";
+import { definedSymbols } from "../../../src/firmware/toolchain/elf.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import type { Layout } from "../../../src/layout/schema.ts";
 import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
@@ -25,14 +27,15 @@ const ORYX_REVA_SHA256 = "ccd90fdeda0a7f5e7c0017d1b5c8a9585fa2f08faeb341859ba051
 gated("a generated keymap built in Docker", () => {
   const TIMEOUT = 20 * 60_000;
 
-  async function build(layout: Layout, boardRevisionId: "reva" | "revb") {
+  // Passed or not, the plain builds below are the byte-identical-to-Oryx check: hands-free is opt-in per build (D-070).
+  async function build(layout: Layout, boardRevisionId: "reva" | "revb", handsFree?: { buildId: string }) {
     const board = await moonlander();
     const dir = tempDir();
     const log = new LogSink(join(dir, "build.log"));
     const artifactPath = join(dir, "out.bin");
     const r = await buildQmk({
       board: board.definition, boardRevisionId, checkoutDir: checkoutDirFor(board), artifactPath, log, containerName: `keyloom-test-${process.pid}-${boardRevisionId}`,
-      source: generateQmkSource({ layout, board: board.definition, revisionId: "rev_test", boardRevisionId }),
+      source: generateQmkSource({ layout, board: board.definition, revisionId: "rev_test", boardRevisionId, ...(handsFree ? { handsFree } : {}) }),
     });
     log.close();
     return { ...r, bytes: await Bun.file(artifactPath).bytes() };
@@ -67,5 +70,26 @@ gated("a generated keymap built in Docker", () => {
     const built = await build(edited, "reva");
     expect(dfuProblem(built.bytes, "0483:df11")).toBeUndefined();
     expect(built.bytes.length).toBeGreaterThan(60_000);
+  }, TIMEOUT);
+
+  test("a hands-free build for each revision links the wrapper in front of Oryx's raw_hid_receive and carries its marker", async () => {
+    const board = await moonlander();
+    const { layout } = await importOryxSource(FIXTURE_DIR, board.definition);
+    for (const [rev, bootloader] of [["reva", "0483:df11"], ["revb", "3297:2003"]] as const) {
+      const buildId = "bld_01JABCDEFGHJKMNPQRSTVWXYZ0";
+      const built = await build(layout, rev, { buildId });
+      expect(dfuProblem(built.bytes, bootloader)).toBeUndefined();
+      expect(markerInFirmware(built.bytes)).toBe(buildMarker(buildId));
+      // buildQmk has already refused the build if the ELF lacked the wrapper; this reads the same file again, independently.
+      const elf = await Bun.file(join(checkoutDirFor(board), ".build", `zsa_moonlander_${rev}_keyloom.elf`)).bytes();
+      const symbols = definedSymbols(elf);
+      expect(symbols.has("__wrap_raw_hid_receive")).toBe(true);
+      expect(symbols.has("raw_hid_receive")).toBe(true);
+      // reva's plain build is 67,268 bytes (above); the wrapper and a longer serial are the only code added.
+      if (rev === "reva") {
+        expect(built.bytes.length).toBeGreaterThan(67_268);
+        expect(built.bytes.length).toBeLessThan(67_268 + 400);
+      }
+    }
   }, TIMEOUT);
 });

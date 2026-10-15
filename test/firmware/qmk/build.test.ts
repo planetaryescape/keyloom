@@ -11,6 +11,7 @@ import { describeLocated, locateCompileError } from "../../../src/firmware/qmk/l
 import { importOryxSource } from "../../../src/firmware/qmk/import.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { FAKE_DOCKER, dfuImage, fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
+import { fakeElf } from "../../helpers/fake-elf.ts";
 import { gitEnv, originRepo } from "../../helpers/git-fixture.ts";
 import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
 import { tempDir } from "../../helpers/tmp.ts";
@@ -123,6 +124,42 @@ describe("buildQmk (fake docker)", () => {
     s.lines.length = 0;
     await s.build("ok");
     expect(s.lines.some((l) => l.includes("creating"))).toBe(false);
+  });
+});
+
+describe("buildQmk, hands-free", () => {
+  const withMarker = (s: Awaited<ReturnType<typeof setup>>) => generateQmkSource({ layout, board: s.board, revisionId: "rev_T", boardRevisionId: "revb", handsFree: { buildId: "bld_01JABCDEFGHJKMNPQRSTVWXYZ0" } });
+
+  test("make is told not to copy the firmware into a userspace folder the image doesn't have, which failed some builds", async () => {
+    const s = await setup();
+    await s.build("ok");
+    expect(await Bun.file(s.dockerLog).text()).toContain("-e QMK_USERSPACE= ");
+  });
+
+  test("a build whose ELF defines the wrapper is kept", async () => {
+    const s = await setup();
+    const elf = join(s.dir, "good.elf");
+    await Bun.write(elf, fakeElf(["__wrap_raw_hid_receive", "raw_hid_receive"]));
+    const r = await s.build("ok", { FAKE_ELF: elf }, { source: withMarker(s) });
+    expect(r.bytes).toBe(216);
+  });
+
+  test("a build whose ELF lacks the wrapper is refused, because --wrap silently not applying would give a keyboard that can't be restarted", async () => {
+    const s = await setup();
+    const elf = join(s.dir, "bad.elf");
+    await Bun.write(elf, fakeElf(["raw_hid_receive"], ["__real_raw_hid_receive"]));
+    await expect(s.build("ok", { FAKE_ELF: elf }, { source: withMarker(s) })).rejects.toThrow(/doesn't define __wrap_raw_hid_receive/);
+    expect(existsSync(join(s.dir, "out", "bld.bin"))).toBe(false);
+  });
+
+  test("so is a build that produced no ELF at all", async () => {
+    const s = await setup();
+    await expect(s.build("ok", { FAKE_ELF: "" }, { source: withMarker(s) })).rejects.toThrow(/doesn't define __wrap_raw_hid_receive/);
+  });
+
+  test("a plain build is not asked for an ELF", async () => {
+    const s = await setup();
+    expect((await s.build("ok", { FAKE_ELF: "" })).bytes).toBe(216);
   });
 });
 

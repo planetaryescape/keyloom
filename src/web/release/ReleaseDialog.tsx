@@ -74,8 +74,9 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
         Replace the firmware on your {boardName}?
       </p>
       <p>
-        keyloom will ask you to put the keyboard in its bootloader, then write this build to it. The keyboard stops typing
-        until the flash finishes, so have another keyboard to hand. Your layout stays safe in keyloom either way.
+        keyloom puts the keyboard in its bootloader itself when it can, and asks you to press the reset key when it can't, then
+        writes this build to it. The keyboard stops typing until the flash finishes, so have another keyboard to hand. Your
+        layout stays safe in keyloom either way.
       </p>
       <div className="confirm-actions">
         <button type="button" className="button" onClick={() => setConfirming(false)}>Cancel</button>
@@ -224,6 +225,7 @@ export function ReleaseDialog({ open, onClose, release, head, boardName, status,
                   <CircleCheck size={18} aria-hidden="true" />
                   <p>
                     <strong>Flashed.</strong> Your {boardName} restarts with the latest layout: {withFullStop(head.summary)}
+                    {flash.note === null ? null : <> {flash.note}</>}
                   </p>
                 </div>
                 <details className="log-details">
