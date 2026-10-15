@@ -46,6 +46,15 @@ export function rotatedCorners(key: GeometryKey): Point[] {
   });
 }
 
+// The middle of the key as drawn, in canvas units: where an arrow from one key to another starts and ends.
+export function keyCenter(key: GeometryKey, bounds: Bounds): Point {
+  const corners = rotatedCorners(key);
+  return {
+    x: corners.reduce((sum, p) => sum + p.x, 0) / corners.length - bounds.minX,
+    y: corners.reduce((sum, p) => sum + p.y, 0) / corners.length - bounds.minY,
+  };
+}
+
 // The canvas is the union of every rotated key, so thumb clusters and tilted columns
 // fit without special cases.
 export function boardBounds(keys: readonly GeometryKey[]): Bounds {

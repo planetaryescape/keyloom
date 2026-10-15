@@ -13,6 +13,8 @@ interface Props {
   idleNote: string;
   state: CheckState;
   onRecheck: () => void;
+  /** A card that lists moves itself passes false, so they aren't said twice. */
+  showMoves?: boolean;
 }
 
 function slotName(layout: Layout, slot: Slot): string {
@@ -70,19 +72,19 @@ function DiffDetails({ result, layout }: { result: ValidationResult; layout: Lay
   );
 }
 
-function Summary({ result, layout }: { result: ValidationResult; layout: Layout }) {
+function Summary({ result, layout, showMoves }: { result: ValidationResult; layout: Layout; showMoves: boolean }) {
   const line = diffLine(result);
   return (
     <>
       {line === "" ? null : <p className="diff-line">{line}.</p>}
-      <DiffDetails result={result} layout={layout} />
+      {showMoves ? <DiffDetails result={result} layout={layout} /> : null}
     </>
   );
 }
 
 // Everything the validator said about the draft, in the order it matters: errors block Apply,
 // warnings don't, and a clean pass says so rather than staying silent.
-export function Validation({ layout, slot, idleNote, state, onRecheck }: Props) {
+export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves = true }: Props) {
   let body;
   if (state.status === "idle") {
     body = (
@@ -130,7 +132,7 @@ export function Validation({ layout, slot, idleNote, state, onRecheck }: Props) 
             ))}
           </ul>
         )}
-        {errors.length === 0 && warnings.length === 0 ? <DiffDetails result={state.result} layout={layout} /> : <Summary result={state.result} layout={layout} />}
+        {errors.length === 0 && warnings.length === 0 ? (showMoves ? <DiffDetails result={state.result} layout={layout} /> : null) : <Summary result={state.result} layout={layout} showMoves={showMoves} />}
       </>
     );
   }

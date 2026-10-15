@@ -1,0 +1,207 @@
+/* The comparison table above a group of alternatives: one row each, the cost in numbers, the detail in the cards below. */
+.proposal-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.compare {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-page);
+  font-size: var(--text-sm);
+}
+
+.compare caption {
+  padding: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  caption-side: top;
+}
+
+.compare th,
+.compare td {
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.compare thead th {
+  border-top: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.compare tbody th {
+  font-weight: var(--weight-regular);
+}
+
+.compare-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.compare th.compare-num,
+.compare td.compare-num {
+  padding-inline: var(--space-2);
+}
+
+.compare .compare-num {
+  width: 1%;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.compare td.compare-num {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.compare td[data-zero="true"] {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.compare td[data-warn="true"] {
+  color: var(--color-warning);
+}
+
+.compare tbody tr:hover:not([data-status="superseded"]),
+.compare tbody tr[data-pinned="true"] {
+  background: var(--color-accent-bg);
+}
+
+.compare tbody tr[data-status="superseded"] {
+  color: var(--color-text-muted);
+}
+
+.compare-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.compare-number {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.compare-title {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  text-align: left;
+}
+
+button.compare-title {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 3px;
+}
+
+button.compare-title:hover,
+button.compare-title[aria-pressed="true"] {
+  text-decoration-color: currentColor;
+}
+
+.compare-state {
+  flex: none;
+  margin-top: 3px;
+  color: var(--color-text-muted);
+}
+
+.compare-summary {
+  padding-left: 28px;
+  color: var(--color-text-muted);
+}
+
+.compare-pinned {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-left: 28px;
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* The Moves list in a card: each function pushed out of the way, and where it landed. */
+.proposal-section h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.proposal-moves ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.proposal-moves li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.proposal-moves kbd {
+  min-width: 36px;
+  flex: none;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.moves-path {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.moves-path svg {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.proposal-moves li[data-dropped="true"] strong {
+  color: var(--color-warning);
+}
+
+.proposal-kicker {
+  margin: 0 0 2px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}

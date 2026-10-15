@@ -2,6 +2,7 @@ import { useImperativeHandle, useRef, type CSSProperties, type KeyboardEvent, ty
 import type { GeometryKey } from "../../boards/schema.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "./Cap.tsx";
+import { MoveArrows } from "./MoveArrows.tsx";
 import { boardBounds, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { useFitUnit } from "./useFitUnit.ts";
@@ -52,6 +53,8 @@ interface KeyboardProps {
   onToggle?: (index: number) => void;
   /** Keys a hovered proposal changes, and where a displaced function lands. */
   marks?: ReadonlyMap<number, "changed" | "home">;
+  /** Arrows from a displaced function's old key to its new home, for the hovered proposal. */
+  arrows?: ReadonlyArray<{ from: number; to: number }>;
   handle?: Ref<KeyboardHandle>;
 }
 
@@ -85,6 +88,7 @@ export function Keyboard({
   chatSelected,
   onToggle,
   marks,
+  arrows = [],
   handle,
 }: KeyboardProps) {
   const bounds = boardBounds(keys);
@@ -177,6 +181,7 @@ export function Keyboard({
             />
           );
         })}
+        <MoveArrows keys={keys} canvas={canvas} unit={unit} arrows={arrows} />
       </div>
     </div>
   );

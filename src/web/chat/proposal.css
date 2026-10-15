@@ -54,7 +54,7 @@
 }
 
 /* A settled card keeps its title and reason and drops the detail, so the open choice stands out. */
-.proposal[data-status="superseded"] .proposal-rows,
+.proposal[data-status="superseded"] .proposal-section,
 .proposal[data-status="superseded"] .tradeoffs,
 .proposal[data-status="superseded"] .validation {
   display: none;

@@ -5,9 +5,11 @@ interface LayerTabsProps {
   layers: readonly Layer[];
   selectedId: string;
   onSelect: (id: string) => void;
+  /** Layers that carry a mark from the previewed proposal while another layer is showing. */
+  marked?: ReadonlySet<string>;
 }
 
-export function LayerTabs({ layers, selectedId, onSelect }: LayerTabsProps) {
+export function LayerTabs({ layers, selectedId, onSelect, marked }: LayerTabsProps) {
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Arrow keys move between tabs and select as they go, as the tablist pattern asks.
@@ -49,6 +51,12 @@ export function LayerTabs({ layers, selectedId, onSelect }: LayerTabsProps) {
             onKeyDown={(event) => onKeyDown(event, index)}
           >
             {layer.name}
+            {marked?.has(layer.id) && !selected ? (
+              <>
+                <span className="layer-tab-mark" aria-hidden="true" />
+                <span className="sr-only"> (has keys in the proposal)</span>
+              </>
+            ) : null}
           </button>
         );
       })}

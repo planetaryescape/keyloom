@@ -70,3 +70,14 @@ export async function streamChat(
   }
   if (!finished) throw new ApiError(0, "The connection to keyloom dropped before the reply finished.");
 }
+
+/** Forgets a priority. The server retires it, so the record of what BK once said survives (08). */
+export async function forgetPriority(token: string, id: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/priorities/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-keyloom-token": token } });
+  } catch {
+    throw new ApiError(0, "Can't reach keyloom. Is it still running in your terminal?");
+  }
+  if (!response.ok) throw await failure(response);
+}

@@ -6,11 +6,14 @@ import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { previewProposal } from "./preview.ts";
+import { ProposalMoves } from "./ProposalMoves.tsx";
 import { keyLabel, replacedNatives, slotKey, slotName } from "./proposal-facts.ts";
 import "./proposal.css";
 
 interface Props {
   proposal: Proposal;
+  /** Which of several alternatives this is, so the card and its row in the comparison carry the same number. Omitted for a lone proposal. */
+  option?: { number: number; of: number };
   layout: Layout;
   board: BoardDefinition;
   /** The card whose preview is pinned on the board. */
@@ -28,7 +31,7 @@ const MAX_ROWS = 6;
 
 // One alternative from the agent. The same card serves a fresh proposal, an applied one and a
 // superseded sibling, so the choice reads the same whichever you look at.
-export function ProposalCard({ proposal, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease }: Props) {
+export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease }: Props) {
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -88,6 +91,7 @@ export function ProposalCard({ proposal, layout, board, pinned, onPreview, onPin
         if (!event.currentTarget.contains(event.relatedTarget)) onPreview(null);
       }}
     >
+      {option === undefined ? null : <p className="proposal-kicker">Option {option.number} of {option.of}</p>}
       <header className="proposal-head">
         <h3 id={titleId}>{proposal.title}</h3>
         {proposal.status === "applied" ? (
@@ -99,20 +103,25 @@ export function ProposalCard({ proposal, layout, board, pinned, onPreview, onPin
       <p className="proposal-why">{proposal.explanation}</p>
 
       {rows.length === 0 ? null : (
-        <ul className="proposal-rows" aria-label="Keys this changes">
-          {rows.slice(0, MAX_ROWS).map((row) => (
-            <li key={row.key}>
-              <span className="proposal-where">{row.where}</span>
-              <span className="proposal-swap">
-                <kbd>{row.before}</kbd>
-                <ArrowRight size={14} aria-label="becomes" role="img" />
-                <kbd data-new="true">{row.after}</kbd>
-              </span>
-            </li>
-          ))}
-          {rows.length > MAX_ROWS ? <li className="muted">and {rows.length - MAX_ROWS} more</li> : null}
-        </ul>
+        <div className="proposal-section">
+          <h4>Changes</h4>
+          <ul className="proposal-rows" aria-label="Keys this changes">
+            {rows.slice(0, MAX_ROWS).map((row) => (
+              <li key={row.key}>
+                <span className="proposal-where">{row.where}</span>
+                <span className="proposal-swap">
+                  <kbd>{row.before}</kbd>
+                  <ArrowRight size={14} aria-label="becomes" role="img" />
+                  <kbd data-new="true">{row.after}</kbd>
+                </span>
+              </li>
+            ))}
+            {rows.length > MAX_ROWS ? <li className="muted">and {rows.length - MAX_ROWS} more</li> : null}
+          </ul>
+        </div>
       )}
+
+      <ProposalMoves proposal={proposal} layout={layout} />
 
       <div className="tradeoffs">
         <div>
@@ -125,7 +134,7 @@ export function ProposalCard({ proposal, layout, board, pinned, onPreview, onPin
         </div>
       </div>
 
-      <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} />
+      <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} showMoves={false} />
 
       {open ? (
         confirming ? (

@@ -1,5 +1,6 @@
 // The validator reports functions as canonical strings (key:LEFT+LCTL, layer:toggle:layer-4). People
 // read the same legends the board shows, so this turns one into the other for the diff lines.
+import { keyCodeLabel } from "../../layout/keycodes.ts";
 import { modsText, tapText } from "../../layout/render-grid.ts";
 import type { Layout, Mod } from "../../layout/schema.ts";
 
@@ -28,4 +29,16 @@ export function functionLabel(fn: string, layout: Layout): string {
     default:
       return fn;
   }
+}
+
+/**
+ * The same function in words, for a sentence or a chip ("Backspace stays where it is"), where the
+ * keycap legend ("BSPC") would read as jargon. A key whose label is punctuation keeps its legend.
+ */
+export function functionName(fn: string, layout: Layout): string {
+  const [kind, ...rest] = fn.split(":");
+  if (kind !== "key") return functionLabel(fn, layout);
+  const [code = "", ...mods] = rest.join(":").split("+");
+  const label = keyCodeLabel(code);
+  return `${mods.length ? modsText(mods as Mod[]) : ""}${/^[A-Za-z0-9]/.test(label) ? label : tapText(code)}`;
 }

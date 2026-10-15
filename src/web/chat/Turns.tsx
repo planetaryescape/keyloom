@@ -2,7 +2,10 @@ import { CircleAlert, LoaderCircle, RefreshCw } from "lucide-react";
 import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
+import { groupProposals } from "./compare.ts";
 import { Markdown } from "./Markdown.tsx";
+import { PriorityChips } from "./PriorityChips.tsx";
+import { ProposalCompare } from "./ProposalCompare.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import type { AssistantTurn, UserTurn } from "./transcript.ts";
@@ -40,18 +43,20 @@ interface Props {
   onPreview: (proposal: Proposal | null) => void;
   onPin: (proposal: Proposal) => void;
   onApply: (proposal: Proposal) => Promise<void>;
+  onRemovePriority: (id: string) => Promise<void>;
   onAskAgain: () => void;
   onOpenRelease: () => void;
   onRetry: () => void;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onAskAgain, onOpenRelease, onRetry }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
   return (
     <div className="msg msg-assistant" data-phase={turn.phase}>
       <p className="msg-who">keyloom</p>
+      <PriorityChips priorities={turn.priorities} layout={layout} onRemove={onRemovePriority} />
       {/* Hidden from the live region until the reply is whole, so a screen reader hears it once, not token by token. */}
       <div aria-hidden={streaming || undefined}>
         {turn.text === "" ? null : <Markdown source={turn.text} />}
@@ -65,25 +70,29 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
       ) : null}
       {turn.phase === "stopped" ? <p className="msg-note">Stopped. What came through is above.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}
-      {offers === 0 ? null : (
-        <ul className="proposals" aria-live="off">
-          {turn.proposals.map((proposal) => (
-            <li key={proposal.changeSetId}>
-              <ProposalCard
-                proposal={proposal}
-                layout={layout}
-                board={board}
-                pinned={pinnedId === proposal.changeSetId}
-                onPreview={onPreview}
-                onPin={onPin}
-                onApply={onApply}
-                onAskAgain={onAskAgain}
-                onOpenRelease={onOpenRelease}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      {groupProposals(turn.proposals).map((group) => (
+        <section className="proposal-group" key={group[0]?.changeSetId} aria-label={group.length > 1 ? `${group.length} options` : "Option"}>
+          {group.length > 1 ? <ProposalCompare group={group} layout={layout} pinnedId={pinnedId} onPreview={onPreview} onPin={onPin} /> : null}
+          <ul className="proposals" aria-live="off">
+            {group.map((proposal, index) => (
+              <li key={proposal.changeSetId}>
+                <ProposalCard
+                  proposal={proposal}
+                  {...(group.length > 1 ? { option: { number: index + 1, of: group.length } } : {})}
+                  layout={layout}
+                  board={board}
+                  pinned={pinnedId === proposal.changeSetId}
+                  onPreview={onPreview}
+                  onPin={onPin}
+                  onApply={onApply}
+                  onAskAgain={onAskAgain}
+                  onOpenRelease={onOpenRelease}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
       {turn.failure === null ? null : (
         <div className="chat-problem chat-problem-inline" role="alert">
           <CircleAlert size={18} aria-hidden="true" />

@@ -197,6 +197,16 @@ code {
 }
 
 /* Tabs keep one weight, so selecting a tab changes colour and fill and never the width. */
+.layer-tab-mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: var(--space-2);
+  border-radius: 50%;
+  background: var(--color-accent);
+  vertical-align: middle;
+}
+
 .layer-tab {
   min-height: 32px;
   padding: var(--space-1) var(--space-3);

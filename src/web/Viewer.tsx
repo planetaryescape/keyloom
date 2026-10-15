@@ -7,7 +7,7 @@ import { undoChange } from "./api-write.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
-import { marksOn, previewProposal } from "./chat/preview.ts";
+import { arrowsOn, marksOn, otherMarkedLayers, previewProposal } from "./chat/preview.ts";
 import { BindingEditor, type DraftState } from "./editor/BindingEditor.tsx";
 import { withBinding } from "./editor/draft.ts";
 import { RevisionBar } from "./history/RevisionBar.tsx";
@@ -80,6 +80,8 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     [shown, layerIndex, keys],
   );
   const marks = useMemo(() => marksOn(preview, layer?.id ?? ""), [preview, layer]);
+  const arrows = useMemo(() => arrowsOn(preview, layer?.id ?? ""), [preview, layer]);
+  const markedLayers = useMemo(() => otherMarkedLayers(preview, layer?.id ?? ""), [preview, layer]);
   const chatSelected = useMemo(
     () => (chatSelection !== null && chatSelection.layerId === layer?.id ? new Set(chatSelection.positions) : NONE),
     [chatSelection, layer],
@@ -251,7 +253,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
         {notice === null ? null : <Notice {...notice} onDismiss={() => setNotice(null)} />}
         <section className="stage" aria-label="Layout" ref={stage}>
           <div className="stage-bar">
-            <LayerTabs layers={layout.layers} selectedId={layer.id} onSelect={chooseLayer} />
+            <LayerTabs layers={layout.layers} selectedId={layer.id} onSelect={chooseLayer} marked={markedLayers} />
             {preview !== null && proposal !== null ? (
               <PreviewBanner
                 title={proposal.title}
@@ -276,6 +278,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
             appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
             chatSelected={chatSelected}
             marks={marks}
+            arrows={arrows}
             onToggle={toggleChatKey}
             onSelect={select}
             onHover={setHovered}

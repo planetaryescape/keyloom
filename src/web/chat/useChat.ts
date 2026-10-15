@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { ChatSelection, ConversationSummary } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
-import { fetchConversation, fetchConversations, streamChat } from "./api-chat.ts";
+import { fetchConversation, fetchConversations, forgetPriority, streamChat } from "./api-chat.ts";
 import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action } from "./transcript.ts";
 
 /** A refusal before the reply started: the message never reached the agent. */
@@ -133,5 +133,14 @@ export function useChat(token: string, layoutRef: string) {
 
   const markApplied = useCallback((changeSetId: string) => dispatch({ type: "applied", changeSetId }), []);
 
-  return { transcript, streaming, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, retry, stop, newConversation, open, markApplied };
+  /** Rejects with the server's message, so the chip can say why it is still there. */
+  const removePriority = useCallback(
+    async (id: string) => {
+      await forgetPriority(token, id);
+      dispatch({ type: "priorityRemoved", id });
+    },
+    [token],
+  );
+
+  return { transcript, streaming, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, retry, stop, newConversation, open, markApplied, removePriority };
 }

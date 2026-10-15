@@ -76,9 +76,9 @@ export function ChatPanel({ token, layoutRef, layout, board, selection, onRemove
     const element = log.current;
     if (element === null || !stick.current) return;
     const replies = element.querySelectorAll<HTMLElement>(".msg-assistant");
-    const firstCard = replies[replies.length - 1]?.querySelector<HTMLElement>(".proposals > li");
+    const firstCard = replies[replies.length - 1]?.querySelector<HTMLElement>(".proposal-group");
     if (firstCard) {
-      element.scrollTop += firstCard.getBoundingClientRect().top - element.getBoundingClientRect().top - 12;
+      element.scrollTop += firstCard.getBoundingClientRect().top - element.getBoundingClientRect().top - 8;
       stick.current = false;
       return;
     }
@@ -188,6 +188,7 @@ export function ChatPanel({ token, layoutRef, layout, board, selection, onRemove
                     onPreview={onPreview}
                     onPin={onPin}
                     onApply={apply}
+                    onRemovePriority={chat.removePriority}
                     onAskAgain={() => send(ASK_AGAIN)}
                     onOpenRelease={onOpenRelease}
                     onRetry={() => void chat.retry()}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatEvent, ChatOutcome, ConversationDetail, ProposalCard } from "../../src/api/http.ts";
+import type { ChatEvent, ChatOutcome, ConversationDetail, PriorityCard, ProposalCard } from "../../src/api/http.ts";
 import { EMPTY, fromConversation, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn, type Transcript } from "../../src/web/chat/transcript.ts";
 
 const validation: ProposalCard["validation"] = { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] } };
@@ -119,5 +119,43 @@ describe("fromConversation", () => {
   test("proposals with no reply to hang off still show", () => {
     const t = fromConversation({ ...detail, messages: [detail.messages[0]!] });
     expect(assistant(t)?.proposals).toHaveLength(1);
+  });
+});
+
+describe("priority chips", () => {
+  const chip = (id: string, sourceMessageIds: string[] = []): PriorityCard => ({
+    id, priorityKind: "pinned", statement: "keep Backspace", reason: "stated by BK", subject: { functions: ["key:BACKSPACE"] }, sourceMessageIds, createdAt: 1,
+  });
+
+  test("a priority event adds a chip to the reply, once, and done merges any the stream missed", () => {
+    const t = run([
+      sent,
+      ev({ type: "priority", priority: chip("d1") }),
+      ev({ type: "priority", priority: chip("d1") }),
+      ev({ type: "done", outcome: outcome({ priorities: [chip("d1"), chip("d2")] }) }),
+    ]);
+    expect(assistant(t)?.priorities.map((p) => p.id)).toEqual(["d1", "d2"]);
+  });
+
+  test("removing a chip drops it from every reply", () => {
+    const t = run([sent, ev({ type: "priority", priority: chip("d1") }), ev({ type: "priority", priority: chip("d2") }), { type: "priorityRemoved", id: "d1" }]);
+    expect(assistant(t)?.priorities.map((p) => p.id)).toEqual(["d2"]);
+  });
+
+  test("a reopened conversation puts each chip under the first reply after the message it came from", () => {
+    const detail: ConversationDetail = {
+      conversation: { id: "c9", layoutId: "l", title: "t", createdAt: 1 },
+      messages: [
+        { id: "m1", role: "user", text: "hi", toolCalls: [], selection: null, createdAt: 1 },
+        { id: "m2", role: "assistant", text: "which?", toolCalls: [], selection: null, createdAt: 2 },
+        { id: "m3", role: "user", text: "keep Backspace", toolCalls: [], selection: null, createdAt: 3 },
+        { id: "m4", role: "assistant", text: "noted", toolCalls: [], selection: null, createdAt: 4 },
+        { id: "m5", role: "assistant", text: "and here", toolCalls: [], selection: null, createdAt: 5 },
+      ],
+      proposals: [],
+      priorities: [chip("d1", ["m3"]), chip("orphan", ["gone"])],
+    };
+    const turns = fromConversation(detail).turns.filter((turn): turn is AssistantTurn => turn.kind === "assistant");
+    expect(turns.map((turn) => turn.priorities.map((p) => p.id))).toEqual([[], ["d1"], ["orphan"]]);
   });
 });

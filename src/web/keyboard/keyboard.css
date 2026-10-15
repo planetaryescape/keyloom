@@ -200,3 +200,30 @@ button.cap[data-applied="true"] {
   align-items: center;
   justify-content: center;
 }
+
+/* Arrows for a hovered proposal: accent line over a page-coloured halo, above the caps and out of the pointer's way. */
+.move-arrows {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  color: var(--color-accent);
+  pointer-events: none;
+}
+
+.move-arrow-halo,
+.move-arrow {
+  fill: none;
+}
+
+.move-arrow-halo {
+  stroke: var(--color-page);
+  stroke-width: 6;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.move-arrow {
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
