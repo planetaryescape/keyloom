@@ -4,10 +4,11 @@
 // until it has flashed a real board, so this reads its exit code first and everything else loosely,
 // and keeps the raw output in the log.
 import { existsSync } from "node:fs";
+import type { FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
 import { dfuProblem } from "./dfu.ts";
 
-export type FlashState = "waiting_for_bootloader" | "writing" | "succeeded" | "failed";
+export type { FlashResult, FlashState } from "../toolchain/flash-state.ts";
 
 export const BOOTLOADER_WAIT_MS = 120_000;
 export const WRITE_TIMEOUT_MS = 180_000;
@@ -30,8 +31,6 @@ export type FlashInput = {
   /** Aborting stops zapp. Without this a Ctrl-C would leave it waiting, and it would flash whenever the board next enters its bootloader. */
   signal?: AbortSignal;
 };
-
-export type FlashResult = { state: "succeeded" | "failed"; error: string | null; output: string[] };
 
 const LOADED = /firmware loaded/i;
 
