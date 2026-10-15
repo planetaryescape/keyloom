@@ -18,6 +18,16 @@ export function rowsOf(geometry: Geometry | undefined, keyCount: number): number
   const rows = [...byRow.entries()].sort((a, b) => a[0] - b[0]).map(([, ps]) => ps);
   const flat = rows.flat();
   if (geometry && flat.length === keyCount && flat.every((p, i) => p === i)) return rows;
+  // Raised or tilted thumb keys (the Corne's sit at y 2.83 beside a row at 2.24) break grouping by height.
+  // Position order is row-major, so a new row starts wherever x steps back to the left.
+  if (geometry && geometry.keys.length === keyCount && keyCount > 0) {
+    const wrapped: number[][] = [[0]];
+    for (let p = 1; p < keyCount; p++) {
+      if ((geometry.keys[p] as { x: number }).x < (geometry.keys[p - 1] as { x: number }).x) wrapped.push([]);
+      (wrapped[wrapped.length - 1] as number[]).push(p);
+    }
+    if (wrapped.length > 1) return wrapped;
+  }
   return Array.from({ length: Math.ceil(keyCount / 10) }, (_, r) => Array.from({ length: Math.min(10, keyCount - r * 10) }, (_, i) => r * 10 + i));
 }
 
