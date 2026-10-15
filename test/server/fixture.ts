@@ -1,4 +1,4 @@
-import { LayoutDetailSchema, type LayoutDetail } from "../../src/server/responses.ts";
+import { LayoutDetailSchema, type LayoutDetail } from "../../src/api/http.ts";
 
 // The Moonlander sample used by the server and viewer tests. Parsed on load so a broken
 // fixture fails here, not in a confusing assertion further down.

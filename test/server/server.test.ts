@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { connect } from "node:net";
-import { LayoutDetailSchema, LayoutListResponseSchema } from "../../src/server/responses.ts";
+import { LayoutDetailSchema, LayoutListResponseSchema } from "../../src/api/http.ts";
 import type { LayoutSource } from "../../src/server/layout-source.ts";
 import { startServer, type RunningServer } from "../../src/server/start-server.ts";
 import { checkHost, checkToken } from "../../src/server/guard.ts";

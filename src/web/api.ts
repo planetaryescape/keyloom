@@ -4,7 +4,7 @@ import {
   LayoutListResponseSchema,
   type LayoutDetail,
   type LayoutSummary,
-} from "../server/responses.ts";
+} from "../api/http.ts";
 
 export class ApiError extends Error {
   readonly status: number;

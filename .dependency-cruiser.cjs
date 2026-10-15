@@ -14,9 +14,10 @@ const ALLOWED = {
   memory: ["layout", "persistence"],
   persistence: ["layout"],
   app: ["layout", "validation", "boards", "firmware", "agent", "memory", "persistence"],
-  server: ["app"],
-  cli: ["app"],
-  web: ["layout"],
+  api: ["layout", "boards"], // the HTTP wire contract shared by server and web
+  server: ["app", "api", "layout", "boards", "web"], // web: the bundled HTML entry it serves; layout/boards: schema types
+  cli: ["app", "server"], // the CLI entry point composes the server (keyloom serve)
+  web: ["layout", "boards", "api"],
   // Ambient module declarations; nothing imports them.
   types: [],
 };

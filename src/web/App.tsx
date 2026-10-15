@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
-import type { LayoutDetail, LayoutSummary } from "../server/responses.ts";
+import type { LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
 import { Keyboard } from "./keyboard/Keyboard.tsx";

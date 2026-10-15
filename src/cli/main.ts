@@ -3,9 +3,10 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
-  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, selectLayers, showBoard, ValidationFailedError,
+  regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { EXIT, classify } from "./errors.ts";
+import { DEFAULT_PORT, serve } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
 import { importTable } from "./report.ts";
 
@@ -155,6 +156,33 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .action(async (ref: string) => {
       const r = await regenerateGeometry(ref);
       print(io, format(), { json: { path: r.path, key_count: r.keyCount, source: r.source }, table: `wrote ${r.path}: ${r.keyCount} keys from ${r.source}` });
+    });
+
+  program
+    .command("serve")
+    .description("start the local web app and open it in the browser")
+    .option("--port <port>", "port on 127.0.0.1", String(DEFAULT_PORT))
+    .option("--no-open", "don't open the browser")
+    .action(async (opts: { port: string; open: boolean }) => {
+      const port = Number(opts.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new UsageError(`--port must be 1-65535, got "${opts.port}"`);
+      await withApp(async (app) => {
+        let running;
+        try {
+          running = serve(app, { port, open: opts.open });
+        } catch (err) {
+          if ((err as { code?: string }).code === "EADDRINUSE") throw new UsageError(`port ${port} is in use; pass --port`);
+          throw err;
+        }
+        io.err(`keyloom is running at ${running.url}\nPress Ctrl-C to stop.\n`);
+        // Serve until interrupted; withApp closes the database after the server stops.
+        await new Promise<void>((resolve) => {
+          const stop = () => resolve();
+          process.once("SIGINT", stop);
+          process.once("SIGTERM", stop);
+        });
+        running.stop();
+      });
     });
 
   program

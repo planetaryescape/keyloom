@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { fetchLayouts } from "../../src/web/api.ts";
-import type { LayoutSummary } from "../../src/server/responses.ts";
+import type { LayoutSummary } from "../../src/api/http.ts";
 
 interface LayoutListBody {
   layouts: LayoutSummary[];

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { checkHost, checkToken } from "./guard.ts";
 import type { LayoutSource } from "./layout-source.ts";
 import { loadWebAssets } from "./web-assets.ts";
-import { LayoutDetailSchema, LayoutListResponseSchema } from "./responses.ts";
+import { LayoutDetailSchema, LayoutListResponseSchema } from "../api/http.ts";
 
 export interface ServerOptions {
   port: number;

@@ -1,6 +1,6 @@
 import type { BoardDefinition, Geometry } from "../boards/schema.ts";
 import type { Layout } from "../layout/schema.ts";
-import type { LayoutSummary } from "./responses.ts";
+import type { LayoutSummary } from "../api/http.ts";
 
 // The server reads layouts through this interface. The CLI injects the storage-backed
 // implementation; the server knows nothing about where layouts live.
