@@ -6,8 +6,8 @@ import type { CheckState } from "./useCheck.ts";
 
 interface Props {
   layout: Layout;
-  /** The key being edited, so issues about it read "This key" and others name their key. */
-  slot: Slot;
+  /** The key being edited, so issues about it read "This key" and others name their key. Omitted for a proposal, where every key is named. */
+  slot?: Slot;
   /** Why there is nothing to check: an incomplete or unchanged draft. */
   idleNote: string;
   state: CheckState;
@@ -19,7 +19,7 @@ function slotName(layout: Layout, slot: Slot): string {
   return `${layer}, key ${slot.position + 1}`;
 }
 
-function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" | "warning"; layout: Layout; slot: Slot }) {
+function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" | "warning"; layout: Layout; slot: Slot | undefined }) {
   const Icon = kind === "error" ? CircleX : TriangleAlert;
   const others = issue.slots ?? [];
   return (
@@ -33,7 +33,7 @@ function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" 
         {others.length === 0 ? null : (
           <ul className="slot-chips" aria-label="Keys involved">
             {others.map((other) => (
-              <li key={`${other.layerId}:${other.position}`} className="chip">{other.layerId === slot.layerId && other.position === slot.position ? "This key" : slotName(layout, other)}</li>
+              <li key={`${other.layerId}:${other.position}`} className="chip">{slot !== undefined && other.layerId === slot.layerId && other.position === slot.position ? "This key" : slotName(layout, other)}</li>
             ))}
           </ul>
         )}

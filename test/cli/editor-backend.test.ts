@@ -1,6 +1,6 @@
 // The adapter behind the editor's write routes, over a real database with BK's imported layout.
 import { afterEach, describe, expect, test } from "bun:test";
-import { type App, closeApp, getLayout, importLayout, openApp } from "../../src/app/index.ts";
+import { type App, closeApp, getLayout, importLayout, listChanges, openApp, proposeChange } from "../../src/app/index.ts";
 import { appEditorBackend } from "../../src/cli/editor-backend.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { EditorError } from "../../src/server/editor-backend.ts";
@@ -68,5 +68,38 @@ describe("appEditorBackend", () => {
     expect([err.status, err.code]).toEqual([404, "not_found"]);
     expect(await backend.getBuild("bld_nope")).toBeNull();
     expect(await backend.getFlash("fl_nope")).toBeNull();
+  });
+});
+
+describe("applyChangeSet", () => {
+  test("applies a stored proposal as an agent revision and supersedes its siblings", async () => {
+    const { app, backend, head } = await setup();
+    const group = "turn-1";
+    const a = proposeChange(app, "synchronized", { ops: F17, explanation: "F17 on key 7", source: "agent", proposalGroup: group });
+    const b = proposeChange(app, "synchronized", { ops: setKey(6, "F18"), explanation: "F18 on key 7", source: "agent", proposalGroup: group });
+
+    const applied = await backend.applyChangeSet(a.id);
+    expect(applied.changeSetId).toBe(a.id);
+    expect(applied.revisionId).not.toBe(head);
+    expect(getLayout(app, "synchronized").document.layers[0]?.bindings[6]).toEqual({ kind: "key", code: "F17" });
+    expect(Object.fromEntries(listChanges(app, "synchronized").map((c) => [c.id, c.status]))).toMatchObject({ [a.id]: "applied", [b.id]: "superseded" });
+  });
+
+  test("maps the app's errors: unknown 404, already applied 400, moved-on head 409 stale_base", async () => {
+    const { app, backend } = await setup();
+    expect((await editorError(backend.applyChangeSet("cs_nope"))).status).toBe(404);
+
+    const a = proposeChange(app, "synchronized", { ops: F17, explanation: "F17", source: "agent" });
+    const other = proposeChange(app, "synchronized", { ops: setKey(8, "F18"), explanation: "F18", source: "agent" });
+    await backend.applyChangeSet(a.id);
+    const again = await editorError(backend.applyChangeSet(a.id));
+    expect([again.status, again.code]).toEqual([400, "usage"]);
+
+    // `other` shares no slot with `a`, so it still applies; a proposal on a's slot does not.
+    await backend.applyChangeSet(other.id);
+    const clash = proposeChange(app, "synchronized", { ops: setKey(6, "F19"), explanation: "F19", source: "agent" });
+    await backend.apply("synchronized", { baseRevisionId: getLayout(app, "synchronized").revision.id, ops: setKey(6, "F20"), summary: "meanwhile" });
+    const stale = await editorError(backend.applyChangeSet(clash.id));
+    expect([stale.status, stale.code]).toEqual([409, "stale_base"]);
   });
 });

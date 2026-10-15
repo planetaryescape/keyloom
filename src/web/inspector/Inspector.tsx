@@ -39,7 +39,7 @@ export function Inspector({ description, position, finger, layerName, tapAt, onO
           <MousePointer2 size={22} aria-hidden="true" />
           <p>
             <strong>Pick a key to see what it does</strong>
-            Tap, hover or click one, or Tab into the keyboard and use the arrow keys. Press Enter on a key to edit it.
+            Hover a key, or Tab into the keyboard and use the arrow keys. Click keys to send them with your next chat message, and double-click or press Enter to edit one.
           </p>
         </div>
       </section>

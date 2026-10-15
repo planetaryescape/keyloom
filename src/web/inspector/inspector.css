@@ -15,6 +15,10 @@
   color: var(--color-text-muted);
 }
 
+.inspector-idle > svg {
+  flex: none;
+}
+
 .inspector-idle strong {
   display: block;
   color: var(--color-text);

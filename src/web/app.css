@@ -56,6 +56,42 @@ code {
   padding: var(--space-4) var(--space-5) var(--space-5);
 }
 
+/* Workspace: the board and its inspector on the left, the chat beside them when there is room
+   for both (09-web-editor: Screen) and under them when there isn't. */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.workspace-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.workspace > .chat {
+  height: min(80vh, 720px);
+  min-height: 480px;
+}
+
+@media (min-width: 1280px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 28vw, 440px);
+    align-items: start;
+    gap: var(--space-4);
+  }
+
+  /* Stays in view while the board and inspector scroll, so a proposal and the keys it changes are in sight together. */
+  .workspace > .chat {
+    position: sticky;
+    top: var(--space-4);
+    height: calc(100vh - 56px - var(--space-6));
+    min-height: 0;
+  }
+}
+
 /* Header: who this layout is, on one line that wraps cleanly. */
 .app-header {
   display: flex;

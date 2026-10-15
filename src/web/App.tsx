@@ -184,7 +184,7 @@ function LayoutPage({
       {failure !== null || !("keys" in rotated) ? (
         <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
       ) : (
-        <Viewer detail={detail} keys={rotated.keys} token={token} layoutRef={summary.id} onChanged={onChanged} />
+        <Viewer detail={detail} keys={rotated.keys} token={token} layoutRef={summary.id} onChanged={onChanged} onOpenRelease={() => setReleaseOpen(true)} />
       )}
       <ReleaseDialog
         open={releaseOpen}

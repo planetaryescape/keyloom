@@ -212,3 +212,9 @@ export const ConversationDetailSchema = z.object({
   proposals: z.array(ProposalCardSchema),
 });
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
+
+// Applying a stored proposal (rung 3). Same token and error conventions as the editor routes above.
+//   POST /api/change-sets/:id/apply       {} -> ApplyResponse   (404 not_found; 400 usage when the change set is no
+//                                                                 longer proposed; 409 stale_base or validation_failed)
+// It applies the change set exactly as stored, against the head, and marks its siblings superseded. It
+// never builds or flashes.

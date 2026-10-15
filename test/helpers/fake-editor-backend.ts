@@ -6,7 +6,8 @@ import {
 } from "../../src/layout/keycodes.ts";
 import type { ApplyRequest, ApplyResponse, Build, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
 import type { Binding, Layout } from "../../src/layout/schema.ts";
-import type { Slot } from "../../src/layout/change.ts";
+import type { ChangeOp, Slot } from "../../src/layout/change.ts";
+import { applyOps } from "../../src/layout/apply-ops.ts";
 import { EditorError, type EditorBackend } from "../../src/server/editor-backend.ts";
 import type { LayoutSource } from "../../src/server/layout-source.ts";
 import type { Issue, ValidationResult } from "../../src/validation/result.ts";
@@ -22,6 +23,17 @@ export interface FakeOptions {
 }
 
 type Revision = RevisionInfo & { document: Layout };
+
+/** A proposal the fake chat backend stored, applied by id like a real change set. */
+export interface StoredProposal {
+  id: string;
+  baseRevisionId: string;
+  ops: ChangeOp[];
+  summary: string;
+  /** Proposals from one agent turn; applying one supersedes the rest. */
+  group: string;
+  status: "proposed" | "applied" | "rejected" | "superseded";
+}
 
 const BUILD_LOG: readonly (readonly [number, string])[] = [
   [0, "docker: using image zsa/qmk_modern:latest"],
@@ -49,6 +61,7 @@ export class FakeEditor implements EditorBackend {
   private readonly builds = new Map<string, { build: Build; revisionId: string }>();
   private readonly flashes = new Map<string, { flash: Flash; startedAt: number }>();
   private readonly options: Required<FakeOptions>;
+  private readonly proposals = new Map<string, StoredProposal>();
 
   constructor(
     private readonly base: LayoutDetail,
@@ -102,6 +115,34 @@ export class FakeEditor implements EditorBackend {
     }
     const revision = this.push("editor", request.summary, document);
     return { revisionId: revision.id, changeSetId: `cs_${++this.counter}`, validation };
+  }
+
+  /** Stores a proposal against the current head, as the real agent's propose_changes does. */
+  storeProposal(ops: ChangeOp[], summary: string, group: string): StoredProposal {
+    const proposal: StoredProposal = { id: `cs_${++this.counter}`, baseRevisionId: this.head.id, ops, summary, group, status: "proposed" };
+    this.proposals.set(proposal.id, proposal);
+    return proposal;
+  }
+
+  proposalStatus(id: string): StoredProposal["status"] | undefined {
+    return this.proposals.get(id)?.status;
+  }
+
+  async applyChangeSet(changeSetId: string): Promise<ApplyResponse> {
+    const proposal = this.proposals.get(changeSetId);
+    if (proposal === undefined) throw new EditorError(404, "not_found", `No change set "${changeSetId}".`);
+    if (proposal.status !== "proposed") throw new EditorError(400, "usage", `Change set ${proposal.id} is ${proposal.status}, not proposed.`);
+    if (proposal.baseRevisionId !== this.head.id) {
+      throw new EditorError(409, "stale_base", "The layout changed since this was proposed. Ask for it again.");
+    }
+    const applied = applyOps(this.head.document, proposal.ops);
+    if (!applied.ok) throw new EditorError(409, "validation_failed", applied.error.message);
+    const revision = this.push("agent", proposal.summary, structuredClone(applied.layout));
+    proposal.status = "applied";
+    for (const other of this.proposals.values()) {
+      if (other.group === proposal.group && other.id !== proposal.id && other.status === "proposed") other.status = "superseded";
+    }
+    return { revisionId: revision.id, changeSetId: proposal.id, validation: { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, reminders: [] } } };
   }
 
   async undo(_ref: string, request: UndoRequest): Promise<UndoResponse> {

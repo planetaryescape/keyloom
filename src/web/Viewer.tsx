@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
-import type { LayoutDetail } from "../api/http.ts";
+import type { ApplyResponse, ChatSelection, LayoutDetail, ProposalCard } from "../api/http.ts";
 import { describeKey, type KeyDescription } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { undoChange } from "./api-write.ts";
+import { ChatPanel } from "./chat/ChatPanel.tsx";
+import { PreviewBanner } from "./chat/PreviewBanner.tsx";
+import { layerName } from "./chat/proposal-facts.ts";
+import { marksOn, previewProposal } from "./chat/preview.ts";
 import { BindingEditor, type DraftState } from "./editor/BindingEditor.tsx";
 import { withBinding } from "./editor/draft.ts";
 import { RevisionBar } from "./history/RevisionBar.tsx";
@@ -22,13 +26,16 @@ interface ViewerProps {
   layoutRef: string;
   /** Fetches the layout again after a change, resolving once the new one is on screen. */
   onChanged: () => Promise<void>;
+  /** Opens the Build and flash dialog, which the chat points at after an apply. */
+  onOpenRelease: () => void;
 }
 
 type Editing = { layerId: string; position: number; focus: boolean };
 const CLEAN: DraftState = { binding: null, dirty: false };
+const NONE: ReadonlySet<number> = new Set();
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
-export function Viewer({ detail, keys, token, layoutRef, onChanged }: ViewerProps) {
+export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenRelease }: ViewerProps) {
   const { document: layout, board, revision } = detail;
   const [layerId, setLayerId] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -39,26 +46,43 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged }: ViewerProp
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [applied, setApplied] = useState<{ layerId: string; position: number } | null>(null);
   const [undoing, setUndoing] = useState(false);
+  // The keys clicked for the chat, on one layer, and the proposal being previewed (hovered or pinned).
+  const [chatSelection, setChatSelection] = useState<ChatSelection | null>(null);
+  const [hoveredProposal, setHoveredProposal] = useState<ProposalCard | null>(null);
+  const [pinnedProposal, setPinnedProposal] = useState<ProposalCard | null>(null);
+  const stage = useRef<HTMLElement>(null);
   const keyboard = useRef<KeyboardHandle>(null);
   const editorBox = useRef<HTMLDivElement>(null);
 
-  const layerIndex = Math.max(
+  const headIndex = Math.max(
     0,
     layout.layers.findIndex((candidate) => candidate.id === layerId),
   );
-  const layer = layout.layers[layerIndex];
+  const proposal = hoveredProposal ?? pinnedProposal;
+  // The editor and a preview never share the board: opening a key to edit ends the preview.
+  const preview = useMemo(
+    () => (proposal === null || editing !== null ? null : previewProposal(board, layout, proposal, layout.layers[headIndex]?.id ?? "")),
+    [proposal, editing, board, layout, headIndex],
+  );
+  const layer = layout.layers.find((candidate) => candidate.id === preview?.layerId) ?? layout.layers[headIndex];
 
   // While a draft is complete the board shows it, so the key reads as it will once applied.
-  const shown = useMemo(
-    () =>
-      editing !== null && draft.binding !== null
-        ? withBinding(layout, editing.layerId, editing.position, draft.binding)
-        : layout,
-    [layout, editing, draft.binding],
+  const shown = useMemo(() => {
+    const base = preview?.layout ?? layout;
+    return editing !== null && draft.binding !== null ? withBinding(base, editing.layerId, editing.position, draft.binding) : base;
+  }, [layout, preview, editing, draft.binding]);
+  const layerIndex = Math.max(
+    0,
+    shown.layers.findIndex((candidate) => candidate.id === layer?.id),
   );
   const descriptions = useMemo(
     () => keys.map((_, index) => describeKey(shown, layerIndex, index)),
     [shown, layerIndex, keys],
+  );
+  const marks = useMemo(() => marksOn(preview, layer?.id ?? ""), [preview, layer]);
+  const chatSelected = useMemo(
+    () => (chatSelection !== null && chatSelection.layerId === layer?.id ? new Set(chatSelection.positions) : NONE),
+    [chatSelection, layer],
   );
 
   const inspected = hovered ?? selected;
@@ -132,6 +156,48 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged }: ViewerProp
     if (refocus && position !== null) keyboard.current?.focusKey(position);
   }
 
+  function toggleChatKey(position: number) {
+    if (layer === undefined) return;
+    setChatSelection((previous) => {
+      if (previous === null || previous.layerId !== layer.id) return { layerId: layer.id, positions: [position] };
+      const positions = previous.positions.includes(position)
+        ? previous.positions.filter((candidate) => candidate !== position)
+        : [...previous.positions, position].sort((a, b) => a - b);
+      return positions.length === 0 ? null : { layerId: previous.layerId, positions };
+    });
+  }
+
+  function removeChatKey(position: number) {
+    setChatSelection((previous) => {
+      if (previous === null) return null;
+      const positions = previous.positions.filter((candidate) => candidate !== position);
+      return positions.length === 0 ? null : { layerId: previous.layerId, positions };
+    });
+  }
+
+  // On a narrow screen the board is above the chat, so pinning a preview brings the board into view.
+  function pinProposal(card: ProposalCard) {
+    const unpin = pinnedProposal?.changeSetId === card.changeSetId;
+    setPinnedProposal(unpin ? null : card);
+    if (unpin || !window.matchMedia("(max-width: 1279px)").matches) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    stage.current?.scrollIntoView({ block: "start", behavior: calm ? "auto" : "smooth" });
+  }
+
+  // A proposal was applied on the server: show the new layout, on the layer where it changed.
+  async function onProposalApplied(card: ProposalCard, _result: ApplyResponse) {
+    setHoveredProposal(null);
+    setPinnedProposal(null);
+    await onChanged();
+    const changed = card.validation.diff.changed;
+    const here = changed.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? changed[0];
+    if (here !== undefined) {
+      setLayerId(here.layerId);
+      setApplied(here);
+    }
+    setNotice({ kind: "success", message: "Applied", detail: card.title });
+  }
+
   async function onApplied(summary: string) {
     if (editing === null) return;
     const { layerId: appliedLayer, position } = editing;
@@ -180,64 +246,92 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged }: ViewerProp
   const undoBlock = editing !== null && draft.dirty ? "Apply or cancel the key you are editing first" : null;
 
   return (
-    <>
-      {notice === null ? null : <Notice {...notice} onDismiss={() => setNotice(null)} />}
-      <section className="stage" aria-label="Layout">
-        <div className="stage-bar">
-          <LayerTabs layers={layout.layers} selectedId={layer.id} onSelect={chooseLayer} />
-          <RevisionBar revision={revision} busy={undoing} blockedReason={undoBlock} onUndo={() => void undo()} />
-        </div>
-        <Keyboard
-          handle={keyboard}
-          keys={keys}
-          hands={board.hands}
-          descriptions={descriptions}
-          fingers={board.fingers}
-          layerName={layer.name}
-          selected={selected}
-          partners={partners}
-          comboKeys={comboKeys}
-          pendingIndex={editingHere && draft.binding !== null ? editing.position : null}
-          appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
-          onSelect={select}
-          onHover={setHovered}
-          onActivate={openEditor}
-        />
-        <Legend firmware={layout.firmware} />
-      </section>
-      {editing !== null ? (
-        <div ref={editorBox}>
-          <BindingEditor
-            key={`${revision.id}:${editing.layerId}:${editing.position}`}
-            token={token}
-            layoutRef={layoutRef}
-            layout={layout}
-            revisionId={revision.id}
-            layerId={editing.layerId}
-            position={editing.position}
-            finger={board.fingers[String(editing.position)]}
-            autoFocus={editing.focus}
-            blocked={blocked}
-            onDraft={(next) => {
-              setDraft(next);
-              setBlocked(false);
-            }}
-            onClose={() => closeEditor(true)}
-            onApplied={onApplied}
-            onStale={onStale}
+    <div className="workspace">
+      <div className="workspace-main">
+        {notice === null ? null : <Notice {...notice} onDismiss={() => setNotice(null)} />}
+        <section className="stage" aria-label="Layout" ref={stage}>
+          <div className="stage-bar">
+            <LayerTabs layers={layout.layers} selectedId={layer.id} onSelect={chooseLayer} />
+            {preview !== null && proposal !== null ? (
+              <PreviewBanner
+                title={proposal.title}
+                layerName={layerName(layout, preview.layerId)}
+                onStop={pinnedProposal !== null && hoveredProposal === null ? () => setPinnedProposal(null) : undefined}
+              />
+            ) : (
+              <RevisionBar revision={revision} busy={undoing} blockedReason={undoBlock} onUndo={() => void undo()} />
+            )}
+          </div>
+          <Keyboard
+            handle={keyboard}
+            keys={keys}
+            hands={board.hands}
+            descriptions={descriptions}
+            fingers={board.fingers}
+            layerName={layer.name}
+            selected={selected}
+            partners={partners}
+            comboKeys={comboKeys}
+            pendingIndex={editingHere && draft.binding !== null ? editing.position : null}
+            appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
+            chatSelected={chatSelected}
+            marks={marks}
+            onToggle={toggleChatKey}
+            onSelect={select}
+            onHover={setHovered}
+            onActivate={openEditor}
           />
-        </div>
-      ) : (
-        <Inspector
-          description={description}
-          position={inspected}
-          finger={inspected === null ? undefined : board.fingers[String(inspected)]}
-          layerName={layer.name}
-          tapAt={(position) => descriptions[position]?.legend.tap || "empty"}
-          onOpenLayer={chooseLayer}
-          {...(selected === null ? {} : { onEdit: () => openEditor(selected) })}
-        />
-      )}
-    </>
+          <Legend firmware={layout.firmware} />
+        </section>
+        {editing !== null ? (
+          <div ref={editorBox}>
+            <BindingEditor
+              key={`${revision.id}:${editing.layerId}:${editing.position}`}
+              token={token}
+              layoutRef={layoutRef}
+              layout={layout}
+              revisionId={revision.id}
+              layerId={editing.layerId}
+              position={editing.position}
+              finger={board.fingers[String(editing.position)]}
+              autoFocus={editing.focus}
+              blocked={blocked}
+              onDraft={(next) => {
+                setDraft(next);
+                setBlocked(false);
+              }}
+              onClose={() => closeEditor(true)}
+              onApplied={onApplied}
+              onStale={onStale}
+            />
+          </div>
+        ) : (
+          <Inspector
+            description={description}
+            position={inspected}
+            finger={inspected === null ? undefined : board.fingers[String(inspected)]}
+            layerName={layer.name}
+            tapAt={(position) => descriptions[position]?.legend.tap || "empty"}
+            onOpenLayer={chooseLayer}
+            {...(selected === null ? {} : { onEdit: () => openEditor(selected) })}
+          />
+        )}
+      </div>
+      <ChatPanel
+        token={token}
+        layoutRef={layoutRef}
+        layout={layout}
+        board={board}
+        selection={chatSelection}
+        onRemoveKey={removeChatKey}
+        onClearSelection={() => setChatSelection(null)}
+        onRestoreSelection={(restored) => setChatSelection((current) => current ?? restored)}
+        pinnedId={pinnedProposal?.changeSetId ?? null}
+        onPreview={setHoveredProposal}
+        onPin={pinProposal}
+        onApplied={onProposalApplied}
+        onOpenRelease={onOpenRelease}
+      />
+    </div>
   );
 }

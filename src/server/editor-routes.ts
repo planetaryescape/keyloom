@@ -31,6 +31,7 @@ type Route = {
 const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["layouts/:/check", { method: "POST", run: (b, ref, r) => check(b, ref, r) }],
   ["layouts/:/apply", { method: "POST", run: (b, ref, r) => apply(b, ref, r) }],
+  ["change-sets/:/apply", { method: "POST", run: (b, id, r) => applyChangeSet(b, id, r) }],
   ["layouts/:/undo", { method: "POST", run: (b, ref, r) => undo(b, ref, r) }],
   ["layouts/:/builds", { method: "POST", run: (b, ref, r) => startBuild(b, ref, r) }],
   ["builds/:", { method: "GET", run: (b, id) => found(b.getBuild(id), BuildSchema, "build") }],
@@ -142,6 +143,13 @@ async function apply(backend: EditorBackend, ref: string, request: Request): Pro
   const body = await readBody(request, ApplyRequestSchema);
   if (body instanceof Response) return body;
   return Response.json(ApplyResponseSchema.parse(await backend.apply(ref, body)));
+}
+
+// The body is `{}`, like a flash's: the change set is already stored, so the request carries nothing else.
+async function applyChangeSet(backend: EditorBackend, changeSetId: string, request: Request): Promise<Response> {
+  const body = await readBody(request, EmptyBody);
+  if (body instanceof Response) return body;
+  return Response.json(ApplyResponseSchema.parse(await backend.applyChangeSet(changeSetId)));
 }
 
 async function undo(backend: EditorBackend, ref: string, request: Request): Promise<Response> {
