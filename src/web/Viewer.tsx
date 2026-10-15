@@ -211,7 +211,7 @@ export function Viewer({ detail, keys, token, layoutRef, onChanged, onOpenReleas
     setHoveredProposal(null);
     setPinnedProposal(null);
     await onChanged();
-    const changed = card.validation.diff.changed;
+    const changed = [...card.validation.diff.changed, ...card.validation.diff.retuned];
     const here = changed.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? changed[0];
     if (here !== undefined) {
       setLayerId(here.layerId);

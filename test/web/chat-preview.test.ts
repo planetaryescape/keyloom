@@ -93,3 +93,16 @@ describe("remembered reasons on the board (rung 6)", () => {
     expect(rememberedOn(null, null, "base").size).toBe(0);
   });
 });
+
+describe("retuned keys in a preview (rung 6)", () => {
+  test("a hold-tap whose profile changes is marked like a changed key, and its layer is shown", () => {
+    const layout = structuredClone(head);
+    layout.layers[1]!.bindings[5] = { kind: "holdTap", tap: { code: "F" }, hold: { mods: ["LGUI"] }, profileId: "hrm" };
+    layout.holdTapProfiles = [{ id: "hrm", name: "H", firmware: layout.firmware, options: {} }];
+    const ops: ChangeOp[] = [{ op: "upsertHoldTapProfile", profile: { id: "hrm", name: "H", firmware: layout.firmware, options: layout.firmware === "qmk" ? { TAPPING_TERM: 170 } : { "tapping-term-ms": 170 } } }];
+    const card = { ...proposal(ops), validation: evaluate(board, layout, ops).result };
+    const preview = previewProposal(board, layout, card, layout.layers[0]!.id);
+    expect(preview.layerId).toBe(layout.layers[1]!.id);
+    expect(marksOn(preview, layout.layers[1]!.id).get(5)).toBe("changed");
+  });
+});

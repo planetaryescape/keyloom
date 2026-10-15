@@ -28,7 +28,8 @@ export function previewProposal(board: BoardDefinition, head: Layout, proposal: 
   // A proposal made against an older head can fail to apply now; the stored diff still says which keys it meant.
   const diff = evaluation.after === null ? proposal.validation.diff : evaluation.result.diff;
   const known = new Set(head.layers.map((layer) => layer.id));
-  const changed = diff.changed.filter((slot) => known.has(slot.layerId));
+  // A retuned hold-tap has the same binding but feels different, so it is marked like a changed key.
+  const changed = [...diff.changed, ...diff.retuned].filter((slot) => known.has(slot.layerId));
   const layerId = changed.some((slot) => slot.layerId === currentLayerId) ? currentLayerId : (changed[0]?.layerId ?? currentLayerId);
   const homes = diff.displaced.flatMap((moved) => (moved.to === null ? [] : [moved.to]));
   const moves = diff.displaced.flatMap((moved) => (moved.to === null ? [] : [{ from: moved.from, to: moved.to }]));
