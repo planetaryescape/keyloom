@@ -5,6 +5,7 @@ import {
   type App, type ImportOutcome, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp,
   regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
+import { registerChangeCommands } from "./commands/change.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
@@ -159,6 +160,8 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       const r = await regenerateGeometry(ref);
       print(io, format(), { json: { path: r.path, key_count: r.keyCount, source: r.source }, table: `wrote ${r.path}: ${r.keyCount} keys from ${r.source}` });
     });
+
+  registerChangeCommands(program, { io, format, withApp });
 
   program
     .command("serve")
