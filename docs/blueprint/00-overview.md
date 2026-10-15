@@ -28,6 +28,12 @@ keyloom is open source and meant to interest other keyboard owners (D-007). BK s
 7. **Build and flash** ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)).
 8. **Use it and report back.** "That fixed the accidental shortcuts, but now holding Command feels slow" starts the next turn, and the outcome is recorded against the decision (D-018).
 
+## BK's promise
+
+BK, 2026-10-15, after v0.19: "I can now configure all my keyboards from one software. You know how nice Oryx is to use, I took that UX and now configuring any of my boards feels like oryx. And then you know how you don't have to reboot of anything when using vial? I added that so now for any of the keyboards I just change the keys and that's it, not bootloader nonsense. When I don't like something I don't have to break my brain trying to think how to do it or whee to put the key and all that. I just tell it what I want and because it can see my keyboard it will figure it out and make some suggestions to me. If I get a new keyboard I just connect it and say put my config on this. Doesn't matter what keyboard it is as long as it uses ZMK or QMK."
+
+Every rung from 9 on is measured against it: the Oryx feel is [16](16-key-editor.md) and [18](18-visual-design.md), no bootloader is [17](17-keyboard-sync.md) and [21](21-macbook-keyboard.md), "it can see my keyboard" is the agent and [20](20-cross-board.md), and a new keyboard is [22](22-new-keyboard.md). His MacBook keyboard is in scope too (D-230).
+
 ## Principles
 
 1. **Start from the frustration, not the solution.** BK knows what annoys him before he knows the fix. The agent's job is to diagnose and recommend, not only to execute (D-010).

@@ -858,3 +858,34 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 - **Ask when:** a match is under 60%, several keys fit equally, a layer has no counterpart, or a key's target already does something else. Ask together, and say the default.
 - **Always say:** the mapping used, in plain words, in the reply and in the proposal's explanation; what didn't carry over.
 - **Evals:** three live scenarios on OpenRouter, all passing (see [20](20-cross-board.md#evals)). Colours onto the Glove80: it explains why, proposes nothing and asks for no link. Colours onto a second Moonlander: a valid proposal, every colour on the same key. Home row mods onto the Glove80: a valid proposal on home-row keys only with each finger's modifiers in profiles that wait for the other hand.
+
+## BK's promise, the MacBook keyboard and new keyboards (2026-10-15, after v0.19.1)
+
+BK stated the product in his own words: "I can now configure all my keyboards from one software. You know how nice Oryx is to use, I took that UX and now configuring any of my boards feels like oryx. And then you know how you don't have to reboot of anything when using vial? I added that so now for any of the keyboards I just change the keys and that's it, not bootloader nonsense. When I don't like something I don't have to break my brain trying to think how to do it or whee to put the key and all that. I just tell it what I want and because it can see my keyboard it will figure it out and make some suggestions to me. If I get a new keyboard I just connect it and say put my config on this. Doesn't matter what keyboard it is as long as it uses ZMK or QMK." Then: "I would like to have the features that karabiner has or if I install karabiner elements kanata, this configurator should be able to configure that as well so that I can get my macbook keyboard to behave like the other keyboards."
+
+### D-230: A MacBook's built-in keyboard is a keyloom board whose firmware is a software remapper's config, applied by writing the file and reloading it. (BK)
+- **Why:** it gives the laptop keyboard the same layers, home-row mods and combos, and applying is instant with no flash.
+- **Research:** [../research/software-remappers.md](../research/software-remappers.md). Chapter [21](21-macbook-keyboard.md).
+
+### D-231: kanata first; Karabiner-Elements only if kanata fails its spikes or BK asks. (BK, from the research's recommendation)
+- **BK chose:** "kanata (Recommended)".
+- **Why:** positional layers like keyloom's, tap-hold variants that match QMK's, `--check`, a simulator and a reload that reports success. Karabiner has no permissive hold and no read-back.
+- **Cost:** a one-time root LaunchDaemon install that BK runs himself; keyloom never holds sudo.
+
+### D-232: BK's hand-written Karabiner rules are imported as the MacBook's starting layout, then disabled for the built-in keyboard, never deleted. (BK)
+- **BK chose:** "Replace with keyloom's (Recommended)".
+
+### D-233: keyloom writes its own `keyloom.kbd` outside BK's dotfiles and never edits `karabiner.json`. (BK)
+- **BK chose:** "No, keep it separate (Recommended if kanata)".
+
+### D-234: Space stays a hold-layer key on the MacBook. (BK)
+- **BK chose:** "Yes, Space-hold layer (Recommended)". Thumb-layer keys mapped from his other boards land there first.
+
+### D-235: The MacBook remapper can never lock BK out. (Claude, from the research)
+- kanata's exit chord stays active and is proven once with BK before auto-apply; `--check` before every reload; `safe.kbd` disables remapping without sudo; the validator treats Esc, Control and every layer's way back as required; `--release-grab-on-lock`; keyloom never emits kanata's `cmd`.
+
+### D-236: keyloom builds a board definition from a keyboard it sees on USB, asks BK only what it can't derive, and puts a chosen layout on it through the cross-board mapping. (BK)
+- **Research:** [../research/new-keyboard.md](../research/new-keyboard.md). Chapter [22](22-new-keyboard.md).
+- **Stays manual:** the first flash of any new board, and naming a ZMK board when its product string doesn't settle it.
+
+### D-237: Two corrections from the new-keyboard research: VIA has no bootloader-jump command (only Vial does), and the keyboard-state reader's ZSA-only vendor check is generalised in rung 21. (Claude, from the research)

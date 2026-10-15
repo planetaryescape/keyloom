@@ -27,6 +27,16 @@ For each spike, record the command or request, the output (with private data rem
 | S19 | With an OpenRouter key, does `option-option.eval.test.ts` pass through the Anthropic SDK with `baseURL` and `authToken`, and do the Tool Runner, fallback beta, `cache_control`, `usage.cost` and an out-of-credits error behave? | The OpenRouter provider (D-107) | [19](19-model-providers.md) | Rung 10 |
 | S20 | Through a loopback MCP server, does Codex receive `propose_changes`'s full schema, run the validate-and-retry loop, refuse to write files, and can a `permissions` profile stop it reading keyloom's database? What does a four-message conversation cost in plan usage? | The Codex provider (D-108, D-110) | [19](19-model-providers.md) | Rung 10 (Codex part) |
 | S21 | Can MoErgo's ZMK fork at `ce69e85` give each Glove80 key its own colour on each layer, the way the Moonlander's ledmap does? | Whether the Glove80 gets lighting (D-194, D-225) | [20](20-cross-board.md) | Rung 19 |
+| S30 | kanata 1.12.0 on BK's MacBook built-in keyboard only, with driver 6.5.0: remapped built-in, untouched external boards, permissions understood, exit chord works, TCP reload with wait returns ok | kanata as the MacBook target (D-231) | [21](21-macbook-keyboard.md) | Rung 20 |
+| S31 | kanata alongside Karabiner-Elements, with Karabiner ignoring the built-in: output arrives once, Karabiner still works elsewhere | Coexistence (D-231) | [21](21-macbook-keyboard.md) | Rung 20 |
+| S32 | What kanata sees for fn/globe, the F-row, Esc, Touch ID and arrows on BK's MacBook | The board's key list | [21](21-macbook-keyboard.md) | Rung 20 |
+| S33 | kanata's simulator against keyloom's QMK emulator for home-row-mod scripts: same results, or documented per option | Hold-tap feel on the MacBook (D-231) | [21](21-macbook-keyboard.md) | Rung 20 |
+| S34 | Option–Option through kanata reaches the app BK needs it for | BK's first problem (D-025) on the MacBook | [21](21-macbook-keyboard.md) | Rung 20 |
+| S35 | Importing BK's existing Karabiner rules (Space layer, home-row mods, six combos, Hyper) round-trips through keyloom's recognisers | D-232 | [21](21-macbook-keyboard.md) | Rung 20 |
+| S36 | The 77-key ANSI geometry and position order on BK's MacBook, by pressing every key under `kanata -d` | The board's geometry | [21](21-macbook-keyboard.md) | Rung 20 |
+| S40 | The Corne's committed `fingers` against the column-from-home-row rule: which is wrong? **Answered 2026-10-16:** the committed table was one column off and was fixed in rung 19 (D-227); the rule was right | Finger heuristics for new boards (D-236) | [22](22-new-keyboard.md) | Rung 21 |
+| S41 | Can QMK hands-free flashing (D-070) extend beyond ZSA boards, e.g. through Vial's jump or a generic raw-HID packet? | Hands-free on new QMK boards | [22](22-new-keyboard.md) | Nothing; record before claiming it |
+| S42 | Detection on BK's three boards: does keyloom name each from USB alone, and what does it ask when it can't? | D-236 | [22](22-new-keyboard.md) | Rung 21 |
 
 ### S3 result (2026-10-15)
 

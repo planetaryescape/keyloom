@@ -29,6 +29,8 @@ BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10
 | 18 | [Visual design](18-visual-design.md) | The UI audit's findings, layout, keycaps, the visual system, words, states, phones and the screenshot gate |
 | 19 | [Model providers](19-model-providers.md) | Running the agent on a Codex subscription, an OpenRouter key or an Anthropic key |
 | 20 | [Copying from my other keyboard](20-cross-board.md) | The agent sees every layout, deterministic key and layer correspondence across boards, board capabilities, copying colours, behaviours and combos, and why the Glove80 has no lighting |
+| 21 | [MacBook keyboard](21-macbook-keyboard.md) | The built-in keyboard as a board through kanata: apply by reload, safety, importing BK's Karabiner rules |
+| 22 | [New keyboard](22-new-keyboard.md) | Recognising a QMK or ZMK board on USB, building its definition, and putting BK's config on it |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
 Research behind these decisions:
@@ -42,6 +44,8 @@ Research behind these decisions:
 - [../research/handsfree-flash-all-boards.md](../research/handsfree-flash-all-boards.md): how each of BK's boards can be flashed and edited without touching it.
 - [../research/model-providers.md](../research/model-providers.md): the Codex SDK, OpenRouter and Anthropic as providers for keyloom's agent.
 - [../research/spikes/S21.md](../research/spikes/S21.md): what MoErgo's firmware can and can't do for per-key colours on the Glove80.
+- [../research/software-remappers.md](../research/software-remappers.md): Karabiner-Elements and kanata as targets for the MacBook keyboard, with BK's existing config and the spikes.
+- [../research/new-keyboard.md](../research/new-keyboard.md): identifying QMK and ZMK boards from USB, deriving board definitions, and flashing unknown boards.
 - `docs/research/spikes/`: spike evidence, one file per spike. None run yet.
 
 ## Summary

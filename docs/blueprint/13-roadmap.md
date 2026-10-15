@@ -409,6 +409,38 @@ Only BK can do these:
 
 **Left out:** Glove80 lighting (Q24); carrying a typing profile inferred from habits rather than a named thing.
 
+## Rung 20: Car: my MacBook keyboard behaves like my other keyboards
+
+**Previously:** keyloom configures QMK and ZMK boards. **Now:** the MacBook's built-in keyboard is a keyloom board through kanata, and changes apply instantly.
+
+**Promise:** "My MacBook keyboard has my home-row mods and layers, and when I change a key it just changes."
+
+**Build:** [21](21-macbook-keyboard.md) (D-230 to D-235): the software-remapper firmware family, the `apple/macbook-ansi` board, kanata key names and generator, apply by reload with verify, the setup doctor and safety, import of BK's Karabiner rules, and mapping his Moonlander or Glove80 layout onto it.
+
+**New unknowns:** S30 and S31 (kanata on the built-in keyboard, next to Karabiner).
+
+**Demo:** run setup with BK (one sudo command), prove the exit chord, import his Karabiner rules, apply a home-row-mod timing change and type with it within a second, then map his Moonlander layout onto the MacBook and apply it.
+
+**Done when:** BK types on the MacBook with keyloom's layout, an Apply changes it in under a second, "Disable remapping" and the exit chord both work, and his external boards are untouched.
+
+**Left out:** the Karabiner-Elements target (D-231); ISO MacBooks.
+
+## Rung 21: Car: connect a new keyboard and put my config on it
+
+**Previously:** a board needs a contributed definition. **Now:** keyloom recognises a QMK or ZMK keyboard on USB, builds its definition, and puts BK's config on it.
+
+**Promise:** "I plugged in a keyboard keyloom had never seen, confirmed which board it was, and put my Glove80 setup on it."
+
+**Build:** [22](22-new-keyboard.md) (D-236, D-237): USB detection with candidates, definition from the firmware tree plus confirmed heuristics, generalised keyboard detection, new QMK flash recipes (atmel-dfu, stm32-dfu), and "put my config on this" through the cross-board mapping.
+
+**New unknowns:** S42 (detection on BK's boards); S40 (finger heuristics).
+
+**Demo:** with BK's Corne treated as unknown (its definition hidden), detect it, confirm it, put the Glove80 layout on it, first flash, then a hands-free change.
+
+**Done when:** the Corne goes from "unknown keyboard" to running BK's mapped config with only the confirmations the chapter lists.
+
+**Left out:** reading the keymap off boards without Vial, VIA or Studio; hands-free flashing for non-ZSA QMK boards (S41).
+
 ## After the car (not planned yet)
 
 - Conditional layers (tri-layer) in the editor.
