@@ -49,4 +49,10 @@ describe("Markdown", () => {
     expect(html).toContain("<strong>ok</strong>");
     expect(html).toContain("<code>&lt;script&gt;alert(1)&lt;/script&gt;</code>");
   });
+
+  test("a numbered list split by bullets keeps counting from its own first number", () => {
+    const blocks = parseMarkdown("1. **On the thumb.** Key 60.\n- Moves: ^Left\n2. **On F16.** Key 7.\n- Moves: nothing");
+    expect(blocks.map((b) => (b.kind === "list" ? [b.ordered, b.start ?? 1] : b.kind))).toEqual([[true, 1], [false, 1], [true, 2], [false, 1]]);
+    expect(blocks[0]).not.toHaveProperty("start");
+  });
 });

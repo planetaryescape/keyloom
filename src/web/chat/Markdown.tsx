@@ -27,7 +27,7 @@ export function Markdown({ source }: { source: string }) {
         }
         const List = block.ordered ? "ol" : "ul";
         return (
-          <List key={index}>
+          <List key={index} {...(block.start === undefined ? {} : { start: block.start })}>
             {block.items.map((item, itemIndex) => (
               <li key={itemIndex}>
                 <Inlines inlines={item} />

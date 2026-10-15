@@ -4,10 +4,10 @@
 export type Inline = { kind: "text" | "code" | "bold"; text: string };
 export type Block =
   | { kind: "paragraph"; inlines: Inline[] }
-  | { kind: "list"; ordered: boolean; items: Inline[][] };
+  | { kind: "list"; ordered: boolean; items: Inline[][]; start?: number };
 
 const BULLET = /^\s*[-*]\s+(.*)$/;
-const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
+const NUMBERED = /^\s*(\d+)[.)]\s+(.*)$/;
 
 export function parseInline(text: string): Inline[] {
   const out: Inline[] = [];
@@ -45,7 +45,7 @@ export function parseInline(text: string): Inline[] {
 export function parseMarkdown(source: string): Block[] {
   const blocks: Block[] = [];
   let paragraph: string[] = [];
-  let list: { ordered: boolean; items: Inline[][] } | null = null;
+  let list: { ordered: boolean; items: Inline[][]; start?: number } | null = null;
 
   const endParagraph = () => {
     if (paragraph.length > 0) blocks.push({ kind: "paragraph", inlines: parseInline(paragraph.join(" ")) });
@@ -64,13 +64,15 @@ export function parseMarkdown(source: string): Block[] {
     }
     const bullet = BULLET.exec(line);
     const numbered = bullet === null ? NUMBERED.exec(line) : null;
-    const item = bullet ?? numbered;
-    if (item !== null) {
+    if (bullet !== null || numbered !== null) {
       endParagraph();
       const ordered = numbered !== null;
       if (list !== null && list.ordered !== ordered) endList();
-      list ??= { ordered, items: [] };
-      list.items.push(parseInline(item[1] ?? ""));
+      // The model often puts bullets between numbered items, which splits the numbered list; each
+      // part keeps its first number so the options still read 1, 2, 3.
+      const start = numbered === null ? 1 : Number(numbered[1]);
+      list ??= start === 1 ? { ordered, items: [] } : { ordered, items: [], start };
+      list.items.push(parseInline((numbered === null ? bullet?.[1] : numbered[2]) ?? ""));
       continue;
     }
     endList();
