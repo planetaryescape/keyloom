@@ -28,7 +28,8 @@ export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> 
   if (!existsSync(`${spec.dir}/.git`)) return { present: false };
   const head = await capture(git(spec.dir, "rev-parse", "HEAD"), { timeoutMs: 15_000 });
   if (head.exitCode !== 0) throw new CheckoutError(`${spec.dir} is not a usable git checkout: ${head.stderr.trim()}`);
-  const status = await capture(git(spec.dir, "submodule", "status", "--", ...spec.submodules), { timeoutMs: 30_000 });
+  // With no pathspec, `git submodule status` lists every submodule, which is not what an empty list means.
+  const status = spec.submodules.length === 0 ? { stdout: "" } : await capture(git(spec.dir, "submodule", "status", "--", ...spec.submodules), { timeoutMs: 30_000 });
   const uninitialised: string[] = [];
   const drifted: string[] = [];
   for (const line of status.stdout.split("\n")) {

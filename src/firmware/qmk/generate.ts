@@ -80,7 +80,11 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   const keymapC = passthroughIn(layout, "keymap.c");
   const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes");
   const cases = keymapC.filter((p) => p.anchor.startsWith("process_record_user:"));
-  const after = keymapC.filter((p) => !before.includes(p) && !cases.includes(p));
+  const rest = keymapC.filter((p) => !before.includes(p) && !cases.includes(p));
+  // Oryx writes chordal_hold_layout between keymaps[] and the combos, and everything else after them.
+  // Order in C only matters to the linker's layout, but keeping Oryx's makes the binary identical to Oryx's.
+  const beforeCombos = rest.filter((p) => p.anchor === "chordal-hold-layout");
+  const afterCombos = rest.filter((p) => p.anchor !== "chordal-hold-layout");
   const passthroughC = keymapC.map((p) => p.source).join("\n");
 
   const combos = renderCombos(layout, ctx, passthroughC);
@@ -97,12 +101,17 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   if (enumEntries.length > 0) c.push("", `enum custom_keycodes {\n${enumEntries.map((e) => `  ${e},`).join("\n")}\n};`);
   for (const p of before) c.push("", p.source);
   c.push("", renderKeymaps(layout, board, rev.build.layoutMacro, ctx));
-  for (const p of after) c.push("", p.source);
-  if (tapping.functions.length > 0) c.push("", ...tapping.functions.flatMap((f, i) => (i === 0 ? [f] : ["", f])));
+  for (const p of beforeCombos) c.push("", p.source);
   if (combos.source) c.push("", combos.source);
+  for (const p of afterCombos) c.push("", p.source);
+  if (tapping.functions.length > 0) c.push("", ...tapping.functions.flatMap((f, i) => (i === 0 ? [f] : ["", f])));
 
   const macroCases = layout.macros.map((m) => macroCase(ctx.macroNames.get(m.id) as string, m));
-  const caseBlocks = [...macroCases, ...cases.map((p) => `    ${p.source}`)];
+  // Oryx's own case for modifier-wrapped mouse keys comes first, then the macros, then the rest. The compiler
+  // lays the switch out in this order, so keeping it gives a binary identical to Oryx's.
+  const leading = cases.filter((p) => p.anchor.startsWith("process_record_user:QK_MODS"));
+  const trailing = cases.filter((p) => !leading.includes(p));
+  const caseBlocks = leading.map((p) => `    ${p.source}`).concat(macroCases, trailing.map((p) => `    ${p.source}`));
   if (caseBlocks.length > 0) {
     c.push(
       "",

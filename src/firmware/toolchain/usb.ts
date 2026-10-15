@@ -1,6 +1,6 @@
 // Which USB devices are plugged in, from macOS's system_profiler. Used to pick the Moonlander
 // revision (05): rev A and rev B differ in USB product ID.
-import { capture } from "./run.ts";
+import { capture, which } from "./run.ts";
 
 export type UsbDevice = {
   /** `0x1969`, lower case. */
@@ -37,7 +37,7 @@ export function parseUsbDevices(json: unknown): UsbDevice[] {
 }
 
 export async function listUsbDevices(): Promise<UsbDevice[]> {
-  if (process.platform !== "darwin" || !Bun.which("system_profiler")) return [];
+  if (process.platform !== "darwin" || !which("system_profiler")) return [];
   const r = await capture(["system_profiler", "SPUSBDataType", "-json"], { timeoutMs: 20_000 });
   if (r.exitCode !== 0) return [];
   try {

@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { type CheckoutSpec, checkoutState } from "../firmware/toolchain/checkout.ts";
 import { LOW_DISK_BYTES, dockerFreeSpace, dockerStatus } from "../firmware/toolchain/docker.ts";
-import { capture } from "../firmware/toolchain/run.ts";
+import { capture, which } from "../firmware/toolchain/run.ts";
 import { MIGRATIONS } from "../persistence/migrations.ts";
 import { databasePath, dataDir as resolveDataDir } from "../persistence/paths.ts";
 import { listBoardDefinitions } from "./boards.ts";
@@ -76,7 +76,7 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     }
   }
 
-  const zapp = Bun.which("zapp");
+  const zapp = which("zapp");
   checks.push({
     name: "zapp",
     ok: true,

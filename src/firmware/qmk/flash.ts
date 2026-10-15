@@ -3,7 +3,8 @@
 // bootloader mode, without any timeout of its own. What it prints on success or failure is not known
 // until it has flashed a real board, so this reads its exit code first and everything else loosely,
 // and keeps the raw output in the log.
-import { type LogSink, run } from "../toolchain/run.ts";
+import { existsSync } from "node:fs";
+import { type LogSink, run, which } from "../toolchain/run.ts";
 import { dfuProblem } from "./dfu.ts";
 
 export type FlashState = "waiting_for_bootloader" | "writing" | "succeeded" | "failed";
@@ -22,7 +23,7 @@ export type FlashInput = {
   /** Called on every state change; `instruction` is what the person must do now. */
   onState: (state: FlashState, instruction: string | null) => void;
   onLine?: (line: string) => void;
-  /** The zapp executable; found on PATH when omitted. */
+  /** The zapp executable; found on PATH when omitted. Tests always pass a fake. */
   zapp?: string;
   bootloaderWaitMs?: number;
   writeTimeoutMs?: number;
@@ -39,7 +40,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     return { state: "failed", error, output };
   };
 
-  const zapp = input.zapp ?? Bun.which("zapp");
+  // Never a bare name that spawn might resolve against a different PATH: what is checked is what runs.
+  const zapp = input.zapp === undefined ? which("zapp") : existsSync(input.zapp) ? input.zapp : null;
   if (!zapp) return fail("zapp isn't installed. Install it with `brew install zapp`, then flash again.");
 
   const file = Bun.file(input.artifactPath);

@@ -254,6 +254,8 @@ export type FlashOptions = {
   onProgress?: (line: string) => void;
   /** Called when the flash changes state, including the first state. */
   onState?: (flash: FlashView) => void;
+  /** How long to wait for the keyboard to enter its bootloader (default 2 minutes). Short values are for tests. */
+  bootloaderWaitMs?: number;
 };
 
 function chooseBuild(app: App, opts: FlashOptions): BuildRow {
@@ -312,6 +314,7 @@ async function runFlash(app: App, row: FlashRow, artifact: string, bootloader: s
     notify();
     const result = await flashWithZapp({
       artifactPath: artifact, bootloader, log, ...(opts.onProgress ? { onLine: opts.onProgress } : {}),
+      ...(opts.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: opts.bootloaderWaitMs }),
       onState: (state) => {
         if (state === "waiting_for_bootloader" || state === "writing") {
           setFlashProgress(app.db, row.id, state);

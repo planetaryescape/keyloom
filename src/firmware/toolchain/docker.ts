@@ -1,11 +1,11 @@
 // Docker checks: is the daemon up, and how much room does its VM have (S7: a full Docker Desktop
 // disk fails a build late, with "No space left on device").
-import { capture } from "./run.ts";
+import { capture, which } from "./run.ts";
 
 export type DockerStatus = { ok: true; version: string } | { ok: false; reason: string };
 
 export async function dockerStatus(timeoutMs = 15_000): Promise<DockerStatus> {
-  if (!Bun.which("docker")) return { ok: false, reason: "docker is not on PATH; install Docker Desktop or OrbStack" };
+  if (!which("docker")) return { ok: false, reason: "docker is not on PATH; install Docker Desktop or OrbStack" };
   const r = await capture(["docker", "version", "--format", "{{.Server.Version}}"], { timeoutMs });
   if (r.timedOut) return { ok: false, reason: "docker did not answer within 15 s; is Docker Desktop starting?" };
   if (r.exitCode !== 0) return { ok: false, reason: "the docker daemon isn't running; start Docker Desktop" };

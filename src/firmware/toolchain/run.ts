@@ -63,11 +63,23 @@ async function readLines(stream: ReadableStream<Uint8Array>, onLine: (line: stri
   flush(decoder.decode(), true);
 }
 
+/**
+ * Looks `name` up on the PATH as it is now. Bun.which and Bun.spawn would otherwise use the PATH the
+ * process started with, so a changed PATH (a test's fake tools, a user's shell) would be ignored.
+ */
+export function which(name: string): string | null {
+  return Bun.which(name, { PATH: process.env.PATH ?? "" });
+}
+
 export async function run(opts: RunOptions): Promise<RunResult> {
   const started = Date.now();
-  const proc = Bun.spawn(opts.cmd, {
+  const [program, ...args] = opts.cmd;
+  const resolved = program !== undefined && !program.includes("/") ? which(program) : program;
+  if (!resolved) throw new Error(`${program} is not on PATH`);
+  const proc = Bun.spawn([resolved, ...args], {
     ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
-    ...(opts.env === undefined ? {} : { env: { ...process.env, ...opts.env } }),
+    // Explicit, because Bun.spawn's default is the environment the process started with.
+    env: { ...process.env, ...opts.env },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",

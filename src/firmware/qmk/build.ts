@@ -69,9 +69,19 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
 
       const uid = process.getuid?.() ?? 1000;
       const gid = process.getgid?.() ?? 1000;
+      const base = [
+        "docker", "run", "--rm", "--user", `${uid}:${gid}`, "-w", "/qmk_firmware", "-v", `${input.checkoutDir}:/qmk_firmware`,
+      ];
+      // Docker Desktop mounts an empty directory for a path it isn't allowed to share, and make then says only
+      // "No rule to make target", which sends people hunting in the wrong place.
+      const visible = await run({ cmd: [...base, rev.build.image, "test", "-f", "Makefile"], log: input.log, timeoutMs: 5 * 60_000 });
+      if (visible.exitCode !== 0) {
+        throw new BuildFailure(
+          `Docker can't see ${input.checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`,
+        );
+      }
       const cmd = [
-        "docker", "run", "--rm", "--name", input.containerName, "--user", `${uid}:${gid}`, "-w", "/qmk_firmware",
-        "-v", `${input.checkoutDir}:/qmk_firmware`, "-e", "SKIP_GIT=1", "-e", "MAKEFLAGS=-j4",
+        ...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), "-e", "SKIP_GIT=1", "-e", "MAKEFLAGS=-j4",
         rev.build.image, "make", `${rev.qmkTarget}:${input.source.keymapName}`,
       ];
       say(`keyloom: building ${rev.qmkTarget}:${input.source.keymapName} in ${rev.build.image.split("@")[0]}`);

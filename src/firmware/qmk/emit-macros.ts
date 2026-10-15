@@ -29,7 +29,8 @@ function stepToC(step: MacroStep): string {
   const mods = sorted(step.mods);
   if (!step.code && mods.length === 0) throw new GenerateError(`a ${step.op} step needs a key or modifiers`);
   if (step.op === "tap") {
-    if (step.code) return mods.reduceRight((inner, m) => `SS_${m}(${inner})`, `SS_TAP(${xName(step.code)})`);
+    // The last modifier (GUI) ends up outermost, which is how Oryx nests Cmd+Shift+4, so a macro compiles to the same bytes.
+    if (step.code) return mods.reduce((inner, m) => `SS_${m}(${inner})`, `SS_TAP(${xName(step.code)})`);
     return mods.length === 1 ? `SS_TAP(${xMod(mods[0] as Mod)})` : `${mods.map((m) => `SS_DOWN(${xMod(m)})`).join(" ")} ${[...mods].reverse().map((m) => `SS_UP(${xMod(m)})`).join(" ")}`;
   }
   // press: modifiers first, then the key. release: the key first, then the modifiers, in reverse.
