@@ -1,6 +1,7 @@
 // Use cases for changing a layout: check, propose, apply, reject, list, show and undo
 // (02#applying-undoing-and-stale-bases, 07). The agent proposes and the validator decides (D-014):
 // every path that writes a revision runs `evaluate` against the head it is about to extend.
+import { plainSummary } from "../layout/history-summary.ts";
 import { type Layout } from "../layout/schema.ts";
 import type { ChangeOp, DecisionDraft } from "../layout/change.ts";
 import { recordChoice, restoreChangeSet, subjectOf, supersedeTouched, suspendChangeSet } from "../memory/choices.ts";
@@ -234,7 +235,7 @@ export function undo(app: App, ref: string, input: { revisionId?: string; to?: s
     // even if a rule has since been tightened.
     const revision = appendRevision(app.db, {
       layoutId: view.layout.id, expectedHeadId: head.id, layout: parent.layout, origin: "undo",
-      summary: target === undefined ? undoSummary(head) : `Back to: ${parent.revision.summary.replace(/^(Back to|Redo|Undo): /, "")}`,
+      summary: target === undefined ? undoSummary(head) : `Back to: ${plainSummary(parent.revision.summary)}`,
       // Memory follows `undoes`'s parent, so naming the revision just after the target makes it follow the target.
       undoesRevisionId: target?.after.id ?? head.id,
     });

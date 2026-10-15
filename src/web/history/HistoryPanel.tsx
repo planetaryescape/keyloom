@@ -1,6 +1,7 @@
 import { History, LoaderCircle, RefreshCw, Undo2, X, Zap } from "lucide-react";
 import { useState } from "react";
 import type { RevisionEntry } from "../../api/http.ts";
+import { tidySummary } from "../../layout/history-summary.ts";
 import type { Revisions } from "./useRevisions.ts";
 import { formatWhen, sourceLabel } from "./words.ts";
 import "./history.css";
@@ -55,7 +56,8 @@ export function HistoryPanel({ revisions, onClose, onReload, onGoBack, onFlash, 
           {revisions.items.map((revision) => (
             <li key={revision.id} className="revision" data-head={revision.isHead} data-origin={revision.origin}>
               <div className="revision-text">
-                <p className="revision-summary">{revision.summary}</p>
+                {/* Revisions stored before go-backs stopped stacking prefixes still read with one. */}
+                <p className="revision-summary">{revision.origin === "undo" ? tidySummary(revision.summary) : revision.summary}</p>
                 <p className="revision-meta">
                   <span className="revision-source">{sourceLabel(revision.origin)}</span>
                   <time dateTime={new Date(revision.createdAt).toISOString()} title={new Date(revision.createdAt).toLocaleString()}>{formatWhen(revision.createdAt, now)}</time>

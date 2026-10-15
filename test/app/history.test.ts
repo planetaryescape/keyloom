@@ -71,6 +71,21 @@ describe("undo to an earlier revision", () => {
     closeApp(app);
   });
 
+  test("going back to a redo of a go-back names the change, with no 'Back to: Redo: Back to:' nesting", async () => {
+    const { app, ref, revisions } = await setup();
+    undo(app, ref, { revisionId: revisions[3] as string, to: revisions[1] as string });
+    undo(app, ref, {});
+    const redo = listRevisions(app, ref)[0] as { id: string; summary: string };
+    expect(redo.summary).toStartWith("Redo: Back to: ");
+    const head = revisions[3] as string;
+    undo(app, ref, { revisionId: (listRevisions(app, ref)[0] as { id: string }).id, to: head });
+    undo(app, ref, { revisionId: (listRevisions(app, ref)[0] as { id: string }).id, to: redo.id });
+    const summary = listRevisions(app, ref)[0]?.summary ?? "";
+    expect(summary).toStartWith("Back to: ");
+    expect(summary.slice("Back to: ".length)).not.toMatch(/^(Back to|Redo|Undo): /);
+    closeApp(app);
+  });
+
   test("two go-backs from the same head: the second finds the head moved and writes nothing", async () => {
     const { app, ref, revisions } = await setup();
     const head = revisions[3] as string;
