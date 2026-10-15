@@ -210,6 +210,13 @@ describe("copying behaviours across boards", () => {
     expect(opsIn(text).filter((o) => o.op === "setBinding")).toEqual([]);
   });
 
+  test("positions past the end of the other board are reported, not applied, and do not break the result", async () => {
+    const { glove, tools } = await twoBoards();
+    const text = await tools(glove.layoutId).run("map_keys", { from: "my-moonlander", fromLayer: "layer-0", toLayer: "0", carry: "behaviours", positions: [999, 30] });
+    expect(text).toContain("the source layout has no such key");
+    expect(opsIn(text).filter((o) => o.op === "setBinding")).toHaveLength(1);
+  });
+
   test("copying behaviours needs the keys to be named; it never copies the whole layer by default", async () => {
     const { glove, tools } = await twoBoards();
     await expect(tools(glove.layoutId).run("map_keys", { from: "my-moonlander", carry: "behaviours" })).rejects.toThrow(/needs `positions`/);
