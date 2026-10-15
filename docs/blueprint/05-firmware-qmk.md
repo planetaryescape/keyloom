@@ -8,7 +8,7 @@ ZSA started shipping a revision B Moonlander in mid-December 2025. Rev A uses th
 
 So keyloom builds QMK from ZSA's fork at a pinned `firmwareNN` commit (D-040). Mainline is rejected for v1 because it can't build rev B, and BK's board may be rev B (spike S1). The cost: Speculative Hold exists in mainline but not in `firmware25`, so keyloom can't offer it on the Moonlander. The validator rejects it with `firmware_unsupported` ([07](07-change-validation.md)).
 
-The board definition has one board, `zsa/moonlander`, with two `revisions`. Each revision has its own QMK target, USB IDs and flashing notes. The revision is chosen at import. On macOS, keyloom detects it by reading the connected keyboard's USB PID from `system_profiler SPUSBDataType -json`, which gives `0x1969` for rev A or `0x1972` for rev B. If no keyboard is connected, it asks.
+The board definition has one board, `zsa/moonlander`, with two `revisions`. Each revision has its own QMK target, USB IDs and flashing notes. The revision is chosen at import. On macOS, keyloom detects it by reading the connected keyboard's USB PID from `system_profiler SPUSBHostDataType -json` (its `USBDeviceKeyProductID` field), falling back to `SPUSBDataType` on older macOS. Newer macOS returns an empty `SPUSBDataType` report (seen on Darwin 27). The PID is `0x1969` for rev A or `0x1972` for rev B. If no keyboard is connected, it asks.
 
 ## Import reads the Oryx source download
 
