@@ -5,6 +5,7 @@ import { anthropicModel } from "../../src/agent/anthropic-model.ts";
 import { ModelError, UsageError, sendMessage, showConversation } from "../../src/app/index.ts";
 import { listMessages } from "../../src/persistence/conversations.ts";
 import { fakeAnthropic, type ScriptStep } from "../helpers/fake-anthropic.ts";
+import { draft } from "../helpers/ops.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
 
 const run = async (script: ScriptStep[], opts: { message?: string; maxIterations?: number } = {}) => {
@@ -19,7 +20,7 @@ const run = async (script: ScriptStep[], opts: { message?: string; maxIterations
 
 const getLayout: ScriptStep = { blocks: [{ tool: "get_layout", input: { layers: ["layer-0"] } }] };
 const invalidAlt = {
-  alternatives: [{ title: "Nope", ops: [{ op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "key", code: "OPTION" } }], explanation: "x", tradeoffs: { gains: [], costs: [] } }],
+  alternatives: [{ title: "Nope", ops: [{ op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "key", code: "OPTION" } }], explanation: "x", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft() }],
 };
 
 describe("how a turn ends", () => {

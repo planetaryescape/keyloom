@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ChangeOpSchema } from "../../layout/change.ts";
+import { ChangeOpSchema, DecisionDraftSchema } from "../../layout/change.ts";
 import type { AgentPorts, ProposalResult } from "../ports.ts";
 import type { TurnRecorder } from "../recorder.ts";
 import { defineTool } from "./define.ts";
@@ -16,6 +16,9 @@ const ProposalSchema = z.object({
     gains: z.array(z.string()).describe("What gets better, including functions that become easier to reach."),
     costs: z.array(z.string()).describe("What gets worse or moves, including anything displaced and how BK will have to relearn it."),
   }),
+  decisionDraft: DecisionDraftSchema.describe(
+    "What keyloom will remember if BK applies this, so a later change can bring the reason back. Write it from what BK said: his goal, what this alternative chooses, and why. Different alternatives have different choices and reasons.",
+  ),
 });
 
 const InputSchema = z.object({ alternatives: z.array(ProposalSchema).min(1).max(3) });

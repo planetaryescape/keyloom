@@ -2,19 +2,21 @@
 // (02#applying-undoing-and-stale-bases, 07). The agent proposes and the validator decides (D-014):
 // every path that writes a revision runs `evaluate` against the head it is about to extend.
 import { type Layout } from "../layout/schema.ts";
-import type { ChangeOp } from "../layout/change.ts";
+import type { ChangeOp, DecisionDraft } from "../layout/change.ts";
+import { recordChoice, restoreChangeSet, subjectOf, supersedeTouched, suspendChangeSet } from "../memory/choices.ts";
 import { type StaleConflict, staleConflicts } from "../layout/stale.ts";
 import {
-  type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, type Tradeoffs, findChangeSet, insertChangeSet, listChangeSets, markApplied, markRejected,
+  type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, type StoredDraft, type Tradeoffs, findChangeSet, insertChangeSet, listChangeSets, markApplied,
+  markRejected,
 } from "../persistence/change-sets.ts";
 import { type RevisionRow, findRevision } from "../persistence/layouts.ts";
-import { appendRevision } from "../persistence/revisions.ts";
+import { appendRevision, liveChangeSets } from "../persistence/revisions.ts";
 import { transact } from "../persistence/transaction.ts";
 import { type ValidationResult, ValidationResultSchema } from "../validation/result.ts";
 import type { SelectionScope } from "../validation/selection-rules.ts";
 import { type Evaluation, evaluate } from "../validation/validate.ts";
 import type { App } from "./context.ts";
-import { pinnedFor } from "./decisions.ts";
+import { decisionFactsFor, pinnedFor } from "./decisions.ts";
 import { NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 
@@ -55,19 +57,24 @@ export function checkChange(app: App, ref: string, input: { baseRevisionId?: str
       return { ok: false, errors: [error], warnings: [], diff: NO_DIFF };
     }
   }
-  return evaluate(view.board.definition, view.document, input.ops, { pinned: pinnedFor(app, view.layout.id), ...(input.selection ? { selection: input.selection } : {}) }).result;
+  return evaluate(view.board.definition, view.document, input.ops, { ...evaluationContext(app, view.layout.id), ...(input.selection ? { selection: input.selection } : {}) }).result;
 }
 
+/** What the validator needs from memory: pinned priorities and the choices still in force (08). */
+const evaluationContext = (app: App, layoutId: string) => ({ pinned: pinnedFor(app, layoutId), decisions: decisionFactsFor(app, layoutId) });
+
 /** Re-validates against the head and returns the document to save; throws unless the ops are valid and not stale. */
-function resolveAgainstHead(app: App, view: LayoutView, baseRevisionId: string, ops: ChangeOp[], selection?: SelectionScope): { result: ValidationResult; after: Layout } {
+function resolveAgainstHead(
+  app: App, view: LayoutView, baseRevisionId: string, ops: ChangeOp[], selection?: SelectionScope,
+): { result: ValidationResult; after: Layout; touched: Evaluation["touched"] } {
   const conflicts = conflictsWithHead(app, view, baseRevisionId, ops);
   if (conflicts.length > 0) throw new StaleBaseError(staleMessage(baseRevisionId, conflicts), conflicts.map((c) => c.label));
-  const evaluation: Evaluation = evaluate(view.board.definition, view.document, ops, { pinned: pinnedFor(app, view.layout.id), ...(selection ? { selection } : {}) });
+  const evaluation: Evaluation = evaluate(view.board.definition, view.document, ops, { ...evaluationContext(app, view.layout.id), ...(selection ? { selection } : {}) });
   if (!evaluation.result.ok || !evaluation.after) {
     const { errors } = evaluation.result;
     throw new ValidationFailedError(`${errors.length} validation error${errors.length === 1 ? "" : "s"}: ${errors[0]?.message ?? "invalid"}`, evaluation.result);
   }
-  return { result: evaluation.result, after: evaluation.after };
+  return { result: evaluation.result, after: evaluation.after, touched: evaluation.touched };
 }
 
 const requireText = (value: string, what: string) => {
@@ -75,7 +82,11 @@ const requireText = (value: string, what: string) => {
 };
 
 /** What an agent proposal carries beyond the ops: a card heading, trade-offs, and the conversation and alternatives group it belongs to. */
-export type ProposalMeta = { title?: string; tradeoffs?: Tradeoffs; conversationId?: string; proposalGroup?: string; selection?: SelectionScope };
+export type ProposalMeta = {
+  title?: string; tradeoffs?: Tradeoffs; conversationId?: string; proposalGroup?: string; selection?: SelectionScope;
+  /** What to remember when this is applied, and the messages of BK's it answers (08). */
+  decisionDraft?: StoredDraft;
+};
 
 /** Saves a valid change set against the current head without applying it. Invalid ops are refused, not stored. */
 export function proposeChange(
@@ -91,6 +102,7 @@ export function proposeChange(
       layoutId: view.layout.id, baseRevisionId: view.revision.id, source: input.source, ops: input.ops, explanation: input.explanation,
       validation: result, status: "proposed",
       ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.decisionDraft === undefined ? {} : { decisionDraft: input.decisionDraft }),
       ...(input.tradeoffs === undefined ? {} : { tradeoffs: input.tradeoffs }),
       ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
       ...(input.proposalGroup === undefined ? {} : { proposalGroup: input.proposalGroup }),
@@ -98,7 +110,26 @@ export function proposeChange(
   });
 }
 
-export type ApplyOutcome = { revisionId: string; changeSetId: string; validation: ValidationResult };
+/** `decisionId` is the choice written for this change, or null when it carried no reason to remember. */
+export type ApplyOutcome = { revisionId: string; changeSetId: string; validation: ValidationResult; decisionId: string | null };
+
+/** Writes the decision for an applied change, or just retires what it overrode when there is nothing to remember. */
+function remember(
+  app: App, view: LayoutView, cs: { id: string; conversationId: string | null }, draft: StoredDraft | null,
+  outcome: { result: ValidationResult; after: Layout; touched: Evaluation["touched"] },
+): string | null {
+  const touched = outcome.touched.map((t) => t.decisionId);
+  if (draft === null) {
+    supersedeTouched(app.db, touched, null);
+    return null;
+  }
+  const { sourceMessageIds, ...words } = draft;
+  const slots = [...outcome.result.diff.changed, ...outcome.result.diff.retuned];
+  return recordChoice(app.db, {
+    layoutId: view.layout.id, draft: words, subject: subjectOf(outcome.after, slots), changeSetId: cs.id,
+    conversationId: cs.conversationId, sourceMessageIds, touched,
+  }).id;
+}
 
 /** Applies a proposed change set to the head, re-validating it first. */
 export function applyChange(app: App, changeSetId: string): ApplyOutcome {
@@ -107,33 +138,48 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
     if (!cs) throw new NotFoundError(`no change set "${changeSetId}"`);
     if (cs.status !== "proposed") throw new UsageError(`change set ${cs.id} is ${cs.status}, not proposed`);
     const view = getLayout(app, cs.layoutId);
-    const { result, after } = resolveAgainstHead(app, view, cs.baseRevisionId, cs.ops);
+    const resolved = resolveAgainstHead(app, view, cs.baseRevisionId, cs.ops);
+    const { result, after } = resolved;
     const revision = appendRevision(app.db, {
       layoutId: view.layout.id, expectedHeadId: view.revision.id, layout: after, origin: cs.source, summary: cs.explanation, changeSetId: cs.id,
     });
     markApplied(app.db, cs, result);
-    return { revisionId: revision.id, changeSetId: cs.id, validation: result };
+    const decisionId = remember(app, view, cs, cs.decisionDraft, resolved);
+    return { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId };
   });
 }
 
-/** The editor path: records an editor change set and applies it in one transaction. */
+/**
+ * What an editor change remembers: only a reason BK typed, because a typo fix needs no memory (08).
+ * The goal says it was done by hand; the summary is the choice; his words are the reason.
+ */
+export function editorDraft(summary: string, reason: string | undefined): StoredDraft | undefined {
+  const why = reason?.trim();
+  if (!why) return undefined;
+  return { goal: "Changed by hand in the editor", choice: summary.trim(), reason: why, scope: { apps: [], habits: [] }, sourceMessageIds: [] };
+}
+
+/** The editor path: records an editor change set and applies it in one transaction. A `reason` BK typed is remembered. */
 export function applyOps(
   app: App,
   ref: string,
-  input: { baseRevisionId: string; ops: ChangeOp[]; summary: string },
+  input: { baseRevisionId: string; ops: ChangeOp[]; summary: string; reason?: string },
 ): ApplyOutcome {
   requireText(input.summary, "the summary");
   return transact(app.db, () => {
     const view = getLayout(app, ref);
-    const { result, after } = resolveAgainstHead(app, view, input.baseRevisionId, input.ops);
+    const resolved = resolveAgainstHead(app, view, input.baseRevisionId, input.ops);
+    const { result, after } = resolved;
+    const draft = editorDraft(input.summary, input.reason);
     const cs = insertChangeSet(app.db, {
       layoutId: view.layout.id, baseRevisionId: input.baseRevisionId, source: "editor", ops: input.ops, explanation: input.summary,
-      validation: result, status: "applied",
+      validation: result, status: "applied", ...(draft ? { decisionDraft: draft } : {}),
     });
     const revision = appendRevision(app.db, {
       layoutId: view.layout.id, expectedHeadId: view.revision.id, layout: after, origin: "editor", summary: input.summary, changeSetId: cs.id,
     });
-    return { revisionId: revision.id, changeSetId: cs.id, validation: result };
+    const decisionId = remember(app, view, cs, draft ?? null, resolved);
+    return { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId };
   });
 }
 
@@ -178,6 +224,12 @@ export function undo(app: App, ref: string, input: { revisionId?: string } = {})
     const revision = appendRevision(app.db, {
       layoutId: view.layout.id, expectedHeadId: head.id, layout: parent.layout, origin: "undo", summary: undoSummary(head), undoesRevisionId: head.id,
     });
+    // Memory follows the document: what the head carried and the restored document does not leaves the
+    // memory (and what it had superseded returns), and what the restored document carries comes back (08).
+    const was = liveChangeSets(app.db, view.layout.id, head.id);
+    const now = liveChangeSets(app.db, view.layout.id, revision.id);
+    for (const id of was) if (!now.has(id)) suspendChangeSet(app.db, id);
+    for (const id of now) if (!was.has(id)) restoreChangeSet(app.db, id);
     return { revision, undoesRevisionId: head.id };
   });
 }

@@ -39,3 +39,31 @@ export function appendRevision(db: Database, input: AppendRevisionInput): Revisi
   db.query("UPDATE layouts SET head_revision_id = ?, updated_at = ? WHERE id = ?").run(id, now, input.layoutId);
   return { id, layoutId: input.layoutId, parentId: input.expectedHeadId, origin: input.origin, summary: input.summary, createdAt: now };
 }
+
+/**
+ * The change sets whose effect `revisionId`'s document carries. A change or editor revision adds
+ * its change set; an undo revision copies the document before the revision it undid, so it carries
+ * what that earlier revision did. That makes undo and redo the same operation here, which is what
+ * lets decision memory follow either (08).
+ */
+export function liveChangeSets(db: Database, layoutId: string, revisionId: string): Set<string> {
+  type Row = { id: string; parent_id: string | null; origin: Origin; change_set_id: string | null; undoes_revision_id: string | null };
+  const rows = db.query("SELECT id, parent_id, origin, change_set_id, undoes_revision_id FROM revisions WHERE layout_id = ?").all(layoutId) as Row[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const chain: Row[] = [];
+  for (let at = byId.get(revisionId); at; at = at.parent_id === null ? undefined : byId.get(at.parent_id)) chain.unshift(at);
+  const live = new Map<string, Set<string>>();
+  for (const r of chain) {
+    let set: Set<string>;
+    if (r.origin === "undo") {
+      const undone = r.undoes_revision_id === null ? undefined : byId.get(r.undoes_revision_id);
+      const restored = undone?.parent_id ?? null;
+      set = new Set(restored === null ? [] : (live.get(restored) ?? []));
+    } else {
+      set = new Set(r.parent_id === null ? [] : (live.get(r.parent_id) ?? []));
+      if (r.change_set_id !== null) set.add(r.change_set_id);
+    }
+    live.set(r.id, set);
+  }
+  return new Set(live.get(revisionId) ?? []);
+}

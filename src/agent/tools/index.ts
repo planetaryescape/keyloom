@@ -7,17 +7,18 @@ import { getLayoutTool } from "./get-layout.ts";
 import { mirrorKeysTool } from "./mirror-keys.ts";
 import { proposeChangesTool } from "./propose-changes.ts";
 import { recordPriorityTool } from "./record-priority.ts";
+import { updateDecisionOutcomeTool } from "./update-decision-outcome.ts";
 
 /** What a tool reports to the caller as it works, for the chat panel's live cards and chips. */
 export type ToolEvents = { onProposal: (p: ProposalResult) => void; onPriority: (p: RecordedPriority) => void };
 
-/** `update_decision_outcome` arrives with choice decisions in rung 6. */
 export function createTools(ports: AgentPorts, recorder: TurnRecorder, events: ToolEvents): ModelTool[] {
   return [
     getLayoutTool(ports),
     findFunctionTool(ports),
     analyseChangeTool(ports, recorder),
     recordPriorityTool(ports, events.onPriority),
+    updateDecisionOutcomeTool(ports),
     proposeChangesTool(ports, recorder, events.onProposal),
     mirrorKeysTool(ports),
   ];

@@ -22,3 +22,8 @@ export const addReachableLayer = (id: string, afterLayerId: string): ChangeOp[] 
   { op: "addLayer", layer: { id, name: id }, afterLayerId },
   { op: "upsertCombo", combo: { id: `go-${id}`, name: id, positions: [0, 1], layerIds: "all", output: { kind: "layer", action: "momentary", layerId: id } } },
 ];
+
+/** The decision draft the agent attaches to a proposal (08): the words to remember if BK applies it. */
+export const draft = (over: Partial<{ goal: string; choice: string; reason: string; scope: { apps: string[]; habits: string[] } }> = {}) => ({
+  goal: "Test goal", choice: "Test choice", reason: "Test reason", scope: { apps: [], habits: [] }, ...over,
+});

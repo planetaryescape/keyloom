@@ -5,6 +5,7 @@ import {
 } from "../../src/app/index.ts";
 import { bindingFunctions } from "../../src/layout/functions.ts";
 import { fakeAnthropic, type ScriptStep } from "../helpers/fake-anthropic.ts";
+import { draft } from "../helpers/ops.ts";
 import { S_POSITION, optionOptionApp } from "../helpers/option-option.ts";
 
 const bad = { op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "key", code: "OPTION" } };
@@ -14,6 +15,7 @@ const macro = { id: "opt-opt", name: "Option Option", steps: [{ op: "tap", mods:
 const alt = (title: string, ops: unknown[]) => ({
   title, ops, explanation: `${title}: holds the layer with the right hand so Option is a plain key`,
   tradeoffs: { gains: ["Option-Option works"], costs: ["Uses one transparent key on layer 2"] },
+  decisionDraft: draft({ goal: "Option-Option shortcuts were impossible", choice: title, reason: "the right hand holds the layer, so the left hand taps S twice" }),
 });
 
 const question: ScriptStep = {
@@ -108,8 +110,8 @@ describe("the Option-Option conversation with a scripted model", () => {
       model: "claude-opus-5-5", stream: true, thinking: { type: "adaptive" }, output_config: { effort: "medium" },
       tool_choice: { type: "auto" }, fallbacks: "default", cache_control: { type: "ephemeral" },
     });
-    expect(body.tools.map((t: any) => t.name)).toEqual(["get_layout", "find_function", "analyse_change", "record_priority", "propose_changes", "mirror_keys"]);
-    expect(body.tools.map((t: any) => t.strict)).toEqual([true, true, false, true, false, true]);
+    expect(body.tools.map((t: any) => t.name)).toEqual(["get_layout", "find_function", "analyse_change", "record_priority", "update_decision_outcome", "propose_changes", "mirror_keys"]);
+    expect(body.tools.map((t: any) => t.strict)).toEqual([true, true, false, true, true, false, true]);
     expect(body.tools.every((t: any) => t.eager_input_streaming === true)).toBe(true);
     expect(body.system).toContain("never apply");
     expect(body.system).toContain("zsa/moonlander");

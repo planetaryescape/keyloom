@@ -5,6 +5,7 @@ import { appChatBackend } from "../../src/cli/chat-backend.ts";
 import { handleChatRoute } from "../../src/server/chat-routes.ts";
 import { type ScriptStep, fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
+import { draft } from "../helpers/ops.ts";
 
 const TOKEN = "t0ken";
 const servers: Array<{ stop: (force?: boolean) => void }> = [];
@@ -16,6 +17,7 @@ const propose = {
     ops: [{ op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "modifier", mods: ["LALT"] } }],
     explanation: "Hold layer 2, then tap S twice.",
     tradeoffs: { gains: ["Option-Option works"], costs: [] },
+    decisionDraft: draft(),
   }],
 };
 

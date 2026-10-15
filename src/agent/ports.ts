@@ -1,7 +1,7 @@
 // What the agent needs from keyloom, as an interface (01#modules: agent may not import app or
 // persistence). src/app implements it over the real use cases for one layout.
 import type { Board } from "../boards/load.ts";
-import type { ChangeOp } from "../layout/change.ts";
+import type { ChangeOp, DecisionDraft } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
 import type { PriorityKind, Subject } from "../memory/priorities.ts";
 import type { ValidationResult } from "../validation/result.ts";
@@ -20,6 +20,8 @@ export type Proposal = {
   ops: ChangeOp[];
   explanation: string;
   tradeoffs: { gains: string[]; costs: string[] };
+  /** Written from the conversation; becomes a `choice` decision when BK applies it (08). */
+  decisionDraft: DecisionDraft;
 };
 
 /** `changeSetId` is null when the alternative was invalid and so was not stored. */
@@ -36,6 +38,21 @@ export type PriorityInput = { priorityKind: PriorityKind; statement: string; rea
 /** `alreadyKnown` is true when an active priority said the same, so nothing new was stored. */
 export type RecordedPriority = PriorityFact & { alreadyKnown: boolean };
 
+/** A choice keyloom made earlier and remembers, as the agent reads it. */
+export type ChoiceFact = {
+  id: string;
+  status: "hypothesis" | "tried_helpful" | "tried_unhelpful";
+  goal: string;
+  choice: string;
+  reason: string;
+  scope: { apps: string[]; habits: string[] };
+  subject: Subject;
+  /** BK's own words about how it turned out, once he has said. */
+  outcomeNote: string | null;
+};
+
+export type OutcomeInput = { decisionId: string; status: "tried_helpful" | "tried_unhelpful"; note: string };
+
 export interface AgentPorts {
   snapshot(): LayoutSnapshot;
   /** Validates against the head without saving anything. */
@@ -46,4 +63,8 @@ export interface AgentPorts {
   priorities(): PriorityFact[];
   /** Stores a priority BK has just stated (08). */
   recordPriority(input: PriorityInput): RecordedPriority;
+  /** The choices still in force for the layout, for the prompt (08). */
+  choices(): ChoiceFact[];
+  /** Records how a choice turned out in BK's words; throws a readable Error for a priority or a decision that no longer applies. */
+  recordOutcome(input: OutcomeInput): ChoiceFact;
 }

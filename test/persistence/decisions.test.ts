@@ -45,7 +45,7 @@ describe("migration 0005", () => {
     migrate(db);
 
     expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
-    expect(db.query("SELECT MAX(version) AS v FROM schema_migrations").get()).toEqual({ v: 5 });
+    expect(db.query("SELECT MAX(version) AS v FROM schema_migrations").get()).toEqual({ v: MIGRATIONS.length });
     expect(findChangeSet(db, changeSetId)).toEqual(before.change);
     expect(db.query("SELECT * FROM revisions ORDER BY id").all()).toEqual(before.revisions);
     expect(db.query("SELECT * FROM messages ORDER BY id").all()).toEqual(before.messages);

@@ -114,3 +114,15 @@ export function findFlash(db: Database, id: string): FlashRow | undefined {
 export function activeFlashes(db: Database): FlashRow[] {
   return (db.query("SELECT * FROM flashes WHERE status IN ('waiting_for_bootloader','writing') ORDER BY started_at").all() as FlashDb[]).map(toFlash);
 }
+
+/** Successful flashes of any revision of `layoutId`, oldest build first: when each build began and the flash finished. */
+export function successfulFlashes(db: Database, layoutId: string): { buildStartedAt: number; flashedAt: number }[] {
+  const rows = db
+    .query(
+      `SELECT b.started_at AS build_started_at, f.finished_at AS flashed_at FROM flashes f
+       JOIN builds b ON b.id = f.build_id JOIN revisions r ON r.id = b.revision_id
+       WHERE r.layout_id = ? AND f.status = 'succeeded' AND f.finished_at IS NOT NULL ORDER BY b.started_at, f.id`,
+    )
+    .all(layoutId) as { build_started_at: number; flashed_at: number }[];
+  return rows.map((r) => ({ buildStartedAt: r.build_started_at, flashedAt: r.flashed_at }));
+}

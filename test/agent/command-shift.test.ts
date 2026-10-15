@@ -5,6 +5,7 @@ import {
 } from "../../src/app/index.ts";
 import { deepEqual } from "../../src/layout/equal.ts";
 import { fakeAnthropic, type ScriptStep } from "../helpers/fake-anthropic.ts";
+import { draft } from "../helpers/ops.ts";
 import { BACKSPACE_POSITION, F16_POSITION, TAB_POSITION, commandShiftApp } from "../helpers/command-shift.ts";
 
 const base = (position: number) => ({ layerId: "layer-0", position });
@@ -12,6 +13,7 @@ const cmdShift = { kind: "modifier", mods: ["LGUI", "LSFT"] };
 
 const alt = (title: string, ops: unknown[], costs: string[]) => ({
   title, ops, explanation: `${title}: one key for Command-Shift on the left hand`, tradeoffs: { gains: ["One key for Command-Shift"], costs },
+  decisionDraft: draft({ goal: "I press Command-Shift a lot", choice: title, reason: "the left hand stays free for the shortcut" }),
 });
 // Replaces Tab, which is still on the left thumb (Tab/L1): it only changes place.
 const onTab = alt("Command-Shift where Tab is", [{ op: "setBinding", at: base(TAB_POSITION), binding: cmdShift }], ["Tab is reached from the thumb only"]);

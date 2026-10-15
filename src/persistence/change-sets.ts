@@ -2,7 +2,7 @@
 // row that fails to parse is a bug and throws.
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
-import { type ChangeOp, ChangeOpSchema } from "../layout/change.ts";
+import { type ChangeOp, ChangeOpSchema, DecisionDraftSchema } from "../layout/change.ts";
 import { newId } from "./ids.ts";
 
 export type ChangeSetStatus = "proposed" | "applied" | "rejected" | "superseded";
@@ -11,6 +11,10 @@ export type ChangeSetSource = "editor" | "agent";
 const OpsSchema = z.array(ChangeOpSchema);
 const TradeoffsSchema = z.object({ gains: z.array(z.string()), costs: z.array(z.string()) });
 export type Tradeoffs = z.infer<typeof TradeoffsSchema>;
+
+/** The draft plus the messages of BK's it answers, which become the decision's link back to the conversation (08). */
+const StoredDraftSchema = DecisionDraftSchema.extend({ sourceMessageIds: z.array(z.string()).default([]) });
+export type StoredDraft = z.infer<typeof StoredDraftSchema>;
 
 export type ChangeSetRow = {
   id: string;
@@ -21,6 +25,8 @@ export type ChangeSetRow = {
   ops: ChangeOp[];
   explanation: string;
   tradeoffs: Tradeoffs;
+  /** What to remember when this is applied; null for a change set that carries no reason (08). */
+  decisionDraft: StoredDraft | null;
   /** The ValidationResult JSON as stored. src/app parses it; persistence may not import src/validation (01). */
   validation: unknown;
   status: ChangeSetStatus;
@@ -33,7 +39,7 @@ export type ChangeSetRow = {
 
 type Db = {
   id: string; layout_id: string; base_revision_id: string; proposal_group: string | null; source: ChangeSetSource;
-  ops: string; explanation: string; tradeoffs: string; validation: string; status: ChangeSetStatus;
+  ops: string; explanation: string; tradeoffs: string; decision_draft: string | null; validation: string; status: ChangeSetStatus;
   conversation_id: string | null; title: string | null; created_at: number; decided_at: number | null;
 };
 
@@ -46,6 +52,7 @@ const toRow = (r: Db): ChangeSetRow => ({
   ops: OpsSchema.parse(JSON.parse(r.ops)),
   explanation: r.explanation,
   tradeoffs: TradeoffsSchema.parse(JSON.parse(r.tradeoffs)),
+  decisionDraft: r.decision_draft === null ? null : StoredDraftSchema.parse(JSON.parse(r.decision_draft)),
   validation: JSON.parse(r.validation),
   status: r.status,
   conversationId: r.conversation_id,
@@ -65,6 +72,7 @@ export type InsertChangeSetInput = {
   status: "proposed" | "applied";
   proposalGroup?: string;
   tradeoffs?: Tradeoffs;
+  decisionDraft?: StoredDraft;
   title?: string;
   conversationId?: string;
   now?: number;
@@ -74,11 +82,11 @@ export function insertChangeSet(db: Database, input: InsertChangeSetInput): Chan
   const now = input.now ?? Date.now();
   const id = newId("cs");
   db.query(
-    `INSERT INTO change_sets (id, layout_id, base_revision_id, proposal_group, source, ops, explanation, tradeoffs, validation, status, conversation_id, title, created_at, decided_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO change_sets (id, layout_id, base_revision_id, proposal_group, source, ops, explanation, tradeoffs, decision_draft, validation, status, conversation_id, title, created_at, decided_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id, input.layoutId, input.baseRevisionId, input.proposalGroup ?? null, input.source, JSON.stringify(input.ops), input.explanation,
-    JSON.stringify(input.tradeoffs ?? { gains: [], costs: [] }), JSON.stringify(input.validation), input.status, input.conversationId ?? null, input.title ?? null, now, input.status === "applied" ? now : null,
+    JSON.stringify(input.tradeoffs ?? { gains: [], costs: [] }), input.decisionDraft ? JSON.stringify(input.decisionDraft) : null, JSON.stringify(input.validation), input.status, input.conversationId ?? null, input.title ?? null, now, input.status === "applied" ? now : null,
   );
   return findChangeSet(db, id) as ChangeSetRow;
 }

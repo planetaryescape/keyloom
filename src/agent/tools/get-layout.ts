@@ -31,6 +31,24 @@ const cell = (layer: Layer, position: number, ctx: GridContext) => {
   return b ? bindingLabel(b, ctx) : "?";
 };
 
+/** Each hold-tap profile with its options and the keys that use it, because tuning a key's feel means editing its profile (D-017). */
+function profilesText({ holdTapProfiles, layers, settings }: LayoutSnapshot["document"]): string {
+  if (holdTapProfiles.length === 0) return "Hold-tap profiles: none.";
+  const users = new Map<string, string[]>();
+  for (const layer of layers) {
+    for (const [position, b] of layer.bindings.entries()) {
+      if (b.kind === "holdTap") users.set(b.profileId, [...(users.get(b.profileId) ?? []), `key ${position + 1} on ${layer.name}`]);
+    }
+  }
+  const lines = holdTapProfiles.map((p) => {
+    const keys = users.get(p.id) ?? [];
+    const shown = keys.length > 6 ? `${keys.slice(0, 6).join(", ")} and ${keys.length - 6} more` : keys.join(", ") || "no keys";
+    return `- ${p.id} ("${p.name}"): ${JSON.stringify(p.options)}; used by ${keys.length} (${shown})`;
+  });
+  const feel = settings.filter((s) => /TAPPING|HOLD|FLOW|RETRO|TAP_TERM/.test(s.key)).map((s) => `${s.key}=${String(s.value)}`);
+  return ["Hold-tap profiles (id, options, keys using it):", ...lines, ...(feel.length ? [`Layout-wide tap-hold settings: ${feel.join(", ")}.`] : [])].join("\n");
+}
+
 export const getLayoutTool = (ports: AgentPorts) =>
   defineTool({
     name: "get_layout",
@@ -54,10 +72,10 @@ export const getLayoutTool = (ports: AgentPorts) =>
         ].join("\n");
       });
       const macros = snapshot.document.macros.map((m) => `${m.id}: ${m.name}`).join("; ") || "none";
-      const profiles = snapshot.document.holdTapProfiles.map((p) => p.id).join(", ") || "none";
       return [
         `Layout ${snapshot.layoutName} (${snapshot.layoutId}), head revision ${snapshot.revisionId}, board ${snapshot.board.definition.id}.`,
-        `Macros: ${macros}. Hold-tap profiles: ${profiles}.`,
+        `Macros: ${macros}.`,
+        profilesText(snapshot.document),
         "Legend: ⌥ Option/Alt, ⌘ Command/GUI, ⌃ Ctrl, ⇧ Shift; an r prefix means the right-hand modifier; a/b means tap a, hold b; ▽ transparent; MO/TO/TG layer keys.",
         ...sections,
       ].join("\n\n");

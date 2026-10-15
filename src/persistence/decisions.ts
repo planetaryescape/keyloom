@@ -1,5 +1,4 @@
-// Repository for decisions (08). Only kind `priority` is written so far; the row type already
-// carries what a `choice` needs so rung 6 adds writers, not a second shape.
+// Repository for decisions (08): priorities BK states and choices made when a change is applied.
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import { SlotSchema } from "../layout/change.ts";
@@ -37,7 +36,12 @@ export type DecisionRow = {
   changeSetId: string | null;
   conversationId: string | null;
   sourceMessageIds: string[];
+  /** Set only while the status is `superseded`; null when it was overridden without a recorded successor. */
   supersededBy: string | null;
+  /** The status to put back if the change that took this out of play is reversed (migration 0006). */
+  statusBefore: DecisionStatus | null;
+  /** When BK answered or dismissed the "has this worked out?" question (Q6). */
+  outcomeAskedAt: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -45,7 +49,8 @@ export type DecisionRow = {
 type Db = {
   id: string; layout_id: string; kind: DecisionRow["kind"]; priority_kind: PriorityKind | null; subject: string; goal: string; choice: string;
   reason: string; scope: string; status: DecisionStatus; outcome_note: string | null; change_set_id: string | null; conversation_id: string | null;
-  source_message_ids: string; superseded_by: string | null; created_at: number; updated_at: number;
+  source_message_ids: string; superseded_by: string | null; status_before: DecisionStatus | null; outcome_asked_at: number | null;
+  created_at: number; updated_at: number;
 };
 
 const toRow = (r: Db): DecisionRow => ({
@@ -63,7 +68,10 @@ const toRow = (r: Db): DecisionRow => ({
   changeSetId: r.change_set_id,
   conversationId: r.conversation_id,
   sourceMessageIds: IdsSchema.parse(JSON.parse(r.source_message_ids)),
-  supersededBy: r.superseded_by,
+  // The pointer is kept in the row after a reversal so a redo can re-apply it, but it means nothing unless the status says so.
+  supersededBy: r.status === "superseded" ? r.superseded_by : null,
+  statusBefore: r.status_before,
+  outcomeAskedAt: r.outcome_asked_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -123,21 +131,71 @@ export function listDecisions(
   return (rows as Db[]).map(toRow);
 }
 
-export function updateDecision(
-  db: Database,
-  id: string,
-  fields: { goal?: string; choice?: string; reason?: string; status?: DecisionStatus },
-  now = Date.now(),
-): void {
+/** Choice decisions are written when a change set is applied (08); `now` is the moment of the apply. */
+export type InsertChoiceInput = {
+  layoutId: string;
+  subject: Subject;
+  goal: string;
+  choice: string;
+  reason: string;
+  scope: Scope;
+  changeSetId: string;
+  conversationId?: string | null;
+  sourceMessageIds?: string[];
+  now?: number;
+};
+
+export function insertChoice(db: Database, input: InsertChoiceInput): DecisionRow {
+  const id = newId("dec");
+  const now = input.now ?? Date.now();
+  db.query(
+    `INSERT INTO decisions (id, layout_id, kind, priority_kind, subject, goal, choice, reason, scope, status, change_set_id, conversation_id, source_message_ids, created_at, updated_at)
+     VALUES (?, ?, 'choice', NULL, ?, ?, ?, ?, ?, 'hypothesis', ?, ?, ?, ?, ?)`,
+  ).run(
+    id, input.layoutId, JSON.stringify(input.subject), input.goal, input.choice, input.reason, JSON.stringify(input.scope),
+    input.changeSetId, input.conversationId ?? null, JSON.stringify(input.sourceMessageIds ?? []), now, now,
+  );
+  return findDecision(db, id) as DecisionRow;
+}
+
+export type DecisionFields = {
+  goal?: string;
+  choice?: string;
+  reason?: string;
+  scope?: Scope;
+  status?: DecisionStatus;
+  outcomeNote?: string | null;
+  supersededBy?: string | null;
+  statusBefore?: DecisionStatus | null;
+  outcomeAskedAt?: number | null;
+};
+
+// A fixed column per field, so a caller's key is never spliced into SQL.
+const COLUMNS: Record<keyof DecisionFields, string> = {
+  goal: "goal", choice: "choice", reason: "reason", scope: "scope", status: "status", outcomeNote: "outcome_note",
+  supersededBy: "superseded_by", statusBefore: "status_before", outcomeAskedAt: "outcome_asked_at",
+};
+
+export function updateDecision(db: Database, id: string, fields: DecisionFields, now = Date.now()): void {
   const sets: string[] = [];
-  const args: (string | number)[] = [];
-  for (const [column, value] of Object.entries(fields)) {
+  const args: (string | number | null)[] = [];
+  for (const [name, value] of Object.entries(fields) as [keyof DecisionFields, unknown][]) {
     if (value === undefined) continue;
-    sets.push(`${column} = ?`);
-    args.push(value);
+    sets.push(`${COLUMNS[name]} = ?`);
+    args.push(name === "scope" ? JSON.stringify(value) : (value as string | number | null));
   }
   if (sets.length === 0) return;
   db.query(`UPDATE decisions SET ${sets.join(", ")}, updated_at = ? WHERE id = ?`).run(...args, now, id);
+}
+
+/** The decisions a change set wrote (at most one today). */
+export function listDecisionsOfChangeSet(db: Database, changeSetId: string): DecisionRow[] {
+  return (db.query("SELECT * FROM decisions WHERE change_set_id = ? ORDER BY created_at, id").all(changeSetId) as Db[]).map(toRow);
+}
+
+/** Decisions that point at `successorId` as the one that replaced them, whatever their status now. */
+export function listDecisionsSupersededBy(db: Database, successorId: string): DecisionRow[] {
+  return (db.query("SELECT * FROM decisions WHERE superseded_by = ? ORDER BY created_at, id").all(successorId) as Db[]).map(toRow);
 }
 
 /** Oldest first. The priorities BK stated in one conversation that still stand, for its chips. */

@@ -10,5 +10,8 @@ export function validationForModel(v: ValidationResult): string {
     displaced: v.diff.displaced,
     dropped: v.diff.dropped,
     relearnCount: v.diff.relearnCount,
+    retunedSlots: v.diff.retuned,
+    // The words BK stored when he set this up. Quote them to him and ask whether they still hold.
+    reminders: v.diff.reminders,
   });
 }
