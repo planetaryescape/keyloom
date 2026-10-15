@@ -43,7 +43,7 @@ async function setup(halves: Array<ReturnType<typeof half>>, extra: { bootloader
     const old = layer?.bindings[10];
     const code = ["F13", "F14", "F15"][n++ % 3] as string;
     const ops: ChangeOp[] = [
-      ...(old ? bindingFunctions(old) : []).map((function_): ChangeOp => ({ op: "dropFunction", function: function_, reason: "test edit" })),
+      ...(old ? bindingFunctions(old, view.document.tapDances) : []).map((function_): ChangeOp => ({ op: "dropFunction", function: function_, reason: "test edit" })),
       { op: "setBinding", at: { layerId: layer?.id as string, position: 10 }, binding: { kind: "key", code } },
     ];
     return applyOps(e.app, "glove80", { baseRevisionId: view.revision.id, ops, summary: `key 11: ${code}` });
