@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.14.0](https://github.com/planetaryescape/keyloom/compare/v0.13.0...v0.14.0) (2026-10-15)
+
+
+### Features
+
+* a sync engine, sync and autosync commands, and the events stream ([81f29d5](https://github.com/planetaryescape/keyloom/commit/81f29d51a8e2166fc04b01ee08c39a142cc2894c))
+* flashes report hands-free proof, QMK keeps its last good image, syncs get tables ([bc111ad](https://github.com/planetaryescape/keyloom/commit/bc111ad8f9c7055e272d05fbf25dfe76316d81bd))
+* the header shows where each keyboard stands, with Sync now, Pause and an auto-sync switch ([d700ed5](https://github.com/planetaryescape/keyloom/commit/d700ed507139ebf403013252824c7a6d96957aa3))
+
+
+### Bug Fixes
+
+* the sync engine never ends the server, a one-shot sync syncs once, and serve passes fakes through ([3a4e6fd](https://github.com/planetaryescape/keyloom/commit/3a4e6fd1a288aa44576e5af9fcd2cbb4011338bd))
+
 ## [0.13.0](https://github.com/planetaryescape/keyloom/compare/v0.12.0...v0.13.0) (2026-10-15)
 
 
