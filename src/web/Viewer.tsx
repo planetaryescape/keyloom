@@ -24,9 +24,10 @@ import { HistoryPanel, type Milestone } from "./history/HistoryPanel.tsx";
 import { useVersions } from "./history/useVersions.ts";
 import { VersionCompare, type Comparing } from "./history/VersionCompare.tsx";
 import { versionTitle } from "./history/version-words.ts";
-import { archiveConfig, compareVersion, createConfig, nameVersion, renameConfig, restoreConfig, restoreVersion, syncConfig, useConfig } from "./configs/api-configs.ts";
+import { archiveConfig, compareVersion, createConfig, deleteConfig, nameVersion, renameConfig, restoreConfig, restoreVersion, syncConfig, useConfig } from "./configs/api-configs.ts";
 import { ConfigMenu } from "./configs/ConfigMenu.tsx";
-import { ConfirmDialog, NewConfigDialog, RenameDialog } from "./configs/ConfigDialogs.tsx";
+import { ConfirmDialog, DeleteConfigDialog, NewConfigDialog, RenameDialog } from "./configs/ConfigDialogs.tsx";
+import { leaveToast, takeToast } from "./shell/toast-flash.ts";
 import { EditingStatus } from "./configs/EditingStatus.tsx";
 import { useConfigs } from "./configs/useConfigs.ts";
 import { ComboEditor, ComboList, draftFromCombo, type ComboDraft } from "./combos/ComboPane.tsx";
@@ -217,7 +218,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     : { id: boardSync.layoutId, name: boardSync.layoutName };
   const editingOther = keyboardConfig !== null && keyboardConfig.id !== summary.id;
   const [configDialog, setConfigDialog] = useState<
-    { kind: "new"; start?: "version"; version?: string } | { kind: "rename" } | { kind: "put-on"; target: { id: string; name: string } } | { kind: "put-version"; milestone: Milestone } | null
+    { kind: "new"; start?: "version"; version?: string } | { kind: "rename" } | { kind: "put-on"; target: { id: string; name: string } } | { kind: "put-version"; milestone: Milestone } | { kind: "delete"; config: { id: string; name: string } } | null
   >(null);
   // History as versions; a finished sync records one, so the list follows the keyboard's last run as well as the head.
   const history = useVersions(token, layoutRef, `${revision.id}:${boardSync?.last?.id ?? ""}:${boardSync?.state.kind ?? ""}`, historyOpen);
@@ -1142,13 +1143,25 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   };
 
   // ---- configs and versions (D-315) ----
+  // Opening another config remounts this page and drops its toasts, so a toast raised just before is left for the next page (D-316).
+  const toastAcross = (toast: Parameters<typeof toasts.show>[0], moving: boolean) => {
+    if (!moving || !leaveToast(toast)) toasts.show(toast);
+  };
+  useEffect(() => {
+    const left = takeToast();
+    if (left !== null) toasts.show(left);
+    // Once, when the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function archiveThis() {
     try {
       await archiveConfig(token, summary.id);
-      toasts.show({ kind: "info", message: `Archived ${summary.name}`, detail: "It's under Archived in the config menu, with its history." });
-      configs.reload();
       // An archived config is hidden, so the page moves to the one the keyboard runs.
-      if (keyboardConfig !== null && keyboardConfig.id !== summary.id) chrome.onSelect(keyboardConfig.id);
+      const moving = keyboardConfig !== null && keyboardConfig.id !== summary.id;
+      toastAcross({ kind: "info", message: `Archived ${summary.name}`, detail: "It's under Archived in the config menu, with its history." }, moving);
+      configs.reload();
+      if (moving && keyboardConfig !== null) chrome.onSelect(keyboardConfig.id);
     } catch (error) {
       toasts.show({ kind: "error", message: "Couldn't archive it", ...(error instanceof Error ? { detail: error.message } : {}) });
     }
@@ -1157,9 +1170,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   async function restoreArchived(id: string) {
     try {
       const restored = await restoreConfig(token, id);
+      toastAcross({ kind: "info", message: `Restored ${restored.name}` }, restored.id !== summary.id);
       configs.reload();
       chrome.onReload?.(restored.id);
-      toasts.show({ kind: "info", message: `Restored ${restored.name}` });
     } catch (error) {
       toasts.show({ kind: "error", message: "Couldn't restore it", ...(error instanceof Error ? { detail: error.message } : {}) });
     }
@@ -1480,6 +1493,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onRename={() => setConfigDialog({ kind: "rename" })}
                 onArchive={() => void archiveThis()}
                 onRestore={(id) => void restoreArchived(id)}
+                onDelete={(config) => setConfigDialog({ kind: "delete", config: { id: config.id, name: config.name } })}
                 onImport={chrome.onImport}
               />
             }
@@ -1683,6 +1697,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               comparing !== null ? (
                 <VersionCompare
                   comparing={comparing}
+                  layout={layout}
                   boardName={boardDisplayName(board.name)}
                   layerId={layer.id}
                   layerName={layerNameOf}
@@ -1779,11 +1794,22 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           {...(configDialog.version === undefined ? {} : { version: configDialog.version })}
           onCreate={async (request) => {
             const made = await createConfig(token, request);
-            toasts.show({ kind: "info", message: `Made ${made.name}`, detail: `It isn't on your ${boardDisplayName(board.name)} until you put it on.` });
+            toastAcross({ kind: "info", message: `Made ${made.name}`, detail: `It isn't on your ${boardDisplayName(board.name)} until you put it on.` }, true);
             chrome.onReload?.(made.id);
             return made;
           }}
           onImport={chrome.onImport}
+          onClose={() => setConfigDialog(null)}
+        />
+      ) : configDialog?.kind === "delete" ? (
+        <DeleteConfigDialog
+          name={configDialog.config.name}
+          onDelete={async () => {
+            await deleteConfig(token, configDialog.config.id, configDialog.config.name);
+            toasts.show({ kind: "info", message: `Deleted ${configDialog.config.name}` });
+            configs.reload();
+            chrome.onReload?.();
+          }}
           onClose={() => setConfigDialog(null)}
         />
       ) : configDialog?.kind === "rename" ? (

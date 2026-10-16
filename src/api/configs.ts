@@ -13,7 +13,7 @@
 //   GET  /api/configs/:ref/compare?to=<revision|version id|version name> -> CompareResponse (the revision against the head, key by key)
 // `:ref` is a config's ID or exact name. A config is a layout, so `layoutId` elsewhere in the API is a config's ID.
 import { z } from "zod";
-import { BindingSchema } from "../layout/schema.ts";
+import { BindingSchema, LayoutSchema } from "../layout/schema.ts";
 
 export const ConfigSchema = z.object({
   id: z.string().min(1),
@@ -97,6 +97,9 @@ export const CompareResponseSchema = z.object({
   layoutId: z.string().min(1),
   from: RevisionBriefSchema,
   to: RevisionBriefSchema,
+  // What the older revision's layers, macros and tap dances were, so a screen can say what a key did then in words (D-316), not
+  // only by its firmware label ("TD0").
+  fromContext: LayoutSchema.pick({ layers: true, macros: true, tapDances: true, passthrough: true }),
   diff: z.object({
     keys: z.array(KeyChangeSchema),
     layersAdded: z.array(z.object({ id: z.string(), name: z.string() })),

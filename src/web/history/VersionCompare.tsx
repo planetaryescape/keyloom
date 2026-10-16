@@ -1,5 +1,7 @@
 import { ArrowLeft, ArrowRight, Copy, Keyboard, LoaderCircle, Undo2, X } from "lucide-react";
 import type { CompareResponse } from "../../api/configs.ts";
+import type { Layout } from "../../layout/schema.ts";
+import { keyWords } from "./compare-words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
 import type { Milestone } from "./HistoryPanel.tsx";
 import { versionTitle, versionWhen } from "./version-words.ts";
@@ -40,8 +42,10 @@ export function otherChanges(diff: Diff, layerName: (id: string) => string = (id
 
 // One version against now (v3, D-315): the keys that would change if BK went back are marked on the board in the proposal's amber,
 // each with what it was; here they are listed per layer, then everything else, then the three ways to use the version.
-export function VersionCompare({ comparing, boardName, layerId, layerName, onBack, onClose, onShowLayer, onGoBack, onPutOn, onNewConfig, blockedReason }: {
+export function VersionCompare({ comparing, layout, boardName, layerId, layerName, onBack, onClose, onShowLayer, onGoBack, onPutOn, onNewConfig, blockedReason }: {
   comparing: Comparing;
+  /** The layout now, for saying what each key does now. */
+  layout: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough">;
   boardName: string;
   /** The layer on screen, whose keys carry the marks. */
   layerId: string;
@@ -75,7 +79,7 @@ export function VersionCompare({ comparing, boardName, layerId, layerName, onBac
         ) : comparing.compare.diff.same ? (
           <p className="sheet-empty">Nothing differs from now.</p>
         ) : (
-          <Differences diff={comparing.compare.diff} layerId={layerId} layerName={layerName} onShowLayer={onShowLayer} />
+          <Differences compare={comparing.compare} layout={layout} layerId={layerId} layerName={layerName} onShowLayer={onShowLayer} />
         )}
       </div>
       <footer className="history-compare-foot">
@@ -89,7 +93,14 @@ export function VersionCompare({ comparing, boardName, layerId, layerName, onBac
   );
 }
 
-function Differences({ diff, layerId, layerName, onShowLayer }: { diff: Diff; layerId: string; layerName: (id: string) => string; onShowLayer: (layerId: string) => void }) {
+function Differences({ compare, layout, layerId, layerName, onShowLayer }: {
+  compare: CompareResponse;
+  layout: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough">;
+  layerId: string;
+  layerName: (id: string) => string;
+  onShowLayer: (layerId: string) => void;
+}) {
+  const diff = compare.diff;
   const layers = new Map<string, { name: string; keys: Diff["keys"] }>();
   for (const k of diff.keys) {
     const entry = layers.get(k.layerId) ?? { name: k.layerName, keys: [] };
@@ -108,15 +119,23 @@ function Differences({ diff, layerId, layerName, onShowLayer }: { diff: Diff; la
             )}
           </h3>
           <ul className="history-compare-keys">
-            {keys.map((k) => (
-              <li key={`${k.layerId}:${k.position}`}>
-                <span className="history-then"><MiniCap>{k.beforeLabel || "nothing"}</MiniCap></span>
-                <ArrowRight size={12} className="revision-arrow" aria-label="now" role="img" />
-                <MiniCap>{k.afterLabel || "nothing"}</MiniCap>
-                {/* A tap dance or macro re-read from Oryx prints the same and differs inside. */}
-                {k.beforeLabel === k.afterLabel ? <span className="history-compare-note">set up differently</span> : null}
-              </li>
-            ))}
+            {keys.map((k) => {
+              // Named by what the key does, then and now, with what changed (D-316); the caps alone can read "TD0 → TD0".
+              const words = keyWords(k.before, compare.fromContext, k.after, layout);
+              return (
+                <li key={`${k.layerId}:${k.position}`}>
+                  <span className="history-compare-caps">
+                    <span className="history-then"><MiniCap>{k.beforeLabel || "nothing"}</MiniCap></span>
+                    <ArrowRight size={12} className="revision-arrow" aria-label="now" role="img" />
+                    <MiniCap>{k.afterLabel || "nothing"}</MiniCap>
+                  </span>
+                  <span className="history-compare-words">
+                    {words.title}
+                    {words.change === null ? (words.then === words.now ? null : <span className="history-compare-note"> · was {words.then}</span>) : <span className="history-compare-note"> · {words.change}</span>}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}

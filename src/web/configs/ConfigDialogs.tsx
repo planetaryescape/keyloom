@@ -237,3 +237,44 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
     </ConfigDialog>
   );
 }
+
+/**
+ * Deleting a config for good (D-316): offered only for an archived config, and only after its name is typed, the CLI's guard. The
+ * server checks the name too and refuses the config on the keyboard.
+ */
+export function DeleteConfigDialog({ name, onDelete, onClose }: { name: string; onDelete: () => Promise<void>; onClose: () => void }) {
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const matches = typed === name;
+  const go = async () => {
+    if (!matches) return;
+    setBusy(true);
+    try {
+      await onDelete();
+      onClose();
+    } catch (error) {
+      setProblem(message(error));
+      setBusy(false);
+    }
+  };
+  return (
+    <ConfigDialog
+      title={`Delete ${name} for good?`}
+      label="Delete the config"
+      onClose={onClose}
+      onSubmit={() => void go()}
+      foot={
+        <>
+          <button type="button" className="sheet-action" onClick={onClose}>Cancel</button>
+          <button type="submit" className="bar-apply config-danger" disabled={busy || !matches}>Delete {name}</button>
+        </>
+      }
+    >
+      <p className="config-dialog-lead">Its layers, history and versions go with it. Unlike archiving, this can't be undone.</p>
+      <label className="config-label" htmlFor="config-delete">Type {name} to delete it</label>
+      <input id="config-delete" className="config-input" value={typed} data-autofocus autoComplete="off" spellCheck={false} onChange={(e) => setTyped(e.target.value)} />
+      {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
+    </ConfigDialog>
+  );
+}

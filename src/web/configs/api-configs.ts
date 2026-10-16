@@ -3,6 +3,7 @@ import {
   CompareResponseSchema, ConfigListResponseSchema, ConfigResponseSchema, NameVersionResponseSchema, RestoreVersionResponseSchema,
   VersionHistoryResponseSchema, type ApiConfig, type CompareResponse, type NewConfigRequest, type VersionHistoryResponse,
 } from "../../api/configs.ts";
+import { z } from "zod";
 import { SyncNowResponseSchema, type SyncNowResponse } from "../../api/http.ts";
 import { request } from "../api-write.ts";
 
@@ -15,6 +16,10 @@ export const createConfig = async (token: string, body: NewConfigRequest): Promi
 export const renameConfig = async (token: string, ref: string, name: string): Promise<ApiConfig> =>
   (await request("POST", `${at(ref)}/rename`, token, ConfigResponseSchema, undefined, { name })).config;
 export const archiveConfig = async (token: string, ref: string): Promise<ApiConfig> => (await request("POST", `${at(ref)}/archive`, token, ConfigResponseSchema, undefined, {})).config;
+/** Deletes a config and its history for good; the server refuses unless `name` is the config's name, as the CLI does. */
+export const deleteConfig = async (token: string, ref: string, name: string): Promise<void> => {
+  await request("POST", `${at(ref)}/delete`, token, z.object({}).passthrough(), undefined, { name });
+};
 export const restoreConfig = async (token: string, ref: string): Promise<ApiConfig> => (await request("POST", `${at(ref)}/restore`, token, ConfigResponseSchema, undefined, {})).config;
 /** Makes the config the one on its board's keyboard and starts one sync. */
 export const useConfig = (token: string, ref: string): Promise<SyncNowResponse> => request("POST", `${at(ref)}/use`, token, SyncNowResponseSchema, undefined, {});
