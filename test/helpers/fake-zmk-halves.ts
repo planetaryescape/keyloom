@@ -84,6 +84,8 @@ export function fakeWorld(opts: {
   /** Makes touching `path` fail, as stty does without permission. */
   touchError?: (path: string) => string | undefined;
   comeBackMs?: number;
+  /** How long after a half comes back its serial port appears; until then it shows only as a USB device, as a real half does. */
+  portLagMs?: number;
 }): FakeWorld {
   const halves: FakeHalf[] = opts.halves.map((h) => ({
     vendorId: GLOVE80_VENDOR, productId: h.letter === "L" ? 0x27db : 0x27d9, path: `/dev/fake-ttyACM-${h.letter}`, cabled: true, mode: "app", ...h,
@@ -102,10 +104,13 @@ export function fakeWorld(opts: {
     setTimeout(() => mkdirSync(join(opts.root, half.volume), { recursive: true }), bootDelay);
   };
 
+  // When each half's serial port appears after it comes back; a half with no entry has its port.
+  const portAt = new Map<HalfLetter, number>();
+  const portUp = (h: FakeHalf) => (portAt.get(h.letter) ?? 0) <= Date.now();
   const transport: SerialTransport = {
     async list() {
       return halves
-        .filter((h) => h.mode === "app" && h.serial !== undefined)
+        .filter((h) => h.mode === "app" && h.serial !== undefined && portUp(h))
         .map((h): SerialPort => ({ vendorId: h.vendorId, productId: h.productId, serial: h.serial as string, path: h.path }));
     },
     async touch(path, baud) {
@@ -143,6 +148,7 @@ export function fakeWorld(opts: {
       half.mode = "boot";
       setTimeout(() => {
         half.mode = "app";
+        if (opts.portLagMs !== undefined) portAt.set(half.letter, Date.now() + opts.portLagMs);
         const next = opts.after ? opts.after(half, key) : key === undefined ? undefined : serialOf(key, half.letter);
         if (next === undefined) delete half.serial;
         else half.serial = next;
@@ -151,7 +157,18 @@ export function fakeWorld(opts: {
   }, 10);
 
   return {
-    deps: { serial: async () => transport, usb: async () => [], pollMs: 10, restartWaitMs: 600, verifyWaitMs: 800 },
+    deps: {
+      serial: async () => transport,
+      // With a port lag, USB sees a running half at once, by its IDs and serial number, before its serial port is up. Without one,
+      // USB shows nothing, so a half is seen only through its port.
+      usb: async () =>
+        halves
+          .filter((h) => opts.portLagMs !== undefined && h.mode === "app")
+          .map((h) => ({ vendorId: `0x${h.vendorId.toString(16)}`, productId: `0x${h.productId.toString(16)}`, name: `fake ${h.letter}`, maker: "MoErgo", ...(h.serial === undefined ? {} : { serial: h.serial }) })),
+      pollMs: 10,
+      restartWaitMs: 600,
+      verifyWaitMs: 800,
+    },
     halves, touches, flashed,
     press: (letter) => enterBoot(halves.find((h) => h.letter === letter) as FakeHalf),
     stop: () => clearInterval(timer),
