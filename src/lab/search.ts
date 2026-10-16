@@ -9,6 +9,8 @@ import type { ChangeOp } from "../layout/change.ts";
 import { applyOps } from "../layout/apply-ops.ts";
 import type { Layout } from "../layout/schema.ts";
 import { type Candidate, type Bias, layoutCandidates, opsOf, profileCandidates, refine } from "./candidates.ts";
+import { type Issue } from "../validation/result.ts";
+import { validate } from "../validation/validate.ts";
 import { type Difference, type MisfireFacts, isMisfire } from "./classify.ts";
 
 /** What one replay says about the firmware's decisions: only the misfires matter to the search. */
@@ -60,9 +62,11 @@ const exampleOf = (d: Difference & { kind: "misfire-hold" | "misfire-tap" }): Ex
 /** The profile a position uses in the layout being tuned. A candidate may rebind keys to a new profile, so a replay's own bindings cannot say. */
 type ProfileAt = (position: number | undefined) => string | undefined;
 
-function score(baseline: readonly Difference[], after: readonly Difference[], candidate: Candidate, profileAt: ProfileAt): Scored {
+function score(baseline: readonly Difference[], after: readonly Difference[], candidate: Candidate, profileAt: ProfileAt, firstLayerId?: string): Scored {
   const misfires = (list: readonly Difference[]) => list.filter(isMisfire);
-  const inScope = (d: Difference) => candidate.scope.kind === "layout" || profileAt(d.position) === candidate.scope.profileId;
+  // Keys the candidate rebinds from another profile are in its scope too, so what it does to them is counted.
+  const movedHere = (d: Difference) => (candidate.moved ?? []).some((m) => m.at.layerId === firstLayerId && m.at.position === d.position);
+  const inScope = (d: Difference) => candidate.scope.kind === "layout" || profileAt(d.position) === candidate.scope.profileId || movedHere(d);
   const before = misfires(baseline).filter(inScope);
   const now = misfires(after).filter(inScope);
   const had = new Set(before.map((d) => d.pressIndex));
@@ -96,10 +100,13 @@ function combine(layout: Layout, candidates: readonly Candidate[]): Layout | und
   return applied.ok ? applied.layout : undefined;
 }
 
-export async function search(input: { layout: Layout; board: BoardDefinition; baseline: readonly Difference[]; measure: Measure; maxRuns?: number; onProgress?: (line: string) => void }): Promise<SearchResult> {
+export async function search(input: { layout: Layout; board: BoardDefinition; baseline: readonly Difference[]; measure: Measure; maxRuns?: number; validateOps?: (ops: readonly ChangeOp[]) => Issue[]; onProgress?: (line: string) => void }): Promise<SearchResult> {
   const { layout, board, baseline, measure } = input;
   const budget = input.maxRuns ?? MAX_RUNS;
   const say = input.onProgress ?? (() => {});
+  // The check Apply makes, so nothing is offered that the layout would then refuse.
+  const validateOps = input.validateOps ?? ((ops: readonly ChangeOp[]) => validate(board, layout, ops).errors);
+  const firstLayerId = layout.layers[0]?.id;
   const notes: string[] = [];
   let runs = 0;
   let cut = false;
@@ -126,20 +133,24 @@ export async function search(input: { layout: Layout; board: BoardDefinition; ba
   const rounds = Math.max(0, ...[...lists.values()].map((l) => l.length));
 
   async function roundOf(round: Array<Candidate | undefined>, what: string): Promise<void> {
-    const chosen = round.filter((c): c is Candidate => c !== undefined);
+    const all = round.filter((c): c is Candidate => c !== undefined);
+    const alone = async (c: Candidate) => {
+      const doc = combine(layout, [c]);
+      const result = doc ? await run(doc, c.title) : undefined;
+      if (result) tried.push(score(baseline, result, c, profileAt, firstLayerId));
+    };
+    // A candidate that rebinds keys of another profile changes that profile's keys, so it cannot share a run with that profile's own candidate.
+    for (const c of all.filter((x) => x.moved)) await alone(c);
+    const chosen = all.filter((x) => !x.moved);
     if (chosen.length === 0) return;
     const doc = combine(layout, chosen);
     if (!doc) {
       // Two candidates clashed (they changed the same thing); try them one at a time, as far as the budget goes.
-      for (const c of chosen) {
-        const alone = combine(layout, [c]);
-        const result = alone ? await run(alone, c.title) : undefined;
-        if (result) tried.push(score(baseline, result, c, profileAt));
-      }
+      for (const c of chosen) await alone(c);
       return;
     }
     const result = await run(doc, what);
-    if (result) for (const c of chosen) tried.push(score(baseline, result, c, profileAt));
+    if (result) for (const c of chosen) tried.push(score(baseline, result, c, profileAt, firstLayerId));
   }
 
   for (let r = 0; r < rounds; r++) {
@@ -150,7 +161,7 @@ export async function search(input: { layout: Layout; board: BoardDefinition; ba
   for (const c of layoutCandidates(layout, board, bias(baseline, profileAt)).slice(0, 2)) {
     const doc = combine(layout, [c]);
     const result = doc ? await run(doc, c.title) : undefined;
-    if (result) tried.push(score(baseline, result, c, profileAt));
+    if (result) tried.push(score(baseline, result, c, profileAt, firstLayerId));
   }
 
   // Fine: the neighbours of each profile's best tapping term.
@@ -184,10 +195,10 @@ export async function search(input: { layout: Layout; board: BoardDefinition; ba
       if (result) {
         const merged: Candidate = {
           id: pair.map((c) => c.id).join("+"), scope: pair[0]?.scope as Candidate["scope"], family: pair.map((c) => c.family).join("+"),
-          title: pair.map((c) => c.title).join(", and "), ops: opsOf(layout, pair),
+          title: pair.map((c) => c.title).join(", and "), ops: opsOf(layout, pair), moved: pair.flatMap((c) => c.moved ?? []),
           // The pair is one edit of the profile, so it can be merged no further and its ops are already combined.
         };
-        const scored = score(baseline, result, merged, profileAt);
+        const scored = score(baseline, result, merged, profileAt, firstLayerId);
         if (best === undefined || better(scored, best)) best = scored;
       }
     }
@@ -201,7 +212,12 @@ export async function search(input: { layout: Layout; board: BoardDefinition; ba
   for (const t of tried.filter((x) => x.candidate.scope.kind === "layout" && isClear(x.evidence))) results.push(t);
 
   if (cut) notes.push(`the search stopped at ${budget} emulator runs; settings not yet tried were left out`);
-  const suggestions = results
+  const offered = results.filter((r) => {
+    const errors = validateOps(r.candidate.ops);
+    if (errors.length > 0) notes.push(`${r.candidate.title} was dropped: the layout checks reject it (${errors.map((e) => e.message).join("; ")})`);
+    return errors.length === 0;
+  });
+  const suggestions = offered
     .sort((a, b) => b.net - a.net)
     .map((r) => ({ candidate: r.candidate, evidence: r.evidence, ops: r.candidate.ops }));
   return { suggestions, runs, coarse: cut || rounds > 1 || fineRounds > 0, notes };

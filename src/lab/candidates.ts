@@ -4,7 +4,7 @@
 import type { BoardDefinition } from "../boards/schema.ts";
 import { OPTIONS } from "../layout/firmware-options.ts";
 import type { ChangeOp } from "../layout/change.ts";
-import type { HoldTapProfile, Layout } from "../layout/schema.ts";
+import type { Binding, HoldTapProfile, Layout } from "../layout/schema.ts";
 import { BUILTIN_OPTIONS } from "../firmware/zmk/builtins.ts";
 
 export type CandidateScope = { kind: "profile"; profileId: string } | { kind: "layout" };
@@ -24,6 +24,8 @@ export type Candidate = {
    * ready-made upsert ops could not (the second would put back what the first changed).
    */
   patch?: { profileId: string; set: Record<string, HoldTapProfile["options"][string]> };
+  /** The keys rebound to this candidate's profile so every key with the same tap and hold gets the new value (QMK only, see `withSharedKeys`). Already part of `ops`. */
+  moved?: Extract<ChangeOp, { op: "setBinding" }>[];
 };
 
 /** What the recording's misfires lean toward, which decides what is worth trying first. */
@@ -68,15 +70,43 @@ const edit = (profile: HoldTapProfile, set: Record<string, HoldTapProfile["optio
 export function opsOf(layout: Layout, candidates: readonly Candidate[]): ChangeOp[] {
   const patches = new Map<string, Record<string, HoldTapProfile["options"][string]>>();
   const rest: ChangeOp[] = [];
+  const seen = new Set<string>();
   for (const c of candidates) {
-    if (c.patch) patches.set(c.patch.profileId, { ...(patches.get(c.patch.profileId) ?? {}), ...c.patch.set });
-    else rest.push(...c.ops);
+    if (c.patch) {
+      patches.set(c.patch.profileId, { ...(patches.get(c.patch.profileId) ?? {}), ...c.patch.set });
+      // Two edits of one profile move the same keys, which must be said once.
+      for (const m of c.moved ?? []) if (!seen.has(JSON.stringify(m))) (seen.add(JSON.stringify(m)), rest.push(m));
+    } else rest.push(...c.ops);
   }
   const edits = [...patches].flatMap(([id, set]) => {
     const profile = profileOf(layout, id);
     return profile ? [upsert(profile, set)] : [];
   });
   return [...edits, ...rest];
+}
+
+/** The per-key options QMK picks by keycode (emit-tapping.ts PER_KEY), which the validator requires to agree across keys with one tap and hold. */
+const QMK_PER_KEY = ["TAPPING_TERM", "QUICK_TAP_TERM", "PERMISSIVE_HOLD", "HOLD_ON_OTHER_KEY_PRESS"];
+
+/**
+ * QMK picks a per-key option by keycode, so retuning a profile leaves the layout invalid when one of its keys also sits under another
+ * profile (another layer, or another group on this one). The shared copies are rebound to the profile being tuned rather than the other
+ * profile being edited too: their options already agreed, so the move changes nothing until the candidate does, and it cannot drag the
+ * other profile's unrelated keys along. The candidate's ops are then the whole change, which is what gets replayed and scored.
+ */
+function withSharedKeys(layout: Layout, c: Candidate): Candidate {
+  if (layout.firmware !== "qmk" || !c.patch || !QMK_PER_KEY.some((k) => k in (c.patch as NonNullable<Candidate["patch"]>).set)) return c;
+  const { profileId } = c.patch;
+  const exprOf = (b: Extract<Binding, { kind: "holdTap" }>) => JSON.stringify([b.tap, b.hold]);
+  const own = new Set<string>();
+  for (const layer of layout.layers) for (const b of layer.bindings) if (b.kind === "holdTap" && b.profileId === profileId) own.add(exprOf(b));
+  const moved: NonNullable<Candidate["moved"]> = [];
+  for (const layer of layout.layers) {
+    for (const [position, b] of layer.bindings.entries()) {
+      if (b.kind === "holdTap" && b.profileId !== profileId && own.has(exprOf(b))) moved.push({ op: "setBinding", at: { layerId: layer.id, position }, binding: { ...b, profileId } });
+    }
+  }
+  return moved.length === 0 ? c : { ...c, ops: [...c.ops, ...moved], moved };
 }
 
 function termCandidates(layout: Layout, board: BoardDefinition, profile: HoldTapProfile, bias: Bias): Candidate[] {
@@ -250,7 +280,7 @@ export function profileCandidates(layout: Layout, board: BoardDefinition, profil
   if (!profile || profile.firmware === "kanata") return [];
   const flags = profile.firmware === "qmk" ? qmkFlagCandidates(layout, board, profile, bias) : zmkFlagCandidates(layout, board, profile, bias);
   const chordal = profile.firmware === "zmk" && bias.hold > 0 ? [zmkChordalCandidate(layout, board, profile)].filter((c): c is Candidate => c !== undefined) : [];
-  return interleave([termCandidates(layout, board, profile, bias), chordal, flags]);
+  return interleave([termCandidates(layout, board, profile, bias), chordal, flags]).map((c) => withSharedKeys(layout, c));
 }
 
 /** Candidates that change a setting every profile shares, tried one at a time. */
@@ -268,7 +298,7 @@ export function refine(layout: Layout, board: BoardDefinition, best: Candidate, 
   return [best.value - step, best.value + step]
     .map(clampTerm)
     .filter((to, i, list) => to !== from && to !== best.value && list.indexOf(to) === i)
-    .map((to) => ({
+    .map((to) => withSharedKeys(layout, {
       id: `${profile.id}:term:${to}`, scope: best.scope, family: best.family, value: to,
       title: `${to > from ? "Raise" : "Lower"} the tapping term of ${profile.name} from ${from} to ${to} ms`, ...edit(profile, { [key]: to }),
     }));
