@@ -133,5 +133,6 @@
   ],
   "limits": {
     "lighting": "the MacBook keyboard has one backlight for all keys, which macOS controls, not per-key colours"
-  }
+  },
+  "display": { "surface": "deck" }
 }

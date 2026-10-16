@@ -37,6 +37,37 @@ export function ratio(a: string, b: string): number {
 const TEXT = 4.5;
 const UI = 3;
 const PAIRS: readonly (readonly [string, string, number])[] = [
+  // Chrome on the room and on cards (23#palette).
+  ...["room", "room-spot", "surface", "surface-2", "surface-3"].flatMap((bg) => [
+    ["ink", bg, TEXT] as const,
+    ["ink-2", bg, TEXT] as const,
+    ["ink-3", bg, TEXT] as const,
+  ]),
+  ["primary-ink", "primary", TEXT],
+  ["pending-ink", "surface", TEXT],
+  ["ok-ink", "surface", TEXT],
+  ["bad-ink", "surface", TEXT],
+  // The keycap: the tap legend on the top face, the front print on the skirt at its darkest and lightest, the draft's amber front
+  // print, the empty slots' ghost words, the red thumb caps and a laptop's keys.
+  ["legend", "top-lo", TEXT],
+  ["legend", "top-hi", TEXT],
+  ["front", "skirt-lo", TEXT],
+  ["front", "skirt-hi", TEXT],
+  ["ghost", "skirt-hi", TEXT],
+  ["pending-ink", "skirt-lo", TEXT],
+  ["red-legend", "red-top-lo", TEXT],
+  ["red-legend", "red-top-hi", TEXT],
+  ["red-front", "red-skirt-lo", TEXT],
+  ["red-front", "red-skirt-hi", TEXT],
+  ["mac-legend", "mac-top", TEXT],
+  ["mac-legend", "mac-key", TEXT],
+  // Marks on and around a cap: the focus and selection ring, the proposal's amber ring and a combo line, against the case they sit on.
+  ["ink", "case-lo", UI],
+  ["ink", "case-hi", UI],
+  ["pending", "case-lo", UI],
+  ["color-combo", "case-lo", UI],
+  ["color-combo", "room", UI],
+  // The older names other screens still use (tokens.css keeps them, holding the new values).
   ["color-text", "color-page", TEXT],
   ["color-text", "color-surface", TEXT],
   ["color-text", "color-panel", TEXT],
@@ -47,21 +78,26 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["color-error", "color-error-bg", TEXT],
   ["color-error", "color-surface", TEXT],
   ["color-error", "color-panel", TEXT],
+  ["color-error", "color-page", TEXT],
   ["color-accent", "color-page", TEXT],
   ["color-accent", "color-surface", TEXT],
   ["color-accent", "color-panel", TEXT],
   ["color-accent", "color-accent-bg", TEXT],
-  ["color-accent", "cap-key", UI],
   ["color-text", "color-accent-bg", TEXT],
+  ["color-text-muted", "color-accent-bg", TEXT],
   ["color-warning", "color-surface", TEXT],
+  ["color-warning", "color-page", TEXT],
   ["color-warning", "color-warning-bg", TEXT],
   ["color-text", "color-warning-bg", TEXT],
+  ["color-text-muted", "color-warning-bg", TEXT],
   ["color-success", "color-surface", TEXT],
+  ["color-success", "color-page", TEXT],
   ["color-success", "color-success-bg", TEXT],
   ["color-text", "color-success-bg", TEXT],
-  ["color-text-muted", "color-accent-bg", TEXT],
-  ["color-text-muted", "color-warning-bg", TEXT],
   ["color-text-muted", "color-success-bg", TEXT],
+  ["color-border-strong", "color-panel", UI],
+  ["color-focus", "color-panel", UI],
+  // Inspect's kind tints: each ink on its own tint.
   ["cap-key-ink", "cap-key", TEXT],
   ["cap-modifier-ink", "cap-modifier", TEXT],
   ["cap-hold-ink", "cap-hold", TEXT],
@@ -69,31 +105,6 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["cap-macro-ink", "cap-macro", TEXT],
   ["cap-dance-ink", "cap-dance", TEXT],
   ["cap-native-ink", "cap-native", TEXT],
-  // Transparent keys are drawn with muted text straight on the panel.
-  ["color-text-muted", "color-panel", TEXT],
-  ["color-border-strong", "color-panel", UI],
-  ["color-focus", "color-panel", UI],
-  ["color-focus", "cap-key", UI],
-  ["color-focus", "cap-layer", UI],
-  ["color-combo", "color-panel", UI],
-  ["color-combo", "cap-key", UI],
-  ["color-combo", "cap-hold", UI],
-  // Chat (rung 3): proposal cards sit on the page colour inside the surface-coloured panel.
-  ["color-success", "color-page", TEXT],
-  ["color-warning", "color-page", TEXT],
-  ["color-error", "color-page", TEXT],
-  // The chat-selection ring is drawn in the accent colour inside each kind of cap.
-  ["color-accent", "cap-modifier", UI],
-  ["color-accent", "cap-hold", UI],
-  ["color-accent", "cap-layer", UI],
-  ["color-accent", "cap-macro", UI],
-  ["color-accent", "cap-dance", UI],
-  ["color-accent", "cap-native", UI],
-  // A physical keycap colour's rim (D-252) is read against the stage and the plain key it sits on.
-  ["keycap-red", "color-panel", UI],
-  ["keycap-red", "cap-key", UI],
-  // The preview marks (dashed ring and dot) sit on the board's panel.
-  ["color-accent", "color-panel", UI],
 ];
 
 describe("token contrast", () => {
@@ -141,38 +152,24 @@ describe("non-text contrast", () => {
     return value;
   };
 
-  // The border the CSS really draws on a cap, not a token this test assumes it uses.
-  test("every cap's border, as keyboard.css draws it, is at least 3:1 against the stage in both themes", () => {
-    const rule = /\n\.cap \{[^}]*?border:\s*1px solid var\(--([a-z0-9-]+)\)/s.exec(keyboardCss);
-    expect(rule).not.toBeNull();
-    const token = rule?.[1] as string;
-    for (const [theme, values] of themeList) {
-      expect({ theme, ratio: Math.round(ratio(need(values, token), need(values, "color-panel")) * 100) / 100 >= 3 }).toEqual({ theme, ratio: true });
-    }
-  });
-
-  test("a plain key and every other kind of cap differ by at least 1.5:1 in both themes", () => {
+  // Kinds are not drawn at rest (D-264). Under Inspect each kind's tint must still differ from a plain key's.
+  test("under Inspect, every kind's tint differs from a plain key by at least 1.2:1 in both themes", () => {
     const failures: string[] = [];
     for (const [theme, values] of themeList) {
       for (const kind of ["modifier", "hold", "layer", "macro", "native"]) {
         const got = ratio(need(values, "cap-key"), need(values, `cap-${kind}`));
-        if (got < 1.5) failures.push(`${theme}: cap-${kind} against cap-key is ${got.toFixed(2)}:1`);
+        if (got < 1.2) failures.push(`${theme}: cap-${kind} against cap-key is ${got.toFixed(2)}:1`);
       }
     }
     expect(failures).toEqual([]);
   });
 
-  test("a layer key's edge colours stand out from the layer fill and the plain key fill by 3:1", () => {
-    const failures: string[] = [];
-    for (const [theme, values] of themeList) {
-      for (let n = 1; n <= 6; n++) {
-        for (const fill of ["cap-layer", "cap-key"]) {
-          const got = ratio(need(values, `layer-${n}`), need(values, fill));
-          if (got < 3) failures.push(`${theme}: layer-${n} on ${fill} is ${got.toFixed(2)}:1`);
-        }
-      }
+  // The light means one thing per colour (D-263): amber is a change not on the keyboard, green is one that is, and neither may be
+  // mistaken for the other.
+  test("amber and green are told apart in both themes", () => {
+    for (const [, values] of themeList) {
+      expect(need(values, "pending")).not.toBe(need(values, "ok"));
     }
-    expect(failures).toEqual([]);
   });
 
   test("the six layer colours differ from each other, so two layers are not told apart by one hue", () => {
@@ -181,35 +178,4 @@ describe("non-text contrast", () => {
       expect(new Set(colours).size).toBe(6);
     }
   });
-});
-
-// A physical keycap colour tints the kind's fill (D-252); the legend must keep its text contrast on the tinted fill, and the tint must stay
-// the 12% keyboard.css draws, so a stronger wash fails here.
-describe("physical keycap tint", () => {
-  const mix = (a: string, b: string, share: number): string => {
-    const channel = (offset: number) => Math.round(Number.parseInt(a.slice(offset, offset + 2), 16) * share + Number.parseInt(b.slice(offset, offset + 2), 16) * (1 - share));
-    return `#${[1, 3, 5].map((offset) => channel(offset).toString(16).padStart(2, "0")).join("")}`;
-  };
-
-  test("keyboard.css tints at 12%", () => {
-    const rule = /\.cap\[data-keycap="red"\] \{[^}]*color-mix\(in srgb, var\(--keycap-red\) (\d+)%/s.exec(keyboardCss);
-    expect(rule?.[1]).toBe("12");
-  });
-
-  for (const [theme, values] of [
-    ["light", themes.light],
-    ["dark", themes.dark],
-  ] as const) {
-    test(`${theme}: every kind's ink stays at 4.5:1 on its fill with the red tint`, () => {
-      const red = values.get("keycap-red") as string;
-      const failures: string[] = [];
-      for (const kind of ["key", "modifier", "hold", "layer", "macro", "dance", "native"]) {
-        const fill = values.get(`cap-${kind}`) as string;
-        const ink = values.get(`cap-${kind}-ink`) as string;
-        const got = ratio(ink, mix(red, fill, 0.12));
-        if (got < TEXT) failures.push(`${kind}: ${got.toFixed(2)}:1`);
-      }
-      expect(failures).toEqual([]);
-    });
-  }
 });

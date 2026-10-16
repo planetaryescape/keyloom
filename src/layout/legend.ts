@@ -29,6 +29,15 @@ const GLYPH: Readonly<Record<string, string>> = {
   RIGHT: "→",
   UP: "↑",
   DOWN: "↓",
+  // A modifier on a key of its own prints its symbol, the way a Mac keycap does, instead of a firmware-ish LSFT (D-267).
+  LEFT_SHIFT: "⇧",
+  RIGHT_SHIFT: "⇧",
+  LEFT_CTRL: "⌃",
+  RIGHT_CTRL: "⌃",
+  LEFT_ALT: "⌥",
+  RIGHT_ALT: "⌥",
+  LEFT_GUI: "⌘",
+  RIGHT_GUI: "⌘",
 };
 
 // The open-box mark for Space, so Hyper+Space is "Hyp␣" and not a six-letter legend that has to shrink or wrap.

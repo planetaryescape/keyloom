@@ -1,14 +1,87 @@
-/* Layer tabs and their actions (16#layers-are-managed-in-their-tabs). */
+/* The layer strip (23#the-layer-strip): each layer as a small lit board with its name. Its actions sit at its end. */
 .layer-tabs-wrap {
   display: flex;
   min-width: 0;
-  align-items: center;
+  max-width: calc(100% - 240px);
+  align-items: flex-end;
   gap: var(--space-1);
 }
 
 .layer-tabs-wrap .layer-tabs {
+  display: flex;
   min-width: 0;
+  align-items: flex-end;
+  gap: var(--space-1);
   overflow-x: auto;
+  padding: var(--space-1);
+  scrollbar-width: none;
+}
+
+.layer-tabs .layer-tab {
+  display: flex;
+  width: 124px;
+  flex: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2);
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.layer-tabs .layer-tab:hover {
+  background: var(--line);
+  color: var(--ink-2);
+}
+
+.layer-tabs .layer-tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 8px 24px rgb(0 0 0 / 0.14);
+}
+
+.film-mini {
+  display: block;
+  width: 108px;
+  height: 44px;
+}
+
+.layer-tab-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.layer-tab-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-tab-key {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.layer-tabs .layer-dot {
+  flex: none;
+  margin: 0;
+}
+
+.layer-dot[data-unlit="true"] {
+  border: 1.4px solid currentColor;
+  background: transparent;
 }
 
 .layer-tab-actions {
@@ -19,8 +92,8 @@
 
 .layer-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   margin-right: var(--space-2);
   border-radius: 50%;
   vertical-align: middle;
@@ -43,7 +116,7 @@
 }
 
 .layer-tab[data-drop="true"] {
-  box-shadow: inset 3px 0 0 var(--color-accent);
+  box-shadow: inset 3px 0 0 var(--ink);
 }
 
 .layer-tab[draggable="true"] {
@@ -267,4 +340,14 @@
 
 .drop-summary {
   margin-bottom: var(--space-4);
+}
+
+/* With a sheet open beside the board the strip is narrower: the same cells, smaller, so it never runs under Inspect. */
+.workbench[data-side="open"] .layer-tabs .layer-tab {
+  width: 100px;
+}
+
+.workbench[data-side="open"] .film-mini {
+  width: 84px;
+  height: 34px;
 }

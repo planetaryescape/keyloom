@@ -1,10 +1,7 @@
-import { Ellipsis, Hammer, Keyboard, Monitor, Moon, Sun, ChevronDown, Check, FileUp } from "lucide-react";
-import type { LayoutSummary } from "../../api/http.ts";
-import type { ReleaseStatus } from "../release/status.ts";
-import { SyncStatus } from "../sync/SyncStatus.tsx";
-import type { SyncApi } from "../sync/useSync.ts";
+import { ChevronDown, Check, FileUp } from "lucide-react";
+import type { BoardChoice, LayoutSummary } from "../../api/http.ts";
 import { Menu } from "./Menu.tsx";
-import { useTheme, type ThemeChoice } from "./theme.ts";
+import { TopBar, type BoardEntry } from "./TopBar.tsx";
 
 /** "zsa/moonlander" is "Moonlander"; the vendor is in the layout summary, and a menu group needs only the board. */
 export function boardTitle(boardId: string): string {
@@ -20,7 +17,7 @@ interface LayoutMenuProps {
 }
 
 // Layouts grouped by the board they are for, in the order the boards first appear.
-function LayoutMenu({ layouts, selectedId, onSelect, onImport }: LayoutMenuProps) {
+export function LayoutMenu({ layouts, selectedId, onSelect, onImport }: LayoutMenuProps) {
   const selected = layouts.find((layout) => layout.id === selectedId);
   const groups = new Map<string, LayoutSummary[]>();
   for (const layout of layouts) groups.set(layout.boardId, [...(groups.get(layout.boardId) ?? []), layout]);
@@ -30,7 +27,6 @@ function LayoutMenu({ layouts, selectedId, onSelect, onImport }: LayoutMenuProps
       triggerClassName="layout-trigger"
       trigger={
         <>
-          <span className="layout-trigger-board">{selected === undefined ? "" : boardTitle(selected.boardId)}</span>
           <span className="layout-trigger-name">{selected?.name ?? "Layout"}</span>
           <ChevronDown size={14} aria-hidden="true" />
         </>
@@ -70,80 +66,34 @@ function LayoutMenu({ layouts, selectedId, onSelect, onImport }: LayoutMenuProps
   );
 }
 
-const THEMES: readonly { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "auto", label: "Match system", icon: Monitor },
-];
-
-function ThemeToggle({ value, onChange }: { value: ThemeChoice; onChange: (value: ThemeChoice) => void }) {
-  return (
-    <div className="theme-toggle" role="radiogroup" aria-label="Theme">
-      {THEMES.map(({ value: choice, label, icon: Icon }) => (
-        <button key={choice} type="button" role="radio" aria-checked={value === choice} aria-label={label} title={label} onClick={() => onChange(choice)}>
-          <Icon size={16} aria-hidden="true" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ReleaseMenu({ status, onOpen }: { status: ReleaseStatus; onOpen: () => void }) {
-  return (
-    <div className="release-menu">
-      {status.tone === "idle" ? null : (
-        <span className="release-status" data-tone={status.tone} role="status">{status.label}</span>
-      )}
-      <Menu label="Build and flash" align="end" trigger={<Ellipsis size={18} aria-hidden="true" />} triggerClassName="icon-button">
-        {(close) => (
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              close();
-              onOpen();
-            }}
-          >
-            <Hammer size={14} aria-hidden="true" />
-            <span className="menu-item-label">Build and flash…</span>
-          </button>
-        )}
-      </Menu>
-    </div>
-  );
-}
-
 export interface HeaderProps {
   layouts?: readonly LayoutSummary[];
   selectedId?: string;
   onSelect?: (id: string) => void;
   onImport?: () => void;
-  release?: { status: ReleaseStatus; onOpen: () => void };
-  /** The keyboard's sync state for the layout on screen (17). */
-  sync?: { api: SyncApi; layoutId: string; boardId: string; onOpenRelease: () => void };
 }
 
-// The header carries identity and state: which board and layout, the theme, and the way to build.
-// Everything else about the layout lives in the summary panel.
-export function Header({ layouts, selectedId, onSelect, onImport, release, sync }: HeaderProps) {
-  const [theme, setTheme] = useTheme();
+// The top bar for pages that aren't a layout (loading, import, an error, board dev): the name, the boards the person has, and the theme.
+// A layout page draws its own, with the sync line, undo and the menu (Viewer.tsx).
+export function Header({ layouts, selectedId, onSelect }: HeaderProps) {
+  const boards = boardEntries(layouts ?? []);
+  const active = layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null;
   return (
-    <header className="app-header">
-      <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          <Keyboard size={16} />
-        </span>
-        <span className="brand-name">keyloom</span>
-      </div>
-      {layouts === undefined || selectedId === undefined || onSelect === undefined || onImport === undefined ? null : (
-        <LayoutMenu layouts={layouts} selectedId={selectedId} onSelect={onSelect} onImport={onImport} />
-      )}
-      <div className="header-end">
-        {sync === undefined ? null : <SyncStatus sync={sync.api} layoutId={sync.layoutId} boardId={sync.boardId} onOpenRelease={sync.onOpenRelease} />}
-        <ThemeToggle value={theme} onChange={setTheme} />
-        {release === undefined ? null : <ReleaseMenu status={release.status} onOpen={release.onOpen} />}
-      </div>
-    </header>
+    <TopBar
+      {...(boards.length === 0 || onSelect === undefined
+        ? {}
+        : { boards: { entries: boards, active, onSelect: (boardId: string) => { const first = layouts?.find((layout) => layout.boardId === boardId); if (first !== undefined) onSelect(first.id); } } })}
+    />
   );
+}
+
+/** One switcher entry per board the person has a layout for, in the order their layouts are listed. */
+export function boardEntries(layouts: readonly LayoutSummary[], choices: readonly BoardChoice[] = []): BoardEntry[] {
+  const seen = new Map<string, BoardEntry>();
+  for (const layout of layouts) {
+    if (seen.has(layout.boardId)) continue;
+    const board = choices.find((choice) => choice.id === layout.boardId);
+    seen.set(layout.boardId, { id: layout.boardId, name: board?.name.replace(/ keyboard \(ANSI\)$/, "") ?? boardTitle(layout.boardId), ...(board === undefined ? {} : { board }) });
+  }
+  return [...seen.values()];
 }

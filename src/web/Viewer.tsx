@@ -1,11 +1,11 @@
-import { MousePointerClick, Repeat2, X } from "lucide-react";
+import { Eye, MousePointerClick, Repeat2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
 import type { ChangeOp, Slot } from "../layout/change.ts";
-import { addLayerChange, convertLayerOps, duplicateLayerChange, layerColorOf, moveLayerOps, niceLayerName } from "../layout/layer-ops.ts";
+import { addLayerChange, convertLayerOps, duplicateLayerChange, moveLayerOps, niceLayerName } from "../layout/layer-ops.ts";
 import { bindingLegend } from "../layout/legend.ts";
-import type { ApplyResponse, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard, RevisionEntry } from "../api/http.ts";
+import type { ApplyResponse, BoardChoice, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard, RevisionEntry } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { undoChange, upgradeStoredLayout } from "./api-write.ts";
@@ -31,6 +31,7 @@ import type { ComboLine } from "./keyboard/ComboLines.tsx";
 import { Keyboard, type KeyboardHandle } from "./keyboard/Keyboard.tsx";
 import { LayerTabs, type LayerActions } from "./keyboard/LayerTabs.tsx";
 import { SelectionBar } from "./keyboard/SelectionBar.tsx";
+import { layerLight, reachedLayer, reachKey } from "./light/layer-light.ts";
 import { extendSelection } from "./keyboard/selection.ts";
 import { KeyMoves } from "./panel/KeyMoves.tsx";
 import { LibraryPane } from "./panel/LibraryPane.tsx";
@@ -42,16 +43,19 @@ import { colourAt, hsvToHex, isDark } from "../layout/colour.ts";
 import type { LayerLighting } from "../layout/schema.ts";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
 import { keyForChar } from "./panel/slots.ts";
-import { ChatBar } from "./shell/ChatBar.tsx";
+import { Caption } from "./shell/Caption.tsx";
 import { FirstRunTip } from "./shell/FirstRunTip.tsx";
+import { boardEntries, LayoutMenu } from "./shell/Header.tsx";
+import { TopBar } from "./shell/TopBar.tsx";
+import { boardLight, SyncStatus } from "./sync/SyncStatus.tsx";
+import type { ReleaseStatus } from "./release/status.ts";
+import { reachWords } from "./light/reach-words.ts";
 import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
-import { LayoutSummary } from "./shell/LayoutSummary.tsx";
 import { sheetHeight, type SheetSize } from "./shell/sheet.ts";
 import { Shortcuts } from "./shell/Shortcuts.tsx";
 import { SidePanel, type PanelMode } from "./shell/SidePanel.tsx";
 import { readStored, writeStored } from "./shell/storage.ts";
 import { Toasts, useToasts } from "./shell/Toasts.tsx";
-import { Toolbar } from "./shell/Toolbar.tsx";
 import { NARROW, PHONE, useMediaQuery } from "./shell/useMediaQuery.ts";
 import type { SyncApi } from "./sync/useSync.ts";
 import { useSyncToasts } from "./sync/useSyncToasts.ts";
@@ -68,14 +72,24 @@ interface ViewerProps {
   onChanged: () => Promise<void>;
   /** Opens the Build and flash dialog, which the chat points at after an apply. With a revision, it builds that one instead of the head (History's "Flash this"). */
   onOpenRelease: (revision?: { id: string; summary: string }) => void;
-  /** The keyboard's sync state, for the toasts that say a change reached it or didn't. */
+  /** The keyboard's sync state, for the sync line and the toasts that say a change reached it or didn't. */
   sync: SyncApi;
+  /** What the top bar needs from the page around the layout: the layouts and boards to switch between, and Build and flash. */
+  chrome: {
+    layouts: readonly Summary[];
+    selectedId: string;
+    onSelect: (id: string) => void;
+    onImport: () => void;
+    boardChoices: readonly BoardChoice[];
+    release: { status: ReleaseStatus; onOpen: () => void };
+  };
 }
 
 type Editing = { layerId: string; position: number; focus: boolean };
 const CLEAN: DraftState = { binding: null, dirty: false, after: null };
 const NONE: ReadonlySet<number> = new Set();
 const ADVANCED_KEY = "keyloom.advanced";
+const INSPECT_KEY = "keyloom.inspect";
 const SHOW_COMBOS_KEY = "keyloom.showCombos";
 
 // The window's height, so the sheet's three heights follow a rotated phone or a keyboard that opens.
@@ -98,7 +112,7 @@ const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
-export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, sync }: ViewerProps) {
+export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, sync, chrome }: ViewerProps) {
   const { document: layout, board, revision } = detail;
   const [layerId, setLayerId] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -125,6 +139,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The keys of the decision being pointed at in the decisions list.
   const [decisionFocus, setDecisionFocus] = useState<Slot[] | null>(null);
   const [advanced, setAdvanced] = useState(() => readStored(ADVANCED_KEY) === "1");
+  // Inspect shows what calm hides: kinds, what transparent keys pass through to, and combos (D-264).
+  const [inspect, setInspect] = useState(() => readStored(INSPECT_KEY) === "1");
   // Combos drawn as lines, the combos list, and the combo being made or edited (16#combos-are-made-from-a-selection).
   const [showCombos, setShowCombos] = useState(() => readStored(SHOW_COMBOS_KEY) === "1");
   const [combosOpen, setCombosOpen] = useState(false);
@@ -218,15 +234,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     () => (advanced ? (view.layers[layerIndex]?.bindings ?? []).map((binding) => advancedLegend(binding, view) ?? undefined) : undefined),
     [advanced, view, layerIndex],
   );
-  // A layer key's edge takes the colour of the layer it points at: the one chosen for that layer, or the one its place picks.
-  const layerColors = useMemo(() => {
-    const colors = new Map<number, number>();
-    descriptions.forEach((description, index) => {
-      const target = description?.kind === "layer" ? view.layers.findIndex((candidate) => candidate.id === description.targetLayerId) : -1;
-      if (target >= 0) colors.set(index, layerColorOf(view.layers, target));
-    });
-    return colors;
-  }, [descriptions, view]);
   // The LED colour each key shows on this layer, with the staged colours applied, as a faint wash on the cap (D-192).
   const ledColors = useMemo(() => {
     const lit = withLighting(view, lightingDraft).layers[layerIndex];
@@ -238,6 +245,34 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     });
     return colours;
   }, [view, lightingDraft, layerIndex, board.lighting, keys]);
+  // The layer's light, and the light of the layer each key reaches (D-263).
+  const litLayers = useMemo(() => withLighting(view, lightingDraft).layers, [view, lightingDraft]);
+  const light = useMemo(() => layerLight(litLayers, layerIndex, keys.length), [litLayers, layerIndex, keys.length]);
+  const reach = useMemo(() => {
+    const out = new Map<number, string | null>();
+    (view.layers[layerIndex]?.bindings ?? []).forEach((binding, position) => {
+      const target = reachedLayer(binding, view);
+      const at = target === null ? -1 : litLayers.findIndex((candidate) => candidate.id === target);
+      if (at >= 0) out.set(position, layerLight(litLayers, at, keys.length));
+    });
+    return out;
+  }, [view, layerIndex, litLayers, keys.length]);
+  // Every layer's light and LED colours, for the strip's lit miniatures.
+  const layerLights = useMemo(() => litLayers.map((_, index) => layerLight(litLayers, index, keys.length)), [litLayers, keys.length]);
+  const layerLeds = useMemo(
+    () =>
+      litLayers.map((candidate) =>
+        board.lighting === undefined || candidate.lighting === undefined
+          ? null
+          : keys.map((_, position) => {
+              const colour = colourAt(candidate, position);
+              return isDark(colour) ? null : hsvToHex(colour);
+            }),
+      ),
+    [litLayers, board.lighting, keys],
+  );
+  const thumbs = useMemo(() => new Set(Object.entries(board.fingers).flatMap(([p, finger]) => (finger.endsWith("thumb") ? [Number(p)] : []))), [board.fingers]);
+  const rippleFrom = useMemo(() => reachKey(view, view.layers[layerIndex]?.id ?? "", thumbs), [view, layerIndex, thumbs]);
   const marks = useMemo(() => {
     const own = marksOn(preview, layer?.id ?? "");
     if (placements.length === 0 && quick === null) return own;
@@ -259,6 +294,22 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   );
 
   const inspected = hovered ?? selected;
+
+  function toggleInspect() {
+    setInspect((on) => {
+      writeStored(INSPECT_KEY, on ? "0" : "1");
+      return !on;
+    });
+  }
+
+  // A key pressed on the real keyboard lights on screen, so a key can be found by pressing it (23#journeys). Only plain typing keys:
+  // digits switch layers and the rest are shortcuts.
+  const [found, setFound] = useState<number | null>(null);
+  useEffect(() => {
+    if (found === null) return;
+    const timer = window.setTimeout(() => setFound(null), 1400);
+    return () => window.clearTimeout(timer);
+  }, [found]);
 
   const { partners, comboKeys } = useMemo(() => {
     const active = layout.combos.filter(
@@ -296,6 +347,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     for (const position of hovered?.positions ?? []) positions.add(position);
     return positions;
   }, [comboDraft, hoverCombo, layout.combos]);
+
+  // Each apply is a new object, so this counts applies even when the same key is applied twice in a row (D-268).
+  const [pressSeq, setPressSeq] = useState(0);
+  useEffect(() => {
+    if (applied !== null) setPressSeq((count) => count + 1);
+  }, [applied]);
 
   // A pulse that outlives the apply would read as a second change, so it clears itself.
   useEffect(() => {
@@ -793,6 +850,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         else if (chatSelection !== null) setChatSelection(null);
         return;
       }
+      if (event.key === "i" && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target) && editing === null && quick === null) {
+        event.preventDefault();
+        toggleInspect();
+        return;
+      }
+      if (/^[a-hj-z;',./[\]\\`-]$/i.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target) && editing === null && quick === null && !chatOpen) {
+        const code = keyForChar(event.key)?.name;
+        const bindings = view.layers[layerIndex]?.bindings ?? [];
+        const at = bindings.findIndex((binding) => (binding.kind === "key" && binding.code === code && binding.mods === undefined) || (binding.kind === "holdTap" && binding.tap.code === code));
+        if (at >= 0) setFound(at);
+        return;
+      }
       // 1 to 9 switch layers. With a key's panel open a digit is a key to type, so it goes to the panel instead.
       if (/^[1-9]$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target) && (editing === null || chatOpen)) {
         const target = layout.layers[Number(event.key) - 1];
@@ -924,54 +993,75 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   return (
     <div className="workspace">
-      <Toolbar
-        tabs={
-          <LayerTabs
-            layout={layout}
-            selectedId={layer.id}
-            onSelect={chooseLayer}
-            marked={markedLayers}
-            {...(layerActions === undefined ? {} : { actions: layerActions })}
-            renamingId={renamingId}
-            onRenaming={setRenamingId}
-          />
-        }
-        revision={revision}
-        busy={undoing}
-        blockedReason={undoBlock}
-        onUndo={() => void undo()}
-        historyOpen={historyOpen}
-        onHistory={() => {
-          setLibraryOpen(false);
-          setSettingsOpen(false);
-          setHistoryOpen((open) => !open);
+      <TopBar
+        boards={{
+          entries: boardEntries(chrome.layouts, chrome.boardChoices).map((entry) => ({ ...entry, tone: boardLight(sync.boards.find((candidate) => candidate.boardId === entry.id)) })),
+          active: summary.boardId,
+          onSelect: (boardId) => {
+            const first = chrome.layouts.find((candidate) => candidate.boardId === boardId);
+            if (first !== undefined && first.id !== summary.id) chrome.onSelect(first.id);
+          },
         }}
-        libraryOpen={libraryOpen}
-        onLibrary={() => {
-          setHistoryOpen(false);
-          setSettingsOpen(false);
-          setLibraryKeys(null);
-          setLibraryOpen((open) => !open);
+        sync={<SyncStatus sync={sync} layoutId={summary.id} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} />}
+        ask={{ open: chatOpen, onToggle: toggleChat }}
+        undo={{
+          canUndo: revision.origin !== "undo" && revision.undoable,
+          canRedo: revision.origin === "undo" && revision.undoable,
+          busy: undoing,
+          blockedReason: undoBlock,
+          summary: revision.summary,
+          onUndo: () => void undo(),
         }}
-        settingsOpen={settingsOpen}
-        onSettings={() => {
-          setHistoryOpen(false);
-          setLibraryOpen(false);
-          setSettingsOpen((open) => !open);
-        }}
-        combosShown={showCombos}
-        onCombos={toggleCombos}
-        onShortcuts={() => setShortcutsOpen(true)}
-        advanced={advanced}
-        onAdvanced={(value) => {
-          setAdvanced(value);
-          writeStored(ADVANCED_KEY, value ? "1" : "0");
+        menu={{
+          history: {
+            open: historyOpen,
+            onToggle: () => {
+              setLibraryOpen(false);
+              setSettingsOpen(false);
+              setHistoryOpen((open) => !open);
+            },
+          },
+          library: {
+            open: libraryOpen,
+            onToggle: () => {
+              setHistoryOpen(false);
+              setSettingsOpen(false);
+              setLibraryKeys(null);
+              setLibraryOpen((open) => !open);
+            },
+          },
+          combos: { open: combosOpen, onToggle: toggleCombos },
+          settings: {
+            open: settingsOpen,
+            onToggle: () => {
+              setHistoryOpen(false);
+              setLibraryOpen(false);
+              setSettingsOpen((open) => !open);
+            },
+          },
+          advanced: {
+            on: advanced,
+            onToggle: () => {
+              setAdvanced(!advanced);
+              writeStored(ADVANCED_KEY, advanced ? "0" : "1");
+            },
+          },
+          select: { on: selectMode, onToggle: () => setSelectMode(!selectMode) },
+          onShortcuts: () => setShortcutsOpen(true),
+          release: chrome.release,
         }}
       />
-      <div className="workbench" data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
+      <div className="workbench" data-side={mode === "summary" ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
         <section className="stage" aria-label="Layout" data-placing={placing !== null}>
+          <Caption
+            layoutMenu={<LayoutMenu layouts={chrome.layouts} selectedId={chrome.selectedId} onSelect={chrome.onSelect} onImport={chrome.onImport} />}
+            layerId={layer.id}
+            layerName={layer.name}
+            light={light}
+            reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
+            notice={offer}
+          />
           {shownHalf === null ? null : <HalfSwitcher value={half} onChange={setHalf} hands={board.hands} />}
-          <FirstRunTip />
           <SelectionBar
             count={chatSelection?.positions.length ?? 0}
             layerName={chatSelection === null ? layer.name : layerNameOf(chatSelection.layerId)}
@@ -1001,13 +1091,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             comboKeys={comboKeys}
             pendingIndex={editingHere && draft.binding !== null ? editing.position : null}
             appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
+            pressSeq={pressSeq}
             chatSelected={chatSelected}
             highlighted={libraryHighlight}
             marks={marks}
             remembered={remembered}
             arrows={arrows}
             legendOverrides={legendOverrides}
-            layerColors={layerColors}
             ledColors={ledColors}
             onSelect={select}
             onHover={setHovered}
@@ -1021,7 +1111,33 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             onComboOpen={openCombo}
             dragEnabled={placing === null && swapping === null && !comboPicking && quick === null && !chatOpen && !changing}
             onDropKey={(from, to, copy) => void dropKey(from, to, copy)}
+            display={board.display}
+            layerKey={layer.id}
+            light={light}
+            reach={reach}
+            rippleFrom={rippleFrom}
+            inspect={inspect}
+            found={found}
           />
+          <div className="stage-floor">
+            <FirstRunTip />
+            <LayerTabs
+              layout={layout}
+              selectedId={layer.id}
+              onSelect={chooseLayer}
+              marked={markedLayers}
+              {...(layerActions === undefined ? {} : { actions: layerActions })}
+              renamingId={renamingId}
+              onRenaming={setRenamingId}
+              keys={keys}
+              lights={layerLights}
+              leds={layerLeds}
+            />
+            <button type="button" className="inspect-toggle" aria-label="Inspect" aria-pressed={inspect} title="Show what each key is, what transparent keys pass through to, and combos (I)" onClick={toggleInspect}>
+              <Eye size={15} aria-hidden="true" />
+              Inspect
+            </button>
+          </div>
           <div className="stage-notes">
             {preview !== null && proposal !== null ? (
               <PreviewBanner
@@ -1150,7 +1266,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} />
             ) : null
           }
-          summary={<LayoutSummary summary={summary} layout={layout} board={board} revision={revision} offer={offer} />}
+          summary={null}
           key_={
             editing === null ? null : (
               <KeyPanel
@@ -1271,7 +1387,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           }
         />
       </div>
-      <ChatBar open={chatOpen} onToggle={toggleChat} />
       <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       {pendingDrop === null ? null : (
         <DropConfirm

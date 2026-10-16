@@ -193,5 +193,6 @@
   },
   "importers": [
     "zmk-layout-editor-keymap"
-  ]
+  ],
+  "display": { "surface": "wells" }
 }

@@ -40,7 +40,8 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
         triggerClassName="sync-pill"
         trigger={
           <span className="sync-pill-body" data-tone={line.tone}>
-            <Icon size={14} className={line.tone === "busy" ? "spin" : undefined} aria-hidden="true" />
+            <i className="sync-light" data-tone={lightFor(board, line)} aria-hidden="true" />
+            <Icon size={14} className="sync-icon" aria-hidden="true" />
             <span className="sync-label">{line.label}</span>
             <span className="sync-short">{line.short}</span>
           </span>
@@ -95,7 +96,7 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
         )}
       </Menu>
       {line.action === null || board.state.kind === "needs_hand" ? null : (
-        <button type="button" className="button sync-action" onClick={() => act(line.action!.id)}>
+        <button type="button" className="sync-action" onClick={() => act(line.action!.id)}>
           {line.action.label}
         </button>
       )}
@@ -111,12 +112,32 @@ interface Props {
   onOpenRelease: () => void;
 }
 
-// The header's keyboard state: one pill per connected board, and the board of the layout on screen even when it isn't connected.
+/**
+ * The keyboard's state as one light (D-263): green when it has the latest change, amber while a change waits or is on its way, red when
+ * it needs a hand or the last sync failed, and off when it isn't connected.
+ */
+export function lightFor(board: BoardSync, line: SyncLine): "ok" | "pending" | "bad" | "off" {
+  if (line.tone === "error" || line.tone === "warning") return "bad";
+  switch (board.state.kind) {
+    case "in_sync": return line.tone === "success" ? "ok" : "pending";
+    case "syncing":
+    case "behind": return "pending";
+    case "not_connected": return "off";
+    default: return "bad";
+  }
+}
+
+/** The light a board shows in the board switcher, or null when its keyboard isn't connected. */
+export function boardLight(board: BoardSync | undefined): "ok" | "pending" | "bad" | null {
+  if (board === undefined) return null;
+  const tone = lightFor(board, syncLine(board, null));
+  return tone === "off" ? null : tone;
+}
+
+// One quiet line for the keyboard of the layout on screen (23#chrome-recedes). It opens to say why, what to do, and auto-sync.
+// Other connected keyboards show their light on their silhouette in the board switcher.
 export function SyncStatus({ sync, layoutId, boardId, onOpenRelease }: Props) {
-  // The board on screen first, so its pill is the one a phone keeps.
-  const shown = sync.boards
-    .filter((b) => b.boardId === boardId || b.state.kind !== "not_connected")
-    .sort((a, b) => Number(b.boardId === boardId) - Number(a.boardId === boardId));
+  const shown = sync.boards.filter((b) => b.boardId === boardId);
   if (shown.length === 0) return null;
   return (
     <div className="sync-status">

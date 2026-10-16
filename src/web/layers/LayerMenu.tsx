@@ -55,8 +55,9 @@ export function LayerMenu(props: LayerMenuProps) {
   function toggle() {
     if (!open && button.current !== null) {
       const box = button.current.getBoundingClientRect();
-      // Opens under the button, kept inside the window on a phone.
-      setAt({ top: box.bottom + 4, left: Math.max(8, Math.min(box.left, window.innerWidth - 268)) });
+      // Opens above the button, since the layer strip is at the foot of the stage; under it when there's no room above. Kept inside the window.
+      const left = Math.max(8, Math.min(box.left, window.innerWidth - 268));
+      setAt(box.top > 360 ? { bottom: window.innerHeight - box.top + 4, left } : { top: box.bottom + 4, left });
     }
     setOpen((value) => !value);
   }

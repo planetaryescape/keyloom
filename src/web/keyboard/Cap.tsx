@@ -1,14 +1,17 @@
 import { Bookmark, Check } from "lucide-react";
-import type { ButtonHTMLAttributes, CSSProperties, Ref } from "react";
+import { animate } from "motion";
+import { useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type Ref } from "react";
 import type { Legend } from "../../layout/legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
-import { CAP_INSET, fitLegend, HOLD_SIZE, TAP_SIZE, textEm } from "./fit.ts";
+import { fitLegend, HOLD_SIZE, TAP_SIZE } from "./fit.ts";
+import { frontWords } from "./front-words.ts";
 
 export type Tone = Legend["kind"];
+type CapLegend = Pick<Legend, "tap" | "hold" | "double" | "tapHold">;
 
 interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"> {
   tone: Tone;
-  legend: Pick<Legend, "tap" | "hold" | "double" | "tapHold">;
+  legend: CapLegend;
   /** Pixels per key unit. */
   unit: number;
   /** The smallest legend, in px; phones allow 10 (18#legends-stay-readable). */
@@ -20,12 +23,18 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   combo?: boolean;
   /** Degrees to turn the legend back by, so a steeply rotated key still reads upright. */
   legendTurn?: number;
-  /** For a layer key: which of the layer colours (1 to 6) its left edge is drawn in. */
-  layerColor?: number;
-  /** The key's LED colour on this layer as a hex, drawn as a faint wash and a bar along the top edge (D-192). */
+  /** The key's LED colour on this layer as a hex: it bleeds onto the plate under the cap and tints the skirt (D-263). */
   led?: string;
-  /** The physical keycap's colour, drawn as a rim and a faint tint so the key is recognisable without changing its kind's fill. */
+  /** The physical keycap's colour (the Moonlander's red thumb keys). */
   keycap?: KeycapColour;
+  /** For a key that reaches a layer: that layer's light, drawn as a dot on the front print. Null is a layer with no light. */
+  reach?: string | null;
+  /** The legend this key showed on the layer before, cross-faded out over `rippleMs` (D-265). */
+  outgoing?: CapLegend | null;
+  /** When this key's legend and light change after a layer switch, in ms, so the change ripples from the key that holds the layer. */
+  rippleMs?: number;
+  /** Change counter for the press: each new value presses the key down once (D-268). */
+  pressed?: number;
   /** The draft mark: this key's change is not applied yet. */
   pending?: boolean;
   /** The remembered mark: keyloom keeps a reason for this key. */
@@ -37,64 +46,77 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
 }
 
 // A zero-width space after each underscore, plus and bracket lets a firmware name wrap at its own seams.
-const breakAtSeams = (text: string) => text.replace(/[_+(]/g, (seam) => `${seam}\u200b`);
+const breakAtSeams = (text: string) => text.replace(/[_+(]/g, (seam) => `${seam}​`);
+// U+2423 is drawn in CSS, so it matches the legend's stroke in any font.
+const withSpaceMark = (text: string): ReactNode[] =>
+  text.split("␣").flatMap((part, i) => (i === 0 ? [part] : [<span key={i} className="spc" aria-hidden="true" />, part]));
 
-// One keycap (18#a-keycap-shows-every-slot-it-has). Tap is centred and hold sits bottom-left. Kind
-// is carried by shape (a hold-tap's band, a layer key's edge, a macro's mark, a transparent key's
-// dashes, a none key's hatching) as well as by fill, and the selection, draft and remembered marks
-// are each their own element so they can show together.
-export function Cap({
-  tone, legend, unit, floorPx, width, as = "button", combo = false, legendTurn, layerColor, keycap, led, pending = false, remembered = false, breakable = false, style, ...rest
-}: CapProps) {
+/** The printing on one cap: the tap on the top face, the hold (or a tap dance's double tap) printed on the front skirt. */
+function Print({ legend, unit, width, floorPx, reach, breakable, className }: { legend: CapLegend; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; className: string }) {
   const floor = floorPx === undefined ? {} : { floor: floorPx };
   const tap = fitLegend(legend.tap, width, TAP_SIZE, { unit, ...floor });
-  const hold = legend.hold === undefined ? null : fitLegend(legend.hold, width, HOLD_SIZE, { unit, ...floor });
-  // A name wider than the cap wraps at its seams (layer_ / td) and nowhere else: a word with no seam stays whole
-  // (a "toggl / e" legend broke mid-word on a phone, fixed in rung 15, D-187), so its table entry has to be short enough to fit.
-  const wraps = (value: string, size: number) => breakable || (/[_+(]/.test(value) && textEm(value) * size > width - CAP_INSET);
-  const tapWraps = wraps(legend.tap, tap.size);
-  const double = legend.double === undefined ? null : fitLegend(legend.double, width / 2 + 0.1, HOLD_SIZE, { unit, ...floor });
-  const holdWraps = legend.hold !== undefined && hold !== null && wraps(legend.hold, hold.size);
-  const words = (
-    <>
-      {legend.tap === "" ? null : (
-        <span className="cap-tap" data-wrap={tapWraps} style={{ fontSize: tap.size * unit }}>
-          {tapWraps ? breakAtSeams(legend.tap) : legend.tap}
+  const holdText = legend.hold === undefined ? null : frontWords(legend.hold, width, unit, floorPx);
+  const doubleText = legend.double === undefined ? null : `2× ${legend.double}`;
+  // The front carries the hold; a tap dance with no hold prints its double tap there instead, and with a hold, in the top corner.
+  const front = holdText ?? doubleText;
+  const corner = holdText !== null && doubleText !== null ? doubleText : null;
+  const frontSize = front === null ? 0 : fitLegend(front, width, HOLD_SIZE, { unit, ...floor }).size;
+  const stretch = [...legend.tap].length >= 4 ? "condensed" : undefined;
+  return (
+    <span className={className}>
+      <span className="cap-face">
+        {legend.tap === "" ? null : (
+          <span className="cap-tap" data-stretch={stretch} style={{ fontSize: tap.size * unit }}>
+            {breakable ? breakAtSeams(legend.tap) : withSpaceMark(legend.tap)}
+          </span>
+        )}
+        {corner === null ? null : <span className="cap-corner">{withSpaceMark(corner)}</span>}
+        {legend.tapHold === true ? <span className="cap-corner cap-corner-start" aria-hidden="true">tap+hold</span> : null}
+      </span>
+      {front === null ? null : (
+        <span className="cap-front" style={{ fontSize: frontSize * unit }}>
+          {reach === undefined ? null : <i className="cap-dot" data-unlit={reach === null} style={reach === null ? undefined : ({ "--dot": reach } as CSSProperties)} />}
+          {breakable ? breakAtSeams(front) : withSpaceMark(front)}
         </span>
       )}
-      {legend.double === undefined || double === null ? null : (
-        <span className="cap-double" style={{ fontSize: double.size * unit }}>
-          <span className="cap-double-mark" aria-hidden="true">⇈</span>
-          {legend.double}
-        </span>
-      )}
-      {legend.tapHold === true ? (
-        <span className="cap-dots" aria-hidden="true" style={{ gap: Math.max(2, unit * 0.04) }}>
-          <i /><i /><i />
-        </span>
-      ) : null}
-      {legend.hold === undefined || hold === null ? null : (
-        <span className="cap-hold" data-wrap={holdWraps} style={{ fontSize: hold.size * unit }}>
-          {holdWraps ? breakAtSeams(legend.hold) : legend.hold}
-        </span>
-      )}
-    </>
+    </span>
+  );
+}
+
+// One keycap, built in layers like a real one (23#the-keycap): the LED's bleed on the plate, the skirt, the dished top face, and
+// the legends printed on the top and the front. Kind is not drawn at rest; Inspect tints the face by kind (D-264). The selection,
+// draft and remembered marks are each their own element so they can show together.
+export function Cap({
+  tone, legend, unit, floorPx, width, as = "button", combo = false, legendTurn, keycap, led, reach, outgoing = null,
+  rippleMs = 0, pressed, pending = false, remembered = false, breakable = false, style, ...rest
+}: CapProps) {
+  const body = useRef<HTMLSpanElement>(null);
+  const last = useRef(pressed);
+  // Applying presses the key down past rest and lets it spring back, the way a switch moves (D-268).
+  useEffect(() => {
+    if (pressed === undefined || pressed === last.current) return;
+    last.current = pressed;
+    const element = body.current;
+    if (element === null || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const controls = animate(element, { y: [0, unit * 0.08, 0], scale: [1, 0.96, 1] }, { duration: 0.42, ease: [0.3, 1.4, 0.4, 1] });
+    return () => controls.stop();
+  }, [pressed, unit]);
+
+  const turn = legendTurn === undefined ? undefined : ({ "--turn": `${legendTurn}deg` } as CSSProperties);
+  const print = (value: CapLegend, className: string) => (
+    <Print legend={value} unit={unit} width={width} floorPx={floorPx} reach={reach} breakable={breakable} className={className} />
   );
   const selected = rest["aria-pressed"] === true;
   const children = (
     <>
-      {led === undefined ? null : <span className="cap-led" aria-hidden="true" />}
-      {tone === "holdTap" ? <span className="cap-band" aria-hidden="true" /> : null}
-      {tone === "layer" ? <span className="cap-edge" aria-hidden="true" style={{ background: `var(--layer-${layerColor ?? 1})` }} /> : null}
-      {tone === "macro" ? <span className="cap-glyph" aria-hidden="true" style={{ fontSize: Math.max(11, unit * 0.2) }}>▸</span> : null}
-      {legendTurn === undefined ? words : <span className="cap-legend" style={{ transform: `rotate(${legendTurn}deg)` }}>{words}</span>}
-      {combo ? (
-        <span
-          className="cap-combo"
-          aria-hidden="true"
-          style={{ width: unit * 0.11, height: unit * 0.11, bottom: unit * 0.07, right: unit * 0.07 }}
-        />
-      ) : null}
+      <span className="cap-bleed" aria-hidden="true" />
+      <span ref={body} className="cap-body" style={turn}>
+        <span className="cap-top" aria-hidden="true" />
+        {outgoing === null ? null : print(outgoing, "cap-print cap-out")}
+        {print(legend, outgoing === null ? "cap-print" : "cap-print cap-in")}
+        {tone === "macro" ? <span className="cap-kind-mark" aria-hidden="true">▸</span> : null}
+      </span>
+      {combo ? <span className="cap-combo" aria-hidden="true" /> : null}
       {selected ? (
         <span className="cap-mark cap-mark-selected" aria-hidden="true">
           <Check size={10} strokeWidth={3} />
@@ -108,7 +130,7 @@ export function Cap({
       ) : null}
     </>
   );
-  const capStyle: CSSProperties = { borderRadius: Math.min(unit * 0.14, 8), ...(led === undefined ? {} : { "--led": led }), ...style };
+  const capStyle = { "--u": `${unit}px`, "--ripple": `${Math.round(rippleMs)}ms`, ...(led === undefined ? {} : { "--led": led }), ...style } as CSSProperties;
   if (as === "span") {
     return (
       // A swatch only illustrates; whatever it sits beside carries the words.
@@ -118,7 +140,7 @@ export function Cap({
     );
   }
   return (
-    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} style={capStyle} {...rest}>
+    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} data-upright={legendTurn !== undefined} style={capStyle} {...rest}>
       {children}
     </button>
   );

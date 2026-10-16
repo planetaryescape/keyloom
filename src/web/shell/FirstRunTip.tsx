@@ -10,7 +10,7 @@ export function FirstRunTip() {
   if (dismissed) return null;
   return (
     <div className="tip" role="note">
-      <p>Click a key to change it. Press <kbd>⌘K</kbd> to ask keyloom.</p>
+      <p>Click a key to change it, or press one on your keyboard to find it. <kbd>⌘K</kbd> asks keyloom.</p>
       <button
         type="button"
         className="icon-button"

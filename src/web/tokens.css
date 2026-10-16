@@ -1,166 +1,330 @@
 /*
- * Semantic tokens. Components use these names and never a raw colour. Every text colour here
- * keeps at least 4.5:1 on the surfaces it sits on (checked in test/web/contrast.test.ts).
+ * Design tokens: "the keyboard under the light" (23-design-concept.md, D-260).
  *
- * Dark is the default under prefers-color-scheme: dark; [data-theme] forces either theme.
- * The light block is the :root default, so the dark block and [data-theme="dark"] repeat the
- * same values: CSS has no way to share one declaration between a media query and an attribute.
+ * The theme is the room the board sits in; the board's colourway follows it (black caps in the dark room, white in the light one, D-262).
+ * Chrome is ink and greys only. Colour belongs to the board's light: a layer's colour, its LEDs, amber for a change that isn't on the
+ * keyboard yet and green for one that is (D-263). Every text pair here is checked by test/web/contrast.test.ts.
+ *
+ * Dark is the default under prefers-color-scheme: dark; [data-theme] forces either theme. CSS can't share one declaration between a
+ * media query and an attribute, so the dark block is written twice and a test keeps the two identical.
+ *
+ * The --color-* and --cap-* names below the concept's own are the older names other stylesheets still use. They hold the new values,
+ * so every screen takes the new look at once; they go as each screen is rebuilt.
  */
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-page: #edeff3;
-  --color-surface: #fbfbfc;
-  --color-panel: #e2e6ec;
-  --color-border: #c9ced8;
-  --color-border-strong: #778090;
-  --color-text: #12151a;
-  --color-text-muted: #474f5c;
-  --color-focus: #12151a;
+  /* the room */
+  --room: #e4e5e8;
+  --room-spot: #f8f8f9;
+  --room-floor: #d9dade;
+  /* text */
+  --ink: #141519;
+  --ink-2: #464a52;
+  --ink-3: #5f636c;
+  /* chrome surfaces */
+  --surface: #ffffff;
+  --surface-2: #f3f3f5;
+  --surface-3: #e8e9ec;
+  --line: rgb(16 18 24 / 0.09);
+  --line-2: rgb(16 18 24 / 0.16);
+  --primary: #141519;
+  --primary-ink: #ffffff;
+  --scrim: rgb(214 215 219 / 0.62);
+  --card-shadow: 0 30px 70px rgb(30 34 48 / 0.18), 0 3px 10px rgb(30 34 48 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  /* the light's meanings */
+  --pending: #a86500;
+  --pending-ink: #7a4500;
+  --ok: #16a05a;
+  --ok-ink: #13723f;
+  --bad: #c0362c;
+  --bad-ink: #a3170f;
+  /* the board: white colourway */
+  --case-hi: #fbfbfa;
+  --case-lo: #e9e9e7;
+  --case-rim: rgb(255 255 255 / 1);
+  --case-shadow: rgb(40 44 60 / 0.28);
+  --well: rgb(40 44 60 / 0.09);
+  --skirt-hi: #efefee;
+  --skirt-lo: #d3d4d6;
+  --top-hi: #ffffff;
+  --top-lo: #f5f5f4;
+  --top-rim: rgb(255 255 255 / 1);
+  --legend: #1a1b1e;
+  --front: #3f4249;
+  --ghost: #50535a;
+  --cap-drop: rgb(40 44 60 / 0.26);
+  --red-skirt-hi: #b83026;
+  --red-skirt-lo: #9a231c;
+  --red-top-hi: #cf4037;
+  --red-top-lo: #c23a30;
+  --red-legend: #ffffff;
+  --red-front: #ffe9e6;
+  --alu-hi: #e9eaec;
+  --alu-lo: #d4d6d9;
+  --mac-key: #1a1b1d;
+  --mac-top: #26272a;
+  --mac-legend: #e4e5e7;
+  --bleed: 0.55;
+  --glow: 0.42;
+  --spot-dim: rgb(214 215 219 / 0.62);
+
+  /* Older names, holding the new values. */
+  --color-page: #e4e5e8;
+  --color-surface: #ffffff;
+  --color-panel: #f3f3f5;
+  --color-border: #d9dade;
+  --color-border-strong: #84878f;
+  --color-text: #141519;
+  --color-text-muted: #464a52;
+  --color-focus: #141519;
   --color-error: #a3170f;
-  --color-error-bg: #fdeceb;
-  --color-accent: #1d4ed8;
-  --color-accent-bg: #e6edfe;
+  --color-error-bg: #fdecea;
+  --color-accent: #141519;
+  --color-accent-bg: #e8e9ec;
   --color-warning: #7a4500;
-  --color-warning-bg: #fdf1d4;
-  --color-success: #14683a;
-  --color-success-bg: #e2f4e8;
+  --color-warning-bg: #fdf1d9;
+  --color-success: #13723f;
+  --color-success-bg: #e3f4ea;
 
-  --cap-key: #ffffff;
-  --cap-key-ink: #12151a;
-  --cap-modifier: #c6cdd9;
+  /* Kind tints, drawn only under Inspect (D-264). Each ink keeps 4.5:1 on its tint. */
+  --cap-key: #f5f5f4;
+  --cap-key-ink: #1a1b1e;
+  --cap-modifier: #dde1e8;
   --cap-modifier-ink: #1f2530;
-  --cap-hold: #f0c978;
+  --cap-hold: #f3dcb0;
   --cap-hold-ink: #4a2e00;
-  --cap-layer: #bcd0fb;
+  --cap-layer: #d3defb;
   --cap-layer-ink: #14286b;
-  --cap-macro: #e6c2f6;
+  --cap-macro: #ecd6f7;
   --cap-macro-ink: #4e1869;
-  --cap-dance: #f7c6d6;
+  --cap-dance: #f8d6e1;
   --cap-dance-ink: #6a1230;
-  --cap-native: #a4ddd2;
+  --cap-native: #b6e4da;
   --cap-native-ink: #06453c;
-  --color-combo: #3f7d1a;
-  /* The physical red of a Moonlander thumb keycap: a rim and a faint tint, never a kind fill (18, D-252). */
-  --keycap-red: #c62a1f;
+  --color-combo: #464a52;
+  --keycap-red: #c63a31;
 
-  /* A layer key's left edge, by the layer it points at (base is the first). */
-  --layer-1: #475569;
-  --layer-2: #1d4ed8;
-  --layer-3: #a1241c;
-  --layer-4: #0e7468;
-  --layer-5: #6d28d9;
-  --layer-6: #9a4a07;
+  /* The six layer colours: a layer with no LED colour of its own is lit in one of these (D-263). */
+  --layer-1: #8a93a3;
+  --layer-2: #2f7bff;
+  --layer-3: #ff3b30;
+  --layer-4: #21b26a;
+  --layer-5: #8b5cff;
+  --layer-6: #ff9f1a;
 
-  /* How much of a key's LED colour tints its cap; led-contrast.test.ts holds every hue to 4.5:1 for the legend at this strength. */
-  --led-wash: 6%;
+  /* How much of a key's LED colour its skirt takes; led-contrast.test.ts holds every hue to 4.5:1 for the front legend. */
+  --led-wash: 12%;
 
   --cap-shadow-edge: rgb(18 24 38 / 0.28);
   --cap-highlight: rgb(255 255 255 / 0.9);
-  --shadow-pop: 0 8px 24px rgb(18 24 38 / 0.18);
+  --shadow-pop: 0 30px 70px rgb(30 34 48 / 0.18), 0 3px 10px rgb(30 34 48 / 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --color-page: #0d0e12;
-    --color-surface: #15171c;
-    --color-panel: #101217;
-    --color-border: #2a2e37;
-    --color-border-strong: #5f6672;
-    --color-text: #eceef3;
-    --color-text-muted: #a3abb8;
-    --color-focus: #ffffff;
-    --color-error: #ff9088;
+    --room: #0e0f12;
+    --room-spot: #1d1f24;
+    --room-floor: #0a0b0d;
+    --ink: #eef0f3;
+    --ink-2: #b3b7bf;
+    --ink-3: #9298a2;
+    --surface: #191a1e;
+    --surface-2: #222429;
+    --surface-3: #2b2d33;
+    --line: rgb(255 255 255 / 0.08);
+    --line-2: rgb(255 255 255 / 0.14);
+    --primary: #f3f4f6;
+    --primary-ink: #111214;
+    --scrim: rgb(8 9 11 / 0.62);
+    --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.05);
+    --pending: #ffb340;
+    --pending-ink: #ffb340;
+    --ok: #3ddc84;
+    --ok-ink: #6fdc9b;
+    --bad: #ff6b5e;
+    --bad-ink: #ff8a80;
+    --case-hi: #24262a;
+    --case-lo: #16171a;
+    --case-rim: rgb(255 255 255 / 0.09);
+    --case-shadow: rgb(0 0 0 / 0.7);
+    --well: rgb(0 0 0 / 0.42);
+    --skirt-hi: #2a2b30;
+    --skirt-lo: #161719;
+    --top-hi: #393b41;
+    --top-lo: #2b2d32;
+    --top-rim: rgb(255 255 255 / 0.1);
+    --legend: #eef0f2;
+    --front: #aeb2ba;
+    --ghost: #8f949c;
+    --cap-drop: rgb(0 0 0 / 0.6);
+    --red-skirt-hi: #b12c25;
+    --red-skirt-lo: #7c1915;
+    --red-top-hi: #cc382e;
+    --red-top-lo: #c5352c;
+    --red-legend: #ffffff;
+    --red-front: #ffe3e0;
+    --alu-hi: #3a3c41;
+    --alu-lo: #2c2e32;
+    --mac-key: #18191b;
+    --mac-top: #26272a;
+    --mac-legend: #e4e5e7;
+    --bleed: 0.62;
+    --glow: 0.45;
+    --spot-dim: rgb(6 7 9 / 0.58);
+
+    --color-page: #0e0f12;
+    --color-surface: #191a1e;
+    --color-panel: #141518;
+    --color-border: #2a2c31;
+    --color-border-strong: #646973;
+    --color-text: #eef0f3;
+    --color-text-muted: #b3b7bf;
+    --color-focus: #eef0f3;
+    --color-error: #ff8a80;
     --color-error-bg: #2b1513;
-    --color-accent: #9db8ff;
-    --color-accent-bg: #1c2850;
-    --color-warning: #f4c874;
-    --color-warning-bg: #35290f;
-    --color-success: #86dca0;
-    --color-success-bg: #123422;
+    --color-accent: #eef0f3;
+    --color-accent-bg: #2b2d33;
+    --color-warning: #ffb340;
+    --color-warning-bg: #33260e;
+    --color-success: #6fdc9b;
+    --color-success-bg: #122d1e;
 
-    --cap-key: #232730;
-    --cap-key-ink: #eceef3;
-    --cap-modifier: #414a5b;
+    --cap-key: #2b2d32;
+    --cap-key-ink: #eef0f2;
+    --cap-modifier: #3b4252;
     --cap-modifier-ink: #e6eaf2;
-    --cap-hold: #5e4a1c;
+    --cap-hold: #5a4719;
     --cap-hold-ink: #fbe3a8;
-    --cap-layer: #33478a;
+    --cap-layer: #2f4280;
     --cap-layer-ink: #dbe5ff;
-    --cap-macro: #6a3a82;
+    --cap-macro: #613679;
     --cap-macro-ink: #f6dcff;
-    --cap-dance: #7a2e4a;
+    --cap-dance: #712a45;
     --cap-dance-ink: #ffdbe7;
-    --cap-native: #1f6b66;
+    --cap-native: #1d625d;
     --cap-native-ink: #c9f6ee;
-    --color-combo: #a5e06a;
-    --keycap-red: #ff6b5e;
+    --color-combo: #b3b7bf;
+    --keycap-red: #de4a3f;
 
-    --layer-1: #b6c0cf;
-    --layer-2: #9db8ff;
-    --layer-3: #ff9a90;
-    --layer-4: #6fe0cf;
-    --layer-5: #c9a6ff;
-    --layer-6: #f4b36a;
+    --layer-1: #9aa3b2;
+    --layer-2: #3d86ff;
+    --layer-3: #ff4136;
+    --layer-4: #2bd67b;
+    --layer-5: #9466ff;
+    --layer-6: #ffa52e;
+
+    --led-wash: 12%;
 
     --cap-shadow-edge: rgb(0 0 0 / 0.5);
     --cap-highlight: rgb(255 255 255 / 0.08);
-    --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.55);
+    --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-page: #0d0e12;
-  --color-surface: #15171c;
-  --color-panel: #101217;
-  --color-border: #2a2e37;
-  --color-border-strong: #5f6672;
-  --color-text: #eceef3;
-  --color-text-muted: #a3abb8;
-  --color-focus: #ffffff;
-  --color-error: #ff9088;
+  --room: #0e0f12;
+  --room-spot: #1d1f24;
+  --room-floor: #0a0b0d;
+  --ink: #eef0f3;
+  --ink-2: #b3b7bf;
+  --ink-3: #9298a2;
+  --surface: #191a1e;
+  --surface-2: #222429;
+  --surface-3: #2b2d33;
+  --line: rgb(255 255 255 / 0.08);
+  --line-2: rgb(255 255 255 / 0.14);
+  --primary: #f3f4f6;
+  --primary-ink: #111214;
+  --scrim: rgb(8 9 11 / 0.62);
+  --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --pending: #ffb340;
+  --pending-ink: #ffb340;
+  --ok: #3ddc84;
+  --ok-ink: #6fdc9b;
+  --bad: #ff6b5e;
+  --bad-ink: #ff8a80;
+  --case-hi: #24262a;
+  --case-lo: #16171a;
+  --case-rim: rgb(255 255 255 / 0.09);
+  --case-shadow: rgb(0 0 0 / 0.7);
+  --well: rgb(0 0 0 / 0.42);
+  --skirt-hi: #2a2b30;
+  --skirt-lo: #161719;
+  --top-hi: #393b41;
+  --top-lo: #2b2d32;
+  --top-rim: rgb(255 255 255 / 0.1);
+  --legend: #eef0f2;
+  --front: #aeb2ba;
+  --ghost: #8f949c;
+  --cap-drop: rgb(0 0 0 / 0.6);
+  --red-skirt-hi: #b12c25;
+  --red-skirt-lo: #7c1915;
+  --red-top-hi: #cc382e;
+  --red-top-lo: #c5352c;
+  --red-legend: #ffffff;
+  --red-front: #ffe3e0;
+  --alu-hi: #3a3c41;
+  --alu-lo: #2c2e32;
+  --mac-key: #18191b;
+  --mac-top: #26272a;
+  --mac-legend: #e4e5e7;
+  --bleed: 0.62;
+  --glow: 0.45;
+  --spot-dim: rgb(6 7 9 / 0.58);
+
+  --color-page: #0e0f12;
+  --color-surface: #191a1e;
+  --color-panel: #141518;
+  --color-border: #2a2c31;
+  --color-border-strong: #646973;
+  --color-text: #eef0f3;
+  --color-text-muted: #b3b7bf;
+  --color-focus: #eef0f3;
+  --color-error: #ff8a80;
   --color-error-bg: #2b1513;
-  --color-accent: #9db8ff;
-  --color-accent-bg: #1c2850;
-  --color-warning: #f4c874;
-  --color-warning-bg: #35290f;
-  --color-success: #86dca0;
-  --color-success-bg: #123422;
+  --color-accent: #eef0f3;
+  --color-accent-bg: #2b2d33;
+  --color-warning: #ffb340;
+  --color-warning-bg: #33260e;
+  --color-success: #6fdc9b;
+  --color-success-bg: #122d1e;
 
-  --cap-key: #232730;
-  --cap-key-ink: #eceef3;
-  --cap-modifier: #414a5b;
+  --cap-key: #2b2d32;
+  --cap-key-ink: #eef0f2;
+  --cap-modifier: #3b4252;
   --cap-modifier-ink: #e6eaf2;
-  --cap-hold: #5e4a1c;
+  --cap-hold: #5a4719;
   --cap-hold-ink: #fbe3a8;
-  --cap-layer: #33478a;
+  --cap-layer: #2f4280;
   --cap-layer-ink: #dbe5ff;
-  --cap-macro: #6a3a82;
+  --cap-macro: #613679;
   --cap-macro-ink: #f6dcff;
-  --cap-dance: #7a2e4a;
+  --cap-dance: #712a45;
   --cap-dance-ink: #ffdbe7;
-  --cap-native: #1f6b66;
+  --cap-native: #1d625d;
   --cap-native-ink: #c9f6ee;
-  --color-combo: #a5e06a;
-  --keycap-red: #ff6b5e;
+  --color-combo: #b3b7bf;
+  --keycap-red: #de4a3f;
 
-  --layer-1: #b6c0cf;
-  --layer-2: #9db8ff;
-  --layer-3: #ff9a90;
-  --layer-4: #6fe0cf;
-  --layer-5: #c9a6ff;
-  --layer-6: #f4b36a;
+  --layer-1: #9aa3b2;
+  --layer-2: #3d86ff;
+  --layer-3: #ff4136;
+  --layer-4: #2bd67b;
+  --layer-5: #9466ff;
+  --layer-6: #ffa52e;
+
+  --led-wash: 12%;
 
   --cap-shadow-edge: rgb(0 0 0 / 0.5);
   --cap-highlight: rgb(255 255 255 / 0.08);
-  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.55);
+  --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
 }
 
-/* Spacing is a 4px scale and type is one scale (12, 14, 16, 20, 28; weights 400 and 600); nothing in the
-   app uses a value outside them. Keycap legends are the exception: they size in key units (see
-   keyboard/fit.ts), with an 11px floor. */
+/* Spacing is a 4px scale. Type is one family, Instrument Sans, whose width axis lets a long keycap legend get narrower instead of
+   smaller (D-261). Sizes run from the 44px layer title down to the 11px legend floor; keycap legends size in key units (keyboard/fit.ts). */
 :root {
   --space-1: 4px;
   --space-2: 8px;
@@ -171,23 +335,25 @@
   --space-7: 48px;
 
   --text-xs: 12px;
-  --text-sm: 12px;
+  --text-sm: 13px;
   --text-md: 14px;
   --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 28px;
+  --text-display: 44px;
   --weight-regular: 400;
-  --weight-medium: 600;
+  --weight-medium: 550;
   --weight-semibold: 600;
 
-  /* Caps 6, controls 8, panels 12. */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* Controls 10, cards 20, chips round. Caps size in key units. */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 20px;
   --radius-pill: 999px;
 
-  /* Inter is loaded from Google Fonts in index.html; without it (offline) the system font takes over. */
-  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Loaded from Google Fonts in index.html without blocking; the system font stands in until it arrives, or offline. */
+  --font-ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.2, 1.25, 0.35, 1);
 }

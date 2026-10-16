@@ -21,23 +21,27 @@ const ratio = (a: string, b: string) => { const [hi, lo] = [lum(a), lum(b)].sort
 // color-mix(in srgb, led wash, cap) is a straight blend of the sRGB channels.
 const mix = (led: string, cap: string) => `#${rgb(led).map((c, i) => Math.round(c * wash + (rgb(cap)[i] as number) * (1 - wash)).toString(16).padStart(2, "0")).join("")}`;
 
-const TONES = ["key", "modifier", "hold", "layer", "macro", "native"] as const;
 const everyColour: Hsv[] = [];
 for (let h = 0; h < 256; h += 4) for (const s of [255, 128, 0]) for (const v of [255, 128]) everyColour.push([h, s, v]);
 
-describe("a lit cap keeps its legend readable", () => {
+// A lit key's skirt carries its LED at --led-wash (keyboard.css), and the hold is printed on the skirt; the top face is not tinted.
+describe("a lit cap keeps its legends readable", () => {
   test("the wash is a real, small share", () => {
     expect(wash).toBeGreaterThan(0);
     expect(wash).toBeLessThanOrEqual(0.2);
   });
 
+  test("keyboard.css tints the skirt with the token, not a fixed share", () => {
+    const css = Bun.file(new URL("../../src/web/keyboard/keyboard.css", import.meta.url)).text();
+    return css.then((text) => expect(text).toMatch(/color-mix\(in srgb, var\(--led\) var\(--led-wash\), var\(--skirt-lo\)\)/));
+  });
+
   for (const [name, theme] of [["light", tokens(':root[data-theme="light"]')], ["dark", tokens(':root[data-theme="dark"]')]] as const) {
-    test(`${name}: every hue on every cap tone keeps 4.5:1`, () => {
+    test(`${name}: the front print keeps 4.5:1 on a skirt lit by any hue`, () => {
+      const front = theme.get("front") as string;
       let worst = Number.POSITIVE_INFINITY;
-      for (const tone of TONES) {
-        const cap = theme.get(`cap-${tone === "key" ? "key" : tone}`) as string;
-        const ink = theme.get(`cap-${tone}-ink`) ?? (theme.get("cap-key-ink") as string);
-        for (const colour of everyColour) worst = Math.min(worst, ratio(ink, mix(hsvToHex(colour), cap)));
+      for (const skirt of ["skirt-lo", "skirt-hi"]) {
+        for (const colour of everyColour) worst = Math.min(worst, ratio(front, mix(hsvToHex(colour), theme.get(skirt) as string)));
       }
       expect(worst).toBeGreaterThanOrEqual(4.5);
     });

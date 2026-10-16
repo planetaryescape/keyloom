@@ -47,6 +47,8 @@ export function SelectionBar({ count, layerName, selectMode, onSelectMode, onCle
       </div>
     );
   }
+  // Nothing selected is the board at rest: the bar appears only once there is a selection, or while taps select (23#chrome-recedes).
+  if (count === 0 && !selectMode) return null;
   return (
     <div className="selection-bar" role="group" aria-label="Key selection">
       <p className="selection-count" aria-live="polite" data-empty={count === 0}>

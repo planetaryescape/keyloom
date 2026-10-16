@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
+import type { BoardChoice, ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
-import { Header, type HeaderProps } from "./shell/Header.tsx";
+import { Header } from "./shell/Header.tsx";
+import { fetchBoards } from "./import/api-import.ts";
 import { ImportScreen } from "./import/ImportScreen.tsx";
 import { BoardSkeleton } from "./shell/BoardSkeleton.tsx";
 import { rememberShape } from "./shell/shape.ts";
@@ -28,6 +29,13 @@ export function App({ token }: { token: string }) {
   const [attempt, setAttempt] = useState(0);
   // Where each keyboard stands against its layout's head; the server's engine does the work and this follows it (17).
   const sync = useSync(token);
+  // Every board keyloom knows, for the silhouettes in the board switcher. Without it the switcher shows a plain keyboard icon.
+  const [boardChoices, setBoardChoices] = useState<BoardChoice[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchBoards(token, controller.signal).then(setBoardChoices, () => {});
+    return () => controller.abort();
+  }, [token]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -139,6 +147,7 @@ export function App({ token }: { token: string }) {
       summary={summary}
       detail={current.detail}
       menu={menu}
+      boardChoices={boardChoices}
       sync={sync}
       onChanged={refresh}
     />
@@ -150,6 +159,7 @@ function LayoutPage({
   summary,
   detail,
   menu,
+  boardChoices,
   sync,
   onChanged,
 }: {
@@ -157,6 +167,7 @@ function LayoutPage({
   summary: LayoutSummary;
   detail: LayoutDetail;
   menu: HeaderMenu;
+  boardChoices: readonly BoardChoice[];
   sync: SyncApi;
   onChanged: () => Promise<void>;
 }) {
@@ -190,16 +201,21 @@ function LayoutPage({
 
   const failure = problem ?? ("error" in rotated ? rotated.error : null);
   return (
-    <Shell
-      menu={menu}
-      release={failure === null ? { status, onOpen: () => openRelease() } : undefined}
-      sync={{ api: sync, layoutId: summary.id, boardId: summary.boardId, onOpenRelease: () => openRelease() }}
-      fill
-    >
+    <Shell menu={menu} bare={failure === null && "keys" in rotated} fill>
       {failure !== null || !("keys" in rotated) ? (
         <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
       ) : (
-        <Viewer detail={detail} summary={summary} keys={rotated.keys} token={token} layoutRef={summary.id} sync={sync} onChanged={onChanged} onOpenRelease={openRelease} />
+        <Viewer
+          detail={detail}
+          summary={summary}
+          keys={rotated.keys}
+          token={token}
+          layoutRef={summary.id}
+          sync={sync}
+          onChanged={onChanged}
+          onOpenRelease={openRelease}
+          chrome={{ ...menu, boardChoices, release: { status, onOpen: () => openRelease() } }}
+        />
       )}
       <ReleaseDialog
         open={releaseOpen}
@@ -229,25 +245,24 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
   return null;
 }
 
-type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void };
+export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void };
 
-// `fill` is the layout page, which is exactly the window tall so the board and its panel never scroll the page.
+// `fill` is the layout page, which is exactly the window tall so the board and its panel never scroll the page. A `bare` page draws its
+// own top bar (the layout page's has the sync line, undo and the menu).
 function Shell({
   menu,
-  release,
-  sync,
+  bare = false,
   fill = false,
   children,
 }: {
   menu?: HeaderMenu;
-  release?: { status: ReleaseStatus; onOpen: () => void } | undefined;
-  sync?: HeaderProps["sync"];
+  bare?: boolean;
   fill?: boolean;
   children?: ReactNode;
 }) {
   return (
     <div className="app" data-fill={fill}>
-      <Header {...(menu ?? {})} {...(release === undefined ? {} : { release })} {...(sync === undefined ? {} : { sync })} />
+      {bare ? null : <Header {...(menu ?? {})} />}
       <main className="app-main">{children}</main>
     </div>
   );

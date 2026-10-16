@@ -1,0 +1,319 @@
+/* The top bar (23#chrome-recedes): ink and greys only, no border, sitting on the room. */
+.topbar {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) 0 var(--space-5);
+  color: var(--ink);
+}
+
+.topbar-start {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.topbar-word {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.board-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--line);
+}
+
+.board-switch-item {
+  position: relative;
+  display: flex;
+  height: 30px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  cursor: pointer;
+}
+
+.board-switch-item:hover {
+  color: var(--ink);
+}
+
+.board-switch-item[aria-current="page"] {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  color: var(--ink);
+}
+
+.board-switch-item .silhouette {
+  display: block;
+  fill: currentColor;
+}
+
+.board-switch-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+/* Another connected keyboard's state, as a small light on its silhouette. */
+.board-switch-light {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.board-switch-light[data-tone="ok"] { background: var(--ok); }
+.board-switch-light[data-tone="pending"] { background: var(--pending); }
+.board-switch-light[data-tone="bad"] { background: var(--bad); }
+
+.topbar-middle {
+  display: flex;
+  min-width: 0;
+  justify-content: center;
+}
+
+.topbar-end {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.topbar-ask {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: var(--space-2);
+  margin-right: var(--space-2);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--line);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.topbar-ask:hover,
+.topbar-ask[aria-pressed="true"] {
+  color: var(--ink);
+}
+
+.topbar-ask kbd,
+.menu-hint {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+}
+
+.topbar-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.topbar-icon:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.topbar-icon:disabled {
+  color: var(--ink-3);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.topbar-release {
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.topbar-release[data-tone="error"] {
+  color: var(--bad-ink);
+}
+
+/* ---------- the sync line: one quiet line with the keyboard's light ---------- */
+
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sync-pill-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sync-pill {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sync-pill:hover {
+  color: var(--ink);
+}
+
+.sync-pill-body {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.sync-pill-body .sync-icon,
+.sync-short {
+  display: none;
+}
+
+.sync-light {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.sync-light[data-tone="ok"] {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 22%, transparent), 0 0 10px var(--ok);
+}
+
+.sync-light[data-tone="pending"] {
+  background: var(--pending);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--pending) 22%, transparent), 0 0 10px var(--pending);
+}
+
+.sync-light[data-tone="bad"] {
+  background: var(--bad);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--bad) 22%, transparent), 0 0 10px var(--bad);
+}
+
+.sync-pill-body[data-tone="busy"] .sync-light {
+  animation: sync-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes sync-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.sync-action {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.sync-action:hover {
+  background: var(--line-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-pill-body[data-tone="busy"] .sync-light {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    min-height: 52px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    padding: 0 var(--space-2) 0 var(--space-3);
+  }
+
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  /* The light stays; the words shorten to the state. */
+  .sync-label {
+    display: none;
+  }
+
+  .sync-short {
+    display: inline;
+  }
+
+  .sync-action {
+    display: none;
+  }
+
+  .topbar-word,
+  .topbar-ask-text,
+  .topbar-ask kbd,
+  .topbar-release {
+    display: none;
+  }
+
+  .topbar-ask {
+    width: 34px;
+    justify-content: center;
+    margin-right: 0;
+    padding: 0;
+    background: none;
+  }
+
+  .topbar-start {
+    gap: var(--space-2);
+  }
+}
+
+@media (max-width: 600px) {
+  .board-switch-name {
+    display: none;
+  }
+
+  .board-switch-item {
+    padding: 0 var(--space-1);
+  }
+}

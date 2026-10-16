@@ -1,86 +1,10 @@
-/* The keyboard's state in the header (17, 18): a pill per board, tone by meaning (green in sync, blue busy, amber needs a hand,
-   red failed), and a popover that says why and what to do. */
-.sync-status {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.sync-pill-group {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.sync-pill {
-  display: inline-flex;
-  min-width: 0;
-  min-height: 32px;
-  align-items: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.sync-pill-body {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 280px;
-  min-height: 28px;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
-
-.sync-pill-body svg {
-  flex: none;
-}
-
+/* The sync line's popover: why, what to do, and auto-sync (17). The line itself is in shell/topbar.css: one light and one line of
+   words, with tone carried by the light (D-263). */
 .sync-label {
   overflow: hidden;
+  max-width: 340px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sync-short {
-  display: none;
-}
-
-.sync-pill:hover .sync-pill-body {
-  background: var(--color-panel);
-}
-
-.sync-pill-body[data-tone="success"] {
-  border-color: var(--color-success);
-  color: var(--color-success);
-}
-
-.sync-pill-body[data-tone="busy"] {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
-.sync-pill-body[data-tone="warning"] {
-  border-color: var(--color-warning);
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.sync-pill-body[data-tone="error"] {
-  border-color: var(--color-error);
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
-
-.sync-pill-body[data-tone="neutral"] {
-  color: var(--color-text);
 }
 
 .sync-detail {

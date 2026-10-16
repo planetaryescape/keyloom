@@ -1,8 +1,10 @@
 import { Plus } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import type { Slot } from "../../layout/change.ts";
-import { countKind, layerColorOf, layerReferences, niceLayerName } from "../../layout/layer-ops.ts";
+import { countKind, layerReferences, niceLayerName } from "../../layout/layer-ops.ts";
 import type { Layout } from "../../layout/schema.ts";
+import type { GeometryKey } from "../../boards/schema.ts";
+import { boardBounds } from "./geometry.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
 import { DeleteLayerDialog } from "../layers/DeleteLayerDialog.tsx";
 import { LayerMenu } from "../layers/LayerMenu.tsx";
@@ -35,9 +37,43 @@ interface LayerTabsProps {
   /** The layer whose name is being edited; the owner sets it so a new layer opens with its name ready. */
   renamingId: string | null;
   onRenaming: (id: string | null) => void;
+  /** The board's keys, display rotation applied, for each layer's lit miniature. */
+  keys?: readonly GeometryKey[];
+  /** Each layer's light (a CSS colour) or null, by layer index. */
+  lights?: readonly (string | null)[];
+  /** Each layer's LED colour by key position, or null for a layer that sets none. */
+  leds?: readonly (readonly (string | null)[] | null)[];
 }
 
-export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renamingId, onRenaming }: LayerTabsProps) {
+// One layer as a small lit board (23#the-layer-strip): its own keys bright, keys that pass through faint, lit keys in their LED colour.
+function Miniature({ keys, layer, leds }: { keys: readonly GeometryKey[]; layer: Layout["layers"][number]; leds: readonly (string | null)[] | null }) {
+  const b = boardBounds(keys);
+  const pad = 0.3;
+  return (
+    <svg className="film-mini" viewBox={`${b.minX - pad} ${b.minY - pad} ${b.width + 2 * pad} ${b.height + 2 * pad}`} aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+      {keys.map((key, i) => {
+        const binding = layer.bindings[i];
+        const blank = binding === undefined || binding.kind === "transparent" || binding.kind === "none";
+        const led = leds?.[i] ?? null;
+        return (
+          <rect
+            key={i}
+            x={key.x + 0.09}
+            y={key.y + 0.09}
+            width={key.w - 0.18}
+            height={key.h - 0.18}
+            rx={0.2}
+            transform={key.r === 0 ? undefined : `rotate(${key.r} ${key.rx} ${key.ry})`}
+            fill={led ?? "currentColor"}
+            fillOpacity={led !== null ? (blank ? 0.55 : 1) : blank ? 0.16 : 0.6}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renamingId, onRenaming, keys, lights, leds }: LayerTabsProps) {
   const layers = layout.layers;
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -79,7 +115,8 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
       <div className="layer-tabs" role="tablist" aria-label="Layers">
         {layers.map((layer, index) => {
           const isSelected = layer.id === selectedId;
-          const dot = <span className="layer-dot" aria-hidden="true" style={{ background: `var(--layer-${layerColorOf(layers, index)})` }} />;
+          const light = lights?.[index] ?? null;
+          const dot = <span className="layer-dot" data-unlit={light === null} aria-hidden="true" style={light === null ? undefined : { background: light, boxShadow: `0 0 7px ${light}` }} />;
           if (renamingId === layer.id && actions !== undefined) {
             return (
               <RenameField
@@ -130,9 +167,12 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
               }}
               onDrop={(event) => onDrop(event, index)}
             >
-              {dot}
-              {niceLayerName(layer.name)}
-              {isSelected ? <span className="layer-tab-label" aria-hidden="true">{layer.shortLabel ?? ""}</span> : null}
+              {keys === undefined || keys.length === 0 ? null : <Miniature keys={keys} layer={layer} leds={leds?.[index] ?? null} />}
+              <span className="layer-tab-name">
+                {dot}
+                <span className="layer-tab-text">{niceLayerName(layer.name)}</span>
+                {index < 9 ? <span className="layer-tab-key" aria-hidden="true">{index + 1}</span> : null}
+              </span>
               {marked?.has(layer.id) && !isSelected ? (
                 <>
                   <span className="layer-tab-mark" aria-hidden="true" />

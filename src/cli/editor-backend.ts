@@ -68,6 +68,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     }),
     boards: async () => listBoardDefinitions().map((b) => ({
       id: b.definition.id, name: b.definition.name, vendor: b.definition.vendor, firmware: b.definition.firmware, keyCount: b.definition.keyCount, importers: b.definition.importers,
+      keys: b.geometry.keys, display: b.definition.display,
     })),
     importUpload: (request) =>
       translate(async () => {

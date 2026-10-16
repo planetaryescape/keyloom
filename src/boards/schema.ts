@@ -95,6 +95,9 @@ export const BoardDefinitionSchema = z.strictObject({
       shift: z.array(z.strictObject({ positions, dx: z.number() })).optional(),
       // The physical keycap's colour where it is not the board's usual one (the Moonlander's red thumb keys), by position.
       keycaps: z.record(z.string().regex(/^\d+$/), z.enum(KEYCAP_COLOURS)).optional(),
+      // How the case under the keys is drawn (D-266): "wells" sinks each column into a sculpted well (the Glove80), "deck" is a laptop's
+      // aluminium deck with the keys in a recess. Absent is a flat slab.
+      surface: z.enum(["wells", "deck"]).optional(),
     })
     .optional(),
 });

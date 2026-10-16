@@ -1,11 +1,14 @@
-/* The shell (18): the header, the toolbar, the stage with the board, the one side panel, and the chat bar.
-   Spacing and type come from tokens.css only. The side column has one width in every mode, so opening
-   a panel never changes the stage beside it. */
+/* The shell (23-design-concept.md): the top bar, the stage with the board under its light, and one sheet from the right that appears
+   only while something is open. Spacing and type come from tokens.css only. */
 
 .app {
   --side-width: clamp(340px, 26vw, 400px);
   --bar-height: 48px;
-  --chat-bar-height: 40px;
+  /* The chat is opened from the top bar now, so no bar is kept at the foot of the window. */
+  --chat-bar-height: 0px;
+  /* Room the stage keeps above the board for the caption, and below it for the layer strip. */
+  --caption-room: 132px;
+  --floor-room: 172px;
 }
 
 /* Header: identity and state on one line. */
@@ -199,7 +202,7 @@
   flex: 1;
   /* The column is the window's width, whatever the board or the toolbar would like: an auto column grew to the board's width on a phone. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .toolbar {
@@ -330,6 +333,15 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
+/* At rest the board has the whole width; a sheet opens beside it and the board moves over, never under it. */
+.workbench[data-side="closed"] {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
+.workbench[data-side="closed"] > .side {
+  display: none;
+}
+
 /* The stage: the board takes all of it, and everything else floats over its edges. */
 .stage {
   position: relative;
@@ -338,7 +350,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-panel);
+  background: transparent;
 }
 
 .keyboard-well {
@@ -347,7 +359,7 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: var(--space-4);
+  padding: var(--caption-room) var(--space-6) var(--floor-room);
 }
 
 /* margin: auto centres the board and still lets it scroll from its left edge when it is wider than the stage. */
@@ -395,11 +407,12 @@
   margin: 0;
 }
 
+/* Toasts rise above the layer strip, never over it. */
 .toasts {
   position: absolute;
-  z-index: 4;
+  z-index: 9;
   right: var(--space-4);
-  bottom: var(--space-4);
+  bottom: var(--floor-room);
   left: var(--space-4);
   display: flex;
   flex-direction: column;
@@ -414,10 +427,10 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border: 1px solid var(--color-border-strong);
+  border: 0;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-pop);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
   pointer-events: auto;
   animation: toast-in 150ms var(--ease-out);
 }
@@ -493,8 +506,10 @@
   min-height: 0;
   overflow: hidden;
   flex-direction: column;
-  border-left: 1px solid var(--color-border);
-  background: var(--color-surface);
+  margin: 0 var(--space-3) var(--space-3) 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
 }
 
 .side-pane {
@@ -918,7 +933,7 @@
   }
 
   .toasts {
-    bottom: var(--space-7);
+    bottom: var(--floor-room);
   }
 
   .layout-trigger-board,
@@ -1048,5 +1063,256 @@
   .toast,
   .skeleton-block {
     animation: none;
+  }
+}
+
+/* ---------- the stage's caption: which layout, the layer in large type, how to reach it ---------- */
+
+.caption {
+  position: absolute;
+  z-index: 6;
+  top: var(--space-5);
+  left: var(--space-6);
+  max-width: min(420px, 40vw);
+}
+
+.caption-layout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.caption-layout .layout-trigger {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.caption-layout .layout-trigger:hover {
+  background: none;
+  color: var(--ink);
+}
+
+.caption-layer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-1) 0 0;
+  color: var(--ink);
+  font-size: var(--text-display);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+
+.caption-light {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--light);
+  box-shadow: 0 0 14px var(--light);
+}
+
+.caption-light[data-unlit="true"] {
+  border: 1.5px solid var(--ink-3);
+  background: transparent;
+  box-shadow: none;
+}
+
+.caption-reach {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-md);
+}
+
+.caption-key {
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  margin: 0 var(--space-1);
+  padding: 0 var(--space-1);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--top-hi), var(--top-lo));
+  box-shadow: inset 0 1px 0 var(--top-rim), 0 2px 0 var(--skirt-lo), 0 2px 6px var(--cap-drop);
+  color: var(--legend);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  vertical-align: 1px;
+}
+
+.caption-notice {
+  margin-top: var(--space-4);
+}
+
+/* ---------- the stage's floor: the hint, the layer strip, and Inspect ---------- */
+
+.stage-floor {
+  position: absolute;
+  z-index: 6;
+  right: 0;
+  bottom: var(--space-5);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  pointer-events: none;
+}
+
+.stage-floor > * {
+  pointer-events: auto;
+}
+
+.inspect-toggle {
+  position: absolute;
+  right: var(--space-5);
+  bottom: var(--space-4);
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.inspect-toggle:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.inspect-toggle[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14);
+}
+
+/* The one hint, as a quiet line above the strip. */
+.stage-floor > .tip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.stage-floor > .tip p {
+  margin: 0;
+}
+
+/* The selection bar floats over the top of the stage while keys are selected. */
+.stage > .selection-bar {
+  position: absolute;
+  z-index: 8;
+  top: var(--space-4);
+  left: 50%;
+  max-width: calc(100% - 2 * var(--space-5));
+  transform: translateX(-50%);
+}
+
+/* A notice that belongs to the layout, quiet under the caption. */
+.caption-notice .card,
+.caption-notice > * {
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.caption-notice .upgrade-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.caption-notice .upgrade-offer p {
+  margin: 0;
+}
+
+/* ---------- narrow windows and phones: the caption joins the flow, the strip scrolls, Inspect is an icon ---------- */
+@media (max-width: 900px) {
+  .app {
+    --caption-room: var(--space-3);
+    --floor-room: 132px;
+  }
+
+  .caption {
+    position: static;
+    max-width: none;
+    padding: var(--space-2) var(--space-4) 0;
+  }
+
+  .caption-layer {
+    font-size: var(--text-2xl);
+  }
+
+  .caption-reach {
+    font-size: var(--text-sm);
+  }
+
+  .stage-floor {
+    bottom: var(--space-3);
+  }
+
+  .stage-floor > .tip {
+    display: none;
+  }
+
+  .keyboard-well {
+    padding-inline: var(--space-3);
+  }
+
+  /* Above the strip, at the right. */
+  .inspect-toggle {
+    top: calc(-1 * var(--space-7));
+    right: var(--space-3);
+    bottom: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .inspect-toggle {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .layer-tabs-wrap {
+    max-width: calc(100% - var(--space-4));
+  }
+
+  .layer-tabs .layer-tab {
+    width: 92px;
+  }
+
+  .film-mini {
+    width: 76px;
+    height: 30px;
+  }
+
+  .layer-tab-key {
+    display: none;
   }
 }
