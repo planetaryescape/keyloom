@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.0](https://github.com/planetaryescape/keyloom/compare/v0.33.0...v0.34.0) (2026-10-16)
+
+
+### Features
+
+* new keyboard screens (rung 21 part 2) ([0f1c3f2](https://github.com/planetaryescape/keyloom/commit/0f1c3f2b2ad51984dc964c2cbb1182c82a4b20b8))
+
 ## [0.33.0](https://github.com/planetaryescape/keyloom/compare/v0.32.1...v0.33.0) (2026-10-16)
 
 
