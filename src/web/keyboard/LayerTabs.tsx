@@ -147,7 +147,8 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
               className="layer-tab"
               data-dragging={dragId === layer.id}
               data-drop={dragId !== null && overIndex === index && dragId !== layer.id}
-              title={isSelected && actions !== undefined ? "Click again to rename. Right-click for the layer's actions." : undefined}
+              // The full name, since a narrow strip ends it in an ellipsis (D-338).
+              title={isSelected && actions !== undefined ? `${niceLayerName(layer.name)}. Click again to rename. Right-click for the layer's actions.` : niceLayerName(layer.name)}
               draggable={draggable}
               onClick={() => (isSelected && actions !== undefined && actions.blockedReason === null ? onRenaming(layer.id) : onSelect(layer.id))}
               onContextMenu={(event) => {

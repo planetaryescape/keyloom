@@ -17,10 +17,12 @@
   scrollbar-width: none;
 }
 
+/* A tab gives up width before the strip scrolls a layer out of sight: down to its min-width, its name ending in an ellipsis (the full
+   name is the tab's tooltip), while the colour dot and the number never shrink (D-338). */
 .layer-tabs .layer-tab {
   display: flex;
   min-width: 124px;
-  flex: none;
+  flex: 0 1 auto;
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
@@ -64,12 +66,17 @@
 }
 
 .layer-tab-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .layer-tab-key {
+  flex: none;
   margin-left: auto;
-  padding-left: var(--space-3);
+  /* The name row's gap already parts it from the name; more padding here only took width a name needed (D-338). */
+  padding-left: 0;
   color: var(--ink-3);
   font-size: 11px;
   font-weight: 500;

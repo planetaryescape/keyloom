@@ -1112,6 +1112,12 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - Hover highlights that only preview, with the action a visible click (combo rows, library uses, "Also on" chips, proposal cards), are not affordances, and stay as they are. History's long change text is clamped to two lines and reads in full on hover or focus; it's text, not an action, and stays.
 - The "Put a config on" panel names layers as the strip does ("Default layer", not "default_layer"), in its per-layer list and in the list of keys that stay behind. The engine keeps the firmware's names; the screen reads them through `niceLayerName`. The put's proposal texts carry no layer names.
 
+### D-338: The layer strip fits beside a side column: a tab gives up width before a layer scrolls out of sight. (Strip fit, Claude; asked by the coordinator)
+- At 1280 wide with the conversation or History column open, the strip cut the sixth tab off ("Layer 5" read "Layer"), because the tabs never shrank and the strip scrolled.
+- Each tab now shrinks down to its min-width. Its name ends in an ellipsis when it must, and the full name is the tab's tooltip. The colour dot and the layer's number never shrink.
+- The number lost the 12 px of padding it carried; the name row's own gap already parts them.
+- On a phone the strip still scrolls with whole names, since a touch screen has no hover to read a shortened one back.
+
 ## Typing lab (2026-10-16)
 
 ### D-280: An explicit, opt-in typing session records physical key events so keyloom can tune timings from evidence. (BK. Replaces D-035 for sessions BK starts)
