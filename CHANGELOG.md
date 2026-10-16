@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.25.0](https://github.com/planetaryescape/keyloom/compare/v0.24.0...v0.25.0) (2026-10-16)
+
+
+### Features
+
+* name keys by what they print and where they sit, never by number ([597ce13](https://github.com/planetaryescape/keyloom/commit/597ce13caecdf3eb9ed75edebeba3b3ca47107c6))
+* open the chat as a command bar whose proposals preview on the caps ([c38bf8e](https://github.com/planetaryescape/keyloom/commit/c38bf8e4595bad03d7236c47f5c931d6f3163ab2))
+
+
+### Bug Fixes
+
+* keep the board readable under the command bar and let Apply land ([ef99160](https://github.com/planetaryescape/keyloom/commit/ef9916026a586924753b27925ce053e93283b878))
+
 ## [0.24.0](https://github.com/planetaryescape/keyloom/compare/v0.23.0...v0.24.0) (2026-10-16)
 
 
