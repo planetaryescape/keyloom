@@ -47,7 +47,17 @@ describe("CONTRIBUTING.md steps", () => {
     const blocks = [...doc.matchAll(/```sh\n([\s\S]*?)```/g)].flatMap((m) => (m[1] as string).split("\n"));
     const commands = blocks.map((l) => l.replace(/#.*$/, "").trim()).filter((l) => l.startsWith("keyloom "));
     expect(commands.length).toBeGreaterThan(8);
-    const help = (...args: string[]) => Bun.spawnSync(["bun", `${import.meta.dir}/../../src/cli/main.ts`, ...args, "--help"]).stdout.toString();
+    // Each spawn boots the whole CLI, and most commands share a top-level help, so read each help text once.
+    const seen = new Map<string, string>();
+    const help = (...args: string[]) => {
+      const key = args.join(" ");
+      let text = seen.get(key);
+      if (text === undefined) {
+        text = Bun.spawnSync(["bun", `${import.meta.dir}/../../src/cli/main.ts`, ...args, "--help"]).stdout.toString();
+        seen.set(key, text);
+      }
+      return text;
+    };
     for (const command of commands) {
       const words = command.split(/\s+/).slice(1);
       const global = words[0] === "--data-dir" ? 2 : 0;
@@ -56,5 +66,5 @@ describe("CONTRIBUTING.md steps", () => {
       if (sub !== undefined && /^[a-z]+$/.test(sub) && ["boards", "layout"].includes(top as string)) expect(help(top as string), command).toMatch(new RegExp(`^  ${sub}\\b`, "m"));
       for (const flag of words.filter((w) => w.startsWith("--") && w !== "--data-dir")) expect(help(top as string), command).toContain(flag);
     }
-  });
+  }, 30_000);
 });
