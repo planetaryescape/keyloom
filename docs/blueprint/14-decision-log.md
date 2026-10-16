@@ -1147,6 +1147,11 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - **Passages** (`passages.ts`): everyday sentences; every neighbouring home-row pair rolled both ways; every home-row mod held with a plain key on each hand; each finger's own keys. The "starter" is a few holds, the rolls and two sentences, about three minutes. Your own text is lowered and cut to what the lab can ask for.
 
 
+### D-290: A QMK lab suggestion retunes every key with the same tap and hold, and the search offers nothing the validator rejects. (Claude, fixing BK's Moonlander)
+- **Why:** QMK picks TAPPING_TERM, QUICK_TAP_TERM, PERMISSIVE_HOLD and HOLD_ON_OTHER_KEY_PRESS by keycode, so "raise Home-row mods to 280 ms" failed the layout's checks whenever LALT_T(KC_S) also sat under another profile. A candidate that edits those options now rebinds the other copies to the profile being tuned (`withSharedKeys`, `src/lab/candidates.ts`). Their options already agreed, so the move changes nothing but the new value, and the other profile's unrelated keys stay put. The rebinds are part of the candidate's ops, run in its replay and counted in its gains and losses; such a candidate runs alone, since it changes another profile's keys.
+- **Guard:** every suggestion goes through `validate` (the check Apply makes) before it is returned; a rejected one is dropped and the reason goes in the analysis notes.
+- **ZMK is unchanged:** each profile is its own behavior node (`emit-behaviors.ts`) and `zmkOptions` (`hold-tap-rules.ts`) has no same-keycode rule, so a term set on one profile cannot disagree with another.
+
 ### D-302: The migration keeps what the engine already did: a board's config is the layout of its last verified sync, else its newest edited. (Claude, rung 23)
 - **Why:** the engine tracked the layout its keyboard's running build came from before it fell back to the newest, so "newest per board" would have changed what gets flashed. A verified sync is the stored form of "the running build". On BK's data (one layout per board) both rules give the same answer. Past verified syncs also become versions.
 - Migration `0010_configs_and_versions.sql`; tests in `test/persistence/configs-migration.test.ts`.

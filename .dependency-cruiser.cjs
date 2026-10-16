@@ -13,7 +13,7 @@ const ALLOWED = {
   "firmware/emulate": ["layout", "boards", "firmware/toolchain"],
   "firmware/toolchain": [],
   agent: ["layout", "validation", "boards", "memory"],
-  lab: ["layout", "boards", "firmware"], // the typing lab's analysis (24-typing-lab.md); app wires it to the keyboard and the database
+  lab: ["layout", "boards", "firmware", "validation"], // the typing lab's analysis (24-typing-lab.md); app wires it to the keyboard and the database
   memory: ["layout", "persistence"],
   persistence: ["layout"],
   app: ["layout", "validation", "boards", "firmware", "agent", "lab", "memory", "persistence"],
