@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.5](https://github.com/planetaryescape/keyloom/compare/v0.34.4...v0.34.5) (2026-10-16)
+
+
+### Bug Fixes
+
+* ⌘K opens in the side column, never as a bar over the layer strip ([e72f59f](https://github.com/planetaryescape/keyloom/commit/e72f59f95dfd536f0ac6354f55094edfaf5920be))
+
 ## [0.34.4](https://github.com/planetaryescape/keyloom/compare/v0.34.3...v0.34.4) (2026-10-16)
 
 
