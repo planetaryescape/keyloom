@@ -9,6 +9,14 @@ const load = async (dir: string) => {
 };
 
 describe("a board's case (D-266)", () => {
+  test("a trackball part keeps its hand, so it parts and shows with its half (D-353)", () => {
+    const keys = [{ x: 0, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }, { x: 3, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }];
+    const ball = { hand: "right" as const, kind: "ball" as const, d: "M3,2 A0.5,0.5 0 1,0 4,2 A0.5,0.5 0 1,0 3,2 Z" };
+    const display = { case: [{ hand: "left" as const, kind: "body" as const, d: "M-1,-1 L2,-1 L2,2 Z" }, ball] };
+    expect(caseParts(keys, { left: [0], right: [1] }, display, "right")).toEqual([ball]);
+    expect(caseParts(keys, { left: [0], right: [1] }, display, "left").map((part) => part.kind)).toEqual(["body"]);
+  });
+
   test("the Moonlander is drawn from the real object: a body and a hinged thumb module per half, with its tenting leg (D-277)", async () => {
     const { board, keys } = await load("zsa/moonlander");
     const parts = caseParts(keys, board.hands, board.display);
@@ -43,7 +51,8 @@ describe("a board's case (D-266)", () => {
     const parts = caseParts(keys, board.hands, board.display);
     expect(parts.map((part) => part.kind)).toEqual(["deck", "recess", "grille", "grille", "sensor", "knurl"]);
     expect(parts.every((part) => part.hand === null)).toBe(true);
-    // A phone shows one hand of the keys, on a deck around just those keys: the whole deck would run off the screen.
+    // Cut to one hand, a one-piece case falls back to a deck around that hand's keys. A phone no longer asks for this: it shows a
+    // one-piece board whole (D-351).
     expect(caseParts(keys, board.hands, board.display, "left").map((part) => part.kind)).toEqual(["deck", "recess"]);
     // The function row is drawn full height, as on a MacBook Pro, and the rows below it move down to make room.
     expect(keys[0]?.h).toBe(1);

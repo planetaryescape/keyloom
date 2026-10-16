@@ -121,12 +121,13 @@ export const BoardDefinitionSchema = z.strictObject({
         .optional(),
       // The case drawn from the real object instead of computed from the keys (D-277): SVG paths in key units after rotation and shift.
       // Kinds: body and module are the case, deck and recess a laptop's top case and keyboard well, screen a display's dark cover,
-      // grille a speaker grille, sensor a fingerprint key, leg and knob metal tenting parts, knurl fine lines (a knob's knurling, a sensor's ring), hole a pinhole.
+      // grille a speaker grille, sensor a fingerprint key, leg and knob metal tenting parts, knurl fine lines (a knob's knurling, a sensor's ring), hole a pinhole,
+      // ball a trackball (its outline; the editor draws the socket and the shading).
       case: z
         .array(
           z.strictObject({
             hand: z.enum(["left", "right"]).nullable(),
-            kind: z.enum(["body", "module", "deck", "recess", "screen", "grille", "sensor", "leg", "knob", "knurl", "hole"]),
+            kind: z.enum(["body", "module", "deck", "recess", "screen", "grille", "sensor", "leg", "knob", "knurl", "hole", "ball"]),
             d: z.string().min(1),
           }),
         )

@@ -147,6 +147,28 @@
   fill: var(--hole);
 }
 
+/* A trackball: the path is the ball's outline. Its socket is a dark ring just outside it, and the sphere is lit from the top left by a
+   radial gradient (Keyboard.tsx) whose stops take the theme's colours. */
+.case-ball-socket {
+  fill: var(--ball-socket);
+  stroke: var(--ball-socket);
+  stroke-width: 0.14;
+}
+
+.case-ball-rim {
+  fill: none;
+  stroke: var(--ball-socket-rim);
+  stroke-width: 0.02;
+}
+
+.case-ball-hi {
+  stop-color: var(--ball-hi);
+}
+
+.case-ball-lo {
+  stop-color: var(--ball-lo);
+}
+
 /* ---------- the keycap: five layers ---------- */
 
 .cap {

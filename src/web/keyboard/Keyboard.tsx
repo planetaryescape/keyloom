@@ -290,17 +290,30 @@ export function Keyboard({
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
-          {parts.some((part) => part.kind === "grille") ? (
-            // A speaker grille's holes, as a pattern in key units: drawn one by one they would be a thousand paths.
+          {parts.some((part) => part.kind === "grille" || part.kind === "ball") ? (
             <defs>
+              {/* A speaker grille's holes, as a pattern in key units: drawn one by one they would be a thousand paths. */}
               <pattern id={`${caseId}-grille`} width={0.09} height={0.09} patternUnits="userSpaceOnUse">
                 <circle className="case-grille-hole" cx={0.045} cy={0.045} r={0.022} />
               </pattern>
+              {/* A trackball's shading, in the ball's own box so one gradient lights any size of ball from the same side. */}
+              <radialGradient id={`${caseId}-ball`} cx="0.36" cy="0.3" r="0.75" fx="0.32" fy="0.26">
+                <stop offset="0" className="case-ball-hi" />
+                <stop offset="1" className="case-ball-lo" />
+              </radialGradient>
             </defs>
           ) : null}
-          {parts.map((part, i) => (
-            <path key={i} className={`case-${part.kind}`} d={part.d} data-hand={part.hand ?? undefined} style={part.kind === "grille" ? { fill: `url(#${caseId}-grille)` } : undefined} />
-          ))}
+          {parts.map((part, i) =>
+            part.kind === "ball" ? (
+              <g key={i} data-hand={part.hand ?? undefined}>
+                <path className="case-ball-socket" d={part.d} />
+                <path className="case-ball" d={part.d} style={{ fill: `url(#${caseId}-ball)` }} />
+                <path className="case-ball-rim" d={part.d} />
+              </g>
+            ) : (
+              <path key={i} className={`case-${part.kind}`} d={part.d} data-hand={part.hand ?? undefined} style={part.kind === "grille" ? { fill: `url(#${caseId}-grille)` } : undefined} />
+            ),
+          )}
           {(display?.statusLeds ?? []).map((led, i) => {
             // The LEDs change with the ripple, at the delay a key in their place would have.
             const delay = rippleOrigin === null ? 0 : Math.hypot(led.x - canvas.minX - rippleOrigin.x, led.y - canvas.minY - rippleOrigin.y) * RIPPLE_MS_PER_UNIT;

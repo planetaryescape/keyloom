@@ -50,6 +50,11 @@
   --knob: #6f7277;
   --knurl: #45474c;
   --hole: #2a2c31;
+  /* A trackball (display.case "ball"): a lit sphere in a dark socket, so it reads as a ball on a pale case as on a dark one. */
+  --ball-hi: #ffffff;
+  --ball-lo: #6f727a;
+  --ball-socket: #2a2c31;
+  --ball-socket-rim: rgb(40 44 60 / 0.35);
   --finding: #d23a52;
   --finding-ink: #b0263d;
   --rec: #e0324a;
@@ -168,6 +173,10 @@
     --knob: #a8acb2;
     --knurl: #5f636a;
     --hole: #050506;
+    --ball-hi: #e4e6ea;
+    --ball-lo: #2c2e34;
+    --ball-socket: #050506;
+    --ball-socket-rim: rgb(255 255 255 / 0.18);
     --finding: #ff6b7d;
     --finding-ink: #ff9aa6;
     --rec: #ff4d5e;
@@ -282,6 +291,10 @@
   --knob: #a8acb2;
   --knurl: #5f636a;
   --hole: #050506;
+  --ball-hi: #e4e6ea;
+  --ball-lo: #2c2e34;
+  --ball-socket: #050506;
+  --ball-socket-rim: rgb(255 255 255 / 0.18);
   --finding: #ff6b7d;
   --finding-ink: #ff9aa6;
   --rec: #ff4d5e;

@@ -17,8 +17,8 @@ export type CasePart =
   /** A case that hugs its keys (display.caseHug): many overlapping shapes filled as one, so it has no rim of its own. */
   | { kind: "plate"; d: string; hand: Hand }
   /** Drawn from the real object (display.case, D-277): a hinged module, a display's cover, metal tenting parts, knurling, a pinhole,
-   *  a speaker grille, a fingerprint sensor. */
-  | { kind: "module" | "screen" | "leg" | "knob" | "knurl" | "hole" | "grille" | "sensor"; d: string; hand: Hand };
+   *  a speaker grille, a fingerprint sensor, a trackball. */
+  | { kind: "module" | "screen" | "leg" | "knob" | "knurl" | "hole" | "grille" | "sensor" | "ball"; d: string; hand: Hand };
 
 // How far the case reaches past its keys, in key units.
 const BODY_PAD = 0.28;
