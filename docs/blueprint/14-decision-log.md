@@ -1008,3 +1008,8 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - A plain I is free to find the I key by pressing it. On a phone Inspect is only in the menu.
 - Amber for a key that does more than one thing (hold-tap, tap dance), blue for one that changes layer, violet for one that runs something kept as written (macro, firmware binding). Plain keys and modifiers stay untinted. Combo dots are gone; Inspect draws the combo lines instead.
 - Amends D-264.
+
+### D-274: Front prints carry their modifier's symbol on every cap of a board or on none, and combos rest as dots. (P1 final pass, Claude)
+- The board measures "⌘ command", its widest print, in the loaded font at the front's size; if it fits a 1u cap, every cap prints symbol and word ("⌥ option"), otherwise every cap prints the word alone. At 1440×900 the Moonlander (57 px keys) carries symbols; the Glove80 (54 px) and phones don't. Amends D-271.
+- Under Inspect a combo is a dot on its line; its full output appears in a pill while it is pointed at, focused or edited.
+- One undo arrow in the top bar; redo is ⇧⌘Z and a menu item.

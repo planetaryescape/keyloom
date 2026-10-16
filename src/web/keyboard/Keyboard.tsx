@@ -9,6 +9,8 @@ import { LEGEND_FLOOR_PX } from "./fit.ts";
 import { useKeyDrag } from "./useKeyDrag.ts";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { caseParts } from "./case-shape.ts";
+import { frontSymbols, WIDEST_WITH_SYMBOL } from "./front-words.ts";
+import { measureText } from "./measure.ts";
 import { boardBounds, keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { useFitUnit } from "./useFitUnit.ts";
@@ -177,6 +179,19 @@ export function Keyboard({
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const { delays, outgoing, origin: rippleOrigin } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
+  // Measured once the web font is in, since the fallback font is a different width.
+  const [fontsReady, setFontsReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void document.fonts?.ready.then(() => live && setFontsReady(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const symbols = useMemo(() => {
+    const px = Math.max(floorPx, unit * 0.15);
+    return frontSymbols(unit, fontsReady ? measureText(WIDEST_WITH_SYMBOL, `560 condensed ${px}px "Instrument Sans"`) : null, GAP, floorPx);
+  }, [unit, floorPx, fontsReady]);
   // Shift-, Cmd- or Ctrl-click adds a key to the selection. The focus that the press causes must not move the open panel to that key first.
   const extendNext = useRef(false);
   // A phone shows one hand, so a combo is drawn only when all its keys are on it.
@@ -261,6 +276,7 @@ export function Keyboard({
               {...(ledColors?.has(index) ? { led: ledColors.get(index) as string } : {})}
               {...(reach?.has(index) ? { reach: reach.get(index) ?? null } : {})}
               outgoing={outgoing?.[index] ?? null}
+              frontSymbols={symbols}
               rippleMs={delays?.[index] ?? 0}
               {...(appliedIndex === index ? { pressed: pressSeq } : {})}
               pending={pendingIndex === index || marks?.get(index) === "changed"}

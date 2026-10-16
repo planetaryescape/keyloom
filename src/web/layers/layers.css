@@ -69,6 +69,7 @@
 
 .layer-tab-key {
   margin-left: auto;
+  padding-left: var(--space-3);
   color: var(--ink-3);
   font-size: 11px;
   font-weight: 500;

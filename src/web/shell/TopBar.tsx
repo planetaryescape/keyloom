@@ -136,10 +136,10 @@ export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
         <Menu label="More" align="end" triggerClassName="topbar-icon" trigger={<Ellipsis size={18} aria-hidden="true" />}>
           {(close) => (
             <>
-              {undo === undefined || !phone ? null : (
+              {undo === undefined ? null : (
                 <>
-                  <Item icon={Undo2} label="Undo" disabled={!undo.canUndo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} />
-                  <Item icon={Redo2} label="Redo" disabled={!undo.canRedo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} />
+                  {phone ? <Item icon={Undo2} label="Undo" hint="⌘Z" disabled={!undo.canUndo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} /> : null}
+                  <Item icon={Redo2} label="Redo" hint="⇧⌘Z" disabled={!undo.canRedo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} />
                   <div className="menu-separator" role="separator" />
                 </>
               )}
@@ -183,17 +183,14 @@ function Item({ icon: Icon, label, hint, checked, disabled = false, role = "menu
   );
 }
 
-// An undo is itself a revision, so undoing it puts the change back: Undo is on unless the last step was an undo, and Redo the other way
-// round. Both are always drawn, so the top bar looks the same on every board and in every state (P1 review).
+// One undo arrow, the same on every board and in every state (P1 review). Redo is ⇧⌘Z and an item in the menu: an undo is itself a
+// revision, so redo puts back the change the last undo took away.
 function UndoButtons({ canUndo, canRedo, busy, blockedReason, summary, onUndo }: UndoState) {
   const blocked = busy || blockedReason !== null;
   return (
     <>
       <button type="button" className="topbar-icon" aria-label="Undo" title={blockedReason ?? (canUndo ? `Undo: ${summary} (⌘Z)` : "Nothing to undo")} disabled={!canUndo || blocked} onClick={onUndo}>
         {busy ? <LoaderCircle size={17} className="spin" aria-hidden="true" /> : <Undo2 size={17} aria-hidden="true" />}
-      </button>
-      <button type="button" className="topbar-icon" aria-label="Redo" title={blockedReason ?? (canRedo ? "Put the undone change back (⇧⌘Z)" : "Nothing to redo")} disabled={!canRedo || blocked} onClick={onUndo}>
-        <Redo2 size={17} aria-hidden="true" />
       </button>
     </>
   );

@@ -320,7 +320,7 @@
   left: calc(var(--u) * 0.1);
   display: none;
   color: var(--front);
-  font-size: max(10px, calc(var(--u) * 0.14));
+  font-size: max(11px, calc(var(--u) * 0.14));
 }
 
 /* ---------- a layer change: the old print fades as the new one arrives, key by key (D-265) ---------- */
@@ -625,6 +625,17 @@ button.cap[data-dragging="true"] {
   stroke-width: 14;
   pointer-events: stroke;
   cursor: pointer;
+}
+
+.combo-dot {
+  fill: var(--ink-2);
+  stroke: var(--room);
+  stroke-width: 1.5;
+}
+
+.combo-label:focus-visible .combo-dot {
+  stroke: var(--ink);
+  stroke-width: 2;
 }
 
 .combo-label {

@@ -31,7 +31,9 @@ const INSET_SHARE = 0.3;
 const LABEL_PX = 11;
 const PILL_H = 17;
 // What a label keeps clear of: every printed legend and mark on every cap.
-const LEGENDS = ".cap-tap, .cap-hold, .cap-double, .cap-dots, .cap-glyph, .cap-combo, .cap-mark";
+const LEGENDS = ".cap-tap, .cap-front, .cap-corner, .cap-kind-mark, .cap-mark";
+// A combo at rest is a dot on its line; its output shows, in full, only while it is pointed at, focused or being edited (P1 review).
+const DOT_R = 3.5;
 const KEEP_CLEAR = 2;
 
 // The text's own box, not its element's: a legend element can be as wide as its cap while the word in it is not. Boxes are
@@ -106,7 +108,7 @@ export function ComboLines({ keys, canvas, unit, lines, hovered, onHover, onOpen
       obstacles.push(rect);
     }
     const next = new Map<string, Point>();
-    for (const shape of shapes) {
+    for (const shape of shapes.filter(({ line }) => line.editing === true || hovered === line.id)) {
       const placed = placeLabel(shape.mid, shape.along, shape.length, unit, { w: shape.width, h: PILL_H }, obstacles);
       next.set(shape.line.id, placed.at);
       // A spot clear of every legend was not found: the legends under the label fade, so the label is read alone.
@@ -126,14 +128,14 @@ export function ComboLines({ keys, canvas, unit, lines, hovered, onHover, onOpen
   return (
     <svg ref={root} className="combo-lines" width={canvas.width * unit} height={canvas.height * unit} aria-hidden={false} role="group" aria-label="Combos">
       {shapes.map(({ line, d, mid, width }) => {
-        const at = spots.get(line.id) ?? mid;
-        const away = Math.hypot(at.x - mid.x, at.y - mid.y);
         const state = line.editing === true ? "editing" : hovered === line.id ? "hover" : "rest";
+        const at = state === "rest" ? mid : (spots.get(line.id) ?? mid);
+        const away = Math.hypot(at.x - mid.x, at.y - mid.y);
         return (
           <g key={line.id} className="combo-line" data-state={state}>
             <path d={d} className="combo-halo" />
             <path d={d} className="combo-stroke" />
-            {away > PILL_H / 2 ? <path d={`M${mid.x} ${mid.y} L${at.x} ${at.y}`} className="combo-leader" /> : null}
+            {state !== "rest" && away > PILL_H / 2 ? <path d={`M${mid.x} ${mid.y} L${at.x} ${at.y}`} className="combo-leader" /> : null}
             <path
               d={d}
               className="combo-hit"
@@ -160,8 +162,14 @@ export function ComboLines({ keys, canvas, unit, lines, hovered, onHover, onOpen
                 }
               }}
             >
-              <rect x={-width / 2} y={-PILL_H / 2} width={width} height={PILL_H} rx={PILL_H / 2} />
-              <text textAnchor="middle" dominantBaseline="central" fontSize={LABEL_PX}>{line.label}</text>
+              {state === "rest" ? (
+                <circle r={DOT_R} className="combo-dot" />
+              ) : (
+                <>
+                  <rect x={-width / 2} y={-PILL_H / 2} width={width} height={PILL_H} rx={PILL_H / 2} />
+                  <text textAnchor="middle" dominantBaseline="central" fontSize={LABEL_PX}>{line.label}</text>
+                </>
+              )}
             </g>
           </g>
         );

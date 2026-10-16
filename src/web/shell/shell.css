@@ -1336,9 +1336,15 @@
     overflow-y: auto;
   }
 
+  /* The board takes the room between the caption and the strip, centred in it, and the strip sits at the foot: no empty band below
+     the strip (P1 review). The board's width, not its height, sets its size on a phone. */
   .keyboard-well {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     padding-bottom: var(--space-3);
+  }
+
+  .keyboard-well .keyboard {
+    margin-block: auto;
   }
 
   .stage-floor {

@@ -32,6 +32,8 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   outgoing?: CapLegend | null;
   /** When this key's legend and light change after a layer switch, in ms, so the change ripples from the key that holds the layer. */
   rippleMs?: number;
+  /** Whether the front print carries its modifier's symbol ("⌥ option") or the word alone: one choice for the whole board. */
+  frontSymbols?: boolean;
   /** Change counter for the press: each new value presses the key down once (D-268). */
   pressed?: number;
   /** The draft mark: this key's change is not applied yet. */
@@ -51,10 +53,10 @@ const withSpaceMark = (text: string): ReactNode[] =>
   text.split("␣").flatMap((part, i) => (i === 0 ? [part] : [<span key={i} className="spc" aria-hidden="true" />, part]));
 
 /** The printing on one cap: the tap on the top face, the hold (or a tap dance's double tap) printed on the front skirt. */
-function Print({ legend, unit, width, floorPx, reach, breakable, className }: { legend: CapLegend; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; className: string }) {
+function Print({ legend, unit, width, floorPx, reach, breakable, symbols, className }: { legend: CapLegend; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; symbols: boolean; className: string }) {
   const floor = floorPx === undefined ? {} : { floor: floorPx };
   const tap = fitLegend(legend.tap, width, tapRange(legend.tap), { unit, ...floor }, isCondensed(legend.tap));
-  const holdText = legend.hold === undefined ? null : frontWords(legend.hold, width, unit, floorPx);
+  const holdText = legend.hold === undefined ? null : frontWords(legend.hold, symbols);
   const doubleText = legend.double === undefined ? null : `2× ${legend.double}`;
   // The front carries the hold; a tap dance with no hold prints its double tap there instead, and with a hold, in the top corner.
   const front = holdText ?? doubleText;
@@ -87,7 +89,7 @@ function Print({ legend, unit, width, floorPx, reach, breakable, className }: { 
 // draft and remembered marks are each their own element so they can show together.
 export function Cap({
   tone, legend, unit, floorPx, width, as = "button", legendTurn, keycap, led, reach, outgoing = null,
-  rippleMs = 0, pressed, pending = false, remembered = false, breakable = false, style, ...rest
+  rippleMs = 0, frontSymbols = true, pressed, pending = false, remembered = false, breakable = false, style, ...rest
 }: CapProps) {
   const body = useRef<HTMLSpanElement>(null);
   const last = useRef(pressed);
@@ -103,7 +105,7 @@ export function Cap({
 
   const turn = legendTurn === undefined ? undefined : ({ "--turn": `${legendTurn}deg` } as CSSProperties);
   const print = (value: CapLegend, className: string) => (
-    <Print legend={value} unit={unit} width={width} floorPx={floorPx} reach={reach} breakable={breakable} className={className} />
+    <Print legend={value} unit={unit} width={width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontSymbols} className={className} />
   );
   const selected = rest["aria-pressed"] === true;
   const children = (

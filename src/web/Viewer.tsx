@@ -329,7 +329,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances };
     const lineFor = (id: string, name: string, positions: readonly number[], output: Binding | null, editing: boolean): ComboLine => {
       const legend = output === null ? null : bindingLegend(output, ctx);
-      const label = legend === null ? "…" : legend.hold === undefined ? legend.tap : `${legend.tap} ${legend.hold}`;
+      // A legend shortened for a cap ("⌘…") is spelled out in words for the combo's pill, which has the room (P1 review).
+      const short = legend === null ? "…" : legend.hold === undefined ? legend.tap : `${legend.tap} ${legend.hold}`;
+      const label = output !== null && short.endsWith("…") ? bindingSummary(output, layout) : short;
       return {
         id, positions, label, editing,
         name: `${name}, keys ${positions.map((position) => position + 1).join(" and ")}${output === null ? "" : `, sends ${bindingSummary(output, layout)}`}`,
