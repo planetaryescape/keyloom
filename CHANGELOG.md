@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.4](https://github.com/planetaryescape/keyloom/compare/v0.34.3...v0.34.4) (2026-10-16)
+
+
+### Bug Fixes
+
+* clip the key card so a focused picker can't scroll it ([47aa315](https://github.com/planetaryescape/keyloom/commit/47aa315959c180f893f526e06d3ff9b9b3dcfeb9))
+
 ## [0.34.3](https://github.com/planetaryescape/keyloom/compare/v0.34.2...v0.34.3) (2026-10-16)
 
 
