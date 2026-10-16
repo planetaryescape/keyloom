@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/planetaryescape/keyloom/compare/v0.23.0...v0.24.0) (2026-10-16)
+
+
+### Features
+
+* draw BK's four boards from photographs of the real objects ([950466d](https://github.com/planetaryescape/keyloom/commit/950466d33571dc38b5645d1ac2eff78fef547646))
+
 ## [0.23.0](https://github.com/planetaryescape/keyloom/compare/v0.22.1...v0.23.0) (2026-10-16)
 
 
