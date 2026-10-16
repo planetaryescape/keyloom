@@ -756,9 +756,10 @@
 }
 
 /* The card is capped to the board's row and its body scrolls; the head and the footer stay. */
-/* The card clips while its height springs to the content's; the content keeps its natural height, capped so its body scrolls. */
+/* The card clips while its height springs to the content's; the content keeps its natural height, capped so its body scrolls.
+   clip, not hidden: a hidden box is still scrollable, so focusing a picker's search scrolled the whole card up for a moment. */
 .floating-card {
-  overflow: hidden;
+  overflow: clip;
 }
 
 .floating-card-content {
