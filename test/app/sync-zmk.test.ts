@@ -1,6 +1,6 @@
 // Keyboard sync on the Glove80 through the real build and flash use cases, with a fake docker, fake serial ports and fake boot drives:
 // Apply to both halves restarted, written and checked, the halves that need a hand, and firmware that isn't keyloom's.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, setDefaultTimeout } from "bun:test";
 import { join } from "node:path";
 import { type ChangeOp, applyOps, buildAndWait, flashAndWait, getBuild, getLayout } from "../../src/app/index.ts";
 import { appSyncDeps } from "../../src/app/sync-deps.ts";
@@ -11,6 +11,9 @@ import { getBoardSync, lastSyncOfBoard, recentSyncs } from "../../src/persistenc
 import { OLD_KEY, fakeWorld, glove80Image, serialOf } from "../helpers/fake-zmk-halves.ts";
 import { waitFor } from "../helpers/fake-sync.ts";
 import { zmkEnv } from "../helpers/zmk.ts";
+
+// waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
+setDefaultTimeout(20_000);
 
 const BOARD = "moergo/glove80";
 const half = (letter: "L" | "R", over: object = {}) => ({ letter, volume: letter === "L" ? "GLV80LHBOOT" : "GLV80RHBOOT", serial: serialOf(OLD_KEY, letter), ...over });

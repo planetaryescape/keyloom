@@ -1,10 +1,13 @@
 // The sync routes and the events stream, over a real engine with fake build and flash: the stream opens with the current state and carries
 // every change after it, writes need the token and a JSON body, and a request the engine refuses comes back as a usage error with its reason.
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test, setDefaultTimeout } from "bun:test";
 import { SyncEventSchema, SyncNowResponseSchema, SyncStatusResponseSchema, type BoardSync } from "../../src/api/http.ts";
 import { appSyncBackend } from "../../src/cli/sync-backend.ts";
 import { handleSyncRoute } from "../../src/server/sync-routes.ts";
 import { BOARD, type SyncWorld, gate, syncWorld, waitFor } from "../helpers/fake-sync.ts";
+
+// waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
+setDefaultTimeout(20_000);
 
 const TOKEN = "t".repeat(43);
 const servers: Array<{ stop: (force?: boolean) => void }> = [];

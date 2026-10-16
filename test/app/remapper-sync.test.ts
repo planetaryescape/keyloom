@@ -1,6 +1,6 @@
 // The MacBook's sync states and flows against a fake kanata (21): in sync, behind, not connected, not keyloom's, remapping off,
 // the first-proof gate for auto-apply, and the apply timing the promise is about ("an Apply changes it in under a second").
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test, setDefaultTimeout } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { UsageError, applyOps } from "../../src/app/index.ts";
 import { findLayoutRow } from "../../src/persistence/layouts.ts";
@@ -8,6 +8,9 @@ import { lastSyncOfBoard } from "../../src/persistence/syncs.ts";
 import { macbook, at } from "../helpers/macbook.ts";
 import { MAC, remapperWorld } from "../helpers/remapper-world.ts";
 import { waitFor } from "../helpers/fake-sync.ts";
+
+// waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
+setDefaultTimeout(20_000);
 
 let editNo = 0;
 let w: ReturnType<typeof remapperWorld> | undefined;

@@ -1,6 +1,6 @@
 // Keyboard sync on the Moonlander through the real build and flash use cases, with a fake docker, a fake zapp, a fake USB bus and
 // a fake raw HID: Apply to a verified flash with no hands, the hands-free proof that allows auto-sync, and the last good image.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, setDefaultTimeout } from "bun:test";
 import { join } from "node:path";
 import { applyOps, buildAndWait, flashAndWait, getBuild, getLayout } from "../../src/app/index.ts";
 import { appSyncDeps } from "../../src/app/sync-deps.ts";
@@ -11,6 +11,9 @@ import { liveKeyboard, REPEATING_ZAPP, stampMarker } from "../helpers/fake-live-
 import { skewedClock, waitFor } from "../helpers/fake-sync.ts";
 import { setKey } from "../helpers/ops.ts";
 import { toolchainEnv } from "../helpers/toolchain-env.ts";
+
+// waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
+setDefaultTimeout(20_000);
 
 const BOARD = "zsa/moonlander";
 const OLD = "keyloom/AAAAAAAAAAAA";

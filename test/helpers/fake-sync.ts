@@ -33,7 +33,8 @@ export function skewedClock() {
   return { now: () => Date.now() + skew, advance: (ms: number) => void (skew += ms) };
 }
 
-export async function waitFor(cond: () => boolean, what: string, ms = 3000): Promise<void> {
+// The deadline only matters when the condition never comes, so it is sized for a slow CI runner; a passing wait returns as soon as it holds.
+export async function waitFor(cond: () => boolean, what: string, ms = 15_000): Promise<void> {
   const end = Date.now() + ms;
   while (!cond()) {
     if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);

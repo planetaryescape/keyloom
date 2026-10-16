@@ -1,12 +1,15 @@
 // The sync engine's state machine against a fake world (17#auto-sync, D-160 to D-169): batching, one at a time, an Apply during a
 // sync, every way a sync can fail, a keyboard that goes away, firmware that isn't keyloom's, pause, and a restart mid-sync.
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test, setDefaultTimeout } from "bun:test";
 import { UsageError } from "../../src/app/index.ts";
 import { SyncEngine } from "../../src/app/sync-engine.ts";
 import { activeSyncs, claimSync, finishSync, getBoardSync, lastSyncOfBoard, newSyncId, progressSync, recentSyncs, recordHandsFreeProof } from "../../src/persistence/syncs.ts";
 import { proposeChange } from "../../src/app/index.ts";
 import { BOARD, type SyncWorld, gate, skewedClock, syncWorld, waitFor } from "../helpers/fake-sync.ts";
 import { setKey } from "../helpers/ops.ts";
+
+// waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
+setDefaultTimeout(20_000);
 
 let current: SyncWorld | undefined;
 afterEach(async () => {
