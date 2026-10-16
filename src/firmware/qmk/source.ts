@@ -1,11 +1,11 @@
-// Reads an Oryx source download: the zip, or the folder it unpacks to.
+// Reads an Oryx source download (the zip, or the folder it unpacks to), a QMK keymap folder, or a QMK Configurator keymap.json.
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { unzipSync } from "fflate";
+import { ImportError } from "./import-error.ts";
+import { holdsLayers, keymapJsonToC, keymapName } from "./keymap-json.ts";
 
-export class ImportError extends Error {
-  override name = "ImportError";
-}
+export { ImportError };
 
 export type SourceFiles = {
   /** Suggested layout name, from `<vendor>_<board>_<name>_source`. */
@@ -25,12 +25,14 @@ function nameFrom(folder: string, fallback: string): string {
 }
 
 function build(name: string, files: Map<string, string>): SourceFiles {
-  const keymapC = files.get("keymap.c");
-  if (keymapC === undefined) throw new ImportError("no keymap.c found in the Oryx source");
+  let keymapC = files.get("keymap.c");
+  let keymapJson = files.get("keymap.json");
+  // A keymap folder with only a keymap.json is QMK's Configurator format; its layers become the keymap and the rest stays build input.
+  if (keymapC === undefined && keymapJson !== undefined && holdsLayers(keymapJson)) ({ keymapC, rest: keymapJson } = keymapJsonToC(keymapJson, "keymap.json"));
+  if (keymapC === undefined) throw new ImportError("no keymap.c or keymap.json with layers found in the source");
   const out: SourceFiles = { name, keymapC };
   const configH = files.get("config.h");
   const rulesMk = files.get("rules.mk");
-  const keymapJson = files.get("keymap.json");
   if (configH !== undefined) out.configH = configH;
   if (rulesMk !== undefined) out.rulesMk = rulesMk;
   if (keymapJson !== undefined) out.keymapJson = keymapJson;
@@ -60,12 +62,12 @@ async function readZip(path: string): Promise<SourceFiles> {
 
 async function readFolder(path: string): Promise<SourceFiles> {
   let dir = path;
-  if (!(await Bun.file(join(dir, "keymap.c")).exists())) {
+  if (!(await Bun.file(join(dir, "keymap.c")).exists()) && !(await Bun.file(join(dir, "keymap.json")).exists())) {
     // The unpacked zip nests the source one level down.
     const nested = (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory() && e.name.endsWith("_source"));
     const only = nested[0];
     if (nested.length === 1 && only) dir = join(dir, only.name);
-    else throw new ImportError(`no keymap.c in ${path}`);
+    else throw new ImportError(`no keymap.c or keymap.json in ${path}`);
   }
   const files = new Map<string, string>();
   for (const leaf of WANTED) {
@@ -85,5 +87,12 @@ export async function readOryxSource(path: string): Promise<SourceFiles> {
   } catch {
     throw new ImportError(`${path} does not exist`);
   }
-  return info.isDirectory() ? readFolder(path) : readZip(path);
+  if (info.isDirectory()) return readFolder(path);
+  // A keymap.json given on its own takes the name it gives itself ("keymap": "default"); an upload's folder is a temporary one.
+  if (extname(path) === ".json") {
+    if (info.size > MAX_FILE_BYTES) throw new ImportError(`${path} is larger than ${MAX_FILE_BYTES} bytes`);
+    const json = await Bun.file(path).text();
+    return build(keymapName(json) ?? basename(path, ".json"), new Map([["keymap.json", json]]));
+  }
+  return readZip(path);
 }

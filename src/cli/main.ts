@@ -66,7 +66,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .command("import")
     .description("import an existing layout; prints the new layout ID and an import report")
     .requiredOption("--board <board>", "board ID, such as zsa/moonlander or moergo/glove80")
-    .argument("<file>", "Oryx source zip or its folder (Moonlander), a Layout Editor .keymap file (Glove80), or a karabiner.json (MacBook; read only)")
+    .argument("<file>", "Oryx source zip or its folder (Moonlander), a QMK keymap folder or its keymap.json, a Layout Editor .keymap file (Glove80), or a karabiner.json (MacBook; read only)")
     .option("--name <name>", "layout name (default: taken from the source)")
     .action(async (file: string, opts: { board: string; name?: string }) => {
       const outcome: ImportOutcome = await withApp((app) =>
