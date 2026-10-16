@@ -1331,8 +1331,10 @@
     max-width: calc(100% - var(--space-4));
   }
 
+  /* A phone's strip scrolls instead: there is no hover to read a shortened name back (D-338). */
   .layer-tabs .layer-tab {
     min-width: 92px;
+    flex: none;
   }
 
   .film-mini {
