@@ -26,8 +26,9 @@ export const toChoiceFact = (d: DecisionRow): ChoiceFact => ({
 /**
  * `sourceMessageIds` are BK's messages this turn answers: the link back from a priority to the words it came from (08).
  * `selection` is what he had selected when he sent the message, so a proposal that strays from it is warned about (07).
+ * A null `conversationId` is a board review (D-340): its proposals belong to no conversation, so they show in the config's open proposals.
  */
-export function createAgentPorts(app: App, layoutId: string, conversationId: string, sourceMessageIds: string[] = [], selection?: SelectionScope): AgentPorts {
+export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope): AgentPorts {
   const scope = selection ? { selection } : {};
   const snapshotOf = (ref: string): LayoutSnapshot => {
     const view = getLayout(app, ref);
@@ -52,6 +53,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
     check: (ops) => checkChange(app, layoutId, { ops, ...scope }),
     priorities: () => layoutPriorities(app, layoutId).map(toPriorityFact),
     recordPriority(input) {
+      if (conversationId === null) throw new Error("a priority is recorded from what BK says, and a review is not a conversation");
       const { decision, created } = recordPriority(app, layoutId, { ...input, conversationId, sourceMessageIds });
       return { ...toPriorityFact(decision), alreadyKnown: !created };
     },
@@ -70,7 +72,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         if (!validation.ok) return { title: alt.title, changeSetId: null, validation };
         try {
           const cs = proposeChange(app, layoutId, {
-            ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, conversationId, proposalGroup, ...scope,
+            ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
             decisionDraft: { ...alt.decisionDraft, sourceMessageIds },
           });
           return { title: alt.title, changeSetId: cs.id, validation: cs.validation };

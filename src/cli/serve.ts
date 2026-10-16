@@ -1,5 +1,9 @@
 // `keyloom serve`: the local web app over the same use cases the CLI calls (01#server-and-transport).
-import { type AddDeps, type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, type SyncDeps, boardDevView, createSyncEngine, getLayout, listLayouts, upgradeOffer } from "../app/index.ts";
+import {
+  type AddDeps, type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, ReviewEngine, type ReviewOptions, type SyncDeps, boardDevView, createSyncEngine, defaultAgentModel, getLayout,
+  listLayouts, upgradeOffer,
+} from "../app/index.ts";
+import type { AgentModel } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import { appChatBackend } from "./chat-backend.ts";
@@ -9,6 +13,7 @@ import { appLabBackend } from "./lab-backend.ts";
 import { type LabDeps, realLabDeps } from "../app/index.ts";
 import { appDecisionsBackend } from "./decisions-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
+import { appReviewBackend } from "./review-backend.ts";
 import { appSyncBackend } from "./sync-backend.ts";
 
 export const DEFAULT_PORT = 4477;
@@ -64,6 +69,8 @@ export type ServeOptions = {
   flash?: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs">;
   /** How the typing lab reads the keyboard and replays it; the real keyboard and emulator when omitted. Tests pass a scripted keyboard. */
   lab?: LabDeps;
+  /** The board review's agent (D-340): which model it runs on, and when it starts. The configured provider when omitted; tests pass a fake. */
+  review?: ReviewOptions & { model?: () => Promise<AgentModel> };
   /** Where a new keyboard's layout is read from (the pinned firmware trees) and which boards count as known; GitHub and every board when omitted. Tests pass fixtures. */
   keyboards?: AddDeps;
 };
@@ -71,10 +78,14 @@ export type ServeOptions = {
 export function serve(app: App, opts: ServeOptions): RunningServer {
   // The engine that keeps each keyboard on its layout's head lives in this process, beside the server that shows it (D-160).
   const engine = createSyncEngine(app, { ...(opts.handsFree ? { handsFree: opts.handsFree } : {}), ...(opts.syncDeps ? { deps: opts.syncDeps } : {}), ...(opts.flash ?? {}) });
+  // The review follows the sync engine's boards for its connect trigger, so it subscribes before the engine's first reading.
+  const { model, ...reviewOptions } = opts.review ?? {};
+  const reviews = new ReviewEngine(app, { model: model ?? (() => defaultAgentModel(app.dataDir, opts.provider ? { provider: opts.provider } : {})) }, reviewOptions);
+  reviews.start(engine);
   const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
-    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine), configs: appConfigsBackend(app, engine), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
+    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
   });
   let drained: Promise<void> | undefined;
   return {
@@ -82,7 +93,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
     stop: () => {
       running.stop();
       // A build is stopped; a flash is let finish, so the keyboard isn't left half written.
-      drained ??= started.then(() => engine.stop());
+      drained ??= started.then(() => Promise.all([engine.stop(), reviews.stop()])).then(() => undefined);
     },
     drain: async () => {
       await drained;

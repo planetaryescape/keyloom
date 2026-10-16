@@ -3,9 +3,15 @@
 // because the next one is a whole snapshot and nothing is lost by skipping.
 import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import { SyncEventSchema, type BoardSync } from "../../api/http.ts";
+import { type ReviewEvent, ReviewEventSchema } from "../../api/review.ts";
 
-/** `newKeyboards` is empty from a sender that doesn't carry them. */
-export function createEventParser(onBoards: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void, onUnreadable: () => void): { push: (chunk: string) => void } {
+/**
+ * `newKeyboards` is empty from a sender that doesn't carry them. A `review` frame (D-340) says a board review changed; it is passed to
+ * `onReview`, and ignored when the caller has none.
+ */
+export function createEventParser(
+  onBoards: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void, onUnreadable: () => void, onReview?: (event: ReviewEvent) => void,
+): { push: (chunk: string) => void } {
   let pending = "";
   const frame = (raw: string): void => {
     const data = raw.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).replace(/^ /, "")).join("\n");
@@ -15,6 +21,12 @@ export function createEventParser(onBoards: (boards: BoardSync[], newKeyboards: 
       json = JSON.parse(data);
     } catch {
       onUnreadable();
+      return;
+    }
+    if ((json as { type?: unknown } | null)?.type === "review") {
+      const review = ReviewEventSchema.safeParse(json);
+      if (!review.success) onUnreadable();
+      else onReview?.(review.data);
       return;
     }
     const parsed = SyncEventSchema.safeParse(json);

@@ -1,0 +1,270 @@
+// The board review's use cases (D-340): the checks stored once per revision, the agent's part with its guards, and what carries from
+// one revision to the next.
+import { describe, expect, test } from "bun:test";
+import { getLayout, openProposalsOutsideChat } from "../../src/app/index.ts";
+import { createReview, dismissReviewItem, restoreReviewItem, runReviewAi, showReview } from "../../src/app/review.ts";
+import { findChangeSet } from "../../src/persistence/change-sets.ts";
+import { EMPTY_KEYS_ID, finished, fillKey, noModel, proposeStep, reviewWorld, savedId, scriptedModel, submit, touch } from "../helpers/review-world.ts";
+
+const getLayoutStep = { blocks: [{ tool: "get_layout", input: { layers: ["layer-0"] } }] };
+
+describe("the checks", () => {
+  test("they are stored at once, and a revision is reviewed once", async () => {
+    const w = await reviewWorld();
+    const first = createReview(w.app, w.layoutId, "connect", { emit: w.emit });
+    expect(first.created).toBe(true);
+    expect(first.review).toMatchObject({ layoutId: w.layoutId, trigger: "connect", checks: { status: "done" }, ai: { status: "pending", reason: null, model: null }, fixed: [] });
+    expect(first.review.items.map((i) => i.id)).toEqual([EMPTY_KEYS_ID]);
+
+    const again = createReview(w.app, w.layoutId, "manual");
+    expect(again.created).toBe(false);
+    expect(again.review.id).toBe(first.review.id);
+    expect(again.review.trigger).toBe("connect");
+    expect(w.events).toEqual([{ type: "review", layoutId: w.layoutId, revisionId: first.review.revisionId, reviewId: first.review.id, aiStatus: "pending" }]);
+  });
+
+  test("showReview gives the newest review, and says when the head has moved past it", async () => {
+    const w = await reviewWorld();
+    expect(showReview(w.app, w.layoutId).review).toBeNull();
+    const { review } = createReview(w.app, w.layoutId, "apply");
+    const head = fillKey(w.app, w.layoutId, 33);
+    const view = showReview(w.app, w.layoutId);
+    expect(view.review?.id).toBe(review.id);
+    expect(view.headRevisionId).toBe(head);
+    expect(view.review?.revisionId).not.toBe(head);
+  });
+});
+
+describe("hiding a finding", () => {
+  test("it stays hidden on the next revision while the finding is the same, and comes back when restored", async () => {
+    const w = await reviewWorld();
+    createReview(w.app, w.layoutId, "apply");
+    const hidden = dismissReviewItem(w.app, w.layoutId, EMPTY_KEYS_ID, () => 1234);
+    expect(hidden.review?.items[0]).toMatchObject({ id: EMPTY_KEYS_ID, dismissedAt: 1234 });
+
+    // A change that leaves both empty keys as they were: same finding, same id.
+    touch(w.app, w.layoutId);
+    const next = createReview(w.app, w.layoutId, "apply").review;
+    expect(next.items.find((i) => i.id === EMPTY_KEYS_ID)).toMatchObject({ dismissedAt: 1234 });
+
+    expect(restoreReviewItem(w.app, w.layoutId, EMPTY_KEYS_ID).review?.items.find((i) => i.id === EMPTY_KEYS_ID)?.dismissedAt).toBeNull();
+  });
+
+  test("an id the latest review doesn't have is not found", async () => {
+    const w = await reviewWorld();
+    createReview(w.app, w.layoutId, "apply");
+    expect(() => dismissReviewItem(w.app, w.layoutId, "check:nothing::")).toThrow(/no item/);
+  });
+});
+
+describe("what a change fixes", () => {
+  test("a finding the new revision no longer produces comes back once, saying which review it was fixed since", async () => {
+    const w = await reviewWorld();
+    const before = createReview(w.app, w.layoutId, "apply").review;
+    // Fill both empty keys: the hint about them is gone.
+    fillKey(w.app, w.layoutId, 33);
+    fillKey(w.app, w.layoutId, 36);
+    const after = createReview(w.app, w.layoutId, "apply").review;
+    expect(after.items).toEqual([]);
+    expect(after.fixed).toMatchObject([{ id: EMPTY_KEYS_ID, kind: "hint", fixedSince: before.id }]);
+
+    // The review after that has nothing to tick off.
+    touch(w.app, w.layoutId);
+    expect(createReview(w.app, w.layoutId, "apply").review.fixed).toEqual([]);
+  });
+
+  test("a list of empty keys that lost one key has changed, not gone", async () => {
+    const w = await reviewWorld();
+    createReview(w.app, w.layoutId, "apply");
+    fillKey(w.app, w.layoutId, 33);
+    const after = createReview(w.app, w.layoutId, "apply").review;
+    expect(after.items.map((i) => i.id)).toEqual(["check:keys_do_nothing::layer-0/36"]);
+    expect(after.fixed).toEqual([]);
+  });
+
+  test("a finding BK had hidden is not ticked off when it goes", async () => {
+    const w = await reviewWorld();
+    createReview(w.app, w.layoutId, "apply");
+    dismissReviewItem(w.app, w.layoutId, EMPTY_KEYS_ID);
+    fillKey(w.app, w.layoutId, 33);
+    fillKey(w.app, w.layoutId, 36);
+    expect(createReview(w.app, w.layoutId, "apply").review.fixed).toEqual([]);
+  });
+});
+
+describe("the agent's part", () => {
+  test("its suggestion is a real proposed change set outside any conversation, and nothing is applied", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "connect", { emit: w.emit });
+    const head = getLayout(w.app, w.layoutId).revision.id;
+    const m = scriptedModel([
+      getLayoutStep, proposeStep,
+      (seen) => submit([
+        { kind: "suggestion", code: "empty-key-use", title: "Use the empty key {key:layer-0:33}", body: "{key:layer-0:33} does nothing on {layer:layer-0}.", keys: [{ layerId: "layer-0", position: 33 }], layers: ["layer-0"], proposalId: savedId(seen.toolResults), fixes: [EMPTY_KEYS_ID] },
+        { kind: "hint", code: "layer-order", title: "Two layers are alike", body: "They share most keys.", layers: ["layer-0"] },
+      ]),
+      finished,
+    ]);
+
+    const done = await runReviewAi(w.app, review.id, m.deps, { emit: w.emit });
+
+    expect(done.ai).toMatchObject({ status: "done", reason: null, model: m.model.model });
+    const suggestion = done.items.find((i) => i.kind === "suggestion");
+    expect(suggestion).toMatchObject({
+      id: "agent:empty-key-use:layer-0:layer-0/33", source: "agent", severity: "info", fixes: [EMPTY_KEYS_ID], keys: [{ layerId: "layer-0", position: 33 }],
+    });
+    // Checks first, then the agent's.
+    expect(done.items.map((i) => i.source)).toEqual(["check", "agent", "agent"]);
+    const cs = findChangeSet(w.app.db, suggestion?.proposalId as string);
+    expect(cs).toMatchObject({ status: "proposed", source: "agent", conversationId: null, baseRevisionId: head });
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestion?.proposalId as string]);
+    expect(getLayout(w.app, w.layoutId).revision.id).toBe(head);
+    expect(w.events.map((e) => e.aiStatus)).toEqual(["pending", "running", "done"]);
+  });
+
+  test("a revision's agent part runs once: asking again is cached, and only force runs it again", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([submit([]), finished, submit([{ kind: "hint", code: "second-look", title: "Seen", body: "Seen." }]), finished]);
+    await runReviewAi(w.app, review.id, m.deps);
+    expect(m.requests).toHaveLength(2);
+
+    const cached = await runReviewAi(w.app, review.id, m.deps);
+    expect(m.requests).toHaveLength(2);
+    expect(cached.items.map((i) => i.source)).toEqual(["check"]);
+
+    const forced = await runReviewAi(w.app, review.id, m.deps, { force: true });
+    expect(m.requests).toHaveLength(4);
+    expect(forced.items.map((i) => i.code)).toEqual(["keys_do_nothing", "second-look"]);
+  });
+
+  test("what the model gets wrong is dropped, not shown", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([
+      submit([
+        { kind: "suggestion", code: "no-proposal", title: "Do a thing", body: "Do a thing." },
+        { kind: "suggestion", code: "made-up", title: "Do another", body: "Do another.", proposalId: "cs_01MADEUP" },
+        { kind: "hint", code: "keys-do-nothing", title: "Echo", body: "Echo of a check.", layers: [] },
+        { kind: "problem", code: "bad-refs", title: "{layer:ghost} is odd", body: "{key:ghost:3} and {key:layer-0:900}", keys: [{ layerId: "ghost", position: 1 }, { layerId: "layer-0", position: 900 }, { layerId: "layer-0", position: 5 }], layers: ["ghost", "layer-0"] },
+      ]),
+      finished,
+    ]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.items.filter((i) => i.source === "agent").map((i) => i.code)).toEqual(["keys-do-nothing", "bad-refs"]);
+    const problem = done.items.find((i) => i.code === "bad-refs");
+    expect(problem).toMatchObject({ kind: "problem", severity: "warning", title: "ghost is odd", body: "ghost and key 901 on Layer 0", keys: [{ layerId: "layer-0", position: 5 }], layers: ["layer-0"] });
+  });
+
+  test("a suggestion whose change was refused by the validator never reaches the review", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const invalid = { blocks: [{ tool: "propose_changes", input: { alternatives: [{
+      title: "Nope", ops: [{ op: "setBinding", at: { layerId: "layer-9", position: 1 }, binding: { kind: "key", code: "F17" } }], explanation: "x", tradeoffs: { gains: [], costs: [] },
+      decisionDraft: { goal: "g", choice: "c", reason: "r", scope: { apps: [], habits: [] } },
+    }] } }] };
+    const m = scriptedModel([invalid, (seen) => {
+      expect(seen.toolResults.join("\n")).toContain("INVALID");
+      return submit([{ kind: "suggestion", code: "bad", title: "Bad", body: "Bad.", proposalId: savedId(seen.toolResults) }]);
+    }, finished]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.ai.status).toBe("done");
+    expect(done.items.map((i) => i.source)).toEqual(["check"]);
+    expect(openProposalsOutsideChat(w.app, w.layoutId)).toEqual([]);
+  });
+
+  test("with no model provider the status says so in words and the checks still show", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "connect");
+    const done = await runReviewAi(w.app, review.id, noModel, { emit: w.emit });
+    expect(done.ai).toMatchObject({ status: "unavailable", model: null, reason: expect.stringContaining("No model provider is set up") });
+    expect(done.items.map((i) => i.id)).toEqual([EMPTY_KEYS_ID]);
+    // Unavailable is a status to retry from, not the end: a later run with a model fills it in.
+    const m = scriptedModel([submit([]), finished]);
+    expect((await runReviewAi(w.app, review.id, m.deps)).ai.status).toBe("done");
+  });
+
+  test("a model that fails is a failed status with the provider's words, and a refusal says it was refused", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const down = scriptedModel([{ blocks: [], error: { status: 401, message: "no auth" } }]);
+    const failed = await runReviewAi(w.app, review.id, down.deps);
+    expect(failed.ai).toMatchObject({ status: "failed", reason: expect.stringContaining("rejected the API key") });
+    expect(failed.items).toHaveLength(1);
+
+    const refuses = scriptedModel([{ blocks: [], stop: "refusal" }]);
+    const refused = await runReviewAi(w.app, review.id, refuses.deps);
+    expect(refused.ai).toMatchObject({ status: "failed", reason: "The model declined to review this layout." });
+  });
+
+  test("a model that never submits is failed, not left running", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([{ blocks: [{ text: "Looks fine to me." }] }]);
+    expect((await runReviewAi(w.app, review.id, m.deps)).ai).toMatchObject({ status: "failed", reason: "The model finished without giving a review." });
+  });
+
+  test("it stops at its budget of requests, and tool calls past the budget are told to submit", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    // Fifteen calls to one tool in one reply: the fifteenth is past the budget of fourteen.
+    const many = { blocks: Array.from({ length: 15 }, () => ({ tool: "get_typing_findings", input: {} })) };
+    const m = scriptedModel([many, (seen) => {
+      expect(seen.toolResults.at(-1)).toContain("out of tool calls");
+      expect(seen.toolResults.at(-2)).not.toContain("out of tool calls");
+      return submit([]);
+    }, finished]);
+    expect((await runReviewAi(w.app, review.id, m.deps)).ai.status).toBe("done");
+
+    const w2 = await reviewWorld();
+    const r2 = createReview(w2.app, w2.layoutId, "manual").review;
+    const endless = scriptedModel(Array.from({ length: 10 }, () => getLayoutStep));
+    const stopped = await runReviewAi(w2.app, r2.id, endless.deps);
+    expect(endless.requests).toHaveLength(8);
+    expect(stopped.ai).toMatchObject({ status: "failed", reason: "The model used all its steps without finishing the review." });
+  });
+
+  test("if the layout changes while the model works, the review fails and its proposals are withdrawn", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "apply");
+    const m = scriptedModel([proposeStep, (seen) => {
+      const id = savedId(seen.toolResults);
+      touch(w.app, w.layoutId);
+      return submit([{ kind: "suggestion", code: "empty-key-use", title: "Use it", body: "Use it.", proposalId: id }]);
+    }, finished]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.ai).toMatchObject({ status: "failed", reason: expect.stringContaining("changed while keyloom was looking") });
+    expect(done.items.every((i) => i.source === "check")).toBe(true);
+    expect(openProposalsOutsideChat(w.app, w.layoutId)).toEqual([]);
+  });
+
+  test("the next review withdraws the earlier one's open suggestions and carries the agent's fixed findings", async () => {
+    const w = await reviewWorld();
+    const first = createReview(w.app, w.layoutId, "apply").review;
+    const m1 = scriptedModel([proposeStep, (seen) => submit([
+      { kind: "suggestion", code: "empty-key-use", title: "Use it", body: "Use it.", proposalId: savedId(seen.toolResults), keys: [{ layerId: "layer-0", position: 33 }] },
+      { kind: "hint", code: "layer-order", title: "Alike", body: "Alike.", layers: ["layer-0"] },
+    ]), finished]);
+    const reviewed = await runReviewAi(w.app, first.id, m1.deps);
+    const proposalId = reviewed.items.find((i) => i.kind === "suggestion")?.proposalId as string;
+
+    touch(w.app, w.layoutId);
+    const second = createReview(w.app, w.layoutId, "apply").review;
+    expect(findChangeSet(w.app.db, proposalId)?.status).toBe("rejected");
+
+    const m2 = scriptedModel([submit([]), finished]);
+    const done = await runReviewAi(w.app, second.id, m2.deps);
+    // The suggestion goes quietly with its revision; the hint the agent no longer makes is ticked off.
+    expect(done.fixed.map((f) => [f.code, f.fixedSince])).toEqual([["layer-order", first.id]]);
+  });
+
+  test("a failed look is not a fix: findings are only ticked off by an agent that finished", async () => {
+    const w = await reviewWorld();
+    const first = createReview(w.app, w.layoutId, "apply").review;
+    await runReviewAi(w.app, first.id, scriptedModel([submit([{ kind: "hint", code: "layer-order", title: "Alike", body: "Alike." }]), finished]).deps);
+    touch(w.app, w.layoutId);
+    const second = createReview(w.app, w.layoutId, "apply").review;
+    const done = await runReviewAi(w.app, second.id, noModel);
+    expect(done.fixed).toEqual([]);
+  });
+});

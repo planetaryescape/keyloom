@@ -42,6 +42,11 @@ export function deleteLayoutCascade(db: Database, layoutId: string): void {
   db.run("PRAGMA defer_foreign_keys = ON");
   const revisions = "(SELECT id FROM revisions WHERE layout_id = ?)";
   db.query("DELETE FROM versions WHERE layout_id = ?").run(layoutId);
+  // Reviews point at revisions and change sets, so they go first; the previous-review link is inside the set being removed.
+  db.query("UPDATE board_reviews SET previous_review_id = NULL WHERE layout_id = ?").run(layoutId);
+  db.query("DELETE FROM review_items WHERE review_id IN (SELECT id FROM board_reviews WHERE layout_id = ?)").run(layoutId);
+  db.query("DELETE FROM board_reviews WHERE layout_id = ?").run(layoutId);
+  db.query("DELETE FROM review_dismissals WHERE layout_id = ?").run(layoutId);
   db.query("UPDATE syncs SET build_id = NULL, flash_id = NULL WHERE layout_id = ?").run(layoutId);
   db.query(`DELETE FROM syncs WHERE layout_id = ? OR revision_id IN ${revisions}`).run(layoutId, layoutId);
   db.query(`DELETE FROM flashes WHERE build_id IN (SELECT id FROM builds WHERE revision_id IN ${revisions})`).run(layoutId);

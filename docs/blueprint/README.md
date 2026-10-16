@@ -35,6 +35,7 @@ BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10
 | 24 | [Typing lab](24-typing-lab.md) | Recording a typing session, replaying it through the emulators, per-finger findings and proven timing suggestions |
 | 25 | [Configs and versions](25-configs-and-versions.md) | Several configs per board with one on the keyboard, and versions as milestones you can go back to |
 | 26 | [Desktop app](26-desktop-app.md) | Tauri shell around the server, menu-bar sync status, shipping and signing |
+| 27 | [Board review](27-board-review.md) | What keyloom finds in a revision without being asked: checks at once, the agent after, triggers, hiding and the fixed tick |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
 Research behind these decisions:

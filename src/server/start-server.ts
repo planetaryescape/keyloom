@@ -8,6 +8,8 @@ import type { LabBackend } from "./lab-backend.ts";
 import type { ConfigsBackend } from "./configs-backend.ts";
 import type { KeyboardsBackend } from "./keyboards-backend.ts";
 import { handleKeyboardRoute } from "./keyboard-routes.ts";
+import type { ReviewBackend } from "./review-backend.ts";
+import { handleReviewRoute } from "./review-routes.ts";
 import { handleChatRoute } from "./chat-routes.ts";
 import type { DecisionsBackend } from "./decisions-backend.ts";
 import { handleDecisionRoute } from "./decisions-routes.ts";
@@ -35,6 +37,8 @@ export interface ServerOptions {
   configs?: ConfigsBackend;
   /** The new-keyboard side (22, D-336). Without it the /api/keyboards routes fall through to a 404. */
   keyboards?: KeyboardsBackend;
+  /** The board review (D-340). Without it the /api/layouts/:ref/review routes fall through to the layout routes' 404. */
+  review?: ReviewBackend;
   /** The typing lab (rung 22). Without it the /api/lab routes fall through to a 404. */
   lab?: LabBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
@@ -57,7 +61,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, lab, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, review, lab, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -74,6 +78,11 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
       if (chat !== undefined) {
         const chatResponse = await handleChatRoute(request, url.pathname, chat, sessionToken);
         if (chatResponse !== null) return chatResponse;
+      }
+      // Also before the layout routes, whose prefix /api/layouts/:ref/review shares.
+      if (review !== undefined) {
+        const reviewResponse = await handleReviewRoute(request, url.pathname, review, sessionToken);
+        if (reviewResponse !== null) return reviewResponse;
       }
       if (decisions !== undefined) {
         const decisionResponse = await handleDecisionRoute(request, url.pathname, decisions, sessionToken);

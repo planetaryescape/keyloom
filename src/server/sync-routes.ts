@@ -4,6 +4,7 @@ import {
   AutoSyncRequestSchema, DisableRemappingRequestSchema, PauseRequestSchema, SyncEventSchema, SyncNowRequestSchema, SyncNowResponseSchema, SyncStatusResponseSchema, type ApiErrorBody, type BoardSync,
 } from "../api/http.ts";
 import type { DetectedKeyboard } from "../api/detected-keyboards.ts";
+import { type ReviewEvent, ReviewEventSchema } from "../api/review.ts";
 import { checkToken } from "./guard.ts";
 import { SyncError, type SyncBackend } from "./sync-backend.ts";
 
@@ -41,9 +42,12 @@ async function readJson(request: Request): Promise<unknown | Response> {
 
 const frame = (boards: BoardSync[], newKeyboards: DetectedKeyboard[]): string => `event: sync\ndata: ${JSON.stringify(SyncEventSchema.parse({ type: "sync", boards, newKeyboards }))}\n\n`;
 
+const reviewFrame = (event: ReviewEvent): string => `event: review\ndata: ${JSON.stringify(ReviewEventSchema.parse(event))}\n\n`;
+
 function events(request: Request, backend: SyncBackend): Response {
   const encoder = new TextEncoder();
   let unsubscribe = () => {};
+  let unsubscribeReviews = () => {};
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let closed = false;
   const stream = new ReadableStream<Uint8Array>({
@@ -59,6 +63,7 @@ function events(request: Request, backend: SyncBackend): Response {
       const end = () => {
         closed = true;
         unsubscribe();
+        unsubscribeReviews();
         clearInterval(heartbeat);
         try {
           controller.close();
@@ -68,6 +73,8 @@ function events(request: Request, backend: SyncBackend): Response {
       };
       // Subscribed before the snapshot is read, so a change in between is not lost; the browser takes the later frame.
       unsubscribe = backend.subscribe((boards, newKeyboards) => send(frame(boards, newKeyboards)));
+      // A review frame carries no snapshot: the page asks for the review when it hears one, and an event missed is caught by that read.
+      unsubscribeReviews = backend.subscribeReviews?.((event) => send(reviewFrame(event))) ?? (() => {});
       heartbeat = setInterval(() => send(": keepalive\n\n"), EVENTS_HEARTBEAT_MS);
       request.signal.addEventListener("abort", end, { once: true });
       void backend.status().then((boards) => send(frame(boards, backend.newKeyboards())), () => send(": status unavailable\n\n"));
@@ -75,6 +82,7 @@ function events(request: Request, backend: SyncBackend): Response {
     cancel() {
       closed = true;
       unsubscribe();
+      unsubscribeReviews();
       clearInterval(heartbeat);
     },
   });

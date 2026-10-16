@@ -16,6 +16,7 @@ import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { registerSyncCommands } from "./commands/sync.ts";
 import { registerVersionCommands } from "./commands/version.ts";
 import { registerRemapCommands } from "./commands/remap.ts";
+import { registerReviewCommand } from "./commands/review.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
@@ -190,6 +191,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
 
   registerChangeCommands(program, { io, format, withApp });
   registerChatCommands(program, { io, format, withApp }, chat);
+  registerReviewCommand(program, { io, format, withApp }, chat);
   registerDecisionCommands(program, { io, format, withApp });
 
   program

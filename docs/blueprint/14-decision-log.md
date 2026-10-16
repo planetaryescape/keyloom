@@ -1302,3 +1302,39 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - BK: "this should have a license that allows open source but contributions should be contributed upstream i think its agpl3 or something like that".
 - AGPL-3.0 keeps keyloom open: anyone who distributes it, or runs a modified version as a network service, must publish their changes under the same licence. No licence can make people send changes upstream; AGPL makes them public, so they can be taken. Contributions come in under the same licence (inbound = outbound, CONTRIBUTING.md). Relicensing later, for example commercially, would need a contributor licence agreement; none is in place.
 - Every commit is BK's, so he can relicense. Releases up to v0.34.7 stay MIT for whoever has them. "or-later" is GNU's standard form, and it sits with the GPL-2.0-or-later QMK keycode data in `src/layout/keycodes.ts` (see the entry on generated keycodes), which MIT did not.
+
+### D-340 (engine half): A board review is made without being asked, once per revision, with the checks at once and the agent after. (Engine, Claude; the screens are the designer's half of this entry)
+- BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … it would be nice if it's proactive."
+- A review belongs to one revision of one config and is stored (`board_reviews`, `review_items`), unique on config and revision, so it is read, not recomputed, and survives a restart. [27](27-board-review.md) has the shape, routes and states.
+- The checks are the validator's standing warnings plus one new check, `keys_do_nothing`. They are cheap and need no model, so they show even when the agent's part is unavailable or failed.
+- Rejected: a review that exists only in memory. It would be gone on restart and could not carry a dismissal or a "fixed" tick from one revision to the next.
+
+### D-343: Triggers are level-triggered from the database and the sync engine's last reading, and a revision with a review is never asked about again. (Engine, Claude, from D-160)
+- Every second the review engine asks which head has no review and should. Connect is the config on a board's keyboard while that keyboard is connected. Apply and import are a head made since the server started, once the sync engine's quiet time has passed with no further change.
+- The same shape as the sync engine, for the same reason: a burst of Applies, a restart and a keyboard that comes back are one question with different answers, and there is no event queue to get out of step.
+- A config nothing touched while its keyboard was away has no review until it is asked for (`POST …/review/run`, `keyloom review --run`). Reviewing every config at start-up would spend a model call on each of them for nothing BK did.
+- `source` is `agent`, not the comps' `ai`, so the word in the data is the word in the code.
+
+### D-344: The agent's review is one run with the conversation's tools, hands its structure back through `submit_review`, and can only suggest what `propose_changes` saved. (Engine, Claude, from D-014)
+- No tool that needs BK (no priority or outcome recording), a budget of 8 requests and 14 tool calls, and one run per revision, cached. `force` runs it again on purpose.
+- A suggestion whose `proposalId` the run didn't save is dropped, so every suggestion shown has been through the validator against the head, outside any conversation, and sits in the config's open proposals (D-336). Nothing is applied.
+- Keys and layers the model names are checked against the layout, and an item that repeats a check is dropped.
+- Rejected: asking for JSON in the reply and parsing it. A tool's schema is checked by the same machinery as every other tool, and a reply that is not JSON needs a recovery path.
+
+### D-345: An agent part that cannot run says so in words and can be retried: `unavailable` for no provider, `failed` for the rest. (Engine, Claude)
+- No provider set up is the normal state of a fresh install, so it is `unavailable` with the steps to set one up, not a failure. A refusal, a cut-off, an API error, a layout that moved during the run and a process that died are `failed`, each with its reason.
+- A start-up marks runs the last process left `running` as failed, so a screen is never left waiting. A claim in the database keeps the server and `keyloom review --run` from both running one review.
+- A run that finds the layout has moved on withdraws its own proposals; the new revision gets its own review.
+
+### D-346: What a new revision fixes, and what BK hid, follow the finding's id; a new review withdraws the old suggestions' open change sets. (Engine, Claude)
+- `fixed` lists the previous review's problems and hints that the new revision no longer produces, with `fixedSince`. A finding that is still about some of the same keys has changed and is not ticked off ("9 keys do nothing" becoming "8" is not a fix). A hidden finding is not ticked off. The agent's findings count only when its look finished in both reviews, because a missing look is not a fix.
+- Hiding is stored by config and stable id, so it follows the finding to later revisions and ends when the keys change (D-340).
+- The previous review's suggestions are about a revision that is gone. Their change sets are rejected when the new review is made, so the open-proposals list does not collect one set per revision.
+
+### D-347: No test calls a model: the test preload removes every credential. (Engine, Claude)
+- The review runs the agent by itself when a layout changes, so any test that serves or edits a layout could reach whatever model the developer's shell can. `test/helpers/no-paid-model.ts` removes the keys and points the Codex binary at nothing before every test file. A test that wants a model passes a scripted one, as the chat tests do.
+
+### D-348: The Glove80's Magic key opens the wrong layer because BK's own keymap says so; keyloom did not cause it, and the review reports it. (Engine, Claude, from the owner's question)
+- BK's `42-key-map` branch of `bhekanik/glove80-zmk-config`, from its first commit with the binding (`6c425b5`, "layer 2", 2025-05-29) to its head (`93b6ac8`), binds `&magic 5 0` on a keymap whose layers run default (0), one_shot, numbers, navigate, magic_layer (4) and factory_test_layer (5). The default branch `main` is a different keymap and uses `&magic MAGIC 0`. The `#define MAGIC 2` above it is stale from the four-layer keymap before.
+- keyloom's import stored the binding as it was: the first revision of "Glove80 (42-key-map)" already has `&magic 5 0`, and no revision since has reordered layers or touched that key. Reorder does not renumber anything; it refuses when a kept block names layer numbers (`passthroughLayerIndex`, [docs/issues/reorder-blocked-by-layer-numbers.md](../issues/reorder-blocked-by-layer-numbers.md)).
+- The review reports it twice: the check `layer_unreachable` (nothing opens the Magic layer) and, when a model is set up, the agent's suggestion with a validated change set. No importer change was needed.
