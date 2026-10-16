@@ -37,6 +37,10 @@ For each spike, record the command or request, the output (with private data rem
 | S40 | The Corne's committed `fingers` against the column-from-home-row rule: which is wrong? **Answered 2026-10-16:** the committed table was one column off and was fixed in rung 19 (D-227); the rule was right | Finger heuristics for new boards (D-236) | [22](22-new-keyboard.md) | Rung 21 |
 | S41 | Can QMK hands-free flashing (D-070) extend beyond ZSA boards, e.g. through Vial's jump or a generic raw-HID packet? | Hands-free on new QMK boards | [22](22-new-keyboard.md) | Nothing; record before claiming it |
 | S42 | Detection on BK's three boards: does keyloom name each from USB alone, and what does it ask when it can't? | D-236 | [22](22-new-keyboard.md) | Rung 21 |
+| S50 | Does a keyloom raw-HID key-event stream (position, press/release, timer) fit beside Oryx's modules on the Moonlander, keep up at fast typing without dropping events, and stop on timeout or disconnect? | Lab capture on QMK (D-281) | [24](24-typing-lab.md) | Rung 22 |
+| S51 | Does the keyloom-zmk module stream position events from the Glove80's central for both halves in order, and what is the split latency? | Lab capture on ZMK (D-281) | [24](24-typing-lab.md) | Rung 22 |
+| S52 | Can kanata's debug output give a usable event trace on the MacBook? | Lab on the MacBook | [24](24-typing-lab.md) | Nothing yet |
+| S53 | Does replaying a real recorded trace through the QMK and ZMK emulators reproduce what BK's keyboard actually sent (same misfires)? | Trust in suggestions (D-282) | [24](24-typing-lab.md) | Rung 22 |
 
 ### S3 result (2026-10-15)
 
@@ -113,7 +117,7 @@ Yes for QMK, and no for DF0 on purpose. TD0 and TD1 import as tap dances (tap Hy
 | Q2 | npm's `keyloom` is taken by an unrelated password CLI. Keep the name and ship only through GitHub releases and `install.sh`, or rename? | **Answered 2026-10-15:** keep keyloom, with no npm package in v1 (D-034) |
 | Q3 | Other users: bring their own Anthropic key only, or support other model providers? | **Answered 2026-10-15** by D-106: Anthropic, OpenRouter or Codex |
 | Q4 | Should keyloom carry a typing profile from one board to another ("adapt my Moonlander habits to the Glove80")? The assistant raised it; BK never took it up | **Answered 2026-10-15** by D-220, narrowed to copying a named thing: BK: "it should be possible for me to say copy this thing from my other keyboard and apply it here". Rung 19 |
-| Q5 | Should keyloom ever learn from actual keystrokes (key-frequency stats), or only from what BK says? | Open; blueprint assumes only what BK says in v1 (D-035) |
+| Q5 | Should keyloom ever learn from actual keystrokes (key-frequency stats), or only from what BK says? | **Answered 2026-10-16** by D-280: yes, in an opt-in typing session BK starts |
 | Q6 | When should keyloom ask whether a change worked out? | Open; blueprint assumes once, when the layout is next opened at least 7 days after the flash ([08](08-decision-memory.md#tried-outweighs-hypothesised)) |
 | Q7 | Layouts in SQLite, or as files in a git repo BK can diff? | Open; blueprint assumes SQLite with `layout export` (D-032) |
 | Q8 | After import, does keyloom own the layout, so BK stops editing in Oryx and the Layout Editor, with no write-back? | Open; blueprint assumes yes. Re-importing creates a new layout, not a merge |

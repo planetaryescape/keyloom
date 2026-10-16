@@ -441,6 +441,24 @@ Only BK can do these:
 
 **Left out:** reading the keymap off boards without Vial, VIA or Studio; hands-free flashing for non-ZSA QMK boards (S41).
 
+## Rung 22: Car: keyloom watches me type and tunes my home row mods
+
+**Previously:** timings are guessed. **Now:** a typing session records what BK's hands do and proves fixes on his own keystrokes.
+
+**Promise:** "I typed for three minutes, keyloom showed me my S→D rolls fire Option, and the fix it suggested removed 7 of 9 misfires before I flashed it."
+
+**Build:** [24](24-typing-lab.md) (D-280 to D-283): the event stream in QMK and ZMK firmware, capture on the host, replay and counterfactuals in the emulators, per-finger analysis, passages, the lab screens, CLI and an agent tool.
+
+**Design:** the lab screen, recording indicator, findings on the caps and the per-finger heat, following [23](23-design-concept.md) and the key moments in 24; comps first.
+
+**New unknowns:** S50/S51 (firmware capture); S53 (replay fidelity).
+
+**Demo:** on the Moonlander, record a session, see findings per finger, try a timing fix, see before and after, apply it, and type again.
+
+**Done when:** a real session on BK's Moonlander and Glove80 produces findings he agrees with, and a suggested fix's replayed improvement holds up in a second session.
+
+**Left out:** the MacBook (S52); key-frequency statistics outside a session.
+
 ## After the car (not planned yet)
 
 - Conditional layers (tri-layer) in the editor.

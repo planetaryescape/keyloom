@@ -1034,3 +1034,19 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - MacBook Pro 14" (Apple's top-down image): a full-height function row with Touch ID in its 14th place, a black keyboard well, speaker grilles each side and the deck around them. The trackpad is left out, like the palm rests. The taller deck makes the MacBook's keys smaller in short windows (49 px at 1366×768, was 58).
 - Long caps turned past 32° print upright in the widest upright box that fits inside the cap, so the Moonlander's thumb legends stay on their caps.
 - **Amends** D-266: a board's `display.case` wins over the computed case.
+
+## Typing lab (2026-10-16)
+
+### D-280: An explicit, opt-in typing session records physical key events so keyloom can tune timings from evidence. (BK. Replaces D-035 for sessions BK starts)
+- **BK:** "I'd love a feature where I can set up a key config, then tell the software to listen/watch me type for a bit … and then notice things that go wrong like rolls, typos and timings and stuff and then use that knowledge to make suggestions about what to improve."
+- **Bounds:** only while the lab is open and recording is visible; local only; deletable; never raw text to a model. Chapter [24](24-typing-lab.md).
+
+### D-281: The lab captures physical presses and releases from keyloom's own firmware (QMK raw HID, the ZMK module's serial port), not browser key events. (Claude, in the blueprint)
+- **Why:** the browser only sees the firmware's decisions, so timing misfires can't be told from typos without the physical trace.
+- **Option rejected:** a browser-only typing test. It measures speed but can't explain a misfire.
+
+### D-282: Suggestions come from replaying the recorded trace through keyloom's emulators with candidate settings, and carry before-and-after counts. (Claude, in the blueprint)
+- **Why:** the emulators already run the real QMK and ZMK cores (D-075 to D-083), so a suggestion can be proven on BK's own keystrokes before he flashes anything.
+
+### D-283: Findings are told per finger in plain words, not as a single speed score. (BK)
+- **BK:** "instead of saying this is your typing speed it can say your typing slows down on keys that you need to press with your index finger or something or most typos come from your pinky."
