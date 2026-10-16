@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.2](https://github.com/planetaryescape/keyloom/compare/v0.34.1...v0.34.2) (2026-10-16)
+
+
+### Bug Fixes
+
+* the key card keeps its seat when a picker makes it taller ([60bc825](https://github.com/planetaryescape/keyloom/commit/60bc825bd84cd04139970562f9f141e01890ffde))
+
 ## [0.34.1](https://github.com/planetaryescape/keyloom/compare/v0.34.0...v0.34.1) (2026-10-16)
 
 
