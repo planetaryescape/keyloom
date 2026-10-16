@@ -1,5 +1,5 @@
 import { keyIn } from "../../validation/words.ts";
-import { LoaderCircle, Timer, TriangleAlert, X } from "lucide-react";
+import { LoaderCircle, Plus, Timer, TriangleAlert, X } from "lucide-react";
 import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { describeKey, modsWords } from "../../layout/describe.ts";
 import { bindingLegend } from "../../layout/legend.ts";
@@ -653,6 +653,21 @@ export function KeyPanel(props: Props) {
           ) : null}
         </div>
 
+        {/* Empty slots get named buttons: the cap's corners are too small for words, and hidden corners went unfound (BK, 2026-10-16). */}
+        {picker === null && (doubleRegion?.text === null || thenHoldRegion?.text === null) ? (
+          <div className="card-slots" role="group" aria-label="Add to this key">
+            {doubleRegion?.text === null ? (
+              <button type="button" className="card-slot-add" onClick={() => openRegion("doubleTap")}>
+                <Plus size={13} aria-hidden="true" /> Double tap
+              </button>
+            ) : null}
+            {thenHoldRegion?.text === null ? (
+              <button type="button" className="card-slot-add" onClick={() => openRegion("tapThenHold")}>
+                <Plus size={13} aria-hidden="true" /> Tap, then hold
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {sentence === "" || (draft.kind === "macro" && picker === null && !dirty) ? null : <p className="card-sentence" aria-live="polite">{sentence}</p>}
         {draft.kind === "macro" && picker === null && !dirty ? <MacroSteps macro={layout.macros.find((macro) => macro.id === draft.macroId)} /> : null}
         {draft.kind === "native" && draft.native !== null ? (
