@@ -51,6 +51,11 @@ function unmoved(element: Element, origin: DOMRect, m: BoardMotion): Box {
 // around the key, a thread runs from the card to the key, and the card springs in as the halves part.
 export function FloatingCard({ stage, position, placeKey, layout, onLayout, children }: Props) {
   const card = useRef<HTMLDivElement>(null);
+  // The content at its own height (capped by the stage); the card springs to it, so a picker opening grows the card instead of
+  // jumping it in one frame (BK, 2026-10-16: "it sorta flickers or flashes").
+  const content = useRef<HTMLDivElement>(null);
+  const [contentH, setContentH] = useState<number | null>(null);
+  const shown = useRef(false);
   const [seat, setSeat] = useState<{ x: number; y: number; maxH: number; from: number; key: { x: number; y: number; hw: number; hh: number } } | null>(null);
   const reduce = useReducedMotion() === true;
   const latest = useRef(layout);
@@ -64,11 +69,11 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
     chosen.current = null;
     // Only the card changed size: stay put, and rise just enough to keep its foot inside the stage. Its body scrolls past maxH.
     const settle = () => {
-      const element = card.current;
+      const element = content.current;
       const seated = chosen.current;
       if (!element || !seated) return;
       const margin = 16;
-      const y = Math.max(margin, Math.min(seated.y, seated.areaH - element.scrollHeight - margin));
+      const y = Math.max(margin, Math.min(seated.y, seated.areaH - element.offsetHeight - margin));
       if (Math.abs(y - seated.y) < 1) return;
       chosen.current = { ...seated, y };
       setSeat((previous) => (previous === null ? previous : { ...previous, y }));
@@ -109,7 +114,7 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
       const avoid = title === undefined ? [] : [{ x: title.left - origin.left, y: title.top - origin.top, w: title.width, h: title.height }];
       const keyHand = keyEl.getAttribute("data-hand") as "left" | "right" | null;
       // The card's natural height, before any cap, so a short window caps it and its body scrolls.
-      const natural = element.scrollHeight;
+      const natural = content.current?.scrollHeight ?? element.scrollHeight;
       const relative = seatCard({ area, key, keyHand, left, right, board: boardBox, avoid, card: { w: element.offsetWidth, h: natural } });
       // The board is drawn at the scale it was given, so a new scale is relative to it; the next pass, on the redrawn board, settles at 1.
       // A redrawn board's unit is whole pixels, so a scale within 3% of the one drawn is that one: it stops the pass from creeping smaller.
@@ -128,12 +133,13 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
     };
     place();
     const observer = new ResizeObserver((entries) => {
+      if (content.current !== null) setContentH(content.current.offsetHeight);
       // The stage resizing (a window change) seats the card afresh; the card alone resizing only settles it.
       if (chosen.current === null || entries.some((entry) => entry.target === stage.current)) place();
       else settle();
     });
     if (stage.current !== null) observer.observe(stage.current);
-    if (card.current !== null) observer.observe(card.current);
+    if (content.current !== null) observer.observe(content.current);
     return () => observer.disconnect();
     // Seated again when the key or its layer changes, and once more after the board is redrawn at a new scale, on its real geometry.
     // The observer covers size changes.
@@ -175,12 +181,29 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
       <motion.div
         ref={card}
         className="floating-card"
-        style={{ left: seat?.x ?? 0, top: seat?.y ?? 0, maxHeight: seat?.maxH, visibility: seat === null ? "hidden" : "visible" }}
+        style={{ left: seat?.x ?? 0, maxHeight: seat?.maxH, visibility: seat === null ? "hidden" : "visible" }}
         initial={reduce ? false : { opacity: 0, scale: 0.97, x: seat?.from ?? 0 }}
-        animate={{ opacity: 1, scale: 1, x: 0 }}
-        transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 34, mass: 0.8 }}
+        animate={{ opacity: 1, scale: 1, x: 0, top: seat?.y ?? 0, ...(contentH === null ? {} : { height: contentH }) }}
+        transition={
+          reduce
+            ? { duration: 0 }
+            : {
+                type: "spring",
+                stiffness: 520,
+                damping: 34,
+                mass: 0.8,
+                // The first seat is taken at once; after that the card glides to a new height and top.
+                top: shown.current ? { type: "spring", stiffness: 420, damping: 38 } : { duration: 0 },
+                height: shown.current ? { type: "spring", stiffness: 420, damping: 38 } : { duration: 0 },
+              }
+        }
+        onAnimationComplete={() => {
+          if (seat !== null && contentH !== null) shown.current = true;
+        }}
       >
-        {children}
+        <div ref={content} className="floating-card-content" style={{ maxHeight: seat?.maxH }}>
+          {children}
+        </div>
       </motion.div>
     </>
   );

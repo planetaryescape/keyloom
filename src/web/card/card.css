@@ -756,6 +756,18 @@
 }
 
 /* The card is capped to the board's row and its body scrolls; the head and the footer stay. */
+/* The card clips while its height springs to the content's; the content keeps its natural height, capped so its body scrolls. */
+.floating-card {
+  overflow: hidden;
+}
+
+.floating-card-content {
+  display: flex;
+  min-height: 0;
+  flex: none;
+  flex-direction: column;
+}
+
 .floating-card .key-card,
 .floating-card .combo-editor {
   min-height: 0;
