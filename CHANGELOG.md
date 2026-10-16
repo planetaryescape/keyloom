@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/planetaryescape/keyloom/compare/v0.27.0...v0.28.0) (2026-10-16)
+
+
+### Features
+
+* P4 screens under the light ([0e7c382](https://github.com/planetaryescape/keyloom/commit/0e7c382fdecfd76ad9dfec3608125c659073dca5))
+
 ## [0.27.0](https://github.com/planetaryescape/keyloom/compare/v0.26.0...v0.27.0) (2026-10-16)
 
 
