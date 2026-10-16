@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.0](https://github.com/planetaryescape/keyloom/compare/v0.26.0...v0.27.0) (2026-10-16)
+
+
+### Features
+
+* configs and versions engine (rung 23 part 1) ([d634884](https://github.com/planetaryescape/keyloom/commit/d63488417b9d0ddba6a15486e1b7c574831fe0ba))
+* typing lab capture and analysis engine (rung 22 part 1) ([994911d](https://github.com/planetaryescape/keyloom/commit/994911dcaf7f7aa4d78c00ab0595704bba8af3ee))
+
 ## [0.26.0](https://github.com/planetaryescape/keyloom/compare/v0.25.0...v0.26.0) (2026-10-16)
 
 
