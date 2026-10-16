@@ -1,4 +1,4 @@
-import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessagesSquare, Plus, ScrollText, Sparkles, SquarePen } from "lucide-react";
+import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessageSquare, MessagesSquare, Plus, ScrollText, SquarePen } from "lucide-react";
 import { Menu } from "../shell/Menu.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatSelection, ProposalCard } from "../../api/http.ts";
@@ -490,7 +490,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
               ))}
               <li role="option" aria-selected={commandAt === commandRows.length}>
                 <button type="button" className="bar-command" onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setCommandAt(commandRows.length)} onClick={() => send(draft)}>
-                  <Sparkles size={14} aria-hidden="true" />
+                  <MessageSquare size={14} aria-hidden="true" />
                   <span className="bar-command-label">Ask keyloom</span>
                   <span className="bar-command-detail">“{draft.trim()}”</span>
                   {commandAt === commandRows.length ? <kbd className="bar-command-key">↵</kbd> : null}

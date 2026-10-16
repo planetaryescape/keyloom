@@ -830,7 +830,7 @@
 
 .composer-mark[data-busy="true"] {
   color: var(--ink-2);
-  animation: bar-mark-spin 2.4s linear infinite;
+  animation: bar-mark-spin 0.9s linear infinite;
 }
 
 @keyframes bar-mark-spin {
