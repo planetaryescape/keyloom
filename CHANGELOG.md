@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.7](https://github.com/planetaryescape/keyloom/compare/v0.34.6...v0.34.7) (2026-10-16)
+
+
+### Bug Fixes
+
+* a device-gone write error waits for the boot drive to unmount before failing ([acbfa07](https://github.com/planetaryescape/keyloom/commit/acbfa07ca8330b7ffd0144b26c3fcca401096951))
+
 ## [0.34.6](https://github.com/planetaryescape/keyloom/compare/v0.34.5...v0.34.6) (2026-10-16)
 
 
