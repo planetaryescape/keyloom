@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.0](https://github.com/planetaryescape/keyloom/compare/v0.31.1...v0.32.0) (2026-10-16)
+
+
+### Features
+
+* drafts, ⌘K and the thread carry across the journey ([cda6a33](https://github.com/planetaryescape/keyloom/commit/cda6a3399566ebe0fe330a7a4b55e2b218090020))
+
 ## [0.31.1](https://github.com/planetaryescape/keyloom/compare/v0.31.0...v0.31.1) (2026-10-16)
 
 
