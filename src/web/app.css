@@ -308,3 +308,23 @@ kbd {
     animation: none;
   }
 }
+
+/* A board or config switch crossfades the page (App.tsx crossfade). The top bar has its own name so it holds still while only what
+   changed in it moves, instead of fading out and in with the stage. */
+.topbar {
+  view-transition-name: topbar;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-group(topbar) {
+    animation: none;
+  }
+}
