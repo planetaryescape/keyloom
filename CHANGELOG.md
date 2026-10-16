@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.1](https://github.com/planetaryescape/keyloom/compare/v0.30.0...v0.30.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* lab suggestions retune every key that shares a QMK tap and hold ([8ff5be9](https://github.com/planetaryescape/keyloom/commit/8ff5be91755eabd5e4fb5a1432ccdbffa91aa7cc))
+
 ## [0.30.0](https://github.com/planetaryescape/keyloom/compare/v0.29.0...v0.30.0) (2026-10-16)
 
 
