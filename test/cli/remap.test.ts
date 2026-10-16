@@ -1,12 +1,35 @@
 // keyloom remap and keyloom sync on the MacBook (21): setup without root, the doctor, apply through sync, Disable remapping and the
 // exit-chord proof, against a fake kanata and a temporary home folder.
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
 import type { DoctorProbe } from "../../src/firmware/kanata/doctor.ts";
 import { getBoardSync } from "../../src/persistence/syncs.ts";
 import { MAC, remapperWorld } from "../helpers/remapper-world.ts";
+
+// The real kanata folder, as it is before these tests run. BK's own install may live there, so the check is that nothing changed, not
+// that it is empty: every path with its size and mtime, compared at the end.
+const REAL_KANATA = join(process.env.HOME ?? "", "Library", "Application Support", "kanata");
+
+function snapshot(dir: string): Record<string, string> {
+  if (!existsSync(dir)) return {};
+  const out: Record<string, string> = {};
+  const walk = (at: string) => {
+    for (const name of readdirSync(at)) {
+      const path = join(at, name);
+      const stat = lstatSync(path);
+      out[path] = `${stat.isDirectory() ? "dir" : stat.isSymbolicLink() ? "link" : "file"} ${stat.size} ${stat.mtimeMs}`;
+      if (stat.isDirectory()) walk(path);
+    }
+  };
+  out[dir] = `dir ${lstatSync(dir).mtimeMs}`;
+  walk(dir);
+  return out;
+}
+
+const realKanataBefore = snapshot(REAL_KANATA);
 
 let w: ReturnType<typeof remapperWorld> | undefined;
 afterEach(async () => {
@@ -116,6 +139,6 @@ describe("keyloom remap", () => {
   });
 
   test("nothing in these tests touched the real home folder", () => {
-    expect(existsSync(`${process.env.HOME}/Library/Application Support/kanata/keyloom.kbd`)).toBe(false);
+    expect(snapshot(REAL_KANATA)).toEqual(realKanataBefore);
   });
 });
