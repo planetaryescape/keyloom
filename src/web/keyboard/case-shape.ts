@@ -98,7 +98,10 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
   // A board drawn from photos wins over the computed case; its parts already know their hand. A one-piece case (a laptop's) can't be
   // cut down to one hand, so a phone showing one hand of it draws the computed case around that hand's keys instead.
   const oneHandOfOnePiece = only !== null && display?.case?.some((part) => part.hand === null) === true;
-  if (display?.case !== undefined && !oneHandOfOnePiece) return display.case.filter((part) => only === null || part.hand === only).map((part) => ({ ...part }));
+  // A drawn case keeps its column wells (the Glove80's, D-341): they come from the keys, and are drawn over the body they sink into.
+  if (display?.case !== undefined && !oneHandOfOnePiece) {
+    return [...display.case.filter((part) => only === null || part.hand === only).map((part) => ({ ...part })), ...wells(keys, hands, display, visible)];
+  }
 
   if (display?.surface === "deck") {
     const all = keys.filter((_, p) => visible(p));

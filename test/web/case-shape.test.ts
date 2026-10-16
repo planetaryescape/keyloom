@@ -23,12 +23,19 @@ describe("a board's case (D-266)", () => {
     }
   });
 
-  test("the Glove80's case hugs its keys, one plate per half, with a well per column and per thumb key", async () => {
+  test("the Glove80 is drawn from the real object: a sculpted body and a curved thumb module per half, with its column wells (D-341)", async () => {
     const { board, keys } = await load("moergo/glove80");
     const parts = caseParts(keys, board.hands, board.display);
-    expect(parts.filter((part) => part.kind === "plate").map((part) => part.hand)).toEqual(["left", "right"]);
+    expect(parts.filter((part) => part.kind === "body").map((part) => part.hand)).toEqual(["left", "right"]);
+    expect(parts.filter((part) => part.kind === "module").map((part) => part.hand)).toEqual(["left", "right"]);
     const thumbs = keys.filter((key) => key.r !== 0).length;
     expect(parts.filter((part) => part.kind === "well").length).toBeGreaterThan(thumbs);
+    // The halves stand apart: the left half's case ends before the right half's begins, thumb modules included.
+    const left = caseBounds(parts.filter((part) => part.hand === "left" && part.kind !== "well"));
+    const right = caseBounds(parts.filter((part) => part.hand === "right" && part.kind !== "well"));
+    expect((right?.minX ?? 0) - (left?.maxX ?? Infinity)).toBeGreaterThan(0.1);
+    // A phone's one hand keeps only that hand's body, module and wells.
+    expect(caseParts(keys, board.hands, board.display, "right").every((part) => part.hand === "right")).toBe(true);
   });
 
   test("the MacBook is one deck with its keyboard well, speaker grilles and Touch ID, though its hands interleave", async () => {
