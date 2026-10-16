@@ -2,6 +2,7 @@
 // across a conversation: system prompt, then the board, then what the firmware can express. The
 // layout itself is fetched through tools so it never goes stale mid-conversation.
 import { capabilityLine } from "../boards/capabilities.ts";
+import { keyName } from "../boards/key-names.ts";
 import type { Board } from "../boards/load.ts";
 import { bindingLabel } from "../layout/render-grid.ts";
 import type { Layout } from "../layout/schema.ts";
@@ -62,14 +63,14 @@ const PRIORITY_LABEL: Record<PriorityFact["priorityKind"], string> = {
   willing_to_relearn: "willing to relearn: can move",
 };
 
-/** What BK has told keyloom matters (08). Keys are named as the editor names them ("key 29 on Layer 0"), so the agent repeats them right. */
-export function prioritiesContext(priorities: readonly PriorityFact[], document: Layout): string {
+/** What BK has told keyloom matters (08). Keys are named by legend and place ("⌫ (left pinky, home row, Layer 0)"), so the agent repeats them that way (D-279). */
+export function prioritiesContext(priorities: readonly PriorityFact[], document: Layout, board: Board): string {
   const header = "# What BK has told you matters";
   if (priorities.length === 0) return `${header}\nNothing recorded yet. Ask before you guess what must stay put or what he barely uses.`;
   const lines = priorities.map((p) => {
     const about = [
       ...(p.subject.functions ?? []),
-      ...(p.subject.slots ?? []).map((s) => `key ${s.position + 1} on ${document.layers.find((l) => l.id === s.layerId)?.name ?? s.layerId}`),
+      ...(p.subject.slots ?? []).map((s) => keyName(board.definition, document, s, { geometry: board.geometry })),
     ].join(", ");
     return `- [${PRIORITY_LABEL[p.priorityKind]}] ${about}. He said: "${p.statement}"${p.reason === "stated by BK" ? "" : ` (${p.reason})`}`;
   });
@@ -84,9 +85,9 @@ const STATUS_LABEL: Record<ChoiceFact["status"], string> = {
 
 const MAX_KEYS_LISTED = 8;
 
-/** "key 60 on Layer 0", the way the editor names it, and at most a handful of them so one big rearrangement does not flood the prompt. */
-function keysText(slots: readonly { layerId: string; position: number }[], document: Layout): string {
-  const named = slots.slice(0, MAX_KEYS_LISTED).map((s) => `key ${s.position + 1} on ${document.layers.find((l) => l.id === s.layerId)?.name ?? s.layerId}`);
+/** "⌃← (left red thumb key, Layer 0)", by legend and place (D-279), and at most a handful so one big rearrangement does not flood the prompt. */
+function keysText(slots: readonly { layerId: string; position: number }[], document: Layout, board: Board): string {
+  const named = slots.slice(0, MAX_KEYS_LISTED).map((s) => keyName(board.definition, document, s, { geometry: board.geometry }));
   return slots.length > MAX_KEYS_LISTED ? `${named.join(", ")} and ${slots.length - MAX_KEYS_LISTED} more` : named.join(", ");
 }
 
@@ -94,11 +95,11 @@ function keysText(slots: readonly { layerId: string; position: number }[], docum
  * What keyloom changed earlier and why (08). Each carries its status, because "tried and liked" outweighs
  * "we thought this would be comfortable" (D-018), and its id, so the agent can record how it turned out.
  */
-export function choicesContext(choices: readonly ChoiceFact[], document: Layout): string {
+export function choicesContext(choices: readonly ChoiceFact[], document: Layout, board: Board): string {
   const header = "# What was decided earlier, and why";
   if (choices.length === 0) return `${header}\nNothing yet: no change made through keyloom has been remembered.`;
   const lines = choices.map((c) => {
-    const where = keysText(c.subject.slots ?? [], document);
+    const where = keysText(c.subject.slots ?? [], document, board);
     const parts = [
       `- ${c.id} [${STATUS_LABEL[c.status]}]${where ? ` ${where}.` : ""}`,
       `  Goal: "${c.goal}". Chosen: ${c.choice}. Why: ${c.reason}.`,
@@ -123,23 +124,19 @@ export function assembleSystemPrompt(
   board: Board, document: Layout, priorities: readonly PriorityFact[] = [], choices: readonly ChoiceFact[] = [], others: Parameters<typeof otherLayoutsContext>[0] = [],
 ): string {
   return [
-    system.trim(), boardContext(board), firmwareCapabilities(document.firmware), otherLayoutsContext(others), prioritiesContext(priorities, document), choicesContext(choices, document),
+    system.trim(), boardContext(board), firmwareCapabilities(document.firmware), otherLayoutsContext(others), prioritiesContext(priorities, document, board), choicesContext(choices, document, board),
   ].join("\n\n");
 }
 
 /**
- * "Selected on Layer 0 (layer id layer-0): key 30 (position 29) S/⌥; key 31 (position 30) D": each user
- * message carries the selection made when it was sent (D-012). Both numbers are given because BK
- * talks in key numbers and ops take positions; the header ends at the first blank line.
+ * "Selected on Layer 0 (layer id layer-0): S hold ⌥ (left ring, home row) at position 30; D (left middle, home row) at position 31":
+ * each user message carries the selection made when it was sent (D-012). The name is how the agent speaks of the key; the position is
+ * only for ops (D-279). The header ends at the first blank line.
  */
-export function userMessageText(text: string, selection: Selection | undefined, document: Layout): string {
+export function userMessageText(text: string, selection: Selection | undefined, document: Layout, board: Board): string {
   if (!selection) return text;
   const layer = document.layers.find((l) => l.id === selection.layerId);
-  const ctx = { layers: document.layers, macros: document.macros, tapDances: document.tapDances };
-  const keys = selection.positions.map((p) => {
-    const binding = layer?.bindings[p];
-    return `key ${p + 1} (position ${p}) ${binding ? bindingLabel(binding, ctx) : "?"}`;
-  });
+  const keys = selection.positions.map((p) => `${keyName(board.definition, document, { layerId: selection.layerId, position: p }, { geometry: board.geometry, withLayer: false })} at position ${p}`);
   return `Selected on ${layer?.name ?? selection.layerId} (layer id ${selection.layerId}): ${keys.join("; ")}\n\n${text}`;
 }
 

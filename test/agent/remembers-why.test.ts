@@ -16,14 +16,14 @@ const cmdShiftAlt = {
   ops: [{ op: "setBinding", at: TAB, binding: { kind: "modifier", mods: ["LGUI", "LSFT"] } }],
   explanation: "One key for Command-Shift on the left hand.",
   tradeoffs: { gains: ["One key"], costs: ["Tab is reached from the thumb only"] },
-  decisionDraft: draft({ goal: "I press Command-Shift a lot", choice: "Command-Shift on key 43", reason: REASON, scope: { apps: ["Figma"], habits: ["shortcuts with the left hand"] } }),
+  decisionDraft: draft({ goal: "I press Command-Shift a lot", choice: "Command-Shift on the bottom-left pinky key", reason: REASON, scope: { apps: ["Figma"], habits: ["shortcuts with the left hand"] } }),
 };
 const capsAlt = {
   title: "Caps Lock where Command-Shift is",
   ops: [{ op: "dropFunction", function: "mod:LSFT+LGUI", reason: "BK no longer uses it" }, { op: "setBinding", at: TAB, binding: { kind: "key", code: "CAPS_LOCK" } }],
-  explanation: "Caps Lock back on key 43.",
+  explanation: "Caps Lock back on the bottom-left pinky key.",
   tradeoffs: { gains: ["Caps Lock"], costs: ["No Command-Shift key"] },
-  decisionDraft: draft({ goal: "I want Caps Lock back", choice: "Caps Lock on key 43", reason: "I stopped using Command-Shift" }),
+  decisionDraft: draft({ goal: "I want Caps Lock back", choice: "Caps Lock on the bottom-left pinky key", reason: "I stopped using Command-Shift" }),
 };
 
 describe("the agent remembers why", () => {
@@ -34,15 +34,15 @@ describe("the agent remembers why", () => {
       // Turn 1: BK asks for Command-Shift; the model proposes with a decision draft.
       { blocks: [{ tool: "propose_changes", input: { alternatives: [cmdShiftAlt] } }] },
       { blocks: [{ text: "Here is one option." }] },
-      // Turn 2: BK wants it replaced. The prompt carries the stored reason with its status and the key as the editor names it.
+      // Turn 2: BK wants it replaced. The prompt carries the stored reason with its status and the key by what it prints and where it sits (D-279).
       (seen) => {
         const system = String(seen.body.system);
         expect(system).toContain("# What was decided earlier, and why");
-        expect(system).toContain(`[hypothesis: not tested yet, open to revision] key 43 on Layer 0.`);
+        expect(system).toMatch(/\[hypothesis: not tested yet, open to revision\] \S+ \(left pinky, bottom row, outer, Layer 0\)\./);
         expect(system).toContain(`Why: ${REASON}.`);
         expect(system).toContain("Applies to: app Figma; shortcuts with the left hand.");
         expect(system).toContain(choiceId);
-        return { blocks: [{ text: `You put Command-Shift on key 43 because ${REASON}. Does that still hold?` }] };
+        return { blocks: [{ text: `You put Command-Shift on the bottom-left pinky key because ${REASON}. Does that still hold?` }] };
       },
       // Turn 3: BK says go ahead. Analysing returns the reminder to the model.
       { blocks: [{ tool: "analyse_change", input: { ops: capsAlt.ops } }] },
@@ -53,7 +53,7 @@ describe("the agent remembers why", () => {
         expect(result.warnings.map((w: { code: string }) => w.code)).toContain("contradicts_decision");
         return { blocks: [{ tool: "propose_changes", input: { alternatives: [capsAlt] } }] };
       },
-      { blocks: [{ text: "Caps Lock goes back on key 43." }] },
+      { blocks: [{ text: "Caps Lock goes back on the bottom-left pinky key." }] },
       // Turn 4: it was applied; BK reports how Command-Shift (now superseded) went, which cannot be recorded, then the new one.
       () => ({ blocks: [
         { tool: "update_decision_outcome", input: { decisionId: choiceId, status: "tried_unhelpful", note: "never used it" } },

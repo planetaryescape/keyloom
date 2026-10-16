@@ -19,7 +19,7 @@ The prompt is assembled in this order. The stable parts come first so prompt cac
 2. **Board context:** the board definition summary (key count, hands, rows, thumb cluster, finger assignment per position) and the board's `SKILL.md`, if it has one ([04](04-boards-and-contributions.md)).
 3. **Firmware capabilities:** what this firmware can and can't express, from [05](05-firmware-qmk.md) or [06](06-firmware-zmk.md), as a short generated list.
 4. **The active decisions and priorities** for this layout, all of them ([08](08-decision-memory.md)). They are short and few, so there's no retrieval step.
-5. **The conversation**, with each user message carrying the selection made when it was sent (D-012), rendered as `Selected on Layer 0 (layer id layer-0): key 13 (position 12) S; key 14 (position 13) D` (D-063). The board context also lists the board's mirror pairs.
+5. **The conversation**, with each user message carrying the selection made when it was sent (D-012), rendered as `Selected on Layer 0 (layer id layer-0): S hold ⌥ (left ring, home row) at position 30; D (left middle, home row) at position 31` (D-063, D-279). The agent names keys to BK by what they print and where they sit under the hand, never by number; positions are for ops only. The board context also lists the board's mirror pairs.
 
 The layout itself is fetched through tools, so the prompt doesn't go stale after an edit within the conversation.
 

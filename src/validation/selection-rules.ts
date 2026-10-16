@@ -2,6 +2,7 @@
 // picture to say where the change belongs; a proposal that edits others has left that scope.
 // It is a warning because the agent may have a good reason (a displaced function needs a home),
 // and the preview should make BK see it, not forbid it.
+import { keyIn } from "./words.ts";
 import type { Slot } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
 import type { Issue } from "./result.ts";
@@ -11,7 +12,7 @@ export type SelectionScope = { layerId: string; positions: readonly number[] };
 
 const LISTED = 6;
 
-const slotText = (doc: Layout, s: Slot) => `${doc.layers.find((l) => l.id === s.layerId)?.name ?? s.layerId}, key ${s.position + 1}`;
+const slotText = (doc: Layout, s: Slot): string => keyIn(doc, s);
 
 /** `outside_selection`: the change edits keys that were not in the selection. Empty when it stays inside. */
 export function outsideSelection(before: Layout, changed: readonly Slot[], selection: SelectionScope): Issue[] {

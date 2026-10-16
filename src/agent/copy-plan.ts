@@ -2,6 +2,7 @@
 // (boards/correspondence), what each copied binding becomes on the target (layout/transfer), and
 // the ops that do it. The model still writes the proposal and decides what to ask BK; this is the
 // part it would get wrong by counting positions on two different boards.
+import { keyName } from "../boards/key-names.ts";
 import { boardCapabilities, lightingRefusal } from "../boards/capabilities.ts";
 import { type KeyMapping, type KeyMatch, type Strategy, mapKeys } from "../boards/correspondence.ts";
 import { keySlots } from "../boards/key-slots.ts";
@@ -9,7 +10,6 @@ import type { ChangeOp } from "../layout/change.ts";
 import { bindingFunctions } from "../layout/functions.ts";
 import { type LayerMatch, matchLayers } from "../layout/layer-match.ts";
 import { type Hand } from "../layout/mirror.ts";
-import { bindingLabel } from "../layout/render-grid.ts";
 import type { Binding, Layer, Layout } from "../layout/schema.ts";
 import { BindingTransfer, type TransferEnv, transferLighting } from "../layout/transfer.ts";
 import type { LayoutSnapshot } from "./ports.ts";
@@ -80,7 +80,8 @@ export function planBehaviourCopy(from: LayoutSnapshot, to: LayoutSnapshot, mapp
   const sLayer = findLayer(from.document, mapping.sourceLayerId);
   const tLayer = findLayer(to.document, mapping.targetLayerId);
   const transfer = new BindingTransfer(transferEnv(from, to, layers));
-  const ctx = { layers: to.document.layers, macros: to.document.macros, tapDances: to.document.tapDances };
+  // Skip reasons reach BK through the agent, so a target key is named by legend and place, never by number (D-279).
+  const targetName = (position: number) => keyName(to.board.definition, to.document, { layerId: tLayer.id, position }, { geometry: to.board.geometry, withLayer: false });
   const targets = primaryTargets(mapping, minConfidence, false);
   const lowest = new Map(mapping.mapped.map((m) => [m.source, m.matches.find((x) => !x.extra)] as const));
   const steps: BehaviourCopy["steps"] = [];
@@ -95,7 +96,7 @@ export function planBehaviourCopy(from: LayoutSnapshot, to: LayoutSnapshot, mapp
     const match = targets.get(source)?.[0];
     if (match === undefined) {
       const weak = lowest.get(source);
-      steps.push({ source, target: null, confidence: weak?.confidence ?? null, outcome: { skip: weak ? `the best match (key ${weak.target + 1}) is only a ${Math.round(weak.confidence * 100)}% guess, which is too weak to apply without asking` : "no key on the target does this job or sits in this place" } });
+      steps.push({ source, target: null, confidence: weak?.confidence ?? null, outcome: { skip: weak ? `the best match (${targetName(weak.target)}) is only a ${Math.round(weak.confidence * 100)}% guess, which is too weak to apply without asking` : "no key on the target does this job or sits in this place" } });
       continue;
     }
     const targetBinding = tLayer.bindings[match.target] as Binding;
@@ -110,14 +111,14 @@ export function planBehaviourCopy(from: LayoutSnapshot, to: LayoutSnapshot, mapp
       continue;
     }
     if (claimed.has(match.target)) {
-      skip(`another copied key already lands on key ${match.target + 1}`);
+      skip(`another copied key already lands on ${targetName(match.target)}`);
       continue;
     }
     // A copy never quietly replaces something else the target key does; the key keeping its own tap is the one exception.
     const kept = new Set(bindingFunctions(result.binding, to.document.tapDances));
     const lost = bindingFunctions(targetBinding, to.document.tapDances).filter((f) => !kept.has(f));
     if (lost.length > 0) {
-      skip(`key ${match.target + 1} already does something else (${bindingLabel(targetBinding, ctx)}), and copying here would replace it; ask BK where this should go`);
+      skip(`${targetName(match.target)} already does something else, and copying here would replace it; ask BK where this should go`);
       continue;
     }
     claimed.add(match.target);
@@ -185,7 +186,7 @@ export function planComboCopy(from: LayoutSnapshot, to: LayoutSnapshot, mapping:
     }
     const mapped = combo.positions.map((p) => targets.get(p)?.[0]?.target);
     if (mapped.some((m) => m === undefined)) {
-      steps.push({ comboId: id, outcome: { skip: `key ${combo.positions[mapped.findIndex((m) => m === undefined)]! + 1} has no confident counterpart on the target` } });
+      steps.push({ comboId: id, outcome: { skip: `${keyName(from.board.definition, from.document, { layerId: from.document.layers[0]?.id ?? "", position: combo.positions[mapped.findIndex((m) => m === undefined)]! }, { geometry: from.board.geometry, withLayer: false })} has no confident counterpart on the target` } });
       continue;
     }
     const positions = [...new Set(mapped as number[])].sort((a, b) => a - b);

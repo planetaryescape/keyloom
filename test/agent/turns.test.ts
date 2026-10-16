@@ -146,7 +146,7 @@ describe("failures before and during the model call", () => {
       await sendMessage(r.app, r.layoutId, { message: "this key", selection: { layer: "layer-0", positions: [31, 30] }, model: anthropicModel(fake.client) });
       return { ...r, requests: fake.requests };
     });
-    expect(requests[0]?.body.messages[0].content[0].text).toStartWith("Selected on Layer 0 (layer id layer-0): key 31 (position 30) S/⌥; key 32 (position 31) D\n\nthis key");
+    expect(requests[0]?.body.messages[0].content[0].text).toStartWith("Selected on Layer 0 (layer id layer-0): S hold ⌥ (left ring, home row) at position 30; D (left middle, home row) at position 31\n\nthis key");
     const conv = app.db.query("SELECT id FROM conversations ORDER BY created_at DESC LIMIT 1").get() as { id: string };
     expect(showConversation(app, conv.id).messages[0]?.selection).toEqual({ layerId: "layer-0", positions: [30, 31] });
     expect(layoutId).toBeTruthy();

@@ -101,7 +101,8 @@ describe("a selection, a mirror and a proposal through the agent", () => {
       // The model was shown both numbers for every selected key.
       const header = (fake.requests[0]?.body.messages[0].content[0].text as string).split("\n\n")[0]!;
       expect(header).toContain(`(layer id ${c.layerId})`);
-      expect(header).toContain(`key ${c.selection[0]! + 1} (position ${c.selection[0]})`);
+      expect(header).toContain(`at position ${c.selection[0]}`);
+      expect(header).not.toMatch(/\bkey \d+/);
       expect(listChanges(c.app, c.layoutId, { status: "proposed" })).toHaveLength(1);
     });
 

@@ -21,12 +21,12 @@ describe("outside_selection (07)", () => {
     expect(codes(r.warnings)).not.toContain("outside_selection");
   });
 
-  test("a key outside the selection is warned about, named as the editor names it, and listed as a slot", () => {
+  test("a key outside the selection is warned about, named by what it prints (D-279), and listed as a slot", () => {
     const r = validate(tinyBoard, tiny(), [set("base", 0, key("Q")), set("base", 3, key("Z"))], { selection });
     expect(r.ok).toBe(true);
     const warning = r.warnings.find((w) => w.code === "outside_selection");
     expect(warning?.slots).toEqual([{ layerId: "base", position: 3 }]);
-    expect(warning?.message).toBe("This change edits 1 key you did not select: Base, key 4");
+    expect(warning?.message).toBe("This change edits 1 key you did not select: the D key on Base");
   });
 
   test("the same position on another layer is outside the selection", () => {

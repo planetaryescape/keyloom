@@ -1041,6 +1041,11 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - With no credential for the chosen provider, the bar offers each ready provider in one click. A reply that stops says why: "Out of credits", "The key was refused", "The model is busy" or "The reply stopped", always "Nothing was changed". An account failure offers "Switch to" each other ready provider, which starts a new conversation with the message back in the box, since a conversation keeps its provider.
 - Moves in a proposal name functions in words ("Backspace", not BSPC) and layers as the caption does ("Default layer", not default_layer), extending D-270 and D-276.
 
+### D-279: Keys are named by what they print and where they sit, never by number, in everything a person reads. (P3 review, Claude)
+- The review: "No key numbers anywhere a person reads. Name keys by legend, finger and layer." A key is "S hold ⌥ (left ring, home row, Layer 0)", "⌃← (left red thumb key)", "⌫ (left pinky, home row, outer)": the cap's legend, the hand and finger, the row, inner or outer where a finger has more than one key in that row, and the layer. `src/boards/key-names.ts`.
+- **At the source.** The agent's tools write keys that way (`get_layout`'s position table, `map_keys`, `mirror_keys`, `find_function`, the selection header, the priorities and decisions in the prompt, copy-plan skips), each with "at position N" for ops; the system prompt tells the model to speak in names and never say a number. The validator's sentences name a key by its legend and layer ("the B key on Base"); which key it is shows on the board, since every issue carries its slots.
+- **Supersedes** D-063's "talk uses key numbers" and D-112's "one-based key numbers", and the system prompt's "key N" rule. Advanced view keeps key numbers (D-275).
+
 ## Typing lab (2026-10-16)
 
 ### D-280: An explicit, opt-in typing session records physical key events so keyloom can tune timings from evidence. (BK. Replaces D-035 for sessions BK starts)

@@ -1,5 +1,5 @@
+import { keyName } from "../../boards/key-names.ts";
 import { z } from "zod";
-import { fingerOf, handOf } from "../layout-facts.ts";
 import { bindingLabel } from "../../layout/render-grid.ts";
 import { planMirror } from "../mirror-plan.ts";
 import type { AgentPorts } from "../ports.ts";
@@ -7,7 +7,7 @@ import { defineTool } from "./define.ts";
 import { validationForModel } from "./validation-text.ts";
 
 const InputSchema = z.object({
-  positions: z.array(z.number().int().nonnegative()).min(1).max(100).describe("The positions to give the behaviour of their mirror-image keys, as in the Selected header or get_layout. Position numbers, not key numbers."),
+  positions: z.array(z.number().int().nonnegative()).min(1).max(100).describe("The positions to give the behaviour of their mirror-image keys, as in the Selected header or get_layout. Position numbers, for ops only; name keys to BK by legend and place."),
   layer: z.string().min(1).describe("Layer id, name or index: the layer named in the Selected header, or the one BK is talking about."),
 });
 
@@ -26,10 +26,8 @@ export const mirrorKeysTool = (ports: AgentPorts) =>
 
       const plan = planMirror(document, board.definition, wanted.id, positions);
       const ctx = { layers: document.layers, macros: document.macros, tapDances: document.tapDances };
-      const name = (p: number) => {
-        const b = wanted.bindings[p];
-        return `key ${p + 1} (position ${p}, ${handOf(board.definition, p)} ${fingerOf(board.definition, p)}${b ? `, ${bindingLabel(b, ctx)}` : ""})`;
-      };
+      // The name is what the agent says to BK; the position is for ops (D-279).
+      const name = (p: number) => `${keyName(board.definition, document, { layerId: wanted.id, position: p }, { geometry: board.geometry, withLayer: false })} at position ${p}`;
       const lines = plan.steps.map((s) => {
         const from = s.partner === null ? "no mirror key" : `mirrors ${name(s.partner)}`;
         if ("binding" in s.outcome) return `- ${name(s.position)} ${from}: becomes ${bindingLabel(s.outcome.binding, ctx)}`;

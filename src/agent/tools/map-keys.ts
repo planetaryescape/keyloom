@@ -1,7 +1,7 @@
+import { keyName } from "../../boards/key-names.ts";
 import { z } from "zod";
 import { boardCapabilities } from "../../boards/capabilities.ts";
 import type { KeyMapping, UnmatchedWhy } from "../../boards/correspondence.ts";
-import { describeSlot, keySlots } from "../../boards/key-slots.ts";
 import { holdKeyCandidates } from "../../boards/placement.ts";
 import { bindingLabel } from "../../layout/render-grid.ts";
 import type { Layer } from "../../layout/schema.ts";
@@ -32,22 +32,20 @@ const WHY: Record<UnmatchedWhy, string> = {
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
+// "S hold ⌥ (left ring, home row) at position 30": the name is what the agent says to BK, the position is for ops (D-279).
 function describeKey(s: LayoutSnapshot, layer: Layer, position: number): string {
-  const b = layer.bindings[position];
-  const ctx = { layers: s.document.layers, macros: s.document.macros, tapDances: s.document.tapDances };
-  return `key ${position + 1}${b ? ` [${bindingLabel(b, ctx)}]` : ""}`;
+  return `${keyName(s.board.definition, s.document, { layerId: layer.id, position }, { geometry: s.board.geometry, withLayer: false })} at position ${position}`;
 }
 
 function mappingText(from: LayoutSnapshot, to: LayoutSnapshot, mapping: KeyMapping, only: ReadonlySet<number> | null): string[] {
   const sLayer = findLayer(from.document, mapping.sourceLayerId);
   const tLayer = findLayer(to.document, mapping.targetLayerId);
-  const fromSlots = keySlots(from.board.definition, from.board.geometry).slots;
   const shown = (p: number) => only === null || only.has(p);
   const lines = mapping.mapped.filter((m) => shown(m.source)).map((m) => {
     const [best, ...rest] = m.matches;
     if (best === undefined) return "";
     const extra = rest.map((x) => `also ${describeKey(to, tLayer, x.target)}`).join("; ");
-    return `- ${describeKey(from, sLayer, m.source)} (${describeSlot(fromSlots.get(m.source))}) -> ${describeKey(to, tLayer, best.target)}: ${best.method}, ${pct(best.confidence)}, ${best.reason}${extra ? `. ${extra}` : ""}`;
+    return `- ${describeKey(from, sLayer, m.source)} -> ${describeKey(to, tLayer, best.target)}: ${best.method}, ${pct(best.confidence)}, ${best.reason}${extra ? `. ${extra}` : ""}`;
   });
   const unmatched = mapping.unmatchedSource.filter((u) => shown(u.position));
   // Empty keys (transparent, none) are not worth a line each.
@@ -70,9 +68,9 @@ function mappingText(from: LayoutSnapshot, to: LayoutSnapshot, mapping: KeyMappi
   return [
     ...lines.filter(Boolean),
     ...proposals,
-    ...(worth.length ? ["No counterpart (not forced onto another key):", ...worth.map((u) => `- ${describeKey(from, sLayer, u.position)} (${describeSlot(fromSlots.get(u.position))}): ${WHY[u.why]}`)] : []),
+    ...(worth.length ? ["No counterpart (not forced onto another key):", ...worth.map((u) => `- ${describeKey(from, sLayer, u.position)}: ${WHY[u.why]}`)] : []),
     ...(empty ? [`${empty} empty key${empty === 1 ? "" : "s"} (transparent or none) found no counterpart.`] : []),
-    ...(only === null && mapping.unmatchedTarget.length ? [`Keys on ${to.layoutName} that nothing maps to: ${mapping.unmatchedTarget.map((p) => p + 1).join(", ")}.`] : []),
+    ...(only === null && mapping.unmatchedTarget.length ? [`Keys on ${to.layoutName} that nothing maps to (positions, for ops): ${mapping.unmatchedTarget.join(", ")}.`] : []),
   ];
 }
 
@@ -126,7 +124,7 @@ export const mapKeysTool = (ports: AgentPorts) =>
       }
       const mapping = mapLayer(source, to, sourceLayer.id, targetLayer.id, strategy, layers);
       const only = positions === undefined ? null : new Set(positions);
-      const body = [...header, "", `Key matches, ${sourceLayer.name} -> ${targetLayer.name} (key numbers as the editor shows them; each line: source key, its place, target key, method, confidence, reason):`, ...mappingText(source, to, mapping, only)];
+      const body = [...header, "", `Key matches, ${sourceLayer.name} -> ${targetLayer.name} (each line: source key by legend and place, target key, method, confidence, reason; the positions are for ops, the names are what you say to BK):`, ...mappingText(source, to, mapping, only)];
 
       if (carry === "none") return body.join("\n");
 

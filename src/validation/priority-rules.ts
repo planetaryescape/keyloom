@@ -1,5 +1,6 @@
 // The two warnings that use what BK has said matters (07#warnings). Both are reminders and never
 // block (D-023): an old statement prompts a second look, it does not forbid a new decision.
+import { keyIn } from "./words.ts";
 import type { Slot } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
 import type { Issue } from "./result.ts";
@@ -19,7 +20,8 @@ export const LARGE_RELEARN_THRESHOLD = 6;
 export const slotKey = (s: Slot) => `${s.layerId}:${s.position}`;
 
 /** "Layer 0, key 30": key numbers are one-based, as the editor shows them. */
-export const slotText = (doc: Layout, s: Slot) => `${doc.layers.find((l) => l.id === s.layerId)?.name ?? s.layerId}, key ${s.position + 1}`;
+/** A moved key in a sentence, by what it prints and its layer (D-279). */
+export const slotText = (doc: Layout, s: Slot): string => keyIn(doc, s);
 
 /**
  * `moved_pinned`: the change alters a slot a priority pins, or takes a pinned function out of a slot

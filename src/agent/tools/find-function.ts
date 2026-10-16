@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AgentPorts } from "../ports.ts";
-import { fingerOf, findOccurrences, handOf, layerAccess, normalizeFunction } from "../layout-facts.ts";
+import { keyName } from "../../boards/key-names.ts";
+import { findOccurrences, layerAccess, normalizeFunction } from "../layout-facts.ts";
 import { defineTool } from "./define.ts";
 
 const InputSchema = z.object({
@@ -25,7 +26,7 @@ export const findFunctionTool = (ports: AgentPorts) =>
 
       const lines = found.map((o) => {
         const what = o.role === "plain" ? "plain" : `${o.role} half of hold-tap`;
-        return `- ${o.layerId} (${o.layerName}) position ${o.position} [${o.label}]: ${what}, ${handOf(board.definition, o.position)} ${fingerOf(board.definition, o.position)}`;
+        return `- ${o.layerId} (${o.layerName}) position ${o.position}: ${keyName(board.definition, document, { layerId: o.layerId, position: o.position }, { geometry: board.geometry, withLayer: false })}, ${what}`;
       });
       const plain = found.filter((o) => o.role === "plain");
       const layerIds = [...new Set(found.map((o) => o.layerId))];

@@ -187,7 +187,8 @@ describe("copying behaviours across boards", () => {
     const macroKey = (source.layers[0]?.bindings ?? []).findIndex((b) => b.kind === "macro");
     expect(macroKey).toBeGreaterThanOrEqual(0);
     const text = await tools(glove.layoutId).run("map_keys", { from: "my-moonlander", fromLayer: "layer-0", toLayer: "0", strategy: "position", carry: "behaviours", positions: [macroKey], minConfidence: 0.5 });
-    expect(text).toMatch(/not copied, key \d+ already does something else/);
+    expect(text).toMatch(/not copied, \S+ \([^)]*\) already does something else/);
+    expect(text).not.toMatch(/\bkey \d+/);
     expect(opsIn(text)).toEqual([]);
   });
 

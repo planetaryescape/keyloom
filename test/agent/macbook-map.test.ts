@@ -28,11 +28,11 @@ describe("the Moonlander onto the MacBook", () => {
     const { run } = await world();
     const text = await run("map_keys", { from: "my-moonlander" });
     expect(text).toContain("MacBook keyboard (ANSI)");
-    expect(text).toMatch(/\[A\][^\n]*->[^\n]*\[A\]: function/);
+    expect(text).toMatch(/- A \(left pinky, home row[^)]*\) at position \d+ -> A \([^)]*\) at position \d+: function/);
     expect(text).toContain("has fewer thumb keys");
     // Space-hold first, then Caps Lock, then right Option (D-234).
     const proposal = text.split("\n").find((l) => l.includes("fewer thumb keys")) ?? "";
-    const order = [proposal.indexOf("[SPC]"), proposal.indexOf("[CAPS]"), proposal.indexOf("[RALT]")];
+    const order = [proposal.indexOf("Space ("), proposal.indexOf("⇪ ("), proposal.indexOf("⌥ (right")];
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });

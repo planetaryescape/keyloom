@@ -156,7 +156,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   const started = Date.now();
   const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
   try {
-    const text = userMessageText(input.message, selection, view.document);
+    const text = userMessageText(input.message, selection, view.document, view.board);
     const userMessage = insertMessage(app.db, {
       conversationId: conversation.id, role: "user", content: [{ type: "text", text }], ...(selection ? { selection } : {}),
     });

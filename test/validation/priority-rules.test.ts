@@ -11,13 +11,13 @@ const pin = (over: Partial<PinnedPriority>): PinnedPriority => ({ decisionId: "d
 const codes = (issues: Array<{ code: string }>) => issues.map((i) => i.code);
 
 describe("moved_pinned (07)", () => {
-  test("warns when a change alters a pinned slot, quoting BK and naming the key as the editor does", () => {
+  test("warns when a change alters a pinned slot, quoting BK and naming the key by what it prints (D-279)", () => {
     const r = validate(tinyBoard, tiny(), [set("base", 1, key("Q"))], { pinned: [pin({ slots: [at("base", 1)] })] });
     expect(r.ok).toBe(true);
     const warning = r.warnings.find((w) => w.code === "moved_pinned");
     expect(warning).toMatchObject({ slots: [at("base", 1)] });
     expect(warning?.message).toContain('"keep B where it is"');
-    expect(warning?.message).toContain("Base, key 2");
+    expect(warning?.message).toContain("the B key on Base");
   });
 
   test("warns when a pinned function leaves the slot it held, even if it lands somewhere else", () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { capabilityLine } from "../../boards/capabilities.ts";
+import { keyName, keyPlace } from "../../boards/key-names.ts";
 import { type GridContext, bindingLabel, renderLayerGrid } from "../../layout/render-grid.ts";
 import type { Layer } from "../../layout/schema.ts";
 import type { AgentPorts, LayoutSnapshot } from "../ports.ts";
@@ -20,11 +21,14 @@ function pickLayers(snapshot: LayoutSnapshot, wanted: string[] | undefined): Lay
   });
 }
 
-/** Position numbers beside labels, by the board's named rows, because a model counts badly in a 72-item array. */
+/**
+ * Position numbers beside labels, by the board's named rows, because a model counts badly in a 72-item array. Each key also gets its
+ * place under the hand, which is how the agent names it to BK; the number is only for ops (D-279).
+ */
 function positionTable(snapshot: LayoutSnapshot, layer: Layer): string {
   const ctx = { layers: snapshot.document.layers, macros: snapshot.document.macros, tapDances: snapshot.document.tapDances };
   return Object.entries(snapshot.board.definition.rows)
-    .map(([row, positions]) => `${row}: ${positions.map((p) => `${p}=${cell(layer, p, ctx)}`).join(" ")}`)
+    .map(([row, positions]) => `${row}: ${positions.map((p) => `${p}=${cell(layer, p, ctx)} (${keyPlace(snapshot.board.definition, p, snapshot.board.geometry)})`).join("; ")}`)
     .join("\n");
 }
 
@@ -34,12 +38,13 @@ const cell = (layer: Layer, position: number, ctx: GridContext) => {
 };
 
 /** Each hold-tap profile with its options and the keys that use it, because tuning a key's feel means editing its profile (D-017). */
-function profilesText({ holdTapProfiles, layers, settings }: LayoutSnapshot["document"]): string {
+function profilesText(document: LayoutSnapshot["document"], board: LayoutSnapshot["board"]): string {
+  const { holdTapProfiles, layers, settings } = document;
   if (holdTapProfiles.length === 0) return "Hold-tap profiles: none.";
   const users = new Map<string, string[]>();
   for (const layer of layers) {
     for (const [position, b] of layer.bindings.entries()) {
-      if (b.kind === "holdTap") users.set(b.profileId, [...(users.get(b.profileId) ?? []), `key ${position + 1} on ${layer.name}`]);
+      if (b.kind === "holdTap") users.set(b.profileId, [...(users.get(b.profileId) ?? []), keyName(board.definition, document, { layerId: layer.id, position }, { geometry: board.geometry })]);
     }
   }
   const lines = holdTapProfiles.map((p) => {
@@ -69,7 +74,7 @@ export const getLayoutTool = (ports: AgentPorts) =>
         return [
           `## Layer ${index}: ${layer.name} (id: ${layer.id})`,
           grid,
-          "Positions:",
+          "Positions (for ops only; to BK, name a key by its legend and place, as in brackets, never by number):",
           positionTable(snapshot, layer),
           "JSON:",
           JSON.stringify(layer),
@@ -81,7 +86,7 @@ export const getLayoutTool = (ports: AgentPorts) =>
         ...(other ? [`READ-ONLY: this is another of BK's layouts, not the one you are working on (${here.layoutName}). Positions below are positions on ${snapshot.board.definition.name}; do not use them in ops for ${here.layoutName}. Use map_keys to translate.`] : []),
         capabilityLine(snapshot.board.definition),
         `Macros: ${macros}.`,
-        profilesText(snapshot.document),
+        profilesText(snapshot.document, snapshot.board),
         "Legend: ⌥ Option/Alt, ⌘ Command/GUI, ⌃ Ctrl, ⇧ Shift; an r prefix means the right-hand modifier; a/b means tap a, hold b; ▽ transparent; MO/TO/TG layer keys.",
         ...sections,
       ].join("\n\n");

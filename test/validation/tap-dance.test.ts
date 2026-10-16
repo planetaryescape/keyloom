@@ -121,7 +121,7 @@ describe("tap and double-tap do the same", () => {
     const r = validate(tinyBoard, tiny(), [upsert(same), set("base", 3, td("esc-caps")), { op: "dropFunction", function: "key:D", reason: "t" }]);
     expect(r.ok).toBe(true);
     const w = r.warnings.find((x) => x.code === "tap_dance_same_action");
-    expect(w?.plain).toBe("Key 4 on Base: tapping and double-tapping do the same thing, so the extra slot adds nothing.");
+    expect(w?.plain).toBe("The Esc key on Base: tapping and double-tapping do the same thing, so the extra slot adds nothing.");
     expect(w?.slots).toEqual([at("base", 3)]);
   });
 

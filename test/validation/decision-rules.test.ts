@@ -24,7 +24,7 @@ describe("contradicts_decision (07, 08)", () => {
     const warning = r.warnings.find((w) => w.code === "contradicts_decision");
     expect(warning?.slots).toEqual([at("base", 1)]);
     expect(warning?.message).toContain("my left hand is free during shortcuts");
-    expect(warning?.message).toContain("Base, key 2");
+    expect(warning?.message).toContain("the B key on Base");
     expect(warning?.message).toContain("haven't tested");
   });
 
