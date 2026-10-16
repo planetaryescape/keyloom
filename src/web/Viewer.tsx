@@ -1,5 +1,6 @@
 import { Eye, MousePointerClick, Repeat2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { isOnePiece } from "../boards/one-piece.ts";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
 import type { ChangeOp, Slot } from "../layout/change.ts";
@@ -262,7 +263,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [sheet, setSheet] = useState<SheetSize>("half");
   const [half, setHalf] = useState<Half>("left");
   const viewportHeight = useViewportHeight();
-  const splitBoard = board.hands.left.length > 0 && board.hands.right.length > 0;
+  // A one-piece board (a 60%, a laptop) stays whole on a phone, scrolling sideways when its keys would be too small to fit: its drawn
+  // case can't be cut between the hands, and half of it isn't a board anyone has (D-351).
+  const splitBoard = !isOnePiece(board, keys);
   const shownHalf = phone && splitBoard ? half : null;
 
   const headIndex = Math.max(

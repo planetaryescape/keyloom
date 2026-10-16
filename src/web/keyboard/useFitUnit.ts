@@ -48,10 +48,15 @@ export function useFitUnit({ width, height }: FitInput): {
     return () => observer.disconnect();
   }, []);
 
-  const byWidth = width > 0 ? available.width / width : MAX_UNIT;
-  const byHeight = height > 0 && available.height > 0 ? available.height / height : MAX_UNIT;
-  const coarse = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-  const unit = Math.max(coarse ? MIN_UNIT_TOUCH : MIN_UNIT_MOUSE, Math.min(MAX_UNIT, byWidth, byHeight));
-  const fitted = Math.floor(unit);
-  return { ref, unit: fitted, overflowing: width * fitted > available.width + 1 };
+  return { ref, ...fitUnit({ width, height }, available, minUnit()) };
 }
+
+/** px per key unit for a board of `board` key units in a stage of `available` px, never under `min`; pure, for the stage-fit test. */
+export function fitUnit(board: FitInput, available: { width: number; height: number }, min: number): { unit: number; overflowing: boolean } {
+  const byWidth = board.width > 0 ? available.width / board.width : MAX_UNIT;
+  const byHeight = board.height > 0 && available.height > 0 ? available.height / board.height : MAX_UNIT;
+  const unit = Math.floor(Math.max(min, Math.min(MAX_UNIT, byWidth, byHeight)));
+  return { unit, overflowing: board.width * unit > available.width + 1 };
+}
+
+export const MIN_UNIT = { touch: MIN_UNIT_TOUCH, mouse: MIN_UNIT_MOUSE } as const;

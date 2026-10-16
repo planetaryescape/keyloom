@@ -8,19 +8,18 @@ import { MoveArrows } from "./MoveArrows.tsx";
 import { LEGEND_FLOOR_PX } from "./fit.ts";
 import { useKeyDrag } from "./useKeyDrag.ts";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
-import { caseBounds, caseParts } from "./case-shape.ts";
+import { canvasAround } from "./canvas.ts";
+import { caseParts } from "./case-shape.ts";
 import { frontMode, WIDEST_WITH_SYMBOL, WIDEST_WORD } from "./front-words.ts";
 import { measureText } from "./measure.ts";
-import { boardBounds, keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
+import { keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { minUnit, useFitUnit } from "./useFitUnit.ts";
 import "./keyboard.css";
 
-// Space between neighbouring caps, and the margin around the board, in key units. The margin leaves room for the case, which reaches
-// past the keys, and for its shadow.
+// Space between neighbouring caps, in key units.
 export const GAP = 0.09;
-export const MARGIN = 0.6;
-const CASE_MARGIN = 0.3;
+export { MARGIN } from "./canvas.ts";
 const ARROWS: Record<string, Direction> = {
   ArrowLeft: "left",
   ArrowRight: "right",
@@ -200,16 +199,8 @@ export function Keyboard({
   // One hand's keys, when only one is shown. The canvas, the trays, the caps and the arrow keys all follow it.
   const visible = useMemo(() => (half === null ? null : new Set(hands[half])), [half, hands]);
   const shownKeys = useMemo(() => (visible === null ? keys : keys.filter((_, index) => visible.has(index))), [keys, visible]);
-  const bounds = boardBounds(shownKeys);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
-  // The margin around the keys holds most cases and their shadow; a case can reach further (the Moonlander's top edge and tenting
-  // legs, a laptop's deck), so the canvas also covers the case itself plus room for its shadow.
-  const drawnCase = caseBounds(parts);
-  const minX = Math.min(bounds.minX - MARGIN, (drawnCase?.minX ?? Infinity) - CASE_MARGIN);
-  const minY = Math.min(bounds.minY - MARGIN, (drawnCase?.minY ?? Infinity) - CASE_MARGIN);
-  const maxX = Math.max(bounds.minX + bounds.width + MARGIN, (drawnCase?.maxX ?? -Infinity) + CASE_MARGIN);
-  const maxY = Math.max(bounds.minY + bounds.height + MARGIN, (drawnCase?.maxY ?? -Infinity) + CASE_MARGIN);
-  const canvas: Bounds = { minX, minY, width: maxX - minX, height: maxY - minY };
+  const canvas = canvasAround(shownKeys, parts);
   const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
   // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
   // the size it is drawn, so the 11 px floor still holds (P2 review).

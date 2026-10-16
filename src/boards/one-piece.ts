@@ -8,19 +8,15 @@ const SPLIT_GAP = 0.5;
 
 /**
  * A drawn case decides: any body or deck that belongs to no hand makes the board one piece. Without one, the gap between the hands'
- * key boxes does, measured square to the page so a tilted thumb cluster can't close it.
+ * key boxes does, measured square to the page so a tilted thumb cluster can't close it. The editor passes the keys as drawn and
+ * boards check the firmware's, which can't see display.shift; every shipped board gets the same answer from both (test/web/stage-fit).
  */
 export function isOnePiece(def: Pick<BoardDefinition, "hands" | "display">, keys: readonly GeometryKey[]): boolean {
   const drawn = def.display?.case;
   if (drawn !== undefined) return drawn.some((part) => part.hand === null && (part.kind === "body" || part.kind === "deck"));
-  const dx = new Map<number, number>();
-  for (const move of def.display?.shift ?? []) for (const p of move.positions) dx.set(p, (dx.get(p) ?? 0) + move.dx);
-  const box = (p: number) => {
-    const key = keys[p];
-    return key === undefined ? null : { minX: key.x + (dx.get(p) ?? 0), maxX: key.x + key.w + (dx.get(p) ?? 0) };
-  };
-  const left = def.hands.left.flatMap((p) => box(p) ?? []);
-  const right = def.hands.right.flatMap((p) => box(p) ?? []);
+  const at = (positions: readonly number[]) => positions.flatMap((p) => keys[p] ?? []);
+  const left = at(def.hands.left);
+  const right = at(def.hands.right);
   if (left.length === 0 || right.length === 0) return true;
-  return Math.min(...right.map((b) => b.minX)) - Math.max(...left.map((b) => b.maxX)) < SPLIT_GAP;
+  return Math.min(...right.map((k) => k.x)) - Math.max(...left.map((k) => k.x + k.w)) < SPLIT_GAP;
 }
