@@ -55,3 +55,28 @@ export function grouped(review: BoardReview): { problems: ReviewItem[]; suggesti
 
 /** The suggestions that fix an item, so they sit under it. */
 export const fixesFor = (review: BoardReview, id: string): ReviewItem[] => shownItems(review).filter((i) => i.kind === "suggestion" && i.fixes.includes(id));
+
+// A key with no legend says nothing as a cap, so the review says where it is instead, in the board's own rows (D-340).
+const ROW_PLACES: Readonly<Record<string, string>> = {
+  function: "on the function row", number: "on the number row", top: "on the top row", home: "on the home row",
+  bottom: "on the bottom row", lower: "on the lowest row", thumb: "by the thumbs",
+};
+
+/** Where a key sits, in words: "on the function row", "by the thumbs". */
+export function placeOf(position: number, rows: Readonly<Record<string, readonly number[]>>): string {
+  const row = Object.entries(rows).find(([, positions]) => positions.includes(position))?.[0];
+  if (row === undefined) return "elsewhere on the board";
+  return ROW_PLACES[row] ?? `on the ${row} row`;
+}
+
+/** "5 on the function row, 4 by the thumbs": keys counted by where they sit, most first; one key is just its place. */
+export function placeWords(positions: readonly number[], rows: Readonly<Record<string, readonly number[]>>): string {
+  const counts = new Map<string, number>();
+  for (const p of positions) {
+    const place = placeOf(p, rows);
+    counts.set(place, (counts.get(place) ?? 0) + 1);
+  }
+  if (positions.length === 1) return [...counts.keys()][0] ?? "";
+  // A stable sort keeps the board's own row order among places with the same count.
+  return [...counts].sort((a, b) => b[1] - a[1]).map(([place, n]) => `${n} ${place}`).join(", ");
+}

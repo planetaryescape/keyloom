@@ -4,33 +4,53 @@ import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { FixedItem, ReviewItem } from "../../validation/review-item.ts";
-import { keyLabel, layerName } from "../chat/proposal-facts.ts";
+import { describeKey } from "../../layout/describe.ts";
+import { layerName } from "../chat/proposal-facts.ts";
 import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
-import { fixesFor, grouped, markerWords, segments } from "./review-words.ts";
+import { ProviderPicker } from "../chat/ProviderPicker.tsx";
+import { useProviderStatus } from "../chat/useProviderStatus.ts";
+import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
 import "./review.css";
 
-/** A title or body with its keys drawn as caps and its layers as chips (D-340). */
-export function ReviewText({ text, layout }: { text: string; layout: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough"> }) {
+type Rows = Readonly<Record<string, readonly number[]>>;
+
+/**
+ * A title or body with its keys drawn as caps and its layers as chips (D-340). A key with no legend would be a cap that says nothing,
+ * so it reads as where it is instead ("an empty key on the function row"); the board marks it.
+ */
+export function ReviewText({ text, layout, rows }: { text: string; layout: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough">; rows: Rows }) {
   return (
     <>
-      {segments(text).map((s, i) =>
-        s.kind === "text" ? <Fragment key={i}>{s.text}</Fragment>
-        : s.kind === "key" ? <MiniCap key={i}>{keyLabel(layout as Layout, { layerId: s.layerId, position: s.position }) || "empty"}</MiniCap>
-        : <span key={i} className="br-layer"><Layers size={11} aria-hidden="true" />{layerName(layout as Layout, s.layerId)}</span>,
-      )}
+      {segments(text).map((s, i) => {
+        if (s.kind === "text") return <Fragment key={i}>{s.text}</Fragment>;
+        if (s.kind === "layer") return <span key={i} className="br-layer"><Layers size={11} aria-hidden="true" />{layerName(layout as Layout, s.layerId)}</span>;
+        const layerIndex = layout.layers.findIndex((l) => l.id === s.layerId);
+        const tap = layerIndex < 0 ? "" : (describeKey(layout as Layout, layerIndex, s.position)?.legend.tap ?? "");
+        return tap === "" ? <Fragment key={i}>{layerIndex < 0 ? "a key" : "an empty key"} {placeOf(s.position, rows)}</Fragment> : <MiniCap key={i}>{tap}</MiniCap>;
+      })}
     </>
   );
+}
+
+// The check's own sentence names its empty keys one by one, which as caps would all read "empty"; where they are says more.
+function bodyOf(item: ReviewItem, rows: Rows): string {
+  if (item.source !== "check" || item.code !== "keys_do_nothing" || item.keys.length === 0) return item.body;
+  const where = placeWords(item.keys.map((k) => k.position), rows);
+  return item.keys.length === 1 ? `It's ${where}. Pressing it types nothing.` : `${where[0]?.toUpperCase()}${where.slice(1)}. Pressing them types nothing.`;
 }
 
 const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it connected", apply: "after your change", import: "when it was imported", manual: "when you asked" };
 
 // The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
 // a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
-export function ReviewPanel({ review: r, layout, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onClose, onSetUpModel }: {
+export function ReviewPanel({ token, review: r, layout, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onClose }: {
+  token: string;
   review: Review;
   layout: Layout;
+  /** The board's rows, to say where a key with no legend is. */
+  rows: Rows;
   boardName: string;
   configName: string;
   /** The config's open proposals, for a suggestion's card. */
@@ -40,9 +60,11 @@ export function ReviewPanel({ review: r, layout, boardName, configName, proposal
   onApply: (card: ProposalCard) => Promise<void>;
   onShowLayer: (layerId: string) => void;
   onClose: () => void;
-  onSetUpModel: () => void;
 }) {
   const [showHidden, setShowHidden] = useState(false);
+  const [details, setDetails] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const provider = useProviderStatus(token);
   const [applying, setApplying] = useState<string | null>(null);
   const review = r.review;
   const now = Date.now();
@@ -85,8 +107,8 @@ export function ReviewPanel({ review: r, layout, boardName, configName, proposal
     const c = card(item);
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
-        <h4><ReviewText text={item.title} layout={layout} /></h4>
-        <p><ReviewText text={item.body} layout={layout} /></p>
+        <h4><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
+        <p><ReviewText text={bodyOf(item, rows)} layout={layout} rows={rows} /></p>
         <div className="br-meta"><span className="br-src"><Sparkles size={11} aria-hidden="true" />keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>checked against your layout</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
@@ -114,8 +136,8 @@ export function ReviewPanel({ review: r, layout, boardName, configName, proposal
   const finding = (item: ReviewItem) => (
     <Fragment key={item.id}>
       <article className="br-item" data-kind={item.kind} data-stale={stale}>
-        <h4><ReviewText text={item.title} layout={layout} /></h4>
-        <p><ReviewText text={item.body} layout={layout} /></p>
+        <h4><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
+        <p><ReviewText text={bodyOf(item, rows)} layout={layout} rows={rows} /></p>
         <div className="br-meta">
           {item.source === "check" ? <span className="br-src">Check</span> : <span className="br-src"><Sparkles size={11} aria-hidden="true" />keyloom</span>}
           {item.layers.length > 0 ? <span>marked on the strip</span> : item.keys.length > 0 ? <span>{item.keys.length === 1 ? "its key is marked on the board" : "its keys are marked on the board"}</span> : null}
@@ -135,7 +157,7 @@ export function ReviewPanel({ review: r, layout, boardName, configName, proposal
 
   const fixed = (item: FixedItem) => (
     <article key={`fixed:${item.id}`} className="br-item" data-kind="fixed">
-      <h4><CircleCheck size={14} className="br-tick" aria-hidden="true" /> <ReviewText text={item.title} layout={layout} /></h4>
+      <h4><CircleCheck size={14} className="br-tick" aria-hidden="true" /> <ReviewText text={item.title} layout={layout} rows={rows} /></h4>
       <p>Fixed by your change.</p>
       <div className="br-meta"><span className="br-src">{item.source === "check" ? "Check" : "keyloom"}</span><span>just now</span></div>
     </article>
@@ -167,15 +189,36 @@ export function ReviewPanel({ review: r, layout, boardName, configName, proposal
 
         {review.ai.status === "pending" || review.ai.status === "running" ? (
           <p className="br-quiet br-ai-coming"><LoaderCircle size={13} className="spin" aria-hidden="true" /> keyloom's own look is on its way; the checks above are already in.</p>
-        ) : review.ai.status === "unavailable" ? (
+        ) : review.ai.status === "unavailable" || review.ai.status === "failed" ? (
+          // Plain words and the one thing to do; the engine's reason is for whoever wants it, behind Details.
           <div className="br-ai-missing">
-            <b>No suggestions this time.</b> keyloom's own look needs a model; the checks above don't.{review.ai.reason === null ? "" : ` ${review.ai.reason}`}{" "}
-            <button type="button" className="sheet-action br-inline" onClick={onSetUpModel}>Set up a model</button>
-          </div>
-        ) : review.ai.status === "failed" ? (
-          <div className="br-ai-missing">
-            <b>keyloom's own look didn't finish.</b> {review.ai.reason ?? "The model stopped."}{" "}
-            <button type="button" className="sheet-action br-inline" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
+            <p className="br-ai-words">
+              {review.ai.status === "unavailable" ? "Suggestions need a model, and none is set up." : "keyloom's own look didn't finish, so there are no suggestions this time."}
+            </p>
+            <div className="br-actions br-actions-start">
+              {review.ai.status === "unavailable" ? (
+                <button type="button" className="sheet-action" aria-expanded={picking} disabled={provider.status === null} onClick={() => setPicking((v) => !v)}>Set up a model</button>
+              ) : (
+                <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
+              )}
+              {review.ai.reason === null ? null : (
+                <button type="button" className="sheet-action" aria-expanded={details} onClick={() => setDetails((v) => !v)}>{details ? "Hide details" : "Details"}</button>
+              )}
+            </div>
+            {details && review.ai.reason !== null ? <p className="br-ai-reason">{review.ai.reason}</p> : null}
+            {picking ? (
+              <ProviderPicker
+                token={token}
+                status={provider.status}
+                pinned={null}
+                menuOpened={{ open: picking, onClose: () => setPicking(false) }}
+                onChanged={(next) => {
+                  provider.replace(next);
+                  // The review's agent reads the same choice, so a model that is ready now can look at once.
+                  if (next.active !== null && next.providers.find((p) => p.id === next.active?.provider)?.ready === true) void r.run(true);
+                }}
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -184,7 +227,7 @@ export function ReviewPanel({ review: r, layout, boardName, configName, proposal
             <h3><b>Hidden</b> {hidden.length}</h3>
             {hidden.map((item) => (
               <article key={item.id} className="br-item" data-kind="hidden">
-                <h4><ReviewText text={item.title} layout={layout} /></h4>
+                <h4><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
                 <div className="br-actions"><button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.restore(item.id)}>Show it again</button></div>
               </article>
             ))}

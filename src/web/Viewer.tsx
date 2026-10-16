@@ -1963,8 +1963,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         ) : reviewShown ? (
           <div className={narrow ? "lab-sheet br-sheet" : "nb-column"}>
             <ReviewPanel
+              token={token}
               review={boardReview}
               layout={layout}
+              rows={board.rows}
               boardName={boardDisplayName(board.name)}
               configName={summary.name}
               proposals={waiting}
@@ -1977,10 +1979,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               }}
               onShowLayer={(id) => setLayerId(id)}
               onClose={() => setReviewOpen(false)}
-              onSetUpModel={() => {
-                setReviewOpen(false);
-                openChat();
-              }}
             />
           </div>
         ) : proposalsShown ? (
