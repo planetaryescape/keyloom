@@ -162,7 +162,12 @@ export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<
         detail: `running keyloom build ${k.firmware.serial}; the next flash needs no keypress (${hid})`,
       });
     } else if (k.firmware.state === "other") {
-      checks.push({ name, ok: true, detail: `running firmware keyloom didn't build (USB serial ${k.firmware.serial ?? "unavailable"}); the first flash needs the bootloader key, and flashes after it need none` });
+      checks.push({
+        name, ok: true,
+        detail: k.target
+          ? `running firmware keyloom didn't build (USB serial ${k.firmware.serial ?? "unavailable"}); the first flash needs the bootloader key, and flashes after it need none`
+          : `running firmware keyloom didn't build (USB serial ${k.firmware.serial ?? "unavailable"}); keyloom builds for it, and every flash needs the board's own bootloader key`,
+      });
     }
   }
   // A ZMK half reports through its serial port, so the halves are read apart from the QMK keyboards above.

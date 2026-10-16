@@ -298,6 +298,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.instructions` | `manual` | What to tell the person: which tool flashes the file, and how to enter the bootloader. |
 | `revisions[].detect` | all | `null`, or an object that names the USB device. |
 | `revisions[].detect.usbProductId` | all | The board's USB product ID, such as `0x1969`. keyloom uses it to tell hardware revisions apart. |
+| `revisions[].detect.usbVendorId` | optional | The vendor ID the running firmware reports, such as `0x4653`, when the board is not ZSA's. keyloom assumes ZSA's `0x3297` for a ZSA board without it. |
 | `revisions[].device` | `kanata-config`, optional | How a software remapper finds the keyboard to take. A board with no USB IDs (a laptop's own) has `detect: null` and this. |
 | `revisions[].device.kind` | `device` | `macos-product-name`. |
 | `revisions[].device.name` | `device` | The exact product string `kanata --list` prints, such as `Apple Internal Keyboard / Trackpad`. |

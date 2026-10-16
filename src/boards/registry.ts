@@ -21,14 +21,22 @@ for (const e of readBoards()) {
   }
 }
 
+// Boards derived from a keyboard on the person's desk (22). They load beside the shipped ones and never replace one: a shipped id wins.
+let userBoards = new Map<string, Board>();
+
+/** Replaces the user boards with the ones a data directory holds. Each `openApp` calls it, so the registry follows the directory in use. */
+export function setUserBoards(list: readonly Board[]): void {
+  userBoards = new Map(list.filter((b) => !boards.has(b.definition.id)).map((b) => [b.definition.id, b]));
+}
+
 export function listBoards(): Board[] {
-  return [...boards.values()];
+  return [...boards.values(), ...userBoards.values()];
 }
 
 export function getBoard(id: string): Board {
-  const board = boards.get(id);
+  const board = boards.get(id) ?? userBoards.get(id);
   if (!board) {
-    throw new BoardNotFoundError(`no board "${id}". Known boards: ${[...boards.keys()].join(", ") || "none"}`);
+    throw new BoardNotFoundError(`no board "${id}". Known boards: ${[...boards.keys(), ...userBoards.keys()].join(", ") || "none"}`);
   }
   return board;
 }

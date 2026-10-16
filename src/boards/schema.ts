@@ -51,7 +51,8 @@ export const RevisionSchema = z.strictObject({
   qmkTarget: z.string().min(1).optional(),
   build: BuildRecipeSchema,
   flash: FlashRecipeSchema,
-  detect: z.object({ usbProductId: z.string().regex(/^0x[0-9a-f]{4}$/i) }).nullable(),
+  // The running firmware's USB product ID, and its vendor ID where the board is not ZSA's (the Moonlander's check assumes ZSA's; D-237).
+  detect: z.object({ usbProductId: z.string().regex(/^0x[0-9a-f]{4}$/i), usbVendorId: z.string().regex(/^0x[0-9a-f]{4}$/i).optional() }).nullable(),
   // How a software remapper finds the keyboard it should take; the built-in keyboard has no USB IDs (21). Absent on firmware boards.
   device: DeviceMatcherSchema.optional(),
 });

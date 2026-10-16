@@ -24,6 +24,12 @@ function githubSlug(repo: string): string {
   return m[1];
 }
 
+/** A ZMK board's `physicalLayout` is a file, or `file#label` where the file holds several layouts. */
+export const splitLayoutRef = (ref: string): { path: string; label?: string } => {
+  const [path = ref, label] = ref.split("#");
+  return label === undefined ? { path } : { path, label };
+};
+
 export function geometryPath(rev: BoardRevision): string {
   // A ZMK board names the file holding its `zmk,physical-layout`; a QMK board's is derived from its target unless it names one.
   if (rev.build.kind === "kanata-config") throw new GeometryError(`revision ${rev.id}: a software remapper's geometry is written by hand, not derived from a firmware tree`);
@@ -34,8 +40,8 @@ export function geometryPath(rev: BoardRevision): string {
 }
 
 /** Fetches a file at an immutable SHA. SHAs never change, so a cached copy is always valid. */
-async function fetchPinned(
-  rev: BoardRevision,
+export async function fetchPinned(
+  rev: Pick<BoardRevision, "source">,
   path: string,
   fetchText: TextFetcher,
   cacheDir: string | undefined,
@@ -58,12 +64,13 @@ export type GeometryOptions = { fetchText?: TextFetcher; cacheDir?: string | und
 /** Geometry for one revision of a QMK board: `layouts.LAYOUT.layout`, in binding order. */
 export async function generateGeometry(board: BoardDefinition, rev: BoardRevision, opts: GeometryOptions = {}): Promise<Geometry> {
   if (board.firmware === "kanata") throw new GeometryError(`${board.id} is a software remapper: its geometry.json is written by hand, so there is nothing to regenerate`);
-  const path = geometryPath(rev);
+  const ref = geometryPath(rev);
+  const { path, label } = splitLayoutRef(ref);
   const text = await fetchPinned(rev, path, opts.fetchText ?? defaultFetcher, opts.cacheDir);
   if (board.firmware === "zmk") {
-    const keys = parsePhysicalLayout(text);
+    const keys = parsePhysicalLayout(text, label);
     if (keys.length !== board.keyCount) throw new GeometryError(`${path} has ${keys.length} keys, board.json says keyCount ${board.keyCount}`);
-    return GeometrySchema.parse({ schemaVersion: 1, source: { repo: rev.source.repo, sha: rev.source.sha, path }, keys });
+    return GeometrySchema.parse({ schemaVersion: 1, source: { repo: rev.source.repo, sha: rev.source.sha, path: ref }, keys });
   }
   let doc: { layouts?: Record<string, { layout?: QmkKey[] }>; layout_aliases?: Record<string, string> };
   try {

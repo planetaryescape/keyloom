@@ -4,12 +4,18 @@ import { type BoardDevView, loadBoardDev } from "../boards/dev.ts";
 import { type CheckOptions, type CheckResult, checkBoardDir } from "../boards/check.ts";
 import { type GeometryOptions, generateGeometry, serializeGeometry } from "../boards/geometry.ts";
 import { type Board, BoardNotFoundError, loadDefinitionDir } from "../boards/load.ts";
-import { getBoard, listBoards } from "../boards/registry.ts";
-import { cacheDir } from "../persistence/paths.ts";
+import { getBoard, listBoards, setUserBoards } from "../boards/registry.ts";
+import { readUserBoards } from "../boards/user-boards.ts";
+import { cacheDir, dataDir } from "../persistence/paths.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
 
 export type { Board } from "../boards/load.ts";
 export type { CheckResult } from "../boards/check.ts";
+
+/** Loads the boards derived on this machine from the data directory into the registry (22), for commands that never open the database. */
+export function loadUserBoards(dataDirOverride?: string): void {
+  setUserBoards(readUserBoards(dataDir(dataDirOverride)).boards);
+}
 
 export const listBoardDefinitions = (): Board[] => listBoards();
 

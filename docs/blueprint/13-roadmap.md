@@ -431,7 +431,7 @@ Only BK can do these:
 
 **Promise:** "I plugged in a keyboard keyloom had never seen, confirmed which board it was, and put my Glove80 setup on it."
 
-**Build:** [22](22-new-keyboard.md) (D-236, D-237): USB detection with candidates, definition from the firmware tree plus confirmed heuristics, generalised keyboard detection, new QMK flash recipes (atmel-dfu, stm32-dfu), and "put my config on this" through the cross-board mapping.
+**Build:** [22](22-new-keyboard.md) (D-236, D-237, D-330 to D-335): USB detection with candidates, definition from the firmware tree plus confirmed heuristics, generalised keyboard detection, new QMK flash recipes (atmel-dfu, stm32-dfu), and "put my config on this" through the cross-board mapping.
 
 **New unknowns:** S42 (detection on BK's boards); S40 (finger heuristics).
 
@@ -440,6 +440,8 @@ Only BK can do these:
 **Done when:** the Corne goes from "unknown keyboard" to running BK's mapped config with only the confirmations the chapter lists.
 
 **Left out:** reading the keymap off boards without Vial, VIA or Studio; hands-free flashing for non-ZSA QMK boards (S41).
+
+**Built so far (part 1, D-330 to D-335):** detection against a committed index of the QMK and ZMK trees, the generalised keyboard reader, board derivation with the heuristics' accuracy reproduced in tests, local boards in the data directory, "put my config on this" as proposals on a new config, and `keyloom keyboard detect|add|put`. S42 ran on BK's Glove80; S40 is closed. The stage card, the atmel-dfu and stm32-dfu recipes and the smoke build are part 2.
 
 ## Rung 22: Car: keyloom watches me type and tunes my home row mods
 
