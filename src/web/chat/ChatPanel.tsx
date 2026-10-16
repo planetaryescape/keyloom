@@ -73,8 +73,6 @@ interface Props {
   commands?: { find: (text: string) => Command[]; run: (command: Command) => void };
 }
 
-// About two lines of the bar: an answer this short reads where it is asked; anything longer goes to the panel (D-310).
-const LINE_REPLY_CHARS = 180;
 const ASK_AGAIN = "The layout changed after you proposed that, so it no longer applies. Please propose it again against the current layout.";
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
@@ -297,14 +295,11 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   // Anything that needs reading or a choice opens the bar over the board even in a short window; the folded line is for the common
   // case, an option to apply or a message to type.
   const lineProposal = newestOpen.find((proposal) => proposal.changeSetId === pinnedId) ?? newestOpen[0];
-  // Folded only when one line says it all: an option to apply, or nothing yet. A question from keyloom must be read, so it opens.
-  const folded = variant === "bar" && collapsed && view === "chat" && !needsModel && chat.problem === null && !newestFailed && !streaming && (lineProposal !== undefined || empty);
-  // A reply past about two lines of the bar, an option, a failure, or a second message makes it a conversation: it moves to the panel
-  // and stays there until a new conversation starts (D-310). The folded line wins in a short window, where the board needs the height.
-  const longReply = transcript.turns.some((turn) => turn.kind === "assistant" && (turn.text.length > LINE_REPLY_CHARS || turn.proposals.length > 0 || turn.priorities.length > 0 || turn.failure !== null));
-  const asked = transcript.turns.filter((turn) => turn.kind === "user").length;
-  // A carried thread is a conversation already, so it reads in the panel (D-317).
-  const presentation: "bar" | "panel" = sheet || (variant === "bar" && !folded && (longReply || asked > 1 || carried !== null)) ? "panel" : "bar";
+  // ⌘K opens in the side column from the first keystroke (D-318): a bar at the stage's foot covered the layer strip and made a
+  // conversation scroll in a few lines while the sides stood empty (BK, 2026-10-16). The phone keeps its bottom sheet.
+  const presentation: "bar" | "panel" = sheet || variant === "bar" ? "panel" : "bar";
+  // The folded line existed only to keep the foot bar off a short board; the side column doesn't cover the board, so it never folds.
+  const folded = presentation === "bar" && collapsed && view === "chat" && !needsModel && chat.problem === null && !newestFailed && !streaming && (lineProposal !== undefined || empty);
   useEffect(() => {
     if (variant === "bar" && !sheet) onPresentation?.(presentation);
     // The panel is laid out after this render; rest the log once it has its height.
