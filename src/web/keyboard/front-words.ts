@@ -25,8 +25,13 @@ export type FrontMode = "both" | "word" | "mark";
  * cap (a short window with a mouse) even the word may not fit; then every cap prints the symbol alone rather than a cut-off word.
  * `measured` is null when the browser couldn't measure; then fit.ts's estimate decides, erring toward shorter prints.
  */
+/** The front print keeps this far from the cap body's edges, in key units; the per-key check in Cap.tsx uses the same room. */
+export const FRONT_INSET = 0.1;
+
 export function frontMode(unit: number, measured: { both: number; word: number } | null, gapUnits: number, floorPx = LEGEND_FLOOR_PX): FrontMode {
-  const room = (1 - gapUnits) * unit;
+  // The same room the per-key check allows: with a looser limit here, a print that fit the board's choice was cut on its own cap
+  // ("⌘ com" on a 56 px Glove80 cap, 0.56 px short).
+  const room = (1 - Math.max(gapUnits, FRONT_INSET)) * unit;
   if (measured !== null) return measured.both <= room ? "both" : measured.word <= room ? "word" : "mark";
   const size = Math.max(HOLD_SIZE.min, floorPx / unit);
   const fits = (text: string) => textEm(text) * CONDENSED_EM * size <= 1 - CAP_INSET;
