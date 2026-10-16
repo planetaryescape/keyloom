@@ -7,7 +7,7 @@ import { Markdown } from "./Markdown.tsx";
 import { PriorityChips } from "./PriorityChips.tsx";
 import { ProposalCompare } from "./ProposalCompare.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
-import { keyLabel, layerName } from "./proposal-facts.ts";
+import { keyLabel, layerName, optionLabels } from "./proposal-facts.ts";
 import type { AssistantTurn, UserTurn } from "./transcript.ts";
 
 export function UserMessage({ turn, layout }: { turn: UserTurn; layout: Layout }) {
@@ -121,7 +121,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                             onClick={() => proposal.changeSetId !== pinnedId && onPin(proposal)}
                           >
                             <span className="proposal-tab-n">{index + 1}</span>
-                            <span className="proposal-tab-title" title={proposal.title}>{proposal.title}</span>
+                            <span className="proposal-tab-title" title={proposal.title}>{optionLabels(group.map((option) => option.title))[index]}</span>
                           </button>
                         ))}
                       </div>

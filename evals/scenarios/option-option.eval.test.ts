@@ -10,7 +10,7 @@ import { type ChatOutcome, getLayout, listChanges, sendMessage } from "../../src
 import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import { optionOptionApp, S_POSITION } from "../../test/helpers/option-option.ts";
-import { costLine, evalProvider, live, reportFile } from "../provider.ts";
+import { costLine, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 
 const PROBLEM = "Some apps want Option–Option, and I can't do it because Option is my S home row mod.";
@@ -57,6 +57,7 @@ describe("eval: Option-Option", () => {
     );
 
     const checks = {
+      namesKeysNotNumbers: namesNoKeyNumbers(outcomes),
       atLeastOneValidAlternative: proposed.length >= 1 && proposed.every((c) => (c.validation as { ok: boolean }).ok),
       optionReachable: false,
       noMultiTapOnS: true,
@@ -91,6 +92,6 @@ describe("eval: Option-Option", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, reportFile(date, first?.model, first?.effort, "option-option")), `${report}\n`);
 
-    expect(checks).toEqual({ atLeastOneValidAlternative: true, optionReachable: true, noMultiTapOnS: true });
+    expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
   }, 600_000);
 });

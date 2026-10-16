@@ -234,6 +234,11 @@
   animation: sync-breathe 1.4s ease-in-out infinite;
 }
 
+/* A change not on the keyboard yet says so in amber, the one colour for that (D-263). */
+.sync-pill-body:has(.sync-light[data-tone="pending"]) {
+  color: var(--pending-ink);
+}
+
 @keyframes sync-breathe {
   50% {
     opacity: 0.45;

@@ -621,6 +621,21 @@ button.cap[data-found="true"] .cap-body {
   box-shadow: 0 0 8px var(--pending);
 }
 
+/* Applied but not on the keyboard yet: the draft's amber dot, without its ring, until the sync line says the keyboard has it. */
+button.cap[data-unsynced="true"]:not([data-pending="true"])::after {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--u) * 0.08);
+  left: calc(var(--u) * 0.1);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pending);
+  box-shadow: 0 0 8px var(--pending);
+  content: "";
+  pointer-events: none;
+}
+
 .cap-mark-remembered {
   top: calc(var(--u) * 0.05);
   right: calc(var(--u) * 0.08);

@@ -1,4 +1,5 @@
-import { MessagesSquare, ScrollText, SquarePen, X } from "lucide-react";
+import { Cpu, Ellipsis, MessagesSquare, ScrollText, SquarePen } from "lucide-react";
+import { Menu } from "../shell/Menu.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatSelection, ProposalCard } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
@@ -16,6 +17,7 @@ import { chooseProvider } from "./api-chat.ts";
 
 const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" } as const;
 import { keyLabel, layerName } from "./proposal-facts.ts";
+import { ProposalCard as ProposalCardView } from "./ProposalCard.tsx";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
 import { useChat } from "./useChat.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
@@ -27,6 +29,8 @@ interface Props {
   variant?: "bar" | "panel";
   /** Closes the bar (Esc does too). */
   onClose?: () => void;
+  /** A short window: the bar folds to one line, the option and Apply, or the input (bar-fit.ts). */
+  collapsed?: boolean;
   token: string;
   layoutRef: string;
   layout: Layout;
@@ -55,12 +59,13 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   const [draft, setDraft] = useState("");
   const [view, setView] = useState<"chat" | "history" | "decisions">("chat");
+  const [modelOpen, setModelOpen] = useState(false);
   const decisions = useDecisions(token, layoutRef, revisionId, view === "decisions");
   const outcomes = useOutcomeQuestions(token, layoutRef);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -101,12 +106,47 @@ export function ChatPanel({ variant = "panel", onClose, token, layoutRef, layout
     const replies = element.querySelectorAll<HTMLElement>(".msg-assistant");
     const firstCard = replies[replies.length - 1]?.querySelector<HTMLElement>(".proposal-group");
     if (firstCard) {
-      element.scrollTop += firstCard.getBoundingClientRect().top - element.getBoundingClientRect().top - 8;
+      const view = element.getBoundingClientRect();
+      const at = (el: HTMLElement) => element.scrollTop + el.getBoundingClientRect().top - view.top - 8;
+      const cardTop = at(firstCard);
+      if (variant === "bar") {
+        // The bar reads as comp d: the person's own message, then the reply with its option. When both don't fit, the option and its
+        // Apply win: it scrolls down until the card's foot is in view, but never past the card's top.
+        const asked = [...element.querySelectorAll<HTMLElement>(".msg-user")].at(-1);
+        const cardBottom = cardTop + firstCard.getBoundingClientRect().height + 16;
+        const start = asked === undefined ? cardTop : at(asked);
+        element.scrollTop = Math.min(cardTop, Math.max(start, cardBottom - element.clientHeight));
+      } else {
+        element.scrollTop = cardTop;
+      }
       stick.current = false;
       return;
     }
+    // In the bar, the person's own message stays above the reply when both fit (comp d); otherwise the newest words win.
+    const asked = variant === "bar" ? [...element.querySelectorAll<HTMLElement>(".msg-user")].at(-1) : undefined;
+    if (asked !== undefined) {
+      const top = element.scrollTop + asked.getBoundingClientRect().top - element.getBoundingClientRect().top - 8;
+      if (element.scrollHeight - top <= element.clientHeight) {
+        element.scrollTop = top;
+        return;
+      }
+    }
     element.scrollTop = element.scrollHeight;
   }, [transcript.turns, chat.problem, view]);
+
+  // Whether the log scrolls: then the sticky foot sits over the reply, and what passes under it fades (command-bar.css).
+  useEffect(() => {
+    const element = log.current;
+    if (element === null) return;
+    const mark = () => {
+      element.dataset.overflow = String(element.scrollHeight > element.clientHeight + 1);
+    };
+    mark();
+    const observer = new ResizeObserver(mark);
+    observer.observe(element);
+    for (const child of element.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [transcript.turns, view]);
 
   // The Stop button leaves the page when the reply ends; hand focus back to the box instead of dropping it.
   useEffect(() => {
@@ -171,36 +211,51 @@ export function ChatPanel({ variant = "panel", onClose, token, layoutRef, layout
     }, () => {});
   };
 
+  const newConversation = () => {
+    chat.newConversation();
+    setView("chat");
+    setDraft("");
+    input.current?.focus();
+  };
+  // New, Conversations, Decisions and the model, folded into one ⋯ (P3 review): the bar's chrome stays quiet.
+  const barMenu =
+    variant !== "bar" ? null : (
+      <Menu trigger={<Ellipsis size={16} aria-hidden="true" />} label="More" align="end" triggerClassName="bar-more">
+        {(close) => (
+          <>
+            <button type="button" role="menuitem" className="menu-item" disabled={empty && !streaming} onClick={() => { close(); newConversation(); }}>
+              <SquarePen size={14} aria-hidden="true" />
+              <span className="menu-item-label">New conversation</span>
+            </button>
+            <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); showHistory(); }}>
+              <MessagesSquare size={14} aria-hidden="true" />
+              <span className="menu-item-label">Conversations</span>
+            </button>
+            <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setView("decisions"); }}>
+              <ScrollText size={14} aria-hidden="true" />
+              <span className="menu-item-label">Decisions</span>
+            </button>
+            <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setModelOpen(true); }}>
+              <Cpu size={14} aria-hidden="true" />
+              <span className="menu-item-label">Model…</span>
+            </button>
+          </>
+        )}
+      </Menu>
+    );
+  const escape = () => onClose?.();
+  const newestFailed = newest?.kind === "assistant" && newest.failure !== null;
+  // Anything that needs reading or a choice opens the bar over the board even in a short window; the folded line is for the common
+  // case, an option to apply or a message to type.
+  const lineProposal = newestOpen.find((proposal) => proposal.changeSetId === pinnedId) ?? newestOpen[0];
+  // Folded only when one line says it all: an option to apply, or nothing yet. A question from keyloom must be read, so it opens.
+  const folded = variant === "bar" && collapsed && view === "chat" && !needsModel && chat.problem === null && !newestFailed && !streaming && (lineProposal !== undefined || empty);
+
   return (
-    <section className="chat" data-variant={variant} aria-label="Ask keyloom">
+    <section className="chat" data-variant={variant} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded} aria-label="Ask keyloom">
       {variant === "bar" ? (
-        <header className="bar-head">
-          <h2>Ask keyloom</h2>
-          <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} />
-          <span className="bar-head-gap" />
-          <button
-            type="button"
-            className="bar-link"
-            disabled={empty && !streaming}
-            onClick={() => {
-              chat.newConversation();
-              setView("chat");
-              setDraft("");
-              input.current?.focus();
-            }}
-          >
-            New
-          </button>
-          <button type="button" className="bar-link" aria-pressed={view === "history"} onClick={() => (view === "history" ? setView("chat") : showHistory())}>
-            Conversations
-          </button>
-          <button type="button" className="bar-link" aria-pressed={view === "decisions"} onClick={() => setView(view === "decisions" ? "chat" : "decisions")}>
-            Decisions
-          </button>
-          <button type="button" className="bar-close" aria-label="Close (Esc)" title="Close (Esc)" onClick={onClose}>
-            <X size={15} aria-hidden="true" />
-          </button>
-        </header>
+        // The model surfaces only from the menu or when it fails (P3 review); its picker opens above the bar.
+        <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
       ) : null}
       <header className="chat-head" hidden={variant === "bar"}>
         <h2>Chat</h2>
@@ -259,11 +314,30 @@ export function ChatPanel({ variant = "panel", onClose, token, layoutRef, layout
             return error;
           }}
         />
+      ) : folded && lineProposal !== undefined ? (
+        <div className="bar-line">
+          <ProposalCardView
+            proposal={lineProposal}
+            layout={layout}
+            board={board}
+            pinned={lineProposal.changeSetId === pinnedId}
+            onPreview={onPreview}
+            onPin={onPin}
+            onApply={apply}
+            onAskAgain={() => send(ASK_AGAIN)}
+            onOpenRelease={onOpenRelease}
+            compact
+            line
+          />
+          {barMenu}
+          <button type="button" className="bar-esc" onClick={escape} aria-label="Close (Esc)">esc</button>
+        </div>
       ) : (
         <>
           <p className="sr-only" role="status">{streaming ? "keyloom is replying" : ""}</p>
-          <OutcomeQuestions questions={outcomes.questions} onAnswer={outcomes.answer} />
+          {folded ? null : <OutcomeQuestions questions={outcomes.questions} onAnswer={outcomes.answer} />}
           <div
+            hidden={folded}
             ref={log}
             className="chat-log"
             role="log"
@@ -347,6 +421,7 @@ export function ChatPanel({ variant = "panel", onClose, token, layoutRef, layout
             onClearSelection={onClearSelection}
             inputRef={input}
             blockedReason={needsModel ? (variant === "bar" ? null : "Set up a model above before sending a message.") : null}
+            {...(variant === "bar" ? { quiet: { onEscape: escape, menu: barMenu, placeholder: empty ? "Describe what isn't working" : "Reply, or ask for something else" } } : {})}
           />
         </>
       )}

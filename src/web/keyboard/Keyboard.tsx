@@ -62,8 +62,10 @@ interface KeyboardProps {
   ledColors?: ReadonlyMap<number, string> | undefined;
   /** The key whose draft is not applied yet, drawn with a pending mark. */
   pendingIndex?: number | null;
-  /** The key just changed by an apply, which presses down once. */
-  appliedIndex?: number | null;
+  /** The keys just changed by an apply, which press down once together (a proposal can change several). */
+  appliedKeys?: ReadonlySet<number>;
+  /** Keys changed since the keyboard last had the layout: an amber dot until it does (D-263, P3 review). */
+  unsynced?: ReadonlySet<number>;
   /** Counts applies, so applying the same key twice presses it twice (D-268). */
   pressSeq?: number;
   /** Keys in the chat's "Asking about" chips. */
@@ -113,8 +115,6 @@ interface KeyboardProps {
   previewing?: boolean;
   /** The board's scale about its centre, below 1 while a parted board would otherwise run off the stage. */
   scale?: number;
-  /** Told the board's height at its smallest unit, padding included, so what shares its column can give way first. */
-  onMinHeight?: (px: number) => void;
 }
 
 function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined, remembered = false): string {
@@ -148,7 +148,8 @@ export function Keyboard({
   legendOverrides,
   ledColors,
   pendingIndex = null,
-  appliedIndex = null,
+  appliedKeys,
+  unsynced,
   pressSeq = 0,
   chatSelected,
   marks,
@@ -176,7 +177,6 @@ export function Keyboard({
   part = null,
   scale = 1,
   previewing = false,
-  onMinHeight,
 }: KeyboardProps) {
   const handOf = useMemo(() => {
     const map = new Map<number, "left" | "right">();
@@ -201,12 +201,6 @@ export function Keyboard({
   const maxY = Math.max(bounds.minY + bounds.height + MARGIN, (drawnCase?.maxY ?? -Infinity) + CASE_MARGIN);
   const canvas: Bounds = { minX, minY, width: maxX - minX, height: maxY - minY };
   const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
-  useEffect(() => {
-    const element = ref.current;
-    if (element === null || onMinHeight === undefined) return;
-    const style = getComputedStyle(element);
-    onMinHeight(Math.ceil(canvas.height * minUnit() + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)));
-  }, [canvas.height, onMinHeight, ref]);
   // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
   // the size it is drawn, so the 11 px floor still holds (P2 review).
   // Never below a fingertip's 44 px for a parting (or below the unit the window already gave): smaller keys take the 10 px floor, and
@@ -333,7 +327,7 @@ export function Keyboard({
               outgoing={outgoing?.[index] ?? null}
               frontMode={symbols}
               rippleMs={delays?.[index] ?? 0}
-              {...(appliedIndex === index ? { pressed: pressSeq } : {})}
+              {...(appliedKeys?.has(index) ? { pressed: pressSeq } : {})}
               pending={pendingIndex === index || marks?.get(index) === "changed"}
               remembered={remembered?.has(index) ?? false}
               title={description.headline}
@@ -352,7 +346,8 @@ export function Keyboard({
               data-partner={partners.has(index)}
               data-pending={pendingIndex === index || marks?.get(index) === "changed"}
               data-home={marks?.get(index) === "home"}
-              data-applied={appliedIndex === index}
+              data-applied={appliedKeys?.has(index) ?? false}
+              data-unsynced={unsynced?.has(index) ?? false}
               data-found={found === index}
               data-key-index={index}
               data-hand={parts2 ? handOf.get(index) : undefined}

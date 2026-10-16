@@ -11,7 +11,7 @@ import { type ChatOutcome, getLayout, sendMessage } from "../../src/app/index.ts
 import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import { type HomeRowCase, glove80HomeRow, moonlanderHomeRow } from "../../test/helpers/home-row.ts";
-import { costLine, costUsd, evalProvider, live, reportFile } from "../provider.ts";
+import { costLine, costUsd, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 
 const MESSAGE = "give these the same home row mods as the left, mirrored";
@@ -63,6 +63,7 @@ async function runBoard(name: string, make: () => Promise<HomeRowCase>) {
   const board = getLayout(c.app, c.layoutId).board.definition;
 
   const checks = {
+      namesKeysNotNumbers: namesNoKeyNumbers(outcomes),
     proposedSomething: valid.length > 0,
     everyProposalChangesExactlyTheSelection: valid.length > 0 && valid.every((p) => JSON.stringify(sorted(p.validation.diff.changed.map((s) => s.position))) === JSON.stringify(wanted) && p.validation.diff.changed.every((s) => s.layerId === c.layerId)),
     noOutsideSelectionWarning: valid.every((p) => !p.validation.warnings.some((w) => w.code === "outside_selection")),
@@ -118,8 +119,8 @@ describe("eval: do that here too", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, reportFile(moonlander.date, moonlander.model, moonlander.effort, "do-that-here")), `${report}\n`);
 
-    const all = { proposedSomething: true, everyProposalChangesExactlyTheSelection: true, noOutsideSelectionWarning: true, modsMirroredPerFinger: true, profileTriggersOnTheOtherHand: true };
-    expect(moonlander.checks).toEqual(all);
-    expect(glove80.checks).toEqual(all);
+    const failed = (checks: Record<string, boolean>) => Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+    expect(failed(moonlander.checks)).toEqual([]);
+    expect(failed(glove80.checks)).toEqual([]);
   }, 900_000);
 });

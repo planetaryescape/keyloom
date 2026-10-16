@@ -9,10 +9,11 @@ import type { ApplyResponse, BoardChoice, ChatSelection, LayoutDetail, LayoutSum
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { undoChange, upgradeStoredLayout } from "./api-write.ts";
+import { useBarFit } from "./chat/bar-fit.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
-import { arrowsOn, marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
+import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
 import { Reminders } from "./decisions/Reminders.tsx";
 import { HistoryPanel } from "./history/HistoryPanel.tsx";
 import { useRevisions } from "./history/useRevisions.ts";
@@ -125,12 +126,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const toasts = useToasts();
   useSyncToasts(sync, toasts.show);
-  const [applied, setApplied] = useState<{ layerId: string; position: number } | null>(null);
+  // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
+  // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.
+  const [unsynced, setUnsynced] = useState<{ layerId: string; position: number }[]>([]);
+  const boardSync = sync.boards.find((b) => b.boardId === summary.boardId);
+  const synced = boardSync !== undefined && boardSync.layoutId === summary.id && boardSync.state.kind === "in_sync";
+  useEffect(() => {
+    if (synced) setUnsynced([]);
+  }, [synced]);
+  useEffect(() => setUnsynced([]), [summary.id]);
+  // The keys an apply just changed, pressed together (D-268); a proposal can change several on one layer.
+  const [applied, setAppliedKeys] = useState<{ layerId: string; positions: number[] } | null>(null);
+  const setApplied = (slot: { layerId: string; position: number } | null) => setAppliedKeys(slot === null ? null : { layerId: slot.layerId, positions: [slot.position] });
   const [undoing, setUndoing] = useState(false);
   // The chat drawer. Open, a click on a key adds it to the "Asking about" chips; closed, it opens the key's panel (D-099).
   const [chatOpen, setChatOpen] = useState(false);
-  // The board's height at its smallest unit, so the command bar gives way before the board would have to scroll (P3).
-  const [boardNeed, setBoardNeed] = useState(0);
   // The keys in the chips, on one layer, and the proposal being previewed (hovered or pinned).
   const [chatSelection, setChatSelection] = useState<ChatSelection | null>(null);
   const [hoveredProposal, setHoveredProposal] = useState<ProposalCard | null>(null);
@@ -181,6 +191,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const history = useRevisions(token, layoutRef, revision.id, historyOpen);
   // Phones: the panel is a bottom sheet and a split board shows one hand (18#phones).
   const narrow = useMediaQuery(NARROW);
+  const barFit = useBarFit(stageRef, !narrow && chatOpen, `${board.id}:${layoutRef}`);
   const phone = useMediaQuery(PHONE);
   const [sheet, setSheet] = useState<SheetSize>("half");
   const [half, setHalf] = useState<Half>("left");
@@ -204,6 +215,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       ? null
       : (decisionFocus.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? decisionFocus[0])?.layerId ?? null;
   const layer = layout.layers.find((candidate) => candidate.id === (preview?.layerId ?? focusLayerId)) ?? layout.layers[headIndex];
+  const unsyncedHere = useMemo(() => new Set(unsynced.filter((slot) => slot.layerId === layer?.id).map((slot) => slot.position)), [unsynced, layer?.id]);
 
   // While a draft is complete the board shows it, so the key reads as it will once applied.
   const shown = useMemo(() => {
@@ -295,7 +307,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     });
     return withPlaced;
   }, [preview, layer, placements, quick, quickTargets]);
-  const arrows = useMemo(() => arrowsOn(preview, layer?.id ?? ""), [preview, layer]);
   const markedLayers = useMemo(() => otherMarkedLayers(preview, layer?.id ?? ""), [preview, layer]);
   const remembered = useMemo(() => rememberedOn(preview, decisionFocus, layer?.id ?? ""), [preview, decisionFocus, layer]);
   const reminders = preview !== null && proposal !== null ? proposal.validation.diff.reminders : [];
@@ -426,15 +437,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const frame = window.requestAnimationFrame(() => keyboard.current?.scrollKeyIntoView(editing.position));
     return () => window.cancelAnimationFrame(frame);
   }, [editing?.position, editing?.layerId, narrow, mode, sheet, shownHalf]);
-
-  // In a short window the open command bar leaves the board less than its smallest size, so it scrolls in its row; a previewed change
-  // brings its first changed key into view, since the change on the caps is what the preview is for (P3).
-  const firstChanged = useMemo(() => [...marks].find(([, mark]) => mark === "changed")?.[0] ?? null, [marks]);
-  useEffect(() => {
-    if (firstChanged === null || !chatOpen) return;
-    const frame = window.requestAnimationFrame(() => keyboard.current?.scrollKeyIntoView(firstChanged));
-    return () => window.cancelAnimationFrame(frame);
-  }, [firstChanged, chatOpen]);
 
   const editingHere = editing !== null && layer !== undefined && editing.layerId === layer.id;
 
@@ -916,13 +918,16 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   async function onProposalApplied(card: ProposalCard, _result: ApplyResponse) {
     setHoveredProposal(null);
     setPinnedProposal(null);
+    // The apply lands on the board, not in the bar: the bar closes and the changed caps press (P3 review).
+    setChatOpen(false);
     await onChanged();
     const changed = [...card.validation.diff.changed, ...card.validation.diff.retuned];
     const here = changed.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? changed[0];
     if (here !== undefined) {
       setLayerId(here.layerId);
-      setApplied(here);
+      setAppliedKeys({ layerId: here.layerId, positions: changed.filter((slot) => slot.layerId === here.layerId).map((slot) => slot.position) });
     }
+    setUnsynced((current) => [...current, ...changed.filter((slot) => !current.some((c) => c.layerId === slot.layerId && c.position === slot.position))]);
     toasts.show({ kind: "success", message: "Applied", detail: card.title });
   }
 
@@ -964,6 +969,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // One step back or forward (the head's undo), or, with `target`, back to any earlier revision as one new revision (D-170).
   async function undo(target?: RevisionEntry) {
     setUndoing(true);
+    setUnsynced([]);
     const undone = target?.summary ?? revision.summary;
     const restored = target === undefined && revision.origin === "undo";
     try {
@@ -1039,6 +1045,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <ChatPanel
                 variant={narrow ? "panel" : "bar"}
                 onClose={() => setChatOpen(false)}
+                collapsed={barFit.collapsed}
                 token={token}
                 layoutRef={layoutRef}
                 layout={layout}
@@ -1219,8 +1226,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           aria-label="Layout"
           data-placing={placing !== null}
           data-card={!narrow && editing !== null}
-          data-bar={!narrow && chatOpen ? "open" : undefined}
-          style={{ "--board-need": `${boardNeed}px` } as CSSProperties}
+          data-bar={!narrow && chatOpen ? (barFit.collapsed ? "line" : "open") : undefined}
+          style={{ "--board-lift": `${barFit.lift}px`, "--bar-room": `${barFit.room}px` } as CSSProperties}
         >
           <Caption
             layoutMenu={<LayoutMenu layouts={chrome.layouts} selectedId={chrome.selectedId} onSelect={chrome.onSelect} onImport={chrome.onImport} />}
@@ -1248,7 +1255,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           />
           <Keyboard
             handle={keyboard}
-            onMinHeight={setBoardNeed}
             keys={keys}
             keycaps={board.display?.keycaps}
             hands={board.hands}
@@ -1260,7 +1266,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             partners={partners}
             comboKeys={comboKeys}
             pendingIndex={editingHere && draft.binding !== null ? editing.position : null}
-            appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
+            {...(applied !== null && applied.layerId === layer.id ? { appliedKeys: new Set(applied.positions) } : {})}
+            unsynced={unsyncedHere}
             pressSeq={pressSeq}
             shiftPx={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.shift : 0}
             part={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.part : null}
@@ -1269,7 +1276,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             highlighted={libraryHighlight}
             marks={marks}
             remembered={remembered}
-            arrows={arrows}
             legendOverrides={legendOverrides}
             ledColors={ledColors}
             onSelect={select}
@@ -1298,7 +1304,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               {chatContent}
             </div>
           )}
-          <div className="stage-floor" hidden={!narrow && chatOpen}>
+          {/* Kept in the layout while the bar is open, only unseen, so the board keeps the unit it rests at (P3 review). */}
+          <div className="stage-floor" data-under-bar={!narrow && chatOpen}>
             {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
             <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
             <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>

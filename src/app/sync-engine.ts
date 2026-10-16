@@ -11,7 +11,7 @@ import { deepEqual } from "../layout/equal.ts";
 import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash } from "../persistence/builds.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
-  type BoardSyncRow, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
+  type BoardSyncRow, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
   progressSync, revisionLine, setAutoSyncChoice, setPaused as storePaused,
 } from "../persistence/syncs.ts";
 import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
@@ -294,6 +294,18 @@ export class SyncEngine {
       }
     }
 
+    // Unplugged, the keyboard can't be read, so what it last ran is the last build keyloom put on it (null count when that revision is
+    // off the head's line).
+    let lastKnown: SyncFacts["lastKnown"];
+    if (reading.state === "absent") {
+      const last = lastSucceededSync(db, boardId);
+      if (last !== undefined && last.layoutId === layout.id) {
+        const head = layout.headRevisionId;
+        const at = revisionLine(db, layout.id, head).indexOf(last.revisionId);
+        lastKnown = { changes: this.documentsEqual(layout.id, last.revisionId, head) ? 0 : at < 0 ? null : at };
+      }
+    }
+
     const bs = getBoardSync(db, boardId);
     const proven = bs.provenAt !== null;
     const active = activeSyncs(db).find((s) => s.boardId === boardId);
@@ -301,6 +313,7 @@ export class SyncEngine {
       reading, running, active, headSync: lastSyncOfRevision(db, boardId, layout.headRevisionId),
       auto: { on: proven && (bs.autoSync ?? true), paused: bs.paused, proven },
       quiet: this.now() - layout.updatedAt >= this.quietMs,
+      ...(lastKnown === undefined ? {} : { lastKnown }),
     };
     return { boardId, boardName, layout, layouts, reading, facts };
   }

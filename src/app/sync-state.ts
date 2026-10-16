@@ -31,7 +31,7 @@ export type SyncState =
   | { kind: "syncing"; step: SyncStepName; syncId: string; startedAt: number; trigger: "auto" | "manual" }
   | { kind: "behind"; changes: number | null; why: BehindWhy; error: string | null }
   | { kind: "needs_hand"; instruction: string; reason: string }
-  | { kind: "not_connected" }
+  | { kind: "not_connected"; changes?: number | null }
   | { kind: "not_keyloom"; detail: string };
 
 export type SyncFacts = {
@@ -45,6 +45,11 @@ export type SyncFacts = {
   auto: { on: boolean; paused: boolean; proven: boolean };
   /** Whether the quiet time since the last Apply has passed, so auto-sync is due. */
   quiet: boolean;
+  /**
+   * For an unplugged keyboard: changes since the last revision keyloom put on it, so the sync line can say a change applied now is
+   * not on it yet. Absent when keyloom never synced it or the build came from another layout.
+   */
+  lastKnown?: { changes: number | null };
 };
 
 const NEEDS_HAND_REASON = "keyloom couldn't restart it by itself";
@@ -55,7 +60,10 @@ export function deriveState(f: SyncFacts): SyncState {
     if (a.step === "needs_hand") return { kind: "needs_hand", instruction: a.instruction ?? "", reason: NEEDS_HAND_REASON };
     return { kind: "syncing", step: a.step === "done" ? "building" : a.step, syncId: a.id, startedAt: a.startedAt, trigger: a.trigger };
   }
-  if (f.reading.state === "absent") return { kind: "not_connected" };
+  if (f.reading.state === "absent") {
+    const changes = f.lastKnown?.changes;
+    return changes === undefined || changes === 0 ? { kind: "not_connected" } : { kind: "not_connected", changes };
+  }
   if (f.reading.state === "bootloader") {
     return {
       kind: "needs_hand",

@@ -53,8 +53,8 @@ describe("previewProposal", () => {
 });
 
 describe("proposal facts", () => {
-  test("names a key by its layer and one-based position, and labels it by what it prints", () => {
-    expect(slotName(head, { layerId: "nav", position: 32 })).toBe("Nav, key 33");
+  test("names a key by what it prints and its layer, never a number (D-279), and labels it by what it prints", () => {
+    expect(slotName(head, { layerId: "nav", position: 32 })).toBe("a blank key on Nav");
     expect(keyLabel(head, { layerId: "base", position: 32 })).toBe("S");
     expect(keyLabel(head, { layerId: "base", position: 57 })).toBe("empty");
     expect(keyLabel(head, { layerId: "missing", position: 0 })).toBe("?");

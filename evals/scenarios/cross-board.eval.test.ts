@@ -15,7 +15,7 @@ import { listMessages } from "../../src/persistence/conversations.ts";
 import { FIXTURE_DIR } from "../../test/helpers/board.ts";
 import { tempDir } from "../../test/helpers/tmp.ts";
 import { TEMPLATE_FIXTURE } from "../../test/helpers/zmk.ts";
-import { costLine, costUsd, evalProvider, live, reportFile } from "../provider.ts";
+import { costLine, costUsd, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 const MAX_TURNS = 3;
 const NUDGE = "Please decide and go ahead; I trust your mapping.";
@@ -69,6 +69,7 @@ describe("eval: copy from my other keyboard", () => {
     const run = await converse(app, layoutId, "copy the colors (rgb) key lights to be like the ones on my moonlander keyboard");
     const lightingOps = run.proposals.flatMap((p) => p.ops).filter((o) => o.op === "setLayerLighting");
     const checks = {
+      namesKeysNotNumbers: namesNoKeyNumbers(run.outcomes),
       // The board's limit is in the prompt, so a model that answers from it without opening the Moonlander has not needed to look; one that does look is also right.
       lookedOrAnsweredFromTheBoardsLimit: looked(run.uses) || /underglow|one effect|no way to give a key/i.test(run.text),
       didNotAskForOryxOrScreenshots: !ASKS_FOR_THE_LAYOUT.test(run.text),
@@ -89,7 +90,7 @@ describe("eval: copy from my other keyboard", () => {
       ...run.outcomes.map((o, i) => `Turn ${i + 1}: ${o.text}`),
     ].join("\n");
     save(date, run.outcomes, "cross-board-colours", section);
-    expect(checks).toEqual({ lookedOrAnsweredFromTheBoardsLimit: true, didNotAskForOryxOrScreenshots: true, noProposalOnABoardThatCannotDoIt: true, saysItCannot: true, doesNotOfferWhatItCannotDo: true });
+    expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
   }, 600_000);
 
   test.skipIf(!live)("colours onto a board that can show them: a valid proposal that puts each colour on the same key", async () => {
@@ -112,6 +113,7 @@ describe("eval: copy from my other keyboard", () => {
     const seen = createAgentPorts(app, second.layoutId, "eval").layout("my-moonlander").document;
     const lit = seen.layers.filter((l) => l.lighting !== undefined);
     const checks = {
+      namesKeysNotNumbers: namesNoKeyNumbers(run.outcomes),
       lookedAtTheOtherMoonlanderItself: looked(run.uses),
       didNotAskForOryxOrScreenshots: !ASKS_FOR_THE_LAYOUT.test(run.text),
       proposedSomethingValid: valid.length > 0,
@@ -130,7 +132,7 @@ describe("eval: copy from my other keyboard", () => {
       ...run.outcomes.map((o, i) => `Turn ${i + 1}: ${o.text}`),
     ].join("\n");
     save(date, run.outcomes, "cross-board-colours-supported", section);
-    expect(checks).toEqual({ lookedAtTheOtherMoonlanderItself: true, didNotAskForOryxOrScreenshots: true, proposedSomethingValid: true, everyColouredLayerCopiedKeyForKey: true });
+    expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
   }, 600_000);
 
   test.skipIf(!live)("home row mods: a valid proposal on the right home-row keys, the right modifiers for each finger and hand", async () => {
@@ -156,6 +158,7 @@ describe("eval: copy from my other keyboard", () => {
     const sets = valid.flatMap((p) => p.ops.filter((o) => o.op === "setBinding"));
 
     const checks = {
+      namesKeysNotNumbers: namesNoKeyNumbers(run.outcomes),
       lookedAtTheMoonlanderItself: looked(run.uses),
       usedMapKeys: run.uses.some((u) => u.name === "map_keys"),
       proposedSomethingValid: valid.length > 0,
@@ -197,7 +200,7 @@ describe("eval: copy from my other keyboard", () => {
       ...run.proposals.map((p) => `#### ${p.title} (${p.validation.ok ? "valid" : "invalid"})\n${p.explanation}\n\nOps: ${JSON.stringify(p.ops)}\n\nWarnings: ${p.validation.warnings.map((w) => w.code).join(", ") || "none"}`),
     ].join("\n");
     save(date, run.outcomes, "cross-board-home-row", section);
-    expect(checks).toEqual({ lookedAtTheMoonlanderItself: true, usedMapKeys: true, proposedSomethingValid: true, didNotAskForOryxOrScreenshots: true, onlyHomeRowKeysChange: true, everyModCarriedWithTheRightModifiers: true, profilesWaitForTheOtherHand: true });
+    expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
   }, 600_000);
 });
 

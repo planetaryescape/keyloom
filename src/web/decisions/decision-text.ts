@@ -4,6 +4,7 @@ import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { KEYCODES } from "../../layout/keycodes.ts";
 import { functionLabel } from "../editor/function-label.ts";
+import { keyIn } from "../../validation/words.ts";
 
 export const STATUS_WORDS: Record<DecisionCard["status"], string> = {
   hypothesis: "Not tested yet",
@@ -23,9 +24,9 @@ export const PRIORITY_WORDS: Record<NonNullable<DecisionCard["priorityKind"]>, s
 /** What kind of thing it is, in the decisions list. */
 export const kindWords = (d: DecisionCard): string => (d.kind === "priority" ? PRIORITY_WORDS[d.priorityKind ?? "pinned"] : "Choice");
 
-/** "Layer 0, key 43", the way the editor names a key (key numbers count from 1). */
+/** "the ⌫ key on Layer 0": a key by what it prints, never its number (D-279). */
 export function slotName(layout: Layout, slot: Slot): string {
-  return `${layout.layers.find((l) => l.id === slot.layerId)?.name ?? slot.layerId}, key ${slot.position + 1}`;
+  return keyIn(layout, slot);
 }
 
 const MAX_NAMED = 4;

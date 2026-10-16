@@ -46,3 +46,12 @@ export function costLine(outcomes: ChatOutcome[], usage: Usage): string {
 /** Report files carry the provider; a model ID like anthropic/claude-opus-5.5 is not a safe file name as it stands. */
 export const reportFile = (date: string, model: string | undefined, effort: string | undefined, scenario: string): string =>
   `${date}-${evalProvider}-${(model ?? "unknown").replaceAll("/", "-")}-${effort}-${scenario}.md`;
+
+/**
+ * D-279: keys are named by what they print and where they sit, never by number. True when no reply, proposal title, explanation or
+ * trade-off says "key 43" or "position 30" to BK.
+ */
+export function namesNoKeyNumbers(outcomes: readonly ChatOutcome[]): boolean {
+  const said = outcomes.flatMap((o) => [o.text, ...o.proposals.flatMap((p) => [p.title, p.explanation, ...p.tradeoffs.gains, ...p.tradeoffs.costs])]);
+  return said.every((text) => !/\b(key|position)\s+\d+/i.test(text));
+}

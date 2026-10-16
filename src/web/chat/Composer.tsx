@@ -1,5 +1,5 @@
-import { SendHorizontal, Square, X } from "lucide-react";
-import { type KeyboardEvent, type Ref } from "react";
+import { SendHorizontal, Sparkles, Square, X } from "lucide-react";
+import { type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 export interface SelectedKeys {
   layerName: string;
@@ -20,11 +20,13 @@ interface Props {
   inputRef: Ref<HTMLTextAreaElement>;
   /** Why sending isn't possible whatever is typed, such as no model set up; shown under the box. */
   blockedReason?: string | null;
+  /** The command bar's input (comp d): one quiet line, Enter sends, no Send button; an esc chip closes the bar. */
+  quiet?: { onEscape: () => void; menu: ReactNode; placeholder: string };
 }
 
 const MAX_HEIGHT = 160;
 
-export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onOpenKey, onClearSelection, inputRef, blockedReason = null }: Props) {
+export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onOpenKey, onClearSelection, inputRef, blockedReason = null, quiet }: Props) {
   const canSend = value.trim() !== "" && !streaming && blockedReason === null;
 
   // Grows with the text up to a cap, then scrolls; setting "auto" first lets it shrink again.
@@ -56,13 +58,13 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
             {selection.keys.map((key) => (
               <li key={key.position} className="selected-chip">
                 {onOpenKey === undefined ? (
-                  <span title={`Key ${key.position + 1}`}>{key.label}</span>
+                  <span>{key.label}</span>
                 ) : (
-                  <button type="button" className="chip-open" title={`Open key ${key.position + 1}`} onClick={() => onOpenKey(key.position)}>
+                  <button type="button" className="chip-open" title={`Open ${key.label}`} onClick={() => onOpenKey(key.position)}>
                     {key.label}
                   </button>
                 )}
-                <button type="button" className="chip-remove" aria-label={`Remove key ${key.position + 1}, ${key.label}`} onClick={() => onRemoveKey(key.position)}>
+                <button type="button" className="chip-remove" aria-label={`Remove ${key.label}`} onClick={() => onRemoveKey(key.position)}>
                   <X size={12} aria-hidden="true" />
                 </button>
               </li>
@@ -72,6 +74,7 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
         </div>
       )}
       <div className="composer-row">
+        {quiet === undefined ? null : <Sparkles size={14} className="composer-mark" data-busy={streaming} aria-hidden="true" />}
         <textarea
           ref={(element) => {
             fit(element);
@@ -81,11 +84,22 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
           rows={1}
           value={value}
           aria-label="Message to keyloom"
-          placeholder={selection === null ? "Describe what isn't working" : "Say what to do with these keys"}
+          placeholder={selection !== null ? "Say what to do with these keys" : quiet !== undefined ? quiet.placeholder : "Describe what isn't working"}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
         />
-        {streaming ? (
+        {quiet !== undefined ? (
+          <>
+            {streaming ? (
+              <button type="button" className="bar-link composer-stop" onClick={onStop}>
+                <Square size={12} aria-hidden="true" />
+                Stop
+              </button>
+            ) : null}
+            {quiet.menu}
+            <button type="button" className="bar-esc" onClick={quiet.onEscape} aria-label="Close (Esc)">esc</button>
+          </>
+        ) : streaming ? (
           <button type="button" className="button" onClick={onStop}>
             <Square size={14} aria-hidden="true" />
             Stop
@@ -97,7 +111,7 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
           </button>
         )}
       </div>
-      {blockedReason === null ? (
+      {quiet !== undefined ? null : blockedReason === null ? (
         <p className="composer-hint">Enter sends, Shift+Enter adds a line.</p>
       ) : (
         <p id="composer-why" className="composer-why">{blockedReason}</p>

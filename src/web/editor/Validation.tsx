@@ -5,6 +5,7 @@ import type { Issue, ValidationResult } from "../../validation/result.ts";
 import { Reminders } from "../decisions/Reminders.tsx";
 import { functionLabel } from "./function-label.ts";
 import type { CheckState } from "./useCheck.ts";
+import { keyIn } from "../../validation/words.ts";
 
 interface Props {
   layout: Layout;
@@ -20,10 +21,8 @@ interface Props {
   hideLost?: boolean;
 }
 
-function slotName(layout: Layout, slot: Slot): string {
-  const layer = layout.layers.find((candidate) => candidate.id === slot.layerId)?.name ?? slot.layerId;
-  return `${layer}, key ${slot.position + 1}`;
-}
+// A key by what it prints, never its number (D-279); the board lights which one.
+const slotName = (layout: Layout, slot: Slot): string => keyIn(layout, slot);
 
 function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" | "warning"; layout: Layout; slot: Slot | undefined }) {
   const Icon = kind === "error" ? CircleX : TriangleAlert;

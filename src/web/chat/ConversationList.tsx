@@ -1,8 +1,17 @@
 import { ArrowLeft, LoaderCircle, MessageSquareText, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import type { ConversationSummary } from "../../api/http.ts";
 import type { History } from "./useChat.ts";
 
 const when = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+type Outcome = NonNullable<ConversationSummary["outcome"]>;
+
+const outcomeWords = (outcome: Outcome): string =>
+  outcome.kind === "applied" ? `Applied: ${outcome.title}` : outcome.kind === "options" ? `${outcome.count} ${outcome.count === 1 ? "option" : "options"} open` : "Talked it through";
+
+// Titles stored before they were cut at a word end mid-word; this trims one back to its last whole word.
+const wholeWords = (title: string): string => (title.length >= 60 && !title.endsWith("…") && title.includes(" ") ? `${title.slice(0, title.lastIndexOf(" "))}…` : title);
 
 interface Props {
   history: History;
@@ -47,7 +56,10 @@ export function ConversationList({ history, currentId, onBack, onReload, onOpen 
             <li key={item.id}>
               <button type="button" className="history-item" aria-current={item.id === currentId} disabled={opening !== null} onClick={() => void open(item.id)}>
                 <MessageSquareText size={16} aria-hidden="true" />
-                <span className="history-title">{item.title || "Untitled conversation"}</span>
+                <span className="history-text">
+                  <span className="history-title">{wholeWords(item.title) || "Untitled conversation"}</span>
+                  {item.outcome === undefined ? null : <span className="history-outcome" data-kind={item.outcome.kind}>{outcomeWords(item.outcome)}</span>}
+                </span>
                 <span className="history-when">{opening === item.id ? "Opening…" : when.format(item.createdAt)}</span>
               </button>
             </li>

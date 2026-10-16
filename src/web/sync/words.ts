@@ -75,6 +75,10 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
         tone: "warning", action: { id: "sync_now", label: "Try again" },
       };
     case "not_connected":
+      // A change applied while it is unplugged is the one thing worth saying: it isn't on the keyboard yet (amber, D-263).
+      if (s.changes != null && s.changes > 0) {
+        return { label: `${plural(s.changes, "change", "changes")} not on your ${name}`, short: "Not connected", detail: board.auto.on && !board.auto.paused ? `Your ${name} isn't connected. Plug it in and keyloom sends ${s.changes === 1 ? "it" : "them"}.` : `Your ${name} isn't connected. Plug it in, then sync.`, tone: "neutral", action: null };
+      }
       return { label: `${name} not connected`, short: "Not connected", detail: "Plug it in and keyloom checks it.", tone: "neutral", action: null };
     case "not_keyloom":
       return {

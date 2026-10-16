@@ -11,7 +11,7 @@ import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import { deepEqual } from "../../src/layout/equal.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import { BACKSPACE_POSITION, commandShiftApp } from "../../test/helpers/command-shift.ts";
-import { costLine, evalProvider, live, reportFile } from "../provider.ts";
+import { costLine, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 
 const PROBLEM = "I press Command–Shift a lot; give me one key for it.";
@@ -63,6 +63,7 @@ describe("eval: Command-Shift", () => {
     );
 
     const checks = {
+      namesKeysNotNumbers: namesNoKeyNumbers(outcomes),
       askedBeforeProposing: (outcomes[0]?.proposals.length ?? 0) === 0,
       atLeastTwoValidAlternatives: valid.length >= 2,
       everyValidOneGivesCommandShift: valid.length > 0 && valid.every((p) => {
@@ -110,9 +111,6 @@ describe("eval: Command-Shift", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, reportFile(date, first?.model, first?.effort, "command-shift")), `${report}\n`);
 
-    expect(checks).toEqual({
-      askedBeforeProposing: true, atLeastTwoValidAlternatives: true, everyValidOneGivesCommandShift: true, displacedShown: true,
-      backspacePinned: true, f16RarelyUsed: true, oneKeepsBackspace: true, undoRestoresAll: true,
-    });
+    expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
   }, 900_000);
 });

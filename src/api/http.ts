@@ -306,6 +306,14 @@ export const ConversationSummarySchema = z.object({
   id: z.string().min(1),
   title: z.string(),
   createdAt: z.number().finite(),
+  // What came of it, so two conversations about the same thing read apart in the list (P3 review). Absent from older servers.
+  outcome: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("applied"), title: z.string() }),
+      z.object({ kind: z.literal("options"), count: z.number().int().positive() }),
+      z.object({ kind: z.literal("talk") }),
+    ])
+    .optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 
@@ -419,7 +427,8 @@ export const SyncStateSchema = z.discriminatedUnion("kind", [
     error: z.string().nullable(),
   }),
   z.object({ kind: z.literal("needs_hand"), instruction: z.string(), reason: z.string() }),
-  z.object({ kind: z.literal("not_connected") }),
+  // changes: what was applied since the last build keyloom put on the keyboard, when it knows (see SyncFacts.lastKnown).
+  z.object({ kind: z.literal("not_connected"), changes: z.number().int().nonnegative().nullable().optional() }),
   z.object({ kind: z.literal("not_keyloom"), detail: z.string() }),
 ]);
 export type SyncState = z.infer<typeof SyncStateSchema>;

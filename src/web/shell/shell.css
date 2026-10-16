@@ -1419,13 +1419,6 @@
   padding: var(--space-3) var(--space-6);
 }
 
-/* With the command bar open, the board keeps the height it needs at its smallest unit and the bar takes what is left, up to its own
-   size, scrolling inside: a proposal is only seen on the board if the board is all in view (P3). A short window can't hold both, so
-   the bar keeps room for its head, a line of the reply, Apply and the input (about 300 px with the caption), and the board scrolls in
-   its row, brought to the changed key (Viewer.tsx). */
-.stage[data-bar="open"] {
-  grid-template-rows: auto minmax(max(0px, min(var(--board-need, 0px), 100% - 300px)), 1fr) minmax(0, auto);
-}
 
 .stage > .stage-floor {
   position: relative;

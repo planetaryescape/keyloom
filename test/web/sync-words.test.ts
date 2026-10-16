@@ -1,3 +1,4 @@
+import { lightFor } from "../../src/web/sync/SyncStatus.tsx";
 // What the header says about each keyboard state (17), and the toast for a change of state. The words are the product here:
 // every state from the blueprint's table has its sentence, and a failure says why.
 import { describe, expect, test } from "bun:test";
@@ -47,6 +48,11 @@ describe("syncLine", () => {
 
   test("not connected names the board, and firmware that isn't keyloom's offers Flash keyloom's build, not Sync now", () => {
     expect(syncLine(board({ kind: "not_connected" }), "lay_1").label).toBe("Glove80 not connected");
+    // A change applied while it is unplugged is what the line says, with the amber light (D-263, P3 review).
+    const waiting = board({ kind: "not_connected", changes: 1 });
+    expect(syncLine(waiting, "lay_1")).toMatchObject({ label: "1 change not on your Glove80", detail: "Your Glove80 isn't connected. Plug it in and keyloom sends it." });
+    expect(lightFor(waiting, syncLine(waiting, "lay_1"))).toBe("pending");
+    expect(syncLine(board({ kind: "not_connected", changes: 2 }, { auto: { on: false, choice: false, paused: false, proven: true, provenAt: 1, dueAt: null } }), "lay_1").detail).toBe("Your Glove80 isn't connected. Plug it in, then sync.");
     const other = syncLine(board({ kind: "not_keyloom", detail: "USB serial moergo.com:GLV80" }), "lay_1");
     expect(other).toMatchObject({ tone: "warning", action: { id: "flash_keyloom", label: "Flash keyloom's build" } });
     expect(other.detail).toContain("never replaces it by itself");

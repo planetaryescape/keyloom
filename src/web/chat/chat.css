@@ -606,3 +606,16 @@
     white-space: normal;
   }
 }
+
+.history-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-outcome {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}

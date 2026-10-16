@@ -79,10 +79,10 @@ describe("decision text", () => {
     outcomeNote: null, supersededBy: null, conversationId: null, sourceMessageIds: [], createdAt: 1, updatedAt: 1, ...over,
   });
 
-  test("keys are named the way the editor numbers them, and a long list is counted", () => {
-    expect(slotName(head, { layerId: "base", position: 4 })).toBe("Base, key 5");
+  test("keys are named by what they print (D-279), and a long list is counted", () => {
+    expect(slotName(head, { layerId: "base", position: 4 })).toBe("the 2 key on Base");
     const slots = [0, 1, 2, 3, 4, 5].map((position) => ({ layerId: "base", position }));
-    expect(keysLine(head, card({ subject: { slots } }))).toBe("Base, key 1; Base, key 2; Base, key 3; Base, key 4 and 2 more");
+    expect(keysLine(head, card({ subject: { slots } }))).toBe("the 5 key on Base; the 6 key on Base; the 1 key on Base; the Esc key on Base and 2 more");
     expect(keysLine(head, card({ subject: { functions: ["key:BACKSPACE", "key:CAPS_LOCK"] } }))).toBe("Backspace, Caps Lock");
     expect(keysLine(head, card({ subject: { functions: ["mod:LGUI+LSFT"] } }))).toBe("Hold ⌘⇧");
   });

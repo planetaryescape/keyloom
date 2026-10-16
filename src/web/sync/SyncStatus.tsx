@@ -122,7 +122,8 @@ export function lightFor(board: BoardSync, line: SyncLine): "ok" | "pending" | "
     case "in_sync": return line.tone === "success" ? "ok" : "pending";
     case "syncing":
     case "behind": return "pending";
-    case "not_connected": return "off";
+    // Unplugged with changes waiting is still a change not on the keyboard: amber, not off.
+    case "not_connected": return board.state.changes != null && board.state.changes > 0 ? "pending" : "off";
     default: return "bad";
   }
 }

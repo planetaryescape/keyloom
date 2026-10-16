@@ -96,6 +96,6 @@ describe("priority chips", () => {
     expect(priorityChipText(chip("pinned", bs), head)).toBe("Backspace stays where it is");
     expect(priorityChipText(chip("rarely_used", { functions: ["key:F16"] }), head)).toBe("F16: rarely used");
     expect(priorityChipText(chip("frequent", { functions: ["key:A", "key:B"] }), head)).toBe("A, B: used often");
-    expect(priorityChipText(chip("willing_to_relearn", { slots: [base(29)] }), head)).toBe("Happy to relearn Layer 0, key 30");
+    expect(priorityChipText(chip("willing_to_relearn", { slots: [base(29)] }), head)).toBe("Happy to relearn the A key on Layer 0");
   });
 });

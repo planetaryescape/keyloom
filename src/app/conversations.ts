@@ -88,6 +88,15 @@ export type SendMessageInput = {
 
 const TITLE_LENGTH = 60;
 
+/** The first words of the first message, cut at a word, never mid-word (P3 review). */
+export function conversationTitle(message: string): string {
+  const text = message.trim().replace(/\s+/g, " ");
+  if (text.length <= TITLE_LENGTH) return text;
+  const cut = text.slice(0, TITLE_LENGTH + 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > TITLE_LENGTH / 2 ? cut.slice(0, space) : text.slice(0, TITLE_LENGTH)).replace(/[,;:.–-]+$/, "")}…`;
+}
+
 // A second message into a conversation that is mid-turn would interleave tool results with it.
 const answering = new Set<string>();
 
@@ -149,7 +158,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   const model = input.model ?? await defaultAgentModel(app.dataDir, existing ? { provider: existing.provider, ...(existing.model ? { model: existing.model } : {}) } : input.provider ? { provider: input.provider } : {});
 
   const conversation: ConversationRow =
-    existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: input.message.trim().replace(/\s+/g, " ").slice(0, TITLE_LENGTH), provider: model.provider, model: model.model });
+    existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: conversationTitle(input.message), provider: model.provider, model: model.model });
   if (answering.has(conversation.id)) throw new BusyError(`conversation ${conversation.id} is still answering the last message`);
   answering.add(conversation.id);
 
@@ -225,8 +234,17 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   }
 }
 
-export function listConversationSummaries(app: App, ref: string): ConversationRow[] {
-  return listConversations(app.db, getLayout(app, ref).layout.id);
+/** What came of a conversation, so the list can tell two about the same thing apart: the change applied, options left open, or talk. */
+export type ConversationOutcome = { kind: "applied"; title: string } | { kind: "options"; count: number } | { kind: "talk" };
+
+export function listConversationSummaries(app: App, ref: string): (ConversationRow & { outcome: ConversationOutcome })[] {
+  return listConversations(app.db, getLayout(app, ref).layout.id).map((conversation) => {
+    const sets = listConversationChangeSets(app.db, conversation.id);
+    const applied = sets.findLast((cs) => cs.status === "applied");
+    const open = sets.filter((cs) => cs.status === "proposed").length;
+    const outcome: ConversationOutcome = applied !== undefined ? { kind: "applied", title: applied.title ?? "a change" } : open > 0 ? { kind: "options", count: open } : { kind: "talk" };
+    return { ...conversation, outcome };
+  });
 }
 
 export type DisplayMessage = {

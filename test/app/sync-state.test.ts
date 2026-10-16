@@ -44,6 +44,9 @@ describe("deriveState", () => {
 
   test("not connected, not keyloom's and bootloader come from the reading", () => {
     expect(deriveState(base({ reading: { state: "absent" } }))).toEqual({ kind: "not_connected" });
+    // Unplugged after an apply: the count since the last build keyloom put on it travels with the state; nothing waiting says nothing.
+    expect(deriveState(base({ reading: { state: "absent" }, lastKnown: { changes: 1 } }))).toEqual({ kind: "not_connected", changes: 1 });
+    expect(deriveState(base({ reading: { state: "absent" }, lastKnown: { changes: 0 } }))).toEqual({ kind: "not_connected" });
     expect(deriveState(base({ reading: { state: "other", detail: "serial QxK" } }))).toEqual({ kind: "not_keyloom", detail: "serial QxK" });
     expect(deriveState(base({ reading: { state: "bootloader" } })).kind).toBe("needs_hand");
   });

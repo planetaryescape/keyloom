@@ -47,7 +47,7 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
     },
     async list(ref) {
       try {
-        return listConversationSummaries(app, ref).map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt }));
+        return listConversationSummaries(app, ref).map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt, outcome: c.outcome }));
       } catch (err) {
         if (err instanceof NotFoundError) return null;
         throw err;

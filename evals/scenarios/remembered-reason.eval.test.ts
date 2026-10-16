@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { type ChatOutcome, applyChange, getLayout, listDecisions, proposeChange, sendMessage, showDecision } from "../../src/app/index.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { commandShiftApp, TAB_POSITION } from "../../test/helpers/command-shift.ts";
-import { costLine, evalProvider, live, reportFile } from "../provider.ts";
+import { costLine, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 
 const REASON = "My right hand stays on the mouse, so the left hand has to do Command-Shift shortcuts in Figma on its own.";
@@ -30,9 +30,9 @@ describe("eval: remembered reason", () => {
     const { app, layoutId } = await commandShiftApp();
     // The decision from months ago: applied through the same path a real proposal takes.
     const seededChange = proposeChange(app, layoutId, {
-      ops: SEEDED, explanation: "Command-Shift on key 43", source: "agent", title: "Command-Shift where Tab is",
+      ops: SEEDED, explanation: "Command-Shift where Tab was", source: "agent", title: "Command-Shift where Tab is",
       decisionDraft: {
-        goal: "I press Command-Shift a lot and wanted one key for it", choice: "Command-Shift on key 43 of Layer 0 (where Tab was)", reason: REASON,
+        goal: "I press Command-Shift a lot and wanted one key for it", choice: "Command-Shift where Tab was, on Layer 0", reason: REASON,
         scope: { apps: ["Figma"], habits: ["Command-Shift shortcuts with the left hand"] }, sourceMessageIds: [],
       },
     });
@@ -64,10 +64,12 @@ describe("eval: remembered reason", () => {
     );
 
     const checks = {
+      namesKeysNotNumbers: namesNoKeyNumbers(outcomes),
       askedBeforeProposing: (first?.proposals.length ?? 0) === 0,
       // The reply uses the stored reason (the mouse, the left hand or Figma), not a generic confirmation.
       citesTheStoredReason: /mouse|left hand|figma/.test(reply),
-      namesTheKeyLikeTheEditor: /key 43/.test(reply),
+      // D-279: the key by what it prints and where it sits (⌘⇧ on the left pinky, bottom row), not "key 43".
+      namesTheKeyByLegendAndPlace: /⌘⇧|command.?shift/.test(reply) && /pinky|bottom/.test(reply),
       asksWhetherItStillHolds: reply.includes("?"),
       proposesOnceTheReasonIsGone: valid.length > 0,
       everyProposalCarriesTheReminder: valid.length > 0 && valid.every((p) => p.validation.diff.reminders.some((r) => r.decisionId === old && r.reason === REASON)),
@@ -110,9 +112,6 @@ describe("eval: remembered reason", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, reportFile(date, first?.model, first?.effort, "remembered-reason")), `${report}\n`);
 
-    expect(checks).toEqual({
-      askedBeforeProposing: true, citesTheStoredReason: true, namesTheKeyLikeTheEditor: true, asksWhetherItStillHolds: true,
-      proposesOnceTheReasonIsGone: true, everyProposalCarriesTheReminder: true, everyProposalHasADraft: true, applyingAnywaySupersedes: true,
-    });
+    expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
   }, 900_000);
 });

@@ -5,6 +5,7 @@ import type { Legend } from "../../layout/legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
 import { fitLegend, HOLD_SIZE, isCondensed, tapRange } from "./fit.ts";
 import { frontWords, type FrontMode } from "./front-words.ts";
+import { measureText } from "./measure.ts";
 import { roundedPath } from "./case-shape.ts";
 
 export type Tone = Legend["kind"];
@@ -62,6 +63,27 @@ const breakAtSeams = (text: string) => text.replace(/[_+(]/g, (seam) => `${seam}
 const withSpaceMark = (text: string): ReactNode[] =>
   text.split("␣").flatMap((part, i) => (i === 0 ? [part] : [<span key={i} className="spc" aria-hidden="true" />, part]));
 
+// Whether a front word fits the cap at the smallest size it would be drawn: measured in the loaded font where there is a canvas, since
+// fit.ts's estimate runs wide for condensed text and would shorten words that fit (D-274 measures the same way).
+function frontFits(text: string, width: number, px: { unit: number; floor?: number }): boolean {
+  const sizePx = Math.max(HOLD_SIZE.min * px.unit, px.floor ?? 0);
+  const measured = measureText(text, `560 condensed ${sizePx}px "Instrument Sans"`);
+  if (measured === null) return fitLegend(text, width, HOLD_SIZE, px, true).fits;
+  return measured <= (width - FRONT_INSET) * px.unit;
+}
+// The cap body is narrower than its key by the gap between caps, and the front print keeps a hair from the skirt's edge.
+const FRONT_INSET = 0.1;
+
+function shortenToFit(text: string | null, width: number, px: { unit: number; floor?: number }): string | null {
+  if (text === null || frontFits(text, width, px)) return text;
+  const words = text.split(" ");
+  // "⌥ option" keeps its symbol; a single word keeps its first three letters.
+  const last = words.at(-1) ?? text;
+  const short = last.length > 4 ? last.slice(0, 3) : last;
+  const candidate = [...words.slice(0, -1), short].join(" ");
+  return frontFits(candidate, width, px) ? candidate : short;
+}
+
 /** The printing on one cap: the tap on the top face, the hold (or a tap dance's double tap) printed on the front skirt. */
 function Print({ legend, unit, width, floorPx, reach, breakable, symbols, className }: { legend: CapLegend; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; symbols: FrontMode; className: string }) {
   const floor = floorPx === undefined ? {} : { floor: floorPx };
@@ -69,7 +91,9 @@ function Print({ legend, unit, width, floorPx, reach, breakable, symbols, classN
   const holdText = legend.hold === undefined ? null : frontWords(legend.hold, symbols);
   const doubleText = legend.double === undefined ? null : `2× ${legend.double}`;
   // The front carries the hold; a tap dance with no hold prints its double tap there instead, and with a hold, in the top corner.
-  const front = holdText ?? doubleText;
+  // A word too long for the front even at the floor is shortened the way layer keys are ("Numbers" is "Num"), never cut by the cap's
+  // edge (P3 review: "…mbers").
+  const front = breakable ? (holdText ?? doubleText) : shortenToFit(holdText ?? doubleText, width, { unit, ...floor });
   const corner = holdText !== null && doubleText !== null ? doubleText : null;
   // The layer dot takes about 0.12u beside the words. When the words and the dot don't both fit, the dot goes: the name already says
   // which layer, and a cut-off word says nothing (hotfix v0.22.1).

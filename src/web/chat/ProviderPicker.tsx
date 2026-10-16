@@ -1,5 +1,5 @@
 import { Cpu } from "lucide-react";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { chooseProvider } from "./api-chat.ts";
 import type { Pinned } from "./transcript.ts";
@@ -14,11 +14,13 @@ interface Props {
   /** The provider and model the open conversation started on; it can't switch (D-111). */
   pinned: Pinned | null;
   onChanged: (status: ChatProviderStatus) => void;
+  /** The command bar opens the picker from its menu and shows no model line: the model surfaces only when it fails (P3 review). */
+  menuOpened?: { open: boolean; onClose: () => void };
 }
 
 // Which model answers, and the way to change it for the next conversation (19#choosing-a-provider).
 // The choice goes to the data directory's config.json; a conversation already going keeps its own.
-export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
+export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }: Props) {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<Provider["id"]>("anthropic");
   const [model, setModel] = useState("");
@@ -26,6 +28,12 @@ export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const id = useId();
+  // Opened from the bar's menu: start from what the next conversation would use, each time it opens.
+  const outsideOpen = menuOpened?.open ?? false;
+  useEffect(() => {
+    if (outsideOpen) start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outsideOpen]);
 
   if (status === null && pinned === null) return null;
   const shown = pinned ? { provider: pinned.provider, model: pinned.model } : (status?.active ?? null);
@@ -48,7 +56,7 @@ export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
       // The default is not written, so a later change to it applies; only a model BK typed is pinned.
       const next = await chooseProvider(token, { provider, ...(typed === "" || typed === chosen?.defaultModel ? {} : { model: typed }) });
       onChanged(next);
-      setOpen(false);
+      close();
       setSaved(next.active === null ? null : `Next conversation: ${NAMES[next.active.provider]}, ${next.active.model}.`);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "Couldn't save the choice.");
@@ -58,9 +66,14 @@ export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
   }
 
   const locked = status?.lockedBy ?? null;
+  const shownOpen = menuOpened === undefined ? open : menuOpened.open && open;
+  const close = () => {
+    setOpen(false);
+    menuOpened?.onClose();
+  };
   return (
-    <div className="provider-bar">
-      <p className="chat-provider">
+    <div className="provider-bar" data-from-menu={menuOpened !== undefined}>
+      {menuOpened !== undefined ? null : <p className="chat-provider">
         <Cpu size={12} aria-hidden="true" />
         {shown === null ? (
           <span>No model set up</span>
@@ -75,11 +88,11 @@ export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
             {open ? "Cancel" : "Change"}
           </button>
         )}
-      </p>
-      {saved === null || open ? null : (
+      </p>}
+      {saved === null || open || menuOpened !== undefined ? null : (
         <p className="provider-saved" role="status">{pinned === null ? saved : `${saved} This conversation stays on ${NAMES[pinned.provider]}.`}</p>
       )}
-      {!open || status === null ? null : (
+      {!shownOpen || status === null ? null : (
         <form
           className="provider-picker"
           onSubmit={(event) => {
@@ -121,6 +134,7 @@ export function ProviderPicker({ token, status, pinned, onChanged }: Props) {
           )}
           {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
           <div className="provider-actions">
+            {menuOpened === undefined ? null : <button type="button" className="button" onClick={close}>Cancel</button>}
             <button type="submit" className="button button-primary" disabled={saving || locked !== null}>Use for new conversations</button>
           </div>
         </form>
