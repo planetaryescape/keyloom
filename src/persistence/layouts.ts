@@ -13,6 +13,10 @@ export type LayoutRow = {
   headRevisionId: string;
   createdAt: number;
   updatedAt: number;
+  /** When the config was archived (hidden, restorable), or null. */
+  archivedAt: number | null;
+  /** The config and revision this one started as a copy of; the source may have been deleted since. */
+  copiedFrom: { layoutId: string; revisionId: string } | null;
 };
 
 export type RevisionRow = {
@@ -30,6 +34,7 @@ export class NameTakenError extends Error {
 
 type LayoutDb = {
   id: string; board_id: string; name: string; head_revision_id: string; created_at: number; updated_at: number;
+  archived_at: number | null; copied_from_layout_id: string | null; copied_from_revision_id: string | null;
 };
 type RevisionDb = {
   id: string; layout_id: string; parent_id: string | null; origin: Origin; summary: string; created_at: number; document?: string;
@@ -37,6 +42,8 @@ type RevisionDb = {
 
 const toLayout = (r: LayoutDb): LayoutRow => ({
   id: r.id, boardId: r.board_id, name: r.name, headRevisionId: r.head_revision_id, createdAt: r.created_at, updatedAt: r.updated_at,
+  archivedAt: r.archived_at,
+  copiedFrom: r.copied_from_layout_id !== null && r.copied_from_revision_id !== null ? { layoutId: r.copied_from_layout_id, revisionId: r.copied_from_revision_id } : null,
 });
 const toRevision = (r: RevisionDb): RevisionRow => ({
   id: r.id, layoutId: r.layout_id, parentId: r.parent_id, origin: r.origin, summary: r.summary, createdAt: r.created_at,
@@ -47,7 +54,7 @@ const isUniqueViolation = (err: unknown): boolean => (err as { code?: string }).
 /** Creates a layout and its first revision in one transaction. */
 export function createLayout(
   db: Database,
-  input: { name: string; layout: Layout; summary: string; origin: Origin; now?: number },
+  input: { name: string; layout: Layout; summary: string; origin: Origin; now?: number; copiedFrom?: { layoutId: string; revisionId: string } },
 ): { layout: LayoutRow; revision: RevisionRow } {
   const now = input.now ?? Date.now();
   const layoutId = newId("lay");
@@ -56,19 +63,23 @@ export function createLayout(
     db.transaction(() => {
       // layouts.head_revision_id and revisions.layout_id reference each other; check both at commit.
       db.run("PRAGMA defer_foreign_keys = ON");
-      db.query("INSERT INTO layouts (id, board_id, name, head_revision_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(
-        layoutId, input.layout.boardId, input.name, revisionId, now, now,
-      );
+      db.query(
+        "INSERT INTO layouts (id, board_id, name, head_revision_id, created_at, updated_at, copied_from_layout_id, copied_from_revision_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(layoutId, input.layout.boardId, input.name, revisionId, now, now, input.copiedFrom?.layoutId ?? null, input.copiedFrom?.revisionId ?? null);
       db.query(
         "INSERT INTO revisions (id, layout_id, parent_id, document, origin, summary, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)",
       ).run(revisionId, layoutId, JSON.stringify(input.layout), input.origin, input.summary, now);
+      // A board's first config is the one on its keyboard; later ones wait to be put on (D-300).
+      db.query("INSERT OR IGNORE INTO board_config (board_id, layout_id) VALUES (?, ?)").run(input.layout.boardId, layoutId);
     }).immediate();
   } catch (err) {
     if (isUniqueViolation(err)) throw new NameTakenError(`a layout named "${input.name}" already exists`);
     throw err;
   }
   return {
-    layout: { id: layoutId, boardId: input.layout.boardId, name: input.name, headRevisionId: revisionId, createdAt: now, updatedAt: now },
+    layout: {
+      id: layoutId, boardId: input.layout.boardId, name: input.name, headRevisionId: revisionId, createdAt: now, updatedAt: now, archivedAt: null, copiedFrom: input.copiedFrom ?? null,
+    },
     revision: { id: revisionId, layoutId, parentId: null, origin: input.origin, summary: input.summary, createdAt: now },
   };
 }

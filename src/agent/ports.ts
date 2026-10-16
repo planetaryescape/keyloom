@@ -13,6 +13,9 @@ export type LayoutSnapshot = {
   revisionId: string;
   document: Layout;
   board: Board;
+  /** This layout (a config, 25) is the one on its board's keyboard: the one the sync engine keeps there (D-300). */
+  onKeyboard: boolean;
+  archived: boolean;
 };
 
 export type Proposal = {

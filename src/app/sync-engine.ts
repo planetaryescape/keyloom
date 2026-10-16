@@ -1,4 +1,5 @@
-// The sync engine (17#auto-sync, D-160 to D-169): it keeps each keyboard on its layout's head revision.
+// The sync engine (17#auto-sync, D-160 to D-169): it keeps each keyboard on its config's head revision. The config is the
+// one stored as on the keyboard (D-300), never the newest edited, so editing another config of the board schedules nothing.
 //
 // It is level-triggered. Every tick it asks, per board, "does the keyboard run the head, and is it time to put it there?"
 // from the database and the last reading of USB, so a burst of Applies, an Apply during a sync, a restart mid-sync and a
@@ -9,6 +10,7 @@ import { LogSink } from "../firmware/toolchain/run.ts";
 import { processAlive } from "../firmware/toolchain/lock.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash } from "../persistence/builds.ts";
+import { getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
   type BoardSyncRow, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
@@ -65,11 +67,11 @@ export type BoardSyncView = {
   boardName: string;
   /** A software remapper (the MacBook's keyboard): applying writes a config and reloads it, with no build or flash. */
   remapper: boolean;
-  /** The layout this keyboard is tracked against: the one its running build was made from, or the board's newest. */
+  /** The config on this keyboard (D-300): the one the engine keeps it on, which changes only when BK puts another on. */
   layoutId: string;
   layoutName: string;
   headRevisionId: string;
-  /** Other layouts of this board; a sync of one of them replaces what the keyboard runs. */
+  /** Other configs of this board that are not archived; putting one on replaces what the keyboard runs. */
   otherLayouts: number;
   state: SyncState;
   auto: SyncAutoView;
@@ -127,6 +129,7 @@ export class SyncEngine {
   private started = false;
   private failure: string | undefined;
   private chain: Promise<unknown> = Promise.resolve();
+  /** Board to the config a manual sync is waiting to put on. Checked again when it starts: BK may have chosen another since. */
   private readonly pendingManual = new Map<string, string>();
   private readonly listeners = new Set<(boards: BoardSyncView[]) => void>();
   private lastPublished = "";
@@ -265,14 +268,19 @@ export class SyncEngine {
     let builds: Array<BuildRow | undefined> = [];
     if (reading.state === "keyloom" && loaded === undefined) builds = reading.keys.map((k) => findBuildByKey(db, k));
     const known = reading.state === "keyloom" && loaded === undefined && builds.length > 0 && builds.every((b): b is BuildRow => b !== undefined);
+    // The board always has a stored config (createLayout and the migration write one); the newest is only a guard for a database edited by hand.
     const newest = [...layouts].sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? 1 : -1))[0] as LayoutRow;
+    const stored = getBoardConfig(db, boardId);
     const ofRunning = known ? layouts.find((l) => l.id === (builds[0] as BuildRow).layoutId) : loaded === undefined ? undefined : layouts.find((l) => findRevision(db, l.id, loaded) !== undefined);
-    const layout = over ?? ofRunning ?? newest;
+    const layout = over ?? layouts.find((l) => l.id === stored) ?? newest;
 
     let running: SyncFacts["running"] = { kind: "unknown" };
     if (loaded === SETUP_REVISION) {
       // keyloom's own identity file, written by setup before any Apply: behind by definition, and keyloom's to replace.
       running = { kind: "behind", changes: null };
+    } else if (loaded !== undefined && ofRunning && ofRunning.id !== layout.id) {
+      // The keyboard runs another config of this board. This one is stored as on the keyboard, but replacing what runs is a choice BK makes (D-300).
+      running = { kind: "other_config" };
     } else if (loaded !== undefined && ofRunning && ofRunning.id === layout.id) {
       const head = layout.headRevisionId;
       if (this.documentsEqual(layout.id, loaded, head)) running = { kind: "same" };
@@ -282,7 +290,9 @@ export class SyncEngine {
       }
     } else if (known && reading.state === "keyloom") {
       const all = builds as BuildRow[];
-      if (all.every((b) => b.layoutId === layout.id)) {
+      if (all.some((b) => b.layoutId !== layout.id) && all.every((b) => layouts.some((l) => l.id === b.layoutId))) {
+        running = { kind: "other_config" };
+      } else if (all.every((b) => b.layoutId === layout.id)) {
         const head = layout.headRevisionId;
         const behind = all.filter((b) => !this.documentsEqual(layout.id, b.revisionId, head));
         if (behind.length === 0) running = { kind: "same" };
@@ -354,7 +364,7 @@ export class SyncEngine {
     const last = lastSyncOfBoard(this.app.db, b.boardId);
     return {
       boardId: b.boardId, boardName: b.boardName, remapper: isRemapper(b.boardId), layoutId: b.layout.id, layoutName: b.layout.name, headRevisionId: b.layout.headRevisionId,
-      otherLayouts: b.layouts.length - 1, state,
+      otherLayouts: b.layouts.filter((l) => l.id !== b.layout.id && l.archivedAt === null).length, state,
       auto: {
         on: b.facts.auto.on && !b.facts.auto.paused, choice: bs.autoSync, paused: bs.paused, proven: bs.provenAt !== null, provenAt: bs.provenAt,
         dueAt: state.kind === "behind" && state.why === "waiting" ? b.layout.updatedAt + this.quietMs : null,
@@ -385,10 +395,15 @@ export class SyncEngine {
     const run = this.running;
     if (!run || run.reason !== undefined || run.row.step !== "building") return;
     const layout = findLayoutRow(this.app.db, run.row.layoutId);
-    if (layout && layout.headRevisionId !== run.row.revisionId) {
+    if ((layout && layout.headRevisionId !== run.row.revisionId) || this.configChanged(run.row)) {
       run.reason = "superseded";
       run.abort.abort();
     }
+  }
+
+  /** BK put another config on this board's keyboard while this sync was under way: what it carries is no longer wanted there. */
+  private configChanged(row: SyncRow): boolean {
+    return getBoardConfig(this.app.db, row.boardId) !== row.layoutId;
   }
 
   private async startDue(): Promise<void> {
@@ -399,7 +414,7 @@ export class SyncEngine {
     for (const [boardId, layoutId] of [...this.pendingManual]) {
       this.pendingManual.delete(boardId);
       const layout = findLayoutRow(this.app.db, layoutId);
-      if (!layout) continue;
+      if (!layout || getBoardConfig(this.app.db, boardId) !== layoutId) continue;
       await this.refresh(true);
       const b = this.factsFor(boardId, showBoard(boardId).definition.name, listLayoutRows(this.app.db).filter((l) => l.boardId === boardId), layout);
       if (b && deriveState(b.facts).kind !== "in_sync" && b.reading.state !== "absent" && b.reading.state !== "other") {
@@ -457,7 +472,16 @@ export class SyncEngine {
       this.publish();
       return findSync(db, row.id) as SyncRow;
     };
-    const cancelled = (): SyncRow => finish({ status: "cancelled", failure: run.reason === "superseded" ? "superseded" : "cancelled", error: run.reason === "paused" ? "auto-sync was paused" : run.reason === "stopped" ? "keyloom was stopped" : "the layout changed again" });
+    const cancelled = (): SyncRow => finish({ status: "cancelled", failure: run.reason === "superseded" ? "superseded" : "cancelled", error: run.reason === "paused" ? "auto-sync was paused" : run.reason === "stopped" ? "keyloom was stopped" : this.configChanged(row) ? "another config was put on the keyboard" : "the layout changed again" });
+    // Looked at again right before anything touches the keyboard: the tick that would stop a build may not have run yet, and a flash
+    // of the config BK just took off the keyboard is the one mistake this engine must not make (D-300).
+    const unwanted = (): boolean => {
+      if (run.reason === undefined && this.configChanged(row)) {
+        run.reason = "superseded";
+        run.abort.abort();
+      }
+      return run.reason !== undefined;
+    };
     try {
       say(`${row.trigger} sync ${row.id} of ${row.revisionId} for ${row.boardId} ${row.boardRevision} started`);
       this.publish();
@@ -466,6 +490,7 @@ export class SyncEngine {
       if (isRemapper(row.boardId)) {
         const remapper = this.deps.remapper;
         if (!remapper) return finish({ status: "failed", failure: "flash", error: "this copy of keyloom can't apply to a software remapper" });
+        if (unwanted()) return cancelled();
         progressSync(db, row.id, { status: "flashing", step: "writing", builtAt: this.now(), flashStartedAt: this.now() });
         this.publish();
         const applied = await remapper.apply({ layoutId: row.layoutId, revisionId: row.revisionId });
@@ -485,7 +510,7 @@ export class SyncEngine {
         layoutId: row.layoutId, revisionId: row.revisionId, boardRevision: row.boardRevision, signal: run.abort.signal,
         onBuildId: (id) => progressSync(db, row.id, { buildId: id }),
       });
-      if (run.reason !== undefined) return cancelled();
+      if (unwanted()) return cancelled();
       if (!built.ok) return finish({ status: "failed", failure: "build", error: built.error });
       say(built.reused ? `build ${built.buildId} reused` : `build ${built.buildId} done`);
 
@@ -494,7 +519,7 @@ export class SyncEngine {
       const now = this.readingOf(row.boardId);
       if (now.state === "absent") return finish({ status: "failed", failure: "disconnected", error: "The keyboard was unplugged during the build, so nothing was flashed." });
       if (now.state === "other") return finish({ status: "failed", failure: "flash", error: "The keyboard now runs firmware keyloom didn't build, so keyloom left it alone." });
-      if (run.reason !== undefined) return cancelled();
+      if (unwanted()) return cancelled();
 
       progressSync(db, row.id, { status: "flashing", step: "restarting", builtAt: this.now(), flashStartedAt: this.now() });
       this.publish();
@@ -548,51 +573,77 @@ export class SyncEngine {
   // --- what a person asks for -----------------------------------------------------------------
 
   /**
-   * Sync now: puts the head of `layoutRef` on its board's keyboard, whatever the auto-sync setting. It still refuses a keyboard
-   * running firmware keyloom didn't build, because replacing that takes the flash dialog's confirmation (D-094).
+   * Sync now: puts the head of the config on its board's keyboard, whatever the auto-sync setting. It still refuses a keyboard
+   * running firmware keyloom didn't build, because replacing that takes the flash dialog's confirmation (D-094). It refuses a config
+   * that is not the one on the keyboard: changing that is `useConfig`, a choice of its own (D-300).
    */
   syncNow(layoutRef: string): Promise<SyncNowResult> {
-    return this.exclusive(async () => {
-      const layout = findLayoutRow(this.app.db, layoutRef);
-      if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
-      const board = showBoard(layout.boardId);
-      const name = board.definition.name;
-      if (!syncSupported(board)) {
-        throw new UsageError(`keyloom can't tell what a ${name} is running or restart it by itself, so it can't sync it. Use \`keyloom build\` and \`keyloom flash\`.`);
-      }
-      await this.refresh(true);
-      const reading = this.readingOf(board.definition.id);
-      if (reading.state === "absent") {
-        throw new UsageError(board.definition.firmware === "kanata"
-          ? `kanata isn't running for the ${name}, so keyloom can't apply to it. Run \`keyloom doctor\` to see what is missing`
-          : `no ${name} is attached; plug it in and try again`);
-      }
-      if (reading.state === "other" && board.definition.firmware === "kanata") {
-        throw new UsageError(`kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${layout.name} --overwrite\` to do it deliberately.`);
-      }
-      if (reading.state === "other") {
-        throw new UsageError(`the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${layout.name}\` and \`keyloom flash --layout ${layout.name}\` to do it deliberately.`);
-      }
+    return this.exclusive(() => this.syncLocked(layoutRef, false));
+  }
 
-      const run = this.running;
-      if (run) {
-        const sameBoard = run.row.boardId === board.definition.id;
-        if (sameBoard && run.row.layoutId === layout.id && run.row.revisionId === layout.headRevisionId) return { kind: "already_running", sync: run.row, done: run.done };
-        this.pendingManual.set(board.definition.id, layout.id);
-        return { kind: "queued" };
-      }
+  /**
+   * Makes `layoutRef` the config on its board's keyboard and syncs it once (D-300). The checks are `syncNow`'s, and they run before
+   * the choice is stored, so a keyboard that is unplugged or running someone else's firmware leaves the choice as it was.
+   */
+  useConfig(layoutRef: string): Promise<SyncNowResult> {
+    return this.exclusive(() => this.syncLocked(layoutRef, true));
+  }
+
+  private async syncLocked(layoutRef: string, put: boolean): Promise<SyncNowResult> {
+    const layout = findLayoutRow(this.app.db, layoutRef);
+    if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
+    if (layout.archivedAt !== null) throw new UsageError(`${layout.name} is archived; restore it first with \`keyloom config restore ${layout.name}\``);
+    const onKeyboard = getBoardConfig(this.app.db, layout.boardId);
+    if (!put && onKeyboard !== layout.id) {
+      const current = onKeyboard === undefined ? undefined : findLayoutRow(this.app.db, onKeyboard);
+      throw new UsageError(`${layout.name} isn't the config on your ${showBoard(layout.boardId).definition.name}${current ? ` (${current.name} is)` : ""}; put it on with \`keyloom config use ${layout.name}\``);
+    }
+    const board = showBoard(layout.boardId);
+    const name = board.definition.name;
+    if (!syncSupported(board)) {
+      throw new UsageError(`keyloom can't tell what a ${name} is running or restart it by itself, so it can't sync it. Use \`keyloom build\` and \`keyloom flash\`.`);
+    }
+    await this.refresh(true);
+    const reading = this.readingOf(board.definition.id);
+    if (reading.state === "absent") {
+      throw new UsageError(board.definition.firmware === "kanata"
+        ? `kanata isn't running for the ${name}, so keyloom can't apply to it. Run \`keyloom doctor\` to see what is missing`
+        : `no ${name} is attached; plug it in and try again`);
+    }
+    if (reading.state === "other" && board.definition.firmware === "kanata") {
+      throw new UsageError(`kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${layout.name} --overwrite\` to do it deliberately.`);
+    }
+    if (reading.state === "other") {
+      throw new UsageError(`the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${layout.name}\` and \`keyloom flash --layout ${layout.name}\` to do it deliberately.`);
+    }
+
+    const run = this.running;
+    if (!run) {
       const other = activeSyncs(this.app.db).find((s) => this.alive(s.pid));
       if (other) throw new UsageError(`another keyloom sync is running (${other.id}, process ${other.pid}); wait for it or use --wait`);
       if (firmwareBusy(this.app)) throw new UsageError("a build or flash is in progress; wait for it to finish");
+    }
 
-      const b = this.factsFor(board.definition.id, name, listLayoutRows(this.app.db).filter((l) => l.boardId === board.definition.id), layout);
+    // Stored before anything starts, so the sync's own checks (and a tick between) see the config it is for.
+    const previous = onKeyboard;
+    if (put) setBoardConfig(this.app.db, board.definition.id, layout.id);
+    if (run) {
+      const sameBoard = run.row.boardId === board.definition.id;
+      if (sameBoard && run.row.layoutId === layout.id && run.row.revisionId === layout.headRevisionId) return { kind: "already_running", sync: run.row, done: run.done };
+      this.pendingManual.set(board.definition.id, layout.id);
+      return { kind: "queued" };
+    }
+
+    const b = this.factsFor(board.definition.id, name, listLayoutRows(this.app.db).filter((l) => l.boardId === board.definition.id), layout);
+    const launched = b && deriveState(b.facts).kind !== "in_sync" ? this.launch(b, "manual") : null;
+    if (!b || (!launched && deriveState(b.facts).kind !== "in_sync")) {
+      if (put && previous !== undefined) setBoardConfig(this.app.db, board.definition.id, previous);
       if (!b) throw new NotFoundError(`no layout "${layoutRef}"`);
-      if (deriveState(b.facts).kind === "in_sync") return { kind: "in_sync", boardId: board.definition.id, layoutId: layout.id, revisionId: layout.headRevisionId };
-      const launched = this.launch(b, "manual");
-      if (!launched) throw new UsageError(`the ${name} can't be synced right now`);
-      this.publish();
-      return { kind: "started", sync: launched.row, done: launched.done };
-    });
+      throw new UsageError(`the ${name} can't be synced right now`);
+    }
+    if (!launched) return { kind: "in_sync", boardId: board.definition.id, layoutId: layout.id, revisionId: layout.headRevisionId };
+    this.publish();
+    return { kind: "started", sync: launched.row, done: launched.done };
   }
 
   /** "Disable remapping": the identity map goes on, so the built-in keyboard types as a plain one. No sudo (D-235). */

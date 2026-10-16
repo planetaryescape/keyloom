@@ -4,6 +4,7 @@
 import type { Database } from "bun:sqlite";
 import { newId } from "./ids.ts";
 import { transact } from "./transaction.ts";
+import { recordVersion } from "./versions.ts";
 
 export type SyncStatus = "building" | "flashing" | "succeeded" | "failed" | "cancelled";
 export type SyncTrigger = "auto" | "manual";
@@ -127,13 +128,23 @@ export type SyncFinish =
   | { status: "succeeded" }
   | { status: "failed" | "cancelled"; failure: SyncFailure; error: string };
 
-/** Finishes a sync that is still running. Only the first finish counts; returns whether this one did. */
+/**
+ * Finishes a sync that is still running. Only the first finish counts; returns whether this one did. A sync that succeeded was
+ * verified (the engine only finishes one that way), so it is also where its revision becomes a version (D-301): in the same write,
+ * so a verified sync without a version, or a version without a verified sync, cannot exist.
+ */
 export function finishSync(db: Database, id: string, result: SyncFinish, now = Date.now()): boolean {
-  const r =
-    result.status === "succeeded"
-      ? db.query(`UPDATE syncs SET status = 'succeeded', step = 'done', instruction = NULL, finished_at = ? WHERE id = ? AND ${ACTIVE}`).run(now, id)
-      : db.query(`UPDATE syncs SET status = ?, step = 'done', instruction = CASE WHEN ? = 'needs_hand' THEN instruction ELSE NULL END, failure = ?, error = ?, finished_at = ? WHERE id = ? AND ${ACTIVE}`).run(result.status, result.failure, result.failure, result.error, now, id);
-  return r.changes > 0;
+  return db.transaction(() => {
+    const r =
+      result.status === "succeeded"
+        ? db.query(`UPDATE syncs SET status = 'succeeded', step = 'done', instruction = NULL, finished_at = ? WHERE id = ? AND ${ACTIVE}`).run(now, id)
+        : db.query(`UPDATE syncs SET status = ?, step = 'done', instruction = CASE WHEN ? = 'needs_hand' THEN instruction ELSE NULL END, failure = ?, error = ?, finished_at = ? WHERE id = ? AND ${ACTIVE}`).run(result.status, result.failure, result.failure, result.error, now, id);
+    if (r.changes > 0 && result.status === "succeeded") {
+      const row = findSync(db, id) as SyncRow;
+      recordVersion(db, { layoutId: row.layoutId, revisionId: row.revisionId, boardId: row.boardId, syncId: id, at: now });
+    }
+    return r.changes > 0;
+  })();
 }
 
 /** The newest sync of `layoutId` to `boardId` for each revision named, newest first; used to tell whether a revision was already tried. */

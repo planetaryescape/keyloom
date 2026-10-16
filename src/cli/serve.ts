@@ -3,6 +3,7 @@ import { type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, ty
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import { appChatBackend } from "./chat-backend.ts";
+import { appConfigsBackend } from "./configs-backend.ts";
 import { appDecisionsBackend } from "./decisions-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
 import { appSyncBackend } from "./sync-backend.ts";
@@ -66,7 +67,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
-    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine), open: opts.open,
+    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine), configs: appConfigsBackend(app, engine), open: opts.open,
   });
   let drained: Promise<void> | undefined;
   return {

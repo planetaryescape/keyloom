@@ -79,8 +79,8 @@ describe("typing sessions", () => {
     expect(() => saveAnalysis(db, "typ_missing", {})).toThrow("there is no typing session typ_missing");
   });
 
-  test("the migration is the ninth, applied once, and a reopened database keeps its sessions", () => {
-    expect(MIGRATIONS.at(-1)?.name).toBe("0009_typing_sessions");
+  test("the migration is the ninth (the last one before configs), applied once, and a reopened database keeps its sessions", () => {
+    expect(MIGRATIONS.find((m) => m.version === 9)?.name).toBe("0009_typing_sessions");
     const dir = tempDir();
     const db = openDatabase(dir);
     const { layout: l, revision } = createLayout(db, { name: "l", layout, summary: "s", origin: "import" });

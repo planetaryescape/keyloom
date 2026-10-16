@@ -57,7 +57,7 @@ describe("migrations", () => {
   test("the schema is the one in 02 (layouts and revisions)", () => {
     const db = openDatabase(tempDir());
     const cols = (t: string) => (db.query(`PRAGMA table_info(${t})`).all() as Array<{ name: string; notnull: number }>).map((c) => c.name);
-    expect(cols("layouts")).toEqual(["id", "board_id", "name", "head_revision_id", "created_at", "updated_at"]);
+    expect(cols("layouts")).toEqual(["id", "board_id", "name", "head_revision_id", "created_at", "updated_at", "archived_at", "copied_from_layout_id", "copied_from_revision_id"]);
     expect(cols("revisions")).toEqual(["id", "layout_id", "parent_id", "document", "origin", "change_set_id", "undoes_revision_id", "summary", "created_at"]);
     expect(() => db.run("INSERT INTO revisions (id, layout_id, document, origin, summary, created_at) VALUES ('r', 'l', '{}', 'bogus', 's', 1)")).toThrow();
     db.close();

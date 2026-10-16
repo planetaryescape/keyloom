@@ -44,6 +44,8 @@ export type RunSyncOptions = SyncSetup & {
   signal?: AbortSignal;
   /** How long `wait` waits for the running sync, default 15 minutes. */
   waitTimeoutMs?: number;
+  /** Make the config the one on its board's keyboard first (D-300): `keyloom config use`. Without it, a config that isn't already the board's is refused. */
+  put?: boolean;
 };
 
 const STEP_WORDS = {
@@ -60,7 +62,7 @@ export async function runSync(app: App, ref: string, opts: RunSyncOptions = {}):
   opts.signal?.addEventListener("abort", stop, { once: true });
   try {
     if (opts.wait) await waitForOthers(app, opts.waitTimeoutMs ?? 15 * 60_000, opts.signal);
-    const result = await engine.syncNow(ref);
+    const result = await (opts.put ? engine.useConfig(ref) : engine.syncNow(ref));
     if (result.kind === "in_sync") {
       return { status: "in_sync", boardId: result.boardId, layoutId: result.layoutId, revisionId: result.revisionId, sync: null };
     }
@@ -84,6 +86,9 @@ export async function runSync(app: App, ref: string, opts: RunSyncOptions = {}):
     opts.signal?.removeEventListener("abort", stop);
   }
 }
+
+/** `keyloom config use`: makes the config the one on its keyboard and syncs it once, with `runSync`'s checks and outcomes. */
+export const runUseConfig = (app: App, ref: string, opts: RunSyncOptions = {}): Promise<SyncOutcome> => runSync(app, ref, { ...opts, put: true });
 
 async function waitForOthers(app: App, timeoutMs: number, signal: AbortSignal | undefined): Promise<void> {
   const deadline = Date.now() + timeoutMs;
