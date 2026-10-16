@@ -32,6 +32,8 @@ interface LayerTabsProps {
   onSelect: (id: string) => void;
   /** Layers that carry a mark from the previewed proposal while another layer is showing. */
   marked?: ReadonlySet<string>;
+  /** Layers a board review problem is about (D-340): a rose dot on the tab. */
+  reviewed?: ReadonlySet<string>;
   /** Absent while the layout can't be changed from here. */
   actions?: LayerActions;
   /** The layer whose name is being edited; the owner sets it so a new layer opens with its name ready. */
@@ -73,7 +75,7 @@ function Miniature({ keys, layer, leds }: { keys: readonly GeometryKey[]; layer:
   );
 }
 
-export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renamingId, onRenaming, keys, lights, leds }: LayerTabsProps) {
+export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, actions, renamingId, onRenaming, keys, lights, leds }: LayerTabsProps) {
   const layers = layout.layers;
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -147,6 +149,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
               className="layer-tab"
               data-dragging={dragId === layer.id}
               data-drop={dragId !== null && overIndex === index && dragId !== layer.id}
+              data-review={reviewed?.has(layer.id) ? "problem" : undefined}
               // The full name, since a narrow strip ends it in an ellipsis (D-338).
               title={isSelected && actions !== undefined ? `${niceLayerName(layer.name)}. Click again to rename. Right-click for the layer's actions.` : niceLayerName(layer.name)}
               draggable={draggable}

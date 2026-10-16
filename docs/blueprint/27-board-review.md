@@ -1,6 +1,6 @@
 # 27: Board review
 
-Status: engine built (checks, agent part, triggers, routes, events and CLI), 2026-10-17. The screens are the designer's half of D-340 and are not built. Source baseline: origin/main after v0.34.8.
+Status: engine built (checks, agent part, triggers, routes, events and CLI), 2026-10-17; screens built (marker, marks, review panel, states), 2026-10-17 (D-340). Source baseline: origin/main after v0.34.8.
 
 BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … and I can just see them somewhere without me needing to ask for them or dig into some menus … it would be nice if it's proactive."
 
@@ -72,6 +72,10 @@ A config nothing touched while its keyboard was away has no review until `POST �
 - `POST /api/layouts/:ref/review/items/:id/dismiss` and `…/restore` (`:id` URL-encoded). 404 for an id the latest review doesn't have.
 - `GET /api/events` carries `event: review` frames (`{ type: "review", layoutId, revisionId, reviewId, aiStatus }`) when a review is made and each time its agent part moves. The frame holds no review; the page reads it again.
 - `keyloom review [layout] [--run] [--force] [--json]` prints the review in plain words, or the JSON with `schema_version`. `--run` makes the head's review now and waits for the agent.
+
+## The screens
+
+Built in `src/web/review/`: `useReview` reads `GET …/review` on open, on every new head and on each `event: review` frame for the config; `ReviewMarker` sits in the caption; `ReviewPanel` is the side column (a sheet on a phone). The caps and the strip are marked from `keys` and `layers` of the items that show. D-340 has the states.
 
 ## What the screens need
 

@@ -991,3 +991,23 @@ button.cap[data-draft="true"] .cap-body {
 button.cap[data-draft="true"] .cap-front {
   color: var(--pending-ink);
 }
+
+/* ---------- the board review (D-340) ----------
+   A key a problem is about wears the lab's rose ring; a key a hint is about only a faint dot, quieter than anything that asks for
+   action. */
+button.cap[data-review="problem"]:not([data-pending="true"]) .cap-body {
+  box-shadow: 0 0 0 1.5px var(--finding), 0 0 calc(var(--u) * 0.3) color-mix(in oklab, var(--finding) 40%, transparent), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+button.cap[data-review="hint"]::before {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--u) * 0.09);
+  left: calc(var(--u) * 0.11);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  content: "";
+  pointer-events: none;
+}

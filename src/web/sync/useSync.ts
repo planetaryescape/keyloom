@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SyncNowResponseSchema, SyncStatusResponseSchema, type BoardSync } from "../../api/http.ts";
 import { request } from "../api-write.ts";
 import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
+import type { ReviewEvent } from "../../api/review.ts";
 import { createEventParser } from "./events.ts";
 
 export interface SyncApi {
   boards: readonly BoardSync[];
   /** Keyboards on USB keyloom has no board for, from the engine's reads (D-336). */
   newKeyboards: readonly DetectedKeyboard[];
+  /** The last board review frame (D-340): a review was made or its agent part moved; the page reads that config's review again. */
+  lastReview: ReviewEvent | null;
   /** False until the first state arrives, and while the stream is being reopened. */
   live: boolean;
   /** Why the last action failed, until the next one starts. */
@@ -27,6 +30,7 @@ const RETRY_MAX_MS = 10_000;
 export function useSync(token: string): SyncApi {
   const [boards, setBoards] = useState<readonly BoardSync[]>([]);
   const [newKeyboards, setNewKeyboards] = useState<readonly DetectedKeyboard[]>([]);
+  const [lastReview, setLastReview] = useState<ReviewEvent | null>(null);
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +51,7 @@ export function useSync(token: string): SyncApi {
           setBoards(next);
           // A new array each frame; keep the old one while nothing changed, so the card doesn't reset under a choice being made.
           setNewKeyboards((old) => (JSON.stringify(old) === JSON.stringify(keyboards) ? old : keyboards));
-        }, () => setLive(false));
+        }, () => setLive(false), (event) => setLastReview(event));
         const reader = response.body.getReader();
         for (;;) {
           const { value, done } = await reader.read();
@@ -84,7 +88,7 @@ export function useSync(token: string): SyncApi {
   }, []);
 
   return {
-    boards, newKeyboards, live, error,
+    boards, newKeyboards, lastReview, live, error,
     syncNow: (layoutId) => act(async () => (await request("POST", "/api/sync", token, SyncNowResponseSchema, undefined, { layoutId })).boards),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),
     disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
