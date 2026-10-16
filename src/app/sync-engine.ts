@@ -5,6 +5,7 @@
 // from the database and the last reading of USB, so a burst of Applies, an Apply during a sync, a restart mid-sync and a
 // keyboard that comes back are all the same question with different answers, and there is no event queue to get out of step.
 // One sync runs at a time in the whole machine, enforced by a row in the database (claimSync), not by this object.
+import type { DetectedKeyboard } from "./keyboard-detect.ts";
 import { join } from "node:path";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { processAlive } from "../firmware/toolchain/lock.ts";
@@ -131,7 +132,9 @@ export class SyncEngine {
   private chain: Promise<unknown> = Promise.resolve();
   /** Board to the config a manual sync is waiting to put on. Checked again when it starts: BK may have chosen another since. */
   private readonly pendingManual = new Map<string, string>();
-  private readonly listeners = new Set<(boards: BoardSyncView[]) => void>();
+  private readonly listeners = new Set<(boards: BoardSyncView[], newKeyboards: DetectedKeyboard[]) => void>();
+  /** Keyboards on USB keyloom has no board for, from the last read (D-336). */
+  private unknown: DetectedKeyboard[] = [];
   private lastPublished = "";
   private readonly sameDocument = new Map<string, boolean>();
 
@@ -184,7 +187,12 @@ export class SyncEngine {
     if (this.started && !this.stopping) void this.tick();
   }
 
-  subscribe(listener: (boards: BoardSyncView[]) => void): () => void {
+  /** The keyboards on USB keyloom has no board for, as of the last read (D-336). */
+  newKeyboards(): DetectedKeyboard[] {
+    return this.unknown;
+  }
+
+  subscribe(listener: (boards: BoardSyncView[], newKeyboards: DetectedKeyboard[]) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
@@ -230,6 +238,12 @@ export class SyncEngine {
         this.readings = await this.deps.readKeyboards();
       } catch {
         this.readings = new Map();
+      }
+      // Best effort: naming a new keyboard must never stop the engine reading the ones it syncs.
+      try {
+        this.unknown = (await this.deps.newKeyboards?.()) ?? [];
+      } catch {
+        this.unknown = [];
       }
       this.readAt = this.now();
     })();
@@ -376,10 +390,10 @@ export class SyncEngine {
   private publish(): void {
     if (this.listeners.size === 0) return;
     const boards = this.views();
-    const text = JSON.stringify(boards);
+    const text = JSON.stringify([boards, this.unknown]);
     if (text === this.lastPublished) return;
     this.lastPublished = text;
-    for (const l of this.listeners) l(boards);
+    for (const l of this.listeners) l(boards, this.unknown);
   }
 
   /** The current views after a fresh read of the keyboards. */

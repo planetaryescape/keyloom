@@ -2,7 +2,7 @@
 export { type App, closeApp, openApp } from "./context.ts";
 export { BusyError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
-  type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, proposeChange, rejectChange, showChange, undo,
+  type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
 export { type ParsedBinding, parseBindingExpression } from "./binding-expression.ts";
 export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, importLayout, listLayouts } from "./layouts.ts";
@@ -16,9 +16,9 @@ export {
   restoreVersion, versionHistory,
 } from "./versions.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, loadUserBoards, regenerateGeometry, showBoard } from "./boards.ts";
-export { type AddDeps, type AddInput, type AddOutcome, type KeyboardPreview, addKeyboard, previewKeyboard } from "./keyboard-add.ts";
+export { type AddDeps, type AddInput, type AddOutcome, type KeyboardPreview, type PreviewBoard, addKeyboard, previewKeyboard } from "./keyboard-add.ts";
 export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKeyboards, findCandidate, searchKeyboards } from "./keyboard-detect.ts";
-export { type PutInput, type PutOutcome, type PutProposal, putConfig } from "./keyboard-put.ts";
+export { type PutInput, type PutOutcome, type PutPreview, type PutProposal, previewPut, putConfig } from "./keyboard-put.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type DoctorCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
 export {

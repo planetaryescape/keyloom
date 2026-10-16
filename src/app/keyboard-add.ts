@@ -21,7 +21,7 @@ import { parsePhysicalLayout } from "../boards/zmk-geometry.ts";
 import { cacheDir } from "../persistence/paths.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
-import { findCandidate } from "./keyboard-detect.ts";
+import { displayNameFor, findCandidate } from "./keyboard-detect.ts";
 
 export type AddDeps = GeometryOptions & {
   /** The boards that count as already known; defaults to every board keyloom has loaded. */
@@ -51,6 +51,30 @@ export type KeyboardPreview = {
   needs: string[];
   /** ZMK: the controllers that provide what the shield requires and whose boot drive keyloom knows. */
   controllers: Array<{ id: string; name: string }>;
+  /**
+   * The board as it would be added, derived but not stored (D-336), so a screen can draw it with its hands and fingers before the person
+   * confirms: from the home row given, or keyloom's guess, and the controller given, or the first that fits. Null, with `boardProblem`,
+   * when the layout can't be split into hands.
+   */
+  board: PreviewBoard | null;
+  boardProblem: string | null;
+  /** The name to show: "Corne (new)" when a board keyloom already has is called the same (D-336). */
+  displayName: string;
+};
+
+
+export type PreviewBoard = {
+  name: string;
+  keys: GeometryKey[];
+  hands: { left: number[]; right: number[] };
+  fingers: Record<string, string>;
+  thumbs: number[];
+  rows: Array<{ name: string; positions: number[] }>;
+  homeRow: number;
+  /** How the first flash goes: a recipe keyloom runs once the person starts it, or "manual" with the reason. */
+  flash: { kind: string; manualReason: string | null; steps: string[] };
+  /** The controller the drawing assumed when none was given; null when one was given or none is needed. */
+  assumedController: string | null;
 };
 
 function controllersFor(c: Candidate): Array<{ id: string; name: string }> {
@@ -112,9 +136,32 @@ export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddD
   const needs: string[] = [];
   if (input.homeRow === undefined) needs.push("--home-row");
   if (c.entry.kind === "zmk" && (c.entry.zmk.requires?.length ?? 0) > 0 && input.controller === undefined) needs.push("--controller");
+  const controllers = controllersFor(c);
+  const assumed = input.controller === undefined && controllers.length > 0 ? (controllers[0] as { id: string }).id : null;
+  let board: PreviewBoard | null = null;
+  let boardProblem: string | null = null;
+  try {
+    const derived = deriveBoard({
+      candidate: c, geometry, homeRow: input.homeRow ?? guessedHomeRow,
+      ...(layout === null ? {} : { layout }),
+      ...(input.controller !== undefined ? { controller: input.controller } : assumed !== null ? { controller: assumed } : {}),
+    });
+    const rev = derived.definition.revisions[0];
+    const flash = rev?.flash;
+    board = {
+      name: derived.definition.name, keys: geometry.keys, hands: derived.definition.hands, fingers: derived.definition.fingers,
+      thumbs: derived.summary.thumbs, rows: derived.summary.rows, homeRow: derived.summary.homeRow,
+      flash: { kind: flash?.kind ?? "manual", manualReason: derived.summary.manualFlashReason, steps: flash?.kind === "uf2-drives" ? flash.steps.map((st) => st.enter) : [] },
+      assumedController: assumed,
+    };
+  } catch (err) {
+    if (!(err instanceof DeriveError)) throw err;
+    boardProblem = err.message;
+  }
   return {
     candidate: { id: c.id, name: c.name, firmware: c.firmware }, keyCount: geometry.keys.length,
-    rows: rows.map((r, i) => ({ row: i + 1, keys: r.length })), guessedHomeRow, layout, needs, controllers: controllersFor(c),
+    rows: rows.map((r, i) => ({ row: i + 1, keys: r.length })), guessedHomeRow, layout, needs, controllers, board, boardProblem,
+    displayName: displayNameFor(c),
   };
 }
 
@@ -122,6 +169,8 @@ const cacheDirFor = (opts: GeometryOptions): string => opts.cacheDir ?? join(cac
 
 export type AddOutcome = {
   boardId: string;
+  name: string;
+  displayName: string;
   dir: string;
   derived: DerivedBoard["summary"];
   /** Warnings from the check; errors would have stopped the write. */
@@ -167,7 +216,10 @@ export async function addKeyboard(app: App, input: AddInput, opts: AddDeps = {})
     }
     const stored = writeUserBoard(app.dataDir, derived);
     setUserBoards(readUserBoards(app.dataDir).boards);
-    return { boardId: derived.definition.id, dir: stored, derived: derived.summary, warnings: result.issues.filter((i) => i.level === "warning").map((i) => i.message) };
+    return {
+      boardId: derived.definition.id, name: derived.definition.name, displayName: displayNameFor(c), dir: stored, derived: derived.summary,
+      warnings: result.issues.filter((i) => i.level === "warning").map((i) => i.message),
+    };
   } finally {
     await rm(staging, { recursive: true, force: true });
   }

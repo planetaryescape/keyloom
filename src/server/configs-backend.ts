@@ -1,5 +1,5 @@
 import type { CompareResponse, NewConfigRequest, ApiConfig, VersionHistoryResponse } from "../api/configs.ts";
-import type { SyncNowResponse } from "../api/http.ts";
+import type { ProposalCard, SyncNowResponse } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 
 // The server's configs and versions interface (rung 23, 25). Like the other backends, the CLI injects the app-backed
@@ -18,6 +18,8 @@ export interface ConfigsBackend {
   /** A new revision holding the version's document (D-170). */
   restoreVersion(ref: string, target: string): Promise<{ revisionId: string; restoredRevisionId: string }>;
   compare(ref: string, target: string): Promise<CompareResponse>;
+  /** The config's open proposals that no conversation shows (D-336), as the chat's proposal cards. */
+  proposals(ref: string): Promise<ProposalCard[]>;
 }
 
 /** A failure the browser should see as-is. `validation` is set when a rule refused a restore. */

@@ -50,6 +50,8 @@ export interface UndoState {
 
 interface TopBarProps {
   boards?: { entries: readonly BoardEntry[]; active: string | null; onSelect: (boardId: string) => void };
+  /** Beside the boards: the chip for a keyboard keyloom hasn't met (D-336). */
+  boardsAfter?: ReactNode;
   /** The sync line, centred. */
   sync?: ReactNode;
   ask?: { open: boolean; onToggle: () => void };
@@ -85,7 +87,7 @@ const THEMES: readonly { value: ThemeChoice; label: string; icon: typeof Sun }[]
 ];
 
 // The top bar (23#chrome-recedes): which board, one line of state, and the few things used often. Everything else is in the menu.
-export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
+export function TopBar({ boards, boardsAfter, sync, ask, undo, menu }: TopBarProps) {
   const [theme, setTheme] = useTheme();
   // A phone keeps the board menu, the sync light, Ask and the menu; undo, redo and the theme move into the menu (P1 review).
   const phone = useMediaQuery(PHONE);
@@ -116,6 +118,7 @@ export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
             })}
           </nav>
         )}
+        {boardsAfter}
       </div>
       <div className="topbar-middle">{sync}</div>
       <div className="topbar-end">

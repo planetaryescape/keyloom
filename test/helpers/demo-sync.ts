@@ -12,7 +12,10 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { join } from "node:path";
 import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
-import { getBuild, getLayout, listConfigs, listLayouts, openApp } from "../../src/app/index.ts";
+import { detectKeyboards, getBuild, getLayout, listConfigs, listLayouts, openApp } from "../../src/app/index.ts";
+import { listBoards } from "../../src/boards/registry.ts";
+import type { UsbDevice } from "../../src/firmware/toolchain/usb.ts";
+import { CORNE_LAYOUT_FIXTURE } from "./derive-sources.ts";
 import { appSyncDeps } from "../../src/app/sync-deps.ts";
 import { buildMarker } from "../../src/firmware/qmk/handsfree.ts";
 import { buildKey } from "../../src/firmware/zmk/handsfree.ts";
@@ -93,10 +96,24 @@ mkdirSync(volumes, { recursive: true });
 const half = (letter: "L" | "R") => ({ letter, volume: letter === "L" ? "GLV80LHBOOT" : "GLV80RHBOOT", serial: serialOf(buildKey(glvBuild), letter) });
 const glvWorld = fakeWorld({ root: volumes, halves: [half("L"), half("R")] });
 
-const handsFree = { ...moonKeyboard.deps, zmk: glvWorld.deps };
+// A keyboard keyloom has never seen (D-336): a Corne over ZMK's default ID, on the bus while control.json says `"corne": "plugged"`. BK's
+// committed Corne is left out of what counts as known, so the card offers it; its layout comes from the test fixture, never GitHub.
+let corne: "plugged" | "unplugged" = "unplugged";
+const corneDevice: UsbDevice = { vendorId: "0x1d50", productId: "0x615e", name: "Corne", maker: "ZMK Project", serial: "0123456789ABCDEF" };
+const newBoards = () => listBoards().filter((b) => b.definition.id !== "foostan/corne");
+let seen: UsbDevice[] = [];
+const handsFree = {
+  ...moonKeyboard.deps,
+  usb: async () => {
+    seen = [...(await moonKeyboard.deps.usb()), ...(corne === "plugged" ? [corneDevice] : [])];
+    return seen;
+  },
+  zmk: glvWorld.deps,
+};
 const base = appSyncDeps(app, { handsFree, volumesRoot: volumes, bootloaderWaitMs: 60_000 });
 const deps = {
   ...base,
+  newKeyboards: async () => (await detectKeyboards({ usb: async () => seen, boards: newBoards() })).filter((k) => k.status !== "known"),
   // The fake docker's firmware has no marker in it; give each build the one a real build carries, and make the fake keyboard expect it.
   build: async (a: Parameters<typeof base.build>[0]) => {
     const r = await base.build(a);
@@ -113,7 +130,7 @@ const deps = {
 };
 
 // --- the control file ---------------------------------------------------------------------------------------------
-type Control = { build?: "ok" | "compile"; moonlander?: "connected" | "unplugged" | "other" | "no_hid"; glove80?: "connected" | "unplugged" | "other" };
+type Control = { build?: "ok" | "compile"; moonlander?: "connected" | "unplugged" | "other" | "no_hid"; glove80?: "connected" | "unplugged" | "other"; corne?: "plugged" | "unplugged" };
 let applied = "";
 const glvSerials = glvWorld.halves.map((h) => h.serial);
 setInterval(() => {
@@ -131,6 +148,7 @@ setInterval(() => {
   if (text === applied) return;
   applied = text;
   process.env.FAKE_MODE = control.build ?? "ok";
+  corne = control.corne ?? "unplugged";
   process.env.FAKE_LINE = "12";
   process.env.FAKE_COL = "3";
   const m = moonKeyboard.state;
@@ -148,5 +166,12 @@ setInterval(() => {
   });
 }, 400);
 
-const running = serve(app, { port: Number(portArg), open: false, handsFree, syncDeps: deps, flash: { volumesRoot: volumes, bootloaderWaitMs: 60_000 } });
+const tree = async (url: string): Promise<string> => {
+  if (url.endsWith("/app/dts/layouts/foostan/corne/6column.dtsi")) return Bun.file(CORNE_LAYOUT_FIXTURE).text();
+  throw new Error(`GET ${url} returned 404`);
+};
+const running = serve(app, {
+  port: Number(portArg), open: false, handsFree, syncDeps: deps, flash: { volumesRoot: volumes, bootloaderWaitMs: 60_000 },
+  keyboards: { fetchText: tree, cacheDir: w("geometry"), boards: newBoards() },
+});
 console.log(running.url);

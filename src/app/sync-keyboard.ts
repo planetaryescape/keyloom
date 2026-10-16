@@ -1,6 +1,7 @@
 // What each board's keyboard is doing right now, as keyboard sync needs it (17): not there, in its bootloader, running
 // someone else's firmware, or running keyloom builds (named by the keys in their USB serial numbers). It reads USB and
 // serial ports only; nothing here writes to a device.
+import type { UsbDevice } from "../firmware/toolchain/usb.ts";
 import type { Board } from "../boards/load.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { type HandsFreeDeps, inBootloader, keyboardTarget, readRunningFirmware, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
@@ -45,7 +46,7 @@ export async function remapperReading(boardId: string, over: RemapperOverrides =
 }
 
 /** One reading per syncable board. A failed read is the board "absent", not an error: an unplugged keyboard and an unreadable bus look the same from here. */
-export async function readKeyboards(over: HandsFreeOverrides = {}): Promise<Map<string, KeyboardReading>> {
+export async function readKeyboards(over: HandsFreeOverrides = {}, onDevices?: (devices: UsbDevice[]) => void): Promise<Map<string, KeyboardReading>> {
   const out = new Map<string, KeyboardReading>();
   const deps = realHandsFreeDeps(over);
   let devices: Awaited<ReturnType<HandsFreeDeps["usb"]>> = [];
@@ -54,6 +55,8 @@ export async function readKeyboards(over: HandsFreeOverrides = {}): Promise<Map<
   } catch {
     // Every QMK board then reads as absent.
   }
+  // The same read tells the new-keyboard card what is plugged in (D-336), so nothing reads USB a second time.
+  onDevices?.(devices);
   const cached: HandsFreeDeps = { ...deps, usb: async () => devices };
 
   // A software remapper is read over its TCP port, not from USB.

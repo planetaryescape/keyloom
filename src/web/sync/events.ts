@@ -1,9 +1,11 @@
 // Reads the events stream (`GET /api/events`): Server-Sent Events frames (`event: sync` and `data: <SyncEvent JSON>`) separated by a blank
 // line, with comment lines for keep-alive. The chunks can split a frame anywhere; a frame the page can't read is dropped and reported,
 // because the next one is a whole snapshot and nothing is lost by skipping.
+import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import { SyncEventSchema, type BoardSync } from "../../api/http.ts";
 
-export function createEventParser(onBoards: (boards: BoardSync[]) => void, onUnreadable: () => void): { push: (chunk: string) => void } {
+/** `newKeyboards` is empty from a sender that doesn't carry them. */
+export function createEventParser(onBoards: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void, onUnreadable: () => void): { push: (chunk: string) => void } {
   let pending = "";
   const frame = (raw: string): void => {
     const data = raw.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).replace(/^ /, "")).join("\n");
@@ -21,7 +23,7 @@ export function createEventParser(onBoards: (boards: BoardSync[]) => void, onUnr
       onUnreadable();
       return;
     }
-    onBoards(parsed.data.boards);
+    onBoards(parsed.data.boards, parsed.data.newKeyboards ?? []);
   };
   return {
     push(chunk) {

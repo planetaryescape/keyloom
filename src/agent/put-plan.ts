@@ -111,7 +111,8 @@ const structureOps = (source: Layout, ids: ReadonlyMap<string, string>): ChangeO
 const isEmpty = (b: Binding): boolean => b.kind === "none" || b.kind === "transparent";
 const isLayerKey = (b: Binding): boolean => b.kind === "layer" || (b.kind === "holdTap" && "layerId" in b.hold);
 
-export function planLayoutPut(from: LayoutSnapshot, target: Board): PutPlan {
+/** `choices`: for a layer key with no counterpart (by its source position), the target key the person chose among the candidates (D-336). */
+export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: ReadonlyMap<number, number> = new Map()): PutPlan {
   const ids = layerIds(from.document);
   const targetDoc = scaffold(from.document, target, ids);
   const to: LayoutSnapshot = { layoutId: "", layoutName: target.definition.name, revisionId: "", document: targetDoc, board: target, onKeyboard: false, archived: false };
@@ -232,7 +233,9 @@ export function planLayoutPut(from: LayoutSnapshot, target: Board): PutPlan {
         const there = baseCarried.get(p);
         return { target: p, name: placeName(p), ...(there === undefined ? {} : { replaces: sourceNameAt(there.source) }) };
       });
-    const first = placement.candidates[0];
+    // The person's pick among the candidates, where they made one; keyloom's first choice otherwise.
+    const chosen = choices.get(placement.source);
+    const first = (chosen === undefined ? undefined : placement.candidates.find((c) => c.target === chosen)) ?? placement.candidates[0];
     if (first === undefined) continue;
     const binding = base.bindings[placement.source] as Binding;
     const checkpoint = transfer.checkpoint();

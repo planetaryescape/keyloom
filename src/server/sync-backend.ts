@@ -1,4 +1,5 @@
 import type { BoardSync, SyncNowResponse } from "../api/http.ts";
+import type { DetectedKeyboard } from "../api/detected-keyboards.ts";
 
 // The server's keyboard sync interface (rung 13). Like the other backends, the CLI injects the app-backed
 // implementation, so the server knows nothing about USB, builds or the database.
@@ -11,8 +12,10 @@ export interface SyncBackend {
   setPaused(boardId: string, paused: boolean): Promise<BoardSync[]>;
   /** "Disable remapping": loads the identity map on a software-remapper board, with no sudo (21). */
   disableRemapping(boardId: string): Promise<BoardSync[]>;
-  /** Calls `listener` with every board's state whenever one changes; returns the unsubscribe. */
-  subscribe(listener: (boards: BoardSync[]) => void): () => void;
+  /** Calls `listener` with every board's state, and the keyboards keyloom has no board for, whenever one changes; returns the unsubscribe. */
+  subscribe(listener: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void): () => void;
+  /** The keyboards on USB keyloom has no board for, as of the engine's last read (D-336). */
+  newKeyboards(): DetectedKeyboard[];
 }
 
 /** A failure the browser should see as-is. */

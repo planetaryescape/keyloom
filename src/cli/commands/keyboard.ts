@@ -90,7 +90,8 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
         const rows = preview.rows.map((r) => `  row ${r.row}: ${r.keys} keys${r.row === preview.guessedHomeRow ? "  (keyloom's guess for the home row)" : ""}`).join("\n");
         const controllers = preview.controllers.length > 0 ? `\ncontrollers keyloom can write the flash steps for: ${preview.controllers.map((c) => c.id).join(", ")}` : "";
         print(io, format(), {
-          json: { added: false, needs: preview.needs, preview },
+          // The drawn board is for the screens (D-336); the CLI's JSON stays what it was.
+          json: { added: false, needs: preview.needs, preview: { ...preview, board: undefined, boardProblem: undefined, displayName: undefined } },
           table: `${preview.candidate.name}: ${preview.keyCount} keys${preview.layout ? ` (layout ${preview.layout})` : ""}, main block rows from the top:\n${rows}${controllers}`,
         });
         throw new UsageError(`${preview.candidate.name} is not stored yet. Confirm with ${preview.needs.join(" and ")}${preview.needs.includes("--home-row") ? ` (keyloom guesses ${preview.guessedHomeRow})` : ""}`);

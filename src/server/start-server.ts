@@ -6,6 +6,8 @@ import { handleConfigRoute } from "./config-routes.ts";
 import { handleLabRoute } from "./lab-routes.ts";
 import type { LabBackend } from "./lab-backend.ts";
 import type { ConfigsBackend } from "./configs-backend.ts";
+import type { KeyboardsBackend } from "./keyboards-backend.ts";
+import { handleKeyboardRoute } from "./keyboard-routes.ts";
 import { handleChatRoute } from "./chat-routes.ts";
 import type { DecisionsBackend } from "./decisions-backend.ts";
 import { handleDecisionRoute } from "./decisions-routes.ts";
@@ -31,6 +33,8 @@ export interface ServerOptions {
   sync?: SyncBackend;
   /** The rung 23 configs and versions side. Without it the /api/configs routes fall through to a 404. */
   configs?: ConfigsBackend;
+  /** The new-keyboard side (22, D-336). Without it the /api/keyboards routes fall through to a 404. */
+  keyboards?: KeyboardsBackend;
   /** The typing lab (rung 22). Without it the /api/lab routes fall through to a 404. */
   lab?: LabBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
@@ -53,7 +57,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, decisions, sync, configs, lab, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, lab, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -86,6 +90,10 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
       if (configs !== undefined) {
         const configResponse = await handleConfigRoute(request, url.pathname, configs, sessionToken);
         if (configResponse !== null) return configResponse;
+      }
+      if (keyboards !== undefined) {
+        const keyboardResponse = await handleKeyboardRoute(request, url.pathname, keyboards, sessionToken);
+        if (keyboardResponse !== null) return keyboardResponse;
       }
       if (url.pathname === LIST_PATH || url.pathname === BOARD_DEV_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);

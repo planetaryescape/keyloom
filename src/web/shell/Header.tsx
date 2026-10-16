@@ -41,5 +41,7 @@ export function boardEntries(layouts: readonly LayoutSummary[], choices: readonl
     const board = choices.find((choice) => choice.id === layout.boardId);
     seen.set(layout.boardId, { id: layout.boardId, name: board === undefined ? boardTitle(layout.boardId) : boardDisplayName(board.name), ...(board === undefined ? {} : { board }) });
   }
-  return [...seen.values()];
+  // A board keyloom derived (local/) that has the name of one it already has reads "Corne (new)", so the two can be told apart (D-336).
+  const entries = [...seen.values()];
+  return entries.map((e) => (e.id.startsWith("local/") && entries.some((o) => o.id !== e.id && o.name === e.name) ? { ...e, name: `${e.name} (new)` } : e));
 }

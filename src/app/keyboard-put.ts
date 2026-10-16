@@ -7,7 +7,9 @@ import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import { newId } from "../persistence/ids.ts";
 import { type ChangeSetView, proposeChange } from "./changes.ts";
-import { type ConfigView, newConfig } from "./configs.ts";
+import { type ConfigView, blankDocument, newConfig } from "./configs.ts";
+import { evaluate } from "../validation/validate.ts";
+import type { Layout } from "../layout/schema.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
@@ -21,7 +23,12 @@ export type PutInput = {
   board: string;
   /** The new config's name; defaults to "<layout> on <board>". */
   name?: string;
+  /** For a layer key with no counterpart, by its source position: the target key chosen among the candidates (D-336). */
+  placements?: Record<string, number>;
 };
+
+/** What a put would make, without making it (D-336): the plan, and the layout the placed proposal would give the board, to draw. */
+export type PutPreview = Omit<PutOutcome, "config" | "proposals"> & { name: string; after: Layout; summary: string };
 
 export type PutProposal = { changeSetId: string; title: string; summary: string; warnings: number; changedKeys: number };
 
@@ -38,7 +45,28 @@ export type PutOutcome = {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-export function putConfig(app: App, input: PutInput): PutOutcome {
+function choicesOf(input: PutInput): Map<number, number> {
+  return new Map(Object.entries(input.placements ?? {}).map(([source, target]) => [Number(source), target]));
+}
+
+export function previewPut(app: App, input: PutInput): PutPreview {
+  const { view, target, plan } = planFor(app, input);
+  const blank = blankDocument(target.definition.id);
+  const ops = plan.opsWithPlacements.length > 0 ? plan.opsWithPlacements : plan.ops;
+  const after = evaluate(target.definition, blank, ops).after ?? blank;
+  return {
+    name: input.name ?? `${view.layout.name} on ${target.definition.name}`, after, summary: summaryOf(view.layout.name, plan),
+    placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes,
+  };
+}
+
+function summaryOf(from: string, plan: ReturnType<typeof planLayoutPut>): string {
+  const carried = plan.layers.reduce((n, l) => n + l.carried, 0);
+  const guessed = plan.layers.reduce((n, l) => n + l.guessed, 0);
+  return `${plural(carried, "key")} across ${plural(plan.layers.length, "layer")} from ${from}${guessed > 0 ? `, ${guessed} of them nearest-place guesses` : ""}${plan.combos.copied.length > 0 ? `, ${plural(plan.combos.copied.length, "combo")}` : ""}`;
+}
+
+function planFor(app: App, input: PutInput) {
   const view = getLayout(app, input.from);
   const target = showBoard(input.board);
   if (target.definition.id === view.layout.boardId) throw new UsageError(`${view.layout.name} is already a ${target.definition.name} config; to copy it, use \`keyloom config new\``);
@@ -49,14 +77,16 @@ export function putConfig(app: App, input: PutInput): PutOutcome {
     layoutId: view.layout.id, layoutName: view.layout.name, revisionId: view.revision.id, document: upgraded === null ? view.document : upgraded.layout, board: view.board,
     onKeyboard: getBoardConfig(app.db, view.layout.boardId) === view.layout.id, archived: view.layout.archivedAt !== null,
   };
-  const plan = planLayoutPut(source, target);
+  return { view, target, plan: planLayoutPut(source, target, choicesOf(input)) };
+}
+
+export function putConfig(app: App, input: PutInput): PutOutcome {
+  const { view, target, plan } = planFor(app, input);
 
   const name = input.name ?? `${view.layout.name} on ${target.definition.name}`;
   const config = newConfig(app, { name, from: "blank", board: target.definition.id });
   const group = newId("pg");
-  const carried = plan.layers.reduce((n, l) => n + l.carried, 0);
-  const guessed = plan.layers.reduce((n, l) => n + l.guessed, 0);
-  const summary = `${plural(carried, "key")} across ${plural(plan.layers.length, "layer")} from ${view.layout.name}${guessed > 0 ? `, ${guessed} of them nearest-place guesses` : ""}${plan.combos.copied.length > 0 ? `, ${plural(plan.combos.copied.length, "combo")}` : ""}`;
+  const summary = summaryOf(view.layout.name, plan);
   const explanation = [
     `${view.layout.name} on the ${target.definition.name}: ${summary}.`,
     plan.notCarried.length > 0 ? `${plural(plan.notCarried.length, "key")} had no counterpart or too weak a one, and ${plan.notCarried.length === 1 ? "is" : "are"} not carried.` : "",
@@ -75,8 +105,11 @@ export function putConfig(app: App, input: PutInput): PutOutcome {
   proposals.push(asProposal(main, main.title ?? "", summary));
   if (plan.opsWithPlacements.length > 0) {
     const placed = plan.placements.filter((p) => p.candidates.length > 0 && p.blocked === undefined);
+    // Where each key went: the person's pick among the candidates where they made one (D-336), keyloom's first choice otherwise.
+    const choices = choicesOf(input);
     const where = (p: PlacementProposal) => {
-      const first = p.candidates[0] as PlacementCandidate;
+      const chosen = choices.get(p.source);
+      const first = (chosen === undefined ? undefined : p.candidates.find((c) => c.target === chosen)) ?? (p.candidates[0] as PlacementCandidate);
       return `${p.sourceName} on the ${first.name} key${first.replaces ? `, instead of ${first.replaces}` : ""}`;
     };
     const text = `the same, with ${plural(placed.length, "layer key")} that had no key of its own placed: ${placed.map(where).join("; ")}`;

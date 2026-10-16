@@ -4,6 +4,8 @@ import type { Candidate } from "../boards/derive/detect.ts";
 import { candidateById, detectCandidates, searchIndex } from "../boards/derive/detect.ts";
 import { keyboardIndex } from "../boards/derive/keyboard-index.ts";
 import { boardByUsbId, boardForCandidate } from "../boards/derive/known.ts";
+import { localBoardId } from "../boards/derive/build-board.ts";
+import { listBoards } from "../boards/registry.ts";
 import type { Board } from "../boards/load.ts";
 import { realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import type { UsbDevice } from "../firmware/toolchain/usb.ts";
@@ -20,6 +22,8 @@ export type KeyboardDeps = {
 export type CandidateView = Pick<Candidate, "id" | "firmware" | "name" | "vendor" | "confidence" | "reasons"> & {
   /** The ZMK shield's controller requirement, or the QMK bootloader, so the choice can be made from the list. */
   detail: string;
+  /** The name to show: "Corne (new)" when a board keyloom has is already called that (D-336). */
+  displayName: string;
 };
 
 export type DetectedKeyboard = {
@@ -36,8 +40,17 @@ export type DetectedKeyboard = {
 
 const ZMK_DEFAULT = { vendorId: "0x1d50", productId: "0x615e" };
 
+/**
+ * "Corne (new)" when a board keyloom has (shipped, contributed or derived) already has the name, so the card and the board switch can
+ * tell the two apart (D-336). Every board in the registry counts, because the switch shows them all.
+ */
+export function displayNameFor(c: Candidate): string {
+  const id = localBoardId(c);
+  return listBoards().some((b) => b.definition.id !== id && b.definition.name === c.name) ? `${c.name} (new)` : c.name;
+}
+
 export const candidateView = (c: Candidate): CandidateView => ({
-  id: c.id, firmware: c.firmware, name: c.name, vendor: c.vendor, confidence: c.confidence, reasons: c.reasons,
+  id: c.id, firmware: c.firmware, name: c.name, vendor: c.vendor, confidence: c.confidence, reasons: c.reasons, displayName: displayNameFor(c),
   detail: c.entry.kind === "qmk"
     ? `${c.entry.qmk.target}, ${c.entry.qmk.bootloader ?? "bootloader unknown"}${c.entry.qmk.split ? ", split" : ""}`
     : `${c.entry.zmk.kind}${c.entry.zmk.requires?.length ? `, needs a ${c.entry.zmk.requires.join("/")} controller` : ""}${c.entry.zmk.siblings.length > 1 ? `, ${c.entry.zmk.siblings.length} halves` : ""}`,

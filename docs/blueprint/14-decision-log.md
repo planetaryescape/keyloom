@@ -1079,6 +1079,31 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - `isKeyboard` compared against ZSA's vendor ID; it now compares against the vendor ID the board declares (`detect.usbVendorId`), and ZSA's when a ZSA board declares none, so every existing target behaves as before. `keyboardIdentity` is what can be seen; `keyboardTarget` (ZSA, Zapp) is what can be restarted. Doctor lists a derived board in words that do not promise hands-free flashing, `syncSupported` stays false for it, and `flash --reboot-only` says why it cannot.
 - **Where:** `src/firmware/qmk/handsfree-flash.ts`, `src/app/keyboard.ts`.
 
+### D-336: The new-keyboard screens: a stage card when one is plugged in, its board drawn beside the two questions, and a put that ends in the config's open proposals. (Rung 21 part 2, Claude; comps approved by the coordinator for BK)
+- **Noticing it.** The sync engine's own USB read names the keyboards keyloom has no board for and publishes them on the existing event stream (`newKeyboards` on the sync frame). The new-keyboard card follows that stream, with no second poller. It only reads.
+- **The card over the stage.** It says what USB said, then lists the candidates with keyloom's reasons word for word, with "Likely", "Maybe" or "One of two". A search field is always there. An ambiguous keyboard has nothing chosen until BK picks one. "Not now" leaves an amber "New keyboard" chip beside the board switch.
+- **The two questions, beside the board.** The board is drawn by the same renderer as every board, from the firmware's own layout, with blank caps.
+  - The home row: click any key in a row, or use the row buttons; keyloom's guess is marked.
+  - For a ZMK shield, the controller.
+  - `previewKeyboard` now derives the board without storing it and returns its keys, hands, fingers, rows and recipe. Until a controller is chosen it assumes the first that fits, and says so.
+- **The board as keyloom read it.** Each cap shows the finger keyloom expects, with keys, halves, home row, controller and firmware listed beside it. Fingers are shown, not editable: a wrong guess means going back. A per-key finger override is a possible later item, not built.
+- **The flash.** The flash box follows the board's real recipe (D-333 unchanged). Nothing flashes from this flow.
+  - A board with a recipe (the Corne's UF2 drives) reads "keyloom won't flash from here. The first flash is by hand", then how.
+  - Only a board without one says its recipe is "manual", with the reason.
+- **Names that collide.** A derived board whose name another board in the registry already has reads "Corne (new)", in the card, the panel and the board switch.
+- **Putting a config on it.** Pick any config on another board.
+  - The board shows the mapping, with placed layer keys in amber.
+  - The column says what came over per layer, the commonest reason the rest stayed behind, and a "See the keys that stay behind" list.
+  - Each layer key with no counterpart offers its candidates as chips. A pick is passed to the plan (`placements`, source position to target), and the proposal's text names the pick.
+  - "Make" creates the config and its proposals; nothing is applied.
+- **The new config opens with its proposals.**
+  - A config's open proposals that no conversation shows are listed in the side column with the chat's proposal card. Each has a visible "Show it on the board" pin, and Apply is the ordinary apply.
+  - The caption offers "N proposals waiting · Show" while it's closed.
+- **Routes,** in the `/api/configs` style with tests:
+  - `GET /api/keyboards/detect[?search=]`, `POST /api/keyboards/preview`, `POST /api/keyboards/add`, `POST /api/keyboards/put/preview` and `POST /api/keyboards/put` (`src/api/keyboards.ts`);
+  - `GET /api/configs/:ref/proposals`.
+- **Visible at rest.** Every action in the flow is a button, chip, radio row or field. Nothing waits for a hover.
+
 ## Typing lab (2026-10-16)
 
 ### D-280: An explicit, opt-in typing session records physical key events so keyloom can tune timings from evidence. (BK. Replaces D-035 for sessions BK starts)

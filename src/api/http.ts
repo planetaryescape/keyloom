@@ -4,6 +4,7 @@ import { z } from "zod";
 import { BoardDefinitionSchema, GeometrySchema } from "../boards/schema.ts";
 import { ChangeOpSchema, DecisionDraftSchema, SlotSchema } from "../layout/change.ts";
 import { BindingSchema, LayoutSchema } from "../layout/schema.ts";
+import { DetectedKeyboardSchema } from "./detected-keyboards.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 
 export const LayoutSummarySchema = z.object({
@@ -491,5 +492,6 @@ export const AutoSyncRequestSchema = z.object({ boardId: z.string().min(1), enab
 export const PauseRequestSchema = z.object({ boardId: z.string().min(1), paused: z.boolean() });
 export const DisableRemappingRequestSchema = z.object({ boardId: z.string().min(1) });
 
-export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema) });
+// `newKeyboards`: keyboards on USB keyloom has no board for, from the engine's own reads (D-336); absent from older senders.
+export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema), newKeyboards: z.array(DetectedKeyboardSchema).optional() });
 export type SyncEvent = z.infer<typeof SyncEventSchema>;

@@ -1,6 +1,6 @@
 # 22: A new keyboard: connect it and put my config on it
 
-Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on origin/main at `f0ac50d` (v0.31.1); the stage card and the new flash recipes are not (see "What is built so far"). The rest of this chapter is the design it follows. Detection ran against BK's real USB bus once (S42, in [15](15-open-questions.md)); nothing here has put a config on a physical keyboard.
+Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on origin/main at `f0ac50d` (v0.31.1); the screens built on fake USB (part 2, D-336); the new flash recipes are not (see "What is built so far"). The rest of this chapter is the design it follows. Detection ran against BK's real USB bus once (S42, in [15](15-open-questions.md)); nothing here has put a config on a physical keyboard.
 
 BK: "If I get a new keyboard I just connect it and say put my config on this. Doesn't matter what keyboard it is as long as it uses ZMK or QMK."
 
@@ -50,6 +50,8 @@ Two corrections were found while researching this (D-237):
 
 ## What is built so far
 
+Part 2 is the screens (D-336). They follow the sync engine's USB reads, which now publish unknown keyboards on the event stream. A stage card names the keyboard, and the column beside its drawn board asks for the home row and the controller. It then shows the board as read, with each finger and the flash. Putting a config on it ends in the new config's open proposals. The routes are `/api/keyboards/…` and `/api/configs/:ref/proposals`. Nothing in the flow writes to a device.
+
 Part 1 is the engine and the CLI, with no screens. The demo runs with fakes in `test/app/keyboard-new.test.ts`: BK's Corne is hidden from detection, and a fake USB device with its real product string over ZMK's default ID is named, confirmed, derived and given his Glove80 layout.
 
 - **Detect** (`keyloom keyboard detect`): the QMK and ZMK keyboards on USB, with vendor ID, product ID, product string and device version (`bcdDevice`, new in `src/firmware/toolchain/usb.ts`), each either a board keyloom has or a ranked list with the reasons. Index and matching: `src/boards/derive/`, `scripts/gen-keyboard-index.ts` (D-331). The index covers every QMK keyboard with USB IDs in the pinned tree, not a subset (about 890 KB); a QMK keyboard whose layout comes from `community_layouts` has none in its own files and cannot be derived yet.
@@ -60,7 +62,6 @@ Part 1 is the engine and the CLI, with no screens. The demo runs with fakes in `
 
 Not built, and not guessed at:
 
-- The stage card: the screens for choosing among candidates, drawing the guess on the keys, tapping the home row, and reviewing the placements. The same engine serves them.
 - Flash recipes for `atmel-dfu`, `stm32-dfu` and the rest of the DFU family (TODO: part 2). Until then a derived QMK board other than an RP2040 one is flashed by hand, and says so when it is added.
 - A smoke build of a derived board. Its `build` block uses the pinned QMK and ZMK images and a submodule list chosen from the bootloader's platform; the first build will confirm or correct them (S43, to be run). A ZMK board is pinned to ZMK main and its controller names are the hardware-model-v2 ones (`nice_nano//zmk`); whether the pinned image builds them is part of that build.
 - Reading Studio, Vial or VIA for the keyboard's own name or keymap, a bootloader drive's Board-ID for the controller, and the right half of a split ZMK keyboard (its product string is unobserved, spike 4).
