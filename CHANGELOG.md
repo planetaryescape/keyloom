@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.35.0](https://github.com/planetaryescape/keyloom/compare/v0.34.8...v0.35.0) (2026-10-16)
+
+
+### Features
+
+* proactive board review engine ([bdc1e4f](https://github.com/planetaryescape/keyloom/commit/bdc1e4ff92e9b16450760df0748675946abde490))
+
+
+### Bug Fixes
+
+* draw the Glove80 from photos, two bodies with thumb modules ([9ad7ddc](https://github.com/planetaryescape/keyloom/commit/9ad7ddc81f352dc6edb2bfd8c20a381c57aa0c4c))
+* the board's legend choice uses the same room as each cap's check ([#84](https://github.com/planetaryescape/keyloom/issues/84)) ([2f4104f](https://github.com/planetaryescape/keyloom/commit/2f4104f3394ef396d584ca60db5cd1cc48bd7aa5))
+
 ## [0.34.8](https://github.com/planetaryescape/keyloom/compare/v0.34.7...v0.34.8) (2026-10-16)
 
 
