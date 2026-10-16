@@ -831,15 +831,10 @@
   color: var(--pending-ink);
 }
 
-/* The empty corners say what they'd hold only when the cap is pointed at or focused. */
+/* An empty corner is offered by the named "+ Double tap" and "+ Tap, then hold" buttons under the cap (v0.32.1, D-337); showing the
+   corner too would say the same thing twice. A filled corner shows what it holds. */
 .hero-corner[data-empty="true"] {
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.hero-cap:hover .hero-corner[data-empty="true"],
-.hero-cap:focus-within .hero-corner[data-empty="true"] {
-  opacity: 0.85;
+  display: none;
 }
 
 /* The picker: its slot's name and quiet links on one line, search first, the categories on one scrolling row. */

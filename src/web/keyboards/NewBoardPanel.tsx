@@ -1,5 +1,6 @@
 import { ArrowLeft, LoaderCircle, Zap } from "lucide-react";
 import type { PreviewResponse, PutPreviewResponse } from "../../api/keyboards.ts";
+import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
 import "./keyboards.css";
 
@@ -181,13 +182,14 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
               // Every key that stays behind, with why, a click away: a list that long would bury the choices below it.
               <details className="nb-behind">
                 <summary>See the {plural(behind.length, "key")} that stay behind</summary>
-                <ul>{behind.map((n) => <li key={`${n.layerName}:${n.source}`}><b>{n.sourceName}</b> on {n.layerName}: {n.why}</li>)}</ul>
+                <ul>{behind.map((n) => <li key={`${n.layerName}:${n.source}`}><b>{n.sourceName}</b> on {niceLayerName(n.layerName)}: {n.why}</li>)}</ul>
               </details>
             )}
             <div className="nb-rows" role="table" aria-label="Layers">
               {preview.layers.map((l) => (
                 <div key={l.source} role="row">
-                  <span role="cell">{preview.after.layers.find((x) => x.id === l.target)?.name ?? l.target}</span>
+                  {/* The strip's name for the layer ("Default layer"), not the firmware's ("default_layer"). */}
+                  <span role="cell">{niceLayerName(preview.after.layers.find((x) => x.id === l.target)?.name ?? l.target)}</span>
                   <span role="cell">{plural(l.carried, "key")}</span>
                   <span role="cell">{l.carried === 0 ? "all off" : l.guessed > 0 ? `${l.guessed} by nearest place` : ""}</span>
                 </div>
