@@ -50,6 +50,9 @@
   --knob: #6f7277;
   --knurl: #45474c;
   --hole: #2a2c31;
+  --finding: #d23a52;
+  --finding-ink: #b0263d;
+  --rec: #e0324a;
   --screen: #17181b;
   --screen-rim: rgb(0 0 0 / 0.5);
   --well: rgb(40 44 60 / 0.09);
@@ -165,6 +168,9 @@
     --knob: #a8acb2;
     --knurl: #5f636a;
     --hole: #050506;
+    --finding: #ff6b7d;
+    --finding-ink: #ff9aa6;
+    --rec: #ff4d5e;
     --screen: #08090a;
     --screen-rim: rgb(255 255 255 / 0.08);
     --well: rgb(0 0 0 / 0.42);
@@ -276,6 +282,9 @@
   --knob: #a8acb2;
   --knurl: #5f636a;
   --hole: #050506;
+  --finding: #ff6b7d;
+  --finding-ink: #ff9aa6;
+  --rec: #ff4d5e;
   --screen: #08090a;
   --screen-rim: rgb(255 255 255 / 0.08);
   --well: rgb(0 0 0 / 0.42);

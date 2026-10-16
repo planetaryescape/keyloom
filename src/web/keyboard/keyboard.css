@@ -920,3 +920,38 @@ button.cap[data-dragging="true"] {
   opacity: 0.45;
   transition: opacity 0.25s ease;
 }
+
+/* ---------- the typing lab (D-314) ----------
+   Keys pressed just now light; a finding's keys carry a rose ring and dot, rose being the lab's own colour for "this went wrong"
+   (amber stays "not on your keyboard yet"); the per-finger heat rises from below each cap. */
+button.cap[data-lab-lit="true"] .cap-body {
+  box-shadow: 0 0 0 2px var(--ink-2), 0 0 calc(var(--u) * 0.4) color-mix(in oklab, var(--ink) 25%, transparent);
+  transform: translateY(calc(var(--u) * 0.02));
+}
+
+button.cap[data-lab-finding="true"] .cap-body {
+  box-shadow: 0 0 0 1.5px var(--finding), 0 0 calc(var(--u) * 0.35) color-mix(in oklab, var(--finding) 45%, transparent), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+button.cap[data-lab-finding="true"]::before {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--u) * 0.08);
+  left: calc(var(--u) * 0.1);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--finding);
+  box-shadow: 0 0 6px var(--finding);
+  content: "";
+  pointer-events: none;
+}
+
+button.cap[data-lab-heat="true"] .cap-top::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 90% at 50% 100%, color-mix(in oklab, var(--finding) calc(var(--heat) * 40%), transparent), transparent 75%);
+  content: "";
+  pointer-events: none;
+}

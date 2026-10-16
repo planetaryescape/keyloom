@@ -22,6 +22,10 @@ import {
 } from "../persistence/typing-sessions.ts";
 import { transact } from "../persistence/transaction.ts";
 import { rejectChange, proposeChange } from "./changes.ts";
+import { toCard } from "./proposal-card.ts";
+import { findChangeSet } from "../persistence/change-sets.ts";
+import { tappingTermOf } from "../lab/terms.ts";
+
 import type { App } from "./context.ts";
 import { emulateEvents } from "./emulate.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
@@ -172,7 +176,8 @@ function proposalFor(layout: Layout, s: Suggestion, recordedOn: number) {
   const date = new Date(recordedOn).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
   const gained = `${e.removed} of ${e.before} ${plural(e.before, "misfire", "misfires")} gone`;
   const cost = e.introduced === 0 ? "none new" : `${e.introduced} new`;
-  const examples = e.examples.slice(0, 2).map((x) => exampleText(layout, x));
+  // A scripted or very regular typist repeats the same misfire word for word; saying it twice adds nothing.
+  const examples = [...new Set(e.examples.map((x) => exampleText(layout, x)))].slice(0, 2);
   return {
     title: s.candidate.title,
     explanation: `${s.candidate.title}. Replaying your ${date} recording with this change: ${gained}, ${cost}.${examples.length ? ` For example ${examples.join("; ")}.` : ""}`,
@@ -291,6 +296,94 @@ export function typingFindings(app: App, layoutId: string): TypingFindings {
           kind: e.kind, keys: [keyName(view.document, e.position), ...(e.nextPosition === undefined ? [] : [keyName(view.document, e.nextPosition)])], heldMs: e.facts.heldMs, overlapMs: e.facts.overlapMs,
         })),
       })),
+      notes: stored.notes,
+    },
+  };
+}
+
+// --- the screens --------------------------------------------------------------------------------
+
+/** Why a board can't be recorded, in words; null when it can (24-typing-lab.md, capturing what the hands do). */
+export function cannotRecord(board: BoardDefinition): string | null {
+  return board.firmware === "kanata" ? `The lab can't listen to the ${board.name}: it has no stream of physical key presses yet.` : null;
+}
+
+const fingerWords = (finger: string) => finger.replaceAll("-", " ");
+
+/** The sentence that leads the fingers block (D-314): the slowest finger and the one with most errors, or that they are even. */
+export function fingersLead(rows: readonly { finger: string; keys: number; errors: number; medianMs: number }[]): string {
+  const measured = rows.filter((r) => r.keys >= 5);
+  if (measured.length === 0) return "Not enough typing yet to tell your fingers apart.";
+  const slow = [...measured].filter((r) => r.medianMs > 0).sort((a, b) => b.medianMs - a.medianMs)[0];
+  // "Most errors" is a count, as the engine's errors-by-finger finding counts them; the rate only breaks a tie.
+  const rate = (r: { keys: number; errors: number }) => r.errors / r.keys;
+  const err = [...measured].filter((r) => r.errors > 0).sort((a, b) => b.errors - a.errors || rate(b) - rate(a))[0];
+  const parts: string[] = [];
+  if (slow !== undefined) parts.push(`Your ${fingerWords(slow.finger)} is your slowest finger`);
+  if (err === undefined) parts.push("no finger made an error");
+  else if (err.finger === slow?.finger) parts[0] = `Your ${fingerWords(err.finger)} is your slowest finger and makes the most errors`;
+  else parts.push(`most errors come from your ${fingerWords(err.finger)}`);
+  const text = parts.join(", and ");
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
+/** The read-out as the screen takes it; src/api/lab.ts checks the same shape on the wire. */
+export type LabReadout = {
+  presses: number; durationMs: number; passageId: string; counts: StoredAnalysis["counts"]; fingersLead: string;
+  fingers: Array<{ finger: string; hand: "left" | "right"; keys: number; errors: number; typos: number; misfires: number; medianMs: number }>;
+  findings: Array<{ id: string; kind: string; sentence: string; positions: number[] }>;
+  suggestions: Array<{
+    title: string; before: number; after: number; removed: number; introduced: number;
+    example: { position: number; held: string; next: string | null; heldMs: number; overlapMs: number; termMs: number | null } | null;
+    proposal: ReturnType<typeof toCard> | null;
+  }>;
+  notes: string[];
+};
+
+/** A session's read-out for the screen: counts, sentences, per-finger rows and positions to mark, with each suggestion's proposal card. */
+export function labReadout(app: App, id: string): { session: TypingSessionSummary; readout: LabReadout | null } {
+  const row = sessionRow(app, id);
+  const session = summaryOf(row);
+  if (!hasAnalysis(row)) return { session, readout: null };
+  const stored = row.analysis as StoredAnalysis;
+  const view = getLayout(app, row.layoutId, row.revisionId);
+  const layout = view.document;
+  const boardFingers = view.board.definition.fingers;
+  const fingers = stored.stats.fingers.map((f) => ({
+    finger: f.finger, hand: f.hand, keys: f.attempts, errors: f.errors, typos: f.typos ?? 0, misfires: f.misfires ?? 0, medianMs: f.interKey.median,
+  }));
+  const positionsOf = (f: StoredAnalysis["findings"][number]): number[] => {
+    if (typeof f.data.position === "number") {
+      const next = stored.differences.find((d) => d.position === f.data.position && d.facts?.nextPosition !== undefined)?.facts?.nextPosition;
+      return next === undefined ? [f.data.position] : [f.data.position, next];
+    }
+    if (typeof f.data.finger === "string") {
+      const finger = f.data.finger;
+      return [...new Set(stored.differences.flatMap((d) => (d.position !== undefined && boardFingers[String(d.position)] === finger ? [d.position] : [])))];
+    }
+    return [];
+  };
+  const byCandidate = new Map(stored.proposals.map((p) => [p.candidateId, p.changeSetId]));
+  return {
+    session,
+    readout: {
+      presses: stored.presses, durationMs: stored.durationMs, passageId: row.passageId, counts: stored.counts,
+      fingersLead: fingersLead(fingers), fingers,
+      findings: stored.findings.slice(0, 6).map((f) => ({ id: f.id, kind: f.kind, sentence: f.sentence, positions: positionsOf(f) })),
+      suggestions: stored.suggestions.map((s) => {
+        const e = s.evidence.examples[0];
+        const changeSetId = byCandidate.get(s.candidate.id) ?? null;
+        const cs = changeSetId === null ? undefined : findChangeSet(app.db, changeSetId);
+        const binding = e === undefined ? undefined : layout.layers[0]?.bindings[e.position];
+        return {
+          title: s.candidate.title, before: s.evidence.before, after: s.evidence.after, removed: s.evidence.removed, introduced: s.evidence.introduced,
+          example: e === undefined ? null : {
+            position: e.position, held: keyName(layout, e.position), next: e.nextPosition === undefined ? null : keyName(layout, e.nextPosition), heldMs: e.facts.heldMs, overlapMs: e.facts.overlapMs,
+            termMs: binding?.kind === "holdTap" ? (tappingTermOf(layout, binding.profileId) ?? null) : null,
+          },
+          proposal: cs === undefined ? null : toCard(cs),
+        };
+      }),
       notes: stored.notes,
     },
   };

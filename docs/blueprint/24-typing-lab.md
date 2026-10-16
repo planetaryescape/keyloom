@@ -1,6 +1,6 @@
 # 24: Typing lab: keyloom watches you type and tunes the board to your hands
 
-Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens are not. Source baseline: origin/main at `9357af8` (v0.24.0). Nothing has run on a keyboard yet: S50 and S51 are the runbooks.
+Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens and `/api/lab` routes built on a scripted fake keyboard (D-314), 2026-10-16. Source baseline: origin/main at `9357af8` (v0.24.0). Nothing has run on a keyboard yet: S50 and S51 are the runbooks.
 
 BK: "timings are quite tricky for home row mods and stuff. I'd love a feature where I can set up a key config, then tell the software to listen/watch me type for a bit (you can make a quick typing test or something) and then notice things that go wrong like rolls, typos and timings and stuff and then use that knowledge to make suggestions about what to improve … Maybe we could even create a test that checks how fast each of my fingers is so instead of saying this is your typing speed it can say your typing slows down on keys that you need to press with your index finger or something or most typos come from your pinky."
 
@@ -17,7 +17,7 @@ A tailor watches you move, then adjusts the cut. The lab measures in the open, s
 ## How it fits the whole
 
 - **Mental model.** It adds two nouns to board, layer, key and change: a **session** (one recorded stretch of typing) and a **finding** (something that went wrong, with its cause). A suggestion is an ordinary keyloom change, a proposal on the keys, applied and synced the way every change is.
-- **Map.** The lab opens from the menu and from ⌘K ("test my home row mods"). It replaces the stage with the test, then returns to the board with findings drawn on the caps: amber where things went wrong, with a per-finger heat on the board. Proposals reuse the ⌘K proposal card.
+- **Map.** The lab opens from the menu and from ⌘K ("test my home row mods"). It replaces the stage with the test, then returns to the board with findings drawn on the caps: rose where things went wrong (amber stays "not on the keyboard yet", D-314), with a per-finger heat on the board that shows speed or errors. Proposals reuse the ⌘K proposal card.
 - **Journey.**
   1. BK sets a layout and starts a session.
   2. He types a prompted passage, or his own text, for two to five minutes.
@@ -71,4 +71,4 @@ Sessions start only by BK's action, show a recording indicator, stay in keyloom'
 
 ## Decisions and spikes
 
-D-280 to D-289, and spikes S50 to S53, are in [14](14-decision-log.md) and [15](15-open-questions.md). The engine is `src/lab/`; the CLI is `keyloom lab` ([10](10-cli.md)); the agent tool is `get_typing_findings` ([03](03-agent.md)).
+D-280 to D-289 and the screens' D-314, and spikes S50 to S53, are in [14](14-decision-log.md) and [15](15-open-questions.md). The engine is `src/lab/`; the screens are `src/web/lab/` over the `/api/lab` routes (`src/api/lab.ts`); the CLI is `keyloom lab` ([10](10-cli.md)); the agent tool is `get_typing_findings` ([03](03-agent.md)).

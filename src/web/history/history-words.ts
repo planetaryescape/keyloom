@@ -61,7 +61,8 @@ export function historyWords(summary: string, layout: Pick<Layout, "layers" | "m
   };
 
   // "Swapped Layer 0 (I) and Layer 0 (T)" and "Swapped A on Base and 4 on Numbers": the two caps, and the layer once when they share it.
-  const swapped = /^Swapped (?:(.+?) \((.+?)\)|(.+?) on (.+?)) and (?:(.+?) \((.+?)\)|(.+?) on (.+?))$/.exec(rest);
+  // The stored form names the key's number too ("Swapped Layer 0 key 20 (I) and Layer 0 key 25 (T)"); it is read away here.
+  const swapped = /^Swapped (?:(.+?) \((.+?)\)|(.+?) on (.+?)) and (?:(.+?) \((.+?)\)|(.+?) on (.+?))$/.exec(rest.replace(/ key \d+ \(/g, " ("));
   if (swapped !== null) {
     const [aLayer, aCap] = swapped[1] !== undefined ? [swapped[1], swapped[2]] : [swapped[4], swapped[3]];
     const [bLayer, bCap] = swapped[5] !== undefined ? [swapped[5], swapped[6]] : [swapped[8], swapped[7]];
