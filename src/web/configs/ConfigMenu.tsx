@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Check, ChevronDown, ChevronRight, FileUp, Pencil, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronDown, ChevronRight, FileUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ApiConfig } from "../../api/configs.ts";
 import { formatWhen } from "../history/words.ts";
@@ -18,6 +18,8 @@ interface Props {
   onRename: () => void;
   onArchive: () => void;
   onRestore: (id: string) => void;
+  /** Deleting for good is offered for archived configs only (D-316); the dialog asks for the name. */
+  onDelete: (config: ApiConfig) => void;
   onImport: () => void;
 }
 
@@ -29,7 +31,7 @@ export function configLine(config: ApiConfig, now: number): string {
 
 // The config switcher (D-315): the caption's layout menu, now this board's configs only (other boards are in the top bar's board
 // switch). The one on the keyboard is marked green; New, Rename, Archive and the archived ones follow, then Import.
-export function ConfigMenu({ live, archived, selectedId, selectedName, boardName, onSelect, onNew, onRename, onArchive, onRestore, onImport }: Props) {
+export function ConfigMenu({ live, archived, selectedId, selectedName, boardName, onSelect, onNew, onRename, onArchive, onRestore, onDelete, onImport }: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const now = Date.now();
   const selected = live.find((c) => c.id === selectedId);
@@ -101,13 +103,19 @@ export function ConfigMenu({ live, archived, selectedId, selectedName, boardName
               </button>
               {showArchived
                 ? archived.map((config) => (
-                    <button key={config.id} type="button" role="menuitem" className="menu-item config-archived" onClick={() => { close(); onRestore(config.id); }}>
-                      <ArchiveRestore size={14} aria-hidden="true" />
-                      <span className="menu-item-label">
-                        Restore {config.name}
-                        <span className="config-sub">Archived {formatWhen(config.archivedAt ?? config.updatedAt, now).toLowerCase()}</span>
-                      </span>
-                    </button>
+                    <div key={config.id} role="group" aria-label={config.name} className="config-archived-group">
+                      <button type="button" role="menuitem" className="menu-item config-archived" onClick={() => { close(); onRestore(config.id); }}>
+                        <ArchiveRestore size={14} aria-hidden="true" />
+                        <span className="menu-item-label">
+                          Restore {config.name}
+                          <span className="config-sub">Archived {formatWhen(config.archivedAt ?? config.updatedAt, now).toLowerCase()}</span>
+                        </span>
+                      </button>
+                      <button type="button" role="menuitem" className="menu-item config-archived config-delete" onClick={() => { close(); onDelete(config); }}>
+                        <Trash2 size={14} aria-hidden="true" />
+                        <span className="menu-item-label">Delete {config.name}…</span>
+                      </button>
+                    </div>
                   ))
                 : null}
             </>

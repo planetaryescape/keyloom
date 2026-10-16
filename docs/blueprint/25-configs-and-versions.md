@@ -66,10 +66,9 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 
 ## Not built yet
 
-- Deleting a config from the screens (the CLI and `/api/configs/:ref/delete` have it).
 - New config from an import is `keyloom import --name`, which already makes a layout; on a board that has a config it is not put on the keyboard.
 - A real default keymap for a blank config (D-306).
 
 ## Decisions
 
-D-300 and D-301 are in [14](14-decision-log.md), with D-302 to D-309 for the build and D-315 for the screens: the caption's "Config ▾" switcher, the editing line, History as versions, compare on the board, and putting a version on the keyboard as a restore followed by a sync. The screens are `src/web/configs/` and `src/web/history/`.
+D-300 and D-301 are in [14](14-decision-log.md), with D-302 to D-309 for the build and D-315 for the screens: the caption's "Config ▾" switcher, the editing line, History as versions, compare on the board, and putting a version on the keyboard as a restore followed by a sync; D-316 for compare in words and deleting an archived config. The screens are `src/web/configs/` and `src/web/history/`.

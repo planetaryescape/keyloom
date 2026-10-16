@@ -14,6 +14,10 @@
   align-items: flex-start;
 }
 
+.config-delete {
+  color: var(--bad);
+}
+
 .config-item[data-on-keyboard] {
   background: var(--surface-2);
 }
@@ -254,4 +258,10 @@
   margin: var(--space-3) 0 0;
   color: var(--bad);
   font-size: var(--text-sm);
+}
+
+/* Deleting for good is the one red action; the shared .button-danger reads tokens the light theme no longer defines. */
+.bar-apply.config-danger {
+  background: var(--bad);
+  color: #fff;
 }

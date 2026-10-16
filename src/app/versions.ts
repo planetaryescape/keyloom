@@ -145,6 +145,8 @@ export type CompareView = {
   /** The older revision, and the head it is compared with. */
   from: RevisionBrief;
   to: RevisionBrief;
+  /** The older revision's layers, macros and tap dances, for saying what its keys did. */
+  fromContext: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough">;
   diff: Omit<LayoutDiff, "keys"> & { keys: KeyChange[] };
 };
 
@@ -167,6 +169,7 @@ export function compareRevision(app: App, ref: string, target: string): CompareV
     layoutId: layout.id,
     from: brief(from.revision),
     to: brief(to.revision),
+    fromContext: fromCtx,
     diff: {
       ...diff,
       keys: diff.keys.map((k) => ({ ...k, beforeLabel: bindingLabel(k.before, fromCtx), afterLabel: bindingLabel(k.after, toCtx) })),

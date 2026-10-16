@@ -216,9 +216,20 @@
 }
 
 .history-compare-keys li {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.history-compare-caps {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.history-compare-words {
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.4;
 }
 
 .history-then .mini-cap {
