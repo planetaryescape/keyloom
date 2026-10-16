@@ -1,4 +1,4 @@
-import { Cpu, Ellipsis, MessagesSquare, ScrollText, SquarePen } from "lucide-react";
+import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessagesSquare, Plus, ScrollText, Sparkles, SquarePen } from "lucide-react";
 import { Menu } from "../shell/Menu.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatSelection, ProposalCard } from "../../api/http.ts";
@@ -9,6 +9,7 @@ import { applyChangeSet } from "../api-write.ts";
 import { DecisionsView } from "../decisions/DecisionsView.tsx";
 import { OutcomeQuestions } from "../decisions/OutcomeQuestions.tsx";
 import { useDecisions, useOutcomeQuestions } from "../decisions/useDecisions.ts";
+import type { Command } from "./commands.ts";
 import { Composer, type SelectedKeys } from "./Composer.tsx";
 import { ConversationList } from "./ConversationList.tsx";
 import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
@@ -60,6 +61,8 @@ interface Props {
   /** Called once the server has applied a proposal, to refresh the board; resolves when it has. */
   onApplied: (proposal: ProposalCard, result: ApplyResponse) => Promise<void>;
   onOpenRelease: () => void;
+  /** ⌘K commands (D-315): what the typed text can just do, offered above "Ask keyloom". */
+  commands?: { find: (text: string) => Command[]; run: (command: Command) => void };
 }
 
 // About two lines of the bar: an answer this short reads where it is asked; anything longer goes to the panel (D-310).
@@ -68,11 +71,33 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   const [draft, setDraft] = useState("");
+  // The command rows for what's typed. Enter runs the highlighted one; a short text highlights the first command, a longer one (a
+  // question that happens to say "test") highlights "Ask keyloom", so a real question is never swallowed by a command.
+  const findCommands = commands?.find;
+  const commandRows = useMemo(() => (findCommands === undefined || selection !== null ? [] : findCommands(draft)), [findCommands, draft, selection]);
+  const shortText = draft.trim().split(/\s+/).length <= 6;
+  const [commandAt, setCommandAt] = useState(0);
+  useEffect(() => setCommandAt(shortText ? 0 : commandRows.length), [commandRows, shortText]);
+  const runCommand = (command: Command) => {
+    setDraft("");
+    commands?.run(command);
+  };
+  const onCommandKey = (key: string): boolean => {
+    if (commandRows.length === 0) return false;
+    if (key === "ArrowDown") setCommandAt((i) => Math.min(commandRows.length, i + 1));
+    else if (key === "ArrowUp") setCommandAt((i) => Math.max(0, i - 1));
+    else {
+      const chosen = commandRows[commandAt];
+      if (chosen === undefined) return false;
+      runCommand(chosen);
+    }
+    return true;
+  };
   const [view, setView] = useState<"chat" | "history" | "decisions">("chat");
   const [modelOpen, setModelOpen] = useState(false);
   // Bumped when the chat moves between the bar and the panel: the log has a new height, so where it rests is worked out again.
@@ -434,7 +459,30 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
             )}
             {chat.problem === null ? null : <ProblemNotice problem={chat.problem} providers={provider.status?.providers ?? []} onRetry={retryDraft} onDismiss={chat.dismissProblem} />}
           </div>
+          {commandRows.length === 0 ? null : (
+            <ul className="bar-commands" role="listbox" aria-label="Commands">
+              {commandRows.map((command, i) => (
+                <li key={`${command.kind}:${"id" in command ? command.id : ""}`} role="option" aria-selected={commandAt === i}>
+                  <button type="button" className="bar-command" onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setCommandAt(i)} onClick={() => runCommand(command)}>
+                    <CommandIcon kind={command.kind} />
+                    <span className="bar-command-label">{command.label}</span>
+                    <span className="bar-command-detail">{command.detail}</span>
+                    {commandAt === i ? <kbd className="bar-command-key">↵</kbd> : null}
+                  </button>
+                </li>
+              ))}
+              <li role="option" aria-selected={commandAt === commandRows.length}>
+                <button type="button" className="bar-command" onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setCommandAt(commandRows.length)} onClick={() => send(draft)}>
+                  <Sparkles size={14} aria-hidden="true" />
+                  <span className="bar-command-label">Ask keyloom</span>
+                  <span className="bar-command-detail">“{draft.trim()}”</span>
+                  {commandAt === commandRows.length ? <kbd className="bar-command-key">↵</kbd> : null}
+                </button>
+              </li>
+            </ul>
+          )}
           <Composer
+            onCommandKey={onCommandKey}
             value={draft}
             onChange={setDraft}
             onSend={() => send(draft)}
@@ -452,4 +500,9 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
       )}
     </section>
   );
+}
+
+function CommandIcon({ kind }: { kind: Command["kind"] }) {
+  const Icon = kind === "lab" ? Activity : kind === "new-config" ? Plus : kind === "switch" ? ArrowRightLeft : Keyboard;
+  return <Icon size={14} aria-hidden="true" />;
 }

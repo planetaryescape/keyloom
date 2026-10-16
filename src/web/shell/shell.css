@@ -1491,7 +1491,9 @@
 }
 
 @media (max-height: 620px) {
-  .caption-layout {
+  /* A short window keeps one small line under the layer's name. The config switcher is the way to another config (D-315), so it
+     stays, and the line saying how to reach the layer gives way to it. */
+  .caption-reach {
     display: none;
   }
 

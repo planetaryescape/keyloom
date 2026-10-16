@@ -17,7 +17,7 @@ A tailor watches you move, then adjusts the cut. The lab measures in the open, s
 ## How it fits the whole
 
 - **Mental model.** It adds two nouns to board, layer, key and change: a **session** (one recorded stretch of typing) and a **finding** (something that went wrong, with its cause). A suggestion is an ordinary keyloom change, a proposal on the keys, applied and synced the way every change is.
-- **Map.** The lab opens from the menu and from ⌘K ("test my home row mods"). It replaces the stage with the test, then returns to the board with findings drawn on the caps: rose where things went wrong (amber stays "not on the keyboard yet", D-314), with a per-finger heat on the board that shows speed or errors. Proposals reuse the ⌘K proposal card.
+- **Map.** The lab opens from the menu and from ⌘K ("test my home row mods", offered as a command row above "Ask keyloom", D-315). It replaces the stage with the test, then returns to the board with findings drawn on the caps: rose where things went wrong (amber stays "not on the keyboard yet", D-314), with a per-finger heat on the board that shows speed or errors. Proposals reuse the ⌘K proposal card.
 - **Journey.**
   1. BK sets a layout and starts a session.
   2. He types a prompted passage, or his own text, for two to five minutes.

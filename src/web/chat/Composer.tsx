@@ -20,13 +20,15 @@ interface Props {
   inputRef: Ref<HTMLTextAreaElement>;
   /** Why sending isn't possible whatever is typed, such as no model set up; shown under the box. */
   blockedReason?: string | null;
+  /** Keys the ⌘K command rows take first (Enter, the arrows); true when one was used, so the box doesn't send. */
+  onCommandKey?: (key: string) => boolean;
   /** The command bar's input (comp d): one quiet line, Enter sends, no Send button; an esc chip closes the bar. */
   quiet?: { onEscape: () => void; menu: ReactNode; placeholder: string };
 }
 
 const MAX_HEIGHT = 160;
 
-export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onOpenKey, onClearSelection, inputRef, blockedReason = null, quiet }: Props) {
+export function Composer({ value, onChange, onSend, onStop, streaming, selection, onRemoveKey, onOpenKey, onClearSelection, inputRef, blockedReason = null, onCommandKey, quiet }: Props) {
   const canSend = value.trim() !== "" && !streaming && blockedReason === null;
 
   // Grows with the text up to a cap, then scrolls; setting "auto" first lets it shrink again.
@@ -37,8 +39,13 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
   };
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.nativeEvent.isComposing || event.shiftKey) return;
+    if ((event.key === "Enter" || event.key === "ArrowDown" || event.key === "ArrowUp") && onCommandKey?.(event.key) === true) {
+      event.preventDefault();
+      return;
+    }
     // Enter while an input method is composing picks a candidate; it isn't a send.
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    if (event.key !== "Enter") return;
     event.preventDefault();
     if (canSend) onSend();
   }
