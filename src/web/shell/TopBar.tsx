@@ -5,6 +5,8 @@ import type { BoardChoice } from "../../api/http.ts";
 import type { GeometryKey } from "../../boards/schema.ts";
 import { applyDisplayRotation, boardBounds } from "../keyboard/geometry.ts";
 import type { ReleaseStatus } from "../release/status.ts";
+import pkg from "../../../package.json" with { type: "json" };
+import { GithubMark } from "./GithubMark.tsx";
 import { Menu } from "./Menu.tsx";
 import { useTheme, type ThemeChoice } from "./theme.ts";
 import "./topbar.css";
@@ -79,6 +81,8 @@ export function Silhouette({ keys, display, width = 30, height = 14 }: { keys: r
     </svg>
   );
 }
+
+const GITHUB_URL = "https://github.com/planetaryescape/keyloom";
 
 const THEMES: readonly { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
@@ -174,6 +178,12 @@ export function TopBar({ boards, boardsAfter, sync, ask, undo, menu }: TopBarPro
                   <Item key={value} icon={icon} label={label} checked={theme === value} role="menuitemradio" onSelect={() => { close(); setTheme(value); }} />
                 ))}
               </div>
+              <div className="menu-separator" role="separator" />
+              <a className="menu-item" role="menuitem" href={GITHUB_URL} target="_blank" rel="noopener">
+                <GithubMark />
+                <span className="menu-item-label">keyloom on GitHub</span>
+                <span className="menu-version">v{pkg.version}</span>
+              </a>
             </>
           )}
         </Menu>
