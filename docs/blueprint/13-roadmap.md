@@ -459,6 +459,24 @@ Only BK can do these:
 
 **Left out:** the MacBook (S52); key-frequency statistics outside a session.
 
+## Rung 23: Car: several configs per board, and versions I can go back to
+
+**Previously:** one implicit layout per board, a flat revision list. **Now:** named configs per board, one explicitly on the keyboard, and versions as milestones.
+
+**Promise:** "I keep QWERTY, Colemak and a steno config on my Moonlander, switch with one click, and when last week's change didn't work out I went back to the version from before it."
+
+**Build:** [25](25-configs-and-versions.md) (D-300, D-301): config on the keyboard per board, the sync engine change, new config from current/version/blank/import, rename and archive, versions recorded on verified sync, naming, compare and go back, CLI and agent awareness.
+
+**Design:** the config switcher in the top bar, the "editing X · Y is on your keyboard" line, and History's version milestones with compare-on-board, all in [23](23-design-concept.md)'s language. Comps first.
+
+**New unknowns:** migrating existing data to an explicit on-keyboard config (the newest layout per board, as today).
+
+**Demo:** make a Colemak config from QWERTY, edit it without the keyboard changing, put it on, go back to an earlier version, and compare.
+
+**Done when:** editing a non-active config never syncs (tested), and versions appear after real syncs on BK's Moonlander.
+
+**Left out:** sharing configs between people.
+
 ## After the car (not planned yet)
 
 - Conditional layers (tri-layer) in the editor.

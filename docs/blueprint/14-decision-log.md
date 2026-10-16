@@ -1063,3 +1063,13 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 
 ### D-283: Findings are told per finger in plain words, not as a single speed score. (BK)
 - **BK:** "instead of saying this is your typing speed it can say your typing slows down on keys that you need to press with your index finger or something or most typos come from your pinky."
+
+## Configs and versions (2026-10-16)
+
+### D-300: Each board has exactly one config on the keyboard, chosen explicitly; only it auto-syncs, and editing any other config never touches the keyboard. (BK's request; design Claude)
+- **BK:** "maybe I want a steno config and a qwerty config and a colemac config and I don't want to use layers for that, then I can keep layout configs that are different".
+- **Replaces:** the sync engine's implicit "newest edited layout is the board's layout" (`src/app/sync-engine.ts`).
+- Chapter [25](25-configs-and-versions.md).
+
+### D-301: A version is a revision that went onto the keyboard, recorded automatically on a verified sync and nameable; History shows versions as milestones. (BK's request; design Claude)
+- **BK:** "keep multiple versions of my layout and version history just like oryx does so if i change something an use it for a week and don't like it I can go bto a past version".

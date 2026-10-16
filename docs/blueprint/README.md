@@ -33,6 +33,7 @@ BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10
 | 22 | [New keyboard](22-new-keyboard.md) | Recognising a QMK or ZMK board on USB, building its definition, and putting BK's config on it |
 | 23 | [Design concept](23-design-concept.md) | The keyboard under the light: what keyloom is to BK, how the whole fits together, the moments, the visual language and the design gate |
 | 24 | [Typing lab](24-typing-lab.md) | Recording a typing session, replaying it through the emulators, per-finger findings and proven timing suggestions |
+| 25 | [Configs and versions](25-configs-and-versions.md) | Several configs per board with one on the keyboard, and versions as milestones you can go back to |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
 Research behind these decisions:
