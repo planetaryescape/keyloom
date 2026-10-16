@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.1](https://github.com/planetaryescape/keyloom/compare/v0.35.0...v0.35.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* switching boards crossfades instead of flashing a loading screen ([#85](https://github.com/planetaryescape/keyloom/issues/85)) ([41fdb37](https://github.com/planetaryescape/keyloom/commit/41fdb37ac6a8ace6e0fdd66e2229204e77554c7a))
+
 ## [0.35.0](https://github.com/planetaryescape/keyloom/compare/v0.34.8...v0.35.0) (2026-10-16)
 
 
