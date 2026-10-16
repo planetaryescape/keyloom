@@ -1291,3 +1291,8 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 ### D-318: ⌘K opens in the side column, never as a bar at the stage's foot. (BK, 2026-10-16; reverses D-310's bar for quick asks)
 - BK: "How come the cmd k menu still opens at the bottom and blocks the layer selector when i explicitly asked you to fix this because as the conversation gets long i have to scroll to read and the fact that it blocks other UI when there's space on the sides."
 - On a wide screen the chat is the full-height column beside the board from the first keystroke; the board re-fits beside it and the layer strip stays clear. The short-window folded line goes with the bar, since the column never covers the board. The phone keeps its bottom sheet (D-313).
+
+### D-342: keyloom is AGPL-3.0-or-later, replacing MIT. (BK, 2026-10-16)
+- BK: "this should have a license that allows open source but contributions should be contributed upstream i think its agpl3 or something like that".
+- AGPL-3.0 keeps keyloom open: anyone who distributes it, or runs a modified version as a network service, must publish their changes under the same licence. No licence can make people send changes upstream; AGPL makes them public, so they can be taken. Contributions come in under the same licence (inbound = outbound, CONTRIBUTING.md). Relicensing later, for example commercially, would need a contributor licence agreement; none is in place.
+- Every commit is BK's, so he can relicense. Releases up to v0.34.7 stay MIT for whoever has them. "or-later" is GNU's standard form, and it sits with the GPL-2.0-or-later QMK keycode data in `src/layout/keycodes.ts` (see the entry on generated keycodes), which MIT did not.
