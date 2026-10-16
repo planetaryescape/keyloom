@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.1](https://github.com/planetaryescape/keyloom/compare/v0.34.0...v0.34.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* actions visible at rest and layer names in the put panel ([5bdeaa1](https://github.com/planetaryescape/keyloom/commit/5bdeaa10a5ae1e204140f22210231f3368a6e899))
+* whole focus ring on the picker search, wrapped categories, no AI sparkle ([effde11](https://github.com/planetaryescape/keyloom/commit/effde11c107ae85b560aa97d6e86ce0a1fbab23f))
+
 ## [0.34.0](https://github.com/planetaryescape/keyloom/compare/v0.33.0...v0.34.0) (2026-10-16)
 
 
