@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.8](https://github.com/planetaryescape/keyloom/compare/v0.34.7...v0.34.8) (2026-10-16)
+
+
+### Bug Fixes
+
+* the layer strip shrinks its tabs before it scrolls ([cb1af87](https://github.com/planetaryescape/keyloom/commit/cb1af87a60b147103fbfe5c5c58903539f28a726))
+
 ## [0.34.7](https://github.com/planetaryescape/keyloom/compare/v0.34.6...v0.34.7) (2026-10-16)
 
 

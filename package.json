@@ -1,6 +1,6 @@
 {
   "name": "keyloom",
-  "version": "0.34.7",
+  "version": "0.34.8",
   "private": true,
   "description": "Open-source, local-first keyboard configurator for QMK and ZMK boards, with an agent that proposes validated layout changes.",
   "license": "AGPL-3.0-or-later",
