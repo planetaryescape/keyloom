@@ -10,6 +10,7 @@ import m0007 from "./migrations/0007_conversation_provider.sql" with { type: "te
 import m0008 from "./migrations/0008_keyboard_sync.sql" with { type: "text" };
 import m0009 from "./migrations/0009_typing_sessions.sql" with { type: "text" };
 import m0010 from "./migrations/0010_configs_and_versions.sql" with { type: "text" };
+import m0011 from "./migrations/0011_board_reviews.sql" with { type: "text" };
 
 export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: string }> = [
   { version: 1, name: "0001_layouts_and_revisions", sql: m0001 },
@@ -22,4 +23,5 @@ export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: str
   { version: 8, name: "0008_keyboard_sync", sql: m0008 },
   { version: 9, name: "0009_typing_sessions", sql: m0009 },
   { version: 10, name: "0010_configs_and_versions", sql: m0010 },
+  { version: 11, name: "0011_board_reviews", sql: m0011 },
 ];

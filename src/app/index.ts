@@ -52,6 +52,10 @@ export {
   type DecisionRow, type DecisionStatus, type OutcomeQuestion, type OutcomeStatus, dismissOutcome, editDecision, listDecisions, outcomeQuestions,
   recordOutcome, recordPriority, retireDecision, retirePriority, showDecision,
 } from "./decisions.ts";
+export {
+  type AiStatus, type BoardReview, type FixedItem, type ReviewEvent, type ReviewItem, type ReviewTrigger, type ReviewView, dismissReviewItem, restoreReviewItem, reviewWords, showReview,
+} from "./review.ts";
+export { ReviewEngine, type ReviewOptions } from "./review-engine.ts";
 export { type ProviderStatus, chooseNextProvider, defaultAgentModel, providerStatus } from "./chat-model.ts";
 export type { AgentModel } from "../agent/model.ts";
 export { PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";

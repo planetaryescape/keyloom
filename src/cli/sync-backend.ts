@@ -1,6 +1,7 @@
 // The server's keyboard sync interface over the app's engine (rung 13). The server stays ignorant of USB and
 // builds; this adapter is the one place that knows both sides.
 import { NotFoundError, UsageError } from "../app/index.ts";
+import type { ReviewEngine } from "../app/review-engine.ts";
 import type { SyncEngine } from "../app/sync-engine.ts";
 import { SyncError, type SyncBackend } from "../server/sync-backend.ts";
 
@@ -15,7 +16,7 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-export function appSyncBackend(engine: SyncEngine): SyncBackend {
+export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine): SyncBackend {
   return {
     status: () => translate(() => engine.snapshot()),
     syncNow: (layoutId) =>
@@ -28,5 +29,6 @@ export function appSyncBackend(engine: SyncEngine): SyncBackend {
     disableRemapping: (boardId) => translate(async () => (await engine.disableRemapping(boardId), engine.views())),
     subscribe: (listener) => engine.subscribe(listener),
     newKeyboards: () => engine.newKeyboards(),
+    ...(reviews ? { subscribeReviews: (listener: Parameters<ReviewEngine["subscribe"]>[0]) => reviews.subscribe(listener) } : {}),
   };
 }

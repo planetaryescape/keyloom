@@ -13,7 +13,7 @@ export const IssueSchema = z.object({
   plain: z.string().min(1).optional(),
   // For function_lost: the canonical function string, so the editor can offer to drop or place it.
   function: z.string().min(1).optional(),
-  // For layer_unreachable: the layer, so the editor can tell that dropping a layer key won't help.
+  // For layer_unreachable and layer_trap: the layer, so the editor can tell that dropping a layer key won't help.
   layerId: z.string().min(1).optional(),
 });
 export type Issue = z.infer<typeof IssueSchema>;

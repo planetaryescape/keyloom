@@ -47,6 +47,14 @@ export type Evaluation = { result: ValidationResult; after: Layout | null; touch
 /** What the layout alone can't tell the validator: priorities BK has stated and decisions kept (08). The browser's own check passes none. */
 export type EvaluationContext = { pinned?: readonly PinnedPriority[]; decisions?: readonly DecisionFact[]; selection?: SelectionScope };
 
+/**
+ * Everything the validator would warn about in a layout as it stands: the rules above that otherwise fire only for what a change adds,
+ * here read against the layout alone. The board review turns each into an item (D-340).
+ */
+export const standingIssues = (board: BoardDefinition, doc: Layout): Issue[] => [
+  ...documentRules(board, doc), ...doubledLetterTapdance(doc), ...tapDanceWarnings(doc), ...macroSecrets(doc), ...homerowSameHandMods(board, doc),
+];
+
 export const validate = (board: BoardDefinition, before: Layout, ops: readonly ChangeOp[], context: EvaluationContext = {}): ValidationResult =>
   evaluate(board, before, ops, context).result;
 

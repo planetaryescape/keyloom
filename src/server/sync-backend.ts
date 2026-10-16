@@ -1,5 +1,6 @@
 import type { BoardSync, SyncNowResponse } from "../api/http.ts";
 import type { DetectedKeyboard } from "../api/detected-keyboards.ts";
+import type { ReviewEvent } from "../api/review.ts";
 
 // The server's keyboard sync interface (rung 13). Like the other backends, the CLI injects the app-backed
 // implementation, so the server knows nothing about USB, builds or the database.
@@ -16,6 +17,8 @@ export interface SyncBackend {
   subscribe(listener: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void): () => void;
   /** The keyboards on USB keyloom has no board for, as of the engine's last read (D-336). */
   newKeyboards(): DetectedKeyboard[];
+  /** Calls `listener` whenever a board review is made or its agent part changes (D-340), so the events stream carries it beside the sync state. */
+  subscribeReviews?(listener: (event: ReviewEvent) => void): () => void;
 }
 
 /** A failure the browser should see as-is. */

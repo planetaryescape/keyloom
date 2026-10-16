@@ -115,6 +115,10 @@ The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor doe
 
 `keyloom autosync on|off|pause|resume|status <board>` prints `{ board_id, auto_sync: "on"|"off", choice, paused, proven, proven_at }`. `on` before a flash keyloom did by itself was verified is exit 2, with how to get one. The choice lives in the database, so a running `keyloom serve` sees it at its next look.
 
+## review shows what keyloom found in a config
+
+`keyloom review [layout]` prints the newest review of the config in plain words: problems, suggestions, hints, what the last revision fixed, what was checked and how the agent's part went. `--run` makes the head's review now and waits for the agent (it needs a model provider; the checks run without one), `--force` runs the agent again on a revision it already looked at, `--provider` picks the model as for `chat`. JSON is `{ layout_id, head_revision_id, stale, review }`, where `review` is null before any, and otherwise `{ id, layout_id, revision_id, trigger, checked_at, checks, ai: { status, reason, model }, items: [{ id, source, kind, severity, code, title, body, keys, layers, proposal_id, fixes, dismissed_at }], fixed }`; `title` and `body` keep the `{key:…}` and `{layer:…}` markers. `--format ids` prints the item ids. [27](27-board-review.md) has the design.
+
 ## config and version keep several layouts per board and go back to old ones
 
 A config is a layout. Each board has one config on its keyboard (D-300); `keyloom sync <config>` refuses any other and names `keyloom config use`. All JSON carries `schema_version`.

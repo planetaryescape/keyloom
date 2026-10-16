@@ -34,3 +34,28 @@ describe("the events parser", () => {
     expect(seen).toHaveLength(1);
   });
 });
+
+describe("review frames (D-340)", () => {
+  const review = { type: "review", layoutId: "lay_1", revisionId: "rev_1", reviewId: "rvw_1", aiStatus: "done" };
+  const reviewFrame = (e: unknown) => `event: review\ndata: ${JSON.stringify(e)}\n\n`;
+
+  test("a review frame goes to the review callback and is not mistaken for a sync frame", () => {
+    const seen: BoardSync[][] = [];
+    const reviews: unknown[] = [];
+    let unreadable = 0;
+    const parser = createEventParser((b) => seen.push(b), () => unreadable++, (e) => reviews.push(e));
+    parser.push(`${reviewFrame(review)}${frame([board])}`);
+    expect(reviews).toEqual([review]);
+    expect(seen).toHaveLength(1);
+    expect(unreadable).toBe(0);
+  });
+
+  test("a caller that doesn't care about reviews hears nothing, and a review frame it can't read is dropped as unreadable", () => {
+    const { seen, unreadable, parser } = collect();
+    parser.push(reviewFrame(review));
+    expect(unreadable()).toBe(0);
+    parser.push(reviewFrame({ type: "review", layoutId: 3 }));
+    expect(unreadable()).toBe(1);
+    expect(seen).toEqual([]);
+  });
+});

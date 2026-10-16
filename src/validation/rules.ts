@@ -178,10 +178,11 @@ export function layerUnreachable(doc: Layout): Issue[] {
 
 /** `layer_trap`: see `trappedLayers` for the reading of "leads back". */
 export function layerTrap(doc: Layout): Issue[] {
-  return trappedLayers(doc).map(({ layerId, entered }) =>
-    issue("layer_trap", `layer "${layerId}" is entered with toggle or to but has no key that leads back to the base layer`,
+  return trappedLayers(doc).map(({ layerId, entered }) => ({
+    // The layer rides along so the board review can mark its tab, as it does for layer_unreachable.
+    layerId, ...issue("layer_trap", `layer "${layerId}" is entered with toggle or to but has no key that leads back to the base layer`,
       `${layerName(doc, layerId)} has no key that gets back to ${doc.layers[0]?.name ?? "the base layer"}, so you could get stuck on it.`,
-      entered.flatMap((e) => (e.slot ? [e.slot] : []))));
+      entered.flatMap((e) => (e.slot ? [e.slot] : []))) }));
 }
 
 /**
