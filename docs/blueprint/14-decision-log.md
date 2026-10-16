@@ -989,3 +989,22 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 
 ### D-269: The top bar's board switcher draws each board's silhouette from `GET /api/boards`. (Claude)
 - The boards list now carries each board's geometry keys and display hints, so a board BK hasn't opened yet still shows its shape. A connected keyboard that isn't on screen shows its sync light on its silhouette. The sync line covers the board on screen only.
+
+### D-270: A cap prints words a person reads; firmware spelling is for Advanced view only. (P1 design review, Claude)
+- `src/layout/legend.ts` and `src/layout/native-legend.ts` print, at rest: shifted keys as the character they type (`!`), modifiers in Apple's order either side alike (`⌃B`, not `r⌃B`), Hyper and Meh as ✦ and ◆, media and paging keys as words (Bri−, Vol+, PgDn, Play), layer keys by the layer's name as people read it (sentence case, no underscores; first word or three letters when the name is longer than eight characters) with the action spelled out (hold, toggle, go to, once), and a macro named only after its firmware slot by what it sends (⇧⌘4).
+- Every kind of kept firmware binding in BK's Moonlander and Glove80 layouts has a human legend read from its source: one-shot modifiers (⇧ / once), Oryx dual-function keys read from the kept `process_record_user` (F5 / Game), ZMK `&layer_on_hold` (⏎ / Numbers), `&magic`, lighting (Hue− / lights), mouse (Click / mouse), Bluetooth (BT 1, Unpair), output (USB / output) and bootloader (Boot / flash). Anything else keeps a label that is already a word, or reads "Custom". The source is in Advanced view and the panel; `advanced-legend.ts` is reached only when Advanced view is on.
+- Layer names are shown in display form everywhere (`niceLayerName` is now `layerDisplayName`); the stored name is unchanged.
+- **Replaces** D-187's "tog" and "go" (the condensed width fits "toggle" and "go to") and 18's upper-case layer short labels on caps.
+
+### D-271: Cap type steps down with length, sits at about 480 weight, and a key is at most 58 px. (P1 design review, Claude)
+- A tap legend is 0.28u for one glyph, 0.23u for two, 0.2u for three and 0.18u for a word, never under the 11 px floor (`tapRange` in `fit.ts`). Words of four or more characters and every front print are set at the font's 75% width; fit.ts estimates them at 0.74 of the regular width, measured in the browser (0.65 to 0.72).
+- Front prints spell their words ("option", "command", "control"); on a cap too small for symbol and word, the word alone. Never an abbreviation.
+- `MAX_UNIT` is 58 px, so a Corne or a laptop renders at about a Moonlander's cap size instead of filling the stage.
+
+### D-272: Status LEDs on a case come from `display.statusLeds` and light in the layer's colour. (P1 design review, Claude)
+- Positions are in key units after `rotate` and `shift`. The Moonlander lists three per half; they change with the layer ripple.
+
+### D-273: Inspect is ⌥I and a menu item, and uses three hues. (P1 design review, Claude)
+- A plain I is free to find the I key by pressing it. On a phone Inspect is only in the menu.
+- Amber for a key that does more than one thing (hold-tap, tap dance), blue for one that changes layer, violet for one that runs something kept as written (macro, firmware binding). Plain keys and modifiers stay untinted. Combo dots are gone; Inspect draws the combo lines instead.
+- Amends D-264.

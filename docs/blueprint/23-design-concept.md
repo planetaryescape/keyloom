@@ -97,7 +97,8 @@ Always visible without asking: which board and layout, which layer and how to re
 
 ## Visual language
 
-- **Type:** one family, Instrument Sans, with its width axis (75 to 100), so long legends get narrower instead of smaller (D-261). Sizes: 44 layer title, 28 phone title, 16 brand, 14 body, 13 chrome, 11 the legend floor. Weights 450 to 650.
+- **Type:** one family, Instrument Sans, with its width axis (75 to 100), so long legends get narrower instead of smaller (D-261). Sizes: 44 layer title, 28 phone title, 16 brand, 14 body, 13 chrome, 11 the legend floor. Cap legends step down with length (0.28u for a glyph to 0.18u for a word) at about 480 weight, and words are set at 75% width (D-271). Weights 450 to 600.
+- **Legends:** words a person reads, never firmware spelling (D-270): `!` not ⇧1, Vol+ not VOLU, "Navigate / go to" not "NAV / go", "F5 / Game" for an Oryx dual-function key. Firmware names live behind Advanced view.
 - **Colour:** tokens in `src/web/tokens.css`. The theme is the room: dark `#0e0f12` with a `#1d1f24` spot, light `#e4e5e8` with `#f8f8f9`. Ink in three steps. The board's colourway follows the room: black caps in the dark, white in the light (D-262). Amber `--pending`, green `--ok`, red `--bad`. Six layer colours (`--layer-1` to `--layer-6`) light layers with no LEDs of their own.
 - **Materials:** the keycap is five layers (bleed, skirt, LED tint, dished face, legends), every size a multiple of `--u`. Cases are filled outlines with a soft drop shadow. Cards are surfaces with a large soft shadow and no border.
 - **Icons:** lucide, at 15 to 18 px, in ink. No emoji.
@@ -120,7 +121,7 @@ Always visible without asking: which board and layout, which layer and how to re
 
 - **Primary:** the board and its light.
 - **Secondary:** the layer's name and how to reach it; the strip; the sync line.
-- **Hidden until asked:** key kinds, inherited legends, combo lines (Inspect); firmware names (Advanced view); History, Library, Combos, Settings, Build and flash, shortcuts, theme choice (the menu); selection actions (only once keys are selected).
+- **Hidden until asked:** key kinds in three hues, inherited legends, combo lines (Inspect, ⌥I); firmware names (Advanced view); History, Library, Combos, Settings, Build and flash, shortcuts, theme choice (the menu); selection actions (only once keys are selected).
 - **Left off on purpose:** the permanent side panel and its layout summary (the board says it), the toolbar row (each item opens rarely), kind fills at rest (colour carried nothing and made the board a chart), trays (a tray says widget, a case says keyboard), the bottom chat bar (chat is an action, not a strip), the instruction rows.
 
 ## Taste references
@@ -148,7 +149,7 @@ A phase is done when:
 
 | Phase | What lands | Status |
 |---|---|---|
-| P1 | The board renderer for every board, the room, the light, front-printed legends, Inspect, the top bar and sync line, the layer strip, the ripple, the press, the tokens and type | Built (rung "light", D-260 to D-269) |
+| P1 | The board renderer for every board, the room, the light, front-printed legends, Inspect, the top bar and sync line, the layer strip, the ripple, the press, the tokens and type | Built (rung "light", D-260 to D-273, after the first design review) |
 | P2 | The key card: the lit keycap as hero, slot regions, inline picker, halves part when needed | Next |
 | P3 | ⌘K as the command bar, proposals on the caps | |
 | P4 | History, Library, Settings, Combos, import and new board, sync detail, MacBook states | |
