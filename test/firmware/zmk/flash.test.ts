@@ -72,17 +72,25 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     const s = await setup();
     mount(s.root, RIGHT, 20);
     const seen: Uint8Array[] = [];
+    // setInterval doesn't wait for an async tick, so under load two ticks could both read the same drive before either removed it.
+    let busy = false;
     const timer = setInterval(async () => {
-      const f = Bun.file(join(s.root, RIGHT, "glove80.uf2"));
-      if (await f.exists()) {
-        seen.push(new Uint8Array(await f.arrayBuffer()));
-        rmSync(join(s.root, RIGHT), { recursive: true, force: true });
-        mount(s.root, LEFT, 10);
-      }
-      const l = Bun.file(join(s.root, LEFT, "glove80.uf2"));
-      if (await l.exists()) {
-        seen.push(new Uint8Array(await l.arrayBuffer()));
-        rmSync(join(s.root, LEFT), { recursive: true, force: true });
+      if (busy) return;
+      busy = true;
+      try {
+        const f = Bun.file(join(s.root, RIGHT, "glove80.uf2"));
+        if (await f.exists()) {
+          seen.push(new Uint8Array(await f.arrayBuffer()));
+          rmSync(join(s.root, RIGHT), { recursive: true, force: true });
+          mount(s.root, LEFT, 10);
+        }
+        const l = Bun.file(join(s.root, LEFT, "glove80.uf2"));
+        if (await l.exists()) {
+          seen.push(new Uint8Array(await l.arrayBuffer()));
+          rmSync(join(s.root, LEFT), { recursive: true, force: true });
+        }
+      } finally {
+        busy = false;
       }
     }, 10);
     const r = await s.flash();
