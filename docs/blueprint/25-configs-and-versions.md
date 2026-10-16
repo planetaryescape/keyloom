@@ -1,6 +1,6 @@
 # 25: Configs and versions
 
-Status: proposal, 2026-10-16. Source baseline: origin/main after v0.25.0.
+Status: model, sync, CLI, API and agent built (rung 23 part 1); screens are the designer's. Source baseline: origin/main after v0.25.0.
 
 BK: "I would like this app to keep multiple versions of my layout and version history just like oryx does so if i change something an use it for a week and don't like it I can go bto a past version or maybe I want a steno config and a qwerty config and a colemac config and I don't want to use layers for that, then I can keep layout configs that are different".
 
@@ -57,6 +57,20 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 | Putting a config on the keyboard | Deliberate | One confirm, then the same press-and-sync moment as Apply |
 | Going back a week | Relief | The version timeline shows what changed since, drawn on the board, before going back |
 
+## What is built
+
+- **Model.** `board_config` names the config on each keyboard; `versions` holds the revisions that went on a keyboard or were named; `layouts` gains `archived_at` and `copied_from_*` (D-302 for the migration).
+- **Sync.** The engine tracks the stored config only. A manual `sync` of another config is refused, `config use` stores the choice after the usual checks and syncs once, and a switch in the middle of a sync stops a build and checks again right before the flash (D-303, D-304). A keyboard running another config of the board reads "behind: other_config" and auto-sync leaves it.
+- **Versions.** Written in the transaction that finishes a verified sync (D-307). History is `versions` with the revisions between two folded under the later one, plus the revisions newer than the newest version as `pending`. Restore is the go-back path; compare is a key-by-key diff (D-309).
+- **Surfaces.** CLI in [10](10-cli.md#config-and-version-keep-several-layouts-per-board-and-go-back-to-old-ones); routes in [01](01-architecture.md) and `src/api/configs.ts`; the agent's `list_layouts` marks the config on each keyboard and its prompt says a "Colemak config" is a new config, which it tells BK how to make.
+
+## Not built yet
+
+- The screens (config switcher, "Editing X, Y is on your keyboard", version milestones with compare on the board).
+- "Put a version on the keyboard" as a sync of an old revision.
+- New config from an import is `keyloom import --name`, which already makes a layout; on a board that has a config it is not put on the keyboard.
+- A real default keymap for a blank config (D-306).
+
 ## Decisions
 
-D-300 and D-301 are in [14](14-decision-log.md).
+D-300 and D-301 are in [14](14-decision-log.md), with D-302 to D-309 for the build.

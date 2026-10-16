@@ -21,6 +21,8 @@ export type BehindWhy =
   | "failed"
   /** The keyboard runs a keyloom build this copy of keyloom has no record of, so it is not replaced by itself. */
   | "unknown_build"
+  /** The keyboard runs another config of this board. Only an explicit "put on" replaces it (D-300), so auto-sync leaves it. */
+  | "other_config"
   /** This revision was already put on the keyboard and something else has been flashed since. */
   | "changed_since"
   /** Remapping was switched off (safe.kbd loaded); Sync now turns it back on. */
@@ -37,7 +39,7 @@ export type SyncState =
 export type SyncFacts = {
   reading: KeyboardReading;
   /** What the keyboard runs compared with the head: `same` when its builds are the head or an identical document. */
-  running: { kind: "same" } | { kind: "behind"; changes: number | null } | { kind: "unknown" };
+  running: { kind: "same" } | { kind: "behind"; changes: number | null } | { kind: "unknown" } | { kind: "other_config" };
   /** The sync running now for this board, if any. */
   active: SyncRow | undefined;
   /** The newest sync of the head revision to this board, if any. */
@@ -81,6 +83,7 @@ export function deriveState(f: SyncFacts): SyncState {
     return { kind: "needs_hand", instruction: h.instruction ?? h.error ?? "", reason: NEEDS_HAND_REASON };
   }
   if (f.running.kind === "unknown") return { kind: "behind", changes: null, why: "unknown_build", error: null };
+  if (f.running.kind === "other_config") return { kind: "behind", changes: null, why: "other_config", error: null };
   if (h && h.status === "failed" && !RETRYABLE_FAILURES.includes(h.failure ?? "flash")) return { kind: "behind", changes, why: "failed", error: h.error };
   if (h?.status === "succeeded") return { kind: "behind", changes, why: "changed_since", error: null };
   if (f.auto.paused) return { kind: "behind", changes, why: "paused", error: h?.error ?? null };

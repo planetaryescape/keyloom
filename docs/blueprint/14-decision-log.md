@@ -1099,7 +1099,6 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - Four quiet controls at the strip's right, icon and short label (icons only beside a sheet or the conversation, or below 1400 px wide, with the name in the tooltip): **Combos** and **Inspect** toggle what the board draws, **History** and **Library** open their sheets. Combos is remembered per browser. With Combos on, each combo is its line and its output in a small chip placed off the legends, so the board reads at a glance; clicking one opens its card in the side panel. The phone keeps them in the ⋯ menu, which otherwise holds the rare things: All combos (the list), Settings, Build and flash, Select several keys, Advanced view, Shortcuts, Redo and theme.
 - **Shortcuts:** ⌥C combos, ⌥I Inspect, ⌥H History, ⌥L Library, not with a key's card open or in a text field, and listed under ?. **Not single letters:** a plain letter finds that key on the board ("Press a key on your Moonlander to find it here"), which is why Inspect moved to ⌥I in the P1 review; C, H and L alone would open sheets when BK presses those keys on his keyboard.
 
-||||||| parent of fafa874 (feat: typing lab replay fidelity, privacy cleanup, docs and runbooks (rung 22 part 1))
 
 ### D-284: The Moonlander streams its key events through a second raw-HID command that wraps `action_exec`, off until the host asks. (Claude, building rung 22)
 - **Command.** First byte `0xE8` (Oryx uses 0x00-0x0C and 0xFE, VIA 0x01-0x15 and 0xFF, keyloom's bootloader command 0xE7), then the eight bytes `KLTYPING`, then an action byte: 0 stop, 1 start, 2 keepalive. A start while the stream is on is a keepalive. `src/firmware/qmk/typing-stream.ts` holds the constants, the packets and the decoder; the C is generated from the same file into `keymap.c` beside the bootloader wrapper (`handsfree.ts`), so a hands-free build has both.
@@ -1148,3 +1147,30 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - **Sentences** (`sentences.ts`) are generators with a weight, not a template per number: a finger is named for errors only when its rate is 1.5 times the overall one; for speed only when it is 25% and 30 ms slower than the rest; a roll gets its overlap and, for a mod-tap, what it types held and its term; modifiers are said as a Mac says them (Option, Command). Keys are named by what they type.
 - **Passages** (`passages.ts`): everyday sentences; every neighbouring home-row pair rolled both ways; every home-row mod held with a plain key on each hand; each finger's own keys. The "starter" is a few holds, the rolls and two sentences, about three minutes. Your own text is lowered and cut to what the lab can ask for.
 
+
+### D-302: The migration keeps what the engine already did: a board's config is the layout of its last verified sync, else its newest edited. (Claude, rung 23)
+- **Why:** the engine tracked the layout its keyboard's running build came from before it fell back to the newest, so "newest per board" would have changed what gets flashed. A verified sync is the stored form of "the running build". On BK's data (one layout per board) both rules give the same answer. Past verified syncs also become versions.
+- Migration `0010_configs_and_versions.sql`; tests in `test/persistence/configs-migration.test.ts`.
+
+### D-303: `sync` refuses a config that is not on the keyboard; only `config use` changes which one is. (Claude, rung 23)
+- **Why:** a manual sync of any layout used to put it on the keyboard. That would make "the config on the keyboard" a label the CLI could contradict. `keyloom sync <config>` now names `keyloom config use` instead.
+
+### D-304: The stored config is the intent; a keyboard running another config of the board is "behind (other_config)" and auto-sync leaves it. (Claude, rung 23)
+- **Why:** a keyboard flashed by hand with another config must never be replaced because the stored choice disagrees. Only `config use` (a manual sync) replaces it. `config use` stores the choice only after the keyboard passed `sync`'s own checks (attached, keyloom firmware, nothing else syncing), so a refusal leaves it as it was; if the sync then fails, the choice stays and the state reads behind.
+- **Mid-sync switches:** a build of a config that stopped being the board's is stopped, and the engine checks again right before the remapper apply and right before the flash. A flash that had already started finishes and is recorded as what is on the keyboard.
+
+### D-305: A copy is a new layout with its own history starting at the copied document, and a link back; it does not carry decisions or conversations. (Claude, rung 23)
+- **Why:** history is per layout and append-only. The first revision of a copy has origin `import` (the column's check constraint predates configs) and a summary saying where it came from. `copied_from_*` are plain columns, so deleting the source leaves the copy standing with its link naming a deleted config.
+
+### D-306: A blank config is one empty Base layer sized to the board; a software remapper starts as its identity map. (Claude, rung 23)
+- **Why:** boards carry no default keymap (the firmware tree's own is not in the repo). A remapper with an empty map would silence the laptop's keyboard the moment it is put on.
+- **Open:** a real default keymap per board would need a pinned file in each board folder (04).
+
+### D-307: A version is one row per revision; putting a revision on again moves its put-on time forward and reopens it. (Claude, rung 23)
+- **Why:** it keeps names attached to the revision. The cost is that an earlier stay of the same revision is not kept. Versions are written inside the transaction that finishes a verified sync, so one exists exactly when the other does, including after a crash recovery that confirms a flash.
+
+### D-308: Delete needs the config's name and refuses the config on a keyboard and one a sync is using; it removes the config's revisions, change sets, decisions, conversations, builds, syncs and versions. (Claude, rung 23)
+- Build files on disk stay.
+
+### D-309: Compare is a per-key diff of documents (revision against head) plus named changes for the rest; it is the same structure the restore changes. (Claude, rung 23)
+- **Why:** there was no document differ, and a change set is not the difference between two revisions. `src/layout/diff.ts` is pure. Restoring a version goes through the go-back path (D-170), refuses a restore that would change nothing, and does not sync.

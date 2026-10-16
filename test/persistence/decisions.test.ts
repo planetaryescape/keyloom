@@ -7,7 +7,7 @@ import { insertMessage } from "../../src/persistence/conversations.ts";
 import {
   findDecision, insertChoice, insertPriority, listConversationPriorities, listDecisions, updateDecision,
 } from "../../src/persistence/decisions.ts";
-import { createLayout } from "../../src/persistence/layouts.ts";
+import { createLayoutAtOldSchema } from "../helpers/old-schema.ts";
 import { MIGRATIONS } from "../../src/persistence/migrations.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
 
@@ -23,7 +23,7 @@ function databaseAtVersion4() {
     db.query("INSERT INTO schema_migrations VALUES (?, ?, 0)").run(m.version, m.name);
   }
   db.run("PRAGMA foreign_keys = ON");
-  const created = createLayout(db, { name: "old", layout, summary: "import", origin: "import" });
+  const created = createLayoutAtOldSchema(db, { name: "old", layout, summary: "import" });
   // Raw SQL: at version 4 the table has no provider column, which the repository now writes.
   const conversation = { id: "conv_old" };
   db.query("INSERT INTO conversations (id, layout_id, title, created_at) VALUES (?, ?, 'talk', 1)").run(conversation.id, created.layout.id);

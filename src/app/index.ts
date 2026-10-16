@@ -8,6 +8,13 @@ export { type ParsedBinding, parseBindingExpression } from "./binding-expression
 export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, importLayout, listLayouts } from "./layouts.ts";
 export { type UploadInput, importUpload } from "./import-upload.ts";
 export { listRevisions } from "./history.ts";
+export {
+  type ConfigView, type ListConfigsOptions, type NewConfigInput, archiveConfig, blankDocument, deleteConfig, listConfigs, newConfig, renameConfig, restoreConfig, showConfig,
+} from "./configs.ts";
+export {
+  type CompareView, type KeyChange, type RevisionBrief, type VersionHistory, type VersionMilestone, type VersionView, compareRevision, nameVersion, resolveRevision,
+  restoreVersion, versionHistory,
+} from "./versions.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type DoctorCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
@@ -21,7 +28,7 @@ export {
 } from "./firmware.ts";
 export {
   type AutoSyncReport, type BoardSyncView, type RunSyncOptions, type SyncDeps, type SyncEngine, type SyncOptions, type SyncOutcome, type SyncSetup, type SyncState,
-  autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, setAutoSync, syncStatus,
+  autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, runUseConfig, setAutoSync, syncStatus,
 } from "./sync.ts";
 export { BuildFailedError, EmulateFailedError, FlashFailedError, RebootFailedError } from "./firmware-errors.ts";
 export { type EmulateOptions, type EmulateOutcome, emulateLayout } from "./emulate.ts";

@@ -118,7 +118,22 @@ layouts(
   board_id TEXT NOT NULL,
   name TEXT NOT NULL,
   head_revision_id TEXT NOT NULL REFERENCES revisions(id),
-  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  archived_at INTEGER NULL,            -- hidden but kept (25)
+  copied_from_layout_id TEXT NULL,     -- plain columns: the source may be deleted
+  copied_from_revision_id TEXT NULL
+);
+
+-- 25, D-300: the config the sync engine keeps on each board's keyboard.
+board_config(board_id TEXT PRIMARY KEY, layout_id TEXT NOT NULL REFERENCES layouts(id));
+
+-- 25, D-301: revisions that went on a keyboard (put_on_at set by a verified sync) or were only named. One row per revision.
+versions(
+  id TEXT PRIMARY KEY,                 -- ver_…
+  layout_id TEXT NOT NULL REFERENCES layouts(id), revision_id TEXT NOT NULL REFERENCES revisions(id),
+  board_id TEXT NOT NULL, name TEXT NULL,
+  put_on_at INTEGER NULL, ended_at INTEGER NULL, sync_id TEXT NULL REFERENCES syncs(id),
+  created_at INTEGER NOT NULL, UNIQUE (layout_id, revision_id)
 );
 
 revisions(

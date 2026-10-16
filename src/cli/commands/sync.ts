@@ -28,7 +28,7 @@ export function describeSync(v: BoardSyncView): string {
     case "behind": {
       const n = s.changes === null ? "changes" : s.changes === 1 ? "1 change" : `${s.changes} changes`;
       const unproven = v.remapper ? "auto-apply is not on yet: prove the exit chord, then run keyloom remap confirm-exit-chord" : "auto-sync is not on yet: it needs one flash that keyloom does and verifies";
-      const why = { waiting: "auto-sync will start it", auto_off: "auto-sync is off", paused: "auto-sync is paused", unproven, failed: "the last sync failed", unknown_build: "it runs a keyloom build this copy doesn't know", changed_since: "something else was flashed since", remapping_off: "remapping is switched off; sync turns it back on" }[s.why];
+      const why = { waiting: "auto-sync will start it", auto_off: "auto-sync is off", paused: "auto-sync is paused", unproven, failed: "the last sync failed", unknown_build: "it runs a keyloom build this copy doesn't know", other_config: "it runs another config; `keyloom config use` puts this one on", changed_since: "something else was flashed since", remapping_off: "remapping is switched off; sync turns it back on" }[s.why];
       return `behind: ${n} not on it (${why})${s.error ? `; ${s.error}` : ""}`;
     }
     case "needs_hand": return `needs a hand: ${s.instruction} (${s.reason})`;
@@ -40,7 +40,8 @@ export function describeSync(v: BoardSyncView): string {
 const boardJson = (v: BoardSyncView) => {
   const s = v.state;
   return {
-    board_id: v.boardId, board_name: v.boardName, layout_id: v.layoutId, layout_name: v.layoutName, head_revision_id: v.headRevisionId, other_layouts: v.otherLayouts,
+    board_id: v.boardId, board_name: v.boardName, layout_id: v.layoutId, layout_name: v.layoutName, config_id: v.layoutId, config_name: v.layoutName,
+    head_revision_id: v.headRevisionId, other_layouts: v.otherLayouts, other_configs: v.otherLayouts,
     state: s.kind,
     step: s.kind === "syncing" ? s.step : null,
     changes: s.kind === "behind" ? s.changes : null,
@@ -63,6 +64,37 @@ const autoJson = (r: AutoSyncReport) => ({ board_id: r.boardId, auto_sync: r.on 
 const autoLine = (r: AutoSyncReport): string =>
   `${r.boardName}: auto-sync is ${r.on ? "on" : r.paused ? "paused" : "off"}${r.proven ? "" : " (not proven yet: it turns on after one flash that keyloom does by itself and verifies)"}`;
 
+/** One sync of a config and its result in every format; `put` makes the config the one on the keyboard first (`keyloom config use`). */
+export async function syncAndPrint(deps: SyncCommandDeps, ref: string, opts: { wait?: boolean; put?: boolean }): Promise<void> {
+  const { io, format, quiet, withApp, handsFree, syncDeps } = deps;
+  const setup = { ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { deps: syncDeps } : {}) };
+  let shown = "";
+  const outcome = await untilInterrupted((signal) =>
+    withApp((app) =>
+      runSync(app, ref, {
+        ...(opts.wait ? { wait: true } : {}), ...(opts.put ? { put: true } : {}), ...setup, signal,
+        // Progress goes to stderr whatever the format, so a script's stdout stays parseable.
+        onStep: (step) => {
+          if (step !== shown && !quiet()) io.err(`${(shown = step)}\n`);
+        },
+      }),
+    ),
+  );
+  const s = outcome.sync;
+  print(io, format(), {
+    json: {
+      status: outcome.status, board_id: outcome.boardId, layout_id: outcome.layoutId, revision_id: outcome.revisionId,
+      sync_id: s?.id ?? null, build_id: s?.buildId ?? null, flash_id: s?.flashId ?? null,
+      timings_s: s && {
+        wait: seconds(s.startedAt - s.appliedAt), build: seconds(s.builtAt === null ? null : s.builtAt - s.startedAt),
+        flash: seconds(s.finishedAt === null || s.flashStartedAt === null ? null : s.finishedAt - s.flashStartedAt), apply_to_verified: seconds(s.finishedAt === null ? null : s.finishedAt - s.appliedAt),
+      },
+    },
+    table: quiet() ? (s?.id ?? outcome.revisionId) : outcome.status === "in_sync" ? "already on the keyboard; nothing to do" : `synced ${outcome.revisionId} to ${outcome.boardId}: ${outcome.boardId === "apple/macbook-ansi" ? "kanata reports it loaded" : "the keyboard came back running it"} (${s?.id})`,
+    ids: [s?.id ?? outcome.revisionId],
+  });
+}
+
 export function registerSyncCommands(program: Command, deps: SyncCommandDeps): void {
   const { io, format, quiet, withApp, handsFree, syncDeps } = deps;
   const setup = { ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { deps: syncDeps } : {}) };
@@ -71,36 +103,10 @@ export function registerSyncCommands(program: Command, deps: SyncCommandDeps): v
 
   sync
     .command("run", { isDefault: true })
-    .description("sync a layout: build the head, flash it hands-free and check the keyboard came back running it (never replaces firmware keyloom didn't build)")
-    .argument("<layout>", "layout ID or name")
+    .description("sync the config on the keyboard: build the head, flash it hands-free and check the keyboard came back running it (never replaces firmware keyloom didn't build)")
+    .argument("<layout>", "config (layout) ID or name; it must be the one on its keyboard, `keyloom config use` changes that")
     .option("--wait", "if a sync is already running (the server's), wait for it to end first instead of refusing")
-    .action(async (ref: string, opts: { wait?: boolean }) => {
-      let shown = "";
-      const outcome = await untilInterrupted((signal) =>
-        withApp((app) =>
-          runSync(app, ref, {
-            ...(opts.wait ? { wait: true } : {}), ...setup, signal,
-            // Progress goes to stderr whatever the format, so a script's stdout stays parseable.
-            onStep: (step) => {
-              if (step !== shown && !quiet()) io.err(`${(shown = step)}\n`);
-            },
-          }),
-        ),
-      );
-      const s = outcome.sync;
-      print(io, format(), {
-        json: {
-          status: outcome.status, board_id: outcome.boardId, layout_id: outcome.layoutId, revision_id: outcome.revisionId,
-          sync_id: s?.id ?? null, build_id: s?.buildId ?? null, flash_id: s?.flashId ?? null,
-          timings_s: s && {
-            wait: seconds(s.startedAt - s.appliedAt), build: seconds(s.builtAt === null ? null : s.builtAt - s.startedAt),
-            flash: seconds(s.finishedAt === null || s.flashStartedAt === null ? null : s.finishedAt - s.flashStartedAt), apply_to_verified: seconds(s.finishedAt === null ? null : s.finishedAt - s.appliedAt),
-          },
-        },
-        table: quiet() ? (s?.id ?? outcome.revisionId) : outcome.status === "in_sync" ? "already on the keyboard; nothing to do" : `synced ${outcome.revisionId} to ${outcome.boardId}: ${outcome.boardId === "apple/macbook-ansi" ? "kanata reports it loaded" : "the keyboard came back running it"} (${s?.id})`,
-        ids: [s?.id ?? outcome.revisionId],
-      });
-    });
+    .action((ref: string, opts: { wait?: boolean }) => syncAndPrint(deps, ref, opts));
 
   sync
     .command("status")
@@ -111,7 +117,7 @@ export function registerSyncCommands(program: Command, deps: SyncCommandDeps): v
         json: { boards: boards.map(boardJson) },
         rows: boards.map((b) => ({ schema_version: 1, ...boardJson(b) })),
         ids: boards.map((b) => b.boardId),
-        table: boards.length === 0 ? "no layouts for a board keyloom can sync yet" : columns([["BOARD", "LAYOUT", "STATE"], ...boards.map((b) => [b.boardId, b.layoutName, describeSync(b)])]),
+        table: boards.length === 0 ? "no layouts for a board keyloom can sync yet" : columns([["BOARD", "CONFIG ON KEYBOARD", "STATE"], ...boards.map((b) => [b.boardId, b.layoutName, describeSync(b)])]),
       });
     });
 

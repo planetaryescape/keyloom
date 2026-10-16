@@ -8,7 +8,7 @@ import { UsageError, sendMessage, showConversation } from "../../src/app/index.t
 import { migrate } from "../../src/persistence/db.ts";
 import { MIGRATIONS } from "../../src/persistence/migrations.ts";
 import { findConversation, listMessages } from "../../src/persistence/conversations.ts";
-import { createLayout } from "../../src/persistence/layouts.ts";
+import { createLayoutAtOldSchema } from "../helpers/old-schema.ts";
 import { importOryxSource } from "../../src/firmware/qmk/import.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
 import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
@@ -57,7 +57,7 @@ describe("a database from before this change", () => {
       db.query("INSERT INTO schema_migrations VALUES (?, ?, 0)").run(m.version, m.name);
     }
     db.run("PRAGMA foreign_keys = ON");
-    const created = createLayout(db, { name: "old", layout, summary: "import", origin: "import" });
+    const created = createLayoutAtOldSchema(db, { name: "old", layout, summary: "import" });
     db.query("INSERT INTO conversations (id, layout_id, title, created_at) VALUES ('conv_old', ?, 'talk', 1)").run(created.layout.id);
     db.query("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES ('msg_old', 'conv_old', 'assistant', ?, 2)").run(JSON.stringify(OLD_ASSISTANT));
     const before = db.query("SELECT * FROM messages").all();

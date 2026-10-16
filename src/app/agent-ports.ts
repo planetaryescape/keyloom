@@ -2,6 +2,7 @@
 // the agent's validation and storage are exactly the editor's and the CLI's (D-014).
 import type { AgentPorts, ChoiceFact, LayoutSnapshot, PriorityFact, Proposal, ProposalResult } from "../agent/ports.ts";
 import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
+import { getBoardConfig } from "../persistence/configs.ts";
 import type { DecisionRow } from "../persistence/decisions.ts";
 import { newId } from "../persistence/ids.ts";
 import type { ValidationResult } from "../validation/result.ts";
@@ -30,7 +31,10 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
   const scope = selection ? { selection } : {};
   const snapshotOf = (ref: string): LayoutSnapshot => {
     const view = getLayout(app, ref);
-    return { layoutId: view.layout.id, layoutName: view.layout.name, revisionId: view.revision.id, document: view.document, board: view.board };
+    return {
+      layoutId: view.layout.id, layoutName: view.layout.name, revisionId: view.revision.id, document: view.document, board: view.board,
+      onKeyboard: getBoardConfig(app.db, view.layout.boardId) === view.layout.id, archived: view.layout.archivedAt !== null,
+    };
   };
   // Another layout is shown as a fresh import would read it: a stored Oryx layout still holds its colours and tap dances as code, and the
   // agent can only copy what it can see. This is a view in memory; nothing is saved, so D-193 (never upgrade on read) stands.

@@ -63,6 +63,7 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
         : s.why === "paused" ? "Auto-sync is paused."
         : s.why === "auto_off" ? "Auto-sync is off for this keyboard."
         : s.why === "unproven" ? "Auto-sync turns on after keyloom flashes this keyboard by itself once and sees it come back. Sync now to do that."
+        : s.why === "other_config" ? `Your ${name} runs a different config. Put this one on from the config menu to replace it.`
         : s.why === "unknown_build" ? `Your ${name} runs a keyloom build this copy doesn't know, so keyloom won't replace it by itself.`
         : "Something else was flashed since this change.";
       return { label, short: "Behind", detail, tone: s.why === "failed" ? "error" : "neutral", action: { id: "sync_now", label: "Sync now" } };

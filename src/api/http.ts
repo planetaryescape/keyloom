@@ -423,7 +423,7 @@ export const SyncStateSchema = z.discriminatedUnion("kind", [
     kind: z.literal("behind"),
     // Revisions between what the keyboard runs and the head; null when keyloom can't count them.
     changes: z.number().int().nonnegative().nullable(),
-    why: z.enum(["waiting", "auto_off", "paused", "unproven", "failed", "unknown_build", "changed_since", "remapping_off"]),
+    why: z.enum(["waiting", "auto_off", "paused", "unproven", "failed", "unknown_build", "other_config", "changed_since", "remapping_off"]),
     error: z.string().nullable(),
   }),
   z.object({ kind: z.literal("needs_hand"), instruction: z.string(), reason: z.string() }),

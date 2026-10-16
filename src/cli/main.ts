@@ -6,12 +6,14 @@ import {
   regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
+import { registerConfigCommands } from "./commands/config.ts";
 import { type ChatDeps, parseProvider, registerChatCommands } from "./commands/chat.ts";
 import { registerDecisionCommands } from "./commands/decisions.ts";
 import { registerEmulateCommand } from "./commands/emulate.ts";
 import { type LabCliDeps, registerLabCommands } from "./commands/lab.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { registerSyncCommands } from "./commands/sync.ts";
+import { registerVersionCommands } from "./commands/version.ts";
 import { registerRemapCommands } from "./commands/remap.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
@@ -231,7 +233,10 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     });
 
   registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}) });
-  registerSyncCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) });
+  const syncCommandDeps = { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) };
+  registerSyncCommands(program, syncCommandDeps);
+  registerConfigCommands(program, syncCommandDeps);
+  registerVersionCommands(program, syncCommandDeps);
   registerRemapCommands(program, { io, format, withApp, ...(handsFree ? { handsFree } : {}) });
   registerEmulateCommand(program, { io, format, quiet: () => globals().quiet === true, withApp });
   registerLabCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(lab ? { cli: lab } : {}) });

@@ -4,7 +4,7 @@ import { importOryxSource } from "../../src/firmware/qmk/import.ts";
 import { migrate } from "../../src/persistence/db.ts";
 import { findChangeSet, insertChangeSet } from "../../src/persistence/change-sets.ts";
 import { findConversation, insertConversation, insertMessage, listConversations, listMessages } from "../../src/persistence/conversations.ts";
-import { createLayout } from "../../src/persistence/layouts.ts";
+import { createLayoutAtOldSchema } from "../helpers/old-schema.ts";
 import { MAX_LOG_BYTES, appendLog } from "../../src/persistence/log.ts";
 import { MIGRATIONS } from "../../src/persistence/migrations.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
@@ -24,7 +24,7 @@ function databaseAtVersion3(): { db: Database; layoutId: string; changeSetId: st
     db.query("INSERT INTO schema_migrations VALUES (?, ?, 0)").run(m.version, m.name);
   }
   db.run("PRAGMA foreign_keys = ON");
-  const created = createLayout(db, { name: "old", layout, summary: "import", origin: "import" });
+  const created = createLayoutAtOldSchema(db, { name: "old", layout, summary: "import" });
   const changeSetId = "cs_old";
   db.query(
     `INSERT INTO change_sets (id, layout_id, base_revision_id, proposal_group, source, ops, explanation, tradeoffs, validation, status, created_at, decided_at)
