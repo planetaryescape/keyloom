@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/planetaryescape/keyloom/compare/v0.25.0...v0.26.0) (2026-10-16)
+
+
+### Features
+
+* read conversations in a panel beside the board, and put combos one click away ([dab840f](https://github.com/planetaryescape/keyloom/commit/dab840f66721c098168f2ffc0ea780224fea55d3))
+
 ## [0.25.0](https://github.com/planetaryescape/keyloom/compare/v0.24.0...v0.25.0) (2026-10-16)
 
 
