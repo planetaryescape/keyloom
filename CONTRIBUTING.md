@@ -1,5 +1,7 @@
 # Adding a keyboard to keyloom
 
+Using Claude Code? Run `/add-keyboard` in a clone of this repo. It walks you through the steps below, including drawing your board from photos of it.
+
 A board is a folder in this repo. You add one with a pull request that holds only that folder. You don't write code.
 
 You need the keyboard on your desk. keyloom's maintainer can't test hardware he doesn't own, so your PR must say you built the firmware and flashed it to your own board.
