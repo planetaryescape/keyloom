@@ -10,6 +10,7 @@ import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
+import { ViewControls } from "./shell/ViewControls.tsx";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
@@ -141,6 +142,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [undoing, setUndoing] = useState(false);
   // The chat drawer. Open, a click on a key adds it to the "Asking about" chips; closed, it opens the key's panel (D-099).
   const [chatOpen, setChatOpen] = useState(false);
+  // Where the open conversation reads (D-310): the bar at the stage's foot, or the panel beside the board.
+  const [chatPresentation, setChatPresentation] = useState<"bar" | "panel">("bar");
   // The keys in the chips, on one layer, and the proposal being previewed (hovered or pinned).
   const [chatSelection, setChatSelection] = useState<ChatSelection | null>(null);
   const [hoveredProposal, setHoveredProposal] = useState<ProposalCard | null>(null);
@@ -191,7 +194,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const history = useRevisions(token, layoutRef, revision.id, historyOpen);
   // Phones: the panel is a bottom sheet and a split board shows one hand (18#phones).
   const narrow = useMediaQuery(NARROW);
-  const barFit = useBarFit(stageRef, !narrow && chatOpen, `${board.id}:${layoutRef}`);
+  const chatPanel = !narrow && chatOpen && chatPresentation === "panel";
+  // A key opened while the conversation is in the panel takes the panel's place; closing it brings the conversation back (D-310).
+  const keyOverChat = chatPanel && editing !== null;
+  const barFit = useBarFit(stageRef, !narrow && chatOpen && !chatPanel, `${board.id}:${layoutRef}`);
   const phone = useMediaQuery(PHONE);
   const [sheet, setSheet] = useState<SheetSize>("half");
   const [half, setHalf] = useState<Half>("left");
@@ -354,10 +360,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       const legend = output === null ? null : bindingLegend(output, ctx);
       // A legend shortened for a cap ("⌘…") is spelled out in words for the combo's pill, which has the room (P1 review).
       const short = legend === null ? "…" : legend.hold === undefined ? legend.tap : `${legend.tap} ${legend.hold}`;
-      const label = output !== null && short.endsWith("…") ? bindingSummary(output, layout) : short;
+      // A macro's chip is what it presses, in the caps' glyphs ("⌘ C"), so a chip stays small enough to sit off the legends (D-311).
+      const macro = output?.kind === "macro" ? layout.macros.find((m) => m.id === output.macroId) : undefined;
+      const pressed = macro?.steps.flatMap((step) => (step.op === "tap" && step.code !== undefined ? [bindingLegend({ kind: "key", code: step.code, ...(step.mods === undefined ? {} : { mods: step.mods }) }, ctx).tap] : step.op === "text" ? [`“${step.text}”`] : []));
+      const label = pressed !== undefined && pressed.length > 0 && pressed.length <= 3 ? pressed.join(" ") : output !== null && short.endsWith("…") ? bindingSummary(output, layout) : short;
       return {
         id, positions, label, editing,
-        name: `${name}, keys ${positions.map((position) => position + 1).join(" and ")}${output === null ? "" : `, sends ${bindingSummary(output, layout)}`}`,
+        // Its keys by what they print, never their numbers (D-279).
+        name: `${positions.map((position) => { const b = layer.bindings[position]; return b === undefined ? "a key" : bindingLegend(b, ctx).tap || "a blank key"; }).join(" and ")} together${output === null ? "" : `, send ${bindingSummary(output, layout)}`}`,
       };
     };
     const lines = showCombos || inspect ? combosOn(layout, layer.id).filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false)) : [];
@@ -405,7 +415,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [draft.binding]);
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
-  const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
+  const mode: PanelMode = chatOpen && !keyOverChat ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
   const libraryHighlight = useMemo(() => {
     const keys = new Set(mode === "library" && libraryKeys !== null ? libraryKeys : []);
     if (pointAt !== null && pointAt.layerId === layer?.id) keys.add(pointAt.position);
@@ -565,18 +575,44 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setCombosOpen(true);
   }
 
+  // Combos on the board: the lines and each output in a chip, remembered per browser (D-311). Clicking one opens its card.
   function toggleCombos() {
     const on = !showCombos;
     setShowCombos(on);
     writeStored(SHOW_COMBOS_KEY, on ? "1" : "0");
     if (!on) {
-      setCombosOpen(false);
       setComboDraft(null);
       setComboPicking(false);
+    }
+  }
+
+  function toggleHistory() {
+    setLibraryOpen(false);
+    setSettingsOpen(false);
+    setCombosOpen(false);
+    setHistoryOpen((open) => !open);
+  }
+
+  function toggleLibrary() {
+    setHistoryOpen(false);
+    setSettingsOpen(false);
+    setCombosOpen(false);
+    setLibraryKeys(null);
+    setLibraryOpen((open) => !open);
+  }
+
+  // Every combo, as a list: from the menu, for the ones on other layers.
+  function toggleComboList() {
+    if (combosOpen) {
+      setCombosOpen(false);
+      setComboDraft(null);
       return;
     }
     if (draftBlocks()) return;
     if (editing !== null) closeEditor(false);
+    setHistoryOpen(false);
+    setLibraryOpen(false);
+    setSettingsOpen(false);
     setCombosOpen(true);
   }
 
@@ -825,7 +861,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   function openKeyFromChip(position: number) {
     const chipLayer = chatSelection?.layerId ?? layer?.id;
     if (chipLayer === undefined) return;
-    setChatOpen(false);
+    // From the conversation panel the key takes the panel and the conversation waits (D-310); from the bar, the bar closes.
+    if (!chatPanel) setChatOpen(false);
     setLayerId(chipLayer);
     openEditor(position, chipLayer);
   }
@@ -870,6 +907,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         if (swapping !== null) setSwapping(null);
         else if (comboPicking) setComboPicking(false);
         else if (comboDraft !== null) setComboDraft(null);
+        // A key over the conversation panel goes first, back to the conversation (D-310).
+        else if (keyOverChat) closeEditor(true);
         else if (chatOpen) setChatOpen(false);
         else if (editing !== null) closeEditor(true);
         else if (repeating) setRepeating(false);
@@ -884,6 +923,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       if (event.code === "KeyI" && event.altKey && !event.metaKey && !event.ctrlKey && !typing(event.target)) {
         event.preventDefault();
         toggleInspect();
+        return;
+      }
+      // ⌥C, ⌥H and ⌥L, like ⌥I: a plain letter finds that key on the board, which pressing the real keyboard relies on (D-311).
+      // event.code, since ⌥ and a letter type a dead key or a symbol on a Mac. Not while typing or with a key's card open.
+      if (event.altKey && !event.metaKey && !event.ctrlKey && !typing(event.target) && editing === null && (event.code === "KeyC" || event.code === "KeyH" || event.code === "KeyL")) {
+        event.preventDefault();
+        if (event.code === "KeyC") toggleCombos();
+        else if (event.code === "KeyH") toggleHistory();
+        else toggleLibrary();
         return;
       }
       if (/^[a-z;',./[\]\\`-]$/i.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target) && editing === null && quick === null && !chatOpen) {
@@ -1046,6 +1094,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 variant={narrow ? "panel" : "bar"}
                 onClose={() => setChatOpen(false)}
                 collapsed={barFit.collapsed}
+                onPresentation={setChatPresentation}
                 token={token}
                 layoutRef={layoutRef}
                 layout={layout}
@@ -1180,24 +1229,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           onUndo: () => void undo(),
         }}
         menu={{
-          history: {
-            open: historyOpen,
-            onToggle: () => {
-              setLibraryOpen(false);
-              setSettingsOpen(false);
-              setHistoryOpen((open) => !open);
-            },
-          },
-          library: {
-            open: libraryOpen,
-            onToggle: () => {
-              setHistoryOpen(false);
-              setSettingsOpen(false);
-              setLibraryKeys(null);
-              setLibraryOpen((open) => !open);
-            },
-          },
-          combos: { open: combosOpen, onToggle: toggleCombos },
+          // Combos, Inspect, History and Library are one click away beside the strip (D-311); the menu keeps the rare things, and
+          // the list of every combo.
+          combos: { open: combosOpen, onToggle: toggleComboList },
+          // On a phone the strip has no room for the view controls; there they stay in the menu.
+          history: { open: historyOpen, onToggle: toggleHistory },
+          library: { open: libraryOpen, onToggle: toggleLibrary },
+          inspect: { on: inspect, onToggle: toggleInspect },
+          showCombos: { on: showCombos, onToggle: toggleCombos },
           settings: {
             open: settingsOpen,
             onToggle: () => {
@@ -1214,19 +1253,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             },
           },
           select: { on: selectMode, onToggle: () => setSelectMode(!selectMode) },
-          inspect: { on: inspect, onToggle: toggleInspect },
           onShortcuts: () => setShortcutsOpen(true),
           release: chrome.release,
         }}
       />
-      <div className="workbench" data-side={mode === "summary" || (!narrow && (mode === "key" || mode === "chat" || (mode === "combo" && comboDraft !== null))) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
+      <div className="workbench" data-side={chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
         <section
           ref={stageRef}
           className="stage"
           aria-label="Layout"
           data-placing={placing !== null}
           data-card={!narrow && editing !== null}
-          data-bar={!narrow && chatOpen ? (barFit.collapsed ? "line" : "open") : undefined}
+          data-bar={!narrow && chatOpen && !chatPanel ? (barFit.collapsed ? "line" : "open") : undefined}
           style={{ "--board-lift": `${barFit.lift}px`, "--bar-room": `${barFit.room}px` } as CSSProperties}
         >
           <Caption
@@ -1269,9 +1307,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             {...(applied !== null && applied.layerId === layer.id ? { appliedKeys: new Set(applied.positions) } : {})}
             unsynced={unsyncedHere}
             pressSeq={pressSeq}
-            shiftPx={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.shift : 0}
-            part={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.part : null}
-            scale={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.scale : 1}
+            shiftPx={!narrow && editing !== null && !keyOverChat ? boardLayout.shift : 0}
+            part={!narrow && editing !== null && !keyOverChat ? boardLayout.part : null}
+            scale={!narrow && editing !== null && !keyOverChat ? boardLayout.scale : 1}
             chatSelected={chatSelected}
             highlighted={libraryHighlight}
             marks={marks}
@@ -1288,6 +1326,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             comboLit={comboLit}
             onComboHover={setHoverCombo}
             onComboOpen={openCombo}
+            comboLabels={showCombos}
             dragEnabled={placing === null && swapping === null && !comboPicking && quick === null && !chatOpen && !changing}
             onDropKey={(from, to, copy) => void dropKey(from, to, copy)}
             display={board.display}
@@ -1299,13 +1338,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             found={found}
             previewing={preview !== null}
           />
-          {narrow ? null : (
-            <div className="command-bar" hidden={!chatOpen} data-open={chatOpen}>
-              {chatContent}
-            </div>
-          )}
           {/* Kept in the layout while the bar is open, only unseen, so the board keeps the unit it rests at (P3 review). */}
-          <div className="stage-floor" data-under-bar={!narrow && chatOpen}>
+          <div className="stage-floor" data-under-bar={!narrow && chatOpen && !chatPanel}>
             {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
             <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
             <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>
@@ -1321,10 +1355,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               lights={layerLights}
               leds={layerLeds}
             />
-            <button type="button" className="inspect-toggle" aria-label="Inspect" aria-pressed={inspect} title="Show what each key is, what transparent keys pass through to, and combos (I)" onClick={toggleInspect}>
-              <Eye size={15} aria-hidden="true" />
-              Inspect
-            </button>
+            <ViewControls
+              combos={{ on: showCombos, onToggle: toggleCombos }}
+              inspect={{ on: inspect, onToggle: toggleInspect }}
+              history={{ on: historyOpen, onToggle: toggleHistory }}
+              library={{ on: libraryOpen, onToggle: toggleLibrary }}
+            />
           </div>
           <div className="stage-notes">
             {/* On a wide screen the bar itself says what is previewed; the banner is for the narrow sheet. */}
@@ -1357,19 +1393,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               </p>
             )}
           </div>
-          {!narrow && comboDraft !== null && comboCard !== null && comboDraft.positions.length > 0 ? (
-            <FloatingCard stage={stageRef} position={comboDraft.positions[0] as number} placeKey={`combo:${comboDraft.id}:${layer.id}`} layout={boardLayout} onLayout={setBoardLayout}>
-              {comboCard}
-            </FloatingCard>
-          ) : null}
-          {!narrow && editing !== null && keyCard !== null ? (
+          {/* A combo's card opens in the side panel, like the list it comes from (D-311). */}
+          {!narrow && editing !== null && keyCard !== null && !keyOverChat ? (
             <FloatingCard stage={stageRef} position={editing.position} placeKey={`${editing.layerId}:${editing.position}:${layer.id}`} layout={boardLayout} onLayout={setBoardLayout}>
               {keyCard}
             </FloatingCard>
           ) : null}
         </section>
         <SidePanel
-          mode={!narrow && (mode === "key" || mode === "chat" || (mode === "combo" && comboDraft !== null)) ? "summary" : mode}
+          mode={keyOverChat ? "key" : !narrow && (mode === "key" || mode === "chat") ? "summary" : mode}
           size={sheet}
           viewportHeight={viewportHeight}
           onSize={setSheet}
@@ -1436,14 +1468,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             ) : null
           }
           combo={
-            comboDraft !== null ? (
-              narrow ? comboCard : null) : combosOpen ? (
+            comboDraft !== null ? comboCard : combosOpen ? (
               <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} />
             ) : null
           }
           summary={null}
           key_={
-            narrow ? keyCard : null
+            narrow || keyOverChat ? keyCard : null
           }
           chat={narrow ? chatContent : null}
           repeat={
@@ -1469,6 +1500,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             ) : null
           }
         />
+        {/* One chat, mounted once: the bar over the stage's foot, or the panel beside the board for a conversation (D-310). A key opened
+            from the panel takes its place and the conversation waits, still mounted. */}
+        {narrow ? null : (
+          <div
+            className="command-bar"
+            hidden={!chatOpen || keyOverChat}
+            data-open={chatOpen}
+            data-presentation={chatPresentation}
+            style={{ "--bar-room": `${barFit.room}px` } as CSSProperties}
+          >
+            {chatContent}
+          </div>
+        )}
       </div>
       <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       {pendingDrop === null ? null : (

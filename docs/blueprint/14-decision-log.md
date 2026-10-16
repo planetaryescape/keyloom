@@ -1086,3 +1086,16 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 
 ### D-322: Browser mode stays; the desktop app is a client of the same server. (Claude)
 - **Why:** a phone or another machine still reaches keyloom, and the app adds no second code path.
+
+### D-310: A conversation reads in a full-height panel beside the board; the bar is for quick asks. (BK on v0.25.0, Claude)
+- **BK:** "I don't like this version of the ai, it's short so i have to scroll a lot to read, plus it's on top of the layer switcher."
+- Once a reply runs past about two lines of the bar (180 characters), carries an option, a priority or a failure, or there is a second message, ⌘K moves the conversation to a panel on the right of the stage, from below the top bar to the bottom edge, about 65 characters a line (`--chat-width`). It reads top to bottom and scrolls only when the conversation is taller than the panel, resting on the newest exchange. The board moves left whole and re-fits to the width that's left, at the legend floor; proposals still light its caps. The layer strip stays in view under the board, a size smaller.
+- The one-line bar stays for a quick ask and its short answer, and for the folded option at short heights. The input sits at the panel's foot with ⋯ and esc.
+- A key opened from the conversation takes the panel's place at the same width; Esc or closing it brings the conversation back, kept. The phone keeps its sheet (P5).
+- **Supersedes** D-278's bar placement for conversations.
+
+### D-311: Combos, Inspect, History and Library are one click away beside the layer strip. (BK on v0.25.0, Claude)
+- **BK:** "some useful and relatively often used tools ar now hidden in this menu and thus increasing the time to ge them. for example combos, I ewant to be able to see combos quickly and easily".
+- Four quiet controls at the strip's right, icon and short label (icons only beside a sheet or the conversation, or below 1400 px wide, with the name in the tooltip): **Combos** and **Inspect** toggle what the board draws, **History** and **Library** open their sheets. Combos is remembered per browser. With Combos on, each combo is its line and its output in a small chip placed off the legends, so the board reads at a glance; clicking one opens its card in the side panel. The phone keeps them in the ⋯ menu, which otherwise holds the rare things: All combos (the list), Settings, Build and flash, Select several keys, Advanced view, Shortcuts, Redo and theme.
+- **Shortcuts:** ⌥C combos, ⌥I Inspect, ⌥H History, ⌥L Library, not with a key's card open or in a text field, and listed under ?. **Not single letters:** a plain letter finds that key on the board ("Press a key on your Moonlander to find it here"), which is why Inspect moved to ⌥I in the P1 review; C, H and L alone would open sheets when BK presses those keys on his keyboard.
+

@@ -353,6 +353,18 @@
   height: 34px;
 }
 
+/* Beside the wider conversation panel (D-310), smaller still, so six layers fit at 1280 without scrolling. */
+.workbench[data-side="chat"] .layer-tabs .layer-tab {
+  min-width: 84px;
+  padding: var(--space-1);
+  gap: var(--space-1);
+}
+
+.workbench[data-side="chat"] .film-mini {
+  width: 70px;
+  height: 28px;
+}
+
 /* The strip's actions (add, and the selected layer's menu) stay out of sight until the strip is pointed at or focused; right-click
    or the context-menu key on a layer opens its menu too (P1 review). */
 .layer-tabs-wrap .layer-tab-actions {

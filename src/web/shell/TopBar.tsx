@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Keyboard as KeyboardIcon, Library, LoaderCircle, Monitor, Moon, MousePointer2, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Keyboard as KeyboardIcon, Library, ListTree, LoaderCircle, Monitor, Moon, MousePointer2, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { PHONE, useMediaQuery } from "./useMediaQuery.ts";
 import type { BoardChoice } from "../../api/http.ts";
@@ -29,6 +29,8 @@ export interface MenuActions {
   select?: { on: boolean; onToggle: () => void };
   /** Inspect: kinds, pass-through legends and combos on the board (⌥I). */
   inspect?: { on: boolean; onToggle: () => void };
+  /** Combos drawn on the board, for the phone's menu (D-311). */
+  showCombos?: { on: boolean; onToggle: () => void };
   onShortcuts?: () => void;
   release?: { status: ReleaseStatus; onOpen: () => void };
 }
@@ -143,10 +145,12 @@ export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
                   <div className="menu-separator" role="separator" />
                 </>
               )}
-              {menu?.inspect === undefined ? null : <Item icon={Eye} label="Inspect" hint="⌥I" checked={menu.inspect.on} role="menuitemcheckbox" onSelect={() => { close(); menu.inspect?.onToggle(); }} />}
-              {menu?.history === undefined ? null : <Item icon={History} label="History" checked={menu.history.open} onSelect={() => { close(); menu.history?.onToggle(); }} />}
-              {menu?.library === undefined ? null : <Item icon={Library} label="Library" checked={menu.library.open} onSelect={() => { close(); menu.library?.onToggle(); }} />}
-              {menu?.combos === undefined ? null : <Item icon={Spline} label="Combos" checked={menu.combos.open} onSelect={() => { close(); menu.combos?.onToggle(); }} />}
+              {/* Combos, Inspect, History and Library sit beside the strip on a wide screen (D-311); a phone keeps them here. */}
+              {!phone || menu?.showCombos === undefined ? null : <Item icon={Spline} label="Combos on the board" hint="⌥C" checked={menu.showCombos.on} role="menuitemcheckbox" onSelect={() => { close(); menu.showCombos?.onToggle(); }} />}
+              {!phone || menu?.inspect === undefined ? null : <Item icon={Eye} label="Inspect" hint="⌥I" checked={menu.inspect.on} role="menuitemcheckbox" onSelect={() => { close(); menu.inspect?.onToggle(); }} />}
+              {!phone || menu?.history === undefined ? null : <Item icon={History} label="History" hint="⌥H" checked={menu.history.open} onSelect={() => { close(); menu.history?.onToggle(); }} />}
+              {!phone || menu?.library === undefined ? null : <Item icon={Library} label="Library" hint="⌥L" checked={menu.library.open} onSelect={() => { close(); menu.library?.onToggle(); }} />}
+              {menu?.combos === undefined ? null : <Item icon={ListTree} label="All combos" checked={menu.combos.open} onSelect={() => { close(); menu.combos?.onToggle(); }} />}
               {menu?.settings === undefined ? null : <Item icon={SlidersHorizontal} label="Settings" checked={menu.settings.open} onSelect={() => { close(); menu.settings?.onToggle(); }} />}
               {menu?.release === undefined ? null : (
                 <>

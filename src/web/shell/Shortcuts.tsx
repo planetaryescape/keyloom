@@ -12,7 +12,10 @@ const SHORTCUTS: readonly { keys: readonly string[]; range?: true; does: string 
   { keys: ["⌘", "Z"], does: "Undo the last change" },
   { keys: ["⇧", "⌘", "Z"], does: "Redo a change you undid" },
   { keys: ["⌘", "K"], does: "Open or close the chat" },
-  { keys: ["⌥", "I"], does: "Inspect: show what kind each key is, what transparent keys pass through to, and combos" },
+  { keys: ["⌥", "C"], does: "Combos: draw them on the board, each with what it sends" },
+  { keys: ["⌥", "I"], does: "Inspect: show what kind each key is and what transparent keys pass through to" },
+  { keys: ["⌥", "H"], does: "Open or close History" },
+  { keys: ["⌥", "L"], does: "Open or close the Library" },
   { keys: ["A"], does: "Press a letter or punctuation key on your keyboard to find it on the board" },
   { keys: ["?"], does: "Show this list" },
 ];

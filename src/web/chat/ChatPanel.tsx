@@ -31,6 +31,11 @@ interface Props {
   onClose?: () => void;
   /** A short window: the bar folds to one line, the option and Apply, or the input (bar-fit.ts). */
   collapsed?: boolean;
+  /**
+   * Told where the conversation should be read (D-310): "bar" for a quick ask and its short answer, or the folded line; "panel" once a
+   * reply runs past a line or two, so it reads top to bottom at full height beside the board.
+   */
+  onPresentation?: (presentation: "bar" | "panel") => void;
   token: string;
   layoutRef: string;
   layout: Layout;
@@ -55,17 +60,21 @@ interface Props {
   onOpenRelease: () => void;
 }
 
+// About two lines of the bar: an answer this short reads where it is asked; anything longer goes to the panel (D-310).
+const LINE_REPLY_CHARS = 180;
 const ASK_AGAIN = "The layout changed after you proposed that, so it no longer applies. Please propose it again against the current layout.";
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   const [draft, setDraft] = useState("");
   const [view, setView] = useState<"chat" | "history" | "decisions">("chat");
   const [modelOpen, setModelOpen] = useState(false);
+  // Bumped when the chat moves between the bar and the panel: the log has a new height, so where it rests is worked out again.
+  const [placed, setPlaced] = useState(0);
   const decisions = useDecisions(token, layoutRef, revisionId, view === "decisions");
   const outcomes = useOutcomeQuestions(token, layoutRef);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -132,7 +141,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, token
       }
     }
     element.scrollTop = element.scrollHeight;
-  }, [transcript.turns, chat.problem, view]);
+  }, [transcript.turns, chat.problem, view, placed]);
 
   // Whether the log scrolls: then the sticky foot sits over the reply, and what passes under it fades (command-bar.css).
   useEffect(() => {
@@ -250,9 +259,23 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, token
   const lineProposal = newestOpen.find((proposal) => proposal.changeSetId === pinnedId) ?? newestOpen[0];
   // Folded only when one line says it all: an option to apply, or nothing yet. A question from keyloom must be read, so it opens.
   const folded = variant === "bar" && collapsed && view === "chat" && !needsModel && chat.problem === null && !newestFailed && !streaming && (lineProposal !== undefined || empty);
+  // A reply past about two lines of the bar, an option, a failure, or a second message makes it a conversation: it moves to the panel
+  // and stays there until a new conversation starts (D-310). The folded line wins in a short window, where the board needs the height.
+  const longReply = transcript.turns.some((turn) => turn.kind === "assistant" && (turn.text.length > LINE_REPLY_CHARS || turn.proposals.length > 0 || turn.priorities.length > 0 || turn.failure !== null));
+  const asked = transcript.turns.filter((turn) => turn.kind === "user").length;
+  const presentation: "bar" | "panel" = variant === "bar" && !folded && (longReply || asked > 1) ? "panel" : "bar";
+  useEffect(() => {
+    if (variant === "bar") onPresentation?.(presentation);
+    // The panel is laid out after this render; rest the log once it has its height.
+    const frame = window.requestAnimationFrame(() => {
+      stick.current = true;
+      setPlaced((count) => count + 1);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [variant, presentation, onPresentation]);
 
   return (
-    <section className="chat" data-variant={variant} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded} aria-label="Ask keyloom">
+    <section className="chat" data-variant={variant} data-presentation={variant === "bar" ? presentation : undefined} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded && presentation === "bar"} aria-label="Ask keyloom">
       {variant === "bar" ? (
         // The model surfaces only from the menu or when it fails (P3 review); its picker opens above the bar.
         <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />

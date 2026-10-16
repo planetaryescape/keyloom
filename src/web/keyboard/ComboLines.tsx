@@ -23,6 +23,8 @@ interface Props {
   hovered: string | null;
   onHover: (id: string | null) => void;
   onOpen: (id: string) => void;
+  /** Combos switched on (D-311): every output shows in its chip, placed off the legends, so the board reads at a glance. */
+  labels?: boolean;
 }
 
 // How far a side stops short of each key's middle, in key units, and at most this share of the side's length.
@@ -62,7 +64,7 @@ export function labelPoint(points: readonly Point[]): Point {
 
 // "Show combos": a thin line between each combo's keys with its output as a small label. The svg
 // ignores the pointer except on the lines and labels, so the caps under it stay clickable.
-export function ComboLines({ keys, canvas, unit, lines, hovered, onHover, onOpen }: Props) {
+export function ComboLines({ keys, canvas, unit, lines, hovered, onHover, onOpen, labels = false }: Props) {
   const root = useRef<SVGSVGElement>(null);
   const [spots, setSpots] = useState<ReadonlyMap<string, Point>>(new Map());
 
@@ -108,7 +110,7 @@ export function ComboLines({ keys, canvas, unit, lines, hovered, onHover, onOpen
       obstacles.push(rect);
     }
     const next = new Map<string, Point>();
-    for (const shape of shapes.filter(({ line }) => line.editing === true || hovered === line.id)) {
+    for (const shape of shapes.filter(({ line }) => labels || line.editing === true || hovered === line.id)) {
       const placed = placeLabel(shape.mid, shape.along, shape.length, unit, { w: shape.width, h: PILL_H }, obstacles);
       next.set(shape.line.id, placed.at);
       // A spot clear of every legend was not found: the legends under the label fade, so the label is read alone.
@@ -128,7 +130,7 @@ export function ComboLines({ keys, canvas, unit, lines, hovered, onHover, onOpen
   return (
     <svg ref={root} className="combo-lines" width={canvas.width * unit} height={canvas.height * unit} aria-hidden={false} role="group" aria-label="Combos">
       {shapes.map(({ line, d, mid, width }) => {
-        const state = line.editing === true ? "editing" : hovered === line.id ? "hover" : "rest";
+        const state = line.editing === true ? "editing" : hovered === line.id ? "hover" : labels ? "label" : "rest";
         const at = state === "rest" ? mid : (spots.get(line.id) ?? mid);
         const away = Math.hypot(at.x - mid.x, at.y - mid.y);
         return (

@@ -90,6 +90,8 @@ interface KeyboardProps {
   highlighted?: ReadonlySet<number>;
   onComboHover?: (id: string | null) => void;
   onComboOpen?: (id: string) => void;
+  /** Combos switched on: each output in its chip, not just a dot (D-311). */
+  comboLabels?: boolean;
   /** Whether a key can be dragged onto another, and what dropping does (swap, or copy with Option). */
   dragEnabled?: boolean;
   onDropKey?: (from: number, to: number, copy: boolean) => void;
@@ -164,6 +166,7 @@ export function Keyboard({
   highlighted,
   onComboHover,
   onComboOpen,
+  comboLabels = false,
   dragEnabled = false,
   onDropKey,
   display,
@@ -382,7 +385,7 @@ export function Keyboard({
           );
         })}
         <MoveArrows keys={keys} canvas={canvas} unit={unit} arrows={arrows} />
-        <ComboLines keys={keys} canvas={canvas} unit={unit} lines={visibleLines} hovered={comboHovered} onHover={(id) => onComboHover?.(id)} onOpen={(id) => onComboOpen?.(id)} />
+        <ComboLines keys={keys} canvas={canvas} unit={unit} lines={visibleLines} hovered={comboHovered} onHover={(id) => onComboHover?.(id)} onOpen={(id) => onComboOpen?.(id)} labels={comboLabels} />
       </div>
       {drag === null ? null : (
         <div className="key-ghost" role="status" style={{ left: drag.x, top: drag.y }}>

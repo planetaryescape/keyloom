@@ -1,7 +1,7 @@
 /* The command bar (23#chrome-recedes, comp d, P3): ⌘K opens the chat over the empty stage below the board, which keeps the unit it
    rests at and moves up when the bar needs the room (bar-fit.ts). One surface, no borders, the person's message, the reply, the input. */
 
-.stage > .command-bar {
+.workbench > .command-bar[data-presentation="bar"] {
   position: absolute;
   z-index: 8;
   right: 0;
@@ -13,7 +13,145 @@
   pointer-events: none;
 }
 
-.stage > .command-bar[hidden] {
+/* ---------- the conversation panel (D-310) ----------
+   Once there is a conversation, it reads beside the board at full height, in the column the key card and the sheets use. The board
+   re-fits to what is left, at the floor (useFitUnit), and the strip stays in view under it. */
+.workbench {
+  position: relative;
+}
+
+.workbench[data-side="chat"] {
+  grid-template-columns: minmax(0, 1fr) var(--chat-width);
+}
+
+.workbench[data-side="chat"] > .side {
+  display: none;
+}
+
+/* A key opened from the conversation takes the panel's place at the panel's width, so nothing beside it moves (D-310). */
+.workbench[data-over-chat="true"] {
+  grid-template-columns: minmax(0, 1fr) var(--chat-width);
+}
+
+.workbench > .command-bar[data-presentation="panel"] {
+  display: flex;
+  min-height: 0;
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0 var(--space-3) var(--space-3) 0;
+}
+
+.workbench > .command-bar[data-presentation="panel"] > * {
+  flex: 1;
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] {
+  width: 100%;
+  max-height: none;
+  border-radius: var(--radius-lg);
+  animation: panel-in 0.36s var(--ease-spring);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+/* A conversation reads like a page: who speaks above what they said, a measure of about 65 characters, and room between turns. */
+.chat[data-variant="bar"][data-presentation="panel"] .chat-log {
+  padding: var(--space-5) var(--space-5) var(--space-4);
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .msg {
+  display: flex;
+  max-width: 66ch;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 var(--space-5);
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .msg > * {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .msg-who {
+  padding: 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* The person's own words: a quiet block, so where a turn starts is plain at a glance. */
+.chat[data-variant="bar"][data-presentation="panel"] .msg-user .msg-bubble {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+/* 15 px, between the scale's md and lg: a reply is read, not scanned, and 65 characters of it fit the panel at 1440. */
+.chat[data-variant="bar"][data-presentation="panel"] .msg-assistant {
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .msg-assistant :is(p, li) {
+  margin-block: 0 var(--space-2);
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .msg-assistant :is(ol, ul) {
+  margin: 0 0 var(--space-3);
+  padding-left: 1.25em;
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .msg-assistant li + li {
+  margin-top: var(--space-1);
+}
+
+/* An option in the panel: its own surface after the reply, Apply at its foot. */
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-compact.proposal-compact {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-bar-foot {
+  position: static;
+  margin-inline: 0;
+  padding: var(--space-3) 0 0;
+  background: none;
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-bar-foot::before {
+  display: none;
+}
+
+/* The options take their own row in the panel, so Not this and Apply stay together on the next. */
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-bar-foot {
+  flex-wrap: wrap;
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-bar-foot .proposal-tabs {
+  flex: 1 0 100%;
+}
+
+.chat[data-variant="bar"][data-presentation="panel"] .composer {
+  padding-inline: var(--space-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat[data-variant="bar"][data-presentation="panel"] {
+    animation: none;
+  }
+}
+
+.workbench > .command-bar[hidden] {
   display: none;
 }
 
@@ -416,7 +554,7 @@
   display: none !important;
 }
 
-.stage > .command-bar > * {
+.workbench > .command-bar[data-presentation="bar"] > * {
   flex: 0 1 760px;
 }
 
