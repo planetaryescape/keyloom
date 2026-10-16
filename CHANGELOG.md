@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.6](https://github.com/planetaryescape/keyloom/compare/v0.34.5...v0.34.6) (2026-10-16)
+
+
+### Bug Fixes
+
+* verify a ZMK half by its USB serial while its serial port is still coming up ([47de622](https://github.com/planetaryescape/keyloom/commit/47de6225d3d7804d85584b10ce5779e12616deb5))
+
 ## [0.34.5](https://github.com/planetaryescape/keyloom/compare/v0.34.4...v0.34.5) (2026-10-16)
 
 
