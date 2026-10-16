@@ -3,12 +3,14 @@
 import type { ChangeOp, Slot } from "../../layout/change.ts";
 import type { Binding, Layout } from "../../layout/schema.ts";
 import { bindingSummary, sameBinding } from "./draft.ts";
+import { keyIn, layerName } from "../../validation/words.ts";
 
 export const sameSlot = (a: Slot, b: Slot) => a.layerId === b.layerId && a.position === b.position;
 
 export const bindingAt = (layout: Layout, slot: Slot): Binding | undefined => layout.layers.find((layer) => layer.id === slot.layerId)?.bindings[slot.position];
 
-const slotName = (layout: Layout, slot: Slot) => `${layout.layers.find((layer) => layer.id === slot.layerId)?.name ?? slot.layerId} key ${slot.position + 1}`;
+// A key by what it prints, never its number (D-279).
+const slotName = (layout: Layout, slot: Slot) => keyIn(layout, slot);
 
 /** Two keys exchange bindings, on this layer or across layers. Null for the same key twice. */
 export function swapOps(a: Slot, b: Slot): ChangeOp[] | null {
@@ -16,7 +18,8 @@ export function swapOps(a: Slot, b: Slot): ChangeOp[] | null {
 }
 
 export function swapSummary(layout: Layout, a: Slot, b: Slot): string {
-  return `Swapped ${slotName(layout, a)} (${summaryAt(layout, a)}) and ${slotName(layout, b)} (${summaryAt(layout, b)})`;
+  // What each key did names it; the layer says where (D-279).
+  return `Swapped ${summaryAt(layout, a)} on ${layerName(layout, a.layerId)} and ${summaryAt(layout, b)} on ${layerName(layout, b.layerId)}`;
 }
 
 const summaryAt = (layout: Layout, slot: Slot) => {
@@ -33,7 +36,7 @@ export function copyOps(layout: Layout, from: Slot, to: Slot): ChangeOp[] | null
 }
 
 export function copySummary(layout: Layout, from: Slot, to: Slot): string {
-  return `Copied ${slotName(layout, from)} (${summaryAt(layout, from)}) onto ${slotName(layout, to)}`;
+  return `Copied ${summaryAt(layout, from)} from ${layerName(layout, from.layerId)} onto ${slotName(layout, to)}`;
 }
 
 /** The copied binding onto every target that doesn't already have it; null when there is nothing to change. */

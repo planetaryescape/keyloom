@@ -19,13 +19,13 @@ describe("where else a key's function lives", () => {
     expect(whereElseSentence(entry as never, only)).toMatch(/only on this key/);
   });
 
-  test("the same key on another layer is named by layer and one-based key number", () => {
+  test("the same key on another layer is named by what it prints and its layer (D-279)", () => {
     const two = put(other, 5, { kind: "key", code: "F23" } as never);
     const withBoth = put(base, 3, { kind: "key", code: "F23" } as never);
     const merged = { ...withBoth, layers: withBoth.layers.map((l) => (l.id === other ? two.layers.find((x) => x.id === other)! : l)) };
     const [entry] = whereElse(merged, at(base, 3), { kind: "key", code: "F23" });
     expect(entry?.others).toEqual([at(other, 5)]);
-    expect(whereElseSentence(entry as never, merged)).toContain("key 6");
+    expect(whereElseSentence(entry as never, merged)).toContain("the F23 key on Numbers");
   });
 
   test("a hold-tap reports both of its halves, and a tap alone is found inside another hold-tap", () => {

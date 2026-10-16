@@ -201,7 +201,7 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
     const taps = steps.flatMap((step) => (step.op === "tap" && step.code !== undefined ? [bindingLegend({ kind: "key", code: step.code, ...(step.mods === undefined ? {} : { mods: step.mods }) }, ctx).tap] : []));
     return taps.length === 0 ? legend : { ...legend, tap: taps.join(" ") };
   })();
-  const title = draft.positions.length === 0 ? "New combo" : keyLegends.map((legend, i) => legend.tap || `key ${(draft.positions[i] ?? 0) + 1}`).join(" + ");
+  const title = draft.positions.length === 0 ? "New combo" : keyLegends.map((legend, i) => legend.tap || "a blank key").join(" + ");
   const where = draft.layerIds === "all" ? "every layer" : draft.layerIds.map((id) => layerDisplayName(layout.layers.find((candidate) => candidate.id === id)?.name ?? id)).join(", ");
   const applyText = applying ? "Applying" : draft.output === null ? (draft.isNew ? "Add combo" : "Apply") : `Send ${cardTitle(draft.output, layout)} from ${title}`;
 
@@ -263,7 +263,7 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
           {picking
             ? draft.positions.map((position) => (
                 <button key={position} type="button" className="card-chip" disabled={tooFew} title={tooFew ? "A combo needs at least two keys" : undefined} onClick={() => onDraft({ ...draft, positions: draft.positions.filter((candidate) => candidate !== position) })}>
-                  Remove key {position + 1}
+                  Remove this key
                 </button>
               ))
             : null}

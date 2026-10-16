@@ -5,6 +5,7 @@ import { macroWords } from "../card/card-words.ts";
 import type { Binding, Layout, Macro, Mod, SlotAction, TapDance } from "../../layout/schema.ts";
 import { modsWords } from "../../layout/describe.ts";
 import { keyCodeLabel } from "../../layout/keycodes.ts";
+import { keyOn } from "../../validation/words.ts";
 
 export type LayerAction = Extract<Binding, { kind: "layer" }>["action"];
 export type NativeBinding = Extract<Binding, { kind: "native" }>;
@@ -317,10 +318,12 @@ export function bindingSummary(binding: Binding, layout: Layout): string {
   }
 }
 
-/** "Base, key 7: F17". Key numbers count from 1, like the inspector. */
-export function changeSummary(layout: Layout, layerId: string, position: number, binding: Binding): string {
-  const layerName = layout.layers.find((layer) => layer.id === layerId)?.name ?? layerId;
-  return `${layerName}, key ${position + 1}: ${bindingSummary(binding, layout)}`;
+/**
+ * "The A key on Base: F17": the key by what it printed before the change, never its number (D-279). `before` names the key; `layout`
+ * may already hold macros or tap dances the new binding refers to.
+ */
+export function changeSummary(layout: Layout, layerId: string, position: number, binding: Binding, before: Layout = layout): string {
+  return `${keyOn(before, { layerId, position })}: ${bindingSummary(binding, layout)}`;
 }
 
 /** The layout with one binding swapped, for describing a draft the same way an applied binding is. */

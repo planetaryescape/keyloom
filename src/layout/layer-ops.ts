@@ -5,6 +5,7 @@ import { layerDisplayName } from "./cap-words.ts";
 import type { ChangeOp, Slot } from "./change.ts";
 import { defaultShortLabel } from "./legend.ts";
 import type { Binding, Layer, Layout } from "./schema.ts";
+import { bindingLegend } from "./legend.ts";
 
 export const LAYER_COLOR_COUNT = 6;
 export const SHORT_LABEL_MAX = 4;
@@ -107,7 +108,12 @@ export function layerReferences(layout: Layout, layerId: string): LayerReference
   const out: LayerReference[] = [];
   const nameOf = (id: string) => layout.layers.find((layer) => layer.id === id)?.name ?? id;
   const target = nameOf(layerId);
-  const where = (slot: Slot) => `${nameOf(slot.layerId)}, key ${slot.position + 1}`;
+  // A key by what it prints, never its number (D-279).
+  const where = (slot: Slot) => {
+    const binding = layout.layers.find((layer) => layer.id === slot.layerId)?.bindings[slot.position];
+    const tap = binding === undefined ? "" : bindingLegend(binding, { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances }).tap;
+    return `The ${tap === "" ? "blank" : tap} key on ${nameOf(slot.layerId)}`;
+  };
   const describe = (binding: Binding): string | null => {
     if (binding.kind === "layer" && binding.layerId === layerId) return `${ACTION_WORD[binding.action]} ${target}`;
     if (binding.kind === "holdTap" && "layerId" in binding.hold && binding.hold.layerId === layerId) return `holds ${target}`;

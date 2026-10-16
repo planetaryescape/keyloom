@@ -21,7 +21,7 @@ describe("the library", () => {
 
   test("a macro is used by the keys that run it and the tap dance slots that hold it", () => {
     expect(lib.macros).toHaveLength(1);
-    expect(lib.macros[0]?.uses.map((u) => u.label)).toEqual(["Base, key 1", "Base, key 2", "Numbers, key 1"]);
+    expect(lib.macros[0]?.uses.map((u) => u.label)).toEqual(["the Esc key on Base", "the Macro key on Base", "the Esc key on Numbers"]);
     expect(lib.macros[0]?.detail).toBe("1 step");
   });
 
@@ -31,7 +31,7 @@ describe("the library", () => {
   });
 
   test("a profile is used by the hold-taps that name it; one nothing uses says so by having no uses", () => {
-    expect(lib.profiles[0]?.uses.map((u) => u.label)).toEqual(["Base, key 4"]);
+    expect(lib.profiles[0]?.uses.map((u) => u.label)).toEqual(["the A hold ⇧ key on Base"]);
     expect(libraryOf(tiny()).macros[0]?.uses).toEqual([]);
   });
 

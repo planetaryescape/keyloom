@@ -36,8 +36,8 @@ describe("planRepeat", () => {
     expect(planRepeat(layout, "base", [1], { ...last, after: last.before })).toEqual({ transform: null, rows: [], ops: [] });
   });
 
-  test("the summary names the keys by their key numbers", () => {
+  test("the summary names the keys by what they print (D-279)", () => {
     const plan = planRepeat(layout, "base", [1, 3], last);
-    expect(repeatSummary(layout, "base", plan)).toBe("Base, keys 2, 4: repeated the last change");
+    expect(repeatSummary(layout, "base", plan)).toBe("Base: repeated the last change on B, D");
   });
 });

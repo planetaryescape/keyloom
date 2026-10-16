@@ -24,7 +24,7 @@ describe("swapping", () => {
   });
 
   test("the history line names both keys and what they held", () => {
-    expect(swapSummary(tiny(), at("base", 0), at("num", 3))).toBe("Swapped Base key 1 (A) and Numbers key 4 (4)");
+    expect(swapSummary(tiny(), at("base", 0), at("num", 3))).toBe("Swapped A on Base and 4 on Numbers");
   });
 });
 
@@ -60,8 +60,8 @@ describe("copying and pasting", () => {
   });
 
   test("summaries say what went where", () => {
-    expect(copySummary(tiny(), at("base", 0), at("num", 0))).toBe("Copied Base key 1 (A) onto Numbers key 1");
-    expect(pasteSummary(tiny(), key("ESCAPE"), [at("base", 0)])).toBe("Pasted Esc onto Base key 1");
+    expect(copySummary(tiny(), at("base", 0), at("num", 0))).toBe("Copied A from Base onto the 1 key on Numbers");
+    expect(pasteSummary(tiny(), key("ESCAPE"), [at("base", 0)])).toBe("Pasted Esc onto the A key on Base");
     expect(pasteSummary(tiny(), key("ESCAPE"), [at("base", 0), at("base", 1), at("num", 0)])).toBe("Pasted Esc onto 3 keys");
   });
 });

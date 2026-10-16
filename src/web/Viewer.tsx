@@ -61,6 +61,7 @@ import { Toasts, useToasts } from "./shell/Toasts.tsx";
 import { NARROW, PHONE, useMediaQuery } from "./shell/useMediaQuery.ts";
 import type { SyncApi } from "./sync/useSync.ts";
 import { useSyncToasts } from "./sync/useSyncToasts.ts";
+import { keyIn, keyOn } from "../validation/words.ts";
 
 interface ViewerProps {
   detail: LayoutDetail;
@@ -1197,7 +1198,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                         const target = layout.layers.find((candidate) => candidate.id === editing.layerId);
                         if (target === undefined) return;
                         const lighting: LayerLighting = withKeyColour(target.lighting, editing.position, colour);
-                        void perform([{ op: "setLayerLighting", layerId: target.id, lighting }], `${target.name}, key ${editing.position + 1}: ${colour === null ? "follows the layer colour" : "own colour"}`);
+                        void perform([{ op: "setLayerLighting", layerId: target.id, lighting }], `${keyOn(layout, { layerId: target.id, position: editing.position })}: ${colour === null ? "follows the layer colour" : "own colour"}`);
                       }}
                     />
                   )}
@@ -1374,7 +1375,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             {swapping === null || layer === undefined ? null : (
               <p className="place-banner" role="status">
                 <MousePointerClick size={16} aria-hidden="true" />
-                <span>Click the key to swap with key {swapping.position + 1} on {layerNameOf(swapping.layerId)}. You can change layer first. Escape cancels.</span>
+                <span>Click the key to swap with {keyIn(layout, swapping)}. You can change layer first. Escape cancels.</span>
                 <button type="button" className="button" onClick={() => setSwapping(null)}>Cancel</button>
               </p>
             )}
