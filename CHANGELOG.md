@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0](https://github.com/planetaryescape/keyloom/compare/v0.29.0...v0.30.0) (2026-10-16)
+
+
+### Features
+
+* typing lab screens and routes ([6449901](https://github.com/planetaryescape/keyloom/commit/6449901fb1632f1faeac79e19ef45d834fbb534f))
+
 ## [0.29.0](https://github.com/planetaryescape/keyloom/compare/v0.28.0...v0.29.0) (2026-10-16)
 
 
