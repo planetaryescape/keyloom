@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.3](https://github.com/planetaryescape/keyloom/compare/v0.34.2...v0.34.3) (2026-10-16)
+
+
+### Bug Fixes
+
+* retry a UF2 write a freshly mounted boot drive refuses ([84d0b29](https://github.com/planetaryescape/keyloom/commit/84d0b297681c80117f6c23142b0ed7a3ec552868))
+* the key card glides to a new height instead of jumping a frame ([c983736](https://github.com/planetaryescape/keyloom/commit/c983736a579166afff96b26ad5892edf2feb997d))
+
 ## [0.34.2](https://github.com/planetaryescape/keyloom/compare/v0.34.1...v0.34.2) (2026-10-16)
 
 
