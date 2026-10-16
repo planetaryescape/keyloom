@@ -32,7 +32,10 @@ const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : 
 // The parted board is never drawn below this share of its size; past it, it slides instead.
 const MIN_SCALE = 0.8;
 
-export function seatCard({ area, key, keyHand, left, right, card, board: boardBox, gap = 20, margin = 16 }: {
+// The board keeps at least this much room at the stage's sides when it parts (P2 review).
+const SIDE = 32;
+
+export function seatCard({ area, key, keyHand, left, right, card, board: boardBox, gap = 20, margin = 16, avoid = [] }: {
   /** Where the card may go: the board's row, between the caption and the strip. */
   area: Box;
   key: Box;
@@ -43,12 +46,14 @@ export function seatCard({ area, key, keyHand, left, right, card, board: boardBo
   card: { w: number; h: number };
   /** The board element's box, unmoved: what a scale is centred on. */
   board?: Box;
+  /** Other things the card must not cover where it sits beside the board, such as the layer's title. */
+  avoid?: readonly Box[];
   gap?: number;
   margin?: number;
 }): Seat {
   const h = Math.min(card.h, area.h - 2 * margin);
   const y = clamp(key.y + key.h / 2 - Math.min(h, 260) / 2, area.y + margin, area.y + area.h - margin - h);
-  const all = [...left, ...right].map((b) => ({ x: b.x - gap, y: b.y - gap, w: b.w + 2 * gap, h: b.h + 2 * gap }));
+  const all = [...left, ...right, ...avoid].map((b) => ({ x: b.x - gap, y: b.y - gap, w: b.w + 2 * gap, h: b.h + 2 * gap }));
   const cx = key.x + key.w / 2;
 
   // 1. A free spot.
@@ -62,8 +67,8 @@ export function seatCard({ area, key, keyHand, left, right, card, board: boardBo
   if (best !== null) return { x: best.x, y, part: null, shift: 0, scale: 1, clear: true };
 
   const board = span([...left, ...right]);
-  const lo = area.x + margin;
-  const hi = area.x + area.w - margin;
+  const lo = area.x + SIDE;
+  const hi = area.x + area.w - SIDE;
 
   // 2 and 3. Part a split board, scaled down if the parted halves wouldn't fit, and slid only if even that isn't enough.
   if (left.length > 0 && right.length > 0 && keyHand !== null) {

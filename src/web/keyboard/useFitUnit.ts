@@ -10,6 +10,11 @@ const MIN_UNIT_TOUCH = 44;
 const MIN_UNIT_MOUSE = 34;
 const MAX_UNIT = 58;
 
+/** The smallest key the board is drawn at for this pointer: a fingertip's 44 px, or 34 px with a mouse. */
+export function minUnit(): number {
+  return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? MIN_UNIT_TOUCH : MIN_UNIT_MOUSE;
+}
+
 interface FitInput {
   /** Board size in key units, margins included. */
   width: number;

@@ -5,7 +5,7 @@
   position: absolute;
   z-index: 12;
   display: flex;
-  width: 352px;
+  width: 376px;
   max-height: calc(100% - var(--space-5));
   flex-direction: column;
   border-radius: var(--radius-lg);
@@ -1000,4 +1000,42 @@
 .card-head .card-tools {
   grid-column: 2;
   grid-row: 1;
+}
+
+.card-heading h2 {
+  text-wrap: balance;
+}
+
+/* The categories' one row scrolls inside the picker; it never widens the card (P2 review). */
+/* clip, not hidden: a hidden overflow can still be scrolled sideways by focus, which shifted the picker out of view. */
+.card-scroll,
+.card-picker {
+  overflow-x: clip;
+}
+
+.card-picker,
+.card-picker .picker,
+.card-picker .picker-tabs {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A fieldset's default min-inline-size is its content's, so the categories' one row widened the whole card body. */
+.card-body {
+  min-inline-size: 0;
+}
+
+/* The head stays solid over a body scrolled beneath it. */
+.key-card > .card-head,
+.combo-editor > .card-head {
+  position: relative;
+  z-index: 1;
+  padding-bottom: var(--space-3);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.card-head .card-heading p {
+  margin-top: calc(-1 * var(--space-2));
 }

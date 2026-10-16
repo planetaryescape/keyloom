@@ -308,6 +308,14 @@ export function KeyPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picker]);
 
+  // Opening a picker brings it into view inside the card, which may be short in a small window.
+  const pickerSlot = picker?.slot ?? null;
+  useEffect(() => {
+    if (pickerSlot === null) return;
+    const frame = window.requestAnimationFrame(() => root.current?.querySelector(".card-picker")?.scrollIntoView({ block: "nearest" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pickerSlot]);
+
   if (draft === null || layer === undefined || original === undefined) return null;
 
   const incomplete = incompleteReason(draft, layout);
@@ -615,6 +623,8 @@ export function KeyPanel(props: Props) {
             changed={changedSlots}
             onOpen={openRegion}
             label={current?.headline ?? ""}
+            // While a picker is open the key steps down, so the picker shows in a short window (P2 review).
+            size={picker === null ? 112 : 84}
           />
           {modTarget === null ? null : <CardMods mods={modTarget.mods} onToggle={modTarget.toggle} label={modTarget.label} />}
           {draft.kind === "layer" && picker === null ? (
@@ -1003,9 +1013,10 @@ const SLOT_TITLE: Record<SlotName, string> = { tap: "When tapped", hold: "When h
 function danceSentence(draft: Draft, layout: Layout, termMs: number): string {
   const tapAction = tapSlotAction(draft);
   const parts: string[] = [];
-  if (tapAction !== null) parts.push(`Tap for ${slotPhrase(tapAction, layout)}.`);
-  if (draft.doubleTap !== null) parts.push(`Tap twice for ${slotPhrase(draft.doubleTap, layout)}.`);
-  if (draft.tapThenHold !== null) parts.push(`Tap, then hold, for ${slotPhrase(draft.tapThenHold, layout)}.`);
+  // A no-break space keeps "for [." together; a one-character key alone at a line's start reads as stray punctuation.
+  if (tapAction !== null) parts.push(`Tap for\u00a0${slotPhrase(tapAction, layout)}.`);
+  if (draft.doubleTap !== null) parts.push(`Tap twice for\u00a0${slotPhrase(draft.doubleTap, layout)}.`);
+  if (draft.tapThenHold !== null) parts.push(`Tap, then hold, for\u00a0${slotPhrase(draft.tapThenHold, layout)}.`);
   parts.push(`It waits ${termMs} ms for the second tap.`);
   return parts.join(" ");
 }

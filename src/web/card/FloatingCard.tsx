@@ -51,7 +51,7 @@ function unmoved(element: Element, origin: DOMRect, m: BoardMotion): Box {
 // around the key, a thread runs from the card to the key, and the card springs in as the halves part.
 export function FloatingCard({ stage, position, placeKey, layout, onLayout, children }: Props) {
   const card = useRef<HTMLDivElement>(null);
-  const [seat, setSeat] = useState<{ x: number; y: number; maxH: number; from: number; key: { x: number; y: number } } | null>(null);
+  const [seat, setSeat] = useState<{ x: number; y: number; maxH: number; from: number; key: { x: number; y: number; hw: number; hh: number } } | null>(null);
   const reduce = useReducedMotion() === true;
   const latest = useRef(layout);
   latest.current = layout;
@@ -84,18 +84,27 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
       for (const part of parts) (part.getAttribute("data-hand") === "right" ? right : left).push(unmoved(part, origin, motion));
       const key = unmoved(keyEl, origin, motion);
       const w = well.getBoundingClientRect();
-      const area = { x: 0, y: w.top - origin.top, w: origin.width, h: w.height };
+      // The card may use the stage's whole height, from under the top bar to the strip: the gap between parted halves is free above
+      // and below the board (P2 review). It keeps clear of the layer's title.
+      const floor = root.querySelector<HTMLElement>(".stage-floor")?.getBoundingClientRect();
+      const bottom = floor?.top ?? w.bottom;
+      const area = { x: 0, y: 0, w: origin.width, h: bottom - origin.top };
+      const title = root.querySelector<HTMLElement>(".caption")?.getBoundingClientRect();
+      const avoid = title === undefined ? [] : [{ x: title.left - origin.left, y: title.top - origin.top, w: title.width, h: title.height }];
       const keyHand = keyEl.getAttribute("data-hand") as "left" | "right" | null;
       // The card's natural height, before any cap, so a short window caps it and its body scrolls.
       const natural = element.scrollHeight;
-      const seated = seatCard({ area, key, keyHand, left, right, board: boardBox, card: { w: element.offsetWidth, h: natural } });
+      const relative = seatCard({ area, key, keyHand, left, right, board: boardBox, avoid, card: { w: element.offsetWidth, h: natural } });
+      // The board is drawn at the scale it was given, so a new scale is relative to it; the next pass, on the redrawn board, settles at 1.
+      // A redrawn board's unit is whole pixels, so a scale within 3% of the one drawn is that one: it stops the pass from creeping smaller.
+      const seated = { ...relative, scale: relative.scale > 0.97 ? latest.current.scale : Math.min(1, latest.current.scale * relative.scale) };
       // Where the key ends up: scaled about the board's centre, slid, and parted with its half.
       const bcx = boardBox.x + boardBox.w / 2;
       const bcy = boardBox.y + boardBox.h / 2;
-      const partPx = seated.part !== null && seated.part.hand === keyHand ? seated.part.px * seated.scale : 0;
-      const kx = bcx + (key.x + key.w / 2 - bcx) * seated.scale + seated.shift + partPx;
-      const ky = bcy + (key.y + key.h / 2 - bcy) * seated.scale;
-      setSeat({ x: seated.x, y: seated.y, maxH: area.h - 32, from: seated.x > kx ? -14 : 14, key: { x: kx, y: ky } });
+      const partPx = seated.part !== null && seated.part.hand === keyHand ? seated.part.px * relative.scale : 0;
+      const kx = bcx + (key.x + key.w / 2 - bcx) * relative.scale + seated.shift + partPx;
+      const ky = bcy + (key.y + key.h / 2 - bcy) * relative.scale;
+      setSeat({ x: seated.x, y: seated.y, maxH: area.h - 32, from: seated.x > kx ? -14 : 14, key: { x: kx, y: ky, hw: (key.w * relative.scale) / 2, hh: (key.h * relative.scale) / 2 } });
       const now = latest.current;
       const samePart = (now.part?.hand ?? null) === (seated.part?.hand ?? null) && Math.abs((now.part?.px ?? 0) - (seated.part?.px ?? 0)) < 1;
       if (!samePart || Math.abs(now.shift - seated.shift) > 1 || Math.abs(now.scale - seated.scale) > 0.005) onLayout({ shift: seated.shift, part: seated.part, scale: seated.scale });
@@ -105,9 +114,10 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
     if (stage.current !== null) observer.observe(stage.current);
     if (card.current !== null) observer.observe(card.current);
     return () => observer.disconnect();
-    // Seated again when the key or its layer changes; the observer covers size changes.
+    // Seated again when the key or its layer changes, and once more after the board is redrawn at a new scale, on its real geometry.
+    // The observer covers size changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeKey]);
+  }, [placeKey, layout.scale]);
 
   // The thread runs from the card's near edge to the key.
   const cardW = card.current?.offsetWidth ?? 352;
@@ -117,7 +127,11 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
       : (() => {
           const fromX = seat.key.x < seat.x ? seat.x : seat.x + cardW;
           const fromY = Math.max(seat.y + 28, Math.min(seat.key.y, seat.y + 120));
-          return { x1: fromX, y1: fromY, x2: seat.key.x, y2: seat.key.y };
+          // It ends at the key's edge, not on its legend (comp b).
+          const dx = seat.key.x - fromX;
+          const dy = seat.key.y - fromY;
+          const reach = Math.max(Math.abs(dx) / Math.max(1, seat.key.hw), Math.abs(dy) / Math.max(1, seat.key.hh), 1);
+          return { x1: fromX, y1: fromY, x2: seat.key.x - dx / reach, y2: seat.key.y - dy / reach };
         })();
 
   return (

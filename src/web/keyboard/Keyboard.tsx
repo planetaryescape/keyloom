@@ -13,7 +13,7 @@ import { frontMode, WIDEST_WITH_SYMBOL, WIDEST_WORD } from "./front-words.ts";
 import { measureText } from "./measure.ts";
 import { boardBounds, keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
-import { useFitUnit } from "./useFitUnit.ts";
+import { minUnit, useFitUnit } from "./useFitUnit.ts";
 import "./keyboard.css";
 
 // Space between neighbouring caps, and the margin around the board, in key units. The margin leaves room for the case, which reaches
@@ -190,7 +190,12 @@ export function Keyboard({
     width: bounds.width + 2 * MARGIN,
     height: bounds.height + 2 * MARGIN,
   };
-  const { ref, unit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
+  const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
+  // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
+  // the size it is drawn, so the 11 px floor still holds (P2 review).
+  // Never below a fingertip's 44 px for a parting (or below the unit the window already gave): smaller keys take the 10 px floor, and
+  // the card shouldn't be what shrinks the legends.
+  const unit = scale === 1 ? fitUnit : Math.max(Math.min(fitUnit, Math.max(44, minUnit())), Math.floor(fitUnit * scale));
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const { delays, outgoing, origin: rippleOrigin } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
@@ -268,7 +273,7 @@ export function Keyboard({
         role="group"
         aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}
         data-part={part === null || part.px === 0 ? undefined : part.hand}
-        style={{ width: canvas.width * unit, height: canvas.height * unit, transform: shiftPx === 0 && scale === 1 ? undefined : `translateX(${shiftPx}px) scale(${scale})`, "--part": `${part?.px ?? 0}px`, "--part-units": `${(part?.px ?? 0) / unit}` } as CSSProperties}
+        style={{ width: canvas.width * unit, height: canvas.height * unit, transform: shiftPx === 0 ? undefined : `translateX(${shiftPx}px)`, "--part": `${part?.px ?? 0}px`, "--part-units": `${(part?.px ?? 0) / unit}` } as CSSProperties}
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
