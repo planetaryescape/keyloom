@@ -355,6 +355,34 @@
   text-align: center;
 }
 
+/* Named ways to add a double tap or tap-then-hold: quiet like the modifier buttons, words instead of symbols. */
+.card-slots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.card-slot-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.card-slot-add:hover {
+  color: var(--ink);
+}
+
 .card-note {
   margin: 0;
   color: var(--ink-2);
