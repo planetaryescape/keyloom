@@ -12,7 +12,8 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
-    "gen:keycodes": "bun scripts/gen-keycodes.ts"
+    "gen:keycodes": "bun scripts/gen-keycodes.ts",
+    "gen:keyboard-index": "bun scripts/gen-keyboard-index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.132.1",

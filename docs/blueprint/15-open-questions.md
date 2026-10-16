@@ -34,9 +34,10 @@ For each spike, record the command or request, the output (with private data rem
 | S34 | Option–Option through kanata reaches the app BK needs it for | BK's first problem (D-025) on the MacBook | [21](21-macbook-keyboard.md) | Rung 20 |
 | S35 | Importing BK's existing Karabiner rules (Space layer, home-row mods, six combos, Hyper) round-trips through keyloom's recognisers | D-232 | [21](21-macbook-keyboard.md) | Rung 20 |
 | S36 | The 77-key ANSI geometry and position order on BK's MacBook, by pressing every key under `kanata -d` | The board's geometry | [21](21-macbook-keyboard.md) | Rung 20 |
-| S40 | The Corne's committed `fingers` against the column-from-home-row rule: which is wrong? **Answered 2026-10-16:** the committed table was one column off and was fixed in rung 19 (D-227); the rule was right | Finger heuristics for new boards (D-236) | [22](22-new-keyboard.md) | Rung 21 |
+| S40 | The Corne's committed `fingers` against the column-from-home-row rule: which is wrong? **Answered 2026-10-16:** the committed table was one column off and was fixed in rung 19 (D-227); the rule was right, and `test/boards/derive/heuristics.test.ts` reproduces it: 132 of 132 on the Moonlander and Glove80 and 36 of 36 on the Corne (result below) | Finger heuristics for new boards (D-236) | [22](22-new-keyboard.md) | Rung 21 |
 | S41 | Can QMK hands-free flashing (D-070) extend beyond ZSA boards, e.g. through Vial's jump or a generic raw-HID packet? | Hands-free on new QMK boards | [22](22-new-keyboard.md) | Nothing; record before claiming it |
-| S42 | Detection on BK's three boards: does keyloom name each from USB alone, and what does it ask when it can't? | D-236 | [22](22-new-keyboard.md) | Rung 21 |
+| S42 | Detection on BK's three boards: does keyloom name each from USB alone, and what does it ask when it can't? **Part answered 2026-10-16:** the Glove80, on the real bus; the Moonlander and Corne were not plugged in (result below) | D-236 | [22](22-new-keyboard.md) | Rung 21 |
+| S43 | Does a derived board's default keymap build from the pinned tree, and are the submodule lists, build images and (for ZMK) hardware-model-v2 controller names the generator writes right? | Derived boards build (D-333) | [22](22-new-keyboard.md) | Rung 21 part 2 |
 | S50 | Does a keyloom raw-HID key-event stream (position, press/release, timer) fit beside Oryx's modules on the Moonlander, keep up at fast typing without dropping events, and stop on timeout or disconnect? | Lab capture on QMK (D-281) | [24](24-typing-lab.md) | Rung 22 |
 | S51 | Does the keyloom-zmk module stream position events from the Glove80's central for both halves in order, and what is the split latency? | Lab capture on ZMK (D-281) | [24](24-typing-lab.md) | Rung 22 |
 | S52 | Can kanata's debug output give a usable event trace on the MacBook? | Lab on the MacBook | [24](24-typing-lab.md) | Nothing yet |
@@ -76,6 +77,32 @@ The combined `glove80.uf2` holds two images at the same addresses with different
 ### S8 result (2026-10-15)
 
 Yes. Flash `fl_01M5067Z2Y2JT3EDYD3JCY0NSC` copied keyloom's combined `glove80.uf2` (build `bld_01M4ZXEWMANN3V3H25Y28EC6JP`, BK's `42-key-map` keymap) to `GLV80RHBOOT` and then to the left half's boot drive with `keyloom flash --wait 15` (v0.10.1). Each bootloader took its own image and rebooted, both halves came back on USB as "Glove80 Right" and "Glove80 Left", and BK typed on the board: "typing works as you can see." An earlier attempt, `fl_01M5066BDXSVVD2CF3ZJT0JMN5`, failed with `EACCES` on the copy because the agent's sandbox blocked writes to `/Volumes`. A flash now explains that error, since macOS raises the same one for an app without Removable Volumes access.
+
+### S40 and S42 results (2026-10-16, rung 21 part 1)
+
+**S40, finger heuristics.** Run on `origin/main` at `f0ac50d` plus the rung's changes, by `test/boards/derive/heuristics.test.ts`, deriving each of BK's three boards from its firmware source file and comparing with the committed `board.json`:
+
+| Rule | Moonlander | Glove80 | Corne | Total |
+|---|---|---|---|---|
+| Hands (widest x-gap) | 72/72 | 80/80 | 42/42 | 194/194 |
+| Thumbs (small column, or more than 1.2 below) | 8/8 | 12/12 | 6/6 | 26/26, no false thumbs |
+| Fingers (apex column is the middle finger) | 64/64 | 68/68 | 36/36 | 168/168 (132/132 without the Corne) |
+| Rows (key linked to the key level with it) | 5/5 | 6/6 | 3/3 | all, thumbs apart |
+| Mirror pairs | 36/36 | 40/40 | 21/21 | all |
+
+Hands, thumbs and fingers are the research's rules unchanged. Rows and mirror pairs are new in this part, and the first version of the rows rule, clustering raw key heights, merged the Glove80's six rows into one; linking each key to the one level with it in the next column fixed that, and the half-unit drop of the Glove80's pinky columns needs the "level with the key above" rule. One caveat: the committed Moonlander files two thumb keys (59, 60) under `lower`; the rule calls them thumbs, as the finger table does.
+
+**S42, detection.** `keyloom keyboard detect` on BK's machine (macOS, Darwin 27), with `--data-dir` pointing at an empty scratch directory:
+
+```
+Glove80 Left   0x16c0:0x27db  v0x0305  MoErgo     your Glove80 (moergo/glove80)
+Glove80 Right  0x16c0:0x27d9  v0x0305  MoErgo     your Glove80 (moergo/glove80)
+```
+
+- The Glove80: both halves are named from USB alone. The index gives `zmk:glove80` at 95% for the left half (product string "Glove80 Left" and the board's own ID), and the board is already keyloom's, so detection stops there. The ID `0x16c0:0x27db` is also one of 11 V-USB IDs QMK boards share, which is why the list drops candidates that only share an ID once one fits.
+- The Moonlander: not plugged in during the run. By the index alone, `0x3297:0x1969` names `zsa/moonlander` uniquely (a test). BK's running Moonlander is `revb`, `0x3297:0x1972`, which upstream QMK's data does not list (a ZSA fork ID, as the research found), so it is recognised by the board definition's `detect`, not by the index.
+- The Corne: not plugged in. With a fake bus, `Corne` over ZMK's default ID gives `zmk:corne` at 80%, and keyloom's own Corne is then recognised as known. The right half's product string is still unobserved (spike 4). The QMK Corne is a list: `crkbd/rev1` and `crkbd/r2g` share every ID.
+- What it asks when it can't: a list of candidates with the reason each fits, a ZMK keyboard whose string names nothing as `unknown` with `--search`, and for a shared or placeholder ID a list that is never reduced to one.
 
 ### S35 result (2026-10-16)
 

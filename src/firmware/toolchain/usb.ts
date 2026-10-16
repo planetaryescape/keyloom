@@ -13,6 +13,15 @@ export type UsbDevice = {
   maker: string;
   /** The USB serial number string, when the device has one. A keyloom build writes its build marker here (D-070). */
   serial?: string;
+  /** The device version the descriptor reports (bcdDevice) as `0x0305`. QMK sets it from `device_version`, so it helps tell boards that share ids apart. */
+  bcdDevice?: string;
+};
+
+/** macOS 26 reports `0x0305`; older macOS `3.05`; Linux's sysfs `0305`. All are the same four BCD digits. */
+const bcd = (v: unknown): string | undefined => {
+  if (typeof v !== "string") return undefined;
+  const digits = /^(?:0x)?([0-9a-f]{4})$/i.exec(v.trim())?.[1] ?? /^(\d{1,2})\.(\d{2})$/.exec(v.trim())?.slice(1).join("").padStart(4, "0");
+  return digits === undefined ? undefined : `0x${digits.toLowerCase()}`;
 };
 
 const hex = (v: unknown): string | undefined => (typeof v === "string" ? /0x[0-9a-f]{4}/i.exec(v)?.[0]?.toLowerCase() : undefined);
@@ -32,12 +41,14 @@ export function parseUsbDevices(json: unknown): UsbDevice[] {
     if (productId) {
       const maker = o.manufacturer ?? o.USBDeviceKeyVendorName;
       const serial = o.serial_num ?? o.USBDeviceKeySerialNumber;
+      const bcdDevice = bcd(o.bcd_device ?? o.USBDeviceKeyProductVersion);
       found.push({
         productId,
         vendorId: hex(o.vendor_id ?? o.USBDeviceKeyVendorID) ?? "",
         name: typeof o._name === "string" ? o._name : "",
         maker: typeof maker === "string" ? maker : "",
         ...(typeof serial === "string" && serial !== "" ? { serial } : {}),
+        ...(bcdDevice ? { bcdDevice } : {}),
       });
     }
     walk(o._items);
@@ -70,9 +81,10 @@ export function linuxUsbDevices(root = "/sys/bus/usb/devices"): UsbDevice[] {
     const product = read(dir, "idProduct");
     if (!vendor || !product) continue; // an interface (`1-2:1.0`) has no ids of its own
     const serial = read(dir, "serial");
+    const bcdDevice = bcd(read(dir, "bcdDevice"));
     found.push({
       productId: `0x${product.toLowerCase()}`, vendorId: `0x${vendor.toLowerCase()}`, name: read(dir, "product") ?? "", maker: read(dir, "manufacturer") ?? "",
-      ...(serial ? { serial } : {}),
+      ...(serial ? { serial } : {}), ...(bcdDevice ? { bcdDevice } : {}),
     });
   }
   return found;

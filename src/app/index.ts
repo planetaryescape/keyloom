@@ -15,7 +15,10 @@ export {
   type CompareView, type KeyChange, type RevisionBrief, type VersionHistory, type VersionMilestone, type VersionView, compareRevision, nameVersion, resolveRevision,
   restoreVersion, versionHistory,
 } from "./versions.ts";
-export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, regenerateGeometry, showBoard } from "./boards.ts";
+export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, loadUserBoards, regenerateGeometry, showBoard } from "./boards.ts";
+export { type AddDeps, type AddInput, type AddOutcome, type KeyboardPreview, addKeyboard, previewKeyboard } from "./keyboard-add.ts";
+export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKeyboards, findCandidate, searchKeyboards } from "./keyboard-detect.ts";
+export { type PutInput, type PutOutcome, type PutProposal, putConfig } from "./keyboard-put.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type DoctorCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
 export {

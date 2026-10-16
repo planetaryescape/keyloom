@@ -22,6 +22,8 @@ export type HandsFreeDeps = {
 export type KeyboardTarget = {
   /** `0x1969`, lower case. */
   productId: string;
+  /** `0x3297`, lower case; ZSA's when a target leaves it out, which every target written before D-237 did. */
+  vendorId?: string;
   /** `0483:df11`, as boards' flash recipes spell it. */
   bootloader: string;
   name: string;
@@ -34,7 +36,10 @@ export type RunningFirmware =
 
 const hexId = (n: number): string => `0x${n.toString(16).padStart(4, "0")}`;
 
-const isKeyboard = (d: UsbDevice, t: KeyboardTarget): boolean => d.vendorId === hexId(ZSA_VENDOR_ID) && d.productId === t.productId;
+/** Which USB device a board is, by the ids its running firmware reports. Any QMK board with ids can be seen; only a ZSA board can also be restarted (D-237). */
+export type KeyboardIdentity = Required<Pick<KeyboardTarget, "vendorId">> & Pick<KeyboardTarget, "productId" | "name">;
+
+const isKeyboard = (d: UsbDevice, t: Pick<KeyboardTarget, "vendorId" | "productId">): boolean => d.vendorId === (t.vendorId ?? hexId(ZSA_VENDOR_ID)) && d.productId === t.productId;
 
 export const inBootloader = (devices: UsbDevice[], t: KeyboardTarget): boolean => {
   const [vendor, product] = t.bootloader.split(":");
@@ -44,7 +49,7 @@ export const inBootloader = (devices: UsbDevice[], t: KeyboardTarget): boolean =
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** What the keyboard's USB serial says about its firmware. */
-export async function readRunningFirmware(deps: HandsFreeDeps, target: KeyboardTarget): Promise<RunningFirmware> {
+export async function readRunningFirmware(deps: HandsFreeDeps, target: Pick<KeyboardTarget, "vendorId" | "productId">): Promise<RunningFirmware> {
   const device = (await deps.usb()).find((d) => isKeyboard(d, target));
   if (!device) return { state: "absent" };
   const marker = markerOf(device.serial);
@@ -174,10 +179,18 @@ export async function verifyBuild(deps: HandsFreeDeps, target: KeyboardTarget, b
 
 export const realHandsFreeDeps = (over: Partial<HandsFreeDeps> = {}): HandsFreeDeps => ({ usb: listUsbDevices, hid: defaultHidTransport, ...over });
 
-/** The keyboard a board revision describes, or undefined when keyloom has no way to recognise it by USB. */
+/** The keyboard a board revision is on USB, or undefined when the board declares no product ID. ZSA's vendor ID is the default for a ZSA board that names none. */
+export function keyboardIdentity(board: BoardDefinition, rev: QmkBoardRevision): KeyboardIdentity | undefined {
+  const vendorId = rev.usbVendorId ?? (board.vendor === "ZSA" ? hexId(ZSA_VENDOR_ID) : null);
+  if (rev.usbProductId === null || vendorId === null) return undefined;
+  return { vendorId, productId: rev.usbProductId, name: board.name };
+}
+
+/** The keyboard keyloom can also restart into its bootloader: a ZSA board flashed by Zapp, whose firmware keyloom builds with the raw-HID command (D-070). */
 export function keyboardTarget(board: BoardDefinition, rev: QmkBoardRevision): KeyboardTarget | undefined {
-  if (board.vendor !== "ZSA" || rev.flash.kind !== "zapp" || rev.usbProductId === null) return undefined;
-  return { productId: rev.usbProductId, bootloader: rev.flash.bootloader, name: board.name };
+  const identity = keyboardIdentity(board, rev);
+  if (board.vendor !== "ZSA" || rev.flash.kind !== "zapp" || identity === undefined) return undefined;
+  return { ...identity, bootloader: rev.flash.bootloader };
 }
 
 /**

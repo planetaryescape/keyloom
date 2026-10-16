@@ -26,6 +26,11 @@ export type TransferEnv = {
    * which is the one list kanata's opposite-hand variants express. Only a copy onto a kanata board needs it.
    */
   sourceTriggerIsOppositeHand?(positions: number[], hand: Hand): boolean;
+  /**
+   * Put a whole layout on a new board (22): a hold-tap on a target with the source's firmware keeps its source profile, with its
+   * settings, instead of getting a profile built for the hand. Absent for a copy of some keys onto a layout that has its own profiles.
+   */
+  keepProfiles?: boolean;
 };
 
 export type Transferred = { binding: Binding } | { skip: string };
@@ -181,6 +186,10 @@ export class BindingTransfer {
   private profileFor(source: Extract<Binding, { kind: "holdTap" }>, target: Binding, position: number, hand: Hand | null): string {
     if (target.kind === "holdTap" && this.profiles.some((p) => p.id === target.profileId)) return target.profileId;
     const firmware = this.env.target.firmware;
+    if (this.env.keepProfiles === true && firmware === this.env.source.firmware) {
+      const kept = this.keptProfile(source, hand);
+      if (kept !== undefined) return kept;
+    }
     const users: Array<{ position: number; profileId: string }> = [];
     for (const layer of this.env.target.layers) layer.bindings.forEach((b, p) => b.kind === "holdTap" && users.push({ position: p, profileId: b.profileId }));
     if (firmware === "kanata") return this.kanataProfile(source, hand);
@@ -224,6 +233,33 @@ export class BindingTransfer {
     const id = uniqueId(new Set(this.profiles.map((p) => p.id)), "home-row-mods");
     const profile: HoldTapProfile = { ...translated, id, name: from?.name ?? "Home-row mods" };
     this.notes.push(...notes);
+    this.profiles.push(profile);
+    this.made.set(key, id);
+    this.ops.set(`profile:${id}`, { op: "upsertHoldTapProfile", profile });
+    return id;
+  }
+
+  /**
+   * The source's own profile on a same-firmware target. A ZMK profile that lists trigger positions is meant for one hand, so it is
+   * made once per hand, with the list the target board's other hand and thumbs give; the source's list names the source board's keys.
+   */
+  private keptProfile(source: Extract<Binding, { kind: "holdTap" }>, hand: Hand | null): string | undefined {
+    const from = this.env.source.holdTapProfiles.find((p) => p.id === source.profileId);
+    if (from === undefined) return undefined;
+    const positions = from.options["hold-trigger-key-positions"];
+    const perHand = this.env.target.firmware === "zmk" && Array.isArray(positions) && hand !== null;
+    const key = `kept:${from.id}:${perHand ? hand : ""}`;
+    const already = this.made.get(key);
+    if (already !== undefined) return already;
+    const id = uniqueId(new Set(this.profiles.map((p) => p.id)), perHand ? `${from.id}-${hand}` : from.id);
+    const options = { ...from.options };
+    if (perHand) {
+      options["hold-trigger-key-positions"] = this.env.triggerPositions(hand);
+      if (this.env.sourceTriggerIsOppositeHand?.(positions as number[], hand) !== true) {
+        this.notes.push(`${from.name} waits for keys of the source board that have no equivalent here; on ${hand}-hand keys it waits for the other hand and the thumbs instead`);
+      }
+    }
+    const profile: HoldTapProfile = { ...from, id, name: perHand ? `${from.name} (${hand} hand)` : from.name, options };
     this.profiles.push(profile);
     this.made.set(key, id);
     this.ops.set(`profile:${id}`, { op: "upsertHoldTapProfile", profile });

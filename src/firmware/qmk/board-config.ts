@@ -12,6 +12,8 @@ export type QmkBoardRevision = {
   flash: Exclude<FlashRecipe, KanataReload>;
   /** The USB product ID the running firmware reports (`0x1969`), when the board declares one. */
   usbProductId: string | null;
+  /** The vendor ID it reports, when the board names one (a board without one is taken to be ZSA's if it is a ZSA board). */
+  usbVendorId: string | null;
 };
 
 export class BoardConfigError extends Error {
@@ -27,5 +29,5 @@ export function qmkRevision(board: BoardDefinition, revisionId?: string): QmkBoa
   if (!rev.qmkTarget) throw new BoardConfigError(`${board.id} ${rev.id} has no qmkTarget`);
   if (rev.build.kind !== "qmk-docker") throw new BoardConfigError(`${board.id} ${rev.id} build: a QMK board builds with qmk-docker, not ${rev.build.kind}`);
   if (rev.flash.kind === "kanata-reload") throw new BoardConfigError(`${board.id} ${rev.id} flash: a QMK board can't be applied with kanata-reload`);
-  return { id: rev.id, qmkTarget: rev.qmkTarget, source: rev.source, build: rev.build, flash: rev.flash, usbProductId: rev.detect?.usbProductId.toLowerCase() ?? null };
+  return { id: rev.id, qmkTarget: rev.qmkTarget, source: rev.source, build: rev.build, flash: rev.flash, usbProductId: rev.detect?.usbProductId.toLowerCase() ?? null, usbVendorId: rev.detect?.usbVendorId?.toLowerCase() ?? null };
 }

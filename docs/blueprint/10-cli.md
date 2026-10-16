@@ -10,6 +10,9 @@ keyloom
   boards list                              boards keyloom has definitions for
   boards show <board>                      physical keys, hands, firmware, build and flash recipe
   boards check <dir>                       validate a board definition (for contributors, 04)
+  keyboard detect [--search T]             the QMK and ZMK keyboards on USB: the board keyloom has, or ranked candidates with the reasons (22)
+  keyboard add --candidate C [--home-row N] [--layout L] [--controller B]   derive a board from the firmware tree, check it, store it in the data directory
+  keyboard put <layout> --on <board> [--name N]   map a layout onto that board as proposals on a new config; nothing is applied or flashed
 
   import --board <board> <file> [--name N] import an existing layout; prints the new layout ID and an import report
   layout list

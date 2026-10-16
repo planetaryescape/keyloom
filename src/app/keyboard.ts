@@ -4,8 +4,7 @@ import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { portOfAnotherBoard } from "./zmk-ports.ts";
 import { type HalfFirmware, type ZmkHandsFreeDeps, halfTargets, readHalf } from "../firmware/zmk/handsfree-flash.ts";
-import { type HandsFreeDeps, type KeyboardTarget, type RunningFirmware, keyboardTarget, readRunningFirmware, realHandsFreeDeps, rebootToBootloader } from "../firmware/qmk/handsfree-flash.ts";
-import { ZSA_VENDOR_ID } from "../firmware/qmk/handsfree.ts";
+import { type HandsFreeDeps, type KeyboardIdentity, type KeyboardTarget, type RunningFirmware, keyboardIdentity, keyboardTarget, readRunningFirmware, realHandsFreeDeps, rebootToBootloader } from "../firmware/qmk/handsfree-flash.ts";
 import type { HidTransport } from "../firmware/toolchain/hid.ts";
 import { listBoardDefinitions } from "./boards.ts";
 import { UsageError } from "./errors.ts";
@@ -14,9 +13,10 @@ import { RebootFailedError } from "./firmware-errors.ts";
 export type { HandsFreeDeps };
 export type { HandsFreeOverrides } from "./firmware-drivers.ts";
 
-export type AttachedKeyboard = { boardId: string; boardName: string; revisionId: string; target: KeyboardTarget; firmware: RunningFirmware };
+/** `target` is set only for a keyboard keyloom can restart into its bootloader; any other board with USB ids is seen, not restarted (D-237). */
+export type AttachedKeyboard = { boardId: string; boardName: string; revisionId: string; identity: KeyboardIdentity; target: KeyboardTarget | undefined; firmware: RunningFirmware };
 
-/** Every attached keyboard keyloom can restart, one per board revision it recognises by USB product ID. */
+/** Every attached QMK keyboard keyloom has a board for, one per board revision it recognises by USB ids. */
 export async function attachedKeyboards(deps: HandsFreeDeps = realHandsFreeDeps()): Promise<AttachedKeyboard[]> {
   const found: AttachedKeyboard[] = [];
   const devices = await deps.usb();
@@ -25,10 +25,10 @@ export async function attachedKeyboards(deps: HandsFreeDeps = realHandsFreeDeps(
     if (board.definition.firmware !== "qmk") continue;
     for (const r of board.definition.revisions) {
       const rev = qmkRevision(board.definition, r.id);
-      const target = keyboardTarget(board.definition, rev);
-      if (!target) continue;
-      const firmware = await readRunningFirmware(cached, target);
-      if (firmware.state !== "absent") found.push({ boardId: board.definition.id, boardName: board.definition.name, revisionId: r.id, target, firmware });
+      const identity = keyboardIdentity(board.definition, rev);
+      if (!identity) continue;
+      const firmware = await readRunningFirmware(cached, identity);
+      if (firmware.state !== "absent") found.push({ boardId: board.definition.id, boardName: board.definition.name, revisionId: r.id, identity, target: keyboardTarget(board.definition, rev), firmware });
     }
   }
   return found;
@@ -66,7 +66,8 @@ export async function rawHidFinding(deps: HandsFreeDeps, keyboard: AttachedKeybo
     return `no raw HID access: ${(err as Error).message}`;
   }
   try {
-    const found = (await transport.list()).some((h) => h.vendorId === ZSA_VENDOR_ID && `0x${h.productId.toString(16).padStart(4, "0")}` === keyboard.target.productId);
+    const hex = (n: number) => `0x${n.toString(16).padStart(4, "0")}`;
+    const found = (await transport.list()).some((h) => hex(h.vendorId) === keyboard.identity.vendorId && hex(h.productId) === keyboard.identity.productId);
     return found ? "its raw HID interface is visible" : "its raw HID interface was not found";
   } catch (err) {
     return `couldn't list HID devices: ${(err as Error).message}`;
@@ -81,14 +82,17 @@ export type RebootOutcome = { board: string; revision: string; previousFirmware:
  */
 export async function rebootKeyboard(opts: { board?: string; handsFree?: Partial<HandsFreeDeps>; onLine?: (line: string) => void } = {}): Promise<RebootOutcome> {
   const deps = realHandsFreeDeps(opts.handsFree);
-  const attached = (await attachedKeyboards(deps)).filter((k) => opts.board === undefined || k.boardId === opts.board);
+  const seen = (await attachedKeyboards(deps)).filter((k) => opts.board === undefined || k.boardId === opts.board);
+  const attached = seen.filter((k) => k.target !== undefined);
+  if (attached.length === 0 && seen.length > 0) throw new UsageError(`the ${seen[0]?.boardName} is attached, but keyloom can only restart a ZSA keyboard running its own firmware into the bootloader; put it there with its own reset key`);
   if (attached.length === 0) throw new UsageError(opts.board ? `no ${opts.board} keyboard is attached` : "no keyboard keyloom can restart is attached");
   if (attached.length > 1) throw new UsageError(`more than one keyboard is attached (${attached.map((k) => `${k.boardId} ${k.revisionId}`).join(", ")}); say which with --board`);
   const keyboard = attached[0] as AttachedKeyboard;
-  const result = await rebootToBootloader(deps, keyboard.target, (line) => opts.onLine?.(line));
+  const target = keyboard.target as KeyboardTarget;
+  const result = await rebootToBootloader(deps, target, (line) => opts.onLine?.(line));
   if (!result.ok) throw new RebootFailedError(`couldn't restart the ${keyboard.boardName} into its bootloader: ${result.reason}`);
   return {
     board: keyboard.boardId, revision: keyboard.revisionId,
-    previousFirmware: keyboard.firmware.state === "keyloom" ? keyboard.firmware.serial : "unknown", bootloader: keyboard.target.bootloader,
+    previousFirmware: keyboard.firmware.state === "keyloom" ? keyboard.firmware.serial : "unknown", bootloader: target.bootloader,
   };
 }
