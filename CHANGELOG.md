@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/planetaryescape/keyloom/compare/v0.22.0...v0.22.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* never let the board run under the layer strip ([427a8d5](https://github.com/planetaryescape/keyloom/commit/427a8d57a42e90f4200c0c9cba0790821946db73))
+
 ## [0.22.0](https://github.com/planetaryescape/keyloom/compare/v0.21.0...v0.22.0) (2026-10-16)
 
 
