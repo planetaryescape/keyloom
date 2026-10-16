@@ -48,7 +48,7 @@ const STOP_REASONS: Record<string, string> = {
 export function reviewRequest(layoutName: string, revisionId: string, checks: readonly ReviewItem[]): string {
   const found = checks.length === 0
     ? "The checks found nothing."
-    : ["The checks found:", ...checks.map((c) => `- [${c.kind}] id ${c.id}: ${c.title}. ${c.body}`)].join("\n");
+    : ["The checks found (already shown to BK; do not restate any of them):", ...checks.map((c) => `- [${c.kind}] id ${c.id} (code ${c.code}): ${c.title}. ${c.body}`)].join("\n");
   return `Review the layout "${layoutName}" at revision ${revisionId}.\n\n${found}`;
 }
 
@@ -103,6 +103,14 @@ export async function runReviewAgent(input: { model: AgentModel; ports: AgentPor
   return { status: "done", items: toItems(submitted.items, snapshot.document, snapshot.board.definition.keyCount, checks, proposed), ...spent };
 }
 
+const slotSet = (keys: readonly { layerId: string; position: number }[]) => keys.map((k) => `${k.layerId}/${k.position}`).sort().join(",");
+
+/** A finding about nothing in particular (no layer, no key) restates nothing, so it is never matched. */
+function restates(checks: readonly ReviewItem[], kind: ReviewItem["kind"], layers: readonly string[], keys: readonly { layerId: string; position: number }[]): boolean {
+  if (layers.length === 0 && keys.length === 0) return false;
+  return checks.some((c) => c.kind === kind && [...c.layers].sort().join(",") === [...layers].sort().join(",") && slotSet(c.keys) === slotSet(keys));
+}
+
 /**
  * The model's findings as items, with everything it could get wrong checked: a suggestion needs a change set saved in this run (it is
  * validated against the head when saved, D-014), keys and layers must exist, and a finding the checks already made is dropped.
@@ -120,6 +128,8 @@ function toItems(
     if (f.kind === "suggestion" && (proposalId === null || !proposed.has(proposalId))) continue;
     const keys = f.keys.filter((k) => layerInfo.has(k.layerId) && k.position < keyCount);
     const layers = [...new Set(f.layers.filter((id) => layerInfo.has(id)))];
+    // The model invents its own codes, so a restated check is found by what it is about: the same kind, layers and keys.
+    if (restates(checks, f.kind, layers, keys)) continue;
     const id = itemId({ source: "agent", code: f.code, layers, keys });
     if (taken.has(id)) continue;
     taken.add(id);

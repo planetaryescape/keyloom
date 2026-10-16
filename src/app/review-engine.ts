@@ -115,10 +115,11 @@ export class ReviewEngine {
     if (findReviewOfRevision(this.app.db, layout.id, layout.headRevisionId)) return undefined;
     // Wait for the change to settle: a run of Applies is one review, of the last of them.
     if (this.now() - layout.updatedAt < this.quietMs) return undefined;
-    if (this.connected.has(layout.id)) return "connect";
+    // A head made since the server started was caused by the change, even when the keyboard is connected; "connect" is for a head that
+    // was already there when the keyboard appeared.
     const head = findRevision(this.app.db, layout.id, layout.headRevisionId)?.revision;
-    if (head === undefined || head.createdAt < this.startedAt) return undefined;
-    return head.origin === "import" ? "import" : "apply";
+    if (head !== undefined && head.createdAt >= this.startedAt) return head.origin === "import" ? "import" : "apply";
+    return this.connected.has(layout.id) ? "connect" : undefined;
   }
 
   // --- what the routes and the CLI call -----------------------------------------------------
