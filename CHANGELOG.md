@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.1](https://github.com/planetaryescape/keyloom/compare/v0.31.0...v0.31.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* configs polish and the blank danger buttons ([37ca870](https://github.com/planetaryescape/keyloom/commit/37ca870312789b6c4590967f14b99aad01a6f9c5))
+
 ## [0.31.0](https://github.com/planetaryescape/keyloom/compare/v0.30.1...v0.31.0) (2026-10-16)
 
 
