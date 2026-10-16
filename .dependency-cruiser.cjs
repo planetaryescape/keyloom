@@ -13,9 +13,10 @@ const ALLOWED = {
   "firmware/emulate": ["layout", "boards", "firmware/toolchain"],
   "firmware/toolchain": [],
   agent: ["layout", "validation", "boards", "memory"],
+  lab: ["layout", "boards", "firmware"], // the typing lab's analysis (24-typing-lab.md); app wires it to the keyboard and the database
   memory: ["layout", "persistence"],
   persistence: ["layout"],
-  app: ["layout", "validation", "boards", "firmware", "agent", "memory", "persistence"],
+  app: ["layout", "validation", "boards", "firmware", "agent", "lab", "memory", "persistence"],
   api: ["layout", "boards", "validation"], // the HTTP wire contract shared by server and web
   server: ["app", "api", "layout", "boards", "validation", "web"], // web: the bundled HTML entry it serves; layout/boards/validation: schema types
   cli: ["app", "server"], // the CLI entry point composes the server (keyloom serve)

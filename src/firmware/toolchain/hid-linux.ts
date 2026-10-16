@@ -4,7 +4,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { join } from "node:path";
-import { type HidTransport, HidError, RAW_HID_USAGE, RAW_HID_USAGE_PAGE, type RawHidInterface } from "./hid.ts";
+import { type HidTransport, HidError, RAW_HID_REPORT_SIZE, RAW_HID_USAGE, RAW_HID_USAGE_PAGE, type RawHidInterface } from "./hid.ts";
+import { openPolled } from "./polled-file.ts";
 
 // Report descriptor items: `06 60 FF` is Usage Page (0xFF60), `09 61` is Usage (0x61).
 const RAW_HID_DESCRIPTOR = Buffer.from([0x06, RAW_HID_USAGE_PAGE & 0xff, RAW_HID_USAGE_PAGE >> 8, 0x09, RAW_HID_USAGE]);
@@ -40,6 +41,20 @@ export function linuxHid(sysClass = "/sys/class/hidraw", devDir = "/dev"): HidTr
         found.push({ vendorId: Number.parseInt(id[1] as string, 16), productId: Number.parseInt(id[2] as string, 16), ...(serial ? { serial } : {}), handle: join(devDir, node) });
       }
       return found;
+    },
+
+    async openSession(target, onReport, onError) {
+      try {
+        // One read of a hidraw node is one report, so a report is never split or joined.
+        const file = openPolled(target.handle, (chunk) => onReport(chunk), { chunkSize: RAW_HID_REPORT_SIZE, ...(onError ? { onError } : {}) });
+        return { write: (report) => file.write(report), close: () => file.close() };
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "EACCES" || code === "EPERM") {
+          throw new HidError(`no permission to open ${target.handle}. Install ZSA's udev rules (https://github.com/zsa/wally/wiki/Linux-install) or run keyloom with access to it, then try again`);
+        }
+        throw new HidError(`could not open ${target.handle}: ${(err as Error).message}`);
+      }
     },
 
     async write(target, report) {

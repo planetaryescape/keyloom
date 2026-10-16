@@ -2,7 +2,7 @@
 import { join } from "node:path";
 import { EmulationError } from "../firmware/emulate/error.ts";
 import { ScriptError, parseScript } from "../firmware/emulate/script.ts";
-import type { EmulationResult } from "../firmware/emulate/types.ts";
+import type { EmulationResult, EmulatorEvent } from "../firmware/emulate/types.ts";
 import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import { dockerStatus } from "../firmware/toolchain/docker.ts";
@@ -14,7 +14,7 @@ import { EMULATORS } from "./emulators.ts";
 import { UsageError } from "./errors.ts";
 import { checkoutDirFor, sourceFor } from "./firmware.ts";
 import { EmulateFailedError } from "./firmware-errors.ts";
-import { getLayout } from "./layouts.ts";
+import { type LayoutView, getLayout } from "./layouts.ts";
 
 export type EmulateOptions = {
   /** The key script (10#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses), such as "hold 31 300 then tap 32". */
@@ -30,32 +30,47 @@ export type EmulateOutcome = EmulationResult & { layoutId: string; revisionId: s
 
 export async function emulateLayout(app: App, ref: string, opts: EmulateOptions): Promise<EmulateOutcome> {
   const view = getLayout(app, ref, opts.revisionId);
-  const board = view.board.definition;
-  const emulator = board.firmware === "kanata" ? undefined : EMULATORS[board.firmware];
-  if (!emulator) throw new UsageError(`emulating ${board.firmware.toUpperCase()} boards isn't available yet`);
   let events;
   try {
-    events = parseScript(opts.script, { keyCount: board.keyCount });
+    events = parseScript(opts.script, { keyCount: view.board.definition.keyCount });
   } catch (err) {
     if (err instanceof ScriptError) throw new UsageError(err.message);
     throw err;
   }
+  // No hardware detection: the emulator needs no connected keyboard, so the first revision stands in unless one is named.
+  const boardRevision = opts.boardRevision ?? (view.board.definition.revisions[0] as { id: string }).id;
+  return emulateEvents(app, view, events, {
+    boardRevision, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}), ...(opts.signal ? { signal: opts.signal } : {}),
+  });
+}
 
-  const id = `emu_${Date.now().toString(36)}`;
+export type EmulateEventsOptions = {
+  boardRevision: string;
+  onProgress?: (line: string) => void;
+  signal?: AbortSignal;
+  /** One log for several runs (the typing lab replays one recording many times); each run gets its own when omitted. */
+  log?: LogSink;
+};
+
+/** Runs key events on the real firmware logic for `view`'s document (which a caller may have changed from the stored one). */
+export async function emulateEvents(app: App, view: LayoutView, events: readonly EmulatorEvent[], opts: EmulateEventsOptions): Promise<EmulateOutcome> {
+  const board = view.board.definition;
+  const emulator = board.firmware === "kanata" ? undefined : EMULATORS[board.firmware];
+  if (!emulator) throw new UsageError(`emulating ${board.firmware.toUpperCase()} boards isn't available yet`);
+
+  const id = `emu_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const logRel = `logs/emulate-${id}.log`;
-  const logPath = join(app.dataDir, logRel);
-  const log = new LogSink(logPath);
+  const logPath = opts.log?.path ?? join(app.dataDir, logRel);
+  const log = opts.log ?? new LogSink(logPath);
   try {
     // Before the checkout: a missing Docker should not first cost a multi-gigabyte download.
     const docker = await dockerStatus();
     if (!docker.ok) throw new BuildFailure(docker.reason);
     const slug = board.id.replace("/", "-");
-    // No hardware detection: the emulator needs no connected keyboard, so the first revision stands in unless one is named.
-    const boardRevision = opts.boardRevision ?? (board.revisions[0] as { id: string }).id;
     const result = await emulator({
       board,
-      boardRevision,
-      source: sourceFor(view, boardRevision),
+      boardRevision: opts.boardRevision,
+      source: sourceFor(view, opts.boardRevision),
       events,
       checkoutDir: checkoutDirFor(view.board),
       workDir: join(cacheDir(), "emulate", slug),
@@ -72,6 +87,6 @@ export async function emulateLayout(app: App, ref: string, opts: EmulateOptions)
     log.line(`keyloom: emulation failed: ${err.message}`);
     throw new EmulateFailedError(`${err.message} (log: ${logPath})`, logPath);
   } finally {
-    log.close();
+    if (!opts.log) log.close();
   }
 }

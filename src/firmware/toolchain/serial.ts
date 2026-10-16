@@ -2,6 +2,7 @@
 // "touch" it, which means setting its baud rate and closing it. Listing reads the registry or sysfs and opens
 // nothing; only touch() reaches a device. Each platform's listing is in its own file; callers take a
 // SerialTransport so tests never touch a keyboard.
+import { openPolled } from "./polled-file.ts";
 import { capture } from "./run.ts";
 
 export type SerialPort = {
@@ -13,11 +14,19 @@ export type SerialPort = {
   path: string;
 };
 
+/** A serial port held open: bytes from the keyboard arrive in the callback given to open(), and write() sends to it. */
+export type SerialSession = {
+  write(text: string): void;
+  close(): void;
+};
+
 export type SerialTransport = {
   /** Every USB serial port attached, for any vendor. Reading this never opens a device. */
   list(): Promise<SerialPort[]>;
   /** Sets the port's baud rate and closes it. */
   touch(path: string, baud: number): Promise<void>;
+  /** Holds the port open to read what the keyboard writes (the typing lab's key stream, D-281). Never changes it to 1200 or 1201 baud. */
+  open?(path: string, onData: (text: string) => void, onError?: (error: Error) => void): Promise<SerialSession>;
 };
 
 export class SerialError extends Error {
@@ -36,4 +45,30 @@ export async function touchWithStty(path: string, baud: number, platform: NodeJS
     throw new SerialError(`no permission to open ${path}${platform === "linux" ? "; add your user to the dialout (or uucp) group and log in again" : ""}`);
   }
   throw new SerialError(`stty could not set ${path} to ${baud} baud${said ? `: ${said}` : r.timedOut ? ": it timed out" : ""}`);
+}
+
+/** The rate a lab session runs at. Any rate but 1200 and 1201 is ignored by the keyboard's restart trigger (handsfree.c). */
+export const STREAM_BAUD = 115200;
+
+/**
+ * `stty raw` first, because a terminal in line mode would hold characters back, rewrite newlines and echo; then the port is held
+ * open by this process so closing it later is a close at STREAM_BAUD, which the restart trigger ignores.
+ */
+export async function openWithStty(path: string, onData: (text: string) => void, onError?: (error: Error) => void, platform: NodeJS.Platform = process.platform): Promise<SerialSession> {
+  const r = await capture(["stty", platform === "darwin" ? "-f" : "-F", path, "raw", "-echo", String(STREAM_BAUD)], { timeoutMs: 10_000 });
+  if (r.exitCode !== 0) {
+    const said = (r.stderr || r.stdout).trim();
+    if (/permission denied/i.test(said)) {
+      throw new SerialError(`no permission to open ${path}${platform === "linux" ? "; add your user to the dialout (or uucp) group and log in again" : ""}`);
+    }
+    throw new SerialError(`stty could not set up ${path}${said ? `: ${said}` : ""}`);
+  }
+  const decoder = new TextDecoder();
+  try {
+    const file = openPolled(path, (chunk) => onData(decoder.decode(chunk, { stream: true })), { chunkSize: 256, ...(onError ? { onError } : {}) });
+    const encoder = new TextEncoder();
+    return { write: (text) => file.write(encoder.encode(text)), close: () => file.close() };
+  } catch (err) {
+    throw new SerialError(`could not open ${path}: ${(err as Error).message}`);
+  }
 }

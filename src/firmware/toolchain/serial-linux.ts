@@ -3,7 +3,7 @@
 // path handed back is the stable /dev/serial/by-id link when udev made one, else /dev/ttyACMn.
 import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { type SerialTransport, touchWithStty } from "./serial.ts";
+import { type SerialTransport, openWithStty, touchWithStty } from "./serial.ts";
 
 const tryRead = (path: string): string | undefined => {
   try {
@@ -71,5 +71,6 @@ export function linuxSerial(sysClassTty = "/sys/class/tty", devDir = "/dev", byI
       return found;
     },
     touch: (path, baud) => touchWithStty(path, baud, "linux"),
+    open: (path, onData, onError) => openWithStty(path, onData, onError, "linux"),
   };
 }

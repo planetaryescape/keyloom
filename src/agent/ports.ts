@@ -53,6 +53,35 @@ export type ChoiceFact = {
 
 export type OutcomeInput = { decisionId: string; status: "tried_helpful" | "tried_unhelpful"; note: string };
 
+/**
+ * What the typing lab found, aggregated and anonymised (D-280, 24-typing-lab.md#privacy): counts, per-finger numbers, the findings in words and
+ * the suggestions with their evidence. A key is named by the key it is; the passage, the typed text and the trace never appear here.
+ */
+export type TypingFindings = {
+  sessions: number;
+  analysed: number;
+  latest?: {
+    sessionId: string;
+    recordedAt: number;
+    seconds: number;
+    presses: number;
+    counts: { misfireHold: number; misfireTap: number; typo: number; missed: number; double: number };
+    findings: Array<{ kind: string; sentence: string }>;
+    fingers: Array<{ finger: string; keys: number; errors: number; medianMsBetweenKeys: number }>;
+    suggestions: Array<{
+      title: string;
+      /** The proposal to show BK; null when it could not be stored (the layout changed since). */
+      changeSetId: string | null;
+      before: number;
+      after: number;
+      removed: number;
+      introduced: number;
+      examples: Array<{ kind: string; keys: string[]; heldMs: number; overlapMs: number }>;
+    }>;
+    notes: string[];
+  };
+};
+
 export interface AgentPorts {
   snapshot(): LayoutSnapshot;
   /** The head of every layout keyloom holds, this conversation's included. Read-only: a proposal can only target `snapshot()` (D-014, D-220). */
@@ -71,4 +100,6 @@ export interface AgentPorts {
   choices(): ChoiceFact[];
   /** Records how a choice turned out in BK's words; throws a readable Error for a priority or a decision that no longer applies. */
   recordOutcome(input: OutcomeInput): ChoiceFact;
+  /** What BK's recorded typing sessions on this layout found. Aggregated: no text and no trace. */
+  typingFindings(): TypingFindings;
 }

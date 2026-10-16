@@ -12,6 +12,7 @@ import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
 import { ValidationFailedError } from "./errors.ts";
 import { getLayout, listLayouts } from "./layouts.ts";
+import { typingFindings } from "./lab.ts";
 
 export const toPriorityFact = (d: DecisionRow): PriorityFact => ({
   id: d.id, priorityKind: d.priorityKind ?? "pinned", statement: d.goal, reason: d.reason, subject: d.subject,
@@ -51,6 +52,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
       return { ...toPriorityFact(decision), alreadyKnown: !created };
     },
     choices: () => layoutChoices(app, layoutId).map(toChoiceFact),
+    typingFindings: () => typingFindings(app, layoutId),
     recordOutcome(input) {
       // The agent works on one layout; a decision ID from another is as good as a wrong one.
       if (showDecision(app, input.decisionId).layoutId !== layoutId) throw new Error(`"${input.decisionId}" is not a decision on this layout`);

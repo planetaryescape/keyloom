@@ -3,6 +3,7 @@
 // The firmware side (emitted into the keymap) and the host side (handsfree-flash.ts)
 // both read their constants from here so they cannot drift apart.
 import { RAW_HID_REPORT_SIZE } from "../toolchain/hid.ts";
+import { streamSource } from "./typing-stream.ts";
 
 /** First byte of the packet. Oryx's commands are 0x00-0x0C and 0xFE, and VIA's are 0x01-0x15 and 0xFF (quantum/via.h), so this is unclaimed. */
 export const BOOTLOADER_COMMAND = 0xe7;
@@ -58,6 +59,9 @@ export const serialDefine = (marker: string): string => `#define SERIAL_NUMBER $
 /** Added to rules.mk so the linker routes every call of raw_hid_receive to the wrapper below. */
 export const WRAP_LINK_FLAG = "LDFLAGS += -Wl,--wrap=raw_hid_receive";
 
+/** The typing lab's key-event stream (typing-stream.ts) is added to the wrapper for the board it is built for. */
+export type StreamOptions = { layoutMacro: string; keyCount: number };
+
 /** The wrapper must be a separate function the linker can route to; link-time inlining can defeat --wrap, so it is switched off. */
 export const NO_LTO = "LTO_ENABLE = no";
 export const WRAPPER_SYMBOL = "__wrap_raw_hid_receive";
@@ -67,15 +71,17 @@ export const WRAPPER_SYMBOL = "__wrap_raw_hid_receive";
  * sends the USB code's call to __wrap_raw_hid_receive, which handles the one packet and hands every
  * other to __real_raw_hid_receive, which the linker binds to Oryx's function.
  */
-export function wrapperSource(): string {
+export function wrapperSource(stream?: StreamOptions): string {
   const magic = [...new TextEncoder().encode(BOOTLOADER_MAGIC)].map((b) => `'${String.fromCharCode(b)}'`).join(", ");
   return [
     "// keyloom: a raw-HID packet with this command and magic reboots into the bootloader, so keyloom can flash with no keypress.",
     "#include <string.h>",
     `#define KEYLOOM_BOOTLOADER_COMMAND 0x${BOOTLOADER_COMMAND.toString(16)}`,
     `static const uint8_t keyloom_bootloader_magic[] = {${magic}};`,
+    ...(stream ? ["", streamSource(stream.layoutMacro, stream.keyCount), ""] : []),
     "void __real_raw_hid_receive(uint8_t *data, uint8_t length);",
     "void __wrap_raw_hid_receive(uint8_t *data, uint8_t length) {",
+    ...(stream ? ["  if (keyloom_lab_receive(data, length)) return;"] : []),
     "  if (length > sizeof(keyloom_bootloader_magic) && data[0] == KEYLOOM_BOOTLOADER_COMMAND &&",
     "      memcmp(data + 1, keyloom_bootloader_magic, sizeof(keyloom_bootloader_magic)) == 0) {",
     "    reset_keyboard();",

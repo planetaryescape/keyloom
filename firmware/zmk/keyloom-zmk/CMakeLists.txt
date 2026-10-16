@@ -3,5 +3,6 @@
 zephyr_library()
 zephyr_library_sources_ifdef(CONFIG_KEYLOOM_HANDSFREE src/handsfree.c)
 zephyr_library_sources_ifdef(CONFIG_KEYLOOM_SERIAL_OVERRIDE src/serial.c)
+zephyr_library_sources_ifdef(CONFIG_KEYLOOM_TYPING_LAB src/typing.c)
 # ZMK's headers (zmk/behavior.h, zmk/split/central.h) live in the application, which is ZMK's app/ in every keyloom build.
 zephyr_include_directories(${APPLICATION_SOURCE_DIR}/include)

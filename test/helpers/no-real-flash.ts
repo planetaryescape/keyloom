@@ -8,6 +8,7 @@ import { mock } from "bun:test";
 import * as hid from "../../src/firmware/toolchain/hid.ts";
 import * as hidDefault from "../../src/firmware/toolchain/hid-default.ts";
 import * as hidMacos from "../../src/firmware/toolchain/hid-macos.ts";
+import * as polled from "../../src/firmware/toolchain/polled-file.ts";
 import * as serial from "../../src/firmware/toolchain/serial.ts";
 import * as serialDefault from "../../src/firmware/toolchain/serial-default.ts";
 import * as volumes from "../../src/firmware/zmk/volumes.ts";
@@ -47,6 +48,8 @@ const refuseHid = (what: string): never => {
 const readOnly = (real: hid.HidTransport): hid.HidTransport => ({
   list: () => real.list(),
   write: async () => refuseHid("HidTransport.write()"),
+  // The typing lab's reader (D-281) would start a key stream on a real keyboard.
+  openSession: async () => refuseHid("HidTransport.openSession()"),
 });
 mock.module("../../src/firmware/toolchain/hid-default.ts", () => ({
   ...hidDefault,
@@ -60,14 +63,33 @@ mock.module("../../src/firmware/toolchain/hid-macos.ts", () => ({ ...hidMacos, m
 // real port. Touching a path under /dev is refused; a test's fake stty on a temporary path still runs. Listing is replaced by an empty
 // bus, so a keyboard on the desk can't change a test's outcome; tests inject fakes (ZmkHandsFreeDeps) to see any port.
 const realTouch = serial.touchWithStty;
+const realOpenWithStty = serial.openWithStty;
 mock.module("../../src/firmware/toolchain/serial.ts", () => ({
   ...serial,
   touchWithStty: async (path: string, baud: number, platform?: NodeJS.Platform) => {
     if (path.startsWith("/dev/")) refuse(`touchWithStty(${path})`);
     return realTouch(path, baud, platform);
   },
+  openWithStty: async (path: string, ...rest: [never, never, never]) => {
+    if (path.startsWith("/dev/")) refuse(`openWithStty(${path})`);
+    return realOpenWithStty(path, ...rest);
+  },
 }));
 mock.module("../../src/firmware/toolchain/serial-default.ts", () => ({
   ...serialDefault,
-  defaultSerialTransport: async () => ({ list: async () => [], touch: async (path: string) => refuse(`SerialTransport.touch(${path})`) }),
+  defaultSerialTransport: async () => ({
+    list: async () => [],
+    touch: async (path: string) => refuse(`SerialTransport.touch(${path})`),
+    open: async (path: string) => refuse(`SerialTransport.open(${path})`),
+  }),
 }));
+// The typing lab's stream starts on a command written to a real port or hidraw node; a test may open only a path it made itself.
+const realOpenPolled = polled.openPolled;
+mock.module("../../src/firmware/toolchain/polled-file.ts", () => ({
+  ...polled,
+  openPolled: (path: string, ...rest: [never, never]) => {
+    if (path.startsWith("/dev/")) refuse(`openPolled(${path})`);
+    return realOpenPolled(path, ...rest);
+  },
+}));
+
