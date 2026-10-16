@@ -950,3 +950,42 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 
 ### D-249: Copying onto the MacBook offers hold keys instead of forcing them. (Claude, D-234 and 20)
 - `board.json` can list `holdKeyPreference`: positions where a layer or hold key lands first when the board it came from had more thumb keys. The MacBook lists Space, Caps Lock and right Option. `map_keys` shows them for each layer key with no counterpart and says to ask BK, suggesting the first. A hold-tap copied onto a kanata board gets a translated kanata profile (D-242).
+
+### D-260: keyloom's look is "the keyboard under the light", and the shell is the top bar, the stage and one sheet. (BK approved the comps, Claude)
+- BK, 2026-10-16, on the comps in `evidence/concept/`: "Yes, build it". The concept and its rules are [23](23-design-concept.md).
+- The toolbar row, the permanent side panel with its layout summary, and the bottom chat bar are removed. History, Library, Combos, Settings, Advanced view, select mode, shortcuts, theme and Build and flash are in the top bar's menu; the chat opens from Ask keyloom (⌘K). The side column appears only while something is open, as a sheet beside the board.
+- **Replaces** 18's toolbar, side panel and chat bar layout.
+
+### D-261: One typeface, Instrument Sans, using its width axis for long legends. (Claude)
+- Real keycap legends are set in a slightly condensed grotesk; the width axis (75 to 100) lets "command" or "Space" get narrower instead of smaller, so the 11 px floor holds. Loaded from Google Fonts without blocking, as Inter was; the system font stands in offline.
+- **Replaces** 18's Inter.
+
+### D-262: The theme is the room, and the board's colourway follows it. (BK, Claude)
+- BK chose "the case colour follows the theme": black caps and case in the dark room, white in the light one. The Moonlander's red thumb caps stay red in both. A setting to pin the colourway to the board BK owns is deferred.
+
+### D-263: Light carries meaning: a layer's colour, amber for a change not on the keyboard, green for one that is. (Claude)
+- A layer's light is its dominant LED colour when it has LEDs (BK's Oryx colours), else its chosen colour, else the colour its place picks; the first layer with neither is unlit (`src/web/light/layer-light.ts`). It is the underglow, the strip's miniature and the dot on every key that reaches the layer.
+- Per-key LED colours bleed under the cap and tint its skirt at `--led-wash` (12%); every hue keeps the front print at 4.5:1 (`test/web/led-contrast.test.ts`).
+- Chrome has no accent colour: ink is primary. The older `--color-accent` name now holds ink.
+- **Replaces** 18's one blue accent and "no gradients, glow or decorative motion": glow is now the meaning-carrier, kept off the chrome.
+
+### D-264: Key kinds are hidden at rest and shown by Inspect. (Claude)
+- At rest a cap shows its tap legend on the top face and its hold printed on the front skirt, like a real dual-legend cap. Inspect (`i`, or the toggle at the stage's foot) tints faces by kind, shows what transparent keys pass through to, marks combo keys and draws combo lines. The kind is always said in words in the key's name and its panel.
+- The kind tints keep their ink at 4.5:1; they differ from a plain key by 1.2:1 or more, since at rest they are not shown and under Inspect the words carry the kind.
+- **Replaces** D-100's "kind is a shape and a fill" and the 1.5:1 kind-fill rule.
+
+### D-265: A layer change ripples out from the key that holds the layer; keys never move. (Claude)
+- The underglow crossfades first; each key's legend and light then change after a delay of 18 ms per key unit from the key that reaches the layer on the first layer (a held thumb key first). The old legend fades as the new arrives. Reduced motion switches at once.
+
+### D-266: Each board's case is drawn from its geometry, with an optional `display.surface` hint. (Claude)
+- A display rotation group is a module drawn square in its own frame and turned (the Moonlander's thumb clusters). Each hand's other keys make one body: a box when they are all square, a filleted hull when any key turns. Hands that interleave make one body. `display.surface` is `wells` (the Glove80: a sunken well per column and thumb key) or `deck` (the MacBook: an aluminium deck and a recess). `src/web/keyboard/case-shape.ts`.
+- **Replaces** 18's trays.
+
+### D-267: The front print spells a lone modifier the way Apple's caps do, and a modifier key prints its symbol. (Claude)
+- A hold of one modifier prints "⌥ option", or "⌥ opt" when that wouldn't fit at the legend's size; Hyper prints "✦ hyper". Which side's modifier it is stays in the key's name and panel. A key that is itself a modifier prints ⇧, ⌃, ⌥ or ⌘ instead of LSFT or LGUI.
+
+### D-268: Applying presses the key down. (Claude)
+- The applied key's cap travels down 0.08 key units past rest and springs back over 0.42 s (Motion). Reduced motion skips it.
+
+### D-269: The top bar's board switcher draws each board's silhouette from `GET /api/boards`. (Claude)
+- The boards list now carries each board's geometry keys and display hints, so a board BK hasn't opened yet still shows its shape. A connected keyboard that isn't on screen shows its sync light on its silhouette. The sync line covers the board on screen only.

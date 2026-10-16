@@ -31,6 +31,7 @@ BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10
 | 20 | [Copying from my other keyboard](20-cross-board.md) | The agent sees every layout, deterministic key and layer correspondence across boards, board capabilities, copying colours, behaviours and combos, and why the Glove80 has no lighting |
 | 21 | [MacBook keyboard](21-macbook-keyboard.md) | The built-in keyboard as a board through kanata: apply by reload, safety, importing BK's Karabiner rules |
 | 22 | [New keyboard](22-new-keyboard.md) | Recognising a QMK or ZMK board on USB, building its definition, and putting BK's config on it |
+| 23 | [Design concept](23-design-concept.md) | The keyboard under the light: what keyloom is to BK, how the whole fits together, the moments, the visual language and the design gate |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
 Research behind these decisions:

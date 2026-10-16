@@ -2,6 +2,8 @@
 
 Status: proposal, 2026-10-15. Source baseline: origin/main at `65cc12a` (v0.10.1).
 
+**Partly replaced on 2026-10-16 by [23](23-design-concept.md) (D-260).** These rules no longer hold: kind shown by fill and shape at rest (D-264), one blue accent (D-263), no gradients or glow (D-263), Inter (D-261), trays (D-266), the toolbar row, the permanent side panel and the bottom chat bar (D-260). The rest of this chapter (legend floor, words, states, keyboard use, the 1440 and 390 screenshot gate) still holds.
+
 BK: "please do a visual assessment of keyloom, right now it's built for functionality. to make sure it works without much regard for looking pretty. I want you to do a UI/UX blueprint." Earlier, while it was being built: "dont' build an ugly ui, check your work and make sure the UI you build looks good" and "and follows good design principles". The taste he named: "In terms of great UX I think i love most oryx and vial".
 
 The assessment is [../research/keyloom-ui-audit.md](../research/keyloom-ui-audit.md): 26 screenshots of v0.10.1 on BK's own layouts, each finding tied to the file and line that causes it. This chapter is what we do about it. The key panel's content is in [16](16-key-editor.md), and the sync state is in [17](17-keyboard-sync.md).
