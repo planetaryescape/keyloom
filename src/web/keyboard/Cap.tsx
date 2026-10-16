@@ -4,7 +4,7 @@ import { useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type 
 import type { Legend } from "../../layout/legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
 import { fitLegend, HOLD_SIZE, isCondensed, tapRange } from "./fit.ts";
-import { frontWords, type FrontMode } from "./front-words.ts";
+import { FRONT_INSET, frontWords, type FrontMode } from "./front-words.ts";
 import { measureText } from "./measure.ts";
 import { roundedPath } from "./case-shape.ts";
 
@@ -71,8 +71,6 @@ function frontFits(text: string, width: number, px: { unit: number; floor?: numb
   if (measured === null) return fitLegend(text, width, HOLD_SIZE, px, true).fits;
   return measured <= (width - FRONT_INSET) * px.unit;
 }
-// The cap body is narrower than its key by the gap between caps, and the front print keeps a hair from the skirt's edge.
-const FRONT_INSET = 0.1;
 
 function shortenToFit(text: string | null, width: number, px: { unit: number; floor?: number }): string | null {
   if (text === null || frontFits(text, width, px)) return text;

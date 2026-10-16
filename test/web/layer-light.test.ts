@@ -72,6 +72,9 @@ describe("front print words (D-267, P1 review)", () => {
     // Measured in Instrument Sans at 11 px, 75% width: "⌘ command" is 50.5 px. A Moonlander cap at 57 px has 51.9 px of front.
     expect(frontMode(57, { both: 50.5, word: 38.8 }, 0.09)).toBe("both");
     expect(frontMode(49, { both: 50.5, word: 38.8 }, 0.09)).toBe("word");
+    // A Glove80 cap at 56 px: "⌘ command" (50.55 px) misses the per-key room (50.4 px), so the board prints the word alone instead
+    // of choosing "both" and having F and J cut to "⌘ com".
+    expect(frontMode(56, { both: 50.55, word: 38.8 }, 0.09)).toBe("word");
     // BK's 1280x577 window with a mouse: 38 px keys, where even "command" (35 px at 10 px) doesn't fit 34.6 px.
     expect(frontMode(38, { both: 45.9, word: 35.3 }, 0.09)).toBe("mark");
   });
