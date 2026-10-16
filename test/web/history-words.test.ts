@@ -27,6 +27,16 @@ describe("History rows in people's words (D-312)", () => {
     expect(historyWords("Back to: The F key on Base: F17", layout)).toEqual({ how: "Went back", cap: "F", layer: "Base", text: "F17" });
   });
 
+  test("a change from the chat keeps its words, with old key numbers read away", () => {
+    expect(historyWords("Key 19 on Layer 0 (R) becomes a hold-tap, tap for R, hold for option.", layout, "agent").text).toBe("The R key on Layer 0 becomes a hold-tap, tap for R, hold for option.");
+    expect(historyWords("The left thumb key becomes a plain Option. Option is then a press.", layout, "agent").text).toBe("The left thumb key becomes a plain Option. Option is then a press.");
+  });
+
+  test("a swap is two caps and its layer", () => {
+    expect(historyWords("Swapped Layer 0 (I) and Layer 0 (T)", layout)).toEqual({ how: null, cap: null, layer: "Layer 0", text: "Swapped", swap: ["I", "T"] });
+    expect(historyWords("Swapped A on Base and 4 on Numbers", layout)).toMatchObject({ layer: "Base and Numbers", swap: ["A", "4"] });
+  });
+
   test("anything else keeps its words", () => {
     expect(historyWords("Read colours and tap dances from the Oryx code", layout)).toEqual({ how: null, cap: null, layer: null, text: "Read colours and tap dances from the Oryx code" });
   });

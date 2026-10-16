@@ -873,7 +873,9 @@
     bottom: var(--chat-bar-height);
     left: 0;
     height: var(--sheet-h, 46dvh);
-    border-top: 1px solid var(--color-border-strong);
+    /* The full width of the phone: the wide screen's right-hand gap would leave a strip of the stage showing (P5). */
+    margin: 0;
+    border-top: 0;
     border-left: 0;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: var(--shadow-pop);

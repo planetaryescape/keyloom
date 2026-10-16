@@ -5,7 +5,7 @@ import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { LogTail } from "./LogTail.tsx";
 import { elapsedOf, type ReleaseStatus } from "./status.ts";
 import type { Release } from "./useRelease.ts";
-import { withoutKeyNumbers } from "../../layout/history-summary.ts";
+import { headline } from "../../layout/history-summary.ts";
 import "./release.css";
 
 interface Props {
@@ -116,7 +116,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
           <div>
             <h2 id="release-title">Build and flash</h2>
             <p className="muted">
-              {earlierRevision ? "From an earlier revision: " : "From the latest layout: "}<strong>{withoutKeyNumbers(head.summary)}</strong>
+              {earlierRevision ? "From an earlier revision: " : "From the latest layout: "}<strong>{headline(head.summary)}</strong>
             </p>
           </div>
           <button type="button" className="sheet-close" aria-label="Close" onClick={onClose}>
@@ -244,7 +244,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                 <div className="callout callout-success" role="status">
                   <CircleCheck size={18} aria-hidden="true" />
                   <p>
-                    <strong>Flashed.</strong> Your {boardName} restarts with {earlierRevision ? "this earlier revision" : "the latest layout"}: {withFullStop(withoutKeyNumbers(head.summary))}
+                    <strong>Flashed.</strong> Your {boardName} restarts with {earlierRevision ? "this earlier revision" : "the latest layout"}: {withFullStop(headline(head.summary))}
                     {flash.note === null ? null : <> {flash.note}</>}
                   </p>
                 </div>

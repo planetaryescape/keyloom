@@ -26,3 +26,16 @@
   flex: none;
   color: var(--ink-3);
 }
+
+/* A long line (a change from the chat) shows two lines; pointing at or focusing the row shows it all. */
+.revision-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.revision:hover .revision-title,
+.revision:focus-within .revision-title {
+  display: block;
+}
