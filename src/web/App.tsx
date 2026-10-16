@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import type { BoardChoice, ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
@@ -17,6 +18,17 @@ import { Viewer, type Arrival } from "./Viewer.tsx";
 
 type Failure = { message: string; retryable: boolean };
 type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
+
+// Runs a state change that replaces the page as a crossfade where the browser has view transitions; elsewhere, and with reduced
+// motion, it happens at once. flushSync makes React commit inside the transition's callback, so the new page is what it captures.
+function crossfade(update: () => void) {
+  const doc = document as Document & { startViewTransition?: (callback: () => void) => unknown };
+  if (doc.startViewTransition === undefined || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    update();
+    return;
+  }
+  doc.startViewTransition(() => flushSync(update));
+}
 
 export function App({ token }: { token: string }) {
   const [layouts, setLayouts] = useState<LayoutSummary[] | null>(null);
@@ -61,7 +73,7 @@ export function App({ token }: { token: string }) {
     const controller = new AbortController();
     fetchLayout(token, selectedId, controller.signal)
       .then((detail) => {
-        if (!controller.signal.aborted) setView({ id: selectedId, detail });
+        if (!controller.signal.aborted) crossfade(() => setView({ id: selectedId, detail }));
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setView({ id: selectedId, error: describe(error) });
@@ -129,8 +141,11 @@ export function App({ token }: { token: string }) {
     );
   }
 
-  // A view for an earlier selection is ignored until the new one arrives.
-  const current = view !== null && view.id === summary.id ? view : null;
+  // A switch keeps the board on screen until the next one has loaded, then the two crossfade: a loading skeleton in between flashed
+  // the whole page (BK, 2026-10-17: "the screen kinda just flashes, it's a little jarring").
+  const previous = view !== null && "detail" in view ? layouts.find((layout) => layout.id === view.id) : undefined;
+  const current = view !== null && view.id === summary.id ? view : previous !== undefined ? view : null;
+  const shown = current !== null && current.id !== summary.id && previous !== undefined ? previous : summary;
   if (current === null) {
     return (
       <Shell menu={menu} fill>
@@ -150,15 +165,15 @@ export function App({ token }: { token: string }) {
 
   return (
     <LayoutPage
-      key={summary.id}
+      key={shown.id}
       token={token}
-      summary={summary}
+      summary={shown}
       detail={current.detail}
       menu={menu}
       boardChoices={boardChoices}
       sync={sync}
       onChanged={refresh}
-      arrival={carry !== null && carry.id === summary.id ? carry : null}
+      arrival={carry !== null && carry.id === shown.id ? carry : null}
       onCarry={(id, next) => {
         setCarry({ id, ...next });
         setImporting(false);
