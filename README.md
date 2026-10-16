@@ -45,7 +45,7 @@ The Glove80 gets the same editor.
 
 ![The Glove80 board](docs/screenshots/glove80.png)
 
-The screenshots use keyloom's own test fixtures and fake keyboards, not a real layout.
+The screenshots use keyloom's test fixtures and fake keyboards; nothing in them is connected to a real keyboard.
 
 ## Install
 
