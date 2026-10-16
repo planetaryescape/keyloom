@@ -82,7 +82,7 @@ Always visible without asking: which board and layout, which layer and how to re
 4. **Keys never move when the meaning changes.** A layer switch changes the legends and the light, not the geometry.
 5. **Edit on the key.** The card's hero is the key itself (P2).
 6. **Physical feedback.** Applying presses the key down.
-7. **Every board is drawn from data.** A contributed board gets its case, caps and silhouette with no code of its own.
+7. **Every board is drawn from data.** A contributed board gets its case, caps and silhouette with no code of its own. A board someone owns can be drawn from photographs of it instead, still as data (D-277).
 
 ## Key moments
 

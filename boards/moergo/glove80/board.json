@@ -194,5 +194,5 @@
   "importers": [
     "zmk-layout-editor-keymap"
   ],
-  "display": { "surface": "wells" }
+  "display": { "surface": "wells", "caseHug": 0.3 }
 }

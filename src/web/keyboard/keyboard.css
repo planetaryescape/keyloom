@@ -89,7 +89,62 @@
 }
 
 .case-recess {
+  fill: var(--mac-well);
+}
+
+/* A case that hugs its keys (display.caseHug): overlapping shapes filled as one, so a rim would draw their insides. */
+.keyboard-case .case-plate {
+  fill: color-mix(in oklab, var(--case-hi) 55%, var(--case-lo));
+}
+
+/* A case drawn from the real object (display.case, D-277). The module is a separate hinged plate, so it catches a little more light
+   than the body it sits against; the seam between them is its rim. */
+.keyboard-case .case-module {
+  fill: color-mix(in oklab, var(--case-hi) 70%, var(--case-lo));
+  stroke: var(--case-seam);
+  stroke-width: 0.022;
+}
+
+.keyboard-case .case-body {
+  stroke-linejoin: round;
+}
+
+/* A display's cover (the Corne's OLED acrylic): dark glass in either room, with a faint sheen along its top. */
+.case-screen {
+  fill: var(--screen);
+  stroke: var(--screen-rim);
+  stroke-width: 0.014;
+}
+
+/* A laptop's speaker grille (filled with the holes pattern in Keyboard.tsx) and its fingerprint key. */
+.case-grille-hole {
+  fill: var(--grille-hole);
+}
+
+.case-sensor {
   fill: var(--mac-key);
+}
+
+.case-leg {
+  fill: var(--leg);
+  stroke: var(--leg-rim);
+  stroke-width: 0.014;
+}
+
+.case-knob {
+  fill: var(--knob);
+  stroke: var(--leg-rim);
+  stroke-width: 0.012;
+}
+
+.case-knurl {
+  fill: none;
+  stroke: var(--knurl);
+  stroke-width: 0.018;
+}
+
+.case-hole {
+  fill: var(--hole);
 }
 
 /* ---------- the keycap: five layers ---------- */
@@ -216,6 +271,7 @@
 
 /* A steeply turned cap (the Glove80's thumb fan) turns its whole print back upright, so the front word stays under the tap legend. */
 .cap[data-upright="true"] .cap-print {
+  inset: calc(50% - var(--print-h, 100%) / 2) calc(50% - var(--print-w, 100%) / 2);
   transform: rotate(var(--turn, 0deg));
 }
 
@@ -281,6 +337,78 @@
 .cap[data-keycap="red"] .cap-front,
 .cap[data-keycap="red"] .cap-corner {
   color: var(--red-front);
+}
+
+/* A shaped cap (display.keyShapes): clipped to its outline, so its shadow comes from a filter on the whole cap and its light from a
+   clipped child inside the blurred bleed. Rings are drawn on .cap-outline, a line along the same outline. */
+.cap[data-shaped="true"] {
+  filter: drop-shadow(0 calc(var(--u) * 0.035) calc(var(--u) * 0.03) var(--cap-drop)) drop-shadow(0 calc(var(--u) * 0.1) calc(var(--u) * 0.16) var(--cap-drop));
+}
+
+.cap[data-shaped="true"] .cap-bleed {
+  background: none;
+}
+
+.cap-bleed-shape {
+  position: absolute;
+  inset: 0;
+  background: var(--led, transparent);
+}
+
+.cap-outline {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  transition: transform 0.18s var(--ease-out);
+}
+
+.cap-outline path {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2px;
+}
+
+button.cap[data-shaped="true"]:focus-visible .cap-outline path,
+button.cap[data-shaped="true"][data-current="true"] .cap-outline path,
+button.cap[data-shaped="true"][data-found="true"] .cap-outline path {
+  stroke: var(--ink);
+}
+
+button.cap[data-shaped="true"][aria-pressed="true"] .cap-outline path,
+button.cap[data-shaped="true"][data-highlight="true"] .cap-outline path,
+button.cap[data-shaped="true"][data-combo-hover="true"] .cap-outline path {
+  stroke: var(--ink-2);
+}
+
+.keyboard[data-inspect="true"] button.cap[data-shaped="true"][data-partner="true"] .cap-outline path {
+  stroke: var(--ink-3);
+  stroke-width: 1.5px;
+}
+
+button.cap[data-shaped="true"][data-pending="true"] .cap-outline path {
+  stroke: var(--pending);
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 0 calc(var(--u) * 0.2) var(--pending));
+}
+
+button.cap[data-shaped="true"][data-home="true"] .cap-outline path {
+  stroke: var(--pending);
+  stroke-dasharray: 4 3;
+  stroke-width: 1.5px;
+}
+
+button.cap[data-shaped="true"][data-drop="true"] .cap-outline path {
+  stroke: var(--ink);
+  stroke-width: 3px;
+}
+
+button.cap[data-shaped="true"]:hover .cap-outline {
+  transform: translateY(calc(var(--u) * -0.02));
+}
+
+button.cap[data-shaped="true"][data-current="true"] .cap-outline {
+  transform: translateY(calc(var(--u) * -0.05));
 }
 
 /* A laptop's keys: black scissor caps, flat, in both rooms. */

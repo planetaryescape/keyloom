@@ -321,14 +321,21 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.rotate[].r` | all | The angle in degrees. |
 | `display.rotate[].rx` | all | The x of the point to turn around, in key units. |
 | `display.rotate[].ry` | all | The y of the point to turn around, in key units. |
-| `display.shift` | all | Optional. A list of sideways slides to draw, applied after rotation. |
+| `display.shift` | all | Optional. A list of slides to draw, applied after rotation. |
 | `display.shift[].positions` | all | The keys to slide. |
 | `display.shift[].dx` | all | How far to slide them, in key units. Use it when a split board's halves are drawn too close for their tilted thumb clusters. |
+| `display.shift[].dy` | all | Optional. How far to move them down, in key units, when a row above is drawn taller than the geometry has it. |
 | `display.keycaps` | all | Optional. An object from a position, as a string, to the physical keycap colour where it is not the board's usual one. Only `red` exists, for the Moonlander's two big thumb keys. |
 | `display.surface` | all | Optional. How the editor draws the case under the keys: `wells` sinks each column into a sculpted well (the Glove80), `deck` draws a laptop's aluminium deck with the keys in a recess (the MacBook). Leave it out for a flat case. |
 | `display.statusLeds` | all | Optional. The case's status LEDs (the Moonlander has three per half). The editor lights each one in the layer's colour. |
 | `display.statusLeds[].x` | all | An LED's horizontal position, in key units after `rotate` and `shift`. |
 | `display.statusLeds[].y` | all | The LED's vertical position, in the same units. |
+| `display.caseHug` | all | Optional. Draws a case that hugs the keys, reaching this many key units past each one, instead of one outline around them all. Keys turned about the same point (a thumb fan) get a curved band. The Glove80 uses `0.3`. |
+| `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. Drawing only: binding order never changes. |
+| `display.case` | all | Optional. The case drawn from photos of the real board instead of computed from the keys. Each part is an SVG path in key units after `rotate` and `shift`. Leave it out and the editor draws a case from the keys. |
+| `display.case[].hand` | all | `left`, `right`, or `null` for a one-piece case. A split board's halves part for the key card by hand. |
+| `display.case[].kind` | all | `body` or `module` (a separate hinged plate) for the case; `deck` and `recess` for a laptop's top case and keyboard well; `screen` for a display's dark cover; `grille` for a speaker grille; `sensor` for a fingerprint key; `leg` and `knob` for metal tenting parts; `knurl` for fine lines, such as a knob's knurling or a fingerprint key's ring; `hole` for a pinhole. |
+| `display.case[].d` | all | The part's path, using absolute `M`, `L`, `Q`, `A` and `Z` commands. |
 
 Use `display.rotate` only when the firmware's own geometry doesn't tilt keys that really tilt. The Moonlander's thumbs are the example.
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { applyDisplayRotation } from "../../src/web/keyboard/geometry.ts";
-import { caseParts, convexHull, roundedPath } from "../../src/web/keyboard/case-shape.ts";
+import { caseBounds, caseParts, convexHull, roundedPath } from "../../src/web/keyboard/case-shape.ts";
 
 const load = async (dir: string) => {
   const board = await Bun.file(new URL(`../../boards/${dir}/board.json`, import.meta.url)).json();
@@ -9,35 +9,55 @@ const load = async (dir: string) => {
 };
 
 describe("a board's case (D-266)", () => {
-  test("the Moonlander is two bodies plus two thumb modules, one per display rotation group", async () => {
+  test("the Moonlander is drawn from the real object: a body and a hinged thumb module per half, with its tenting leg (D-277)", async () => {
     const { board, keys } = await load("zsa/moonlander");
     const parts = caseParts(keys, board.hands, board.display);
-    expect(parts.filter((part) => part.kind === "body")).toHaveLength(4);
-    // Modules are drawn after the bodies, so they sit on top where they meet.
-    expect(parts.at(-1)?.kind).toBe("body");
+    expect(parts.filter((part) => part.kind === "body").map((part) => part.hand)).toEqual(["left", "right"]);
+    expect(parts.filter((part) => part.kind === "module").map((part) => part.hand)).toEqual(["left", "right"]);
+    expect(parts.filter((part) => part.kind === "leg")).toHaveLength(2);
+    // Every key sits on its half's body or module, so the case is under the keys it belongs to.
+    const bounds = caseBounds(parts.filter((part) => part.kind === "body" || part.kind === "module"));
+    for (const key of keys) {
+      expect(key.x).toBeGreaterThan(bounds?.minX ?? Infinity);
+      expect(key.y).toBeGreaterThan(bounds?.minY ?? Infinity);
+    }
   });
 
-  test("the Glove80 is two hull bodies with a well per column and per thumb key", async () => {
+  test("the Glove80's case hugs its keys, one plate per half, with a well per column and per thumb key", async () => {
     const { board, keys } = await load("moergo/glove80");
     const parts = caseParts(keys, board.hands, board.display);
-    expect(parts.filter((part) => part.kind === "body")).toHaveLength(2);
+    expect(parts.filter((part) => part.kind === "plate").map((part) => part.hand)).toEqual(["left", "right"]);
     const thumbs = keys.filter((key) => key.r !== 0).length;
     expect(parts.filter((part) => part.kind === "well").length).toBeGreaterThan(thumbs);
   });
 
-  test("the MacBook is one deck with a recess, though its hands interleave", async () => {
+  test("the MacBook is one deck with its keyboard well, speaker grilles and Touch ID, though its hands interleave", async () => {
     const { board, keys } = await load("apple/macbook-ansi");
-    expect(caseParts(keys, board.hands, board.display).map((part) => part.kind)).toEqual(["deck", "recess"]);
+    const parts = caseParts(keys, board.hands, board.display);
+    expect(parts.map((part) => part.kind)).toEqual(["deck", "recess", "grille", "grille", "sensor", "knurl"]);
+    expect(parts.every((part) => part.hand === null)).toBe(true);
+    // A phone shows one hand of the keys, on a deck around just those keys: the whole deck would run off the screen.
+    expect(caseParts(keys, board.hands, board.display, "left").map((part) => part.kind)).toEqual(["deck", "recess"]);
+    // The function row is drawn full height, as on a MacBook Pro, and the rows below it move down to make room.
+    expect(keys[0]?.h).toBe(1);
+    expect(keys[13]?.y).toBe(1);
   });
 
-  test("the Corne, with no display hints, is two plain bodies", async () => {
+  test("the Corne is two PCBs, each with its OLED cover", async () => {
     const { board, keys } = await load("foostan/corne");
-    expect(caseParts(keys, board.hands, board.display).map((part) => part.kind)).toEqual(["body", "body"]);
+    expect(caseParts(keys, board.hands, board.display).map((part) => `${part.kind}:${part.hand}`)).toEqual(["body:left", "screen:left", "body:right", "screen:right"]);
+  });
+
+  test("a board with no display hints gets two plain bodies from its keys", async () => {
+    const { board, keys } = await load("foostan/corne");
+    expect(caseParts(keys, board.hands, undefined).map((part) => part.kind)).toEqual(["body", "body"]);
   });
 
   test("one hand on a phone draws only that hand's case", async () => {
     const { board, keys } = await load("zsa/moonlander");
-    expect(caseParts(keys, board.hands, board.display, "left").filter((part) => part.kind === "body")).toHaveLength(2);
+    const parts = caseParts(keys, board.hands, board.display, "left");
+    expect(parts.length).toBeGreaterThan(0);
+    expect(parts.every((part) => part.hand === "left")).toBe(true);
   });
 });
 
@@ -58,15 +78,32 @@ describe("outline helpers", () => {
 describe("the Moonlander's thumb modules mirror each other (P1 review)", () => {
   test("the right module has the left one's size, turned the other way", async () => {
     const { board, keys } = await load("zsa/moonlander");
-    const bodies = caseParts(keys, board.hands, board.display).filter((part) => part.kind === "body");
+    const modules = caseParts(keys, board.hands, board.display).filter((part) => part.kind === "module");
     const size = (d: string) => {
       const xs = [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]));
       const ys = [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[2]));
       return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), top: Math.min(...ys) };
     };
-    const [left, right] = bodies.slice(-2).map((part) => size(part.d));
+    const [left, right] = modules.map((part) => size(part.d));
     expect(Math.abs((left?.w ?? 0) - (right?.w ?? 0))).toBeLessThan(0.01);
     expect(Math.abs((left?.h ?? 0) - (right?.h ?? 0))).toBeLessThan(0.01);
     expect(Math.abs((left?.top ?? 0) - (right?.top ?? 0))).toBeLessThan(0.01);
+  });
+
+  test("the red thumb caps keep their firmware positions, reshaped as houses that sit on their modules", async () => {
+    const { board, keys } = await load("zsa/moonlander");
+    expect(board.display.keycaps).toEqual({ "59": "red", "60": "red" });
+    expect(Object.keys(board.display.keyShapes)).toEqual(["59", "60"]);
+    // The thumb keys turn with their module, inward on each half.
+    for (const p of [59, 66, 67, 68]) expect(keys[p]?.r).toBe(51);
+    for (const p of [60, 69, 70, 71]) expect(keys[p]?.r).toBe(-51);
+    expect(keys[59]?.h).toBe(1.2);
+    expect(keys[59]?.w).toBe(2);
+  });
+});
+
+describe("case bounds", () => {
+  test("reads M, L, Q and the end point of A", () => {
+    expect(caseBounds([{ kind: "hole", hand: null, d: "M0,1 L2,1 Q3,0 3,4 A1,1 0 1,0 -1,2 Z" }])).toEqual({ minX: -1, minY: 0, maxX: 3, maxY: 4 });
   });
 });

@@ -92,7 +92,8 @@ export const BoardDefinitionSchema = z.strictObject({
     .strictObject({
       rotate: z.array(z.strictObject({ positions, r: z.number(), rx: z.number(), ry: z.number() })).optional(),
       // Slides keys sideways, in key units, after rotation. QMK's Moonlander halves are 4u apart, too close for the thumb clusters to tilt inward without meeting.
-      shift: z.array(z.strictObject({ positions, dx: z.number() })).optional(),
+      // dy moves keys down, for a row drawn taller than the geometry has it (a MacBook Pro's full-height function row).
+      shift: z.array(z.strictObject({ positions, dx: z.number(), dy: z.number().optional() })).optional(),
       // The physical keycap's colour where it is not the board's usual one (the Moonlander's red thumb keys), by position.
       keycaps: z.record(z.string().regex(/^\d+$/), z.enum(KEYCAP_COLOURS)).optional(),
       // How the case under the keys is drawn (D-266): "wells" sinks each column into a sculpted well (the Glove80), "deck" is a laptop's
@@ -100,6 +101,35 @@ export const BoardDefinitionSchema = z.strictObject({
       surface: z.enum(["wells", "deck"]).optional(),
       // Status LEDs on the case, in key units after rotation and shift (the Moonlander's three per half). They light in the layer's colour.
       statusLeds: z.array(z.strictObject({ x: z.number(), y: z.number() })).optional(),
+      // The case hugs the keys instead of wrapping them in one outline, reaching this far past each key, in key units (the Glove80's
+      // stepped columns and curved thumb band). Keys turned about a shared point make a curved band around that point.
+      caseHug: z.number().positive().max(1).optional(),
+      // A drawn key whose cap isn't the geometry's rectangle (the Moonlander's red "house" thumb cap): a box that replaces the key's own,
+      // in the same unrotated units, and the cap's outline as points in fractions of that box. Binding order and position never change.
+      keyShapes: z
+        .record(
+          z.string().regex(/^\d+$/),
+          z.strictObject({
+            x: z.number().optional(),
+            y: z.number().optional(),
+            w: z.number().positive().optional(),
+            h: z.number().positive().optional(),
+            outline: z.array(z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)])).min(3).optional(),
+          }),
+        )
+        .optional(),
+      // The case drawn from the real object instead of computed from the keys (D-277): SVG paths in key units after rotation and shift.
+      // Kinds: body and module are the case, deck and recess a laptop's top case and keyboard well, screen a display's dark cover,
+      // grille a speaker grille, sensor a fingerprint key, leg and knob metal tenting parts, knurl fine lines (a knob's knurling, a sensor's ring), hole a pinhole.
+      case: z
+        .array(
+          z.strictObject({
+            hand: z.enum(["left", "right"]).nullable(),
+            kind: z.enum(["body", "module", "deck", "recess", "screen", "grille", "sensor", "leg", "knob", "knurl", "hole"]),
+            d: z.string().min(1),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 });

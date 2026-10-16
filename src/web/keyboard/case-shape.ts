@@ -13,7 +13,12 @@ export type CasePart =
   | { kind: "well"; d: string; hand: Hand }
   /** A laptop's aluminium deck, and the recess its keys sit in. */
   | { kind: "deck"; d: string; hand: Hand }
-  | { kind: "recess"; d: string; hand: Hand };
+  | { kind: "recess"; d: string; hand: Hand }
+  /** A case that hugs its keys (display.caseHug): many overlapping shapes filled as one, so it has no rim of its own. */
+  | { kind: "plate"; d: string; hand: Hand }
+  /** Drawn from the real object (display.case, D-277): a hinged module, a display's cover, metal tenting parts, knurling, a pinhole,
+   *  a speaker grille, a fingerprint sensor. */
+  | { kind: "module" | "screen" | "leg" | "knob" | "knurl" | "hole" | "grille" | "sensor"; d: string; hand: Hand };
 
 // How far the case reaches past its keys, in key units.
 const BODY_PAD = 0.28;
@@ -90,6 +95,11 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
   const shown = only === null ? null : new Set(hands[only]);
   const visible = (p: number) => shown === null || shown.has(p);
 
+  // A board drawn from photos wins over the computed case; its parts already know their hand. A one-piece case (a laptop's) can't be
+  // cut down to one hand, so a phone showing one hand of it draws the computed case around that hand's keys instead.
+  const oneHandOfOnePiece = only !== null && display?.case?.some((part) => part.hand === null) === true;
+  if (display?.case !== undefined && !oneHandOfOnePiece) return display.case.filter((part) => only === null || part.hand === only).map((part) => ({ ...part }));
+
   if (display?.surface === "deck") {
     const all = keys.filter((_, p) => visible(p));
     if (all.length === 0) return [];
@@ -99,6 +109,8 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
       { kind: "recess", d: roundedPath(rect(b.minX - 0.12, b.minY - 0.12, b.width + 0.24, b.height + 0.24), 0.22), hand: null },
     ];
   }
+
+  if (display?.caseHug !== undefined) return [...huggedCase(keys, hands, display.caseHug, visible), ...wells(keys, hands, display, visible)];
 
   const parts: CasePart[] = [];
   const inModule = new Set<number>();
@@ -141,4 +153,76 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
     }
   }
   return [...drawn, ...parts];
+}
+
+/**
+ * The extent of the case's paths, so the canvas leaves room for a case that reaches well past the keys (the Moonlander's top edge and
+ * tenting legs). Reads the absolute M, L, Q and A commands this file and display.case use; an arc counts its end point only.
+ */
+export function caseBounds(parts: readonly CasePart[]): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  let box: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
+  const add = (x: number, y: number) => {
+    box = box === null ? { minX: x, minY: y, maxX: x, maxY: y } : { minX: Math.min(box.minX, x), minY: Math.min(box.minY, y), maxX: Math.max(box.maxX, x), maxY: Math.max(box.maxY, y) };
+  };
+  for (const part of parts) {
+    for (const [, command, args] of part.d.matchAll(/([MLQAZ])([^MLQAZ]*)/g)) {
+      const n = (args ?? "").trim().split(/[\s,]+/).filter(Boolean).map(Number);
+      if (command === "A") {
+        for (let i = 0; i + 6 < n.length; i += 7) add(n[i + 5] as number, n[i + 6] as number);
+      } else {
+        for (let i = 0; i + 1 < n.length; i += 2) add(n[i] as number, n[i + 1] as number);
+      }
+    }
+  }
+  return box;
+}
+
+// A case that hugs its keys: each upright key grown by `pad`, overlapping its neighbours so they fill as one shape with the steps of
+// the columns kept, and each fan of keys turned about one point (a thumb cluster) as a curved band around that point.
+function huggedCase(keys: readonly GeometryKey[], hands: Hands, pad: number, visible: (p: number) => boolean): CasePart[] {
+  const parts: CasePart[] = [];
+  for (const hand of ["left", "right"] as const) {
+    const own = hands[hand].filter(visible).flatMap((p) => keys[p] ?? []);
+    if (own.length === 0) continue;
+    const upright = own.filter((key) => key.r === 0);
+    const fans = new Map<string, GeometryKey[]>();
+    for (const key of own) if (key.r !== 0) fans.set(`${key.rx},${key.ry}`, [...(fans.get(`${key.rx},${key.ry}`) ?? []), key]);
+    const shapes = upright.map((key) => roundedPath(rect(key.x - pad, key.y - pad, key.w + 2 * pad, key.h + 2 * pad), pad * 1.2));
+    for (const fan of fans.values()) shapes.push(fanBand(fan, pad));
+    parts.push({ kind: "plate", d: shapes.join(" "), hand });
+  }
+  return parts;
+}
+
+// The annular sector around keys turned about one point, sampled every few degrees so it reads as a curve.
+function fanBand(fan: readonly GeometryKey[], pad: number): string {
+  const pivot = { x: fan[0]?.rx ?? 0, y: fan[0]?.ry ?? 0 };
+  const polar = fan.flatMap(rotatedCorners).map((p) => ({ r: Math.hypot(p.x - pivot.x, p.y - pivot.y), a: Math.atan2(p.y - pivot.y, p.x - pivot.x) }));
+  const inner = Math.max(0.1, Math.min(...polar.map((p) => p.r)) - pad);
+  const outer = Math.max(...polar.map((p) => p.r)) + pad;
+  // The pad along the arc is measured on the inner edge, so the band's ends clear the keys there too.
+  const from = Math.min(...polar.map((p) => p.a)) - pad / inner;
+  const to = Math.max(...polar.map((p) => p.a)) + pad / inner;
+  const steps = Math.max(2, Math.ceil(((to - from) * 180) / Math.PI / 4));
+  const at = (r: number, a: number): Point => ({ x: pivot.x + r * Math.cos(a), y: pivot.y + r * Math.sin(a) });
+  const outerArc = Array.from({ length: steps + 1 }, (_, i) => at(outer, from + ((to - from) * i) / steps));
+  const innerArc = Array.from({ length: steps + 1 }, (_, i) => at(inner, to - ((to - from) * i) / steps));
+  // Each sample point rounds by at most half its short edges, so the arcs stay arcs and only the band's four ends visibly round.
+  return roundedPath([...outerArc, ...innerArc], pad * 1.2);
+}
+
+function wells(keys: readonly GeometryKey[], hands: Hands, display: Display, visible: (p: number) => boolean): CasePart[] {
+  if (display?.surface !== "wells") return [];
+  const out: CasePart[] = [];
+  for (const hand of ["left", "right"] as const) {
+    const group = hands[hand].filter(visible).flatMap((p) => keys[p] ?? []);
+    const columns = new Map<number, GeometryKey[]>();
+    for (const key of group) if (key.r === 0) columns.set(key.x, [...(columns.get(key.x) ?? []), key]);
+    for (const column of columns.values()) {
+      const b = boardBounds(column);
+      out.push({ kind: "well", d: roundedPath(rect(b.minX + 0.03, b.minY + 0.02, b.width - 0.06, b.height - 0.04), 0.3), hand });
+    }
+    for (const key of group) if (key.r !== 0) out.push({ kind: "well", d: roundedPath(grown(key, -0.02), 0.25), hand });
+  }
+  return out;
 }

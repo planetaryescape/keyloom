@@ -95,6 +95,15 @@ export function applyDisplayRotation(
   display: BoardDefinition["display"],
 ): GeometryKey[] {
   const out = keys.map((key) => ({ ...key }));
+  // A reshaped cap's box comes first, so a rotation turns it with its neighbours (the Moonlander's red cap is taller than 1u).
+  for (const [p, shape] of Object.entries(display?.keyShapes ?? {})) {
+    const key = out[Number(p)];
+    if (key === undefined) throw new Error(`display key shape refers to key ${p}, but the board has ${keys.length} keys`);
+    key.x = shape.x ?? key.x;
+    key.y = shape.y ?? key.y;
+    key.w = shape.w ?? key.w;
+    key.h = shape.h ?? key.h;
+  }
   for (const rotation of display?.rotate ?? []) {
     for (const position of rotation.positions) {
       const key = out[position];
@@ -114,6 +123,8 @@ export function applyDisplayRotation(
       }
       key.x += move.dx;
       key.rx += move.dx;
+      key.y += move.dy ?? 0;
+      key.ry += move.dy ?? 0;
     }
   }
   return out;

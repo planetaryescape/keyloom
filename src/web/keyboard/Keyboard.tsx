@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type Ref } from "react";
+import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type Ref } from "react";
 import type { BoardDefinition, GeometryKey, KeycapColour } from "../../boards/schema.ts";
 import type { Legend } from "../../layout/legend.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
@@ -8,7 +8,7 @@ import { MoveArrows } from "./MoveArrows.tsx";
 import { LEGEND_FLOOR_PX } from "./fit.ts";
 import { useKeyDrag } from "./useKeyDrag.ts";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
-import { caseParts } from "./case-shape.ts";
+import { caseBounds, caseParts } from "./case-shape.ts";
 import { frontMode, WIDEST_WITH_SYMBOL, WIDEST_WORD } from "./front-words.ts";
 import { measureText } from "./measure.ts";
 import { boardBounds, keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
@@ -20,6 +20,7 @@ import "./keyboard.css";
 // past the keys, and for its shadow.
 export const GAP = 0.09;
 export const MARGIN = 0.6;
+const CASE_MARGIN = 0.3;
 const ARROWS: Record<string, Direction> = {
   ArrowLeft: "left",
   ArrowRight: "right",
@@ -184,12 +185,15 @@ export function Keyboard({
   const visible = useMemo(() => (half === null ? null : new Set(hands[half])), [half, hands]);
   const shownKeys = useMemo(() => (visible === null ? keys : keys.filter((_, index) => visible.has(index))), [keys, visible]);
   const bounds = boardBounds(shownKeys);
-  const canvas: Bounds = {
-    minX: bounds.minX - MARGIN,
-    minY: bounds.minY - MARGIN,
-    width: bounds.width + 2 * MARGIN,
-    height: bounds.height + 2 * MARGIN,
-  };
+  const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
+  // The margin around the keys holds most cases and their shadow; a case can reach further (the Moonlander's top edge and tenting
+  // legs, a laptop's deck), so the canvas also covers the case itself plus room for its shadow.
+  const drawnCase = caseBounds(parts);
+  const minX = Math.min(bounds.minX - MARGIN, (drawnCase?.minX ?? Infinity) - CASE_MARGIN);
+  const minY = Math.min(bounds.minY - MARGIN, (drawnCase?.minY ?? Infinity) - CASE_MARGIN);
+  const maxX = Math.max(bounds.minX + bounds.width + MARGIN, (drawnCase?.maxX ?? -Infinity) + CASE_MARGIN);
+  const maxY = Math.max(bounds.minY + bounds.height + MARGIN, (drawnCase?.maxY ?? -Infinity) + CASE_MARGIN);
+  const canvas: Bounds = { minX, minY, width: maxX - minX, height: maxY - minY };
   const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
   // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
   // the size it is drawn, so the 11 px floor still holds (P2 review).
@@ -197,8 +201,9 @@ export function Keyboard({
   // the card shouldn't be what shrinks the legends.
   const unit = scale === 1 ? fitUnit : Math.max(Math.min(fitUnit, Math.max(44, minUnit())), Math.floor(fitUnit * scale));
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const shapes = display?.keyShapes;
+  const caseId = useId().replace(/:/g, "");
   const { delays, outgoing, origin: rippleOrigin } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
-  const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
   // Only a board whose case is in two pieces can part; a laptop's keys belong to hands but sit on one deck.
   const parts2 = parts.some((part) => part.hand !== null);
   // Measured once the web font is in, since the fallback font is a different width.
@@ -277,8 +282,16 @@ export function Keyboard({
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
+          {parts.some((part) => part.kind === "grille") ? (
+            // A speaker grille's holes, as a pattern in key units: drawn one by one they would be a thousand paths.
+            <defs>
+              <pattern id={`${caseId}-grille`} width={0.09} height={0.09} patternUnits="userSpaceOnUse">
+                <circle className="case-grille-hole" cx={0.045} cy={0.045} r={0.022} />
+              </pattern>
+            </defs>
+          ) : null}
           {parts.map((part, i) => (
-            <path key={i} className={`case-${part.kind}`} d={part.d} data-hand={part.hand ?? undefined} />
+            <path key={i} className={`case-${part.kind}`} d={part.d} data-hand={part.hand ?? undefined} style={part.kind === "grille" ? { fill: `url(#${caseId}-grille)` } : undefined} />
           ))}
           {(display?.statusLeds ?? []).map((led, i) => {
             // The LEDs change with the ripple, at the delay a key in their place would have.
@@ -314,8 +327,9 @@ export function Keyboard({
               unit={unit}
               floorPx={legendFloor}
               width={geometryKey.w}
+              {...(shapes?.[String(index)]?.outline === undefined ? {} : { shape: { outline: shapes[String(index)]?.outline ?? [], w: (rect.width - GAP) * unit, h: (rect.height - GAP) * unit } })}
               // The Moonlander's thumbs tilt a little and read fine; the Glove80's fan out to 60 degrees.
-              {...(Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? { legendTurn: -rect.rotate } : {})}
+              {...(Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? { legendTurn: -rect.rotate, ...uprightBox(rect) } : {})}
               style={keyStyle(rect, unit)}
               tabIndex={index === tabStop ? 0 : -1}
               aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index, marks?.get(index), remembered?.has(index))}
@@ -378,6 +392,20 @@ function statusLedHand(x: number, keys: readonly GeometryKey[], hands: { left: r
   const rightMin = Math.min(...xs(hands.right), Number.POSITIVE_INFINITY);
   if (!Number.isFinite(leftMax) || !Number.isFinite(rightMin)) return null;
   return x <= (leftMax + rightMin + 1) / 2 ? "left" : "right";
+}
+
+// A long cap turned steeply (the Moonlander's 1.5u thumbs at 51 degrees) would swing the corners of an upright print out of the cap, and
+// the front word with them. Its print gets the widest upright box of PRINT_DEPTH units that fits inside the turned cap instead. A
+// square cap keeps its own box: its corners stay close enough (the Glove80's thumbs).
+const PRINT_DEPTH = 0.6;
+function uprightBox(rect: KeyRect): { printBox?: { w: number; h: number } } {
+  const w = rect.width - GAP;
+  const h = rect.height - GAP;
+  if (Math.abs(w - h) < 0.01) return {};
+  const c = Math.abs(Math.cos((rect.rotate * Math.PI) / 180));
+  const s = Math.abs(Math.sin((rect.rotate * Math.PI) / 180));
+  const across = Math.min(w, h, (w - PRINT_DEPTH * s) / c, (h - PRINT_DEPTH * c) / s);
+  return across > 0 ? { printBox: { w: across, h: PRINT_DEPTH } } : {};
 }
 
 // Real caps print their legends turned with the cap; the Moonlander's 30 degree thumbs read fine that way. Past this, the

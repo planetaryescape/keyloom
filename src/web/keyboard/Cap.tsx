@@ -5,6 +5,7 @@ import type { Legend } from "../../layout/legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
 import { fitLegend, HOLD_SIZE, isCondensed, tapRange } from "./fit.ts";
 import { frontWords, type FrontMode } from "./front-words.ts";
+import { roundedPath } from "./case-shape.ts";
 
 export type Tone = Legend["kind"];
 type CapLegend = Pick<Legend, "tap" | "hold" | "double" | "tapHold">;
@@ -22,6 +23,8 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   as?: "button" | "span";
   /** Degrees to turn the legend back by, so a steeply rotated key still reads upright. */
   legendTurn?: number;
+  /** With legendTurn: the upright box, in key units, the print is centred in, where the cap's own box would poke out of the cap. */
+  printBox?: { w: number; h: number };
   /** The key's LED colour on this layer as a hex: it bleeds onto the plate under the cap and tints the skirt (D-263). */
   led?: string;
   /** The physical keycap's colour (the Moonlander's red thumb keys). */
@@ -42,8 +45,15 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   remembered?: boolean;
   /** Firmware names can be long (KC_BSPC), so Advanced view may break them at underscores. */
   breakable?: boolean;
+  /** A cap that isn't a rectangle (board.json display.keyShapes): its outline in fractions of the cap, and the cap's size in px. */
+  shape?: { outline: readonly (readonly [number, number])[]; w: number; h: number } | undefined;
   style?: CSSProperties;
   ref?: Ref<HTMLButtonElement>;
+}
+
+// An outline in fractions, drawn into a box of w by h px whose top-left sits at (x, y), with rounded corners.
+function shapePath(outline: readonly (readonly [number, number])[], x: number, y: number, w: number, h: number, radius: number): string {
+  return roundedPath(outline.map(([fx, fy]) => ({ x: x + fx * w, y: y + fy * h })), radius);
 }
 
 // A zero-width space after each underscore, plus and bracket lets a firmware name wrap at its own seams.
@@ -93,8 +103,8 @@ function Print({ legend, unit, width, floorPx, reach, breakable, symbols, classN
 // the legends printed on the top and the front. Kind is not drawn at rest; Inspect tints the face by kind (D-264). The selection,
 // draft and remembered marks are each their own element so they can show together.
 export function Cap({
-  tone, legend, unit, floorPx, width, as = "button", legendTurn, keycap, led, reach, outgoing = null,
-  rippleMs = 0, frontMode = "both", pressed, pending = false, remembered = false, breakable = false, style, ...rest
+  tone, legend, unit, floorPx, width, as = "button", legendTurn, printBox, keycap, led, reach, outgoing = null,
+  rippleMs = 0, frontMode = "both", pressed, pending = false, remembered = false, breakable = false, shape, style, ...rest
 }: CapProps) {
   const body = useRef<HTMLSpanElement>(null);
   const last = useRef(pressed);
@@ -108,20 +118,36 @@ export function Cap({
     return () => controls.stop();
   }, [pressed, unit]);
 
-  const turn = legendTurn === undefined ? undefined : ({ "--turn": `${legendTurn}deg` } as CSSProperties);
+  const turn = legendTurn === undefined ? undefined : ({ "--turn": `${legendTurn}deg`, ...(printBox === undefined ? {} : { "--print-w": `${printBox.w * unit}px`, "--print-h": `${printBox.h * unit}px` }) } as CSSProperties);
   const print = (value: CapLegend, className: string) => (
-    <Print legend={value} unit={unit} width={width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontMode} className={className} />
+    <Print legend={value} unit={unit} width={printBox?.w ?? width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontMode} className={className} />
   );
   const selected = rest["aria-pressed"] === true;
+  // A shaped cap is clipped to its outline: the body, its dished top (inset as .cap-top is) and the light under it. Rings can't be a
+  // box-shadow on a clipped body, so the outline is also drawn as a line for the focus and selection states to colour.
+  const clip = (x: number, y: number, w: number, h: number, r: number) => (shape === undefined ? undefined : `path("${shapePath(shape.outline, x, y, w, h, r)}")`);
+  const ring = shape === undefined ? null : shapePath(shape.outline, 0, 0, shape.w, shape.h, unit * 0.13);
+  const bleedPad = unit * 0.03;
   const children = (
     <>
-      <span className="cap-bleed" aria-hidden="true" />
-      <span ref={body} className="cap-body" style={turn}>
-        <span className="cap-top" aria-hidden="true" />
+      <span className="cap-bleed" aria-hidden="true">
+        {shape === undefined ? null : <span className="cap-bleed-shape" style={{ clipPath: clip(0, 0, shape.w + 2 * bleedPad, shape.h + 2 * bleedPad, unit * 0.16) }} />}
+      </span>
+      <span ref={body} className="cap-body" style={shape === undefined ? turn : { ...turn, clipPath: clip(0, 0, shape.w, shape.h, unit * 0.13) }}>
+        <span
+          className="cap-top"
+          aria-hidden="true"
+          style={shape === undefined ? undefined : { clipPath: clip(0, 0, shape.w - unit * 0.15, shape.h - unit * 0.24, unit * 0.1) }}
+        />
         {outgoing === null ? null : print(outgoing, "cap-print cap-out")}
         {print(legend, outgoing === null ? "cap-print" : "cap-print cap-in")}
         {tone === "macro" ? <span className="cap-kind-mark" aria-hidden="true">▸</span> : null}
       </span>
+      {ring === null || shape === undefined ? null : (
+        <svg className="cap-outline" aria-hidden="true" viewBox={`0 0 ${shape.w} ${shape.h}`} width={shape.w} height={shape.h}>
+          <path d={ring} />
+        </svg>
+      )}
       {selected ? (
         <span className="cap-mark cap-mark-selected" aria-hidden="true">
           <Check size={10} strokeWidth={3} />
@@ -139,13 +165,13 @@ export function Cap({
   if (as === "span") {
     return (
       // A swatch only illustrates; whatever it sits beside carries the words.
-      <span className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} style={capStyle} aria-hidden="true">
+      <span className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} data-shaped={shape !== undefined} style={capStyle} aria-hidden="true">
         {children}
       </span>
     );
   }
   return (
-    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} data-upright={legendTurn !== undefined} style={capStyle} {...rest}>
+    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} data-shaped={shape !== undefined} data-upright={legendTurn !== undefined} style={capStyle} {...rest}>
       {children}
     </button>
   );

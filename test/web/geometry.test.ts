@@ -102,6 +102,16 @@ describe("applyDisplayRotation", () => {
     expect(out[0]).toMatchObject({ rx: 0 });
   });
 
+  test("a key shape replaces only the box it names, before the rotation turns it", () => {
+    const out = applyDisplayRotation(keys, {
+      keyShapes: { "1": { y: -0.2, h: 1.2, outline: [[0, 0.4], [0.5, 0], [1, 0.4], [1, 1], [0, 1]] } },
+      rotate: [{ positions: [1], r: 20, rx: 1, ry: 1 }],
+    });
+    expect(out[1]).toMatchObject({ x: keys[1]?.x, y: -0.2, w: keys[1]?.w, h: 1.2, r: 20 });
+    expect(out[0]).toEqual(keys[0] as (typeof out)[number]);
+    expect(() => applyDisplayRotation(keys, { keyShapes: { "9": { h: 2 } } })).toThrow(/key 9/);
+  });
+
   test("a shift past the geometry throws", () => {
     expect(() => applyDisplayRotation(keys, { shift: [{ positions: [9], dx: 1 }] })).toThrow(/key 9/);
   });

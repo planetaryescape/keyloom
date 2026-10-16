@@ -131,7 +131,7 @@ function checkFacts(board: Board, dir: string, issues: CheckIssue[]): void {
     targets.add(to);
   }
   // A display override that points past the geometry would otherwise only fail when someone opens the editor.
-  const drawn = [...(def.display?.rotate ?? []).flatMap((r) => r.positions), ...(def.display?.shift ?? []).flatMap((r) => r.positions), ...Object.keys(def.display?.keycaps ?? {}).map(Number)];
+  const drawn = [...(def.display?.rotate ?? []).flatMap((r) => r.positions), ...(def.display?.shift ?? []).flatMap((r) => r.positions), ...Object.keys(def.display?.keycaps ?? {}).map(Number), ...Object.keys(def.display?.keyShapes ?? {}).map(Number)];
   for (const p of drawn) if (p >= def.keyCount) err(`display refers to position ${p}, but keyCount is ${def.keyCount}`);
   // A staggered laptop keyboard has no mirror image, so a software board may leave the map empty (21).
   if (def.firmware !== "kanata") {
