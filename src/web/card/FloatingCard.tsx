@@ -56,7 +56,23 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
   const latest = useRef(layout);
   latest.current = layout;
 
+  // The seat last chosen, so the card growing (a picker opening) keeps it instead of choosing again: a new choice moved the card and
+  // the board out from under the pointer (BK, 2026-10-16).
+  const chosen = useRef<{ x: number; y: number; areaH: number } | null>(null);
+
   useLayoutEffect(() => {
+    chosen.current = null;
+    // Only the card changed size: stay put, and rise just enough to keep its foot inside the stage. Its body scrolls past maxH.
+    const settle = () => {
+      const element = card.current;
+      const seated = chosen.current;
+      if (!element || !seated) return;
+      const margin = 16;
+      const y = Math.max(margin, Math.min(seated.y, seated.areaH - element.scrollHeight - margin));
+      if (Math.abs(y - seated.y) < 1) return;
+      chosen.current = { ...seated, y };
+      setSeat((previous) => (previous === null ? previous : { ...previous, y }));
+    };
     const place = () => {
       const root = stage.current;
       const element = card.current;
@@ -105,12 +121,17 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
       const kx = bcx + (key.x + key.w / 2 - bcx) * relative.scale + seated.shift + partPx;
       const ky = bcy + (key.y + key.h / 2 - bcy) * relative.scale;
       setSeat({ x: seated.x, y: seated.y, maxH: area.h - 32, from: seated.x > kx ? -14 : 14, key: { x: kx, y: ky, hw: (key.w * relative.scale) / 2, hh: (key.h * relative.scale) / 2 } });
+      chosen.current = { x: seated.x, y: seated.y, areaH: area.h };
       const now = latest.current;
       const samePart = (now.part?.hand ?? null) === (seated.part?.hand ?? null) && Math.abs((now.part?.px ?? 0) - (seated.part?.px ?? 0)) < 1;
       if (!samePart || Math.abs(now.shift - seated.shift) > 1 || Math.abs(now.scale - seated.scale) > 0.005) onLayout({ shift: seated.shift, part: seated.part, scale: seated.scale });
     };
     place();
-    const observer = new ResizeObserver(() => place());
+    const observer = new ResizeObserver((entries) => {
+      // The stage resizing (a window change) seats the card afresh; the card alone resizing only settles it.
+      if (chosen.current === null || entries.some((entry) => entry.target === stage.current)) place();
+      else settle();
+    });
     if (stage.current !== null) observer.observe(stage.current);
     if (card.current !== null) observer.observe(card.current);
     return () => observer.disconnect();
