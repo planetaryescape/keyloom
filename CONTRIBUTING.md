@@ -6,7 +6,7 @@ A board is a folder in this repo. You add one with a pull request that holds onl
 
 You need the keyboard on your desk. keyloom's maintainer can't test hardware he doesn't own, so your PR must say you built the firmware and flashed it to your own board.
 
-The folder is `boards/<vendor>/<board>/`. The board ID is the folder path, such as `foostan/corne`. Use lowercase letters, digits and dashes.
+The folder is `boards/<vendor>/<board>/`. The board ID is the folder path, such as `foostan/corne`. Use lowercase letters, digits and dashes. The vendor is the maker as people know them, not the folder their firmware happens to live in: the Unix60 is by mkdl, so it is `mkdl/unix60`, though QMK keeps it under `keyboards/fr4/`.
 
 ## Before you start
 
@@ -47,7 +47,9 @@ Use a scratch data directory for your own layouts, so test imports don't mix wit
 
 keyloom builds from an exact commit of the firmware source. Find the repo that builds your board.
 
-For QMK, that is usually [`qmk/qmk_firmware`](https://github.com/qmk/qmk_firmware). Find your keyboard under `keyboards/`. Some boards have a revision folder, such as `keyboards/crkbd/rev1`.
+For QMK, that is usually [`qmk/qmk_firmware`](https://github.com/qmk/qmk_firmware). Find your keyboard under `keyboards/`. Some boards have a revision folder, such as `keyboards/crkbd/rev1`. Read the folders at the commit you pin, not the board's readme, which can be out of date.
+
+Use mainline QMK when it has a folder for the controller your board has. Some makers keep newer controllers only in their own fork (Bastard Keyboards' RP2040 boards are in `bastardkb/bastardkb-qmk`). Then pin the fork: `source.repo` can be any GitHub repo, and each controller is its own entry in `revisions`.
 
 For ZMK, that is [`zmkfirmware/zmk`](https://github.com/zmkfirmware/zmk). Find your board's shield under `app/boards/shields/<name>/`. A split board lists its two halves in `<name>.zmk.yml` under `siblings`, such as `corne_left` and `corne_right`.
 
@@ -83,7 +85,7 @@ cp -r boards/_template/zmk boards/foostan/corne     # or boards/_template/qmk
 
 Open `boards/foostan/corne/board.json` and replace every value. The template is a four-key toy board, so you will replace the key facts too. [How to pick a recipe](#how-to-pick-a-recipe) says which build and flash recipe to use. [The field reference](#boardjson-field-reference) says what each field means.
 
-Leave `hands`, `fingers`, `rows` and `mirror` as they are for now. Step 4 fills them in. Set `keyCount` to the number of keys on the board, counting both halves.
+Leave `hands`, `fingers`, `rows` and `mirror` as they are for now. Step 4 fills them in. Set `keyCount` to the number of keys on the board, counting both halves. The QMK template's `layoutFile` points at an `info.json`; delete it when the layouts are in `keyboards/<qmkTarget>/keyboard.json`, as they are for most boards in current QMK.
 
 ### 3. Generate `geometry.json`
 
@@ -107,7 +109,7 @@ keyloom's agent and validator need to know which hand and finger each key belong
 keyloom serve --board-dev foostan/corne
 ```
 
-It prints a link with a `?t=` token on the end. Open that exact link; the bare address shows "This page needs keyloom's link". If port 4477 is taken (another `keyloom serve` is running), add `--port 4478`. Each key shows its position number, counted from 0. Those are the numbers `board.json` uses.
+It prints a link with a `?t=` token on the end. Open that exact link; the bare address shows "This page needs keyloom's link". If port 4477 is taken (another `keyloom serve` is running), add `--port 4478`. Each key shows its number counted from 1, as the editor does. `board.json` counts from 0, so the key the overlay calls 1 is position 0 in `board.json`. The panel shows both.
 
 Hover or select a key to see what `board.json` says about it. The page reads `board.json` again when you press **Reload board.json**, so edit the file and reload to check your work. The panel counts how many positions each fact covers.
 
@@ -178,9 +180,9 @@ Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds 
 
 - `qmkTarget` is what you give `make`, such as `crkbd/rev1`. It is the folder under `keyboards/`.
 - `layoutMacro` is the `LAYOUT_*` name the keymap is written with, such as `LAYOUT_split_3x6_3`. Find it in the board's `keymap.c` or its `info.json`.
-- `layoutFile` is the JSON file that holds the board's `layouts`. Mainline QMK keeps it in the keyboard's own `info.json`, such as `keyboards/crkbd/info.json`, which is one folder above the revision. Leave it out when the layouts are in `keyboards/<qmkTarget>/keyboard.json`.
+- `layoutFile` is the JSON file that holds the board's `layouts`, when that isn't `keyboards/<qmkTarget>/keyboard.json`. Some boards keep them in an `info.json` one folder above the revision, such as `keyboards/crkbd/info.json`. Delete the field when the layouts are in `keyboards/<qmkTarget>/keyboard.json`.
 - `keymapsDir` is the folder keyloom writes its keymap into, such as `keyboards/crkbd/keymaps`.
-- `submodules` lists the git submodules the build needs, such as `lib/lufa` for AVR boards. Other submodules are skipped to keep the checkout small. If the build fails on a missing file under `lib/`, add that submodule here.
+- `submodules` lists the git submodules the build needs. Other submodules are skipped to keep the checkout small. An AVR board (a Pro Micro or Elite-C, whose bootloader is `caterina`, `atmel-dfu`, `qmk-dfu`, `lufa-dfu`, `halfkay` or `lufa-ms`) needs `lib/lufa`. An ARM board needs `lib/chibios`, `lib/chibios-contrib` and `lib/printf`, and an RP2040 also `lib/pico-sdk`. These are what `keyboard add` puts in a derived board; if the build fails on a missing file under `lib/`, add that submodule here.
 - `artifact` is `bin` (the default), `hex` or `uf2`. It is the file `make` produces.
 - Each revision of a board with several hardware revisions is its own entry in `revisions`. keyloom can pick one from a connected keyboard when you set `detect.usbProductId`. Otherwise people pass `--board-rev`.
 
@@ -250,7 +252,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `schemaVersion` | all | Always `1`. |
 | `id` | all | `<vendor>/<board>`. Must equal the folder path. |
 | `name` | all | The board's name as people say it, such as `Corne`. |
-| `vendor` | all | The maker, such as `foostan`. |
+| `vendor` | all | The maker as people know them, such as `foostan` or `Bastard Keyboards`. |
 | `firmware` | all | `qmk` or `zmk`. It decides the importer, the generator and the validator rules. |
 | `keyCount` | all | The number of keys. It must equal the number of keys in `geometry.json`. |
 | `revisions` | all | A list of hardware revisions. One entry when there is only one. |
@@ -330,7 +332,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.shift` | all | Optional. A list of slides to draw, applied after rotation. |
 | `display.shift[].positions` | all | The keys to slide. |
 | `display.shift[].dx` | all | How far to slide them, in key units. Use it when a split board's halves are drawn too close for their tilted thumb clusters. |
-| `display.shift[].dy` | all | Optional. How far to move them down, in key units, when a row above is drawn taller than the geometry has it. |
+| `display.shift[].dy` | all | Optional. How far to move them down, in key units; negative moves them up. Use it when a row above is drawn taller than the geometry has it, or to draw column stagger the geometry lacks: one entry per column, each with its own `dy`. |
 | `display.keycaps` | all | Optional. An object from a position, as a string, to the physical keycap colour where it is not the board's usual one. Only `red` exists, for the Moonlander's two big thumb keys. |
 | `display.surface` | all | Optional. How the editor draws the case under the keys: `wells` sinks each column into a sculpted well (the Glove80), `deck` draws a laptop's aluminium deck with the keys in a recess (the MacBook). Leave it out for a flat case. |
 | `display.statusLeds` | all | Optional. The case's status LEDs (the Moonlander has three per half). The editor lights each one in the layer's colour. |
@@ -340,7 +342,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. Drawing only: binding order never changes. |
 | `display.case` | all | Optional. The case drawn from photos of the real board instead of computed from the keys. Each part is an SVG path in key units after `rotate` and `shift`. Leave it out and the editor draws a case from the keys. |
 | `display.case[].hand` | all | `left`, `right`, or `null` for a one-piece case. A split board's halves part for the key card by hand. |
-| `display.case[].kind` | all | `body` or `module` (a separate hinged plate) for the case; `deck` and `recess` for a laptop's top case and keyboard well; `screen` for a display's dark cover; `grille` for a speaker grille; `sensor` for a fingerprint key; `leg` and `knob` for metal tenting parts; `knurl` for fine lines, such as a knob's knurling or a fingerprint key's ring; `hole` for a pinhole or a screw head; `ball` for a trackball, given as the ball's circle (the editor draws its socket ring and shading). |
+| `display.case[].kind` | all | `body` for each piece of the case, including a thumb cluster printed or milled as part of it; `module` only for a physically separate plate, such as the Moonlander's hinged thumb block; `deck` and `recess` for a laptop's top case and keyboard well; `screen` for a display's dark cover; `grille` for a speaker grille; `sensor` for a fingerprint key; `leg` and `knob` for metal tenting parts; `knurl` for fine lines, such as a knob's knurling or a fingerprint key's ring; `hole` for a pinhole or a screw head; `ball` for a trackball, given as the ball's circle (the editor draws its socket ring and shading). |
 | `display.case[].d` | all | The part's path, using absolute `M`, `L`, `Q`, `A` and `Z` commands. |
 
 Use `display.rotate` only when the firmware's own geometry doesn't tilt keys that really tilt. The Moonlander's thumbs are the example.
