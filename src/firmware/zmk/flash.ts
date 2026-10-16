@@ -14,6 +14,8 @@ import type { VolumeFinder } from "./volumes.ts";
 
 export const BOOTLOADER_WAIT_MS = 120_000;
 export const UNMOUNT_WAIT_MS = 30_000;
+/** How long a freshly mounted boot drive may refuse the write before the refusal is reported. */
+export const WRITE_RETRY_MS = 8_000;
 export const POLL_MS = 500;
 
 export const ZMK_CHECKING_INSTRUCTION = "keyloom is checking whether it can restart the keyboard's halves into their bootloaders itself.";
@@ -52,6 +54,8 @@ export type Uf2FlashInput = {
   onState: (state: FlashState, instruction: string | null, note?: FlashNote) => void;
   onLine?: (line: string) => void;
   bootloaderWaitMs?: number;
+  /** How long to retry a write the drive refuses (EACCES/EPERM); defaults to WRITE_RETRY_MS. */
+  writeRetryMs?: number;
   unmountWaitMs?: number;
   pollMs?: number;
   signal?: AbortSignal;
@@ -160,7 +164,20 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     input.onState("writing", WRITING_INSTRUCTION);
     const target = join(mount, input.driveFileName ?? "glove80.uf2");
     try {
-      await writeFile(target, files[i] as Uint8Array);
+      // A boot drive macOS has only just mounted can refuse the first open with EACCES for a few seconds, then take the same write
+      // (BK's Glove80 left half, 2026-10-16). Retry a refused open while the drive stays mounted; a lasting refusal is still reported.
+      const retryUntil = Date.now() + (input.writeRetryMs ?? WRITE_RETRY_MS);
+      for (;;) {
+        try {
+          await writeFile(target, files[i] as Uint8Array);
+          break;
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          if ((code !== "EACCES" && code !== "EPERM") || Date.now() >= retryUntil || !(await input.findVolume(step.volume))) throw err;
+          say(`keyloom: ${step.volume} refused the write (${code}); trying again`);
+          await sleep(poll, input.signal);
+        }
+      }
       // The write has to reach the drive before the bootloader looks at it.
       const handle = await open(target, "r+");
       try {

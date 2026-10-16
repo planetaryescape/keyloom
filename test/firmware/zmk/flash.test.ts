@@ -146,7 +146,7 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     mkdirSync(join(s.root, RIGHT), { recursive: true });
     chmodSync(join(s.root, RIGHT), 0o555);
     try {
-      const r = await s.flash();
+      const r = await s.flash({ writeRetryMs: 100 });
       expect(r.state).toBe("failed");
       expect(r.error).toContain("EACCES");
       expect(r.error).toContain("The right half was not flashed. keyloom wasn't allowed to write to the drive.");
@@ -154,6 +154,24 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     } finally {
       chmodSync(join(s.root, RIGHT), 0o755);
     }
+  });
+
+  test("a freshly mounted drive that refuses the write at first is written once it allows it", async () => {
+    const s = await setup();
+    mkdirSync(join(s.root, RIGHT), { recursive: true });
+    chmodSync(join(s.root, RIGHT), 0o555);
+    // The drive starts refusing, then allows the write, and the bootloader takes the drive away once the file lands.
+    setTimeout(() => chmodSync(join(s.root, RIGHT), 0o755), 120);
+    const watch = setInterval(() => {
+      if (existsSync(join(s.root, RIGHT, "glove80.uf2"))) {
+        clearInterval(watch);
+        rmSync(join(s.root, RIGHT), { recursive: true, force: true });
+      }
+    }, 10);
+    const r = await s.flash({ steps: [steps[0] as (typeof steps)[number]], writeRetryMs: 2000 });
+    clearInterval(watch);
+    expect(r.state).toBe("succeeded");
+    expect(s.lines.some((l) => l.includes("refused the write (EACCES); trying again"))).toBe(true);
   });
 
   test("a copy that errors because the bootloader took the drive away mid-write counts as written", async () => {
