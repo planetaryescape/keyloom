@@ -21,3 +21,8 @@
     display: flex;
   }
 }
+
+.revision-arrow {
+  flex: none;
+  color: var(--ink-3);
+}

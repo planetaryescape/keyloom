@@ -150,3 +150,18 @@
     transition: none;
   }
 }
+
+.sync-detail-more summary {
+  width: fit-content;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.sync-detail-more span {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}

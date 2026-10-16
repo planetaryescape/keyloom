@@ -1,14 +1,17 @@
-import { LoaderCircle, RefreshCw, Undo2, Zap } from "lucide-react";
+import { ArrowRight, LoaderCircle, RefreshCw, Undo2, Zap } from "lucide-react";
 import { useState } from "react";
 import type { RevisionEntry } from "../../api/http.ts";
-import { tidySummary, withoutKeyNumbers } from "../../layout/history-summary.ts";
-import { SheetHead } from "../shell/Sheet.tsx";
+import type { Layout } from "../../layout/schema.ts";
+import { MiniCap, SheetHead } from "../shell/Sheet.tsx";
+import { historyWords } from "./history-words.ts";
 import type { Revisions } from "./useRevisions.ts";
 import { formatWhen, sourceLabel } from "./words.ts";
 import "./history.css";
 
 interface Props {
   revisions: Revisions;
+  /** The layout on screen, so an old row's key can be drawn as the cap it is now. */
+  layout: Pick<Layout, "layers" | "macros" | "tapDances">;
   onClose: () => void;
   onReload: () => void;
   /** Goes back to this revision as one new revision. Resolves once the page shows it. */
@@ -19,7 +22,7 @@ interface Props {
 }
 
 // Revisions of this layout, newest first (D-102). Chats are conversations and live in the chat.
-export function HistoryPanel({ revisions, onClose, onReload, onGoBack, onFlash, blockedReason }: Props) {
+export function HistoryPanel({ layout, revisions, onClose, onReload, onGoBack, onFlash, blockedReason }: Props) {
   const [working, setWorking] = useState<string | null>(null);
   const now = Date.now();
 
@@ -47,16 +50,30 @@ export function HistoryPanel({ revisions, onClose, onReload, onGoBack, onFlash, 
         ) : (
           <ol className="sheet-rows" aria-label="Revisions">
             {revisions.items.map((revision) => {
-              // Older summaries carry key numbers and stacked prefixes; both are read away here (D-279).
-              const words = withoutKeyNumbers(revision.origin === "undo" ? tidySummary(revision.summary) : revision.summary);
+              // Stored summaries are read into people's words here, old and new alike (D-279, D-312).
+              const row = historyWords(revision.summary, layout);
+              const words = row.text;
               return (
                 <li key={revision.id} className="sheet-row revision" data-head={revision.isHead} data-origin={revision.origin}>
                   <div className="sheet-row-main">
+                    {/* The key, then what it became: "[4] → F17". */}
+                    {row.cap === null ? null : (
+                      <>
+                        <MiniCap>{row.cap}</MiniCap>
+                        <ArrowRight size={12} className="revision-arrow" aria-label="became" role="img" />
+                      </>
+                    )}
                     <p className="sheet-row-title">{words}</p>
                     {revision.isHead ? <span className="sheet-pill">On screen</span> : null}
                   </div>
                   <p className="sheet-row-meta">
-                    <span>{sourceLabel(revision.origin)}</span>
+                    <span>{row.how ?? sourceLabel(revision.origin)}</span>
+                    {row.layer === null ? null : (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span>{row.layer}</span>
+                      </>
+                    )}
                     <span aria-hidden="true">·</span>
                     <time dateTime={new Date(revision.createdAt).toISOString()} title={new Date(revision.createdAt).toLocaleString()}>{formatWhen(revision.createdAt, now)}</time>
                   </p>

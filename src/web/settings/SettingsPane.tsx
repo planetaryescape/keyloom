@@ -133,6 +133,7 @@ export function SettingsPane(props: Props) {
                     baseline={baselineOf(spec, layout, board)}
                     blockedBy={blockedBy(spec)}
                     changed={value !== baselineOf(spec, layout, board)}
+                    staged={staged.has(spec.key)}
                     advanced={advanced}
                     keptOwn={staged.has(spec.key) ? keptFor(spec) : []}
                     sourceText={sourceText(spec, layout)}

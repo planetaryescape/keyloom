@@ -64,7 +64,7 @@
 }
 
 /* A staged change is not on the keyboard yet: the amber dot, as on a cap (D-263). */
-.setting[data-changed="true"]::before {
+.setting[data-staged="true"]::before {
   position: absolute;
   top: calc(var(--space-3) + 6px);
   left: -12px;
@@ -384,4 +384,20 @@
 .upgrade-offer .upgrade-problem {
   flex-basis: 100%;
   color: var(--color-error);
+}
+
+/* The long explanation, on request: one line of words is what a row shows (P4 review). */
+.setting-more summary {
+  width: fit-content;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.setting-more[open] summary {
+  margin-bottom: var(--space-1);
+}
+
+.setting-more p + p {
+  margin-top: var(--space-1);
 }

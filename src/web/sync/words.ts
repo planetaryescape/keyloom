@@ -13,6 +13,8 @@ export interface SyncLine {
   /** A sentence under the label in the popover: why, or what to do. */
   detail: string | null;
   tone: SyncTone;
+  /** What keyloom read, for those who want it, behind "Details" (a USB serial): never in the line's one sentence. */
+  more?: string;
   action: { id: SyncActionId; label: string } | null;
 }
 
@@ -84,7 +86,7 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
     case "not_keyloom":
       return {
         // The reading ("the right half reports USB serial …") is why keyloom thinks so; the sentence around it says what it means.
-        label: "Running firmware keyloom didn't build", short: "Not keyloom's", detail: `Your ${name} runs firmware from somewhere else (${s.detail}). keyloom never replaces it by itself; flash keyloom's build once and it can sync from then on.`,
+        label: "Running firmware keyloom didn't build", short: "Not keyloom's", detail: "Flash keyloom's build once to sync from then on.", more: `${s.detail}. keyloom never replaces it by itself.`,
         tone: "warning", action: { id: "flash_keyloom", label: "Flash keyloom's build" },
       };
   }

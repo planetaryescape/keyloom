@@ -1,43 +1,33 @@
 import { describe, expect, test } from "bun:test";
-import { formatWhen, sourceLabel } from "../../src/web/history/words.ts";
+import { historyWords } from "../../src/web/history/history-words.ts";
 
-// A fixed "now" in local time (a Thursday), so the weekday and the day count are the ones a person would say.
-const now = new Date(2026, 9, 15, 14, 30).getTime();
-const at = (day: number, hour: number, minute = 0, month = 9, year = 2026) => new Date(year, month, day, hour, minute).getTime();
+const layout = {
+  layers: [
+    { id: "layer-0", name: "Layer 0", bindings: Array.from({ length: 30 }, (_, i) => (i === 24 ? { kind: "key" as const, code: "X" } : { kind: "key" as const, code: "A" })) },
+    { id: "layer-3", name: "Numbers", bindings: [] },
+  ],
+  macros: [],
+  tapDances: [],
+} as never;
 
-describe("formatWhen", () => {
-  test("says just now for the last minute, and today for the rest of the day", () => {
-    expect(formatWhen(now - 20_000, now)).toBe("Just now");
-    expect(formatWhen(at(15, 9, 5), now)).toMatch(/^Today /);
+describe("History rows in people's words (D-312)", () => {
+  test("an old numbered summary gets the key's cap and its layer, and no double colon", () => {
+    expect(historyWords("Undo: Layer 0, key 25: X", layout)).toEqual({ how: "Undone", cap: "X", layer: "Layer 0", text: "X" });
   });
 
-  test("counts calendar days, so 23:50 yesterday is yesterday and not today", () => {
-    expect(formatWhen(at(14, 23, 50), now)).toMatch(/^Yesterday /);
-    expect(formatWhen(at(14, 0, 5), now)).toMatch(/^Yesterday /);
+  test("firmware modifier names read as the caps print them", () => {
+    expect(historyWords("Layer 0, key 1: Tap /, hold Right Ctrl + Right Alt", layout).text).toBe("/, hold for control + option");
   });
 
-  test("names the weekday for the rest of the last week: last Tuesday is Tuesday", () => {
-    expect(formatWhen(at(13, 18, 32), now)).toMatch(/^Tuesday /);
-    expect(formatWhen(at(9, 18, 32), now)).toMatch(/^Friday /);
+  test("a rename by layer id reads as a layer", () => {
+    expect(historyWords("Renamed layer-3 to Numbers", layout).text).toBe("Renamed a layer to Numbers");
   });
 
-  test("a week or more back is a date, with the year only when it isn't this one", () => {
-    // Day-and-month order follows the browser's locale, so only what is the same everywhere is asserted.
-    expect(formatWhen(at(8, 10), now)).not.toMatch(/Today|Yesterday|day /);
-    expect(formatWhen(at(8, 10), now)).not.toContain("2026");
-    expect(formatWhen(at(8, 10, 0, 11, 2025), now)).toContain("2025");
+  test("a new legend-named summary splits into cap, layer and change", () => {
+    expect(historyWords("Back to: The F key on Base: F17", layout)).toEqual({ how: "Went back", cap: "F", layer: "Base", text: "F17" });
   });
 
-  test("a time from the future (clock skew) is not 'just now'", () => {
-    expect(formatWhen(now + 120_000, now)).toMatch(/^Today /);
-  });
-});
-
-describe("sourceLabel", () => {
-  test("uses the words BK knows: the chat, not the agent", () => {
-    expect(sourceLabel("agent")).toBe("Chat");
-    expect(sourceLabel("editor")).toBe("Editor");
-    expect(sourceLabel("import")).toBe("Import");
-    expect(sourceLabel("undo")).toBe("Undo");
+  test("anything else keeps its words", () => {
+    expect(historyWords("Read colours and tap dances from the Oryx code", layout)).toEqual({ how: null, cap: null, layer: null, text: "Read colours and tap dances from the Oryx code" });
   });
 });

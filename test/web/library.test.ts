@@ -37,7 +37,7 @@ describe("the library", () => {
 
   test("a combo whose output is the item counts, with no key to point at", () => {
     const l = { ...tiny(), combos: [{ id: "c", name: "Paste combo", positions: [0, 1], layerIds: "all" as const, output: { kind: "macro" as const, macroId: "m1" } }] };
-    expect(libraryOf(l).macros[0]?.uses).toEqual([{ label: "The combo A + B" }]);
+    expect(libraryOf(l).macros[0]?.uses).toEqual([{ label: "The combo A + B", combo: ["A", "B"] }]);
   });
 
   test("the board highlights only the uses on the layer it shows", () => {

@@ -1216,12 +1216,8 @@
   outline-offset: 1px;
 }
 
-/* Where the stage is narrow (a sheet or the conversation beside it, or a small window), icons only; each keeps its tooltip and name. */
-.workbench:is([data-side="open"], [data-side="chat"]) .view-control-label {
-  display: none;
-}
-
-@media (max-width: 1400px) {
+/* Quiet labels at 1366 and wider, icons with tooltips below: by the window's width alone, so every board shows the same (P4 review). */
+@media (max-width: 1365px) {
   .view-control-label {
     display: none;
   }

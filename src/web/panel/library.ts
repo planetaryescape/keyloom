@@ -16,7 +16,7 @@ function comboWords(layout: Layout, positions: readonly number[]): string {
 }
 
 /** A place an item is used: in words, and for keys the cap's legend and its layer, so the sheet can draw it as a small cap. */
-export type LibraryUse = { label: string; slot?: Slot; legend?: string; layer?: string };
+export type LibraryUse = { label: string; slot?: Slot; legend?: string; layer?: string; combo?: string[] };
 export type LibraryItem = { id: string; name: string; detail: string; uses: LibraryUse[] };
 export type Library = { macros: LibraryItem[]; tapDances: LibraryItem[]; profiles: LibraryItem[] };
 
@@ -32,7 +32,7 @@ function usesOf(layout: Layout, match: (binding: Layout["layers"][number]["bindi
         : [],
     ),
   );
-  const combos = layout.combos.filter((combo) => match(combo.output)).map((combo): LibraryUse => ({ label: `The combo ${comboWords(layout, combo.positions)}` }));
+  const combos = layout.combos.filter((combo) => match(combo.output)).map((combo): LibraryUse => ({ label: `The combo ${comboWords(layout, combo.positions)}`, combo: comboWords(layout, combo.positions).split(" + ") }));
   function legendText(binding: Layout["layers"][number]["bindings"][number]): string {
     const legend = bindingLegend(binding, ctx);
     return legend.tap === "" ? "blank" : legend.hold === undefined ? legend.tap : `${legend.tap} ${legend.hold}`;

@@ -371,10 +371,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         name: `${positions.map((position) => { const b = layer.bindings[position]; return b === undefined ? "a key" : bindingLegend(b, ctx).tap || "a blank key"; }).join(" and ")} together${output === null ? "" : `, send ${bindingSummary(output, layout)}`}`,
       };
     };
-    const lines = showCombos || inspect ? combosOn(layout, layer.id).filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false)) : [];
+    // With the Combos sheet open, pointing at a row draws that one combo, as the Library lights its keys (P4 review).
+    const shown = showCombos || inspect ? combosOn(layout, layer.id) : combosOpen && hoverCombo !== null ? combosOn(layout, layer.id).filter((combo) => combo.id === hoverCombo) : [];
+    const lines = shown.filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false));
     if (comboDraft !== null && comboDraft.positions.length >= 2) lines.push(lineFor(comboDraft.id, comboDraft.name || "New combo", comboDraft.positions, comboDraft.output, true));
     return lines;
-  }, [showCombos, inspect, layout, layer, comboDraft]);
+  }, [showCombos, inspect, layout, layer, comboDraft, combosOpen, hoverCombo]);
   // Pointing at a combo (its line, its label or its row) lights the keys it is made of.
   const comboLit = useMemo<ReadonlySet<number>>(() => {
     const positions = new Set<number>(comboDraft?.positions ?? []);
@@ -1459,6 +1461,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           history={
             historyOpen ? (
               <HistoryPanel
+                layout={layout}
                 revisions={history.revisions}
                 onClose={() => setHistoryOpen(false)}
                 onReload={history.reload}

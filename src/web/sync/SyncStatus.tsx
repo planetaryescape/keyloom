@@ -57,6 +57,12 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
                 {line.label}
               </span>
               {line.detail === null ? null : <span className="sync-detail-why">{line.detail}</span>}
+              {line.more === undefined ? null : (
+                <details className="sync-detail-more">
+                  <summary>Details</summary>
+                  <span>{line.more}</span>
+                </details>
+              )}
             </div>
             {line.action === null ? null : (
               <button type="button" role="menuitem" className="menu-item sync-primary" onClick={() => { close(); act(line.action!.id); }}>
@@ -100,11 +106,7 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
           </>
         )}
       </Menu>
-      {line.action === null || board.state.kind === "needs_hand" ? null : (
-        <button type="button" className="sync-action" onClick={() => act(line.action!.id)}>
-          {line.action.label}
-        </button>
-      )}
+      {/* The one thing to do is the popover's filled button; the line itself only says the state (P4 review). */}
     </div>
   );
 }

@@ -53,7 +53,17 @@ export function LibraryPane({ layout, layerId, onHighlight, onOpenKey, onClose }
                       <ul className="mini-caps library-uses" aria-label={`Where ${item.name} is used`}>
                         {item.uses.map((use) => (
                           <li key={use.label}>
-                            {use.slot === undefined || use.legend === undefined ? (
+                            {use.combo !== undefined ? (
+                              // A combo's keys as caps, like a key's, so every row reads the same way (P4 review).
+                              <span className="mini-caps" aria-label={use.label}>
+                                {use.combo.map((legend, i) => (
+                                  <span key={`${legend}${i}`} className="mini-caps">
+                                    {i === 0 ? null : <span className="plus" aria-hidden="true">+</span>}
+                                    <MiniCap>{legend}</MiniCap>
+                                  </span>
+                                ))}
+                              </span>
+                            ) : use.slot === undefined || use.legend === undefined ? (
                               <span className="sheet-row-meta">{use.label}</span>
                             ) : (
                               <button
