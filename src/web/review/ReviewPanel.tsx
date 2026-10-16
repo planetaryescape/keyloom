@@ -1,0 +1,223 @@
+import { Check, CircleCheck, FileText, Layers, LoaderCircle, Sparkles, X } from "lucide-react";
+import { Fragment, useState, type ReactNode } from "react";
+import type { ProposalCard } from "../../api/http.ts";
+import type { BoardReview } from "../../api/review.ts";
+import type { Layout } from "../../layout/schema.ts";
+import type { FixedItem, ReviewItem } from "../../validation/review-item.ts";
+import { keyLabel, layerName } from "../chat/proposal-facts.ts";
+import { formatWhen } from "../history/words.ts";
+import { MiniCap } from "../shell/Sheet.tsx";
+import { fixesFor, grouped, markerWords, segments } from "./review-words.ts";
+import type { Review } from "./useReview.ts";
+import "./review.css";
+
+/** A title or body with its keys drawn as caps and its layers as chips (D-340). */
+export function ReviewText({ text, layout }: { text: string; layout: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough"> }) {
+  return (
+    <>
+      {segments(text).map((s, i) =>
+        s.kind === "text" ? <Fragment key={i}>{s.text}</Fragment>
+        : s.kind === "key" ? <MiniCap key={i}>{keyLabel(layout as Layout, { layerId: s.layerId, position: s.position }) || "empty"}</MiniCap>
+        : <span key={i} className="br-layer"><Layers size={11} aria-hidden="true" />{layerName(layout as Layout, s.layerId)}</span>,
+      )}
+    </>
+  );
+}
+
+const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it connected", apply: "after your change", import: "when it was imported", manual: "when you asked" };
+
+// The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
+// a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
+export function ReviewPanel({ review: r, layout, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onClose, onSetUpModel }: {
+  review: Review;
+  layout: Layout;
+  boardName: string;
+  configName: string;
+  /** The config's open proposals, for a suggestion's card. */
+  proposals: readonly ProposalCard[] | null;
+  pinnedId: string | null;
+  onPin: (card: ProposalCard) => void;
+  onApply: (card: ProposalCard) => Promise<void>;
+  onShowLayer: (layerId: string) => void;
+  onClose: () => void;
+  onSetUpModel: () => void;
+}) {
+  const [showHidden, setShowHidden] = useState(false);
+  const [applying, setApplying] = useState<string | null>(null);
+  const review = r.review;
+  const now = Date.now();
+  const card = (item: ReviewItem) => (item.proposalId === null ? undefined : proposals?.find((p) => p.changeSetId === item.proposalId && p.status === "proposed"));
+
+  const head = (
+    <header className="br-head">
+      <div>
+        <p className="br-eyebrow"><FileText size={13} aria-hidden="true" />
+          {review === null ? "Not looked over yet" : r.stale ? "keyloom is looking again · your change" : `keyloom looked it over · ${TRIGGER[review.trigger]}, ${formatWhen(review.checkedAt, now).replace(/^(Today|Yesterday|Just now)/, (w) => w.toLowerCase())}`}
+        </p>
+        <h2>Your {boardName}, looked over</h2>
+        <p className="br-lead">
+          {r.stale ? "Checking the new version. What's below is from the one before, so it may already be out of date." : `What keyloom noticed about ${configName}, without being asked. It looks again after every change.`}
+        </p>
+      </div>
+      <button type="button" className="sheet-close" aria-label="Close the review" onClick={onClose}><X size={16} aria-hidden="true" /></button>
+    </header>
+  );
+
+  if (review === null) {
+    return (
+      <section className="br-panel" aria-label="Board review">
+        {head}
+        <div className="br-body">
+          <p className="br-quiet">keyloom looks a config over when its keyboard connects and after each change. This one hasn't had a look yet.</p>
+          <div className="br-actions br-actions-start"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run()}>{r.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}Look it over now</button></div>
+        </div>
+      </section>
+    );
+  }
+
+  const g = grouped(review);
+  const hidden = review.items.filter((i) => i.dismissedAt !== null);
+  const fixedNow = r.justFixed;
+  const nothing = g.problems.length + g.suggestions.length + g.hints.length === 0;
+  const stale = r.stale || undefined;
+
+  const suggestion = (item: ReviewItem) => {
+    const c = card(item);
+    return (
+      <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
+        <h4><ReviewText text={item.title} layout={layout} /></h4>
+        <p><ReviewText text={item.body} layout={layout} /></p>
+        <div className="br-meta"><span className="br-src"><Sparkles size={11} aria-hidden="true" />keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>checked against your layout</span>}</div>
+        <div className="br-actions">
+          {c === undefined ? null : (
+            <button type="button" className="sheet-action" aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
+          )}
+          <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.dismiss(item.id)}>Not this</button>
+          {c === undefined ? null : (
+            <button
+              type="button"
+              className="bar-apply"
+              disabled={applying !== null || !c.validation.ok || r.stale}
+              onClick={() => {
+                setApplying(item.id);
+                void onApply(c).finally(() => setApplying(null));
+              }}
+            >
+              {applying === item.id ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}Apply
+            </button>
+          )}
+        </div>
+      </article>
+    );
+  };
+
+  const finding = (item: ReviewItem) => (
+    <Fragment key={item.id}>
+      <article className="br-item" data-kind={item.kind} data-stale={stale}>
+        <h4><ReviewText text={item.title} layout={layout} /></h4>
+        <p><ReviewText text={item.body} layout={layout} /></p>
+        <div className="br-meta">
+          {item.source === "check" ? <span className="br-src">Check</span> : <span className="br-src"><Sparkles size={11} aria-hidden="true" />keyloom</span>}
+          {item.layers.length > 0 ? <span>marked on the strip</span> : item.keys.length > 0 ? <span>{item.keys.length === 1 ? "its key is marked on the board" : "its keys are marked on the board"}</span> : null}
+        </div>
+        <div className="br-actions">
+          {item.layers[0] === undefined && item.keys[0] === undefined ? null : (
+            <button type="button" className="sheet-action" onClick={() => onShowLayer(item.layers[0] ?? (item.keys[0] as { layerId: string }).layerId)}>
+              {item.layers[0] !== undefined ? "Show the layer" : "Show the keys"}
+            </button>
+          )}
+          <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.dismiss(item.id)}>{item.kind === "problem" ? "It's on purpose · hide" : "Hide"}</button>
+        </div>
+      </article>
+      {fixesFor(review, item.id).map(suggestion)}
+    </Fragment>
+  );
+
+  const fixed = (item: FixedItem) => (
+    <article key={`fixed:${item.id}`} className="br-item" data-kind="fixed">
+      <h4><CircleCheck size={14} className="br-tick" aria-hidden="true" /> <ReviewText text={item.title} layout={layout} /></h4>
+      <p>Fixed by your change.</p>
+      <div className="br-meta"><span className="br-src">{item.source === "check" ? "Check" : "keyloom"}</span><span>just now</span></div>
+    </article>
+  );
+
+  // A suggestion that fixes something shown sits under it; the rest are listed on their own.
+  const shownIds = new Set([...g.problems, ...g.hints].map((i) => i.id));
+  const loose = g.suggestions.filter((s) => !s.fixes.some((id) => shownIds.has(id)));
+
+  const group = (title: string, count: number, body: ReactNode) => (
+    <div className="br-group">
+      <h3><b>{title}</b> {count}</h3>
+      {body}
+    </div>
+  );
+
+  return (
+    <section className="br-panel" aria-label="Board review">
+      {head}
+      <div className="br-body">
+        {nothing && fixedNow.length === 0 ? (
+          <p className="br-quiet br-nothing">
+            <Check size={14} aria-hidden="true" /> Nothing to note. keyloom checked {review.checks.summary.layers} layers, {review.checks.summary.keys} keys and {review.checks.summary.combos} combos: every layer can be reached, nothing is lost, and the timings agree.
+          </p>
+        ) : null}
+        {g.problems.length === 0 && fixedNow.length === 0 ? null : group("Problems", g.problems.length, <>{fixedNow.filter((f) => f.kind === "problem").map(fixed)}{g.problems.map(finding)}</>)}
+        {loose.length === 0 ? null : group("Suggestions", loose.length, loose.map(suggestion))}
+        {g.hints.length === 0 ? null : group("Hints", g.hints.length, <>{fixedNow.filter((f) => f.kind === "hint").map(fixed)}{g.hints.map(finding)}</>)}
+
+        {review.ai.status === "pending" || review.ai.status === "running" ? (
+          <p className="br-quiet br-ai-coming"><LoaderCircle size={13} className="spin" aria-hidden="true" /> keyloom's own look is on its way; the checks above are already in.</p>
+        ) : review.ai.status === "unavailable" ? (
+          <div className="br-ai-missing">
+            <b>No suggestions this time.</b> keyloom's own look needs a model; the checks above don't.{review.ai.reason === null ? "" : ` ${review.ai.reason}`}{" "}
+            <button type="button" className="sheet-action br-inline" onClick={onSetUpModel}>Set up a model</button>
+          </div>
+        ) : review.ai.status === "failed" ? (
+          <div className="br-ai-missing">
+            <b>keyloom's own look didn't finish.</b> {review.ai.reason ?? "The model stopped."}{" "}
+            <button type="button" className="sheet-action br-inline" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
+          </div>
+        ) : null}
+
+        {showHidden && hidden.length > 0 ? (
+          <div className="br-group">
+            <h3><b>Hidden</b> {hidden.length}</h3>
+            {hidden.map((item) => (
+              <article key={item.id} className="br-item" data-kind="hidden">
+                <h4><ReviewText text={item.title} layout={layout} /></h4>
+                <div className="br-actions"><button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.restore(item.id)}>Show it again</button></div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+        {r.problem === null ? null : <p className="br-problem" role="alert">{r.problem}</p>}
+      </div>
+      <footer className="br-foot">
+        <span>
+          {review.ai.status === "done" ? "" : "Checks only · "}
+          {review.checks.summary.layers} layers, {review.checks.summary.keys} keys, {review.checks.summary.combos} combos checked
+          {hidden.length === 0 ? "" : ` · ${hidden.length} hidden`}
+        </span>
+        {hidden.length === 0 ? null : <button type="button" className="sheet-action" onClick={() => setShowHidden((v) => !v)}>{showHidden ? "Hide hidden" : "Show hidden"}</button>}
+      </footer>
+    </section>
+  );
+}
+
+/** The marker by the config name (D-340): what the review found, calm; one click opens it. */
+export function ReviewMarker({ review: r, open, onToggle }: { review: Review; open: boolean; onToggle: () => void }) {
+  const review = r.review;
+  if (!r.loaded) return null;
+  if (review === null) {
+    return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}><i data-tone="hint" aria-hidden="true" />Not looked over yet</button>;
+  }
+  if (r.stale) return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}><i data-tone="busy" aria-hidden="true" />Looking over your change…</button>;
+  const g = grouped(review);
+  const tone = g.problems.length > 0 ? "problem" : g.hints.length > 0 || g.suggestions.length > 0 ? "hint" : "ok";
+  const text = markerWords(review) ?? "Looked over · nothing to note";
+  return (
+    <button type="button" className="br-marker" aria-pressed={open} aria-label={`Board review: ${text}`} onClick={onToggle}>
+      <i data-tone={tone} aria-hidden="true" />{text}
+    </button>
+  );
+}

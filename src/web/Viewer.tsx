@@ -21,6 +21,8 @@ import { NewKeyboardCard } from "./keyboards/NewKeyboardCard.tsx";
 import { NewBoardPanel, type PutSource } from "./keyboards/NewBoardPanel.tsx";
 import { NewBoardKeyboard } from "./keyboards/NewBoardKeyboard.tsx";
 import { OpenProposals } from "./keyboards/OpenProposals.tsx";
+import { useReview } from "./review/useReview.ts";
+import { ReviewMarker, ReviewPanel } from "./review/ReviewPanel.tsx";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import type { Turn } from "./chat/transcript.ts";
@@ -303,8 +305,35 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     fetchOpenProposals(token, layoutRef, controller.signal).then(setWaiting, () => setWaiting([]));
     return () => controller.abort();
   }, [token, layoutRef, revision.id]);
-  const waitingCount = waiting?.filter((p) => p.status === "proposed").length ?? 0;
-  const proposalsShown = proposalsOpen && !newBoardPanel && !labPanelShown;
+  // The board review (D-340): read without being asked, its marker by the config name, its marks on the caps and the strip.
+  const boardReview = useReview(token, summary.id, revision.id, sync.lastReview);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const reviewShown = reviewOpen && !newBoardPanel && !labPanelShown;
+  const reviewSuggestionIds = useMemo(
+    () => new Set((boardReview.review?.items ?? []).flatMap((i) => (i.proposalId === null ? [] : [i.proposalId]))),
+    [boardReview.review],
+  );
+  // The review's own suggestions are proposals too; the caption counts the others, so one change isn't announced twice.
+  const waitingCount = waiting?.filter((p) => p.status === "proposed" && !reviewSuggestionIds.has(p.changeSetId)).length ?? 0;
+  const proposalsShown = proposalsOpen && !newBoardPanel && !labPanelShown && !reviewShown;
+  const reviewMarks = useMemo(() => {
+    const items = (boardReview.review?.items ?? []).filter((i) => i.dismissedAt === null);
+    const on = (kind: "problem" | "hint") => new Set(items.filter((i) => i.kind === kind).flatMap((i) => i.keys.filter((k) => k.layerId === layer?.id).map((k) => k.position)));
+    return { problems: on("problem"), hints: on("hint"), layers: new Set(items.filter((i) => i.kind === "problem").flatMap((i) => i.layers)) };
+  }, [boardReview.review, layer?.id]);
+  // The satisfaction beat (D-340): a review made after a change that cleared findings says so, once.
+  const fixedToastFor = useRef<string | null>(null);
+  useEffect(() => {
+    const fixed = boardReview.justFixed;
+    const id = boardReview.review?.id ?? null;
+    if (fixed.length === 0 || id === null || fixedToastFor.current === id) return;
+    fixedToastFor.current = id;
+    const first = fixed[0] as (typeof fixed)[number];
+    const plain = first.title.replace(/\{layer:([^{}:]+)\}/g, (_, l: string) => layerNameOf(l)).replace(/\{key:([^{}:]+):(\d+)\}/g, "the key");
+    toasts.show({ kind: "success", message: "keyloom looked again", detail: fixed.length === 1 ? `Fixed: ${plain}` : `${fixed.length} things are fixed, ${plain} among them` });
+    // layerNameOf follows the layout, which the review already waited for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardReview.justFixed, boardReview.review?.id]);
   // While listening, the top bar steps back too (D-314); it lives outside this component, so the root carries the state.
   useEffect(() => {
     if (labOpen && lab.phase.kind === "listening") document.documentElement.dataset.lab = "listening";
@@ -1596,7 +1625,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           release: chrome.release,
         }}
       />
-      <div className="workbench" data-newboard={newBoardDrawn !== null || undefined} data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown || (newBoardPanel && !narrow) || (proposalsShown && !narrow) ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
+      <div className="workbench" data-newboard={newBoardDrawn !== null || undefined} data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown || (newBoardPanel && !narrow) || (proposalsShown && !narrow) || (reviewShown && !narrow) ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
         <section
           ref={stageRef}
           className="stage"
@@ -1623,12 +1652,16 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onImport={chrome.onImport}
               />
             }
+            marker={<ReviewMarker review={boardReview} open={reviewShown} onToggle={() => {
+              setProposalsOpen(false);
+              setReviewOpen((v) => !v);
+            }} />}
             layerId={layer.id}
             layerName={layer.name}
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
             notice={offer ?? (waitingCount === 0 || proposalsOpen ? null : (
-              <button type="button" className="sheet-action nb-waiting" onClick={() => setProposalsOpen(true)}>
+              <button type="button" className="sheet-action nb-waiting" onClick={() => { setReviewOpen(false); setProposalsOpen(true); }}>
                 {waitingCount === 1 ? "1 proposal waiting" : `${waitingCount} proposals waiting`} · Show
               </button>
             ))}
@@ -1708,6 +1741,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             inspect={inspect}
             {...(labOpen ? { lab: labBoard } : {})}
             {...(compareThen === null ? {} : { then: compareThen })}
+            review={reviewMarks}
             found={found}
             previewing={preview !== null}
           />
@@ -1740,6 +1774,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               selectedId={layer.id}
               onSelect={chooseLayer}
               marked={markedLayers}
+              reviewed={reviewMarks.layers}
               {...(layerActions === undefined ? {} : { actions: layerActions })}
               renamingId={renamingId}
               onRenaming={setRenamingId}
@@ -1924,6 +1959,29 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         {newBoardPanel && !narrow ? (
           <div className="nb-column">
             <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
+          </div>
+        ) : reviewShown ? (
+          <div className={narrow ? "lab-sheet br-sheet" : "nb-column"}>
+            <ReviewPanel
+              review={boardReview}
+              layout={layout}
+              boardName={boardDisplayName(board.name)}
+              configName={summary.name}
+              proposals={waiting}
+              pinnedId={pinnedProposal?.changeSetId ?? null}
+              onPin={pinProposal}
+              onApply={async (card) => {
+                const result = await applyChangeSet(token, card.changeSetId);
+                await onProposalApplied(card, result);
+                setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
+              }}
+              onShowLayer={(id) => setLayerId(id)}
+              onClose={() => setReviewOpen(false)}
+              onSetUpModel={() => {
+                setReviewOpen(false);
+                openChat();
+              }}
+            />
           </div>
         ) : proposalsShown ? (
           // A phone has no column: the proposals are a sheet at the foot, as the lab's read-out is.

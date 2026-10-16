@@ -6,6 +6,8 @@ import type { ReachWords } from "../light/reach-words.ts";
 interface CaptionProps {
   /** The config picker (D-315: a config is a layout, and the caption calls it what BK does). */
   layoutMenu: ReactNode;
+  /** Beside the config's name: the board review's marker (D-340). */
+  marker?: ReactNode;
   layerId: string;
   layerName: string;
   /** The layer's light as a CSS colour, or null when it is unlit. */
@@ -20,13 +22,14 @@ interface CaptionProps {
 
 // The stage's caption (23#chrome-recedes): which layout, which layer in large type, and how to get there. The name cross-fades with the
 // light when the layer changes.
-export function Caption({ layoutMenu, layerId, layerName, light, reach, notice, aside }: CaptionProps) {
+export function Caption({ layoutMenu, marker, layerId, layerName, light, reach, notice, aside }: CaptionProps) {
   const reduce = useReducedMotion() === true;
   return (
     <div className="caption">
       <div className="caption-layout">
         <span className="caption-layout-word">Config</span>
         {layoutMenu}
+        {marker}
       </div>
       <div className="caption-main">
       {/* popLayout takes the outgoing name out of the flow, so the two cross-fade instead of the old leaving a gap first. */}
