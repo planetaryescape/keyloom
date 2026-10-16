@@ -1,6 +1,8 @@
 // keyloom lab, end to end on a fake keyboard and a stand-in firmware (D-280 to D-286): record a session, analyse it, find the proposals,
 // ask the agent's tool what it found, and delete everything. The terminal is scripted and the keyboard speaks the real stream protocol.
 import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { applyOps, getLayout, listChanges, proposeChange } from "../../src/app/index.ts";
 import { createAgentPorts } from "../../src/app/agent-ports.ts";
 import { typingFindingsText } from "../../src/agent/tools/get-typing-findings.ts";
@@ -135,6 +137,41 @@ describe("keyloom lab, end to end", () => {
     expect(listTypingSessions(w.app.db)).toEqual([]);
     expect(createAgentPorts(w.app, w.layoutId, "conv_x").typingFindings()).toEqual({ sessions: 0, analysed: 0 });
     expect((await cli(w, ["lab", "delete", id])).code).toBe(3);
+  });
+
+  test("two analyses of one session at once leave one set of proposals, and an analysis from another version is not trusted", async () => {
+    const w = await world();
+    const started = await cli(w, ["lab", "start", w.layoutId, "--text", "sdsdsdsdsdsd", "--format", "json"]);
+    const id: string = json({ ...started, out: started.out.slice(started.out.indexOf("{")) }).session_id;
+    const both = await Promise.all([cli(w, ["lab", "analyse", id, "--format", "json"]), cli(w, ["lab", "analyse", id, "--format", "json"])]);
+    expect(both.map((r) => r.code)).toEqual([0, 0]);
+    const suggestions = json(both[0] as Result).suggestions.length;
+    expect(suggestions).toBeGreaterThan(0);
+    expect(listChanges(w.app, w.layoutId, { status: "proposed" })).toHaveLength(suggestions);
+
+    // An analysis written by another version of keyloom is treated as not made: the tool says nothing about it and --show asks for a new one.
+    w.app.db.query("UPDATE typing_sessions SET analysis = ? WHERE id = ?").run(JSON.stringify({ schemaVersion: 99, counts: "?" }), id);
+    expect(createAgentPorts(w.app, w.layoutId, "conv_x").typingFindings()).toEqual({ sessions: 1, analysed: 0 });
+    const shown = await cli(w, ["lab", "analyse", id, "--show", "--format", "json"]);
+    expect(shown.code).toBe(2);
+    expect(JSON.parse(shown.err).error.message).toContain("has not been analysed");
+  });
+
+  test("the emulator's log is not left behind: a good analysis removes it, a failed one keeps it for the person, and delete removes it too", async () => {
+    const w = await world();
+    const started = await cli(w, ["lab", "start", w.layoutId, "--text", "sdsdsdsdsdsd", "--format", "json"]);
+    const id: string = json({ ...started, out: started.out.slice(started.out.indexOf("{")) }).session_id;
+    const log = join(w.app.dataDir, "logs", `lab-${id}.log`);
+    expect((await cli(w, ["lab", "analyse", id, "--format", "json"])).code).toBe(0);
+    expect(existsSync(log)).toBe(false);
+
+    const good = w.lab.lab as NonNullable<LabCliDeps["lab"]>;
+    w.lab.lab = { ...good, replay: (_app, _view, _rev, hooks) => async () => { hooks.log.line("firmware said: s d"); throw new Error("the emulator broke"); } };
+    expect((await cli(w, ["lab", "analyse", id, "--format", "json"])).code).toBe(1);
+    expect(readFileSync(log, "utf8")).toContain("firmware said");
+
+    expect((await cli(w, ["lab", "delete", id, "--format", "json"])).code).toBe(0);
+    expect(existsSync(log)).toBe(false);
   });
 
   test("a keyboard without the lab's firmware records nothing, says why, and is left off", async () => {

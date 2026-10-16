@@ -60,7 +60,7 @@ function holds(layout: Layout, board: BoardDefinition): Passage | undefined {
       const key = letterAt(layout, p);
       if (key === undefined) continue;
       // Two keys on the other hand, and one on this hand: a hold with a same-hand key is what chordal hold would turn into a tap.
-      for (const then of [targets[0], targets[targets.length - 1], near[0]]) {
+      for (const then of new Set([targets[0], targets[targets.length - 1], near[0]])) {
         if (then !== undefined) steps.push({ kind: "hold", key, then });
       }
     }

@@ -20,11 +20,13 @@ import type { Layout } from "../layout/schema.ts";
 import {
   type TypingSessionRow, type TypingSessionSummary, deleteTypingSession, findTypingSession, insertTypingSession, listTypingSessions, saveAnalysis,
 } from "../persistence/typing-sessions.ts";
+import { transact } from "../persistence/transaction.ts";
 import { rejectChange, proposeChange } from "./changes.ts";
 import type { App } from "./context.ts";
 import { emulateEvents } from "./emulate.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 
 export type LabDeps = {
@@ -52,8 +54,11 @@ async function startRealCapture(board: BoardDefinition, hooks: CaptureHooks): Pr
   }
 }
 
+/** Quiet time before a recording is replayed: a real keyboard has been running for a while, and QMK reads a timer of zero as "not started". */
+const REPLAY_LEAD_MS = 100;
+
 const emulatorReplay: LabDeps["replay"] = (app, view, boardRevision, hooks) => async (doc: Layout, events) =>
-  emulateEvents(app, { ...view, document: doc }, events, { boardRevision, log: hooks.log, ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}), ...(hooks.signal ? { signal: hooks.signal } : {}) });
+  emulateEvents(app, { ...view, document: doc }, events, { boardRevision, log: hooks.log, leadMs: REPLAY_LEAD_MS, cache: false, ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}), ...(hooks.signal ? { signal: hooks.signal } : {}) });
 
 export const realLabDeps = (): LabDeps => ({ startCapture: startRealCapture, replay: emulatorReplay });
 
@@ -100,8 +105,6 @@ export async function beginRecording(
   return { view, passage, capture, startedAt: Date.now() };
 }
 
-export type SessionView = TypingSessionSummary & { passageTitle: string };
-
 /** Ends the stream, saves the session with what was typed, and returns it. A recording with no key presses is not saved. */
 export async function endRecording(app: App, rec: RecordingInProgress, typedText: string): Promise<{ session: TypingSessionSummary; trace: CapturedTrace }> {
   const trace = await rec.capture.finish();
@@ -119,15 +122,22 @@ function summaryOf(row: TypingSessionRow): TypingSessionSummary {
   return { ...rest, eventCount: events.length, analysed: analysis !== null };
 }
 
-export function sessions(app: App, ref?: string): SessionView[] {
+export function sessions(app: App, ref?: string): TypingSessionSummary[] {
   const layoutId = ref === undefined ? undefined : getLayout(app, ref).layout.id;
-  return listTypingSessions(app.db, layoutId === undefined ? {} : { layoutId }).map((s) => ({ ...s, passageTitle: s.passageId }));
+  return listTypingSessions(app.db, layoutId === undefined ? {} : { layoutId });
 }
 
 /** Deletes a session with its trace, its typed text and its analysis. The proposals made from it stay, as any change set does. */
-export function deleteSession(app: App, id: string): void {
+export async function deleteSession(app: App, id: string): Promise<void> {
   if (!deleteTypingSession(app.db, id)) throw new NotFoundError(`no typing session "${id}"`);
+  // A failed analysis keeps its log, and the log holds what the firmware did with the keys.
+  await rm(labLogPath(app, id), { force: true });
 }
+
+const labLogPath = (app: App, id: string): string => join(app.dataDir, "logs", `lab-${id}.log`);
+
+/** An analysis in the shape this version reads; an older or newer one is treated as not made, so it is redone and never misread. */
+const hasAnalysis = (row: TypingSessionRow): boolean => (row.analysis as { schemaVersion?: number } | null)?.schemaVersion === 1;
 
 function sessionRow(app: App, id: string): TypingSessionRow {
   const row = findTypingSession(app.db, id);
@@ -189,7 +199,10 @@ export async function analyseSession(app: App, id: string, deps: LabDeps, opts: 
   const view = getLayout(app, row.layoutId, row.revisionId);
   const board = view.board.definition;
   const boardRevision = row.boardRevision ?? (board.revisions[0] as { id: string }).id;
-  const log = new LogSink(join(app.dataDir, "logs", `lab-${row.id}.log`));
+  // The firmware's output is a copy of what was typed, so the log is kept only when a run fails and it is needed to see why.
+  const logPath = labLogPath(app, row.id);
+  const log = new LogSink(logPath);
+  let finished = false;
   try {
     const analysis = await analyse({
       board, layout: view.document, passage: row.passage, events: row.events, typedText: row.typedText,
@@ -199,44 +212,50 @@ export async function analyseSession(app: App, id: string, deps: LabDeps, opts: 
     });
     const stored: StoredAnalysis = { ...analysis, proposals: [] };
 
-    const previous = (row.analysis as StoredAnalysis | null)?.proposals ?? [];
-    for (const p of previous) {
-      if (p.changeSetId === null) continue;
-      try {
-        rejectChange(app, p.changeSetId);
-      } catch {
-        // Applied, rejected or superseded already: it is not this analysis's to touch.
+    // One transaction for the whole write-up, so two analyses of one session racing cannot both leave their proposals behind: the loser
+    // sees the winner's and rejects them. The session is read again inside it, because it may have been deleted while Docker ran.
+    transact(app.db, () => {
+      const previous = (sessionRow(app, id).analysis as StoredAnalysis | null)?.proposals ?? [];
+      for (const p of previous) {
+        if (p.changeSetId === null) continue;
+        try {
+          rejectChange(app, p.changeSetId);
+        } catch {
+          // Applied, rejected or superseded already: it is not this analysis's to touch.
+        }
       }
-    }
-    const head = getLayout(app, row.layoutId);
-    if (head.revision.id !== row.revisionId && analysis.suggestions.length > 0) {
-      stored.notes.push("the layout has changed since this was recorded; suggestions were tried on the layout as it was, and are checked against the current one when proposed");
-    }
-    for (const s of analysis.suggestions) {
-      if (opts.propose === false) {
-        stored.proposals.push({ candidateId: s.candidate.id, changeSetId: null });
-        continue;
+      const head = getLayout(app, row.layoutId);
+      if (head.revision.id !== row.revisionId && analysis.suggestions.length > 0) {
+        stored.notes.push("the layout has changed since this was recorded; suggestions were tried on the layout as it was, and are checked against the current one when proposed");
       }
-      try {
-        const cs = proposeChange(app, row.layoutId, { ops: s.ops, source: "agent", ...proposalFor(view.document, s, row.startedAt) });
-        stored.proposals.push({ candidateId: s.candidate.id, changeSetId: cs.id });
-      } catch (err) {
-        if (!(err instanceof ValidationFailedError)) throw err;
-        stored.proposals.push({ candidateId: s.candidate.id, changeSetId: null, problem: err.message });
-        stored.notes.push(`${s.candidate.title} could not be proposed on the current layout: ${err.message}`);
+      for (const s of analysis.suggestions) {
+        if (opts.propose === false) {
+          stored.proposals.push({ candidateId: s.candidate.id, changeSetId: null });
+          continue;
+        }
+        try {
+          const cs = proposeChange(app, row.layoutId, { ops: s.ops, source: "agent", ...proposalFor(view.document, s, row.startedAt) });
+          stored.proposals.push({ candidateId: s.candidate.id, changeSetId: cs.id });
+        } catch (err) {
+          if (!(err instanceof ValidationFailedError)) throw err;
+          stored.proposals.push({ candidateId: s.candidate.id, changeSetId: null, problem: err.message });
+          stored.notes.push(`${s.candidate.title} could not be proposed on the current layout: ${err.message}`);
+        }
       }
-    }
-    saveAnalysis(app.db, row.id, stored);
+      saveAnalysis(app.db, row.id, stored);
+    });
+    finished = true;
     return { session: summaryOf({ ...row, analysis: stored, analysedAt: Date.now() }), analysis: stored };
   } finally {
     log.close();
+    if (finished) await rm(logPath, { force: true });
   }
 }
 
 /** The analysis stored for a session, or a message saying to run one. */
 export function sessionAnalysis(app: App, id: string): { session: TypingSessionSummary; analysis: StoredAnalysis } {
   const row = sessionRow(app, id);
-  if (row.analysis === null) throw new UsageError(`session ${id} has not been analysed; run: keyloom lab analyse ${id}`);
+  if (!hasAnalysis(row)) throw new UsageError(`session ${id} has not been analysed; run: keyloom lab analyse ${id}`);
   return { session: summaryOf(row), analysis: row.analysis as StoredAnalysis };
 }
 
@@ -251,10 +270,10 @@ export function sessionContent(app: App, id: string): { passage: Passage; typedT
 /** What the agent may know: counts, per-finger numbers, sentences, suggestions and key-name examples (D-280). */
 export function typingFindings(app: App, layoutId: string): TypingFindings {
   const all = listTypingSessions(app.db, { layoutId });
-  const analysed = all.filter((s) => s.analysed);
-  const latestSummary = analysed[0];
-  if (!latestSummary) return { sessions: all.length, analysed: 0 };
-  const row = sessionRow(app, latestSummary.id);
+  const rows = all.filter((s) => s.analysed).map((s) => sessionRow(app, s.id)).filter(hasAnalysis);
+  const row = rows[0];
+  if (!row) return { sessions: all.length, analysed: 0 };
+  const analysed = rows;
   const stored = row.analysis as StoredAnalysis;
   const view = getLayout(app, layoutId, row.revisionId);
   const byCandidate = new Map(stored.proposals.map((p) => [p.candidateId, p.changeSetId]));

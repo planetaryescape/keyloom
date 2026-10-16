@@ -158,6 +158,7 @@ export function macosHid(): HidTransport {
       );
       const mode = lib.cf.CFStringCreateWithCString(0n, ptr(cstr("kCFRunLoopDefaultMode")), kCFStringEncodingUTF8);
       const runLoop = lib.cf.CFRunLoopGetCurrent();
+      // bun:ffi types a pointer as a branded number; the callback's address and NULL are the two it cannot express.
       lib.io.IOHIDDeviceRegisterInputReportCallback(device, ptr(buffer), buffer.length, callback.ptr as never, null as never);
       lib.io.IOHIDDeviceScheduleWithRunLoop(device, runLoop, mode);
       const pump = setInterval(() => lib.cf.CFRunLoopRunInMode(mode, 0, true), 2);

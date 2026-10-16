@@ -137,3 +137,16 @@ Yes for QMK, and no for DF0 on purpose. TD0 and TD1 import as tap dances (tap Hy
 | Q22 | OpenRouter for Claude models only, or other models too (which needs a Chat Completions adapter)? | Open; blueprint assumes Claude only (D-107) |
 | Q23 | Is Codex acceptable without token streaming and without a cost figure? | Open; blueprint assumes yes, showing whole messages and tokens only (D-108) |
 | Q24 | Would BK build the Glove80 against the community fork behind `moergo-sc/zmk#36` to get per-key, per-layer colours, given it is unmerged and on a different base from MoErgo's v26.09? | Open; blueprint assumes no, and the Glove80 has no lighting (D-225, S21) |
+
+### S50 result, build half only (2026-10-16)
+
+The stream (D-284) is in keyloom's hands-free Moonlander build and compiles beside Oryx's modules: reva 68,140 bytes against 67,268 plain, revb 70,380, with `__wrap_action_exec` called from `matrix_task` (`nm` and `objdump` in [../research/spikes/S50.md](../research/spikes/S50.md)). The C passes its host-compiled tests for batching, the position table, and each way of stopping. Nothing has run on a keyboard: whether it keeps up at fast typing without dropping events, and whether the macOS reader receives the reports, wait for the runbook in S50.md with BK.
+
+### S51 result, build half only (2026-10-16)
+
+The stream (D-285) is in the keyloom-zmk module and links into the hands-free Glove80 and Corne builds (the Corne's central image only). The C passes its host-compiled tests. Nothing has run on a keyboard: the order across the split, the split latency and the stop behaviours wait for the runbook in [../research/spikes/S51.md](../research/spikes/S51.md) with BK.
+
+### S53 result, emulator half (2026-10-16)
+
+A synthetic typing sent over each stream's wire format and replayed through QMK's real core and ZMK's real build reproduces the firmware's reports exactly (30 events and 30 reports on each), and a recording built to misfire is classified and fixed on both real cores. Two firmware behaviours the replays had to allow for are in D-286. The half that needs a real keyboard is the runbook in [../research/spikes/S53.md](../research/spikes/S53.md).
+

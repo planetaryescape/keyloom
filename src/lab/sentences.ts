@@ -7,7 +7,7 @@ import type { Difference } from "./classify.ts";
 import { holdModsOf } from "./intent.ts";
 import { type FingerRow, type FingerStats, MIN_SAMPLES, keyCode } from "./stats.ts";
 
-export type FindingKind = "errors-by-finger" | "slow-finger" | "same-finger" | "roll" | "mod-tap-hold" | "misfire";
+export type FindingKind = "combo" | "errors-by-finger" | "slow-finger" | "same-finger" | "roll" | "mod-tap-hold" | "misfire";
 
 export type Finding = {
   /** Steady across analyses of the same recording, so the screen can keep one open. */
@@ -29,6 +29,17 @@ const plainName = (code: string | undefined): string => {
   const label = keyCodeLabel(code);
   return /^[A-Za-z0-9]/.test(label) ? label : code.toLowerCase().replaceAll("_", " ");
 };
+
+/** What a combo's output is, in words: "Shift", "Shift + [", "a macro". */
+function outputWords(b: Binding): string {
+  switch (b.kind) {
+    case "modifier": return modPhrase(b.mods);
+    case "key": return [...(b.mods ? [modPhrase(b.mods)] : []), plainName(b.code)].join(" + ");
+    case "macro": return "a macro";
+    case "layer": return "a layer";
+    default: return "something else";
+  }
+}
 
 /** A key as a sentence names it: the letter it types, or its word. */
 export const keyName = (layout: Layout, position: number): string => plainName(keyCode(layout, position));
@@ -88,7 +99,10 @@ export function sentencesFor(input: { stats: FingerStats; layout: Layout; board:
     const holdRow = stats.holds.find((h) => h.position === row.from);
     const term = holdRow?.termMs;
     // A roll matters when the first key is a mod-tap: the overlap is time the firmware has to decide between a roll and a hold.
-    const consequence = mods !== undefined ? `; ${keyName(layout, row.from)} is a ${modPhrase(mods)} key, so that is when ${modPhrase(mods)} can fire${term === undefined ? "" : ` (its tapping term is ${term} ms)`}` : "";
+    const consequence =
+      mods !== undefined
+        ? `; ${keyName(layout, row.from)} types ${modPhrase(mods)} when held, so that is the time the firmware has to tell a roll from a hold${term === undefined ? "" : ` (its tapping term is ${term} ms)`}`
+        : "";
     found.push({
       id: `roll:${row.from}>${row.to}`, kind: "roll", weight: (mods !== undefined ? 6 : 1) + row.rolls / 10,
       sentence: `${keyName(layout, row.from)}→${keyName(layout, row.to)} rolls overlap by ${ms(row.overlap.median)} (${row.rolls} of ${row.n} times)${consequence}.`,
@@ -104,6 +118,19 @@ export function sentencesFor(input: { stats: FingerStats; layout: Layout; board:
       id: `hold:${row.position}`, kind: "mod-tap-hold", weight: 3 + row.nearTerm,
       sentence: `When you tap ${keyName(layout, row.position)} you hold it ${ms(row.taps.median)} (${ms(row.taps.p90)} at its slowest tenth); ${row.nearTerm} of ${row.taps.n} taps came within ${ms(row.termMs * 0.2)} of its ${row.termMs} ms tapping term, where it turns into ${modPhrase(mods)}.`,
       data: { position: row.position, tapMedianMs: row.taps.median, tapP90Ms: row.taps.p90, termMs: row.termMs, nearTerm: row.nearTerm },
+    });
+  }
+
+  const swallowed = new Map<string, number>();
+  for (const d of input.differences) if (d.comboId !== undefined) swallowed.set(d.comboId, (swallowed.get(d.comboId) ?? 0) + 1);
+  for (const [id, count] of swallowed) {
+    const combo = layout.combos.find((c) => c.id === id);
+    if (!combo || count < 2) continue;
+    const keys = combo.positions.map((p) => keyName(layout, p)).join(" and ");
+    found.push({
+      id: `combo:${id}`, kind: "combo", weight: 12 + count * 2,
+      sentence: `Pressing ${keys} close together fired a combo (${outputWords(combo.output)}) ${count} times when you were typing them as letters, so the letters were not typed.`,
+      data: { combo: id, count },
     });
   }
 

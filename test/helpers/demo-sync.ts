@@ -58,7 +58,7 @@ Object.assign(process.env, {
 });
 await Bun.write(w("reva.bin"), dfuImage("0483:df11", 300));
 await Bun.write(w("revb.bin"), dfuImage("3297:2003", 300));
-await Bun.write(w("firmware.elf"), fakeElf(["__wrap_raw_hid_receive", "raw_hid_receive"]));
+await Bun.write(w("firmware.elf"), fakeElf(["__wrap_raw_hid_receive", "__wrap_action_exec", "raw_hid_receive"]));
 await Bun.write(w("glove80.uf2"), combinedUf2());
 for (const dir of [checkoutDirFor(moonlanderBoard), checkoutDirFor(glove)]) {
   mkdirSync(join(dir, ".git"), { recursive: true });

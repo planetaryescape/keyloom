@@ -34,6 +34,12 @@ export type EmulateQmkInput = {
   checkoutDir: string;
   events: EmulatorEvent[];
   settleMs?: number;
+  /**
+   * Quiet time before the first event. The harness's clock starts at zero, and QMK treats a timer of zero as "not started" (a combo whose
+   * first key goes down at exactly 0 never times out: seen replaying a recording whose first keys were S and D, which BK's layout combines).
+   * A keyboard that has been on for a while is never there. The reports come back with the lead taken off.
+   */
+  leadMs?: number;
   log?: LogSink;
   onLine?: (line: string) => void;
   signal?: AbortSignal;
@@ -41,7 +47,7 @@ export type EmulateQmkInput = {
 };
 
 /** The events in the order the harness plays them, from time zero, or a message saying which one is wrong. */
-export function scriptFor(events: readonly EmulatorEvent[], keyCount: number): string {
+export function scriptFor(events: readonly EmulatorEvent[], keyCount: number, leadMs = 0): string {
   if (events.length === 0) throw new BuildFailure("There are no key events to run.");
   events.forEach((e, i) => {
     if (!Number.isInteger(e.position) || e.position < 0 || e.position >= keyCount) {
@@ -52,7 +58,7 @@ export function scriptFor(events: readonly EmulatorEvent[], keyCount: number): s
   // Array.prototype.sort is stable, so events at the same time keep the order they were given in.
   const sorted = [...events].sort((a, b) => a.at - b.at);
   const first = (sorted[0] as EmulatorEvent).at;
-  return `${sorted.map((e) => `${Math.round(e.at - first)} ${e.position} ${e.action}`).join("\n")}\n`;
+  return `${sorted.map((e) => `${leadMs + Math.round(e.at - first)} ${e.position} ${e.action}`).join("\n")}\n`;
 }
 
 const UNDEFINED = /undefined reference to `([^']+)'/;
@@ -78,7 +84,8 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
       ? generateQmkSource({ layout: input.layout, board, revisionId: input.revisionId ?? "emulate", boardRevisionId: rev.id })
       : undefined);
   if (!source) throw new BuildFailure("emulateQmk needs a layout or its generated source.");
-  const script = scriptFor(input.events, board.keyCount);
+  const lead = input.leadMs ?? 0;
+  const script = scriptFor(input.events, board.keyCount, lead);
 
   const name = harnessName(rev.qmkTarget, `${Date.now().toString(36)}${process.pid}`);
   const rules = carriedRules(source.files.find((f) => f.path === "rules.mk")?.content);
@@ -155,7 +162,8 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
         "Matrix scanning, debounce and USB are not modelled: QMK sees each key event on a 1 ms scan.",
         ...parsed.warnings,
       ];
-      return { firmware: "qmk" as const, reports: parsed.reports, text: typedText(parsed.reports), warnings };
+      const reports = lead === 0 ? parsed.reports : parsed.reports.map((r) => ({ ...r, at: Math.max(0, r.at - lead) }));
+      return { firmware: "qmk" as const, reports, text: typedText(reports), warnings };
     },
     { timeoutMs: EMULATE_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`) },
   );

@@ -453,6 +453,8 @@ Only BK can do these:
 
 **New unknowns:** S50/S51 (firmware capture); S53 (replay fidelity).
 
+**Built so far (part 1, D-284 to D-289):** the stream in all three boards' firmware, the host readers, the `typing_sessions` table, replay, classification, the counterfactual search, per-finger numbers and sentences, the passages, `keyloom lab` and the agent tool. S50 and S51 have runbooks and have not run on a keyboard; S53's emulator half is done. The lab screens, the recording light and the findings on the caps are part 2.
+
 **Demo:** on the Moonlander, record a session, see findings per finger, try a timing fix, see before and after, apply it, and type again.
 
 **Done when:** a real session on BK's Moonlander and Glove80 produces findings he agrees with, and a suggested fix's replayed improvement holds up in a second session.

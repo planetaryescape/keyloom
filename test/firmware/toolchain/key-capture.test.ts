@@ -67,6 +67,18 @@ describe("recording from a Moonlander", () => {
     expect(kb.stream.closed()).toBe(1);
   });
 
+  test("finishing twice returns the same trace and sends one stop", async () => {
+    const kb = fakeMoonlander();
+    const capture = await startQmkCapture(kb.transport, moonlanderInterface());
+    kb.press([ev(1, true, 1_000_010), ev(1, false, 1_000_050)]);
+    await tick(10);
+    const first = await capture.finish();
+    const second = await capture.finish();
+    expect(second.events).toEqual(first.events);
+    expect(kb.stream.written.filter((r) => r[9] === TYPING_ACTION.stop)).toHaveLength(1);
+    expect(kb.stream.closed()).toBe(1);
+  });
+
   test("more than five events cross report boundaries in order", async () => {
     const kb = fakeMoonlander();
     const capture = await startQmkCapture(kb.transport, moonlanderInterface());

@@ -44,7 +44,7 @@ async function setup(boardDir: string, keymap: string, keymapName?: string) {
   const env = (mode: string, run: string) => ({
     FAKE_MODE: mode, FAKE_DOCKER_LOG: join(dir, "docker.calls"), FAKE_STDIN: join(dir, "stdin"), FAKE_RUN: `${FIXTURES}/emulate/${run}.log`,
   });
-  const go = (script: string | EmulatorEvent[], mode: string, run: string, extra: { timeoutMs?: number } = {}) =>
+  const go = (script: string | EmulatorEvent[], mode: string, run: string, extra: { timeoutMs?: number; cache?: boolean } = {}) =>
     withPath(
       bin,
       () =>
@@ -91,6 +91,16 @@ describe("emulateZmk for the Glove80 (MoErgo image)", () => {
     expect(await e.calls()).toHaveLength(1);
     await e.go("tap 26", "ok", "glove80-tap-letter").catch(() => undefined);
     expect(await e.calls()).toHaveLength(2);
+  });
+
+  test("a run asked not to be kept is neither read from nor written to the saved logs, so a person's keystrokes are not left in the cache", async () => {
+    const e = await setup(`${import.meta.dir}/../../../boards/moergo/glove80`, STYLE_FIXTURE);
+    await e.go("tap 25", "ok", "glove80-tap-letter", { cache: false });
+    await e.go("tap 25", "ok", "glove80-tap-letter", { cache: false });
+    expect(await e.calls()).toHaveLength(2);
+    expect(await Bun.file(join(e.dir, "work", "runs")).exists()).toBe(false);
+    const { readdirSync } = await import("node:fs");
+    expect(() => readdirSync(join(e.dir, "work", "runs"))).toThrow();
   });
 
   test("a keymap the compiler rejects is an EmulationError that carries what it said", async () => {

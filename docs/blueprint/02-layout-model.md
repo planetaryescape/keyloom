@@ -134,6 +134,20 @@ revisions(
 );
 CREATE INDEX revisions_layout ON revisions(layout_id, created_at);
 
+typing_sessions(                       -- the typing lab (24, D-288); local, deletable, never sent to a model
+  id TEXT PRIMARY KEY,                 -- typ_…
+  layout_id TEXT NOT NULL REFERENCES layouts(id),
+  revision_id TEXT NOT NULL REFERENCES revisions(id),   -- the layout as the keyboard ran it while recording
+  board_id TEXT NOT NULL, board_revision TEXT NULL,
+  firmware TEXT NOT NULL CHECK (firmware IN ('qmk','zmk')),
+  started_at INTEGER NOT NULL, ended_at INTEGER NOT NULL,
+  passage_id TEXT NOT NULL, passage TEXT NOT NULL,       -- the steps the person was asked to type
+  typed_text TEXT NOT NULL,                              -- what the computer received
+  events TEXT NOT NULL,                                  -- the physical trace: position, press or release, ms
+  warnings TEXT NOT NULL,
+  analysis TEXT NULL, analysed_at INTEGER NULL           -- the last analysis, or NULL
+);
+
 change_sets(
   id TEXT PRIMARY KEY,                 -- cs_…
   layout_id TEXT NOT NULL REFERENCES layouts(id),

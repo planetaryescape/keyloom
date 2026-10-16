@@ -22,6 +22,8 @@ export type Difference = {
   at: number;
   /** For a missed key: whether the person never pressed it or the keyboard swallowed it. */
   cause?: "you" | "keyboard";
+  /** For a missed key the keyboard swallowed: the combo that took it, when the keys of one were pressed together. */
+  comboId?: string;
   /** For a misfire: the hold-tap profile whose setting decided it. */
   profileId?: string;
   /** For a misfire: the facts an example is made of. */
@@ -38,6 +40,9 @@ export type MisfireFacts = {
   /** The gap since the last key came up. */
   priorIdleMs: number;
 };
+
+/** Keys of one combo pressed within this of each other may have been taken for it; QMK's own COMBO_TERM is 50 ms and a layout may raise it. */
+const COMBO_WINDOW_MS = 200;
 
 /** A key pressed again this soon after it came up is a double press, not a repeated letter. */
 export const DOUBLE_PRESS_MS = 120;
@@ -118,10 +123,23 @@ export function outcomeDifferences(layout: Layout, aligned: readonly Aligned[], 
   const bindings = layout.layers[0]?.bindings ?? [];
   const nextSame = (press: Press) => presses.find((p) => p.index > press.index && p.position === press.position);
   const out: Difference[] = [];
+  // A combo takes all its keys, so it is one difference at its first key, not one per key.
+  const taken = new Set<number>();
+  const comboOf = (press: Press) =>
+    layout.combos.find((c) => c.positions.includes(press.position) && c.positions.every((p) => presses.some((q) => q.position === p && Math.abs(q.downAt - press.downAt) <= COMBO_WINDOW_MS)));
+  const swallowed = (press: Press, base: { pressIndex: number; position: number; at: number }): Difference[] => {
+    const combo = comboOf(press);
+    if (!combo) return [{ ...base, kind: "missed", cause: "keyboard" }];
+    const group = presses.filter((q) => combo.positions.includes(q.position) && Math.abs(q.downAt - press.downAt) <= COMBO_WINDOW_MS);
+    for (const q of group) taken.add(q.index);
+    const first = group.reduce((a, b) => (b.downAt < a.downAt ? b : a));
+    return [{ kind: "missed", cause: "keyboard", comboId: combo.id, pressIndex: first.index, position: first.position, at: first.downAt }];
+  };
 
   for (const a of aligned) {
     if (a.kind !== "match") continue;
     const { press, step } = a;
+    if (taken.has(press.index)) continue;
     const binding = bindings[press.position];
     const code = tapCodeOf(binding);
     if (code === undefined) continue;
@@ -137,12 +155,13 @@ export function outcomeDifferences(layout: Layout, aligned: readonly Aligned[], 
       if (step.intent === "tap" && !typed) {
         // With a modifier hold we can see whether it fired; a layer hold has no modifier to see, and a tap that typed nothing means it held.
         const held = mods === undefined || holdFired(keyboard, mods, press.downAt, to);
-        out.push(held ? { ...base, kind: "misfire-hold", profileId, facts: factsOf(press, presses) } : { ...base, kind: "missed", cause: "keyboard" });
+        if (held) out.push({ ...base, kind: "misfire-hold", profileId, facts: factsOf(press, presses) });
+        else out.push(...swallowed(press, base));
       } else if (step.intent === "hold" && mods !== undefined && !holdFired(keyboard, mods, press.downAt, to)) {
         out.push({ ...base, kind: "misfire-tap", profileId, facts: factsOf(press, presses) });
       }
     } else if (step.intent === "tap" && !typed) {
-      out.push({ ...base, kind: "missed", cause: "keyboard" });
+      out.push(...swallowed(press, base));
     }
   }
   return out;

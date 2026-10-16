@@ -89,7 +89,26 @@ export function modelReplay(board: BoardDefinition): Replay {
     // A key pressed while a hold-tap key is undecided is held back until it decides, as the firmware does.
     const heldBack = new Map<(typeof presses)[number], number>();
 
+    // Combos: every key of one went down within the combo term of the first, so the keys are the combo's and its output replaces them.
+    const comboTerm = Number(layout.settings.find((x) => x.firmware === "qmk" && x.key === "COMBO_TERM")?.value ?? 50);
+    const consumed = new Set<(typeof presses)[number]>();
+    for (const combo of layout.combos) {
+      for (const first of presses.filter((q) => q.position === combo.positions[0] && !consumed.has(q))) {
+        const group = combo.positions.map((position) => presses.find((q) => q.position === position && !consumed.has(q) && Math.abs(q.down - first.down) <= comboTerm));
+        if (group.some((q) => q === undefined)) continue;
+        const members = group as Array<(typeof presses)[number]>;
+        for (const q of members) consumed.add(q);
+        const from = Math.max(...members.map((q) => q.down));
+        const to = Math.min(...members.map((q) => q.up));
+        if (combo.output.kind === "modifier") {
+          emit({ at: from, kind: "modDown", mods: combo.output.mods });
+          emit({ at: Math.max(from, to), kind: "modUp", mods: combo.output.mods });
+        }
+      }
+    }
+
     for (const [i, p] of presses.entries()) {
+      if (consumed.has(p)) continue;
       const b = bindings[p.position];
       if (b?.kind !== "holdTap" || !("mods" in b.hold)) {
         if (b?.kind === "key") {
@@ -157,4 +176,42 @@ export function modelReplay(board: BoardDefinition): Replay {
     }
     return { firmware: layout.firmware === "zmk" ? "zmk" : "qmk", reports, text: typedText(reports), warnings: [] };
   };
+}
+
+/** A small seeded generator, so a synthetic person types the same way every run. */
+export function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * A person typing a passage evenly, as strokes in whole milliseconds: taps about 90 ms long every 140 ms or so, and for a "hold" step the
+ * mod-tap key down for 420 ms with its partner pressed and let go inside it. The jitter is seeded.
+ */
+export function syntheticTyping(steps: ReadonlyArray<{ positions: number[]; intent: "tap" | "hold" }>, seed = 1): Stroke[] {
+  const random = seeded(seed);
+  const jitter = (ms: number) => Math.round(ms * (0.85 + 0.3 * random()));
+  const strokes: Stroke[] = [];
+  let t = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i] as (typeof steps)[number];
+    const position = step.positions[0] as number;
+    if (step.intent === "hold") {
+      const partner = steps[++i] as (typeof steps)[number];
+      const down = t;
+      strokes.push({ position, down, up: down + 420 });
+      strokes.push({ position: partner.positions[0] as number, down: down + 250, up: down + 250 + jitter(70) });
+      t += 700;
+    } else {
+      const down = t;
+      strokes.push({ position, down, up: down + jitter(90) });
+      t += jitter(140);
+    }
+  }
+  return strokes;
 }

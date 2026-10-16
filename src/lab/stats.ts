@@ -6,6 +6,7 @@ import type { Aligned } from "./align.ts";
 import type { Difference } from "./classify.ts";
 import { holdModsOf, tapCodeOf } from "./intent.ts";
 import type { Press } from "./presses.ts";
+import { tappingTermOf } from "./terms.ts";
 
 /** A gap between two key presses longer than this is a pause (a word, a thought), not a transition between fingers. */
 export const PAUSE_MS = 1000;
@@ -68,15 +69,6 @@ export type FingerStats = {
 type Input = { board: BoardDefinition; layout: Layout; presses: readonly Press[]; aligned: readonly Aligned[]; differences: readonly Difference[] };
 
 const fingerOf = (board: BoardDefinition, position: number): string | undefined => board.fingers[String(position)];
-const handOf = (board: BoardDefinition, position: number): "left" | "right" => (board.hands.left.includes(position) ? "left" : "right");
-
-function termOf(layout: Layout, profileId: string): number | undefined {
-  const profile = layout.holdTapProfiles.find((p) => p.id === profileId);
-  const own = profile?.options[profile.firmware === "qmk" ? "TAPPING_TERM" : "tapping-term-ms"];
-  if (typeof own === "number") return own;
-  const global = layout.settings.find((s) => s.firmware === "qmk" && s.key === "TAPPING_TERM")?.value;
-  return typeof global === "number" ? global : undefined;
-}
 
 export function fingerStats(input: Input): FingerStats {
   const { board, layout, presses, aligned, differences } = input;
@@ -147,7 +139,7 @@ export function fingerStats(input: Input): FingerStats {
   }
   const holds = [...holdRows].map(([position, row]): HoldRow => {
     const b = bindings[position];
-    const termMs = b?.kind === "holdTap" ? termOf(layout, b.profileId) : undefined;
+    const termMs = b?.kind === "holdTap" ? tappingTermOf(layout, b.profileId) : undefined;
     return { position, taps: spread(row.taps), holds: spread(row.holds), termMs, nearTerm: termMs === undefined ? 0 : row.taps.filter((d) => d > 0.8 * termMs).length };
   });
 
@@ -166,4 +158,3 @@ export function fingerStats(input: Input): FingerStats {
 
 /** Whether a position's binding is a tap on this layout; used by sentences to name keys. */
 export const keyCode = (layout: Layout, position: number): string | undefined => tapCodeOf(layout.layers[0]?.bindings[position]);
-export { handOf };

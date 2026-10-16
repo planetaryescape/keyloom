@@ -185,6 +185,11 @@ function zmkChordalCandidate(layout: Layout, board: BoardDefinition, profile: Ho
   if (uses.length === 0) return undefined;
   const hands = { left: uses.filter((u) => left.has(u.position)), right: uses.filter((u) => !left.has(u.position)) };
   const ops: ChangeOp[] = [];
+  // ZMK notes the first other key at its release when hold-trigger-on-release is set, but a hold-preferred key is decided when that key goes
+  // down, before any release: the positional check then sees nothing and the hold stands (seen on the Glove80's build, 2026-10-16). The
+  // flavors that wait for a release are the ones it is for.
+  const onRelease = String(base.flavor ?? "hold-preferred") !== "hold-preferred";
+  const { "hold-trigger-on-release": _was, ...rest } = base;
   for (const hand of ["left", "right"] as const) {
     if (hands[hand].length === 0) continue;
     // A key on the left hand is completed by a key on the right.
@@ -193,7 +198,7 @@ function zmkChordalCandidate(layout: Layout, board: BoardDefinition, profile: Ho
       op: "upsertHoldTapProfile",
       profile: {
         id: ids[hand], name: `${profile.name} (${hand} hand)`, firmware: "zmk",
-        options: { ...base, "hold-trigger-key-positions": [...triggers], "hold-trigger-on-release": true },
+        options: { ...rest, "hold-trigger-key-positions": [...triggers], ...(onRelease ? { "hold-trigger-on-release": true } : {}) },
       },
     });
   }

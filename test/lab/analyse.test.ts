@@ -90,6 +90,18 @@ describe("classifying what the firmware did with the keys that were pressed", ()
     expect(deliberate.differences).toEqual([]);
   });
 
+  test("two keys of a combo rolled too close together are swallowed by it, and the combo is named instead of blaming the keys", async () => {
+    // BK's layout makes S and D together Shift. Rolled 30 ms apart, they are the combo and neither letter is typed.
+    const strokes = Array.from({ length: 3 }, (_, i): Stroke[] => [
+      { position: S, down: i * 500, up: i * 500 + 120 },
+      { position: D, down: i * 500 + 30, up: i * 500 + 130 },
+    ]).flat();
+    const a = await run(TEXT("sd".repeat(3)), strokes);
+    expect(a.counts).toMatchObject({ misfireHold: 0, missed: 3 });
+    expect(a.differences.every((d) => d.kind === "missed" && d.cause === "keyboard" && d.comboId !== undefined)).toBe(true);
+    expect(a.findings[0]?.sentence).toBe("Pressing S and D close together fired a combo (Shift) 3 times when you were typing them as letters, so the letters were not typed.");
+  });
+
   test("the same recording in a different order of the array gives the same result", async () => {
     const strokes = sdRolls(4);
     const forward = await run(TEXT("sd".repeat(4)), strokes);

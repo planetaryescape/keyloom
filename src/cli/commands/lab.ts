@@ -90,6 +90,9 @@ export function analysisText(id: string, a: StoredAnalysis): string {
       lines.push(`  ${s.candidate.title}`, `    ${e.removed} of ${e.before} misfires gone, ${e.introduced === 0 ? "none new" : `${e.introduced} new`}${made ? `. Proposed as ${made}; review it with: keyloom change show ${made}` : ""}`);
     }
   }
+  if (a.fidelity) {
+    lines.push("", `Replay check: your keyboard typed ${a.fidelity.typedByKeyboard} characters here and the replay typed ${a.fidelity.typedByReplay}; ${a.fidelity.differing === 0 ? "they match" : `${a.fidelity.differing} differ`}.`);
+  }
   for (const n of a.notes) lines.push("", `Note: ${n}.`);
   if (a.coarseSearch) lines.push("", `The search went from big steps to small ones over ${a.emulatorRuns} emulator runs, so a setting between the steps tried may do better.`);
   return lines.join("\n");

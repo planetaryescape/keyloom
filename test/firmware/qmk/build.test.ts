@@ -139,9 +139,16 @@ describe("buildQmk, hands-free", () => {
   test("a build whose ELF defines the wrapper is kept", async () => {
     const s = await setup();
     const elf = join(s.dir, "good.elf");
-    await Bun.write(elf, fakeElf(["__wrap_raw_hid_receive", "raw_hid_receive"]));
+    await Bun.write(elf, fakeElf(["__wrap_raw_hid_receive", "__wrap_action_exec", "raw_hid_receive"]));
     const r = await s.build("ok", { FAKE_ELF: elf }, { source: withMarker(s) });
     expect(r.bytes).toBe(216);
+  });
+
+  test("so must the typing lab's recorder be, or a keyboard would say it records and send nothing", async () => {
+    const s = await setup();
+    const elf = join(s.dir, "no-stream.elf");
+    await Bun.write(elf, fakeElf(["__wrap_raw_hid_receive", "raw_hid_receive"]));
+    await expect(s.build("ok", { FAKE_ELF: elf }, { source: withMarker(s) })).rejects.toThrow(/doesn't define __wrap_action_exec/);
   });
 
   test("a build whose ELF lacks the wrapper is refused, because --wrap silently not applying would give a keyboard that can't be restarted", async () => {

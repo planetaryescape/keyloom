@@ -50,6 +50,10 @@ export type EmulateEventsOptions = {
   signal?: AbortSignal;
   /** One log for several runs (the typing lab replays one recording many times); each run gets its own when omitted. */
   log?: LogSink;
+  /** Quiet time before the first event; see EmulatorInput.leadMs. */
+  leadMs?: number;
+  /** False keeps the run from being saved for next time; see EmulatorInput.cache. */
+  cache?: boolean;
 };
 
 /** Runs key events on the real firmware logic for `view`'s document (which a caller may have changed from the stored one). */
@@ -72,6 +76,8 @@ export async function emulateEvents(app: App, view: LayoutView, events: readonly
       boardRevision: opts.boardRevision,
       source: sourceFor(view, opts.boardRevision),
       events,
+      ...(opts.leadMs === undefined ? {} : { leadMs: opts.leadMs }),
+      ...(opts.cache === undefined ? {} : { cache: opts.cache }),
       checkoutDir: checkoutDirFor(view.board),
       workDir: join(cacheDir(), "emulate", slug),
       imageContextDir: join(cacheDir(), "images", slug),

@@ -28,7 +28,7 @@ export async function toolchainEnv(opts: { zapp?: string } = {}) {
   await Bun.write(revbFile, REVB);
   // What a hands-free build links (D-070): the build is refused without it.
   const elfFile = join(root, "firmware.elf");
-  await Bun.write(elfFile, fakeElf(["__wrap_raw_hid_receive", "raw_hid_receive"]));
+  await Bun.write(elfFile, fakeElf(["__wrap_raw_hid_receive", "__wrap_action_exec", "raw_hid_receive"]));
   const vars = {
     XDG_CACHE_HOME: cache, FAKE_MODE: "ok", FAKE_DOCKER_LOG: join(root, "docker.calls"), FAKE_BIN_REVA: revaFile, FAKE_BIN_REVB: revbFile, FAKE_ELF: elfFile,
     FAKE_GIT_HEAD: PIN, ZAPP_CALLS: join(root, "zapp.calls"), FAKE_USB: '{"SPUSBDataType":[]}',
