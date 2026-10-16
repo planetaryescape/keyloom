@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.1](https://github.com/planetaryescape/keyloom/compare/v0.32.0...v0.32.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* name the double-tap and tap-then-hold slots under the key ([84eb62f](https://github.com/planetaryescape/keyloom/commit/84eb62ffa744238e03d9c83068d865615eb9b1ab))
+
 ## [0.32.0](https://github.com/planetaryescape/keyloom/compare/v0.31.1...v0.32.0) (2026-10-16)
 
 
