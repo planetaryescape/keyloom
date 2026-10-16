@@ -1,10 +1,10 @@
-import { LoaderCircle, MousePointerClick, Plus, Trash2, X } from "lucide-react";
+import { LoaderCircle, MousePointerClick, Trash2, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Binding, Combo, Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import { bindingFromDraft, bindingSummary, draftFromBinding, type Draft } from "../editor/draft.ts";
-import { ModifierToggles } from "../editor/ModifierToggles.tsx";
+import { CardMods } from "../card/CardMods.tsx";
 import { useOpsCheck } from "../editor/useCheck.ts";
 import { Validation } from "../editor/Validation.tsx";
 import type { PickerTab } from "../panel/picker-items.ts";
@@ -12,6 +12,12 @@ import { SlotPicker } from "../panel/SlotPicker.tsx";
 import { canToggleTapMods, pickTap, tapMods, toggleTapMod, type TapPick } from "../panel/slots.ts";
 import { comboNameFor, comboProblem, comboSummary, layersFromChoice, MIN_COMBO_KEYS, removeComboOps, upsertComboOps } from "./combo-ops.ts";
 import "./combos.css";
+import "../card/card.css";
+import { bindingLegend } from "../../layout/legend.ts";
+import { layerDisplayName } from "../../layout/cap-words.ts";
+import { Cap } from "../keyboard/Cap.tsx";
+import { HeroCap } from "../card/HeroCap.tsx";
+import { cardTitle } from "../card/card-words.ts";
 
 /** A combo being made or edited. The output is null until the person picks one, and nothing is saved before then. */
 export interface ComboDraft {
@@ -178,48 +184,82 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
   const tooFew = draft.positions.length <= MIN_COMBO_KEYS;
   const summaryWord = draft.output === null ? "Choose a key" : bindingSummary(draft.output, layout);
 
+  // The keys as their caps show on this layer, and what they send as a cap of its own (23#the-key-card, P2).
+  const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances, passthrough: layout.passthrough };
+  const layer = layout.layers.find((candidate) => candidate.id === layerId);
+  const keyLegends = draft.positions.map((position) => {
+    const binding = layer?.bindings[position];
+    return binding === undefined ? { kind: "none" as const, tap: "" } : bindingLegend(binding, ctx);
+  });
+  const outputLegend = draft.output === null ? null : bindingLegend(draft.output, ctx);
+  const title = draft.positions.length === 0 ? "New combo" : keyLegends.map((legend, i) => legend.tap || `key ${(draft.positions[i] ?? 0) + 1}`).join(" + ");
+  const where = draft.layerIds === "all" ? "every layer" : draft.layerIds.map((id) => layerDisplayName(layout.layers.find((candidate) => candidate.id === id)?.name ?? id)).join(", ");
+  const applyText = applying ? "Applying" : draft.output === null ? (draft.isNew ? "Add combo" : "Apply") : `Send ${cardTitle(draft.output, layout)} from ${title}`;
+
   return (
-    <section ref={root} className="combo-pane combo-editor" aria-label={draft.isNew ? "New combo" : `Combo ${draft.name}`}>
-      <header className="panel-head">
-        <div className="panel-title">
-          <h2>{draft.isNew ? "New combo" : draft.name}</h2>
-          <p className="muted">{draft.positions.length} keys pressed together</p>
+    <section ref={root} className="combo-pane combo-editor key-card" aria-label={draft.isNew ? "New combo" : `Combo ${draft.name}`}>
+      <header className="card-head">
+        <div className="card-title">
+          <h2>{title}</h2>
+          <p>{draft.isNew ? "New combo" : "Combo"} · {where}</p>
         </div>
-        <button type="button" className="icon-button" aria-label="Close the combo" onClick={onBack}>
-          <X size={18} aria-hidden="true" />
+        <div className="card-actions">
+          {draft.isNew ? null : confirmDelete ? (
+            <button type="button" className="card-chip card-chip-danger" disabled={applying} onClick={() => void save({ ops: removeComboOps(draft.id), summary: comboSummary(layout, layout.combos.find((c) => c.id === draft.id) ?? (combo as Combo), "Removed") })}>
+              Delete for good
+            </button>
+          ) : (
+            <button type="button" className="card-icon" aria-label="Delete this combo" title="Delete this combo" disabled={applying} onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={15} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        <button type="button" className="card-icon" aria-label="Close the combo" title="Close (Esc)" onClick={onBack}>
+          <X size={16} aria-hidden="true" />
         </button>
       </header>
 
-      <fieldset className="panel-body" disabled={applying}>
-        <div className="combo-section">
-          <h3>Keys</h3>
-          <ul className="combo-keys" aria-label="Keys in this combo">
-            {draft.positions.map((position) => (
-              <li key={position}>
-                <span className="combo-key">Key {position + 1}</span>
-                {picking ? (
-                  <button type="button" className="icon-button" aria-label={`Remove key ${position + 1}`} disabled={tooFew} title={tooFew ? "A combo needs at least two keys" : undefined} onClick={() => onDraft({ ...draft, positions: draft.positions.filter((candidate) => candidate !== position) })}>
-                    <X size={12} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-          <button type="button" className="button" aria-pressed={picking} onClick={() => onPicking(!picking)}>
-            <MousePointerClick size={14} aria-hidden="true" />
-            {picking ? "Done picking keys" : "Change keys on the board"}
+      <fieldset className="card-body" disabled={applying}>
+        <div className="combo-hero" aria-label={`${title} pressed together`}>
+          {keyLegends.map((legend, i) => (
+            <span key={draft.positions[i]} className="combo-hero-key">
+              {i === 0 ? null : <span className="combo-hero-op" aria-hidden="true">+</span>}
+              <Cap as="span" tone={legend.kind} legend={legend} unit={56} width={1} style={{ width: 56, height: 56 }} />
+            </span>
+          ))}
+          <span className="combo-hero-op" aria-hidden="true">→</span>
+          <HeroCap
+            legend={outputLegend ?? { tap: "" }}
+            tone={outputLegend?.kind ?? "none"}
+            hold={null}
+            doubleTap={null}
+            tapThenHold={null}
+            open={pickerOpen ? "tap" : null}
+            draft={!same && draft.output !== null}
+            onOpen={() => setPickerOpen((open) => !open)}
+            label={draft.output === null ? "Choose what they send" : `Sends ${summaryWord}`}
+            size={72}
+          />
+        </div>
+        <p className="card-sentence">
+          {draft.output === null ? "Pick what these keys send together." : `Press them together for ${summaryWord}.`}
+          {picking ? " Click keys on the board to add or remove them." : ""}
+        </p>
+        <div className="card-chips">
+          <button type="button" className="card-chip" aria-pressed={picking} onClick={() => onPicking(!picking)}>
+            <MousePointerClick size={13} aria-hidden="true" />
+            {picking ? "Done choosing keys" : "Change keys"}
           </button>
-          {picking ? <p className="muted">Click keys on the board to add or remove them.</p> : null}
+          {picking
+            ? draft.positions.map((position) => (
+                <button key={position} type="button" className="card-chip" disabled={tooFew} title={tooFew ? "A combo needs at least two keys" : undefined} onClick={() => onDraft({ ...draft, positions: draft.positions.filter((candidate) => candidate !== position) })}>
+                  Remove key {position + 1}
+                </button>
+              ))
+            : null}
         </div>
 
-        <div className="combo-section">
-          <h3>Sends</h3>
-          <div className="slot" data-open={pickerOpen}>
-            <button type="button" className="slot-main" aria-expanded={pickerOpen} onClick={() => setPickerOpen((open) => !open)}>
-              <span className="slot-label">When pressed together</span>
-              <span className="slot-value">{summaryWord}</span>
-            </button>
-          </div>
+        <div className="card-picker combo-sends" hidden={!pickerOpen && !canToggleTapMods(pickerDraft)}>
           {pickerOpen ? (
             <SlotPicker
               slot="tap"
@@ -246,7 +286,7 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
             />
           ) : null}
           {!pickerOpen && canToggleTapMods(pickerDraft) ? (
-            <ModifierToggles legend={pickerDraft.kind === "modifier" ? "Modifiers" : "Sent together with it"} mods={tapMods(pickerDraft)} onToggle={(mod) => setOutput(toggleTapMod(pickerDraft, mod))} />
+            <CardMods row label={pickerDraft.kind === "modifier" ? "Modifiers" : "Sent with it"} mods={tapMods(pickerDraft)} onToggle={(mod) => setOutput(toggleTapMod(pickerDraft, mod))} />
           ) : null}
         </div>
 
@@ -286,28 +326,28 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
           </div>
         </details>
 
-        {combo === null ? null : <Validation layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />}
+        {combo === null || !(check.state.status === "error" || (check.state.status === "done" && (!check.state.result.ok || check.state.result.warnings.length > 0))) ? null : (
+          <Validation layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />
+        )}
       </fieldset>
 
-      <footer className="panel-foot">
-        <div className="panel-foot-note" aria-live="polite">
-          {error !== null ? <p className="blocked" role="alert">{error}</p> : <p className="muted">{why ?? (combo === null ? "" : comboSummary(layout, combo, draft.isNew ? "Added" : "Changed"))}</p>}
-        </div>
-        {draft.isNew ? null : confirmDelete ? (
-          <button type="button" className="button button-danger" disabled={applying} onClick={() => void save({ ops: removeComboOps(draft.id), summary: comboSummary(layout, layout.combos.find((c) => c.id === draft.id) ?? (combo as Combo), "Removed") })}>
-            Delete for good
-          </button>
-        ) : (
-          <button type="button" className="button" disabled={applying} onClick={() => setConfirmDelete(true)}>
-            <Trash2 size={14} aria-hidden="true" />
-            Delete
-          </button>
-        )}
-        <button type="button" className="button button-primary" disabled={!canApply} onClick={() => combo !== null && void save({ ops: upsertComboOps(combo), summary: comboSummary(layout, combo, draft.isNew ? "Added" : "Changed") })}>
-          {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : draft.isNew ? <Plus size={14} aria-hidden="true" /> : null}
-          {applying ? "Applying" : draft.isNew ? "Add combo" : "Apply"}
-        </button>
-      </footer>
+      {same && error === null ? null : (
+        <footer className="card-foot">
+          {error !== null || (why !== null && draft.output !== null) ? (
+            <p className="card-foot-note" role={error === null ? undefined : "alert"}>{error ?? why}</p>
+          ) : null}
+          <div className="card-foot-row">
+            <button type="button" className="card-discard" disabled={applying} onClick={onBack}>
+              Discard
+            </button>
+            <button type="button" className="card-apply" disabled={!canApply} onClick={() => combo !== null && void save({ ops: upsertComboOps(combo), summary: comboSummary(layout, combo, draft.isNew ? "Added" : "Changed") })}>
+              {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
+              {applyText}
+              {applying ? null : <kbd aria-hidden="true">↵</kbd>}
+            </button>
+          </div>
+        </footer>
+      )}
     </section>
   );
 }

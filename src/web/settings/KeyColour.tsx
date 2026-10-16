@@ -1,4 +1,3 @@
-import { Palette } from "lucide-react";
 import { colourAt, hsvToHex, isDark } from "../../layout/colour.ts";
 import type { Hsv, Layer } from "../../layout/schema.ts";
 import { ColourChoice } from "./ColourChoice.tsx";
@@ -19,9 +18,7 @@ export function KeyColour({ layer, position, onPick, busy }: Props) {
   const shown = colourAt(layer, position);
   return (
     <details className="key-colour">
-      <summary>
-        <Palette size={14} aria-hidden="true" />
-        Colour
+      <summary className="card-icon" aria-label={`Key colour: ${isDark(shown) ? "off" : own === null ? "the layer's" : "its own"}`} title="Key colour">
         <span className="layer-colour-dot" style={isDark(shown) ? undefined : { background: hsvToHex(shown) }} data-empty={isDark(shown)} aria-hidden="true" />
       </summary>
       <fieldset disabled={busy} style={{ border: 0, margin: 0, padding: 0 }}>

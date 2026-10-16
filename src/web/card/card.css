@@ -1,0 +1,702 @@
+/* The key card (23#the-key-card): a surface with a large soft shadow and no border, the key drawn large as its hero, and nothing on it
+   that isn't about this key. Spacing and type come from tokens.css. */
+
+.floating-card {
+  position: absolute;
+  z-index: 12;
+  display: flex;
+  width: 352px;
+  max-height: calc(100% - var(--space-5));
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  color: var(--ink);
+  transform-origin: center;
+}
+
+/* The board slides aside for the card only when it must; it slides, it doesn't jump. */
+.stage .keyboard {
+  transition: transform 0.36s var(--ease-out);
+}
+
+/* The rest of the board steps back while one key is open. */
+.card-spotlight {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  background: radial-gradient(circle at var(--sx) var(--sy), transparent 0, transparent 70px, var(--spot-dim) 360px);
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.key-card {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.key-card:focus-visible {
+  outline: none;
+}
+
+/* The key's name and where it is on the left, the key's actions and close on the right of the same line. */
+.card-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 0 var(--space-1);
+  padding: var(--space-4) var(--space-3) 0 var(--space-5);
+}
+
+.card-title {
+  display: contents;
+}
+
+.card-title h2 {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+}
+
+.card-title p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.card-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.card-head > .card-icon {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.card-title h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.card-title p {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.card-actions,
+.card-moves {
+  display: flex;
+  align-items: center;
+}
+
+.card-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  list-style: none;
+}
+
+.card-icon::-webkit-details-marker {
+  display: none;
+}
+
+.card-icon:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.card-icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.card-icon[aria-pressed="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.card-actions .key-colour {
+  position: relative;
+}
+
+.card-actions .key-colour .layer-colour-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.card-actions .key-colour .layer-colour-dot[data-empty="true"] {
+  border: 1.5px dashed var(--ink-3);
+}
+
+.card-actions .key-colour[open] > fieldset {
+  position: absolute;
+  z-index: 3;
+  top: 36px;
+  right: 0;
+  width: 260px;
+  padding: var(--space-3) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--card-shadow);
+}
+
+.card-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4) var(--space-4) var(--space-4);
+  overflow-y: auto;
+  border: 0;
+  overscroll-behavior: contain;
+}
+
+.card-body > * {
+  flex-shrink: 0;
+}
+
+.card-body:disabled {
+  opacity: 0.7;
+}
+
+/* ---------- the hero: the key, large, and the modifiers beside it ---------- */
+
+.card-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+.hero-cap {
+  position: relative;
+  flex: none;
+}
+
+.hero-cap .cap-body {
+  overflow: visible;
+}
+
+.hero-cap[data-led="true"] .cap-bleed {
+  opacity: var(--bleed);
+}
+
+.hero-cap[data-keycap="red"] .cap-body {
+  background: linear-gradient(180deg, var(--red-skirt-hi), var(--red-skirt-lo));
+}
+
+.hero-cap[data-keycap="red"] .cap-top {
+  background: radial-gradient(130% 100% at 50% 20%, var(--red-top-hi), var(--red-top-lo) 72%);
+}
+
+.hero-cap[data-keycap="red"] .cap-tap {
+  color: var(--red-legend);
+}
+
+.hero-cap[data-keycap="red"] .cap-front {
+  color: var(--red-front);
+}
+
+.hero-cap[data-draft="true"] .cap-body {
+  box-shadow:
+    0 0 0 1.5px var(--pending),
+    0 0 calc(var(--u) * 0.3) color-mix(in oklab, var(--pending) 45%, transparent),
+    0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+.hero-cap[data-draft="true"] .cap-front {
+  color: var(--pending-ink);
+}
+
+/* Each part of the cap is the slot it prints, and a button. */
+.hero-region {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--u) * 0.1);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hero-region:hover {
+  background: color-mix(in oklab, var(--ink) 6%, transparent);
+}
+
+.hero-region[data-open="true"],
+.hero-region:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.hero-tap {
+  top: calc(var(--u) * 0.04);
+  right: calc(var(--u) * 0.075);
+  bottom: calc(var(--u) * 0.2);
+  left: calc(var(--u) * 0.075);
+}
+
+.hero-tap .cap-tap {
+  color: var(--legend);
+  font-weight: 450;
+}
+
+.hero-front {
+  right: calc(var(--u) * 0.04);
+  bottom: calc(var(--u) * 0.01);
+  left: calc(var(--u) * 0.04);
+  height: calc(var(--u) * 0.18);
+}
+
+.hero-front-static {
+  position: absolute;
+  display: grid;
+  place-items: center;
+}
+
+.hero-front .cap-front {
+  position: static;
+  height: auto;
+  font-size: 13px;
+}
+
+.hero-corner {
+  top: calc(var(--u) * 0.07);
+  padding: 0 var(--space-1);
+  color: var(--front);
+  font-size: 12px;
+  font-stretch: 75%;
+  font-weight: 600;
+}
+
+.hero-corner-start {
+  left: calc(var(--u) * 0.1);
+}
+
+.hero-corner-end {
+  right: calc(var(--u) * 0.1);
+}
+
+.hero-ghost {
+  color: var(--ghost);
+  font-weight: 500;
+  font-stretch: 85%;
+}
+
+.hero-region[data-empty="true"] {
+  opacity: 0.85;
+}
+
+.card-mods {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.card-mods[data-row="true"] {
+  grid-auto-flow: column;
+  justify-content: center;
+}
+
+.card-mod {
+  display: grid;
+  width: 36px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.card-mod:hover {
+  color: var(--ink);
+}
+
+.card-mod[aria-pressed="true"],
+.card-mod[aria-checked="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+/* ---------- words, chips and notes ---------- */
+
+.card-sentence {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.card-note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.card-code {
+  display: block;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.card-chip {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.card-chip:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* ---------- the picker, inline under the cap ---------- */
+
+.card-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.card-picker .picker {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.card-picker .picker-search {
+  min-height: 38px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.card-picker-clear {
+  align-self: flex-end;
+  font-size: var(--text-sm);
+}
+
+.key-card .picker-tab[aria-selected="true"] {
+  border-color: transparent;
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.key-card .picker-tile {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.key-card .picker-tile[aria-selected="true"] {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.key-card .timing,
+.key-card .dance-timing {
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.card-reason summary {
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.card-reason input {
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* ---------- Apply: only when there is a change, and it says what it does ---------- */
+
+.card-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.card-foot-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.card-foot-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--pending-ink);
+}
+
+.card-foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.card-discard {
+  height: 38px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.card-apply {
+  display: inline-flex;
+  min-width: 0;
+  height: 38px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--primary-ink);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.card-apply:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.card-apply kbd {
+  padding: 0 var(--space-1);
+  border: 1px solid color-mix(in oklab, var(--primary-ink) 30%, transparent);
+  border-radius: 6px;
+  color: inherit;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage .keyboard,
+  .card-spotlight {
+    transition: none;
+  }
+}
+
+/* The amber ring already marks the hero as a draft; the board's corner dot would sit on the tap-then-hold corner. */
+.hero-cap .cap-mark-draft {
+  display: none;
+}
+
+.key-card .timing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.key-card .timing-sentence {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.key-card .timing .button {
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font-size: var(--text-sm);
+}
+
+.key-card .dance-term {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.key-card .dance-term input {
+  width: 72px;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink);
+  font: inherit;
+}
+
+.key-card .timing-label {
+  color: var(--ink-3);
+}
+
+/* ---------- a combo: its keys, then what they send ---------- */
+
+.combo-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.combo-hero-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.combo-hero-op {
+  color: var(--ink-3);
+  font-size: var(--text-lg);
+}
+
+.card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.card-chip[aria-pressed="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.card-chip-danger {
+  color: var(--bad-ink);
+}
+
+.combo-editor .combo-more {
+  font-size: var(--text-sm);
+}
+
+/* The head is a flex row: the title (wrapping if it must) and where the key is on the left, the key's actions and close on the right. */
+.card-head {
+  display: flex;
+  align-items: flex-start;
+}
+
+.card-title {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  padding-top: var(--space-1);
+}
+
+.card-title h2,
+.card-title p {
+  padding-right: 0;
+}
+
+.card-actions {
+  margin-top: 0;
+}
+
+.card-head > .card-icon {
+  position: static;
+}
+
+/* The dance's timing on one line: what it does, and the term to change. */
+.key-card .dance-timing {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.key-card .dance-timing .timing-sentence {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+
+/* The title shares the first line with the actions and close; where the key is takes the whole second line, so it never wraps. */
+.card-head {
+  flex-wrap: wrap;
+}
+
+.card-head .card-title {
+  display: contents;
+}
+
+.card-head .card-title h2 {
+  min-width: 0;
+  flex: 1;
+  padding-top: var(--space-1);
+}
+
+.card-head .card-title p {
+  order: 3;
+  flex-basis: 100%;
+  margin-top: 0;
+}

@@ -14,28 +14,20 @@ interface Props {
   blockedReason: string | null;
 }
 
-// Swap, Copy and Paste for the open key (16#moving-and-copying-keys). They sit apart from the slots:
-// each one is a change of its own, applied at once, so they are off while the key has a draft.
+// Swap, Copy and Paste for the open key (16#moving-and-copying-keys), as icons in the key card's header. Each one is a change of its
+// own, applied at once, so they are off while the key has a draft; the reason is in the tooltip and the accessible name.
 export function KeyMoves({ swapping, onSwap, onCopy, copied, pasteTargets, onPaste, blockedReason }: Props) {
+  const pasteWords = copied === null ? "Paste: copy a key first" : `Paste ${copied} on ${pasteTargets === 1 ? "this key" : `${pasteTargets} keys`} (⌘V)`;
   return (
-    <div className="panel-moves" role="group" aria-label="Move or copy this key">
-      <button type="button" className="button" aria-pressed={swapping} disabled={blockedReason !== null} title={blockedReason ?? "Then click the key to swap with, on any layer"} onClick={onSwap}>
-        <ArrowLeftRight size={14} aria-hidden="true" />
-        Swap
+    <div className="card-moves" role="group" aria-label="Move or copy this key">
+      <button type="button" className="card-icon" aria-pressed={swapping} aria-label={blockedReason ?? "Swap: then click the key to swap with, on any layer"} title={blockedReason ?? "Swap: then click the key to swap with, on any layer (S)"} disabled={blockedReason !== null} onClick={onSwap}>
+        <ArrowLeftRight size={15} aria-hidden="true" />
       </button>
-      <button type="button" className="button" disabled={blockedReason !== null} title={blockedReason ?? "Copy this key (⌘C)"} onClick={onCopy}>
-        <Copy size={14} aria-hidden="true" />
-        Copy
+      <button type="button" className="card-icon" aria-label={blockedReason ?? "Copy this key"} title={blockedReason ?? "Copy this key (⌘C)"} disabled={blockedReason !== null} onClick={onCopy}>
+        <Copy size={15} aria-hidden="true" />
       </button>
-      <button
-        type="button"
-        className="button"
-        disabled={blockedReason !== null || copied === null}
-        title={blockedReason ?? (copied === null ? "Copy a key first" : `Put ${copied} on ${pasteTargets === 1 ? "this key" : `${pasteTargets} keys`} (⌘V)`)}
-        onClick={onPaste}
-      >
-        <ClipboardPaste size={14} aria-hidden="true" />
-        {pasteTargets > 1 ? `Paste on ${pasteTargets}` : "Paste"}
+      <button type="button" className="card-icon" aria-label={blockedReason ?? pasteWords} title={blockedReason ?? pasteWords} disabled={blockedReason !== null || copied === null} onClick={onPaste}>
+        <ClipboardPaste size={15} aria-hidden="true" />
       </button>
     </div>
   );

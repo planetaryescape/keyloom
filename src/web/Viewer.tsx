@@ -42,6 +42,7 @@ import { type LightingDraft, withKeyColour, withLighting } from "./settings/ligh
 import { colourAt, hsvToHex, isDark } from "../layout/colour.ts";
 import type { LayerLighting } from "../layout/schema.ts";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
+import { FloatingCard } from "./card/FloatingCard.tsx";
 import { keyForChar } from "./panel/slots.ts";
 import { Caption } from "./shell/Caption.tsx";
 import { boardDisplayName, boardEntries, LayoutMenu } from "./shell/Header.tsx";
@@ -156,6 +157,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [changing, setChanging] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
+  const stageRef = useRef<HTMLElement>(null);
+  // How far the board slides aside for the key card, when the card can't fit beside the key (P2).
+  const [boardShift, setBoardShift] = useState(0);
+  // A key another key's card points at ("Also on Colemak"), lit on the board while pointed at.
+  const [pointAt, setPointAt] = useState<Slot | null>(null);
   const panel = useRef<KeyPanelHandle>(null);
   // History is a panel of its own; it stays chosen while a key or the chat is looked at, and comes back when they close.
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -383,7 +389,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
   const mode: PanelMode = chatOpen ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
-  const libraryHighlight = useMemo(() => (mode === "library" && libraryKeys !== null ? new Set(libraryKeys) : NONE), [mode, libraryKeys]);
+  const libraryHighlight = useMemo(() => {
+    const keys = new Set(mode === "library" && libraryKeys !== null ? libraryKeys : []);
+    if (pointAt !== null && pointAt.layerId === layer?.id) keys.add(pointAt.position);
+    return keys.size === 0 ? NONE : keys;
+  }, [mode, libraryKeys, pointAt, layer]);
 
   // Opening the chat puts the cursor in its box, so Cmd-K then typing is one gesture.
   useEffect(() => {
@@ -750,6 +760,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   function closeEditor(refocus: boolean) {
     const position = editing?.position ?? null;
+    setBoardShift(0);
+    setPointAt(null);
     setEditing(null);
     setDraft(CLEAN);
     setPlacing(null);
@@ -992,6 +1004,98 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The sheet's height is also the room the board keeps below it, so a key opened under it can be scrolled up (18#phones).
   const workbenchStyle = { "--sheet-h": `${sheetHeight(sheet, viewportHeight)}px` } as CSSProperties;
   const chips = chatSelection?.positions.length ?? 0;
+  // The combo being made or edited, as a card: beside its keys on a wide screen, the bottom sheet on a narrow one.
+  const comboCard = comboDraft === null ? null : (
+              <ComboEditor
+                key={`${revision.id}:${comboDraft.id}`}
+                token={token}
+                layoutRef={layoutRef}
+                revisionId={revision.id}
+                layout={layout}
+                layerId={layer.id}
+                draft={comboDraft}
+                onDraft={setComboDraft}
+                picking={comboPicking}
+                onPicking={setComboPicking}
+                onBack={() => {
+                  setComboDraft(null);
+                  setComboPicking(false);
+                }}
+                onApplied={async (summaryText) => {
+                  await onChanged();
+                  setComboDraft(null);
+                  setComboPicking(false);
+                  toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+                }}
+                onStale={onStale}
+              />
+  );
+  // One key card: floating beside its key on a wide screen, the bottom sheet on a narrow one (23#the-key-card).
+  const keyCard = (
+            editing === null ? null : (
+              <KeyPanel
+                key={`${revision.id}:${editing.layerId}:${editing.position}`}
+                handle={panel}
+                token={token}
+                layoutRef={layoutRef}
+                layout={layout}
+                revisionId={revision.id}
+                layerId={editing.layerId}
+                position={editing.position}
+                finger={board.fingers[String(editing.position)]}
+                homeRow={(board.rows.home ?? []).includes(editing.position)}
+                advanced={advanced}
+                autoFocus={editing.focus}
+                blocked={blocked}
+                onDraft={(next) => {
+                  setDraft(next);
+                  setBlocked(false);
+                }}
+                placements={placements}
+                placing={placing}
+                onPlace={setPlacing}
+                onUnplace={(fn) => setPlacements((previous) => previous.filter((candidate) => candidate.function !== fn))}
+                onClose={() => closeEditor(true)}
+                onApplied={onApplied}
+                onTuned={onTuned}
+                onStale={onStale}
+                onShowLayer={(id) => {
+                  if (!draft.dirty) setLayerId(id);
+                }}
+                keycap={board.display?.keycaps?.[String(editing.position)]}
+                led={editing.layerId === layer.id ? ledColors?.get(editing.position) : undefined}
+                reach={editing.layerId === layer.id ? reach.get(editing.position) : undefined}
+                onPointAt={setPointAt}
+                notice={detail.upgrade?.tapDances !== true || !/^TD\(/.test(editedNativeSource(layout, editing)) ? null : offer}
+                actions={
+                  <>
+                  <KeyMoves
+                    swapping={swapping !== null}
+                    onSwap={() => setSwapping((current) => (current === null ? { layerId: editing.layerId, position: editing.position } : null))}
+                    onCopy={() => copyKey({ layerId: editing.layerId, position: editing.position })}
+                    copied={clipboard === null ? null : bindingSummary(clipboard.binding, layout)}
+                    pasteTargets={Math.max(1, chatSelection?.positions.length ?? 0)}
+                    onPaste={() => void paste()}
+                    blockedReason={draft.dirty ? "Apply or discard this key's change first" : null}
+                  />
+                  {board.lighting === undefined ? null : (
+                    <KeyColour
+                      layer={layout.layers.find((candidate) => candidate.id === editing.layerId) ?? layer}
+                      position={editing.position}
+                      busy={changing}
+                      onPick={(colour) => {
+                        const target = layout.layers.find((candidate) => candidate.id === editing.layerId);
+                        if (target === undefined) return;
+                        const lighting: LayerLighting = withKeyColour(target.lighting, editing.position, colour);
+                        void perform([{ op: "setLayerLighting", layerId: target.id, lighting }], `${target.name}, key ${editing.position + 1}: ${colour === null ? "follows the layer colour" : "own colour"}`);
+                      }}
+                    />
+                  )}
+                  </>
+                }
+              />
+            )
+  );
 
   return (
     <div className="workspace">
@@ -1054,8 +1158,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           release: chrome.release,
         }}
       />
-      <div className="workbench" data-side={mode === "summary" ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
-        <section className="stage" aria-label="Layout" data-placing={placing !== null}>
+      <div className="workbench" data-side={mode === "summary" || (!narrow && (mode === "key" || (mode === "combo" && comboDraft !== null))) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
+        <section ref={stageRef} className="stage" aria-label="Layout" data-placing={placing !== null} data-card={!narrow && editing !== null}>
           <Caption
             layoutMenu={<LayoutMenu layouts={chrome.layouts} selectedId={chrome.selectedId} onSelect={chrome.onSelect} onImport={chrome.onImport} />}
             layerId={layer.id}
@@ -1095,6 +1199,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             pendingIndex={editingHere && draft.binding !== null ? editing.position : null}
             appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
             pressSeq={pressSeq}
+            shiftPx={!narrow && (editing !== null || comboDraft !== null) ? boardShift : 0}
             chatSelected={chatSelected}
             highlighted={libraryHighlight}
             marks={marks}
@@ -1123,6 +1228,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             found={found}
           />
           <div className="stage-floor">
+            {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
+            <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
             <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>
             <LayerTabs
               layout={layout}
@@ -1171,10 +1278,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               </p>
             )}
           </div>
-          <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
+          {!narrow && comboDraft !== null && comboCard !== null && comboDraft.positions.length > 0 ? (
+            <FloatingCard stage={stageRef} position={comboDraft.positions[0] as number} alsoKeep={comboDraft.positions} placeKey={`combo:${comboDraft.id}:${layer.id}`} shift={boardShift} onShift={setBoardShift}>
+              {comboCard}
+            </FloatingCard>
+          ) : null}
+          {!narrow && editing !== null && keyCard !== null ? (
+            <FloatingCard stage={stageRef} position={editing.position} placeKey={`${editing.layerId}:${editing.position}:${layer.id}`} shift={boardShift} onShift={setBoardShift}>
+              {keyCard}
+            </FloatingCard>
+          ) : null}
         </section>
         <SidePanel
-          mode={mode}
+          mode={!narrow && (mode === "key" || (mode === "combo" && comboDraft !== null)) ? "summary" : mode}
           size={sheet}
           viewportHeight={viewportHeight}
           onSize={setSheet}
@@ -1242,94 +1358,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           }
           combo={
             comboDraft !== null ? (
-              <ComboEditor
-                key={`${revision.id}:${comboDraft.id}`}
-                token={token}
-                layoutRef={layoutRef}
-                revisionId={revision.id}
-                layout={layout}
-                layerId={layer.id}
-                draft={comboDraft}
-                onDraft={setComboDraft}
-                picking={comboPicking}
-                onPicking={setComboPicking}
-                onBack={() => {
-                  setComboDraft(null);
-                  setComboPicking(false);
-                }}
-                onApplied={async (summaryText) => {
-                  await onChanged();
-                  setComboDraft(null);
-                  setComboPicking(false);
-                  toasts.show({ kind: "success", message: "Applied", detail: summaryText });
-                }}
-                onStale={onStale}
-              />
-            ) : combosOpen ? (
+              narrow ? comboCard : null) : combosOpen ? (
               <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} />
             ) : null
           }
           summary={null}
           key_={
-            editing === null ? null : (
-              <KeyPanel
-                key={`${revision.id}:${editing.layerId}:${editing.position}`}
-                handle={panel}
-                token={token}
-                layoutRef={layoutRef}
-                layout={layout}
-                revisionId={revision.id}
-                layerId={editing.layerId}
-                position={editing.position}
-                finger={board.fingers[String(editing.position)]}
-                homeRow={(board.rows.home ?? []).includes(editing.position)}
-                advanced={advanced}
-                autoFocus={editing.focus}
-                blocked={blocked}
-                onDraft={(next) => {
-                  setDraft(next);
-                  setBlocked(false);
-                }}
-                placements={placements}
-                placing={placing}
-                onPlace={setPlacing}
-                onUnplace={(fn) => setPlacements((previous) => previous.filter((candidate) => candidate.function !== fn))}
-                onClose={() => closeEditor(true)}
-                onApplied={onApplied}
-                onTuned={onTuned}
-                onStale={onStale}
-                onShowLayer={(id) => {
-                  if (!draft.dirty) setLayerId(id);
-                }}
-                footerExtra={
-                  <>
-                  <KeyMoves
-                    swapping={swapping !== null}
-                    onSwap={() => setSwapping((current) => (current === null ? { layerId: editing.layerId, position: editing.position } : null))}
-                    onCopy={() => copyKey({ layerId: editing.layerId, position: editing.position })}
-                    copied={clipboard === null ? null : bindingSummary(clipboard.binding, layout)}
-                    pasteTargets={Math.max(1, chatSelection?.positions.length ?? 0)}
-                    onPaste={() => void paste()}
-                    blockedReason={draft.dirty ? "Apply or reset this key first" : null}
-                  />
-                  {detail.upgrade?.tapDances !== true || !/^TD\(/.test(editedNativeSource(layout, editing)) ? null : offer}
-                  {board.lighting === undefined ? null : (
-                    <KeyColour
-                      layer={layout.layers.find((candidate) => candidate.id === editing.layerId) ?? layer}
-                      position={editing.position}
-                      busy={changing}
-                      onPick={(colour) => {
-                        const target = layout.layers.find((candidate) => candidate.id === editing.layerId);
-                        if (target === undefined) return;
-                        const lighting: LayerLighting = withKeyColour(target.lighting, editing.position, colour);
-                        void perform([{ op: "setLayerLighting", layerId: target.id, lighting }], `${target.name}, key ${editing.position + 1}: ${colour === null ? "follows the layer colour" : "own colour"}`);
-                      }}
-                    />
-                  )}
-                  </>
-                }
-              />
-            )
+            narrow ? keyCard : null
           }
           chat={
             <>

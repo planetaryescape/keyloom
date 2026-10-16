@@ -1,6 +1,7 @@
 // The binding editor's working state. One Draft holds the parameters of every kind at once, so
 // switching Key to Hold-tap and back keeps what was typed (keymap-editor issue #225, 09-web-editor).
 // Pure, so the rules are tested without a browser.
+import { macroWords } from "../card/card-words.ts";
 import type { Binding, Layout, Macro, Mod, SlotAction, TapDance } from "../../layout/schema.ts";
 import { modsWords } from "../../layout/describe.ts";
 import { keyCodeLabel } from "../../layout/keycodes.ts";
@@ -296,7 +297,8 @@ export function bindingSummary(binding: Binding, layout: Layout): string {
     case "layer":
       return `${ACTION_WORD[binding.action]} ${layerName(binding.layerId)}`;
     case "macro":
-      return `Macro ${layout.macros.find((macro) => macro.id === binding.macroId)?.name ?? binding.macroId}`;
+      // An imported macro named only by its firmware slot says what it sends instead (D-270).
+      return `Macro ${macroWords(layout.macros.find((macro) => macro.id === binding.macroId)).replace(/^A macro$/, binding.macroId)}`;
     case "tapDance": {
       const td = layout.tapDances.find((t) => t.id === binding.tapDanceId);
       return td ? `Tap dance ${td.name}` : "Tap dance";

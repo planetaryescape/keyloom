@@ -1013,3 +1013,14 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - The board measures "⌘ command", its widest print, in the loaded font at the front's size; if it fits a 1u cap, every cap prints symbol and word ("⌥ option"), otherwise every cap prints the word alone. At 1440×900 the Moonlander (57 px keys) carries symbols; the Glove80 (54 px) and phones don't. Amends D-271.
 - Under Inspect a combo is a dot on its line; its full output appears in a pill while it is pointed at, focused or edited.
 - One undo arrow in the top bar; redo is ⇧⌘Z and a menu item.
+
+### D-275: The key card floats beside its key, with the key drawn large as its hero, and the board slides aside only when it must. (P2, Claude)
+- Clicking a key opens a card beside it (a bottom sheet on a narrow screen). The card covers neither the key nor the keys around it (1.6 key widths), covers as few other keys as it can, and keeps its place while it grows. Only when no spot clears the key does the board slide away (`src/web/card/card-place.ts`). The rest of the board dims around the key.
+- The hero is the key in the board's five layers. Its parts are its slots: the top face is the tap, the front skirt the hold ("hold…" when empty), the top corners a double tap and a tap-then-hold. Clicking a part opens that slot's picker under the cap. Four symbol toggles (⌘ ⌥ ⌃ ⇧) beside it act on the slot being edited; Advanced view adds the side-by-side toggles.
+- The title names the key by what it does ("I, or hold for Control", "Go to Navigation", "F5, or hold for Layer 5"); the key number is only in Advanced view. Swap, copy, paste and colour are icons in the header. "Also on …" chips light the other key on hover and show its layer on click.
+- Apply appears only when there is a change and says it in words ("Hold I for Control", "Make it a tap dance", "Send Esc from X + B"). A clean check says nothing; problems and warnings show in the card.
+- Combos use the same card: their keys, an arrow, and the output as the hero.
+- **Replaces** the key panel's side column (D-098's panel) on wide screens; all its behaviour is kept.
+
+### D-276: Firmware names never reach a sentence. (P2, Claude)
+- A function lost or kept in a change is named as its cap prints it ("⇧ for one key", "F5, or hold for Layer 5"), or "a custom key". A macro named only by its firmware slot is named by what it sends ("Command, then C"). Extends D-270 from caps to words.

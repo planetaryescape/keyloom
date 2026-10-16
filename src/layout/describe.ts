@@ -137,7 +137,8 @@ function describeBinding(binding: Binding, layout: Layout): Omit<KeyDescription,
       const macro = layout.macros.find((candidate) => candidate.id === binding.macroId);
       return {
         ...base,
-        headline: `Runs macro ${macro?.name ?? binding.macroId}`,
+        // A macro named only by its firmware slot (Oryx's ST_MACRO_1) is described by what it does, not by that name (D-270).
+        headline: macro !== undefined && /^(?:ST_)?MACRO[\s_-]?\d+$/i.test(macro.name.trim()) ? `Runs a macro: ${macro.steps.map(stepWords).join(", then ").toLowerCase()}` : `Runs macro ${macro?.name ?? binding.macroId}`,
         fields: [{ label: "Macro", value: macro?.name ?? binding.macroId }],
         steps: macro?.steps.map(stepWords) ?? [],
       };

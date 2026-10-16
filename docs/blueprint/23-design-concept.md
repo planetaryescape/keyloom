@@ -150,7 +150,7 @@ A phase is done when:
 | Phase | What lands | Status |
 |---|---|---|
 | P1 | The board renderer for every board, the room, the light, front-printed legends, Inspect, the top bar and sync line, the layer strip, the ripple, the press, the tokens and type | Built (rung "light", D-260 to D-273, after the first design review) |
-| P2 | The key card: the lit keycap as hero, slot regions, inline picker, halves part when needed | Next |
+| P2 | The key card: the lit keycap as hero, slot regions, inline picker, the board slides only when needed | Built (D-275, D-276) |
 | P3 | ⌘K as the command bar, proposals on the caps | |
 | P4 | History, Library, Settings, Combos, import and new board, sync detail, MacBook states | |
 | P5 | Phones for all of it, and a full light and dark pass | |

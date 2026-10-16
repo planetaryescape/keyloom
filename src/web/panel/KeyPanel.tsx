@@ -1,4 +1,4 @@
-import { ArrowRight, LoaderCircle, Plus, TriangleAlert, X } from "lucide-react";
+import { LoaderCircle, TriangleAlert, X } from "lucide-react";
 import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { describeKey, modsWords } from "../../layout/describe.ts";
 import { bindingLegend } from "../../layout/legend.ts";
@@ -21,7 +21,12 @@ import {
 import { useOpsCheck } from "../editor/useCheck.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { advancedLegend } from "../keyboard/advanced-legend.ts";
-import { Cap } from "../keyboard/Cap.tsx";
+import type { KeycapColour } from "../../boards/schema.ts";
+import { layerDisplayName } from "../../layout/cap-words.ts";
+import { applyWords, cardTitle, keyPhrase } from "../card/card-words.ts";
+import { HeroCap, type HeroSlot } from "../card/HeroCap.tsx";
+import { CardMods } from "../card/CardMods.tsx";
+import type { Slot } from "../../layout/change.ts";
 import { distinguishingWords, profileWords } from "../../layout/option-words.ts";
 import { keyChange, macroUsers } from "./change-ops.ts";
 import {
@@ -36,6 +41,7 @@ import {
 } from "./slots.ts";
 import { whereElse, whereElseSentence } from "./where-else.ts";
 import "./panel.css";
+import "../card/card.css";
 
 /** A kept function waiting for a key to be clicked: what to put there, copied from where it was. */
 export interface PlaceRequest {
@@ -88,8 +94,16 @@ interface Props {
   /** The layout moved on under this panel; the parent reloads and closes it. */
   onStale: () => void;
   onShowLayer: (layerId: string) => void;
-  /** Controls that act on this key from outside its draft: swap, copy and paste (16#moving-and-copying-keys). */
-  footerExtra?: ReactNode;
+  /** Icon actions in the card's header that act on this key outside its draft: swap, copy, paste, colour (16#moving-and-copying-keys). */
+  actions?: ReactNode;
+  /** A notice that belongs to this key, such as the offer to read an old tap dance into keyloom. */
+  notice?: ReactNode;
+  /** The physical cap colour, LED and layer light, so the hero looks like the key on the board. */
+  keycap?: KeycapColour | undefined;
+  led?: string | undefined;
+  reach?: string | null | undefined;
+  /** Points at another key with the same function ("Also on Colemak"), so the board can light it; null stops. */
+  onPointAt?: (slot: Slot | null) => void;
   handle?: Ref<KeyPanelHandle>;
 }
 
@@ -100,7 +114,7 @@ type OpenPicker = { slot: SlotName; tab: PickerTab } | null;
 export function KeyPanel(props: Props) {
   const {
     token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, placements, placing,
-    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, footerExtra, handle,
+    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, actions, notice, keycap, led, reach, onPointAt, handle,
   } = props;
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
   const layer = layout.layers[layerIndex];
@@ -330,17 +344,20 @@ export function KeyPanel(props: Props) {
   const tap = tapKind(draft);
   const keysOnly = hasHold(draft);
   const drawn = after ?? layout;
-  const ctx = { layers: drawn.layers, macros: drawn.macros, tapDances: drawn.tapDances };
+  const ctx = { layers: drawn.layers, macros: drawn.macros, tapDances: drawn.tapDances, passthrough: drawn.passthrough };
   const shownLegend = bindingLegend(binding ?? draftBinding ?? original, ctx);
   const shownTone = (binding ?? draftBinding ?? original).kind;
-  const where2 = [layer.name, finger === undefined ? undefined : `${finger.replace("-", " ")} finger`].filter(Boolean).join(" · ");
-  const applyLabel = applying ? "Applying" : confirmingNative ? "Replace and apply" : warnings > 0 ? `Apply with ${warnings} ${warnings === 1 ? "warning" : "warnings"}` : "Apply";
   const whyNot =
     binding === null
       ? dirty ? (incomplete ?? "This is the same as the key now.") : null
-      : check.state.status === "checking" ? "Checking the change." : result !== null && !result.ok ? "Fix the errors above first." : null;
+      : check.state.status === "checking"
+        ? "Checking the change."
+        : result !== null && !result.ok
+          ? lostNow.length > 0 && lostNow.every((row) => drops.has(row.lost.function) || placements.some((p) => p.function === row.lost.function)) === false
+            ? `Drop ${lostNow.map((row) => functionName(row.lost.function, layout)).join(" and ")} or put it somewhere first.`
+            : "Fix the problems above first."
+          : null;
 
-  const slotText = tapSlotText(draft, drawn);
   const holdText = holdSlotText(draft, layout);
   const selectedTap = new Set(selectedIdsFor("tap", draft));
   const selectedHold = new Set(selectedIdsFor("hold", draft));
@@ -369,221 +386,195 @@ export function KeyPanel(props: Props) {
     };
   }
 
-  // One of the tap dance's extra slots: a row when it is filled, an add button when it is not, and the picker and modifier toggles beside it.
-  function extraSlot(which: ExtraSlot, label: string) {
-    const action = draft?.[which] ?? null;
-    const open = picker?.slot === which;
+  // The one picker, for whichever slot is open (16#one-picker-for-every-slot), under the cap.
+  function openSlotPicker() {
+    if (picker === null || draft === null) return null;
+    const which = picker.slot;
+    const extra = isExtraSlot(which) ? (draft[which as ExtraSlot] ?? null) : null;
+    const selected = which === "tap" ? selectedTap : which === "hold" ? selectedHold : new Set(extra === null ? [] : slotSelectedIds(extra));
+    const clear =
+      which === "hold" && hasHold(draft)
+        ? { label: "Remove the hold", run: () => update((previous) => clearHold(previous)) }
+        : isExtraSlot(which) && extra !== null
+          ? { label: which === "doubleTap" ? "Remove the double tap" : "Remove tap, then hold", run: () => update((previous) => clearExtraSlot(previous, which as ExtraSlot)) }
+          : null;
     return (
-      <>
-        {action === null && !open ? (
-          <button
-            type="button"
-            className="slot slot-add"
-            onClick={() => {
-              setFocusPicker(true);
-              setPicker({ slot: which, tab: "letters" });
-            }}
-          >
-            <Plus size={14} aria-hidden="true" />
-            {label}
+      <div className="card-picker">
+        {clear === null ? null : (
+          <button type="button" className="link-button card-picker-clear" onClick={() => { clear.run(); setPicker(null); }}>
+            {clear.label}
           </button>
-        ) : (
-          <SlotRow
-            label={label}
-            value={action === null ? "Choose" : slotWords(action, drawn)}
-            open={open}
-            onToggle={() => openPicker(which)}
-            onClear={() => {
-              update((previous) => clearExtraSlot(previous, which));
-              setPicker(null);
-            }}
-            clearLabel={`Clear ${label.toLowerCase()}`}
-          />
         )}
-        {open ? (
-          <SlotPicker
-            slot={which}
-            tab={picker.tab}
-            onTab={(tab) => setPicker({ slot: which, tab })}
-            layout={layout}
-            layerId={layerId}
-            keysOnly={false}
-            advanced={advanced}
-            selectedIds={new Set(action === null ? [] : slotSelectedIds(action))}
-            initialLayerAction={action?.kind === "layer" ? action.action : "toggle"}
-            autoFocus={focusPicker}
-            token={token}
-            layoutRef={layoutRef}
-            position={position}
-            onPick={(choice) => pick(which, choice)}
-            onUseBinding={() => {}}
-            {...macroPaneFor(which)}
-          />
-        ) : null}
-        {action !== null && canToggleSlotMods(action) ? (
-          <Mods
-            legend={action.kind === "modifier" ? "Modifiers" : "Sent together with it"}
-            prompt="Add Shift, Ctrl, Alt or GUI"
-            mods={slotMods(action)}
-            hidden={picker !== null}
-            onToggle={(mod: Mod) => update((previous) => (previous[which] === null ? previous : { ...previous, [which]: toggleSlotMod(previous[which] as SlotAction, mod) }))}
-          />
-        ) : null}
-      </>
+        <SlotPicker
+          slot={which}
+          tab={picker.tab}
+          onTab={(tab) => setPicker({ slot: which, tab })}
+          layout={layout}
+          layerId={layerId}
+          keysOnly={which === "hold" ? true : which === "tap" ? keysOnly : false}
+          advanced={advanced}
+          selectedIds={selected}
+          initialLayerAction={which === "tap" ? draft.layerAction : which === "hold" ? "momentary" : extra?.kind === "layer" ? extra.action : "toggle"}
+          autoFocus={focusPicker}
+          token={token}
+          layoutRef={layoutRef}
+          position={position}
+          onPick={(choice) => pick(which, choice)}
+          onUseBinding={
+            which === "tap"
+              ? (parsed) => {
+                  update(draftFromBinding(parsed, layout, layerId));
+                  setPicker(null);
+                  root.current?.focus({ preventScroll: true });
+                }
+              : () => {}
+          }
+          {...macroPaneFor(which)}
+        />
+      </div>
     );
   }
 
+  // Opening a part of the cap opens its picker; a hold or an extra slot that isn't there yet is added first.
+  function openRegion(region: HeroSlot) {
+    if (draft === null) return;
+    if (region === "tap") return openPicker("tap", draft.kind === "macro" && picker?.slot !== "tap" ? "macro" : undefined);
+    if (region === "hold") {
+      if (!hasHold(draft)) {
+        update((previous) => addHold(previous, profileFor(layout, "mods", homeRow)));
+        setFocusPicker(true);
+        setPicker({ slot: "hold", tab: "modifiers" });
+        return;
+      }
+      return openPicker("hold");
+    }
+    setFocusPicker(true);
+    setPicker((open) => (open?.slot === region ? null : { slot: region, tab: "letters" }));
+  }
+
+  // The four modifiers beside the cap act on the slot being edited: what the tap sends with it, or what the hold holds.
+  const modTarget: { mods: readonly Mod[]; toggle: (mod: Mod) => void; label: string } | null = (() => {
+    if (picker?.slot === "hold" && draft.holdType === "mods") return { mods: draft.holdMods, toggle: (mod: Mod) => update((previous) => toggleHoldMod(previous, mod)), label: "Held together" };
+    if (picker !== null && isExtraSlot(picker.slot)) {
+      const action = draft[picker.slot as ExtraSlot];
+      if (action === null || !canToggleSlotMods(action)) return null;
+      const which = picker.slot as ExtraSlot;
+      return { mods: slotMods(action), toggle: (mod: Mod) => update((previous) => (previous[which] === null ? previous : { ...previous, [which]: toggleSlotMod(previous[which] as SlotAction, mod) })), label: "Sent with it" };
+    }
+    if (canToggleTapMods(draft)) return { mods: tapMods(draft), toggle: (mod: Mod) => update((previous) => toggleTapMod(previous, mod)), label: tap === "modifier" ? "Modifiers" : "Sent with it" };
+    return null;
+  })();
+
+  const holdRegion = draft.kind === "native" || draft.kind === "macro" ? null : hasHold(draft) ? { text: shownLegend.hold ?? holdText, name: "When held" } : canAddHold(draft) ? { text: null, ghost: "hold…", name: "When held" } : null;
+  const extras = draft.kind !== "macro" && draft.kind !== "native" && (canAddExtraSlot(draft) || isDance(draft));
+  const doubleRegion = !extras ? null : draft.doubleTap === null ? { text: null, ghost: "2×", name: "When double-tapped" } : { text: `2× ${shownLegend.double ?? ""}`.trim(), name: "When double-tapped" };
+  const thenHoldRegion = !extras ? null : draft.tapThenHold === null ? { text: null, ghost: "tap+hold", name: "When tapped, then held" } : { text: "tap+hold ●", name: "When tapped, then held" };
+  const title = cardTitle(shownBinding ?? original, drawn);
+  const where2 = [finger === undefined ? undefined : `${finger.replace("-", " ")} finger`, layerDisplayName(layer.name)].filter(Boolean).join(" · ");
+  const showFoot = dirty || blocked || applyError !== null || confirmingNative || applying;
+  const applyText = applying ? "Applying" : confirmingNative ? "Replace and apply" : binding === null ? "Apply" : applyWords(original, binding, drawn);
+  const before = current?.headline ?? "";
+  const lowered = `${before.charAt(0).toLowerCase()}${before.slice(1)}`;
+  // A firmware-only key and a macro say what they do in their own words; their headlines quote firmware names (D-270).
+  const restSentence =
+    draft.kind === "native" ? "" : draft.kind === "macro" ? macroSentence(layout.macros.find((macro) => macro.id === draft.macroId)) : null;
+  const sentence = dirty && binding !== null ? (restSentence === null ? `Before: ${lowered}` : "") : restSentence !== null ? restSentence : draft.kind === "key" || draft.kind === "holdTap" || draft.kind === "transparent" || draft.kind === "none" ? (picker === null ? "Press a key on your keyboard to put it here." : "") : (current?.headline ?? "");
+  // One chip per place, named by where it is; two functions on the same other key, or two keys on the same other layer, are one chip.
+  const chipName = (other: Slot) => (other.layerId === layerId ? `key ${other.position + 1}` : `on ${layerDisplayName(layout.layers.find((candidate) => candidate.id === other.layerId)?.name ?? "")}`);
+  const also = where
+    .flatMap((entry) => entry.others)
+    .filter((other, i, all) => all.findIndex((x) => chipName(x) === chipName(other)) === i)
+    .slice(0, draft.kind === "layer" ? 2 : 3);
+
   return (
-    <section ref={root} tabIndex={-1} className="key-panel" aria-label={`Key ${position + 1}`} onKeyDown={onKeyDown}>
-      <header className="panel-head">
-        <span className="panel-cap" data-pending={binding !== null}>
-          <Cap as="span" tone={shownTone} legend={advancedText ?? shownLegend} unit={48} width={1} style={{ width: 48, height: 48 }} breakable={advancedText !== null} />
-        </span>
-        <div className="panel-title">
-          <h2>Key {position + 1}</h2>
-          <p className="muted">{where2}</p>
+    <section ref={root} tabIndex={-1} className="key-panel key-card" aria-label={`Key ${position + 1}: ${title}`} onKeyDown={onKeyDown}>
+      <header className="card-head">
+        <div className="card-title">
+          <h2>{title}</h2>
+          <p>{where2}{advanced ? ` · key ${position + 1}` : ""}</p>
         </div>
-        <button type="button" className="icon-button" aria-label="Close the key panel" onClick={onClose}>
-          <X size={18} aria-hidden="true" />
+        <div className="card-actions">{actions}</div>
+        <button type="button" className="card-icon" aria-label="Close the key card" title="Close (Esc)" onClick={onClose}>
+          <X size={16} aria-hidden="true" />
         </button>
       </header>
 
-      <fieldset className="panel-body" disabled={applying}>
-        <p className="panel-now" aria-live="polite">
-          <span className="panel-now-label">Now</span>
-          <span>{current?.headline ?? ""}</span>
-          {binding === null ? null : (
-            <>
-              <ArrowRight size={14} aria-hidden="true" />
-              <strong>{bindingSummary(binding, drawn)}</strong>
-            </>
-          )}
-        </p>
-
-        <div className="slots">
-          <SlotRow
-            label="When tapped"
-            value={slotText}
-            open={picker?.slot === "tap"}
-            onToggle={() => openPicker("tap")}
-            code={advanced && advancedText !== null ? advancedText.tap : undefined}
+      <fieldset className="card-body" disabled={applying}>
+        <div className="card-hero">
+          <HeroCap
+            legend={advancedText ?? shownLegend}
+            tone={shownTone}
+            keycap={keycap}
+            led={led}
+            reach={reach}
+            hold={holdRegion}
+            staticFront={holdRegion === null ? (shownLegend.hold ?? null) : null}
+            doubleTap={doubleRegion}
+            tapThenHold={thenHoldRegion}
+            open={picker === null ? null : (picker.slot as HeroSlot)}
+            draft={binding !== null}
+            onOpen={openRegion}
+            label={current?.headline ?? ""}
           />
-          {picker?.slot === "tap" ? (
-            <SlotPicker
-              slot="tap"
-              tab={picker.tab}
-              onTab={(tab) => setPicker({ slot: "tap", tab })}
-              layout={layout}
-              layerId={layerId}
-              keysOnly={keysOnly}
-              advanced={advanced}
-              selectedIds={selectedTap}
-              initialLayerAction={draft.layerAction}
-              autoFocus={focusPicker}
-              token={token}
-              layoutRef={layoutRef}
-              position={position}
-              onPick={(choice) => pick("tap", choice)}
-              onUseBinding={(parsed) => {
-                update(draftFromBinding(parsed, layout, layerId));
-                setPicker(null);
-                root.current?.focus({ preventScroll: true });
-              }}
-              {...macroPaneFor("tap")}
-            />
-          ) : null}
-          {canToggleTapMods(draft) ? (
-            <Mods
-              legend={tap === "modifier" ? "Modifiers" : "Sent together with it"}
-              prompt={tap === "modifier" ? "Add modifiers" : "Add Shift, Ctrl, Alt or GUI"}
-              mods={tapMods(draft)}
-              hidden={picker !== null}
-              onToggle={(mod: Mod) => update((previous) => toggleTapMod(previous, mod))}
-            />
-          ) : null}
-          {draft.kind === "native" && draft.native !== null ? (
-            <p className="form-note">
-              keyloom keeps this {draft.native.firmware.toUpperCase()} binding as written, <code>{draft.native.source}</code>. Picking something else replaces it.
-              {/^TD\(DANCE_\d+\)$/.test(draft.native.source) ? " It is a tap dance from an earlier import. Choose Update layout (in the layout summary, or below) and keyloom will read its taps so you can edit them here." : ""}
-            </p>
-          ) : null}
-          {draft.kind === "tapDance" ? (
-            <p className="form-note">
-              This tap dance has a slot the panel can&apos;t show yet, such as a hold that toggles a layer. It is left as it is; the chat or the CLI can change it, and picking something else here replaces it.
-            </p>
-          ) : null}
-          {draft.kind === "transparent" ? <p className="form-note">{transparentNote(layout, layerId)}</p> : null}
-          {draft.kind === "layer" && draft.layerId !== null ? (
-            <button type="button" className="button" onClick={() => onShowLayer(draft.layerId as string)}>
-              Show that layer
-              <ArrowRight size={14} aria-hidden="true" />
-            </button>
-          ) : null}
-
-          {hasHold(draft) ? (
-            <>
-              <SlotRow
-                label="When held"
-                value={holdText}
-                open={picker?.slot === "hold"}
-                onToggle={() => openPicker("hold")}
-                onClear={() => {
-                  update((previous) => clearHold(previous));
-                  setPicker(null);
-                }}
-                clearLabel="Clear the hold"
-              />
-              {picker?.slot === "hold" ? (
-                <SlotPicker
-                  slot="hold"
-                  tab={picker.tab}
-                  onTab={(tab) => setPicker({ slot: "hold", tab })}
-                  layout={layout}
-                  layerId={layerId}
-                  keysOnly
-                  advanced={advanced}
-                  selectedIds={selectedHold}
-                  initialLayerAction="momentary"
-                  autoFocus={focusPicker}
-                  token={token}
-                  layoutRef={layoutRef}
-                  position={position}
-                  onPick={(choice) => pick("hold", choice)}
-                  onUseBinding={() => {}}
-                />
-              ) : null}
-              {draft.holdType === "mods" ? (
-                <Mods
-                  legend="Held modifiers"
-                  prompt="Add more modifiers"
-                  mods={draft.holdMods}
-                  hidden={picker !== null}
-                  onToggle={(mod: Mod) => update((previous) => toggleHoldMod(previous, mod))}
-                />
-              ) : null}
-            </>
-          ) : canAddHold(draft) ? (
-            <button
-              type="button"
-              className="slot slot-add"
-              onClick={() => {
-                update((previous) => addHold(previous, profileFor(layout, "mods", homeRow)));
-                setFocusPicker(true);
-                setPicker({ slot: "hold", tab: "modifiers" });
-              }}
-            >
-              <Plus size={14} aria-hidden="true" />
-              When held
-            </button>
-          ) : null}
-
-          {canAddExtraSlot(draft) ? (
-            <>
-              {extraSlot("doubleTap", "When double-tapped")}
-              {extraSlot("tapThenHold", "When tapped, then held")}
-            </>
+          {modTarget === null ? null : <CardMods mods={modTarget.mods} onToggle={modTarget.toggle} label={modTarget.label} />}
+          {draft.kind === "layer" && picker === null ? (
+            <div className="card-mods" role="radiogroup" aria-label="What the key does with the layer">
+              {LAYER_ACTION_CHOICES.map(({ value, mark, word }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  className="card-mod"
+                  aria-checked={draft.layerAction === value}
+                  aria-label={word}
+                  title={word}
+                  onClick={() => update((previous) => ({ ...previous, layerAction: value }))}
+                >
+                  {mark}
+                </button>
+              ))}
+            </div>
           ) : null}
         </div>
+
+        {sentence === "" ? null : <p className="card-sentence" aria-live="polite">{sentence}</p>}
+        {draft.kind === "native" && draft.native !== null ? (
+          <p className="card-note">
+            keyloom keeps this key as your firmware wrote it. Picking something else replaces it.
+            {advanced ? <code className="card-code">{draft.native.source}</code> : null}
+          </p>
+        ) : null}
+        {draft.kind === "tapDance" ? <p className="card-note">This tap dance has a slot the card can&apos;t show yet, such as a hold that toggles a layer. It is left as it is; the chat or the CLI can change it.</p> : null}
+        {draft.kind === "transparent" ? <p className="card-note">{transparentNote(layout, layerId)}</p> : null}
+        {notice}
+
+        {also.length > 0 || (draft.kind === "layer" && draft.layerId !== null) ? (
+          <div className="card-chips">
+            {draft.kind === "layer" && draft.layerId !== null ? (
+              <button type="button" className="card-chip" onClick={() => onShowLayer(draft.layerId as string)}>
+                Show {layerDisplayName(layout.layers.find((candidate) => candidate.id === draft.layerId)?.name ?? "the layer")}
+              </button>
+            ) : null}
+            {also.map((other) => (
+              <button
+                key={`${other.layerId}:${other.position}`}
+                type="button"
+                className="card-chip"
+                title={`Show it on ${layerDisplayName(layout.layers.find((candidate) => candidate.id === other.layerId)?.name ?? "")}`}
+                onPointerEnter={() => onPointAt?.(other)}
+                onPointerLeave={() => onPointAt?.(null)}
+                onFocus={() => onPointAt?.(other)}
+                onBlur={() => onPointAt?.(null)}
+                onClick={() => onShowLayer(other.layerId)}
+              >
+                Also {chipName(other)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {openSlotPicker()}
+        {advanced && modTarget !== null ? <ModifierToggles legend={`${modTarget.label}, by side`} mods={modTarget.mods} onToggle={modTarget.toggle} /> : null}
 
         {isDance(draft) ? (
           <DanceTiming
@@ -616,28 +607,11 @@ export function KeyPanel(props: Props) {
             tuneBlockedReason={original.kind !== "holdTap" ? "Apply this hold first, then tune how it feels." : changed ? "Apply your change first, then tune how it feels." : original.profileId !== draft.profileId ? "Apply the profile change first, then tune it." : null}
             tuner={
               original.kind === "holdTap" && !changed && original.profileId === draft.profileId ? (
-                <ProfileTuner
-                  token={token}
-                  layoutRef={layoutRef}
-                  layout={layout}
-                  revisionId={revisionId}
-                  slot={slot}
-                  binding={original}
-                  onApplied={onTuned}
-                  onStale={onStale}
-                />
+                <ProfileTuner token={token} layoutRef={layoutRef} layout={layout} revisionId={revisionId} slot={slot} binding={original} onApplied={onTuned} onStale={onStale} />
               ) : null
             }
           />
         ) : null}
-
-        {where.length === 0 ? null : (
-          <ul className="where-else" aria-label="Where else the key's function lives">
-            {where.map((entry) => (
-              <li key={entry.function} data-alone={entry.others.length === 0}>{whereElseSentence(entry, layout)}.</li>
-            ))}
-          </ul>
-        )}
 
         {binding === null ? null : (
           <LostFunctions
@@ -658,61 +632,70 @@ export function KeyPanel(props: Props) {
             onUnplace={onUnplace}
           />
         )}
-        {binding === null ? null : (
+        {/* Only what needs saying: problems, warnings, or a check that couldn't run. A clean change says nothing; Apply is enough. */}
+        {binding === null || !(check.state.status === "error" || (check.state.status === "done" && (!check.state.result.ok || check.state.result.warnings.length > 0))) ? null : (
           <Validation layout={layout} slot={slot} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />
         )}
         {binding === null ? null : (
-          <div className="editor-reason">
-            <label htmlFor={reasonId}>Why this change? <span className="muted">Optional</span></label>
-            <input id={reasonId} value={reason} maxLength={300} placeholder="So you remember it later" onChange={(event) => setReason(event.target.value)} />
-          </div>
+          <details className="card-reason">
+            <summary>Why this change?</summary>
+            <input id={reasonId} aria-label="Why this change" value={reason} maxLength={300} placeholder="So you remember it later" onChange={(event) => setReason(event.target.value)} />
+          </details>
         )}
       </fieldset>
 
-      <footer className="panel-foot">
-        {footerExtra}
-        <div className="panel-foot-note" aria-live="polite">
-          {confirmingNative ? (
-            <p className="blocked" role="alert">
-              <TriangleAlert size={16} aria-hidden="true" />
-              keyloom can&apos;t edit this key&apos;s custom behaviour. Replacing it removes that behaviour.
+      {showFoot ? (
+        <footer className="card-foot">
+          {confirmingNative || blocked || applyError !== null || (whyNot !== null && binding !== null) ? (
+            <p className="card-foot-note" role={applyError !== null || confirmingNative ? "alert" : undefined}>
+              <TriangleAlert size={14} aria-hidden="true" />
+              {confirmingNative
+                ? "keyloom can't edit this key's custom behaviour. Replacing it removes that behaviour."
+                : blocked
+                  ? "Apply or discard this change before editing another key."
+                  : (applyError ?? whyNot)}
             </p>
-          ) : blocked ? (
-            <p className="blocked">
-              <TriangleAlert size={16} aria-hidden="true" />
-              Apply or reset this change before editing another key.
-            </p>
-          ) : applyError !== null ? (
-            <p className="blocked" role="alert">
-              <TriangleAlert size={16} aria-hidden="true" />
-              {applyError}
-            </p>
-          ) : (
-            <p className="muted">{whyNot ?? summary ?? "Nothing is saved until you apply."}</p>
-          )}
-        </div>
-        {dirty ? (
-          <button
-            type="button"
-            className="button"
-            disabled={applying}
-            onClick={() => {
-              update(initial as Draft);
-              setPicker(null);
-            }}
-          >
-            Reset
-          </button>
-        ) : null}
-        <button type="button" className="button button-primary" disabled={!canApply} aria-describedby={whyNot === null ? undefined : "apply-why"} onClick={() => void apply()}>
-          {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
-          {applyLabel}
-          {applying ? null : <kbd aria-hidden="true">↵</kbd>}
-        </button>
-        {whyNot === null ? null : <span id="apply-why" className="sr-only">{whyNot}</span>}
-      </footer>
+          ) : null}
+          <div className="card-foot-row">
+            <button
+              type="button"
+              className="card-discard"
+              disabled={applying}
+              onClick={() => {
+                update(initial as Draft);
+                setPicker(null);
+              }}
+            >
+              Discard
+            </button>
+            <button type="button" className="card-apply" disabled={!canApply} title={warnings > 0 ? `${warnings} ${warnings === 1 ? "warning" : "warnings"}, listed above` : summary ?? undefined} aria-describedby={whyNot === null ? undefined : "apply-why"} onClick={() => void apply()}>
+              {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
+              {applyText}
+              {applying ? null : <kbd aria-hidden="true">↵</kbd>}
+            </button>
+          </div>
+          {whyNot === null ? null : <span id="apply-why" className="sr-only">{whyNot}</span>}
+        </footer>
+      ) : null}
     </section>
   );
+}
+
+const LAYER_ACTION_CHOICES: readonly { value: Draft["layerAction"]; mark: string; word: string }[] = [
+  { value: "oneShot", mark: "1×", word: "For the next key only" },
+  { value: "momentary", mark: "⇣", word: "While held" },
+  { value: "toggle", mark: "⇄", word: "Toggle on and off" },
+  { value: "to", mark: "→", word: "Go to it" },
+];
+
+// A macro's steps in the card's words: "Sends Shift + Command + 4." or "Taps Command, waits 100 ms, then taps C."
+function macroSentence(macro: Macro | undefined): string {
+  if (macro === undefined || macro.steps.length === 0) return "";
+  const parts = macro.steps.map((step) =>
+    step.op === "waitMs" ? `waits ${step.ms} ms` : step.op === "text" ? `types “${step.text}”` : `${step.op === "tap" ? "taps" : step.op === "press" ? "presses" : "releases"} ${step.code === undefined ? "a key" : keyPhrase(step.code, step.mods)}`,
+  );
+  const said = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")}, then ${parts.at(-1)}`;
+  return `${said?.charAt(0).toUpperCase()}${said?.slice(1)}.`;
 }
 
 // The history entry says what was kept and dropped as well as what the key became, so the undo button names all of it.
@@ -791,48 +774,6 @@ const MODIFIER_KEY: Readonly<Record<Mod, string>> = {
   LCTL: "LEFT_CTRL", LSFT: "LEFT_SHIFT", LALT: "LEFT_ALT", LGUI: "LEFT_GUI", RCTL: "RIGHT_CTRL", RSFT: "RIGHT_SHIFT", RALT: "RIGHT_ALT", RGUI: "RIGHT_GUI",
 };
 
-// The eight modifier toggles, folded away until the key has modifiers or the person asks (the picker already offers each one).
-function Mods({ legend, prompt, mods, hidden, onToggle }: { legend: string; prompt: string; mods: readonly Mod[]; hidden: boolean; onToggle: (mod: Mod) => void }) {
-  const [open, setOpen] = useState(mods.length > 0);
-  if (hidden) return null;
-  if (!open) {
-    return (
-      <button type="button" className="slot-add" onClick={() => setOpen(true)}>
-        <Plus size={14} aria-hidden="true" />
-        {prompt}
-      </button>
-    );
-  }
-  return <ModifierToggles legend={legend} mods={mods} onToggle={onToggle} />;
-}
-
-function SlotRow({
-  label, value, open, onToggle, onClear, clearLabel, code,
-}: {
-  label: string;
-  value: string;
-  open: boolean;
-  onToggle: () => void;
-  onClear?: () => void;
-  clearLabel?: string;
-  code?: string | undefined;
-}) {
-  return (
-    <div className="slot" data-open={open}>
-      <button type="button" className="slot-main" aria-expanded={open} onClick={onToggle}>
-        <span className="slot-label">{label}</span>
-        <span className="slot-value">{value}</span>
-        {code === undefined ? null : <code className="slot-code">{code}</code>}
-      </button>
-      {onClear === undefined ? null : (
-        <button type="button" className="icon-button" aria-label={clearLabel ?? "Clear"} onClick={onClear}>
-          <X size={14} aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 // The feel of a hold-tap in one sentence, with Tune (the rung 6 profile editor) and a way to pick
 // another profile. Profiles are told apart by what they are for and by what differs between them.
 function Timing({
@@ -865,23 +806,18 @@ function Timing({
         {words.length === 0 ? null : <span className="muted">{words.map((word) => word.toLowerCase()).join(", ")}</span>}
       </p>
       <div className="timing-actions">
-        <button
-          type="button"
-          className="button"
-          aria-expanded={tuning}
-          disabled={tuneBlockedReason !== null && !tuning}
-          title={tuneBlockedReason ?? "Change how long a hold takes and when it counts"}
-          onClick={() => onTuning(!tuning)}
-        >
-          Tune
-        </button>
+        {/* Tuning works on a saved hold, so before Apply there is nothing to tune and the button isn't shown. */}
+        {tuneBlockedReason !== null && !tuning ? null : (
+          <button type="button" className="button" aria-expanded={tuning} title="Change how long a hold takes and when it counts" onClick={() => onTuning(!tuning)}>
+            Tune
+          </button>
+        )}
         {profiles.length > 1 ? (
           <button type="button" className="button" aria-expanded={choosing} onClick={() => onChoosing(!choosing)}>
             {choosing ? "Keep this profile" : "Change profile"}
           </button>
         ) : null}
       </div>
-      {tuneBlockedReason !== null ? <p className="muted timing-why">{tuneBlockedReason}</p> : null}
       {choosing ? (
         <ChoiceGroup
           legend={holdLayer ? "Timing for a layer hold" : "Timing profile"}
@@ -935,16 +871,10 @@ function DanceTiming({
   onForAll: (value: boolean) => void;
 }) {
   const id = useId();
-  const ms = term ?? fallback;
   return (
     <section className="dance-timing" aria-label="How the tap dance feels">
-      <p className="timing-sentence">
-        <span className="timing-label">Feels like</span>
-        <strong>A tap dance</strong>
-        <span className="muted">waits {ms} ms for the next tap{hasHold ? " and for a hold" : ""}</span>
-      </p>
       <div className="dance-term">
-        <label htmlFor={id}>Tapping term</label>
+        <label htmlFor={id}>Waits</label>
         <input
           id={id}
           type="number"
@@ -958,7 +888,7 @@ function DanceTiming({
             onTerm(Number.isFinite(value) && value >= 1 ? Math.round(value) : null);
           }}
         />
-        <span className="muted">ms{term === null ? ", the keyboard's own" : ""}</span>
+        <span className="muted">ms for a second tap{hasHold ? " or a hold" : ""}{term === null ? ", your keyboard's own" : ""}</span>
       </div>
       {others === 0 ? null : (
         <label className="dance-shared">

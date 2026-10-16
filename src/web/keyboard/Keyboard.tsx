@@ -104,6 +104,8 @@ interface KeyboardProps {
   found?: number | null;
   /** Inspect: kinds tinted, inherited legends and combo dots shown (D-264). */
   inspect?: boolean;
+  /** How far the board slides sideways to make room for the key card, in px (P2). */
+  shiftPx?: number;
 }
 
 function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined, remembered = false): string {
@@ -161,6 +163,7 @@ export function Keyboard({
   rippleFrom = null,
   found = null,
   inspect = false,
+  shiftPx = 0,
 }: KeyboardProps) {
   // A phone draws the board small, so its legend floor is 10 px; everywhere else 11 (18#legends-stay-readable).
   const floorPx = useMediaQuery(PHONE) ? PHONE_FLOOR_PX : LEGEND_FLOOR_PX;
@@ -250,7 +253,7 @@ export function Keyboard({
         data-surface={display?.surface ?? "slab"}
         role="group"
         aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}
-        style={{ width: canvas.width * unit, height: canvas.height * unit }}
+        style={{ width: canvas.width * unit, height: canvas.height * unit, transform: shiftPx === 0 ? undefined : `translateX(${shiftPx}px)` }}
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>

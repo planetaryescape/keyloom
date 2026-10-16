@@ -3,6 +3,7 @@
 import { keyCodeLabel } from "../../layout/keycodes.ts";
 import { modsText, tapText } from "../../layout/render-grid.ts";
 import type { Layout, Mod } from "../../layout/schema.ts";
+import { cardTitle, macroWords } from "../card/card-words.ts";
 
 const LAYER_ACTION: Readonly<Record<string, string>> = { momentary: "Hold", toggle: "Toggle", to: "Go to", oneShot: "One-shot" };
 
@@ -22,10 +23,14 @@ export function functionLabel(fn: string, layout: Layout): string {
       return `${LAYER_ACTION[action] ?? action} ${name}`;
     }
     case "macro":
-      return layout.macros.find((macro) => macro.id === body)?.name ?? `Macro ${body}`;
-    case "native":
-      // native:<firmware>:<source as written>, e.g. native:zmk:&layer_td.
-      return rest.slice(1).join(":").replace(/^&/, "") || "A native binding";
+      return macroWords(layout.macros.find((macro) => macro.id === body));
+    case "native": {
+      // native:<firmware>:<source as written>, e.g. native:qmk:DUAL_FUNC_0. Said as the cap prints it, never as firmware (D-270).
+      const [firmware = "", ...source] = rest;
+      if (firmware !== "qmk" && firmware !== "zmk" && firmware !== "kanata") return "A custom key";
+      const words = cardTitle({ kind: "native", firmware, source: source.join(":"), label: "" }, layout);
+      return words === "Custom" ? "A custom key" : words;
+    }
     default:
       return fn;
   }
