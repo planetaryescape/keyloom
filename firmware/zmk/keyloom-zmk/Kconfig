@@ -27,3 +27,11 @@ config KEYLOOM_HANDSFREE_STACK_SIZE
     int "Stack size of the thread that watches the serial port"
     depends on KEYLOOM_HANDSFREE
     default 2048
+
+config KEYLOOM_TYPING_LAB
+    bool "keyloom typing lab key-event stream"
+    depends on KEYLOOM_HANDSFREE
+    default y
+    help
+      On the central (or an unsplit board), streams every key press and release over the serial port while the host
+      has asked for it with "KLTYPE START". Off at power-up and after 10 minutes. Compiles to nothing on a peripheral.

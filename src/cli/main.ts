@@ -9,6 +9,7 @@ import { registerChangeCommands } from "./commands/change.ts";
 import { type ChatDeps, parseProvider, registerChatCommands } from "./commands/chat.ts";
 import { registerDecisionCommands } from "./commands/decisions.ts";
 import { registerEmulateCommand } from "./commands/emulate.ts";
+import { type LabCliDeps, registerLabCommands } from "./commands/lab.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
 import { registerSyncCommands } from "./commands/sync.ts";
 import { registerRemapCommands } from "./commands/remap.ts";
@@ -27,7 +28,7 @@ const stdIo = (): Io => ({
 type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: boolean };
 
 /** `handsFree` replaces how USB, raw HID and serial ports are read, and `syncDeps` how `sync` builds and flashes; tests pass fakes. */
-export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps): Command {
+export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
     .version(pkg.version, "-V, --version", "print the keyloom version")
@@ -233,6 +234,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   registerSyncCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) });
   registerRemapCommands(program, { io, format, withApp, ...(handsFree ? { handsFree } : {}) });
   registerEmulateCommand(program, { io, format, quiet: () => globals().quiet === true, withApp });
+  registerLabCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(lab ? { cli: lab } : {}) });
 
   program
     .command("doctor")
@@ -259,9 +261,9 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 });
 
 /** Runs the CLI and returns the exit code; never throws. */
-export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps): Promise<number> {
+export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
-  const program = buildProgram(io, state, chat, handsFree, syncDeps);
+  const program = buildProgram(io, state, chat, handsFree, syncDeps, lab);
   let jsonErrors = false;
   try {
     await program.parseAsync(argv, { from: "user" });

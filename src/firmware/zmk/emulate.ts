@@ -123,7 +123,8 @@ export const emulateZmk: Emulator = async (input) => {
     .slice(0, 24);
   const runsDir = join(input.workDir, "runs");
 
-  const cached = await readCached(runsDir, key);
+  const useCache = input.cache !== false;
+  const cached = useCache ? await readCached(runsDir, key) : undefined;
   let runLines: string[];
   if (cached) {
     say("keyloom: the same keys on the same keymap were emulated before; using that run");
@@ -200,6 +201,6 @@ export const emulateZmk: Emulator = async (input) => {
   if (parsed.eventsSeen !== input.events.length) {
     throw new EmulationError(`the firmware saw ${parsed.eventsSeen} of the ${input.events.length} key events; the run was cut short, so the result isn't shown.`);
   }
-  if (!cached) await keepRun(runsDir, key, runLines);
+  if (!cached && useCache) await keepRun(runsDir, key, runLines);
   return { firmware: "zmk", reports: parsed.reports, text: typedText(parsed.reports), warnings: [...files.warnings, ...parsed.warnings] };
 };

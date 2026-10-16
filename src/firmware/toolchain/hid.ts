@@ -15,11 +15,22 @@ export type RawHidInterface = {
   handle: string;
 };
 
+/** A raw HID interface held open: reports from the keyboard arrive in the callback given to openSession, and write() sends to it. */
+export type HidSession = {
+  write(report: Uint8Array): void | Promise<void>;
+  close(): void | Promise<void>;
+};
+
 export type HidTransport = {
   /** Every raw-HID interface attached, for any vendor. Reading this never opens a device. */
   list(): Promise<RawHidInterface[]>;
   /** Sends one output report (no report ID). Opens the device for as long as the write takes. */
   write(target: RawHidInterface, report: Uint8Array): Promise<void>;
+  /**
+   * Keeps the interface open to read the reports the keyboard sends (the typing lab's key stream, D-281). Only the lab uses it;
+   * absent where keyloom cannot read raw HID.
+   */
+  openSession?(target: RawHidInterface, onReport: (report: Uint8Array) => void, onError?: (error: Error) => void): Promise<HidSession>;
 };
 
 export class HidError extends Error {

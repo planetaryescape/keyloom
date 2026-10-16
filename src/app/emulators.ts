@@ -12,6 +12,7 @@ const qmk: Emulator = (input) =>
     source: input.source,
     checkoutDir: input.checkoutDir,
     events: [...input.events],
+    ...(input.leadMs === undefined ? {} : { leadMs: input.leadMs }),
     log: input.log,
     ...(input.onLine ? { onLine: input.onLine } : {}),
     ...(input.signal ? { signal: input.signal } : {}),

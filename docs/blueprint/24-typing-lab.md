@@ -1,6 +1,6 @@
 # 24: Typing lab: keyloom watches you type and tunes the board to your hands
 
-Status: proposal, 2026-10-16. Source baseline: origin/main at `9357af8` (v0.24.0).
+Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens are not. Source baseline: origin/main at `9357af8` (v0.24.0). Nothing has run on a keyboard yet: S50 and S51 are the runbooks.
 
 BK: "timings are quite tricky for home row mods and stuff. I'd love a feature where I can set up a key config, then tell the software to listen/watch me type for a bit (you can make a quick typing test or something) and then notice things that go wrong like rolls, typos and timings and stuff and then use that knowledge to make suggestions about what to improve … Maybe we could even create a test that checks how fast each of my fingers is so instead of saying this is your typing speed it can say your typing slows down on keys that you need to press with your index finger or something or most typos come from your pinky."
 
@@ -71,4 +71,4 @@ Sessions start only by BK's action, show a recording indicator, stay in keyloom'
 
 ## Decisions and spikes
 
-D-280 to D-283, and spikes S50 to S53, are in [14](14-decision-log.md) and [15](15-open-questions.md).
+D-280 to D-289, and spikes S50 to S53, are in [14](14-decision-log.md) and [15](15-open-questions.md). The engine is `src/lab/`; the CLI is `keyloom lab` ([10](10-cli.md)); the agent tool is `get_typing_findings` ([03](03-agent.md)).

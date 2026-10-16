@@ -3,7 +3,7 @@
 // is a parent entry, which holds the vendor, product and serial number. Reading the registry opens no port,
 // so a half can be found without disturbing it. Touching the port is stty's job (serial.ts).
 import { dlopen, ptr } from "bun:ffi";
-import { type SerialPort, type SerialTransport, SerialError, touchWithStty } from "./serial.ts";
+import { type SerialPort, type SerialTransport, SerialError, openWithStty, touchWithStty } from "./serial.ts";
 
 const kCFStringEncodingUTF8 = 0x08000100;
 const kCFNumberSInt64Type = 4;
@@ -98,5 +98,6 @@ export function macosSerial(): SerialTransport {
       return found;
     },
     touch: (path, baud) => touchWithStty(path, baud, "darwin"),
+    open: (path, onData, onError) => openWithStty(path, onData, onError, "darwin"),
   };
 }

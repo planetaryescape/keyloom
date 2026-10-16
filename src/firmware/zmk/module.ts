@@ -7,6 +7,7 @@ import CMAKE from "../../../firmware/zmk/keyloom-zmk/CMakeLists.txt" with { type
 import KCONFIG from "../../../firmware/zmk/keyloom-zmk/Kconfig" with { type: "text" };
 import OVERLAY from "../../../firmware/zmk/keyloom-zmk/keyloom-cdc-acm.overlay" with { type: "text" };
 import HANDSFREE_C from "../../../firmware/zmk/keyloom-zmk/src/handsfree.c" with { type: "text" };
+import TYPING_C from "../../../firmware/zmk/keyloom-zmk/src/typing.c" with { type: "text" };
 import SERIAL_C from "../../../firmware/zmk/keyloom-zmk/src/serial.c" with { type: "text" };
 import MODULE_YML from "../../../firmware/zmk/keyloom-zmk/zephyr/module.yml" with { type: "text" };
 
@@ -21,6 +22,7 @@ export const MODULE_FILES: Readonly<Record<string, string>> = {
   [OVERLAY_FILE]: OVERLAY,
   "src/handsfree.c": HANDSFREE_C,
   "src/serial.c": SERIAL_C,
+  "src/typing.c": TYPING_C,
   "zephyr/module.yml": MODULE_YML,
 };
 

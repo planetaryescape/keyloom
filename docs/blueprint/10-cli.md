@@ -44,6 +44,11 @@ keyloom
   flash [--build B] [--layout L]           flash the newest successful build of L, or B
   emulate <layout> (--keys "<script>" | --script <file>) [--rev R] [--board-rev B]
                                            run the real firmware logic and print what the keyboard would send
+  lab passages <layout>                    the passages the typing lab can ask for, built from the layout's own home row
+  lab start <layout> [--passage P | --text T]  record the connected keyboard while you type a passage; Ctrl-C ends it
+  lab analyse <session> [--no-propose] [--max-runs N] [--show]  replay it, say what went wrong per finger, try other settings on it
+  lab sessions [layout]                    recorded sessions, newest first
+  lab delete <session>                     delete a session with its recording and what you typed
   flash ... --wait <minutes>                how long to wait for a bootloader key press (1 to 60, default 2)
   flash --reboot-only [--board B]          only restart the attached keyboard into its bootloader (keyloom firmware only)
   sync <layout> [--wait]                   build the head, flash it hands-free and check the keyboard came back running it
@@ -53,6 +58,10 @@ keyloom
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
+
+## The typing lab records your typing and tunes the board to it
+
+`keyloom lab start g80` prints what it records (which key, when, and what you type in this terminal), that it stays on this Mac, and how to delete it, then shows the passage and your typed text until Ctrl-C. It needs a keyboard running a keyloom build (the Moonlander over raw HID, the ZMK boards over the module's serial port), and says what to do when there is none. `keyloom lab analyse typ_…` replays the recording through the layout's firmware logic in Docker, prints what went wrong per finger, and stores each setting change that clearly helps as a proposed change set with the counts from the recording; `--no-propose` prints them without storing. JSON has the counts, findings, per-finger rows and each suggestion's evidence and ops, never the passage or the typed text. [24](24-typing-lab.md) has the design.
 
 ## Emulate prints what a layout types for a sequence of key presses
 

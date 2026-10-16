@@ -15,6 +15,7 @@ import { tappingCallbacks } from "./emit-tapping.ts";
 import { qmkRevision } from "./board-config.ts";
 import { GenerateError } from "./generate-error.ts";
 import { WRAPPER_SYMBOL, NO_LTO, WRAP_LINK_FLAG, buildMarker, serialDefine, wrapperSource } from "./handsfree.ts";
+import { STREAM_SYMBOL, WRAP_ACTION_EXEC_FLAG } from "./typing-stream.ts";
 
 export { GenerateError } from "./generate-error.ts";
 
@@ -160,7 +161,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     );
   }
 
-  if (marker !== undefined) c.push("", wrapperSource());
+  if (marker !== undefined) c.push("", wrapperSource({ layoutMacro: rev.build.layoutMacro, keyCount: board.keyCount }));
 
   const h: string[] = [header(input.revisionId, "//")];
   // Feature switches (Caps Word, Auto Shift, mouse keys) are rules.mk's business; in config.h they would do nothing.
@@ -181,7 +182,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   const keymapJson = passthroughIn(layout, "keymap.json")[0]?.source ?? (rev.build.modules ? `${JSON.stringify({ modules: rev.build.modules }, null, 4)}\n` : undefined);
   if (keymapJson !== undefined) files.push({ path: "keymap.json", content: keymapJson.endsWith("\n") ? keymapJson : `${keymapJson}\n` });
 
-  return { keymapName: KEYMAP_NAME, files, ...(marker !== undefined ? { requiredSymbols: [WRAPPER_SYMBOL] } : {}) };
+  return { keymapName: KEYMAP_NAME, files, ...(marker !== undefined ? { requiredSymbols: [WRAPPER_SYMBOL, STREAM_SYMBOL] } : {}) };
 }
 
 const TAP_DANCE_YES = /^\s*TAP_DANCE_ENABLE\s*[:?]?=\s*yes\b/m;
@@ -208,6 +209,6 @@ function rulesMk(layout: Layout, comboCount: number, hasTapDances: boolean, hand
   for (const s of layout.settings) {
     if (s.firmware === "qmk" && RULES_KEYS.has(s.key)) text += `# keyloom: set on the settings page\n${s.key} = ${s.value === true || (typeof s.value === "number" && s.value !== 0) ? "yes" : "no"}\n`;
   }
-  if (handsFree) text += `# keyloom: route raw_hid_receive through the bootloader command (handsfree.ts)\n${WRAP_LINK_FLAG}\n${NO_LTO}\n`;
+  if (handsFree) text += `# keyloom: route raw_hid_receive through the bootloader command (handsfree.ts) and action_exec through the typing lab's recorder (typing-stream.ts)\n${WRAP_LINK_FLAG}\n${WRAP_ACTION_EXEC_FLAG}\n${NO_LTO}\n`;
   return text === "" ? undefined : text;
 }

@@ -85,11 +85,15 @@ gated("a generated keymap built in Docker", () => {
       const symbols = definedSymbols(elf);
       expect(symbols.has("__wrap_raw_hid_receive")).toBe(true);
       expect(symbols.has("raw_hid_receive")).toBe(true);
-      // reva's plain build is 67,268 bytes (above); the wrapper and a longer serial are the only code added.
+      // The typing lab's recorder (D-281) is wrapped around action_exec, which stays defined beside it.
+      expect(symbols.has("__wrap_action_exec")).toBe(true);
+      expect(symbols.has("action_exec")).toBe(true);
+      // reva's plain build is 67,268 bytes (above); the wrapper, the lab's stream and a longer serial are the only code added.
       if (rev === "reva") {
         expect(built.bytes.length).toBeGreaterThan(67_268);
-        expect(built.bytes.length).toBeLessThan(67_268 + 400);
+        expect(built.bytes.length).toBeLessThan(67_268 + 2500);
       }
+      console.log(`keyloom: ${rev} hands-free build with the typing stream is ${built.bytes.length} bytes`);
     }
   }, TIMEOUT);
 });

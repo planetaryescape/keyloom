@@ -86,6 +86,10 @@ describe("the script", () => {
     expect(script).toBe("0 5 press\n0 7 press\n100 5 release\n");
   });
 
+  test("a lead puts quiet time before the first event, so QMK's clock is not at zero when a key goes down (the typing lab asks for it)", () => {
+    expect(scriptFor([{ at: 5, position: 5, action: "press" }, { at: 45, position: 5, action: "release" }], 72, 100)).toBe("100 5 press\n140 5 release\n");
+  });
+
   test("rejects an empty script, a position off the board and a negative time", () => {
     expect(() => scriptFor([], 72)).toThrow("no key events");
     expect(() => scriptFor([{ at: 0, position: 72, action: "press" }], 72)).toThrow("position 72 is not a key on this board (0 to 71)");

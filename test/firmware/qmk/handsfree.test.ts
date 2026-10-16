@@ -7,6 +7,7 @@ import { importOryxSource } from "../../../src/firmware/qmk/import.ts";
 import {
   BOOTLOADER_COMMAND, BOOTLOADER_MAGIC, RAW_HID_REPORT_SIZE, WRAPPER_SYMBOL, bootloaderPacket, buildMarker, markerInFirmware, markerOf, serialIsBuild, wrapperSource,
 } from "../../../src/firmware/qmk/handsfree.ts";
+import { STREAM_SYMBOL } from "../../../src/firmware/qmk/typing-stream.ts";
 import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
 import { SLOW_RUNNER_MS } from "../../helpers/timeouts.ts";
 
@@ -144,9 +145,10 @@ describe("generating hands-free source", () => {
     expect(h).not.toContain("QxKPz/zLQ3Md");
   });
 
-  test("the linker is told to wrap raw_hid_receive and link-time optimisation is off", () => {
+  test("the linker is told to wrap raw_hid_receive and action_exec, and link-time optimisation is off", () => {
     const rules = files({ buildId: BUILD }).get("rules.mk");
     expect(rules).toContain("LDFLAGS += -Wl,--wrap=raw_hid_receive");
+    expect(rules).toContain("LDFLAGS += -Wl,--wrap=action_exec");
     expect(rules).toContain("LTO_ENABLE = no");
     // Appended after the layout's own rules, so a LTO_ENABLE = yes there cannot win.
     expect(rules.indexOf("LTO_ENABLE = no")).toBeGreaterThan(rules.indexOf("ORYX_ENABLE = yes"));
@@ -154,8 +156,9 @@ describe("generating hands-free source", () => {
 
   test("keymap.c carries the wrapper, and the build must define it", () => {
     const { g, get } = files({ buildId: BUILD });
-    expect(get("keymap.c")).toContain(wrapperSource());
-    expect(g.requiredSymbols).toEqual([WRAPPER_SYMBOL]);
+    // The typing lab's recorder rides in the same wrapper, built with the board's own layout macro (typing-stream.ts).
+    expect(get("keymap.c")).toContain(wrapperSource({ layoutMacro: "LAYOUT_moonlander", keyCount: 72 }));
+    expect(g.requiredSymbols).toEqual([WRAPPER_SYMBOL, STREAM_SYMBOL]);
   });
 
   test("the wrapper's magic, in C, is the same bytes the host sends", () => {
