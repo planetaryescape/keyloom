@@ -326,6 +326,9 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.shift[].dx` | all | How far to slide them, in key units. Use it when a split board's halves are drawn too close for their tilted thumb clusters. |
 | `display.keycaps` | all | Optional. An object from a position, as a string, to the physical keycap colour where it is not the board's usual one. Only `red` exists, for the Moonlander's two big thumb keys. |
 | `display.surface` | all | Optional. How the editor draws the case under the keys: `wells` sinks each column into a sculpted well (the Glove80), `deck` draws a laptop's aluminium deck with the keys in a recess (the MacBook). Leave it out for a flat case. |
+| `display.statusLeds` | all | Optional. The case's status LEDs (the Moonlander has three per half). The editor lights each one in the layer's colour. |
+| `display.statusLeds[].x` | all | An LED's horizontal position, in key units after `rotate` and `shift`. |
+| `display.statusLeds[].y` | all | The LED's vertical position, in the same units. |
 
 Use `display.rotate` only when the firmware's own geometry doesn't tilt keys that really tilt. The Moonlander's thumbs are the example.
 

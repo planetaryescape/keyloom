@@ -102,10 +102,13 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
   for (const group of display?.rotate ?? []) {
     const members = group.positions.filter(visible);
     for (const p of group.positions) inModule.add(p);
-    const square = at(members).map((key) => ({ ...key, r: 0, rx: 0, ry: 0 }));
-    if (square.length === 0) continue;
-    const b = boardBounds(square);
-    const corners = rotatedCorners({ x: b.minX - MODULE_PAD, y: b.minY - MODULE_PAD, w: b.width + 2 * MODULE_PAD, h: b.height + 2 * MODULE_PAD, r: group.r, rx: group.rx, ry: group.ry });
+    const turned = at(members);
+    const pivot = turned[0];
+    if (pivot === undefined) continue;
+    // The pivot comes from the keys, not the rotation group: display.shift has moved the keys (and their pivot) after rotation, so the
+    // group's own rx is where the module was before the halves were spread.
+    const b = boardBounds(turned.map((key) => ({ ...key, r: 0, rx: 0, ry: 0 })));
+    const corners = rotatedCorners({ x: b.minX - MODULE_PAD, y: b.minY - MODULE_PAD, w: b.width + 2 * MODULE_PAD, h: b.height + 2 * MODULE_PAD, r: pivot.r, rx: pivot.rx, ry: pivot.ry });
     parts.push({ kind: "body", d: roundedPath(corners, 0.3) });
   }
 

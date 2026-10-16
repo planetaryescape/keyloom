@@ -175,7 +175,7 @@ export function Keyboard({
   };
   const { ref, unit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
-  const { delays, outgoing } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
+  const { delays, outgoing, origin: rippleOrigin } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
   // Shift-, Cmd- or Ctrl-click adds a key to the selection. The focus that the press causes must not move the open panel to that key first.
   const extendNext = useRef(false);
@@ -237,6 +237,11 @@ export function Keyboard({
           {parts.map((part, i) => (
             <path key={i} className={`case-${part.kind}`} d={part.d} />
           ))}
+          {(display?.statusLeds ?? []).map((led, i) => {
+            // The LEDs change with the ripple, at the delay a key in their place would have.
+            const delay = rippleOrigin === null ? 0 : Math.hypot(led.x - canvas.minX - rippleOrigin.x, led.y - canvas.minY - rippleOrigin.y) * RIPPLE_MS_PER_UNIT;
+            return <circle key={`led-${i}`} className="case-led" data-lit={light !== null} cx={led.x} cy={led.y} r={0.055} style={{ "--led-colour": light ?? "transparent", "--ripple": `${Math.round(delay)}ms` } as CSSProperties} />;
+          })}
         </svg>
         {keys.map((geometryKey, index) => {
           const description = descriptions[index];
@@ -264,7 +269,6 @@ export function Keyboard({
               unit={unit}
               floorPx={floorPx}
               width={geometryKey.w}
-              combo={comboKeys.has(index)}
               // The Moonlander's thumbs tilt a little and read fine; the Glove80's fan out to 60 degrees.
               {...(Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? { legendTurn: -rect.rotate } : {})}
               style={keyStyle(rect, unit)}
@@ -340,12 +344,12 @@ function useRipple(
   descriptions: readonly (KeyDescription | null)[],
   overrides: KeyboardProps["legendOverrides"],
   from: number | null,
-): { delays: readonly number[] | null; outgoing: readonly (Print | null)[] | null } {
+): { delays: readonly number[] | null; outgoing: readonly (Print | null)[] | null; origin: { x: number; y: number } | null } {
   const shownPrints = descriptions.map((description, index) => overrides?.[index] ?? description?.legend ?? null);
   // What the previous render drew, and for which layer; read before this render's values replace it.
   const last = useRef<{ key: string | undefined; prints: (Print | null)[] }>({ key: layerKey, prints: shownPrints });
   const timer = useRef<number | undefined>(undefined);
-  const [ripple, setRipple] = useState<{ delays: number[]; outgoing: (Print | null)[] } | null>(null);
+  const [ripple, setRipple] = useState<{ delays: number[]; outgoing: (Print | null)[]; origin: { x: number; y: number } } | null>(null);
   useEffect(() => {
     const before = last.current;
     last.current = { key: layerKey, prints: shownPrints };
@@ -356,14 +360,14 @@ function useRipple(
       const c = keyCenter(key, canvas);
       return Math.hypot(c.x - origin.x, c.y - origin.y) * RIPPLE_MS_PER_UNIT;
     });
-    setRipple({ delays, outgoing: before.prints });
+    setRipple({ delays, outgoing: before.prints, origin });
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setRipple(null), Math.max(0, ...delays) + RIPPLE_TAIL_MS);
   });
   useEffect(() => () => window.clearTimeout(timer.current), []);
   // The legend a key keeps showing while its delay runs is the one it had; the same legend on both layers needs no fade.
   const outgoing = ripple === null ? null : ripple.outgoing.map((old, i) => (old !== null && !samePrint(old, shownPrints[i] ?? null) ? old : null));
-  return { delays: ripple?.delays ?? null, outgoing };
+  return { delays: ripple?.delays ?? null, outgoing, origin: ripple?.origin ?? null };
 }
 
 const samePrint = (a: Print, b: Print | null) => b !== null && a.tap === b.tap && a.hold === b.hold && a.double === b.double && a.tapHold === b.tapHold;

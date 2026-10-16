@@ -309,8 +309,6 @@
 }
 
 .layer-tab[aria-selected="true"] {
-  border-color: var(--color-border-strong);
-  background: var(--color-page);
   color: var(--color-text);
 }
 
@@ -1120,10 +1118,9 @@
   box-shadow: 0 0 14px var(--light);
 }
 
+/* An unlit layer has no light to show, so no mark at all. */
 .caption-light[data-unlit="true"] {
-  border: 1.5px solid var(--ink-3);
-  background: transparent;
-  box-shadow: none;
+  display: none;
 }
 
 .caption-reach {
@@ -1201,7 +1198,13 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.14);
 }
 
-/* The one hint, as a quiet line above the strip. */
+/* The one hint, a quiet sentence above the strip. */
+.stage-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
 .stage-floor > .tip {
   display: inline-flex;
   align-items: center;
@@ -1275,7 +1278,8 @@
     bottom: var(--space-3);
   }
 
-  .stage-floor > .tip {
+  .stage-floor > .tip,
+  .stage-hint {
     display: none;
   }
 
@@ -1304,15 +1308,78 @@
   }
 
   .layer-tabs .layer-tab {
-    width: 92px;
+    min-width: 92px;
   }
 
   .film-mini {
     width: 76px;
     height: 30px;
+    flex: none;
   }
 
   .layer-tab-key {
+    display: none;
+  }
+}
+
+/* The caption's name and whatever sits beside it (the phone's Left and Right). */
+.caption-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* Phones: one column, top to bottom, with no empty band: caption, board, strip (P1 review). */
+@media (max-width: 600px) {
+  .stage {
+    overflow-y: auto;
+  }
+
+  .keyboard-well {
+    flex: 0 0 auto;
+    padding-bottom: var(--space-3);
+  }
+
+  .stage-floor {
+    position: static;
+    padding-bottom: var(--space-3);
+  }
+
+  .inspect-toggle {
+    display: none;
+  }
+
+  .caption-aside {
+    padding-top: var(--space-2);
+  }
+
+  .caption-aside .half-switcher {
+    display: flex;
+    gap: 0;
+    margin: 0;
+    padding: var(--space-1);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--line);
+  }
+
+  .caption-aside .half-switcher button {
+    min-height: 32px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .caption-aside .half-switcher button[aria-checked="true"] {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .caption-aside .half-count {
     display: none;
   }
 }

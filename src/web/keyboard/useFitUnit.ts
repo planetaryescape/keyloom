@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 
 // Smallest and largest key size in px. Below the minimum the board scrolls inside its stage
 // rather than shrinking caps past what a fingertip or a legend can use (18: caps are 44 px or more).
+// Above the maximum a small board (a Corne, a laptop) would fill the stage with oversized caps; every board stays about the size of a
+// real one on a laptop screen (D-271).
 const MIN_UNIT = 44;
-const MAX_UNIT = 96;
+const MAX_UNIT = 58;
 
 interface FitInput {
   /** Board size in key units, margins included. */

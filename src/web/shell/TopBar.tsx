@@ -1,5 +1,6 @@
-import { Check, MousePointer2, Ellipsis, Hammer, History, Keyboard as KeyboardIcon, Library, LoaderCircle, Moon, Redo2, Search, SlidersHorizontal, Spline, Sun, Undo2, Monitor, CircleHelp, Code } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Keyboard as KeyboardIcon, Library, LoaderCircle, Monitor, Moon, MousePointer2, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
+import { PHONE, useMediaQuery } from "./useMediaQuery.ts";
 import type { BoardChoice } from "../../api/http.ts";
 import type { GeometryKey } from "../../boards/schema.ts";
 import { applyDisplayRotation, boardBounds } from "../keyboard/geometry.ts";
@@ -26,6 +27,8 @@ export interface MenuActions {
   advanced?: { on: boolean; onToggle: () => void };
   /** Taps select keys instead of opening them, for screens without a Shift key. */
   select?: { on: boolean; onToggle: () => void };
+  /** Inspect: kinds, pass-through legends and combos on the board (⌥I). */
+  inspect?: { on: boolean; onToggle: () => void };
   onShortcuts?: () => void;
   release?: { status: ReleaseStatus; onOpen: () => void };
 }
@@ -80,12 +83,14 @@ const THEMES: readonly { value: ThemeChoice; label: string; icon: typeof Sun }[]
 // The top bar (23#chrome-recedes): which board, one line of state, and the few things used often. Everything else is in the menu.
 export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
   const [theme, setTheme] = useTheme();
+  // A phone keeps the board menu, the sync light, Ask and the menu; undo, redo and the theme move into the menu (P1 review).
+  const phone = useMediaQuery(PHONE);
   const dark = theme === "dark" || (theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
   return (
     <header className="topbar">
       <div className="topbar-start">
         <span className="topbar-word">keyloom</span>
-        {boards === undefined || boards.entries.length === 0 ? null : (
+        {boards === undefined || boards.entries.length === 0 ? null : phone ? <BoardMenu {...boards} /> : (
           <nav className="board-switch" aria-label="Boards">
             {boards.entries.map((entry) => {
               const on = entry.id === boards.active;
@@ -99,7 +104,7 @@ export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
                   aria-label={entry.name}
                   onClick={() => boards.onSelect(entry.id)}
                 >
-                  {entry.board?.keys === undefined ? <KeyboardIcon size={16} aria-hidden="true" /> : <Silhouette keys={entry.board.keys} display={entry.board.display} />}
+                  <BoardMark entry={entry} />
                   {on ? <span className="board-switch-name">{entry.name}</span> : null}
                   {entry.tone === null || entry.tone === undefined || on ? null : <i className="board-switch-light" data-tone={entry.tone} aria-hidden="true" />}
                 </button>
@@ -122,13 +127,23 @@ export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
             <kbd>⌘K</kbd>
           </button>
         )}
-        {undo === undefined ? null : <UndoButton {...undo} />}
-        <button type="button" className="topbar-icon" aria-label={dark ? "Use the light theme" : "Use the dark theme"} title="Theme" onClick={() => setTheme(dark ? "light" : "dark")}>
-          {dark ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
-        </button>
+        {undo === undefined || phone ? null : <UndoButtons {...undo} />}
+        {phone ? null : (
+          <button type="button" className="topbar-icon" aria-label={dark ? "Use the light theme" : "Use the dark theme"} title="Light or dark" onClick={() => setTheme(dark ? "light" : "dark")}>
+            <SunMoon size={17} aria-hidden="true" />
+          </button>
+        )}
         <Menu label="More" align="end" triggerClassName="topbar-icon" trigger={<Ellipsis size={18} aria-hidden="true" />}>
           {(close) => (
             <>
+              {undo === undefined || !phone ? null : (
+                <>
+                  <Item icon={Undo2} label="Undo" disabled={!undo.canUndo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} />
+                  <Item icon={Redo2} label="Redo" disabled={!undo.canRedo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} />
+                  <div className="menu-separator" role="separator" />
+                </>
+              )}
+              {menu?.inspect === undefined ? null : <Item icon={Eye} label="Inspect" hint="⌥I" checked={menu.inspect.on} role="menuitemcheckbox" onSelect={() => { close(); menu.inspect?.onToggle(); }} />}
               {menu?.history === undefined ? null : <Item icon={History} label="History" checked={menu.history.open} onSelect={() => { close(); menu.history?.onToggle(); }} />}
               {menu?.library === undefined ? null : <Item icon={Library} label="Library" checked={menu.library.open} onSelect={() => { close(); menu.library?.onToggle(); }} />}
               {menu?.combos === undefined ? null : <Item icon={Spline} label="Combos" checked={menu.combos.open} onSelect={() => { close(); menu.combos?.onToggle(); }} />}
@@ -157,9 +172,9 @@ export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
   );
 }
 
-function Item({ icon: Icon, label, hint, checked, role = "menuitem", onSelect }: { icon: typeof Sun; label: string; hint?: string; checked?: boolean; role?: "menuitem" | "menuitemradio" | "menuitemcheckbox"; onSelect: () => void }) {
+function Item({ icon: Icon, label, hint, checked, disabled = false, role = "menuitem", onSelect }: { icon: typeof Sun; label: string; hint?: string; checked?: boolean; disabled?: boolean; role?: "menuitem" | "menuitemradio" | "menuitemcheckbox"; onSelect: () => void }) {
   return (
-    <button type="button" role={role} aria-checked={role === "menuitem" ? undefined : checked === true} className="menu-item" onClick={onSelect}>
+    <button type="button" role={role} aria-checked={role === "menuitem" ? undefined : checked === true} className="menu-item" disabled={disabled} onClick={onSelect}>
       <Icon size={14} aria-hidden="true" />
       <span className="menu-item-label">{label}</span>
       {hint === undefined ? null : <kbd className="menu-hint">{hint}</kbd>}
@@ -168,14 +183,51 @@ function Item({ icon: Icon, label, hint, checked, role = "menuitem", onSelect }:
   );
 }
 
-// An undo is itself a revision, so undoing it puts the change back: the one button undoes, or redoes when the last step was an undo.
-function UndoButton({ canUndo, canRedo, busy, blockedReason, summary, onUndo }: UndoState) {
-  const redo = canRedo && !canUndo;
-  const enabled = (canUndo || canRedo) && !busy && blockedReason === null;
-  const title = blockedReason ?? (redo ? "Put the undone change back (⇧⌘Z)" : canUndo ? `Undo: ${summary} (⌘Z)` : "Nothing to undo");
+// An undo is itself a revision, so undoing it puts the change back: Undo is on unless the last step was an undo, and Redo the other way
+// round. Both are always drawn, so the top bar looks the same on every board and in every state (P1 review).
+function UndoButtons({ canUndo, canRedo, busy, blockedReason, summary, onUndo }: UndoState) {
+  const blocked = busy || blockedReason !== null;
   return (
-    <button type="button" className="topbar-icon" aria-label={redo ? "Redo" : "Undo"} title={title} disabled={!enabled} onClick={onUndo}>
-      {busy ? <LoaderCircle size={17} className="spin" aria-hidden="true" /> : redo ? <Redo2 size={17} aria-hidden="true" /> : <Undo2 size={17} aria-hidden="true" />}
-    </button>
+    <>
+      <button type="button" className="topbar-icon" aria-label="Undo" title={blockedReason ?? (canUndo ? `Undo: ${summary} (⌘Z)` : "Nothing to undo")} disabled={!canUndo || blocked} onClick={onUndo}>
+        {busy ? <LoaderCircle size={17} className="spin" aria-hidden="true" /> : <Undo2 size={17} aria-hidden="true" />}
+      </button>
+      <button type="button" className="topbar-icon" aria-label="Redo" title={blockedReason ?? (canRedo ? "Put the undone change back (⇧⌘Z)" : "Nothing to redo")} disabled={!canRedo || blocked} onClick={onUndo}>
+        <Redo2 size={17} aria-hidden="true" />
+      </button>
+    </>
+  );
+}
+
+function BoardMark({ entry }: { entry: BoardEntry }) {
+  return entry.board?.keys === undefined ? <KeyboardIcon size={16} aria-hidden="true" /> : <Silhouette keys={entry.board.keys} display={entry.board.display} />;
+}
+
+// On a phone the switcher is one button, the board on screen, that opens the list of boards.
+function BoardMenu({ entries, active, onSelect }: NonNullable<TopBarProps["boards"]>) {
+  const current = entries.find((entry) => entry.id === active) ?? entries[0];
+  if (current === undefined) return null;
+  return (
+    <Menu
+      label="Choose a board"
+      triggerClassName="board-switch-item board-menu-trigger"
+      trigger={
+        <>
+          <BoardMark entry={current} />
+          <span className="board-switch-name">{current.name}</span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </>
+      }
+    >
+      {(close) =>
+        entries.map((entry) => (
+          <button key={entry.id} type="button" role="menuitemradio" aria-checked={entry.id === active} className="menu-item" onClick={() => { close(); onSelect(entry.id); }}>
+            <BoardMark entry={entry} />
+            <span className="menu-item-label">{entry.name}</span>
+            {entry.id === active ? <Check size={14} aria-hidden="true" /> : null}
+          </button>
+        ))
+      }
+    </Menu>
   );
 }

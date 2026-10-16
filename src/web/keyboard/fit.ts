@@ -9,8 +9,24 @@
 // Space a cap takes away from its box: the gap to its neighbours plus padding on both sides.
 export const CAP_INSET = 0.22;
 
-export const TAP_SIZE = { max: 0.3, min: 0.17 };
-export const HOLD_SIZE = { max: 0.19, min: 0.15 };
+export const TAP_SIZE = { max: 0.28, min: 0.15 };
+export const HOLD_SIZE = { max: 0.17, min: 0.15 };
+
+/**
+ * A tap legend's size steps down with its length, so a board of single letters stays calm and a word doesn't shout (D-270): one glyph
+ * 0.28u, two 0.23u, three 0.2u, a word 0.18u. The 11 px floor still wins on a small cap.
+ */
+export function tapRange(text: string): { max: number; min: number } {
+  const n = [...text].length;
+  return { max: n <= 1 ? 0.28 : n === 2 ? 0.23 : n === 3 ? 0.2 : 0.18, min: TAP_SIZE.min };
+}
+
+/** Legends of four or more characters, and every front print, are set in the font's condensed width (font-stretch 75%). */
+export const isCondensed = (text: string): boolean => [...text].length >= 4;
+
+// Measured in Instrument Sans at 75% width, 2026-10-16: words run 0.65 to 0.72 of this file's regular-width estimate ("command" 0.72,
+// "Navigate" 0.67). 0.74 keeps a margin.
+export const CONDENSED_EM = 0.74;
 
 /** The smallest legend, in px, on a laptop. Phones may go to 10. */
 export const LEGEND_FLOOR_PX = 11;
@@ -61,11 +77,11 @@ const symbolsOnly = (text: string): boolean => text !== "" && [...text].every((c
  * `px` turns the floor into key units for the unit size the board is drawn at, so no legend
  * lands below LEGEND_FLOOR_PX. Without it only the range's own minimum applies.
  */
-export function fitLegend(text: string, keyWidth: number, range: { max: number; min: number }, px?: { unit: number; floor?: number }): LegendFit {
+export function fitLegend(text: string, keyWidth: number, range: { max: number; min: number }, px?: { unit: number; floor?: number }, condensed = false): LegendFit {
   const floor = px === undefined ? 0 : (px.floor ?? LEGEND_FLOOR_PX) / px.unit;
   const min = Math.max(range.min, floor);
   const available = keyWidth - CAP_INSET;
-  const em = widestPieceEm(text);
+  const em = widestPieceEm(text) * (condensed ? CONDENSED_EM : 1);
   const max = Math.max(min, symbolsOnly(text) ? range.max * SYMBOL_BOOST : range.max);
   if (em === 0) return { size: max, fits: true };
   const wanted = available / em;

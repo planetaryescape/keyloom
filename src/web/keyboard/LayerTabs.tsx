@@ -79,6 +79,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
   const [dragId, setDragId] = useState<string | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const menuButton = useRef<HTMLSpanElement>(null);
   const selectedIndex = Math.max(0, layers.findIndex((layer) => layer.id === selectedId));
   const selected = layers[selectedIndex];
 
@@ -146,9 +147,16 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
               className="layer-tab"
               data-dragging={dragId === layer.id}
               data-drop={dragId !== null && overIndex === index && dragId !== layer.id}
-              title={isSelected && actions !== undefined ? "Click again to rename" : undefined}
+              title={isSelected && actions !== undefined ? "Click again to rename. Right-click for the layer's actions." : undefined}
               draggable={draggable}
               onClick={() => (isSelected && actions !== undefined && actions.blockedReason === null ? onRenaming(layer.id) : onSelect(layer.id))}
+              onContextMenu={(event) => {
+                if (actions === undefined) return;
+                // Right-click a layer for its actions: it becomes the selected layer, and its menu opens.
+                event.preventDefault();
+                onSelect(layer.id);
+                window.requestAnimationFrame(() => menuButton.current?.querySelector<HTMLButtonElement>("button")?.click());
+              }}
               onKeyDown={(event) => onKeyDown(event, index)}
               onDragStart={(event) => {
                 setDragId(layer.id);
@@ -189,6 +197,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
             <Plus size={16} aria-hidden="true" />
           </button>
           {selected === undefined ? null : (
+            <span ref={menuButton} className="layer-menu-slot">
             <LayerMenu
               layers={layers}
               index={selectedIndex}
@@ -202,6 +211,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, actions, renam
               onConvert={(from, to) => actions.convert(selected.id, from, to)}
               onDelete={() => setDeleting(selected.id)}
             />
+            </span>
           )}
         </div>
       )}

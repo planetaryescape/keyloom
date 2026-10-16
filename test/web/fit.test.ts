@@ -6,7 +6,7 @@ import { describeKey } from "../../src/layout/describe.ts";
 import { bindingLegend } from "../../src/layout/legend.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import type { GeometryKey } from "../../src/boards/schema.ts";
-import { CAP_INSET, HOLD_SIZE, LEGEND_FLOOR_PX, TAP_SIZE, fitLegend, widestPieceEm } from "../../src/web/keyboard/fit.ts";
+import { CAP_INSET, CONDENSED_EM, HOLD_SIZE, LEGEND_FLOOR_PX, TAP_SIZE, fitLegend, isCondensed, tapRange, widestPieceEm } from "../../src/web/keyboard/fit.ts";
 import { importZmkSource } from "../../src/firmware/zmk/import.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
 import { TEMPLATE_FIXTURE, glove80 } from "../helpers/zmk.ts";
@@ -25,26 +25,29 @@ function checkAll(layout: Layout, keys: readonly GeometryKey[], strict: boolean,
     keys.forEach((key, index) => {
       const description = describeKey(layout, layerIndex, index);
       if (description === null) return;
-      for (const [role, text, range] of [
-        ["tap", description.legend.tap, TAP_SIZE],
-        ["hold", description.legend.hold ?? "", HOLD_SIZE],
-        // The double-tap shares the cap's bottom edge with the hold, so each gets half the width and the ⇈ mark.
-        ["double-tap", description.legend.double === undefined ? "" : `⇈${description.legend.double}`, HOLD_SIZE],
+      // Sized as Cap.tsx sizes them: the tap by its length, words and every front print in the condensed width (D-270).
+      for (const [role, text, range, condensed] of [
+        ["tap", description.legend.tap, tapRange(description.legend.tap), isCondensed(description.legend.tap)],
+        ["hold", description.legend.hold ?? "", HOLD_SIZE, true],
+        // The double-tap shares the cap's bottom edge with the hold, so each gets half the width.
+        ["double-tap", description.legend.double === undefined ? "" : `2× ${description.legend.double}`, HOLD_SIZE, true],
       ] as const) {
         if (text === "") continue;
         checked += 1;
         const where = `${layer.name} key ${index + 1} ${role} "${text}"`;
         if (/…|\.\.\./.test(text)) failures.push(`${where} contains an ellipsis`);
-        const width = role === "double-tap" ? key.w / 2 + 0.1 : key.w;
-        const fit = fitLegend(text, width, range, unit === undefined ? undefined : { unit });
+        // A tap dance with a hold prints its double tap in a corner (half the width); without one, across the front.
+        const width = role === "double-tap" && description.legend.hold !== undefined ? key.w / 2 + 0.1 : key.w;
+        const fit = fitLegend(text, width, range, unit === undefined ? undefined : { unit }, condensed);
+        const em = widestPieceEm(text) * (condensed ? CONDENSED_EM : 1);
         if (!fit.fits && strict)
           failures.push(
-            `${where} needs ${widestPieceEm(text).toFixed(2)}em but only ${(width - CAP_INSET).toFixed(2)}u is free`,
+            `${where} needs ${em.toFixed(2)}em but only ${(width - CAP_INSET).toFixed(2)}u is free`,
           );
         if (fit.size < range.min - 1e-9) failures.push(`${where} is below the legible minimum`);
         if (unit !== undefined && fit.size * unit < LEGEND_FLOOR_PX - 1e-9) failures.push(`${where} is drawn at ${(fit.size * unit).toFixed(1)} px, under the ${LEGEND_FLOOR_PX} px floor`);
         // The estimate itself must hold: text at this size is no wider than the cap's free width.
-        if (fit.fits && fit.size * widestPieceEm(text) > width - CAP_INSET + 1e-9)
+        if (fit.fits && fit.size * em > width - CAP_INSET + 1e-9)
           failures.push(`${where} overflows at size ${fit.size}`);
       }
     });
@@ -118,7 +121,7 @@ describe("a layer key's action word never breaks inside a word", () => {
   test("every action word fits a 1u cap at the phone unit and its 10 px floor, so nothing has to wrap", () => {
     for (const action of actions) {
       const hold = bindingLegend({ kind: "layer", action, layerId: "b" }, ctx).hold ?? "";
-      const fit = fitLegend(hold, 1, HOLD_SIZE, { unit: 40, floor: 10 });
+      const fit = fitLegend(hold, 1, HOLD_SIZE, { unit: 40, floor: 10 }, true);
       expect({ hold, fits: fit.fits }).toEqual({ hold, fits: true });
     }
   });
@@ -126,7 +129,7 @@ describe("a layer key's action word never breaks inside a word", () => {
   test("and at the laptop unit with the 11 px floor", () => {
     for (const action of actions) {
       const hold = bindingLegend({ kind: "layer", action, layerId: "b" }, ctx).hold ?? "";
-      expect(fitLegend(hold, 1, HOLD_SIZE, { unit: 49 }).fits).toBe(true);
+      expect(fitLegend(hold, 1, HOLD_SIZE, { unit: 49 }, true).fits).toBe(true);
     }
   });
 

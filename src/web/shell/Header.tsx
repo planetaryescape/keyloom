@@ -87,13 +87,16 @@ export function Header({ layouts, selectedId, onSelect }: HeaderProps) {
   );
 }
 
+/** A board's name as the chrome says it: "your MacBook", not "your MacBook keyboard (ANSI)". */
+export const boardDisplayName = (name: string): string => name.replace(/ keyboard \(ANSI\)$/, "");
+
 /** One switcher entry per board the person has a layout for, in the order their layouts are listed. */
 export function boardEntries(layouts: readonly LayoutSummary[], choices: readonly BoardChoice[] = []): BoardEntry[] {
   const seen = new Map<string, BoardEntry>();
   for (const layout of layouts) {
     if (seen.has(layout.boardId)) continue;
     const board = choices.find((choice) => choice.id === layout.boardId);
-    seen.set(layout.boardId, { id: layout.boardId, name: board?.name.replace(/ keyboard \(ANSI\)$/, "") ?? boardTitle(layout.boardId), ...(board === undefined ? {} : { board }) });
+    seen.set(layout.boardId, { id: layout.boardId, name: board === undefined ? boardTitle(layout.boardId) : boardDisplayName(board.name), ...(board === undefined ? {} : { board }) });
   }
   return [...seen.values()];
 }

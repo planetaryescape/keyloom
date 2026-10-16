@@ -54,10 +54,11 @@ describe("which key reaches a layer", () => {
 });
 
 describe("front print words (D-267)", () => {
-  test("a lone modifier is spelled out when it fits, shortened when it doesn't, and either side reads the same", () => {
+  test("a lone modifier is spelled out with its symbol when that fits, and as the word alone when not; never abbreviated", () => {
     expect(frontWords("⌥", 1, 72)).toBe("⌥ option");
-    expect(frontWords("r⌥", 1, 72)).toBe("⌥ option");
-    expect(frontWords("⌘", 1, 49)).toBe("⌘ cmd");
+    expect(frontWords("✦", 1, 72)).toBe("✦ hyper");
+    expect(frontWords("⌘", 1, 49)).toBe("command");
+    expect(frontWords("⌃", 1, 49)).toBe("control");
   });
 
   test("anything else is printed as it is", () => {

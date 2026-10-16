@@ -209,7 +209,7 @@ export function describeKey(layout: Layout, layerIndex: number, keyIndex: number
   const layer = layout.layers[layerIndex];
   const binding = layer?.bindings[keyIndex];
   if (layer === undefined || binding === undefined) return null;
-  const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances };
+  const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances, passthrough: layout.passthrough };
   const combos = combosAt(layout, layerIndex, keyIndex);
   if (binding.kind !== "transparent") {
     return { ...describeBinding(binding, layout), legend: bindingLegend(binding, ctx), combos };

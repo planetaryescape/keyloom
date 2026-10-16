@@ -58,6 +58,17 @@
   fill: color-mix(in oklab, var(--case-hi) 55%, var(--case-lo));
 }
 
+/* The case's status LEDs (display.statusLeds): dark until a layer with a light is on, then that light. */
+.case-led {
+  fill: var(--well);
+  transition: fill 0.35s ease var(--ripple, 0ms);
+}
+
+.case-led[data-lit="true"] {
+  fill: var(--led-colour);
+  filter: drop-shadow(0 0 0.06px var(--led-colour));
+}
+
 .case-well {
   fill: var(--well);
   stroke: var(--well);
@@ -168,15 +179,15 @@
 /* 5. The legends: the tap printed on the top face, the hold printed on the front skirt (D-267). */
 .cap-tap {
   max-width: 100%;
-  font-weight: 560;
+  font-weight: 480;
   letter-spacing: -0.01em;
   line-height: 1;
   /* A legend wraps only at its own seams (Cap.tsx puts a break opportunity there), never mid-word (D-187). */
 }
 
 .cap-tap[data-stretch="condensed"] {
-  font-stretch: 82%;
-  font-weight: 600;
+  font-stretch: 75%;
+  font-weight: 500;
 }
 
 .cap-front {
@@ -191,9 +202,8 @@
   gap: calc(var(--u) * 0.05);
   overflow: hidden;
   color: var(--front);
-  font-stretch: 78%;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-stretch: 75%;
+  font-weight: 560;
   white-space: nowrap;
 }
 
@@ -208,9 +218,9 @@
   top: calc(var(--u) * 0.04);
   right: calc(var(--u) * 0.06);
   color: var(--front);
-  font-size: max(10px, calc(var(--u) * 0.14));
-  font-stretch: 80%;
-  font-weight: 650;
+  font-size: max(11px, calc(var(--u) * 0.14));
+  font-stretch: 75%;
+  font-weight: 560;
   white-space: nowrap;
 }
 
@@ -347,12 +357,14 @@
   pointer-events: none;
 }
 
-.keyboard[data-inspect="true"] .cap[data-tone="holdTap"] { --kind: var(--cap-hold); }
+/* Three hues, one per question a person asks of a key: does it do more than one thing (amber: hold-taps and tap dances), does it change
+   layer (blue), does it run something keyloom keeps as written (violet: macros and firmware bindings). Plain keys and modifiers stay
+   untinted; their legend already says what they are (D-264). */
+.keyboard[data-inspect="true"] .cap[data-tone="holdTap"],
+.keyboard[data-inspect="true"] .cap[data-tone="tapDance"] { --kind: var(--cap-hold); }
 .keyboard[data-inspect="true"] .cap[data-tone="layer"] { --kind: var(--cap-layer); }
-.keyboard[data-inspect="true"] .cap[data-tone="macro"] { --kind: var(--cap-macro); }
-.keyboard[data-inspect="true"] .cap[data-tone="tapDance"] { --kind: var(--cap-dance); }
-.keyboard[data-inspect="true"] .cap[data-tone="modifier"] { --kind: var(--cap-modifier); }
-.keyboard[data-inspect="true"] .cap[data-tone="native"] { --kind: var(--cap-native); }
+.keyboard[data-inspect="true"] .cap[data-tone="macro"],
+.keyboard[data-inspect="true"] .cap[data-tone="native"] { --kind: var(--cap-macro); }
 
 .keyboard[data-inspect="true"] .cap-kind-mark {
   display: block;
@@ -364,22 +376,6 @@
 
 .keyboard[data-inspect="true"] .cap[data-tone="none"] .cap-top {
   background: repeating-linear-gradient(135deg, transparent 0 5px, var(--line) 5px 6px), var(--top-lo);
-}
-
-/* A key in a combo: a small dot, under Inspect only. */
-.cap-combo {
-  position: absolute;
-  right: calc(var(--u) * 0.08);
-  bottom: calc(var(--u) * 0.24);
-  display: none;
-  width: calc(var(--u) * 0.1);
-  height: calc(var(--u) * 0.1);
-  border-radius: 50%;
-  background: var(--ink-3);
-}
-
-.keyboard[data-inspect="true"] .cap-combo {
-  display: block;
 }
 
 /* ---------- states ---------- */

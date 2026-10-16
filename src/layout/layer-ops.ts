@@ -1,6 +1,7 @@
 // The change ops behind the layer tabs (16#layers-are-managed-in-their-tabs, D-090). Pure, so the
 // tabs, the agent and the tests build the same ops. Layers are always named by id; an index only
 // says where a layer sits now.
+import { layerDisplayName } from "./cap-words.ts";
 import type { ChangeOp, Slot } from "./change.ts";
 import { defaultShortLabel } from "./legend.ts";
 import type { Binding, Layer, Layout } from "./schema.ts";
@@ -14,12 +15,8 @@ export const layerColorOf = (layers: readonly Pick<Layer, "color">[], index: num
 /** The label a layer key prints for it: the one chosen, or the first letters of its name. */
 export const layerShortLabel = (layer: Pick<Layer, "name" | "shortLabel">): string => layer.shortLabel ?? defaultShortLabel(layer.name);
 
-/** "one_shot" reads as "One shot": underscores are firmware spelling, not words a person chose. Names with spaces are left as written. */
-export function niceLayerName(name: string): string {
-  if (!name.includes("_") || /\s/.test(name)) return name;
-  const spaced = name.replace(/_+/g, " ").trim();
-  return spaced === "" ? name : spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
+/** "one_shot" reads as "One shot", "numbers" as "Numbers": firmware spelling is not words a person chose. Display only (D-270). */
+export const niceLayerName = (name: string): string => layerDisplayName(name);
 
 function slug(name: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

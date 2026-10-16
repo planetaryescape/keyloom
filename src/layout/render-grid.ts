@@ -1,7 +1,7 @@
 // Plain-text grids of a layout, placed by the board's physical rows (10-cli.md). Pure, so the
 // CLI and, later, the agent's get_layout tool print the same text.
 import { KEYCODES, type KeyCodeInfo } from "./keycodes.ts";
-import type { Binding, Layer, Macro, Mod, SlotAction, TapDance } from "./schema.ts";
+import type { Binding, Layer, Macro, Mod, Passthrough, SlotAction, TapDance } from "./schema.ts";
 
 /** Structural, so this module needs nothing from src/boards. */
 export type GridKey = { x: number; y: number; w: number; h: number; r?: number; rx?: number; ry?: number };
@@ -25,10 +25,12 @@ export function placedKey(key: GridKey): GridKey {
 
 export type GridContext = {
   layers: readonly Pick<Layer, "id" | "name" | "shortLabel">[];
-  /** The name lets a graphical cap print a macro's summary; the terminal grid only numbers macros. */
-  macros: readonly (Pick<Macro, "id"> & Partial<Pick<Macro, "name">>)[];
+  /** The name and steps let a graphical cap print what a macro sends; the terminal grid only numbers macros. */
+  macros: readonly (Pick<Macro, "id"> & Partial<Pick<Macro, "name" | "steps">>)[];
   /** Needed to number a tap dance key; without it one reads "TD?". */
   tapDances?: readonly TapDance[];
+  /** The firmware source keyloom keeps as written, so a cap can read what a kept binding does (an Oryx dual-function key). */
+  passthrough?: readonly Passthrough[];
 };
 
 const MOD_SYMBOL: Record<Mod, string> = {

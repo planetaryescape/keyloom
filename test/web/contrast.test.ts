@@ -107,6 +107,31 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ["cap-native-ink", "cap-native", TEXT],
 ];
 
+// Inspect lays each kind's tint over the top face at 55% (keyboard.css); the tap legend must still read on it. A lit key's skirt carries
+// its LED at --led-wash; the front print must read on the reddest one, Navigation's #f50909 in BK's layout (P1 review).
+const blend = (a: string, b: string, share: number): string =>
+  `#${[1, 3, 5].map((o) => Math.round(Number.parseInt(a.slice(o, o + 2), 16) * share + Number.parseInt(b.slice(o, o + 2), 16) * (1 - share)).toString(16).padStart(2, "0")).join("")}`;
+
+describe("legends on Inspect's tints and on a red-lit skirt", () => {
+  for (const [theme, values] of [["light", themes.light], ["dark", themes.dark]] as const) {
+    test(`${theme}`, () => {
+      const failures: string[] = [];
+      const at = (name: string) => values.get(name) as string;
+      for (const tint of ["cap-hold", "cap-layer", "cap-macro"]) {
+        for (const face of ["top-lo", "top-hi"]) {
+          const got = ratio(at("legend"), blend(at(tint), at(face), 0.55));
+          if (got < TEXT) failures.push(`legend on ${tint} over ${face}: ${got.toFixed(2)}:1`);
+        }
+      }
+      for (const skirt of ["skirt-lo", "skirt-hi"]) {
+        const got = ratio(at("front"), blend("#f50909", at(skirt), 0.12));
+        if (got < TEXT) failures.push(`front on red-lit ${skirt}: ${got.toFixed(2)}:1`);
+      }
+      expect(failures).toEqual([]);
+    });
+  }
+});
+
 describe("token contrast", () => {
   for (const [theme, values] of [
     ["light", themes.light],

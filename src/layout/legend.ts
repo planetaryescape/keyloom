@@ -2,8 +2,12 @@
 // draws keys share it. The names come from the same places the terminal grid uses (shortKeyLabel,
 // modsText); this module only adds the two things a cap can do that a terminal cell can't: use
 // symbols for the keys that have one, and split a binding into a tap legend and a hold legend.
-import { type GridContext, modsText, shortKeyLabel } from "./render-grid.ts";
-import type { Binding, Mod, SlotAction } from "./schema.ts";
+import { type GridContext, shortKeyLabel } from "./render-grid.ts";
+import type { Binding, MacroStep, Mod, SlotAction } from "./schema.ts";
+import { nativeLegend } from "./native-legend.ts";
+import { capMods, layerLegend } from "./cap-words.ts";
+
+export { capMods, layerDisplayName, layerLegend } from "./cap-words.ts";
 
 export type Legend = {
   kind: Binding["kind"];
@@ -17,7 +21,8 @@ export type Legend = {
   tapHold?: true;
 };
 
-// Only keys whose symbol is better known than their name. Everything else keeps the shared label.
+// Only keys whose symbol or short word is better known than their name. Everything else keeps the shared label. These are what a
+// person reads on a real cap; the firmware's own spelling (BRID, PGDN, VOLU) is for Advanced view (D-270).
 const GLYPH: Readonly<Record<string, string>> = {
   ENTER: "⏎",
   BACKSPACE: "⌫",
@@ -29,6 +34,22 @@ const GLYPH: Readonly<Record<string, string>> = {
   RIGHT: "→",
   UP: "↑",
   DOWN: "↓",
+  PAGE_UP: "PgUp",
+  PAGE_DOWN: "PgDn",
+  APPLICATION: "Menu",
+  PRINT_SCREEN: "PrtSc",
+  INSERT: "Ins",
+  BRIGHTNESS_DOWN: "Bri−",
+  BRIGHTNESS_UP: "Bri+",
+  AUDIO_MUTE: "Mute",
+  AUDIO_VOL_DOWN: "Vol−",
+  AUDIO_VOL_UP: "Vol+",
+  MEDIA_PLAY_PAUSE: "Play",
+  MEDIA_REWIND: "Rew",
+  MEDIA_FAST_FORWARD: "Fwd",
+  MEDIA_NEXT_TRACK: "Next",
+  MEDIA_PREV_TRACK: "Prev",
+  MEDIA_STOP: "Stop",
   // A modifier on a key of its own prints its symbol, the way a Mac keycap does, instead of a firmware-ish LSFT (D-267).
   LEFT_SHIFT: "⇧",
   RIGHT_SHIFT: "⇧",
@@ -40,34 +61,29 @@ const GLYPH: Readonly<Record<string, string>> = {
   RIGHT_GUI: "⌘",
 };
 
-// The open-box mark for Space, so Hyper+Space is "Hyp␣" and not a six-letter legend that has to shrink or wrap.
+// The open-box mark for Space, so Hyper+Space is "✦␣" and not a six-letter legend that has to shrink or wrap.
 const GLYPH_WITH_MODS: Readonly<Record<string, string>> = { ...GLYPH, SPACE: "␣" };
 
-// Native labels the importers made that are longer than a keycap holds at the legend floor. Short labels
-// come from a table, never from shrinking the type (18#legends).
-const NATIVE_SHORT: Readonly<Record<string, string>> = { LyrCol: "LyrC" };
+// What a shifted key types on a US layout: a cap prints "!" for Shift+1, as the key would.
+const SHIFTED: Readonly<Record<string, string>> = {
+  N1: "!", N2: "@", N3: "#", N4: "$", N5: "%", N6: "^", N7: "&", N8: "*", N9: "(", N0: ")",
+  GRAVE: "~", MINUS: "_", EQUAL: "+", LEFT_BRACKET: "{", RIGHT_BRACKET: "}", BACKSLASH: "|",
+  SEMICOLON: ":", QUOTE: '"', COMMA: "<", DOT: ">", SLASH: "?",
+};
 
-function shortNative(label: string): string {
-  const button = /^MSBTN(\d)$/.exec(label);
-  return button ? `Btn${button[1]}` : (NATIVE_SHORT[label] ?? label);
-}
-
-// One word each, so the action fits under a layer's short label at the legend floor (18#legends).
+// One word each, printed on the front skirt in the condensed width (D-270).
 const LAYER_ACTION_WORD = {
   momentary: "hold",
-  // "toggle" is six letters and broke mid-word on a phone cap; "tog" fits at the legend floor (D-187).
-  toggle: "tog",
-  to: "go",
+  toggle: "toggle",
+  to: "go to",
   oneShot: "once",
 } as const satisfies Record<Extract<Binding, { kind: "layer" }>["action"], string>;
 
-// "Space" is wide, so with modifiers in front (Hyp+Space) the shared short label takes over.
 function capText(code: string, mods?: readonly Mod[]): string {
-  const key =
-    mods === undefined
-      ? (GLYPH[code] ?? shortKeyLabel(code))
-      : (GLYPH_WITH_MODS[code] ?? shortKeyLabel(code));
-  return `${mods ? modsText(mods) : ""}${key}`;
+  if (mods === undefined || mods.length === 0) return GLYPH[code] ?? shortKeyLabel(code);
+  const shifted = SHIFTED[code];
+  if (shifted !== undefined && mods.every((mod) => mod === "LSFT" || mod === "RSFT")) return shifted;
+  return `${capMods(mods)}${GLYPH_WITH_MODS[code] ?? shortKeyLabel(code)}`;
 }
 
 // Up to four letters: initials of a name with several words ("Left Hand" is LH), a short word as it
@@ -82,33 +98,15 @@ export function defaultShortLabel(name: string): string {
   return (first.length <= 4 ? first : first.slice(0, 3)).toUpperCase();
 }
 
-/**
- * The short label a layer's key prints: never the whole name. Two layers that would print the same
- * letters get four letters, and a pair that still match fall back to their positions ("L2", "L5").
- */
-export function layerLegend(layerId: string, ctx: GridContext): string {
-  const index = ctx.layers.findIndex((layer) => layer.id === layerId);
-  const layer = ctx.layers[index];
-  if (layer === undefined) return layerId;
-  // A label the person chose is printed as it is, even when two layers share it.
-  if (layer.shortLabel !== undefined) return layer.shortLabel;
-  const label = defaultShortLabel(layer.name);
-  const clash = (other: string) => ctx.layers.some((candidate) => candidate.id !== layer.id && defaultShortLabel(candidate.name) === other);
-  if (!clash(label)) return label;
-  const longer = layer.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase();
-  const longerClash = ctx.layers.some((candidate) => candidate.id !== layer.id && candidate.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() === longer);
-  return longerClash ? `L${index}` : longer;
-}
-
 /** What one tap dance slot prints in a corner of its cap: the same short forms the main legend uses. */
 function slotCap(a: SlotAction, ctx: GridContext): string {
   switch (a.kind) {
     case "key": return capText(a.code, a.mods);
-    case "modifier": return modsText(a.mods);
+    case "modifier": return capMods(a.mods);
     case "layer": return layerLegend(a.layerId, ctx);
     case "macro": {
       const index = ctx.macros.findIndex((macro) => macro.id === a.macroId);
-      return index < 0 ? "M?" : `M${index}`;
+      return macroLegend(index, ctx.macros[index]?.name, ctx.macros[index]?.steps);
     }
   }
 }
@@ -117,16 +115,17 @@ function slotCap(a: SlotAction, ctx: GridContext): string {
 const SLOT_NAME = /^(?:ST_)?MACRO[\s_-]?\d+$|^M\d+$/i;
 
 /**
- * What a macro's cap prints: the first word of its name, such as "Copy" for "Copy, switch, paste"
- * (the ▸ mark on the cap says it is a macro). A word longer than five letters is cut to three and an
- * ellipsis so it fits at the legend floor; a slot name or no name falls back to the number ("M4"),
- * which Advanced view keeps. The whole name stays in the panel and the key's description.
+ * What a macro's cap prints: the first word of its name, such as "Copy" for "Copy, switch, paste". A word longer than five letters is
+ * cut to four so it fits at the legend floor. An imported macro named after its firmware slot (ST_MACRO_2) prints what it sends
+ * instead: its one key, or its first key and an ellipsis (D-270). With neither, it says "Macro". The whole name stays in the panel.
  */
-export function macroLegend(index: number, name: string | undefined): string {
+export function macroLegend(index: number, name: string | undefined, steps?: readonly MacroStep[]): string {
+  if (index < 0) return "Macro";
   const first = name?.trim().split(/[\s,;:._-]+/).find((word) => word !== "");
-  if (index < 0) return "M?";
-  if (first === undefined || SLOT_NAME.test(name?.trim() ?? "")) return `M${index}`;
-  return first.length <= 5 ? first : first.slice(0, 4);
+  if (first !== undefined && !SLOT_NAME.test(name?.trim() ?? "")) return first.length <= 5 ? first : first.slice(0, 4);
+  const sent = (steps ?? []).flatMap((step) => (step.op === "tap" && step.code !== undefined ? [capText(step.code, step.mods)] : step.op === "text" ? [`“${step.text.slice(0, 3)}`] : []));
+  if (sent.length === 0) return "Macro";
+  return sent.length === 1 ? (sent[0] as string) : `${sent[0]}…`;
 }
 
 export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
@@ -134,12 +133,12 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
     case "key":
       return { kind: "key", tap: capText(binding.code, binding.mods) };
     case "modifier":
-      return { kind: "modifier", tap: modsText(binding.mods) };
+      return { kind: "modifier", tap: capMods(binding.mods) };
     case "holdTap":
       return {
         kind: "holdTap",
         tap: capText(binding.tap.code, binding.tap.mods),
-        hold: "mods" in binding.hold ? modsText(binding.hold.mods) : layerLegend(binding.hold.layerId, ctx),
+        hold: "mods" in binding.hold ? capMods(binding.hold.mods) : layerLegend(binding.hold.layerId, ctx),
       };
     case "layer":
       return {
@@ -150,17 +149,15 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
     case "macro": {
       const index = ctx.macros.findIndex((macro) => macro.id === binding.macroId);
       // The play mark on the cap says it is a macro, so no second word competes for the width.
-      return { kind: "macro", tap: macroLegend(index, ctx.macros[index]?.name) };
+      return { kind: "macro", tap: macroLegend(index, ctx.macros[index]?.name, ctx.macros[index]?.steps) };
     }
     case "native": {
-      // A kept hold-tap is labelled "tap/hold" ("Enter/OSL2"); two short halves fit a cap where the whole would not.
-      const [tap, hold, ...more] = binding.label.split("/");
-      if (binding.label.length > 5 && tap !== undefined && tap !== "" && hold !== undefined && hold !== "" && more.length === 0) return { kind: "native", tap, hold };
-      return { kind: "native", tap: shortNative(binding.label) };
+      const print = nativeLegend(binding, ctx);
+      return { kind: "native", tap: print.tap, ...(print.hold === undefined ? {} : { hold: print.hold }) };
     }
     case "tapDance": {
       const td = ctx.tapDances?.find((t) => t.id === binding.tapDanceId);
-      if (!td) return { kind: "tapDance", tap: "TD?" };
+      if (!td) return { kind: "tapDance", tap: "Dance" };
       return {
         kind: "tapDance",
         tap: slotCap(td.tap, ctx),

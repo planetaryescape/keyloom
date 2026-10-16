@@ -44,8 +44,7 @@ import type { LayerLighting } from "../layout/schema.ts";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
 import { keyForChar } from "./panel/slots.ts";
 import { Caption } from "./shell/Caption.tsx";
-import { FirstRunTip } from "./shell/FirstRunTip.tsx";
-import { boardEntries, LayoutMenu } from "./shell/Header.tsx";
+import { boardDisplayName, boardEntries, LayoutMenu } from "./shell/Header.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
 import { boardLight, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
@@ -336,10 +335,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         name: `${name}, keys ${positions.map((position) => position + 1).join(" and ")}${output === null ? "" : `, sends ${bindingSummary(output, layout)}`}`,
       };
     };
-    const lines = showCombos ? combosOn(layout, layer.id).filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false)) : [];
+    const lines = showCombos || inspect ? combosOn(layout, layer.id).filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false)) : [];
     if (comboDraft !== null && comboDraft.positions.length >= 2) lines.push(lineFor(comboDraft.id, comboDraft.name || "New combo", comboDraft.positions, comboDraft.output, true));
     return lines;
-  }, [showCombos, layout, layer, comboDraft]);
+  }, [showCombos, inspect, layout, layer, comboDraft]);
   // Pointing at a combo (its line, its label or its row) lights the keys it is made of.
   const comboLit = useMemo<ReadonlySet<number>>(() => {
     const positions = new Set<number>(comboDraft?.positions ?? []);
@@ -850,12 +849,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         else if (chatSelection !== null) setChatSelection(null);
         return;
       }
-      if (event.key === "i" && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target) && editing === null && quick === null) {
+      // ⌥I, so a plain I is free to find the I key (P1 review). event.code, since ⌥I types a dead key on a Mac.
+      if (event.code === "KeyI" && event.altKey && !event.metaKey && !event.ctrlKey && !typing(event.target)) {
         event.preventDefault();
         toggleInspect();
         return;
       }
-      if (/^[a-hj-z;',./[\]\\`-]$/i.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target) && editing === null && quick === null && !chatOpen) {
+      if (/^[a-z;',./[\]\\`-]$/i.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing(event.target) && editing === null && quick === null && !chatOpen) {
         const code = keyForChar(event.key)?.name;
         const bindings = view.layers[layerIndex]?.bindings ?? [];
         const at = bindings.findIndex((binding) => (binding.kind === "key" && binding.code === code && binding.mods === undefined) || (binding.kind === "holdTap" && binding.tap.code === code));
@@ -1047,6 +1047,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             },
           },
           select: { on: selectMode, onToggle: () => setSelectMode(!selectMode) },
+          inspect: { on: inspect, onToggle: toggleInspect },
           onShortcuts: () => setShortcutsOpen(true),
           release: chrome.release,
         }}
@@ -1060,8 +1061,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
             notice={offer}
+            aside={shownHalf === null ? null : <HalfSwitcher value={half} onChange={setHalf} hands={board.hands} />}
           />
-          {shownHalf === null ? null : <HalfSwitcher value={half} onChange={setHalf} hands={board.hands} />}
           <SelectionBar
             count={chatSelection?.positions.length ?? 0}
             layerName={chatSelection === null ? layer.name : layerNameOf(chatSelection.layerId)}
@@ -1120,7 +1121,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             found={found}
           />
           <div className="stage-floor">
-            <FirstRunTip />
+            <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>
             <LayerTabs
               layout={layout}
               selectedId={layer.id}

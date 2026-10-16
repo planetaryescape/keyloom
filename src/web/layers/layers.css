@@ -19,13 +19,14 @@
 
 .layer-tabs .layer-tab {
   display: flex;
-  width: 124px;
+  min-width: 124px;
   flex: none;
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-2) var(--space-2);
   border: 0;
+  border-color: transparent;
   border-radius: 14px;
   background: none;
   color: var(--ink-3);
@@ -40,10 +41,11 @@
   color: var(--ink-2);
 }
 
+/* Lifted a little, never a grey halo: in the light room a large shadow read as a patch behind the tile (P1 review). */
 .layer-tabs .layer-tab[aria-selected="true"] {
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 8px 24px rgb(0 0 0 / 0.14);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 3px 10px rgb(0 0 0 / 0.06);
 }
 
 .film-mini {
@@ -62,8 +64,6 @@
 }
 
 .layer-tab-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -344,10 +344,28 @@
 
 /* With a sheet open beside the board the strip is narrower: the same cells, smaller, so it never runs under Inspect. */
 .workbench[data-side="open"] .layer-tabs .layer-tab {
-  width: 100px;
+  min-width: 100px;
 }
 
 .workbench[data-side="open"] .film-mini {
   width: 84px;
   height: 34px;
+}
+
+/* The strip's actions (add, and the selected layer's menu) stay out of sight until the strip is pointed at or focused; right-click
+   or the context-menu key on a layer opens its menu too (P1 review). */
+.layer-tabs-wrap .layer-tab-actions {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.layer-tabs-wrap:hover .layer-tab-actions,
+.layer-tabs-wrap:focus-within .layer-tab-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .layer-tabs-wrap .layer-tab-actions {
+    opacity: 1;
+  }
 }

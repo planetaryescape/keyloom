@@ -317,3 +317,16 @@
     padding: 0 var(--space-1);
   }
 }
+
+.board-menu-trigger {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.board-menu-trigger .board-switch-name {
+  display: inline;
+}
+
+.board-menu-trigger .silhouette {
+  fill: currentColor;
+}

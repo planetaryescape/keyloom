@@ -98,6 +98,8 @@ export const BoardDefinitionSchema = z.strictObject({
       // How the case under the keys is drawn (D-266): "wells" sinks each column into a sculpted well (the Glove80), "deck" is a laptop's
       // aluminium deck with the keys in a recess. Absent is a flat slab.
       surface: z.enum(["wells", "deck"]).optional(),
+      // Status LEDs on the case, in key units after rotation and shift (the Moonlander's three per half). They light in the layer's colour.
+      statusLeds: z.array(z.strictObject({ x: z.number(), y: z.number() })).optional(),
     })
     .optional(),
 });

@@ -54,3 +54,19 @@ describe("outline helpers", () => {
     expect(d.startsWith("M0,5 Q0,0 0.5,0")).toBe(true);
   });
 });
+
+describe("the Moonlander's thumb modules mirror each other (P1 review)", () => {
+  test("the right module has the left one's size, turned the other way", async () => {
+    const { board, keys } = await load("zsa/moonlander");
+    const bodies = caseParts(keys, board.hands, board.display).filter((part) => part.kind === "body");
+    const size = (d: string) => {
+      const xs = [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]));
+      const ys = [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[2]));
+      return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), top: Math.min(...ys) };
+    };
+    const [left, right] = bodies.slice(-2).map((part) => size(part.d));
+    expect(Math.abs((left?.w ?? 0) - (right?.w ?? 0))).toBeLessThan(0.01);
+    expect(Math.abs((left?.h ?? 0) - (right?.h ?? 0))).toBeLessThan(0.01);
+    expect(Math.abs((left?.top ?? 0) - (right?.top ?? 0))).toBeLessThan(0.01);
+  });
+});

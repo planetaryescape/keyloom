@@ -14,11 +14,13 @@ interface CaptionProps {
   reach: ReachWords;
   /** A notice that belongs to the layout, such as the offer to read Oryx's colours into it. */
   notice?: ReactNode;
+  /** A control that sits beside the layer's name, such as the phone's Left and Right. */
+  aside?: ReactNode;
 }
 
 // The stage's caption (23#chrome-recedes): which layout, which layer in large type, and how to get there. The name cross-fades with the
 // light when the layer changes.
-export function Caption({ layoutMenu, layerId, layerName, light, reach, notice }: CaptionProps) {
+export function Caption({ layoutMenu, layerId, layerName, light, reach, notice, aside }: CaptionProps) {
   const reduce = useReducedMotion() === true;
   return (
     <div className="caption">
@@ -26,13 +28,15 @@ export function Caption({ layoutMenu, layerId, layerName, light, reach, notice }
         <span className="caption-layout-word">Layout</span>
         {layoutMenu}
       </div>
-      <AnimatePresence mode="wait" initial={false}>
+      <div className="caption-main">
+      {/* popLayout takes the outgoing name out of the flow, so the two cross-fade instead of the old leaving a gap first. */}
+      <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
           key={layerId}
           initial={reduce ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={reduce ? { opacity: 1 } : { opacity: 0 }}
-          transition={{ duration: reduce ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: reduce ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
         >
           <h1 className="caption-layer">
             <span>{niceLayerName(layerName)}</span>
@@ -45,6 +49,8 @@ export function Caption({ layoutMenu, layerId, layerName, light, reach, notice }
           </p>
         </motion.div>
       </AnimatePresence>
+      {aside === undefined || aside === null ? null : <div className="caption-aside">{aside}</div>}
+      </div>
       {notice === undefined || notice === null ? null : <div className="caption-notice">{notice}</div>}
     </div>
   );
