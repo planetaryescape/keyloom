@@ -74,9 +74,9 @@ describe("incomplete drafts say why", () => {
 });
 
 describe("change summary", () => {
-  test("names the layer, the 1-based key number and the new binding", () => {
-    expect(changeSummary(layout, "base", 6, { kind: "key", code: "F17" })).toBe("Base, key 7: F17");
-    expect(changeSummary(layout, "nav", 0, { kind: "key", code: "LEFT_ALT" })).toMatch(/^.+, key 1: Left Alt$/);
+  test("names the key by what it printed, its layer and the new binding (D-279)", () => {
+    expect(changeSummary(layout, "base", 6, { kind: "key", code: "F17" })).toBe("The 4 key on Base: F17");
+    expect(changeSummary(layout, "nav", 0, { kind: "key", code: "LEFT_ALT" })).toMatch(/^.+ key on .+: Left Alt$/);
   });
 });
 

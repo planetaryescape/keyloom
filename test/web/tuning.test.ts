@@ -69,7 +69,7 @@ describe("tuning a hold-tap from the editor", () => {
     expect(ownProfileId(layout, "hrm-key-2", 5)).toBe("hrm-key-6");
     const key = OPTIONS[profile.firmware].find((s) => s.kind === "number")!;
     const text = tuningSummary(layout, slot, profile, { ...profile.options, [key.key]: 170 }, "key");
-    expect(text).toBe(`Base, key 2: ${key.label.toLowerCase()} 170 ms`);
+    expect(text).toBe(`The F hold ⌘ key on Base: ${key.label.toLowerCase()} 170 ms`);
   });
 });
 

@@ -5,6 +5,7 @@ import { bindingFunctions } from "../../layout/functions.ts";
 import type { Binding, Layout } from "../../layout/schema.ts";
 import { layerTarget } from "../../validation/reachability.ts";
 import type { ValidationResult } from "../../validation/result.ts";
+import { keyIn } from "../../validation/words.ts";
 
 export interface LostFunction {
   function: string;
@@ -72,15 +73,14 @@ export function editorOps(slot: Slot, binding: Binding, placements: readonly Pla
   ];
 }
 
-/** "Replaced by F17 on key 7 of Layer 0": one-based, named, never an id. */
+/** "Replaced by F17 on the A key on Layer 0": named by what the key prints, never its number (D-279). */
 export function dropReason(replacedBy: string, layout: Layout, slot: Slot): string {
-  const layerName = layout.layers.find((layer) => layer.id === slot.layerId)?.name ?? "this layer";
-  return `Replaced by ${replacedBy} on key ${slot.position + 1} of ${layerName}`;
+  return `Replaced by ${replacedBy} on ${keyIn(layout, slot)}`;
 }
 
-/** "Layer 0, key 7": a key named the way a person counts it. */
+/** "the A key on Layer 0": a key named by what it prints (D-279). */
 export function keyName(layout: Layout, slot: Slot): string {
-  return `${layout.layers.find((layer) => layer.id === slot.layerId)?.name ?? "this layer"}, key ${slot.position + 1}`;
+  return keyIn(layout, slot);
 }
 
 /** The layer a lost key switches to, for the sentence that says why it can't simply be dropped. */

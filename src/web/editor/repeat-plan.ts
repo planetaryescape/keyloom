@@ -1,6 +1,7 @@
 // "Repeat last change on selection" worked out for the panel (09, D-061): the editor's last change,
 // reduced to a transform (src/layout/repeat.ts) and applied to each selected key. Pure, so the
 // rules are tested without a browser.
+import { bindingLegend } from "../../layout/legend.ts";
 import type { ChangeOp } from "../../layout/change.ts";
 import { applyRepeat, repeatTransform, type RepeatTransform } from "../../layout/repeat.ts";
 import type { Binding, Layout } from "../../layout/schema.ts";
@@ -45,6 +46,14 @@ export function repeatMeaning(layout: Layout, last: LastChange, transform: Repea
 /** The change set's summary, as it reads in the revision history. */
 export function repeatSummary(layout: Layout, layerId: string, plan: RepeatPlan): string {
   const layerName = layout.layers.find((l) => l.id === layerId)?.name ?? layerId;
-  const keys = plan.rows.flatMap((row) => (row.kind === "change" ? [`${row.position + 1}`] : []));
-  return `${layerName}, keys ${keys.join(", ")}: repeated the last change`;
+  // The keys by what they print, never their numbers (D-279).
+  const layer = layout.layers.find((l) => l.id === layerId);
+  const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances };
+  const keys = plan.rows.flatMap((row) => {
+    if (row.kind !== "change") return [];
+    const binding = layer?.bindings[row.position];
+    const tap = binding === undefined ? "" : bindingLegend(binding, ctx).tap;
+    return [tap === "" ? "a blank key" : tap];
+  });
+  return `${layerName}: repeated the last change on ${keys.join(", ")}`;
 }

@@ -1216,12 +1216,14 @@
   outline-offset: 1px;
 }
 
-/* Where the stage is narrow (a sheet or the conversation beside it, or a small window), icons only; each keeps its tooltip and name. */
-.workbench:is([data-side="open"], [data-side="chat"]) .view-control-label {
-  display: none;
+/* Quiet labels when the stage is 1200 px or wider (a 1366 or 1440 window with nothing beside the board), icons with tooltips when
+   it is narrower: by the stage's width, never the board's, so every board shows the same and the labels never run into the strip
+   (P4 review). */
+.stage {
+  container: stage / inline-size;
 }
 
-@media (max-width: 1400px) {
+@container stage (max-width: 1199px) {
   .view-control-label {
     display: none;
   }

@@ -55,7 +55,8 @@ describe("syncLine", () => {
     expect(syncLine(board({ kind: "not_connected", changes: 2 }, { auto: { on: false, choice: false, paused: false, proven: true, provenAt: 1, dueAt: null } }), "lay_1").detail).toBe("Your Glove80 isn't connected. Plug it in, then sync.");
     const other = syncLine(board({ kind: "not_keyloom", detail: "USB serial moergo.com:GLV80" }), "lay_1");
     expect(other).toMatchObject({ tone: "warning", action: { id: "flash_keyloom", label: "Flash keyloom's build" } });
-    expect(other.detail).toContain("never replaces it by itself");
+    expect(other.more).toContain("never replaces it by itself");
+    expect(other.detail).toBe("Flash keyloom's build once to sync from then on.");
   });
 
   test("a keyboard that runs another layout of the board says so and offers to put this one on it", () => {

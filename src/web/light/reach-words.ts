@@ -32,7 +32,7 @@ export function reachWords(
   if (position === null) return words("No key on the first layer reaches it");
   const binding = layout.layers[0]?.bindings[position];
   const where = fingerWords(fingers[String(position)]);
-  const label = legendOf(position) || `key ${position + 1}`;
+  const label = legendOf(position) || "a blank key";
   const on = where === null ? "" : ` on the ${where}`;
   if (binding?.kind === "holdTap") return words("Hold", label, on);
   if (binding?.kind === "layer") {

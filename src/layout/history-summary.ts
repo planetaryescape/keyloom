@@ -14,3 +14,18 @@ export function tidySummary(summary: string): string {
   const first = /^(?:Back to|Redo|Undo): /.exec(stack)?.[0] ?? "";
   return `${first}${summary.slice(stack.length)}`;
 }
+
+/**
+ * A summary stored before keys were named by what they print (D-279), read without its key numbers: "Layer 0, key 25: X" is
+ * "Layer 0: X", "Swapped Base key 1 (A) and …" is "Swapped A on Base and …", "on key 7 of Layer 0" is "on Layer 0". Newer summaries
+ * have no numbers and pass through.
+ */
+export function withoutKeyNumbers(summary: string): string {
+  return summary
+    .replace(/(Layer \d+|[A-Z][\w-]*) key \d+ \(([^)]*)\)/g, "$2 on $1")
+    .replace(/, keys? [\d, ]+:/g, ":")
+    .replace(/on key \d+ of /g, "on ")
+    .replace(/ \(key \d+\)/g, "")
+    .replace(/(Layer \d+|[A-Z][\w-]*) key \d+\b/g, "$1")
+    .replace(/\bkey \d+\b/gi, "a key");
+}

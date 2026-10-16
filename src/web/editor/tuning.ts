@@ -4,6 +4,7 @@ import type { ChangeOp, Slot } from "../../layout/change.ts";
 import { optionLabel } from "../../layout/option-words.ts";
 import { KANATA_VARIANTS } from "../../layout/kanata/profiles.ts";
 import type { Binding, Firmware, HoldTapProfile, Layout } from "../../layout/schema.ts";
+import { keyIn, keyOn } from "../../validation/words.ts";
 
 export type HoldTap = Extract<Binding, { kind: "holdTap" }>;
 
@@ -107,7 +108,7 @@ export function tuningOps(input: {
   if (scope === "profile") return [{ op: "upsertHoldTapProfile", profile: { ...profile, options } }];
   const id = ownProfileId(layout, profile.id, slot.position);
   return [
-    { op: "upsertHoldTapProfile", profile: { id, name: `${profile.name} (key ${slot.position + 1})`, firmware: profile.firmware, options } },
+    { op: "upsertHoldTapProfile", profile: { id, name: `${profile.name} (${keyIn(layout, slot).replace(/^the /, "")})`, firmware: profile.firmware, options } },
     { op: "setBinding", at: slot, binding: { ...binding, profileId: id } },
   ];
 }
@@ -123,5 +124,5 @@ export function tuningSummary(layout: Layout, slot: Slot, profile: HoldTapProfil
       : [`${spec.label.toLowerCase()} ${options[spec.key] === undefined ? "reset" : spec.kind === "number" ? `${String(options[spec.key])} ms` : String(options[spec.key])}`],
   );
   const what = changes.length === 0 ? "hold-tap feel" : changes.join(", ");
-  return scope === "key" ? `${layer}, key ${slot.position + 1}: ${what}` : `${profile.name}: ${what}`;
+  return scope === "key" ? `${keyOn(layout, slot)}: ${what}` : `${profile.name}: ${what}`;
 }

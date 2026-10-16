@@ -1,3 +1,4 @@
+import { keyIn } from "../../validation/words.ts";
 import { LoaderCircle, Timer, TriangleAlert, X } from "lucide-react";
 import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { describeKey, modsWords } from "../../layout/describe.ts";
@@ -319,7 +320,7 @@ export function KeyPanel(props: Props) {
   if (draft === null || layer === undefined || original === undefined) return null;
 
   const incomplete = incompleteReason(draft, layout);
-  const summary = binding === null ? null : withChoices(changeSummary(after ?? layout, layerId, position, binding), after ?? layout, placements, drops);
+  const summary = binding === null ? null : withChoices(changeSummary(after ?? layout, layerId, position, binding, layout), after ?? layout, placements, drops);
   const result = check.state.status === "done" ? check.state.result : null;
   const canApply = binding !== null && result !== null && result.ok && !applying;
   const warnings = result?.warnings.length ?? 0;
@@ -566,7 +567,7 @@ export function KeyPanel(props: Props) {
       : null;
   const sentence = dirty && binding !== null ? (restSentence === null ? `Before: ${lowered}` : "") : dance !== null ? dance : layerLine !== null ? layerLine : meaning !== null ? meaning : restSentence !== null ? restSentence : draft.kind === "key" || draft.kind === "holdTap" || draft.kind === "transparent" || draft.kind === "none" ? (picker === null ? "Press a key on your keyboard to put it here." : "") : (current?.headline ?? "");
   // One chip per place, named by where it is; two functions on the same other key, or two keys on the same other layer, are one chip.
-  const chipName = (other: Slot) => (other.layerId === layerId ? `key ${other.position + 1}` : `on ${layerDisplayName(layout.layers.find((candidate) => candidate.id === other.layerId)?.name ?? "")}`);
+  const chipName = (other: Slot) => (other.layerId === layerId ? keyIn(layout, other).replace(/ on .*$/, "") : `on ${layerDisplayName(layout.layers.find((candidate) => candidate.id === other.layerId)?.name ?? "")}`);
   const also = where
     .flatMap((entry) => entry.others)
     // Only other layers: a duplicate on this layer is in view on the board already.
@@ -591,7 +592,7 @@ export function KeyPanel(props: Props) {
   );
 
   return (
-    <section ref={root} tabIndex={-1} className="key-panel key-card" aria-label={`Key ${position + 1}: ${title}`} onKeyDown={onKeyDown}>
+    <section ref={root} tabIndex={-1} className="key-panel key-card" aria-label={advanced ? `Key ${position + 1}: ${title}` : title} onKeyDown={onKeyDown}>
       <header className="card-head">
         <div className="card-heading">
           <h2>{title}</h2>

@@ -1,4 +1,5 @@
-/* History (18#words): a list of revisions where each row says what changed, who made it and when. */
+/* History (18#words, P4): the sheet's rows (shell/sheet.css). A row's actions show when it is pointed at or focused; the row on
+   screen says so. */
 .history-panel {
   display: flex;
   min-height: 0;
@@ -6,96 +7,22 @@
   flex-direction: column;
 }
 
-.history-icon {
-  display: grid;
-  width: 48px;
-  height: 48px;
+.revision .sheet-row-actions {
+  display: none;
+}
+
+.revision:hover .sheet-row-actions,
+.revision:focus-within .sheet-row-actions {
+  display: flex;
+}
+
+@media (hover: none) {
+  .revision .sheet-row-actions {
+    display: flex;
+  }
+}
+
+.revision-arrow {
   flex: none;
-  place-items: center;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-panel);
-}
-
-.history-why {
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-  font-size: var(--text-sm);
-}
-
-.history-state {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-4);
-}
-
-.history-error {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.history-error p {
-  margin: 0;
-  color: var(--color-error);
-}
-
-.revision-list {
-  min-height: 0;
-  flex: 1;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.revision {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.revision[data-head="true"] {
-  background: var(--color-accent-bg);
-}
-
-.revision-summary {
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-weight: var(--weight-semibold);
-}
-
-.revision-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.revision-source {
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill);
-  font-weight: var(--weight-semibold);
-}
-
-.revision-current {
-  color: var(--color-accent);
-  font-weight: var(--weight-semibold);
-}
-
-.revision-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  color: var(--ink-3);
 }

@@ -1,3 +1,4 @@
+import { keyIn } from "../../validation/words.ts";
 import { Gauge, LoaderCircle } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import type { Slot } from "../../layout/change.ts";
@@ -51,7 +52,8 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
   const result = check.state.status === "done" ? check.state.result : null;
   const canApply = ops !== null && result !== null && result.ok && !applying;
   const specs = OPTIONS[profile.firmware];
-  const keyNumber = slot.position + 1;
+  // The key by what it prints, never its number (D-279).
+  const keyWords = keyIn(layout, slot).replace(/ on .*$/, "");
 
   async function apply() {
     if (!canApply || ops === null || !built.ok) return;
@@ -74,11 +76,11 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
   }
 
   return (
-    <section className="card tuner" aria-label={`Tune how key ${keyNumber} feels`}>
+    <section className="card tuner" aria-label={`Tune how ${keyWords} feels`}>
       <header className="tuner-head">
         <Gauge size={18} aria-hidden="true" />
         <div>
-          <h2>Tune how key {keyNumber} feels</h2>
+          <h2>Tune how {keyWords} feels</h2>
           <p className="muted">
             Timing profile &ldquo;{profile.name}&rdquo;, used by {shared.length} {shared.length === 1 ? "key" : "keys"}. Nothing is saved until you apply.
           </p>
@@ -132,7 +134,7 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
             variant="cards"
             value={scope}
             choices={[
-              { value: "key", label: `Only key ${keyNumber}`, hint: "Gives this key a profile of its own. The others keep their feel." },
+              { value: "key", label: `Only ${keyWords}`, hint: "Gives this key a profile of its own. The others keep their feel." },
               { value: "profile", label: `All ${shared.length} keys`, hint: `Every key that uses "${profile.name}".` },
             ]}
             onChange={setScope}

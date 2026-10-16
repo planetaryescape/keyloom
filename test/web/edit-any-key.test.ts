@@ -86,7 +86,7 @@ describe("the F16 to F17 walk-through on BK's Moonlander", () => {
     const drops = new Map([["key:F16", dropReason("F17", layout, slot)]]);
     const result = validate(board, layout, editorOps(slot, f17, [], drops));
     expect(result.ok).toBe(true);
-    expect(result.diff.dropped).toEqual([{ function: "key:F16", reason: "Replaced by F17 on key 7 of Layer 0" }]);
+    expect(result.diff.dropped).toEqual([{ function: "key:F16", reason: "Replaced by F17 on the F16 key on Layer 0" }]);
   });
 
   test("goes through when F16 is put on another key, which then has to be dropped or placed in turn", () => {

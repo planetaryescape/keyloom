@@ -3,8 +3,8 @@ import type { ProposalCard } from "../../api/http.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { functionName } from "../editor/function-label.ts";
 import { movesOf } from "./compare.ts";
-import { layerName } from "./proposal-facts.ts";
 import "./compare.css";
+import { keyIn } from "../../validation/words.ts";
 
 interface Props {
   proposal: ProposalCard;
@@ -27,9 +27,9 @@ export function ProposalMoves({ proposal, layout }: Props) {
             <li key={move.key}>
               <kbd>{functionName(move.function, layout)}</kbd>
               <span className="moves-path">
-                <span>{layerName(layout, move.from.layerId)}, key {move.from.position + 1}</span>
+                <span>{keyIn(layout, move.from)}</span>
                 <ArrowRight size={14} aria-label="moves to" role="img" />
-                <strong>{sameLayer ? `key ${move.to.position + 1}` : `${layerName(layout, move.to.layerId)}, key ${move.to.position + 1}`}</strong>
+                <strong>{sameLayer ? keyIn(layout, move.to).replace(/ on .*$/, "") : keyIn(layout, move.to)}</strong>
               </span>
             </li>
           );

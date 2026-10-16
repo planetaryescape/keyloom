@@ -61,6 +61,7 @@ import { Toasts, useToasts } from "./shell/Toasts.tsx";
 import { NARROW, PHONE, useMediaQuery } from "./shell/useMediaQuery.ts";
 import type { SyncApi } from "./sync/useSync.ts";
 import { useSyncToasts } from "./sync/useSyncToasts.ts";
+import { keyIn, keyOn } from "../validation/words.ts";
 
 interface ViewerProps {
   detail: LayoutDetail;
@@ -370,10 +371,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         name: `${positions.map((position) => { const b = layer.bindings[position]; return b === undefined ? "a key" : bindingLegend(b, ctx).tap || "a blank key"; }).join(" and ")} together${output === null ? "" : `, send ${bindingSummary(output, layout)}`}`,
       };
     };
-    const lines = showCombos || inspect ? combosOn(layout, layer.id).filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false)) : [];
+    // With the Combos sheet open, pointing at a row draws that one combo, as the Library lights its keys (P4 review).
+    const shown = showCombos || inspect ? combosOn(layout, layer.id) : combosOpen && hoverCombo !== null ? combosOn(layout, layer.id).filter((combo) => combo.id === hoverCombo) : [];
+    const lines = shown.filter((combo) => combo.id !== comboDraft?.id).map((combo) => lineFor(combo.id, combo.name, combo.positions, combo.output, false));
     if (comboDraft !== null && comboDraft.positions.length >= 2) lines.push(lineFor(comboDraft.id, comboDraft.name || "New combo", comboDraft.positions, comboDraft.output, true));
     return lines;
-  }, [showCombos, inspect, layout, layer, comboDraft]);
+  }, [showCombos, inspect, layout, layer, comboDraft, combosOpen, hoverCombo]);
   // Pointing at a combo (its line, its label or its row) lights the keys it is made of.
   const comboLit = useMemo<ReadonlySet<number>>(() => {
     const positions = new Set<number>(comboDraft?.positions ?? []);
@@ -1197,7 +1200,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                         const target = layout.layers.find((candidate) => candidate.id === editing.layerId);
                         if (target === undefined) return;
                         const lighting: LayerLighting = withKeyColour(target.lighting, editing.position, colour);
-                        void perform([{ op: "setLayerLighting", layerId: target.id, lighting }], `${target.name}, key ${editing.position + 1}: ${colour === null ? "follows the layer colour" : "own colour"}`);
+                        void perform([{ op: "setLayerLighting", layerId: target.id, lighting }], `${keyOn(layout, { layerId: target.id, position: editing.position })}: ${colour === null ? "follows the layer colour" : "own colour"}`);
                       }}
                     />
                   )}
@@ -1374,7 +1377,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             {swapping === null || layer === undefined ? null : (
               <p className="place-banner" role="status">
                 <MousePointerClick size={16} aria-hidden="true" />
-                <span>Click the key to swap with key {swapping.position + 1} on {layerNameOf(swapping.layerId)}. You can change layer first. Escape cancels.</span>
+                <span>Click the key to swap with {keyIn(layout, swapping)}. You can change layer first. Escape cancels.</span>
                 <button type="button" className="button" onClick={() => setSwapping(null)}>Cancel</button>
               </p>
             )}
@@ -1458,6 +1461,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           history={
             historyOpen ? (
               <HistoryPanel
+                layout={layout}
                 revisions={history.revisions}
                 onClose={() => setHistoryOpen(false)}
                 onReload={history.reload}

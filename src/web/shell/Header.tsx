@@ -71,12 +71,14 @@ export interface HeaderProps {
   selectedId?: string;
   onSelect?: (id: string) => void;
   onImport?: () => void;
+  /** The boards' shapes, so the switcher draws silhouettes here as the layout page does (P4 review). */
+  boardChoices?: readonly BoardChoice[];
 }
 
 // The top bar for pages that aren't a layout (loading, import, an error, board dev): the name, the boards the person has, and the theme.
 // A layout page draws its own, with the sync line, undo and the menu (Viewer.tsx).
-export function Header({ layouts, selectedId, onSelect }: HeaderProps) {
-  const boards = boardEntries(layouts ?? []);
+export function Header({ layouts, selectedId, onSelect, boardChoices = [] }: HeaderProps) {
+  const boards = boardEntries(layouts ?? [], boardChoices);
   const active = layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null;
   return (
     <TopBar

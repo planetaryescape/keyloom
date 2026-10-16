@@ -339,3 +339,38 @@
 .step-body .field-group {
   width: 100%;
 }
+
+/* ---------- P4: the build and flash card in the concept's language ----------
+   One surface over a dimmed stage, no frame; steps divided by space and a hairline; the step in hand carries the only filled button. */
+.release {
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--card-shadow);
+}
+
+.release::backdrop {
+  background: color-mix(in oklab, var(--room) 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.release-head .muted {
+  color: var(--ink-3);
+}
+
+.release-head strong {
+  color: var(--ink);
+}
+
+.step {
+  border-top: 1px solid var(--line);
+}
+
+.step h3 {
+  color: var(--ink);
+}
+
+.step p,
+.step .muted {
+  color: var(--ink-2);
+}
