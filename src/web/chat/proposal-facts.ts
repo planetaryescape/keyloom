@@ -2,13 +2,15 @@
 // whether it would overwrite a native binding (D-024), which keyloom can show but not rebuild.
 import type { ProposalCard } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
+import { layerDisplayName } from "../../layout/cap-words.ts";
 import { describeKey } from "../../layout/describe.ts";
 import type { Binding, Layout } from "../../layout/schema.ts";
 
 export const slotKey = (slot: Slot): string => `${slot.layerId}:${slot.position}`;
 
 export function layerName(layout: Layout, layerId: string): string {
-  return layout.layers.find((layer) => layer.id === layerId)?.name ?? layerId;
+  // As the caption says it: a ZMK layer named default_layer reads "Default layer" (D-270).
+  return layerDisplayName(layout.layers.find((layer) => layer.id === layerId)?.name ?? layerId);
 }
 
 /** "Nav, key 33": positions are zero-based in the model and one-based on screen, like the board's labels. */

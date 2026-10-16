@@ -25,13 +25,17 @@ interface Props {
   onApply: (proposal: Proposal) => Promise<void>;
   onAskAgain: () => void;
   onOpenRelease: () => void;
+  /** The command bar's card: the explanation, the changes as chips, one trade-off line, the options as tabs, Apply (comp d). */
+  compact?: boolean;
+  /** The tabs that switch between options, drawn where the comp puts them, beside Apply. */
+  alternatives?: React.ReactNode;
 }
 
 const MAX_ROWS = 6;
 
 // One alternative from the agent. The same card serves a fresh proposal, an applied one and a
 // superseded sibling, so the choice reads the same whichever you look at.
-export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease }: Props) {
+export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, alternatives = null }: Props) {
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -74,6 +78,83 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     } finally {
       setApplying(false);
     }
+  }
+
+  // The validator's warnings and errors, only when there are any: a clean proposal says nothing about checking.
+  const problems = proposal.validation.errors.length + proposal.validation.warnings.length;
+
+  if (compact) {
+    const confirmBlock = confirming ? (
+      <div className="proposal-confirm" role="alertdialog" aria-labelledby={`${titleId}-confirm`}>
+        <p id={`${titleId}-confirm`}>
+          <TriangleAlert size={16} aria-hidden="true" />
+          <span>
+            This replaces {natives.length === 1 ? "a custom key" : `${natives.length} custom keys`}: {natives.map((n) => slotName(layout, n.slot)).join(", ")}. keyloom can&apos;t write their firmware code back, though Undo restores it.
+          </span>
+        </p>
+      </div>
+    ) : null;
+    return (
+      <article className="proposal proposal-compact" data-status={proposal.status} data-pinned={pinned} aria-labelledby={titleId}>
+        <h3 id={titleId} className="sr-only">{proposal.title}</h3>
+        <p className="proposal-why">{proposal.explanation}</p>
+        {rows.length === 0 ? null : (
+          <ul className="proposal-diff" aria-label="Keys this changes">
+            {rows.slice(0, MAX_ROWS).map((row) => (
+              <li key={row.key}>
+                <span className="proposal-where">{row.where}</span>
+                <kbd>{row.before}</kbd>
+                <ArrowRight size={13} aria-label="becomes" role="img" />
+                <kbd data-new="true">{row.after}</kbd>
+              </li>
+            ))}
+            {rows.length > MAX_ROWS ? <li className="muted">and {rows.length - MAX_ROWS} more</li> : null}
+          </ul>
+        )}
+        <ProposalMoves proposal={proposal} layout={layout} />
+        {costs.length === 0 ? null : <p className="proposal-trade"><span>Trade-off:</span> {costs.join(" ")}</p>}
+        {proposal.decisionDraft === null || !open ? null : <p className="proposal-trade"><span>keyloom will remember:</span> {proposal.decisionDraft.reason}</p>}
+        {problems === 0 ? null : <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} showMoves={false} />}
+        {confirmBlock}
+        {failure === null ? null : (
+          <div className="proposal-problem" role="alert">
+            <TriangleAlert size={16} aria-hidden="true" />
+            <div>
+              <p>{failure.message}</p>
+              {failure.stale ? <button type="button" className="bar-link" onClick={onAskAgain}>Ask for a fresh proposal</button> : null}
+            </div>
+          </div>
+        )}
+        <div className="proposal-bar-foot">
+          {alternatives}
+          <span className="proposal-bar-gap" />
+          {proposal.status === "applied" ? (
+            <span className="proposal-badge" data-tone="success" ref={outcome} tabIndex={-1}>
+              <CircleCheck size={14} aria-hidden="true" />
+              Applied
+            </span>
+          ) : proposal.status === "superseded" ? (
+            <span className="proposal-badge"><CircleSlash size={14} aria-hidden="true" />Superseded</span>
+          ) : open ? (
+            <>
+              <button type="button" className="bar-link" onClick={() => (confirming ? setConfirming(false) : onPin(proposal))} disabled={!pinned && !confirming}>
+                {confirming ? "Keep it" : "Not this"}
+              </button>
+              <button
+                type="button"
+                className="bar-apply"
+                disabled={applying || !proposal.validation.ok || failure?.stale === true}
+                onClick={() => (natives.length > 0 && !confirming ? setConfirming(true) : void apply())}
+              >
+                {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
+                {confirming ? "Replace and apply" : "Apply"}
+                {applying ? null : <kbd aria-hidden="true">↵</kbd>}
+              </button>
+            </>
+          ) : null}
+        </div>
+      </article>
+    );
   }
 
   return (

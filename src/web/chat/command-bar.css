@@ -1,0 +1,685 @@
+/* The command bar (23#chrome-recedes, comp d, P3): ⌘K opens the chat at the stage's foot, in the strip's row, so the board above it stays
+   in view and shows each proposal on its caps. One surface, no borders, the conversation reading top to bottom, the input last. */
+
+.stage > .command-bar {
+  z-index: 8;
+  display: flex;
+  min-height: 0;
+  grid-row: 3;
+  justify-content: center;
+  padding: 0 var(--space-6) var(--space-4);
+}
+
+.stage > .command-bar[hidden] {
+  display: none;
+}
+
+.chat[data-variant="bar"] {
+  display: flex;
+  width: min(760px, 100%);
+  /* 100% is the bar's row, which gives way to the board (shell.css). */
+  max-height: min(52vh, 460px, 100%);
+  min-height: 0;
+  flex-direction: column;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  color: var(--ink);
+  /* Not hidden: the provider picker opens above the bar, over the board. The scrolling part inside keeps the corners. */
+  overflow: visible;
+  animation: bar-in 0.32s var(--ease-spring);
+}
+
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+
+/* ---------- head: what it is, which model, the few places to go ---------- */
+
+.bar-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-1) var(--space-5);
+}
+
+.bar-head h2 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.bar-head .provider-bar {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.bar-head .chat-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.bar-head .provider-picker {
+  position: absolute;
+  z-index: 3;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  width: 340px;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+.bar-head .provider-saved {
+  display: none;
+}
+
+.bar-head-gap {
+  flex: 1;
+}
+
+.bar-link {
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bar-link:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.bar-link[aria-pressed="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.bar-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bar-close {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.bar-close:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* ---------- the conversation ---------- */
+
+.chat[data-variant="bar"] .chat-log {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: var(--space-2) var(--space-5) var(--space-3);
+  border: 0;
+  overflow-y: auto;
+}
+
+.chat[data-variant="bar"] .msg {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+
+/* Everything after the speaker sits in the second column, one row after another; the speaker stays on the first row. */
+.chat[data-variant="bar"] .msg > :not(.msg-who) {
+  grid-column: 2;
+}
+
+.chat[data-variant="bar"] .msg > :nth-child(2) {
+  grid-row: 1;
+}
+
+.chat[data-variant="bar"] .msg p {
+  margin-top: 0;
+}
+
+.chat[data-variant="bar"] .msg-who {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  padding-top: 1px;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+
+.chat[data-variant="bar"] .msg-bubble {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+}
+
+.chat[data-variant="bar"] .msg-assistant {
+  color: var(--ink);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.chat[data-variant="bar"] .msg-activity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.chat[data-variant="bar"] .chat-empty {
+  padding: var(--space-2) 0;
+  text-align: left;
+}
+
+.chat[data-variant="bar"] .chat-empty .state-icon {
+  display: none;
+}
+
+.chat[data-variant="bar"] .chat-empty h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.chat[data-variant="bar"] .chat-empty p {
+  margin: 0 0 var(--space-3);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.chat[data-variant="bar"] .prompt-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat[data-variant="bar"] .prompt {
+  height: auto;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat[data-variant="bar"] .prompt:hover {
+  color: var(--ink);
+}
+
+.chat[data-variant="bar"] .chat-problem {
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--pending) 14%, var(--surface));
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+/* ---------- a proposal: what it does, the changes as chips, one trade-off line, options and Apply ---------- */
+
+.proposal-compact {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.proposal-compact .proposal-why {
+  margin: 0;
+  color: var(--ink);
+}
+
+.proposal-diff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proposal-diff li {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.proposal-diff kbd {
+  color: var(--ink-2);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+}
+
+.proposal-diff kbd[data-new="true"] {
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+.proposal-trade {
+  margin: var(--space-3) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.proposal-trade span {
+  color: var(--ink-3);
+}
+
+.proposal-bar-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.proposal-bar-gap {
+  flex: 1;
+}
+
+.proposal-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.proposal-tab {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.proposal-tab:hover {
+  color: var(--ink);
+}
+
+.proposal-tab[aria-selected="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.proposal-tab-n {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.bar-apply {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--primary-ink);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.bar-apply:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.bar-apply kbd {
+  padding: 0 var(--space-1);
+  border: 1px solid color-mix(in oklab, var(--primary-ink) 30%, transparent);
+  border-radius: 6px;
+  color: inherit;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* ---------- the input: one line, last ---------- */
+
+.chat[data-variant="bar"] .composer {
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-5);
+  border-top: 1px solid var(--line);
+  background: none;
+}
+
+.chat[data-variant="bar"] .composer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.chat[data-variant="bar"] .composer textarea {
+  min-height: 36px;
+  flex: 1;
+  padding: var(--space-2) 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-md);
+  resize: none;
+}
+
+.chat[data-variant="bar"] .composer textarea:focus-visible {
+  outline: none;
+}
+
+.chat[data-variant="bar"] .composer-hint {
+  display: none;
+}
+
+.chat[data-variant="bar"] .composer .button {
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.chat[data-variant="bar"] .composer .button-primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.chat[data-variant="bar"] .composer .button:disabled {
+  opacity: 0.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat[data-variant="bar"] {
+    animation: none;
+  }
+}
+
+/* A display rule mustn't undo the hidden attribute: the strip steps aside for the bar, and the sheet's head for the bar's own. */
+.stage > .stage-floor[hidden],
+.chat-head[hidden] {
+  display: none !important;
+}
+
+.stage > .command-bar > * {
+  flex: 0 1 760px;
+}
+
+/* The empty bar is one line and the examples (comp d2): it leaves the board its room. */
+.chat[data-variant="bar"] {
+  max-height: min(44vh, 420px);
+}
+
+.chat[data-variant="bar"] .chat-log .chat-empty {
+  display: block;
+  max-width: none;
+  margin: 0;
+  padding: var(--space-1) 0 var(--space-2);
+  text-align: left;
+}
+
+.chat[data-variant="bar"] .chat-log .chat-empty h3 {
+  font-size: var(--text-md);
+  font-weight: var(--weight-regular);
+  color: var(--ink-2);
+}
+
+.chat[data-variant="bar"] .chat-log .chat-empty > p {
+  display: none;
+}
+
+.chat[data-variant="bar"] .chat-log .prompt-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chat[data-variant="bar"] .chat-log .prompt-list li {
+  margin: 0;
+}
+
+.chat[data-variant="bar"] .chat-log .prompt {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.bar-head .provider-change {
+  color: var(--ink-3);
+  text-decoration: none;
+}
+
+.bar-head .provider-change:hover {
+  color: var(--ink);
+}
+
+/* Conversations, as the comp lists them: one row each, the title and when, no borders. The bar's own tab is the way back. */
+.chat[data-variant="bar"] .history {
+  min-height: 0;
+  padding: var(--space-2) var(--space-5) var(--space-4);
+  overflow-y: auto;
+}
+
+.chat[data-variant="bar"] .history-back {
+  display: none;
+}
+
+.chat[data-variant="bar"] .history-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat[data-variant="bar"] .history-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat[data-variant="bar"] .history-item svg {
+  display: none;
+}
+
+.chat[data-variant="bar"] .history-item > span:not(.history-when),
+.chat[data-variant="bar"] .history-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat[data-variant="bar"] .history-when {
+  flex: none;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.chat[data-variant="bar"] .history-item[aria-current="true"] {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* The card in the bar is the reply itself: no frame of its own, whether it is the one on the board or not. */
+.chat[data-variant="bar"] .proposal-compact,
+.chat[data-variant="bar"] .proposal-compact[data-pinned="true"] {
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.chat[data-variant="bar"] .proposal-group {
+  margin-top: var(--space-3);
+}
+
+/* Moves, said quietly: the key that moves and where it goes, as the diff chips are. */
+.chat[data-variant="bar"] .proposal-moves {
+  margin-top: var(--space-3);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.chat[data-variant="bar"] .proposal-moves h4 {
+  display: none;
+}
+
+.chat[data-variant="bar"] .proposal-moves kbd {
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+/* The options and Apply stay at the bar's foot while the reply above them scrolls. */
+.chat[data-variant="bar"] .proposal-bar-foot {
+  position: sticky;
+  z-index: 1;
+  bottom: calc(-1 * var(--space-3));
+  margin-inline: calc(-1 * var(--space-2));
+  padding: var(--space-3) var(--space-2);
+  background: var(--surface);
+  box-shadow: 0 -12px 12px -8px var(--surface);
+}
+
+/* Options shrink before Apply wraps: a long title is cut, and the tab's full title is its tooltip. */
+.chat[data-variant="bar"] .proposal-bar-foot {
+  flex-wrap: nowrap;
+}
+
+.chat[data-variant="bar"] .proposal-tabs {
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+}
+
+.chat[data-variant="bar"] .proposal-tab {
+  min-width: 0;
+  max-width: 240px;
+  flex: 0 1 auto;
+}
+
+.chat[data-variant="bar"] .proposal-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat[data-variant="bar"] .proposal-bar-foot .proposal-badge:focus {
+  outline: none;
+}
+
+.bar-needs-model {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--pending) 12%, var(--surface));
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.bar-needs-model p {
+  margin: 0;
+}
+
+.bar-needs-model b {
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+.bar-ready {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.bar-ready-choice {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.bar-ready-choice span {
+  color: var(--ink-3);
+  font-weight: var(--weight-regular);
+}

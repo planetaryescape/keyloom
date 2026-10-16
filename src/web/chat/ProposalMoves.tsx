@@ -1,7 +1,7 @@
 import { ArrowRight, CircleSlash } from "lucide-react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { Layout } from "../../layout/schema.ts";
-import { functionLabel } from "../editor/function-label.ts";
+import { functionName } from "../editor/function-label.ts";
 import { movesOf } from "./compare.ts";
 import { layerName } from "./proposal-facts.ts";
 import "./compare.css";
@@ -25,7 +25,7 @@ export function ProposalMoves({ proposal, layout }: Props) {
           const sameLayer = move.from.layerId === move.to.layerId;
           return (
             <li key={move.key}>
-              <kbd>{functionLabel(move.function, layout)}</kbd>
+              <kbd>{functionName(move.function, layout)}</kbd>
               <span className="moves-path">
                 <span>{layerName(layout, move.from.layerId)}, key {move.from.position + 1}</span>
                 <ArrowRight size={14} aria-label="moves to" role="img" />
@@ -36,7 +36,7 @@ export function ProposalMoves({ proposal, layout }: Props) {
         })}
         {dropped.map((d) => (
           <li key={d.function} data-dropped="true">
-            <kbd>{functionLabel(d.function, layout)}</kbd>
+            <kbd>{functionName(d.function, layout)}</kbd>
             <span className="moves-path">
               <CircleSlash size={14} aria-hidden="true" />
               <span><strong>Dropped</strong>: {d.reason}</span>

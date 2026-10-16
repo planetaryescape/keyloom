@@ -899,3 +899,9 @@ button.cap[data-dragging="true"] {
     transition: none;
   }
 }
+
+/* While a proposal is previewed, the keys it doesn't touch step back (comp d). */
+.keyboard[data-previewing="true"] button.cap:not([data-pending="true"]):not([data-home="true"]) {
+  opacity: 0.45;
+  transition: opacity 0.25s ease;
+}

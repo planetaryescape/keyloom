@@ -109,8 +109,12 @@ interface KeyboardProps {
   shiftPx?: number;
   /** The halves part for the key card: which hand slides, and by how far in px (BK: "halves part only when needed"). */
   part?: { hand: "left" | "right"; px: number } | null;
+  /** A proposal is on the board: keys it doesn't touch step back, so the change is what's seen (comp d). */
+  previewing?: boolean;
   /** The board's scale about its centre, below 1 while a parted board would otherwise run off the stage. */
   scale?: number;
+  /** Told the board's height at its smallest unit, padding included, so what shares its column can give way first. */
+  onMinHeight?: (px: number) => void;
 }
 
 function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined, remembered = false): string {
@@ -171,6 +175,8 @@ export function Keyboard({
   shiftPx = 0,
   part = null,
   scale = 1,
+  previewing = false,
+  onMinHeight,
 }: KeyboardProps) {
   const handOf = useMemo(() => {
     const map = new Map<number, "left" | "right">();
@@ -195,6 +201,12 @@ export function Keyboard({
   const maxY = Math.max(bounds.minY + bounds.height + MARGIN, (drawnCase?.maxY ?? -Infinity) + CASE_MARGIN);
   const canvas: Bounds = { minX, minY, width: maxX - minX, height: maxY - minY };
   const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null || onMinHeight === undefined) return;
+    const style = getComputedStyle(element);
+    onMinHeight(Math.ceil(canvas.height * minUnit() + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)));
+  }, [canvas.height, onMinHeight, ref]);
   // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
   // the size it is drawn, so the 11 px floor still holds (P2 review).
   // Never below a fingertip's 44 px for a parting (or below the unit the window already gave): smaller keys take the 10 px floor, and
@@ -274,6 +286,7 @@ export function Keyboard({
       <div
         className="keyboard"
         data-inspect={inspect}
+        data-previewing={previewing}
         data-surface={display?.surface ?? "slab"}
         role="group"
         aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}

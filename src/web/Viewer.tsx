@@ -129,6 +129,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [undoing, setUndoing] = useState(false);
   // The chat drawer. Open, a click on a key adds it to the "Asking about" chips; closed, it opens the key's panel (D-099).
   const [chatOpen, setChatOpen] = useState(false);
+  // The board's height at its smallest unit, so the command bar gives way before the board would have to scroll (P3).
+  const [boardNeed, setBoardNeed] = useState(0);
   // The keys in the chips, on one layer, and the proposal being previewed (hovered or pinned).
   const [chatSelection, setChatSelection] = useState<ChatSelection | null>(null);
   const [hoveredProposal, setHoveredProposal] = useState<ProposalCard | null>(null);
@@ -424,6 +426,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const frame = window.requestAnimationFrame(() => keyboard.current?.scrollKeyIntoView(editing.position));
     return () => window.cancelAnimationFrame(frame);
   }, [editing?.position, editing?.layerId, narrow, mode, sheet, shownHalf]);
+
+  // In a short window the open command bar leaves the board less than its smallest size, so it scrolls in its row; a previewed change
+  // brings its first changed key into view, since the change on the caps is what the preview is for (P3).
+  const firstChanged = useMemo(() => [...marks].find(([, mark]) => mark === "changed")?.[0] ?? null, [marks]);
+  useEffect(() => {
+    if (firstChanged === null || !chatOpen) return;
+    const frame = window.requestAnimationFrame(() => keyboard.current?.scrollKeyIntoView(firstChanged));
+    return () => window.cancelAnimationFrame(frame);
+  }, [firstChanged, chatOpen]);
 
   const editingHere = editing !== null && layer !== undefined && editing.layerId === layer.id;
 
@@ -1008,6 +1019,45 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The sheet's height is also the room the board keeps below it, so a key opened under it can be scrolled up (18#phones).
   const workbenchStyle = { "--sheet-h": `${sheetHeight(sheet, viewportHeight)}px` } as CSSProperties;
   const chips = chatSelection?.positions.length ?? 0;
+  // The chat: the command bar at the stage's foot on a wide screen (23#chrome-recedes, P3), the bottom sheet on a narrow one. It stays
+  // mounted while closed, so a reply that is streaming survives closing the bar.
+  const chatContent = (
+            <>
+              {reminders.length === 0 ? null : (
+                <section className="card remembered-card" aria-label="Remembered reasons">
+                  <Reminders reminders={reminders} layout={layout} />
+                </section>
+              )}
+              {chips === 0 || lastChange === null ? null : (
+                <div className="repeat-strip">
+                  <button type="button" className="button" onClick={() => { setChatOpen(false); setRepeating(true); }}>
+                    <Repeat2 size={14} aria-hidden="true" />
+                    Repeat my last change on {chips} {chips === 1 ? "key" : "keys"}
+                  </button>
+                </div>
+              )}
+              <ChatPanel
+                variant={narrow ? "panel" : "bar"}
+                onClose={() => setChatOpen(false)}
+                token={token}
+                layoutRef={layoutRef}
+                layout={layout}
+                board={board}
+                revisionId={revision.id}
+                onHighlightDecision={setDecisionFocus}
+                selection={chatSelection}
+                onRemoveKey={removeChatKey}
+                onOpenKey={openKeyFromChip}
+                onClearSelection={() => setChatSelection(null)}
+                onRestoreSelection={(restored) => setChatSelection((current) => current ?? restored)}
+                pinnedId={pinnedProposal?.changeSetId ?? null}
+                onPreview={setHoveredProposal}
+                onPin={pinProposal}
+                onApplied={onProposalApplied}
+                onOpenRelease={onOpenRelease}
+              />
+            </>
+  );
   // The combo being made or edited, as a card: beside its keys on a wide screen, the bottom sheet on a narrow one.
   const comboCard = comboDraft === null ? null : (
               <ComboEditor
@@ -1162,8 +1212,16 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           release: chrome.release,
         }}
       />
-      <div className="workbench" data-side={mode === "summary" || (!narrow && (mode === "key" || (mode === "combo" && comboDraft !== null))) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
-        <section ref={stageRef} className="stage" aria-label="Layout" data-placing={placing !== null} data-card={!narrow && editing !== null}>
+      <div className="workbench" data-side={mode === "summary" || (!narrow && (mode === "key" || mode === "chat" || (mode === "combo" && comboDraft !== null))) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} style={workbenchStyle}>
+        <section
+          ref={stageRef}
+          className="stage"
+          aria-label="Layout"
+          data-placing={placing !== null}
+          data-card={!narrow && editing !== null}
+          data-bar={!narrow && chatOpen ? "open" : undefined}
+          style={{ "--board-need": `${boardNeed}px` } as CSSProperties}
+        >
           <Caption
             layoutMenu={<LayoutMenu layouts={chrome.layouts} selectedId={chrome.selectedId} onSelect={chrome.onSelect} onImport={chrome.onImport} />}
             layerId={layer.id}
@@ -1190,6 +1248,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           />
           <Keyboard
             handle={keyboard}
+            onMinHeight={setBoardNeed}
             keys={keys}
             keycaps={board.display?.keycaps}
             hands={board.hands}
@@ -1232,8 +1291,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             rippleFrom={rippleFrom}
             inspect={inspect}
             found={found}
+            previewing={preview !== null}
           />
-          <div className="stage-floor">
+          {narrow ? null : (
+            <div className="command-bar" hidden={!chatOpen} data-open={chatOpen}>
+              {chatContent}
+            </div>
+          )}
+          <div className="stage-floor" hidden={!narrow && chatOpen}>
             {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
             <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
             <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>
@@ -1255,7 +1320,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             </button>
           </div>
           <div className="stage-notes">
-            {preview !== null && proposal !== null ? (
+            {/* On a wide screen the bar itself says what is previewed; the banner is for the narrow sheet. */}
+            {preview !== null && proposal !== null && narrow ? (
               <PreviewBanner
                 title={proposal.title}
                 layerName={layerName(layout, preview.layerId)}
@@ -1296,7 +1362,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ) : null}
         </section>
         <SidePanel
-          mode={!narrow && (mode === "key" || (mode === "combo" && comboDraft !== null)) ? "summary" : mode}
+          mode={!narrow && (mode === "key" || mode === "chat" || (mode === "combo" && comboDraft !== null)) ? "summary" : mode}
           size={sheet}
           viewportHeight={viewportHeight}
           onSize={setSheet}
@@ -1372,41 +1438,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           key_={
             narrow ? keyCard : null
           }
-          chat={
-            <>
-              {reminders.length === 0 ? null : (
-                <section className="card remembered-card" aria-label="Remembered reasons">
-                  <Reminders reminders={reminders} layout={layout} />
-                </section>
-              )}
-              {chips === 0 || lastChange === null ? null : (
-                <div className="repeat-strip">
-                  <button type="button" className="button" onClick={() => { setChatOpen(false); setRepeating(true); }}>
-                    <Repeat2 size={14} aria-hidden="true" />
-                    Repeat my last change on {chips} {chips === 1 ? "key" : "keys"}
-                  </button>
-                </div>
-              )}
-              <ChatPanel
-                token={token}
-                layoutRef={layoutRef}
-                layout={layout}
-                board={board}
-                revisionId={revision.id}
-                onHighlightDecision={setDecisionFocus}
-                selection={chatSelection}
-                onRemoveKey={removeChatKey}
-                onOpenKey={openKeyFromChip}
-                onClearSelection={() => setChatSelection(null)}
-                onRestoreSelection={(restored) => setChatSelection((current) => current ?? restored)}
-                pinnedId={pinnedProposal?.changeSetId ?? null}
-                onPreview={setHoveredProposal}
-                onPin={pinProposal}
-                onApplied={onProposalApplied}
-                onOpenRelease={onOpenRelease}
-              />
-            </>
-          }
+          chat={narrow ? chatContent : null}
           repeat={
             repeating && chatSelection !== null && lastChange !== null ? (
               <div className="repeat-pane">

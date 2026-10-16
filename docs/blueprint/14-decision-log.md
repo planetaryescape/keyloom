@@ -1035,6 +1035,12 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 - Long caps turned past 32° print upright in the widest upright box that fits inside the cap, so the Moonlander's thumb legends stay on their caps.
 - **Amends** D-266: a board's `display.case` wins over the computed case.
 
+### D-278: ⌘K opens the chat as a command bar at the stage's foot, and its proposals preview on the caps. (P3, Claude)
+- The bar takes the strip's row on a wide screen; the board above it stays in view. The newest open proposal is pinned at once, so it shows on the caps (changed keys amber, the rest stepped back, arrows to where displaced functions go). Alternatives are tabs that switch the preview; a compact card gives the why, the diff, the moves, the trade-off and what keyloom will remember, with Not this and Apply in a sticky foot. Apply presses the key (D-268). Conversations, decisions and the provider picker live in the bar's head. A narrow screen keeps the chat sheet until P5.
+- The board keeps the height it needs at its smallest unit and the bar takes what is left, scrolling inside. Below about 300 px for the bar and the caption, the bar keeps that room and the board scrolls in its row to the first changed key.
+- With no credential for the chosen provider, the bar offers each ready provider in one click. A reply that stops says why: "Out of credits", "The key was refused", "The model is busy" or "The reply stopped", always "Nothing was changed". An account failure offers "Switch to" each other ready provider, which starts a new conversation with the message back in the box, since a conversation keeps its provider.
+- Moves in a proposal name functions in words ("Backspace", not BSPC) and layers as the caption does ("Default layer", not default_layer), extending D-270 and D-276.
+
 ## Typing lab (2026-10-16)
 
 ### D-280: An explicit, opt-in typing session records physical key events so keyloom can tune timings from evidence. (BK. Replaces D-035 for sessions BK starts)

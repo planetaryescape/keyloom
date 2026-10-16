@@ -1,4 +1,4 @@
-import { MessagesSquare, ScrollText, SquarePen } from "lucide-react";
+import { MessagesSquare, ScrollText, SquarePen, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatSelection, ProposalCard } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
@@ -12,13 +12,21 @@ import { Composer, type SelectedKeys } from "./Composer.tsx";
 import { ConversationList } from "./ConversationList.tsx";
 import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
 import { ProviderPicker } from "./ProviderPicker.tsx";
+import { chooseProvider } from "./api-chat.ts";
+
+const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" } as const;
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
 import { useChat } from "./useChat.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
 import "./chat.css";
+import "./command-bar.css";
 
 interface Props {
+  /** "bar" is the command bar at the stage's foot (P3); "panel" the bottom sheet on a narrow screen. */
+  variant?: "bar" | "panel";
+  /** Closes the bar (Esc does too). */
+  onClose?: () => void;
   token: string;
   layoutRef: string;
   layout: Layout;
@@ -47,7 +55,7 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
+export function ChatPanel({ variant = "panel", onClose, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
@@ -109,6 +117,19 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
     wasStreaming.current = streaming;
   }, [streaming]);
 
+  // In the bar, a reply with options shows the first one on the board at once; the tabs switch between them (comp d).
+  const newest = transcript.turns.at(-1);
+  const newestOpen = newest?.kind === "assistant" && newest.phase === "done" ? newest.proposals.filter((proposal) => proposal.status === "proposed") : [];
+  const newestKey = newestOpen.map((proposal) => proposal.changeSetId).join(",");
+  useEffect(() => {
+    if (variant !== "bar" || newestOpen.length === 0) return;
+    if (newestOpen.some((proposal) => proposal.changeSetId === pinnedId)) return;
+    const first = newestOpen[0];
+    if (first !== undefined) onPin(first);
+    // Only when a new set of options arrives; the person's own choice of tab is not overridden.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant, newestKey]);
+
   const apply = useCallback(
     async (proposal: ProposalCard) => {
       const result = await applyChangeSet(token, proposal.changeSetId);
@@ -136,10 +157,52 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
   const activeReady = status?.active != null && status.providers.some((p) => p.id === status.active?.provider && p.ready);
   const needsModel = status !== null && transcript.pinned === null && !activeReady;
   const retryDraft = draft.trim() === "" ? undefined : () => send(draft);
+  // A conversation keeps its provider, so switching after an account failure starts a new one with the failed message back in the box.
+  const usedProvider = transcript.pinned?.provider ?? status?.active?.provider;
+  const readyOthers = (status?.providers ?? []).filter((p) => p.ready && p.id !== usedProvider).map((p) => ({ id: p.id, name: PROVIDER_NAMES[p.id] }));
+  const switchProvider = (id: string) => {
+    const lastAsked = transcript.turns.findLast((turn) => turn.kind === "user");
+    void chooseProvider(token, { provider: id as keyof typeof PROVIDER_NAMES }).then((next) => {
+      provider.replace(next);
+      chat.newConversation();
+      setView("chat");
+      setDraft(lastAsked?.kind === "user" ? lastAsked.text : "");
+      input.current?.focus();
+    }, () => {});
+  };
 
   return (
-    <section className="chat" aria-label="Chat with keyloom">
-      <header className="chat-head">
+    <section className="chat" data-variant={variant} aria-label="Ask keyloom">
+      {variant === "bar" ? (
+        <header className="bar-head">
+          <h2>Ask keyloom</h2>
+          <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} />
+          <span className="bar-head-gap" />
+          <button
+            type="button"
+            className="bar-link"
+            disabled={empty && !streaming}
+            onClick={() => {
+              chat.newConversation();
+              setView("chat");
+              setDraft("");
+              input.current?.focus();
+            }}
+          >
+            New
+          </button>
+          <button type="button" className="bar-link" aria-pressed={view === "history"} onClick={() => (view === "history" ? setView("chat") : showHistory())}>
+            Conversations
+          </button>
+          <button type="button" className="bar-link" aria-pressed={view === "decisions"} onClick={() => setView(view === "decisions" ? "chat" : "decisions")}>
+            Decisions
+          </button>
+          <button type="button" className="bar-close" aria-label="Close (Esc)" title="Close (Esc)" onClick={onClose}>
+            <X size={15} aria-hidden="true" />
+          </button>
+        </header>
+      ) : null}
+      <header className="chat-head" hidden={variant === "bar"}>
         <h2>Chat</h2>
         <button
           type="button"
@@ -167,7 +230,7 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
         </div>
       </header>
 
-      {view === "chat" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} /> : null}
+      {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} /> : null}
 
       {view === "decisions" ? (
         <DecisionsView
@@ -214,7 +277,29 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
               stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
             }}
           >
-            {needsModel && chat.problem === null ? (
+            {needsModel && chat.problem === null && variant === "bar" && status.providers.some((candidate) => candidate.ready) ? (
+              // In the bar, a provider that is ready is one click away; setting up the chosen one is the fallback (comp d2).
+              <div className="bar-needs-model">
+                <p>
+                  <b>{PROVIDER_NAMES[status.active?.provider ?? "anthropic"]} isn&apos;t set up.</b> Use one that is ready, or set it up and restart keyloom.
+                </p>
+                <div className="bar-ready">
+                  {status.providers
+                    .filter((candidate) => candidate.ready)
+                    .map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        className="bar-ready-choice"
+                        onClick={() => void chooseProvider(token, { provider: candidate.id }).then(provider.replace, () => {})}
+                      >
+                        Use {PROVIDER_NAMES[candidate.id]}
+                        <span>{candidate.defaultModel}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ) : needsModel && chat.problem === null ? (
               <MissingKey providers={status.providers} onRetry={provider.reload} retryLabel="Check again" />
             ) : empty && chat.problem === null ? (
               <EmptyChat
@@ -241,6 +326,9 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
                     onAskAgain={() => send(ASK_AGAIN)}
                     onOpenRelease={onOpenRelease}
                     onRetry={() => void chat.retry()}
+                    switchTo={readyOthers}
+                    onSwitch={switchProvider}
+                    compact={variant === "bar"}
                   />
                 ),
               )
@@ -258,7 +346,7 @@ export function ChatPanel({ token, layoutRef, layout, board, revisionId, onHighl
             {...(onOpenKey === undefined ? {} : { onOpenKey })}
             onClearSelection={onClearSelection}
             inputRef={input}
-            blockedReason={needsModel ? "Set up a model above before sending a message." : null}
+            blockedReason={needsModel ? (variant === "bar" ? null : "Set up a model above before sending a message.") : null}
           />
         </>
       )}
