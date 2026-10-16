@@ -353,9 +353,15 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
 
 async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: string, artifact: string, opts: FlashOptions): Promise<void> {
   const log = new LogSink(absolute(app, row.logPath));
+  // States are told in order and the last one before the flash task ends: each view reads the log, so unchained reads can land
+  // out of order ("writing" after "succeeded") or after a caller already has the result.
+  let told: Promise<void> = Promise.resolve();
   const notify = () => {
     const current = findFlash(app.db, row.id);
-    if (current && opts.onState) void toFlashView(app, current).then(opts.onState);
+    const onState = opts.onState;
+    if (!current || !onState) return;
+    const view = toFlashView(app, current);
+    told = told.then(() => view).then(onState).catch(() => undefined);
   };
   try {
     log.line(`keyloom: flash ${row.id} of build ${row.buildId}`);
@@ -385,6 +391,7 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
     flashInstructions.delete(row.id);
     log.close();
     notify();
+    await told;
   }
 }
 
