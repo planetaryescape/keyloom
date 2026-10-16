@@ -2,6 +2,8 @@
 import { basename, dirname, resolve } from "node:path";
 import { type GeometryOptions, generateGeometry, serializeGeometry } from "./geometry.ts";
 import { type Board, loadBoardDir } from "./load.ts";
+import { mirrorProblems } from "./mirror.ts";
+import { isOnePiece } from "./one-piece.ts";
 import type { BoardDefinition, BoardRevision } from "./schema.ts";
 
 export type CheckIssue = { level: "error" | "warning"; message: string };
@@ -120,22 +122,14 @@ function checkFacts(board: Board, dir: string, issues: CheckIssue[]): void {
 
   checkPartition("rows", def.keyCount, Object.entries(def.rows), issues);
 
-  const left = new Set(def.hands.left);
-  const right = new Set(def.hands.right);
-  const targets = new Set<number>();
-  for (const [from, to] of Object.entries(def.mirror)) {
-    const f = Number(from);
-    if (!left.has(f)) err(`mirror source ${from} is not a left-hand position`);
-    if (!right.has(to)) err(`mirror target ${to} (from ${from}) is not a right-hand position`);
-    if (targets.has(to)) err(`mirror target ${to} is used twice`);
-    targets.add(to);
-  }
+  for (const problem of mirrorProblems(def)) err(problem);
   // A display override that points past the geometry would otherwise only fail when someone opens the editor.
   const drawn = [...(def.display?.rotate ?? []).flatMap((r) => r.positions), ...(def.display?.shift ?? []).flatMap((r) => r.positions), ...Object.keys(def.display?.keycaps ?? {}).map(Number), ...Object.keys(def.display?.keyShapes ?? {}).map(Number)];
   for (const p of drawn) if (p >= def.keyCount) err(`display refers to position ${p}, but keyCount is ${def.keyCount}`);
-  // A staggered laptop keyboard has no mirror image, so a software board may leave the map empty (21).
+  // A staggered laptop keyboard has no mirror image, so a software board may leave the map empty (21); so may any one-piece board (D-350).
+  const emptyOnOnePiece = Object.keys(def.mirror).length === 0 && isOnePiece(def, geometry.keys);
   if (def.firmware !== "kanata") {
-    for (const p of def.hands.left) {
+    if (!emptyOnOnePiece) for (const p of def.hands.left) {
       if (!(String(p) in def.mirror)) issues.push({ level: "warning", message: `left position ${p} has no mirror entry` });
     }
   } else if (Object.keys(def.mirror).length > 0) {

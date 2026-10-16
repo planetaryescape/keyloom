@@ -116,7 +116,10 @@ Fill in these four fields. Every position from 0 to `keyCount - 1` must appear e
 - `hands` has `left` and `right`, each a list of positions.
 - `fingers` maps every position to a name. Use `left-pinky`, `left-ring`, `left-middle`, `left-index`, `left-thumb`, and the same with `right-`. Give each key to the finger that normally presses it. On a column-staggered split, the index finger usually takes the two inner columns, and on a 6-column board the pinky takes the two outer columns.
 - `rows` maps a row name to its positions. Use names like `number`, `top`, `home`, `bottom`, `thumb`.
-- `mirror` maps each left-hand position to the right-hand key at the mirrored spot: same row, same distance from the outer edge. Thumb keys pair the same way, outermost with outermost and innermost with innermost. It lets keyloom answer "do that on the other hand too". Every left position needs an entry, or `boards check` warns.
+- `mirror` maps a left-hand position to the right-hand key at the mirrored spot. It lets keyloom answer "do that on the other hand too", such as copying home-row mods across. Each pair is on one row (the same name in `rows`) and under the same finger, and each right-hand key is the target of one entry at most. On a split board with halves of the same size, pair every key: same row, same distance from the outer edge. The tests then check that the pairs are mirror images in the drawing.
+  - Uneven thumb clusters (five thumb keys on the left, three on the right): pair the thumb keys that sit in the same place under the thumb, such as the key the thumb rests on with its opposite, and leave the extra keys out. Don't pair a key with one that is somewhere else just to fill the map.
+  - A one-piece board (a 60%, a laptop): pair each key with the one the same finger presses on the same row, counting out from the touch-typing line (F with J, D with K, and so on). Leave out keys with no opposite, such as a spacebar or the extra keys at the right end of a row. You may also leave `mirror` empty; `boards check` then doesn't warn.
+  - `boards check` warns about each left key without a partner on a split board. A warning for a key that has no opposite is expected.
 
 The overlay keeps going without a `board.json`, so you can open it before step 2 is done.
 
@@ -309,7 +312,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `hands.right` | all | The right hand's positions. |
 | `fingers` | all | An object from every position number, as a string, to a finger name such as `left-index`. |
 | `rows` | all | An object from a row name to its positions. Every position is in exactly one row. |
-| `mirror` | all | An object from each left-hand position to the right-hand position it mirrors to. |
+| `mirror` | all | An object from a left-hand position to the right-hand position it mirrors to, on the same row and under the same finger. Each target once. Keys with no opposite are left out. |
 | `physicalKeys` | `kanata-config`, optional | The key each position is on the device, in binding order: KeyCode names, plus `FN` for the Apple fn/globe key. A software remapper grabs keys by name. |
 | `holdKeyPreference` | optional | Positions where a layer or hold key lands first when the board it came from had more thumb keys, best first. |
 | `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
@@ -356,11 +359,11 @@ It fails when:
 - The `id` differs from the folder path.
 - `keyCount` differs from the number of keys in `geometry.json`.
 - A position is missing from `hands`, `fingers` or `rows`, or appears twice.
-- A `mirror` entry points the wrong way: its source must be a left key and its target a right key.
+- A `mirror` entry points the wrong way (its source must be a left key and its target a right key), uses a target that another entry already uses, or pairs keys on different rows or under different fingers.
 - The recipes don't fit the firmware, or the flash steps and build targets don't line up.
 - `geometry.json` differs from what the pinned firmware file generates. Run `keyloom boards geometry` again.
 
-It warns when a left-hand key has no mirror entry, or when `SKILL.md` is past 400 lines.
+It warns when a left-hand key of a split board has no mirror entry, or when `SKILL.md` is past 400 lines. A one-piece board with an empty `mirror` gets no mirror warnings.
 
 CI runs it on every board in `boards/`. It checks the format. It can't check that your board builds or flashes. You do that in step 6.
 
