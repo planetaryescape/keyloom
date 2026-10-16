@@ -7,25 +7,32 @@
   isolation: isolate;
 }
 
-/* The soft shadow where the board meets the backdrop. */
+/* The soft shadow where the board meets the backdrop; inside the board's box, so it never makes the row scroll. */
 .keyboard-contact {
   position: absolute;
   z-index: -2;
-  inset: 30% 4% -6% 4%;
+  inset: 34% 4% 0 4%;
   border-radius: 50%;
   background: radial-gradient(closest-side, var(--case-shadow), transparent);
   filter: blur(24px);
   pointer-events: none;
 }
 
-/* The layer's light under the board. Two of them cross-fade when the layer changes (D-263). */
+/* The layer's light under the board, filling the board's row. Two of them cross-fade when the layer changes (D-263). */
+.keyboard-well {
+  position: relative;
+  isolation: isolate;
+}
+
+.keyboard-well > .keyboard {
+  z-index: 1;
+}
+
 .keyboard-glow {
   position: absolute;
-  z-index: -1;
-  inset: -10% -14% -26% -14%;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, var(--glow-colour), transparent 78%);
-  filter: blur(48px);
+  z-index: 0;
+  inset: 0;
+  background: radial-gradient(42% 52% at 50% 56%, var(--glow-colour), transparent 100%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.5s ease;

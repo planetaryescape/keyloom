@@ -13,23 +13,29 @@ const WORDS: Readonly<Record<string, readonly string[]>> = {
   "◆": ["◆ meh", "meh"],
 };
 
-/** The widest front print with a symbol: if it fits a 1u cap, every cap on the board prints symbol and word; if not, none does. */
+/** The widest front print with a symbol, and the widest word alone. */
 export const WIDEST_WITH_SYMBOL = "⌘ command";
+export const WIDEST_WORD = "command";
+
+/** How a board's caps print a held modifier on the front: symbol and word, the word, or the symbol alone. One mode for every cap. */
+export type FrontMode = "both" | "word" | "mark";
 
 /**
- * Whether front prints carry their symbol on this board (P1 review): one answer for every cap, so a row never mixes "⌥ option" with
- * "command". `measured` is the widest print's real width in px, when the browser could measure it; otherwise fit.ts's estimate decides.
+ * The mode for a board (P1 review): the fullest print whose widest case fits a 1u cap's front, measured in the loaded font. On a small
+ * cap (a short window with a mouse) even the word may not fit; then every cap prints the symbol alone rather than a cut-off word.
+ * `measured` is null when the browser couldn't measure; then fit.ts's estimate decides, erring toward shorter prints.
  */
-export function frontSymbols(unit: number, measured: number | null, gapUnits: number, floorPx = LEGEND_FLOOR_PX): boolean {
+export function frontMode(unit: number, measured: { both: number; word: number } | null, gapUnits: number, floorPx = LEGEND_FLOOR_PX): FrontMode {
   const room = (1 - gapUnits) * unit;
-  if (measured !== null) return measured <= room;
+  if (measured !== null) return measured.both <= room ? "both" : measured.word <= room ? "word" : "mark";
   const size = Math.max(HOLD_SIZE.min, floorPx / unit);
-  return textEm(WIDEST_WITH_SYMBOL) * CONDENSED_EM * size <= 1 - CAP_INSET;
+  const fits = (text: string) => textEm(text) * CONDENSED_EM * size <= 1 - CAP_INSET;
+  return fits(WIDEST_WITH_SYMBOL) ? "both" : fits(WIDEST_WORD) ? "word" : "mark";
 }
 
-/** The front print for a hold: a lone modifier spelled out, with its symbol when the board's caps carry symbols. */
-export function frontWords(hold: string, withSymbol: boolean): string {
+/** The front print for a hold: a lone modifier as the board's mode says. Anything else is printed as it is. */
+export function frontWords(hold: string, mode: FrontMode): string {
   const words = WORDS[hold];
   if (words === undefined) return hold;
-  return (withSymbol ? words[0] : words[1]) ?? hold;
+  return mode === "both" ? (words[0] ?? hold) : mode === "word" ? (words[1] ?? hold) : hold;
 }

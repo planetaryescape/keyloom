@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { layerLight, reachedLayer, reachKey } from "../../src/web/light/layer-light.ts";
 import { reachWords } from "../../src/web/light/reach-words.ts";
-import { frontSymbols, frontWords } from "../../src/web/keyboard/front-words.ts";
+import { frontMode, frontWords } from "../../src/web/keyboard/front-words.ts";
 import type { Binding, Layer } from "../../src/layout/schema.ts";
 
 const layer = (id: string, bindings: Binding[], extra: Partial<Layer> = {}): Layer => ({ id, name: id, bindings, ...extra });
@@ -55,25 +55,28 @@ describe("which key reaches a layer", () => {
 
 describe("front print words (D-267, P1 review)", () => {
   test("a lone modifier is spelled out, with its symbol when the board's caps carry symbols and as the word alone when not", () => {
-    expect(frontWords("⌥", true)).toBe("⌥ option");
-    expect(frontWords("⌘", true)).toBe("⌘ command");
-    expect(frontWords("✦", true)).toBe("✦ hyper");
-    expect(frontWords("⌘", false)).toBe("command");
-    expect(frontWords("⌃", false)).toBe("control");
+    expect(frontWords("⌥", "both")).toBe("⌥ option");
+    expect(frontWords("⌘", "both")).toBe("⌘ command");
+    expect(frontWords("✦", "both")).toBe("✦ hyper");
+    expect(frontWords("⌘", "word")).toBe("command");
+    expect(frontWords("⌃", "word")).toBe("control");
+    expect(frontWords("⌘", "mark")).toBe("⌘");
   });
 
   test("anything else is printed as it is", () => {
-    expect(frontWords("⇧⌘", true)).toBe("⇧⌘");
-    expect(frontWords("NAV", false)).toBe("NAV");
+    expect(frontWords("⇧⌘", "both")).toBe("⇧⌘");
+    expect(frontWords("NAV", "word")).toBe("NAV");
   });
 
   test("one choice for the whole board: symbols when the widest print fits a 1u cap's front, measured", () => {
     // Measured in Instrument Sans at 11 px, 75% width: "⌘ command" is 50.5 px. A Moonlander cap at 57 px has 51.9 px of front.
-    expect(frontSymbols(57, 50.5, 0.09)).toBe(true);
-    expect(frontSymbols(49, 50.5, 0.09)).toBe(false);
+    expect(frontMode(57, { both: 50.5, word: 38.8 }, 0.09)).toBe("both");
+    expect(frontMode(49, { both: 50.5, word: 38.8 }, 0.09)).toBe("word");
+    // BK's 1280x577 window with a mouse: 38 px keys, where even "command" (35 px at 10 px) doesn't fit 34.6 px.
+    expect(frontMode(38, { both: 45.9, word: 35.3 }, 0.09)).toBe("mark");
   });
 
   test("without a measurement the estimate decides, and it errs toward the word alone", () => {
-    expect(frontSymbols(49, null, 0.09)).toBe(false);
+    expect(frontMode(49, null, 0.09)).not.toBe("both");
   });
 });

@@ -4,7 +4,7 @@ import { useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type 
 import type { Legend } from "../../layout/legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
 import { fitLegend, HOLD_SIZE, isCondensed, tapRange } from "./fit.ts";
-import { frontWords } from "./front-words.ts";
+import { frontWords, type FrontMode } from "./front-words.ts";
 
 export type Tone = Legend["kind"];
 type CapLegend = Pick<Legend, "tap" | "hold" | "double" | "tapHold">;
@@ -32,8 +32,8 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   outgoing?: CapLegend | null;
   /** When this key's legend and light change after a layer switch, in ms, so the change ripples from the key that holds the layer. */
   rippleMs?: number;
-  /** Whether the front print carries its modifier's symbol ("⌥ option") or the word alone: one choice for the whole board. */
-  frontSymbols?: boolean;
+  /** How a held modifier is printed on the front ("⌥ option", "option" or "⌥"): one choice for the whole board. */
+  frontMode?: FrontMode;
   /** Change counter for the press: each new value presses the key down once (D-268). */
   pressed?: number;
   /** The draft mark: this key's change is not applied yet. */
@@ -53,7 +53,7 @@ const withSpaceMark = (text: string): ReactNode[] =>
   text.split("␣").flatMap((part, i) => (i === 0 ? [part] : [<span key={i} className="spc" aria-hidden="true" />, part]));
 
 /** The printing on one cap: the tap on the top face, the hold (or a tap dance's double tap) printed on the front skirt. */
-function Print({ legend, unit, width, floorPx, reach, breakable, symbols, className }: { legend: CapLegend; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; symbols: boolean; className: string }) {
+function Print({ legend, unit, width, floorPx, reach, breakable, symbols, className }: { legend: CapLegend; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; symbols: FrontMode; className: string }) {
   const floor = floorPx === undefined ? {} : { floor: floorPx };
   const tap = fitLegend(legend.tap, width, tapRange(legend.tap), { unit, ...floor }, isCondensed(legend.tap));
   const holdText = legend.hold === undefined ? null : frontWords(legend.hold, symbols);
@@ -61,7 +61,12 @@ function Print({ legend, unit, width, floorPx, reach, breakable, symbols, classN
   // The front carries the hold; a tap dance with no hold prints its double tap there instead, and with a hold, in the top corner.
   const front = holdText ?? doubleText;
   const corner = holdText !== null && doubleText !== null ? doubleText : null;
-  const frontSize = front === null ? 0 : fitLegend(front, width, HOLD_SIZE, { unit, ...floor }, true).size;
+  // The layer dot takes about 0.12u beside the words. When the words and the dot don't both fit, the dot goes: the name already says
+  // which layer, and a cut-off word says nothing (hotfix v0.22.1).
+  const DOT_UNITS = 0.12;
+  const withDot = front === null || reach === undefined ? null : fitLegend(front, width - DOT_UNITS, HOLD_SIZE, { unit, ...floor }, true);
+  const showDot = withDot !== null && withDot.fits;
+  const frontSize = front === null ? 0 : (showDot && withDot !== null ? withDot : fitLegend(front, width, HOLD_SIZE, { unit, ...floor }, true)).size;
   const stretch = isCondensed(legend.tap) ? "condensed" : undefined;
   return (
     <span className={className}>
@@ -76,7 +81,7 @@ function Print({ legend, unit, width, floorPx, reach, breakable, symbols, classN
       </span>
       {front === null ? null : (
         <span className="cap-front" style={{ fontSize: frontSize * unit }}>
-          {reach === undefined ? null : <i className="cap-dot" data-unlit={reach === null} style={reach === null ? undefined : ({ "--dot": reach } as CSSProperties)} />}
+          {reach === undefined || !showDot ? null : <i className="cap-dot" data-unlit={reach === null} style={reach === null ? undefined : ({ "--dot": reach } as CSSProperties)} />}
           {breakable ? breakAtSeams(front) : withSpaceMark(front)}
         </span>
       )}
@@ -89,7 +94,7 @@ function Print({ legend, unit, width, floorPx, reach, breakable, symbols, classN
 // draft and remembered marks are each their own element so they can show together.
 export function Cap({
   tone, legend, unit, floorPx, width, as = "button", legendTurn, keycap, led, reach, outgoing = null,
-  rippleMs = 0, frontSymbols = true, pressed, pending = false, remembered = false, breakable = false, style, ...rest
+  rippleMs = 0, frontMode = "both", pressed, pending = false, remembered = false, breakable = false, style, ...rest
 }: CapProps) {
   const body = useRef<HTMLSpanElement>(null);
   const last = useRef(pressed);
@@ -105,7 +110,7 @@ export function Cap({
 
   const turn = legendTurn === undefined ? undefined : ({ "--turn": `${legendTurn}deg` } as CSSProperties);
   const print = (value: CapLegend, className: string) => (
-    <Print legend={value} unit={unit} width={width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontSymbols} className={className} />
+    <Print legend={value} unit={unit} width={width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontMode} className={className} />
   );
   const selected = rest["aria-pressed"] === true;
   const children = (

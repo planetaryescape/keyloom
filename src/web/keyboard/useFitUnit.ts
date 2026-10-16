@@ -4,7 +4,10 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 // rather than shrinking caps past what a fingertip or a legend can use (18: caps are 44 px or more).
 // Above the maximum a small board (a Corne, a laptop) would fill the stage with oversized caps; every board stays about the size of a
 // real one on a laptop screen (D-271).
-const MIN_UNIT = 44;
+// 44 px is a fingertip; a mouse can hit smaller keys, so a short window with a mouse lets the board shrink further before it has to
+// scroll (hotfix v0.22.1: BK's 1280x577 window).
+const MIN_UNIT_TOUCH = 44;
+const MIN_UNIT_MOUSE = 34;
 const MAX_UNIT = 58;
 
 interface FitInput {
@@ -42,7 +45,8 @@ export function useFitUnit({ width, height }: FitInput): {
 
   const byWidth = width > 0 ? available.width / width : MAX_UNIT;
   const byHeight = height > 0 && available.height > 0 ? available.height / height : MAX_UNIT;
-  const unit = Math.max(MIN_UNIT, Math.min(MAX_UNIT, byWidth, byHeight));
+  const coarse = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  const unit = Math.max(coarse ? MIN_UNIT_TOUCH : MIN_UNIT_MOUSE, Math.min(MAX_UNIT, byWidth, byHeight));
   const fitted = Math.floor(unit);
   return { ref, unit: fitted, overflowing: width * fitted > available.width + 1 };
 }

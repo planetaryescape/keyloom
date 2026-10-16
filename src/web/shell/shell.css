@@ -1389,3 +1389,107 @@
     display: none;
   }
 }
+
+/* ---------- the stage is three rows: caption, board, strip (hotfix, v0.22.1) ----------
+   The caption and the strip used to float over the stage, with padding reserving room for them. When the window was shorter than the
+   board at its smallest unit, the board ran under the strip. As rows, the board has exactly the space between them: it is sized to
+   fit that space, and when even its smallest size doesn't, it scrolls inside its row. Nothing can overlap the strip or the hint. */
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.stage > .caption {
+  position: relative;
+  top: auto;
+  left: auto;
+  grid-row: 1;
+  max-width: none;
+  padding: var(--space-5) var(--space-6) 0;
+}
+
+.stage > .keyboard-well {
+  grid-row: 2;
+  padding: var(--space-3) var(--space-6);
+}
+
+.stage > .stage-floor {
+  position: relative;
+  bottom: auto;
+  grid-row: 3;
+  padding-bottom: var(--space-5);
+}
+
+.toasts {
+  bottom: 140px;
+}
+
+/* Short windows: the caption and the strip give room back before the board gets small (BK's 1280x577 window). */
+@media (max-height: 760px) {
+  .stage > .caption {
+    padding-top: var(--space-3);
+  }
+
+  .caption-layer {
+    font-size: var(--text-2xl);
+  }
+
+  .caption-reach {
+    margin-top: 0;
+    font-size: var(--text-sm);
+  }
+
+  .stage > .stage-floor {
+    gap: var(--space-2);
+    padding-bottom: var(--space-3);
+  }
+
+  .stage-hint {
+    display: none;
+  }
+
+  .film-mini {
+    width: 84px;
+    height: 32px;
+  }
+
+  .layer-tabs .layer-tab {
+    min-width: 100px;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .toasts {
+    bottom: 104px;
+  }
+}
+
+@media (max-height: 620px) {
+  .caption-layout {
+    display: none;
+  }
+
+  .caption-layer {
+    font-size: var(--text-xl);
+  }
+
+  .film-mini {
+    width: 72px;
+    height: 26px;
+  }
+}
+
+@media (max-width: 600px) {
+  .stage > .caption {
+    padding: var(--space-2) var(--space-4) 0;
+  }
+
+  .stage > .keyboard-well {
+    padding: var(--space-3);
+  }
+
+  .stage > .stage-floor {
+    padding-bottom: var(--space-3);
+  }
+}

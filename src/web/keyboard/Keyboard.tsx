@@ -9,7 +9,7 @@ import { LEGEND_FLOOR_PX } from "./fit.ts";
 import { useKeyDrag } from "./useKeyDrag.ts";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { caseParts } from "./case-shape.ts";
-import { frontSymbols, WIDEST_WITH_SYMBOL } from "./front-words.ts";
+import { frontMode, WIDEST_WITH_SYMBOL, WIDEST_WORD } from "./front-words.ts";
 import { measureText } from "./measure.ts";
 import { boardBounds, keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
@@ -188,10 +188,14 @@ export function Keyboard({
       live = false;
     };
   }, []);
+  // A key under a fingertip's 44 px (a short window with a mouse) allows the phone's 10 px legend floor, so words aren't cut.
+  const legendFloor = unit < 44 ? PHONE_FLOOR_PX : floorPx;
   const symbols = useMemo(() => {
-    const px = Math.max(floorPx, unit * 0.15);
-    return frontSymbols(unit, fontsReady ? measureText(WIDEST_WITH_SYMBOL, `560 condensed ${px}px "Instrument Sans"`) : null, GAP, floorPx);
-  }, [unit, floorPx, fontsReady]);
+    const font = `560 condensed ${Math.max(legendFloor, unit * 0.15)}px "Instrument Sans"`;
+    const both = fontsReady ? measureText(WIDEST_WITH_SYMBOL, font) : null;
+    const word = fontsReady ? measureText(WIDEST_WORD, font) : null;
+    return frontMode(unit, both === null || word === null ? null : { both, word }, GAP, legendFloor);
+  }, [unit, legendFloor, fontsReady]);
   // Shift-, Cmd- or Ctrl-click adds a key to the selection. The focus that the press causes must not move the open panel to that key first.
   const extendNext = useRef(false);
   // A phone shows one hand, so a combo is drawn only when all its keys are on it.
@@ -238,6 +242,8 @@ export function Keyboard({
 
   return (
     <div ref={ref} className="keyboard-well" data-overflowing={overflowing} data-half={half ?? undefined} onPointerDown={swipeStart} onPointerUp={swipeEnd} onPointerCancel={() => { swipe.current = null; }}>
+      {/* The light is the row's background, not part of the board: a glow larger than the board would make the row scroll. */}
+      <Underglow light={light} />
       <div
         className="keyboard"
         data-inspect={inspect}
@@ -247,7 +253,6 @@ export function Keyboard({
         style={{ width: canvas.width * unit, height: canvas.height * unit }}
       >
         <span className="keyboard-contact" aria-hidden="true" />
-        <Underglow light={light} />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
           {parts.map((part, i) => (
             <path key={i} className={`case-${part.kind}`} d={part.d} />
@@ -276,14 +281,14 @@ export function Keyboard({
               {...(ledColors?.has(index) ? { led: ledColors.get(index) as string } : {})}
               {...(reach?.has(index) ? { reach: reach.get(index) ?? null } : {})}
               outgoing={outgoing?.[index] ?? null}
-              frontSymbols={symbols}
+              frontMode={symbols}
               rippleMs={delays?.[index] ?? 0}
               {...(appliedIndex === index ? { pressed: pressSeq } : {})}
               pending={pendingIndex === index || marks?.get(index) === "changed"}
               remembered={remembered?.has(index) ?? false}
               title={description.headline}
               unit={unit}
-              floorPx={floorPx}
+              floorPx={legendFloor}
               width={geometryKey.w}
               // The Moonlander's thumbs tilt a little and read fine; the Glove80's fan out to 60 degrees.
               {...(Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? { legendTurn: -rect.rotate } : {})}
