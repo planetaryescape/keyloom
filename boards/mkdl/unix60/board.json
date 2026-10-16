@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "id": "mkdl/unix60",
+  "name": "Unix60",
+  "vendor": "mkdl",
+  "firmware": "qmk",
+  "keyCount": 60,
+  "revisions": [
+    {
+      "id": "default",
+      "source": {
+        "repo": "https://github.com/qmk/qmk_firmware",
+        "ref": "master",
+        "sha": "180f394b489c238cb231c2bf8b080262155e03c0"
+      },
+      "qmkTarget": "fr4/unix60",
+      "build": {
+        "kind": "qmk-docker",
+        "image": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
+        "layoutMacro": "LAYOUT_60_hhkb",
+        "keymapsDir": "keyboards/fr4/unix60/keymaps",
+        "submodules": [
+          "lib/lufa"
+        ],
+        "artifact": "hex"
+      },
+      "flash": {
+        "kind": "manual",
+        "instructions": "The Unix60 runs on a Pro Micro or Elite-C. Press the reset button on the PCB (or short the two reset pads) to enter the bootloader, then flash the .hex with QMK Toolbox, or run: qmk flash <file>."
+      },
+      "detect": null
+    }
+  ],
+  "hands": {
+    "left": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      55,
+      56
+    ],
+    "right": [
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      57,
+      58,
+      59
+    ]
+  },
+  "fingers": {
+    "0": "left-pinky",
+    "1": "left-pinky",
+    "2": "left-ring",
+    "3": "left-middle",
+    "4": "left-index",
+    "5": "left-index",
+    "6": "right-index",
+    "7": "right-index",
+    "8": "right-middle",
+    "9": "right-ring",
+    "10": "right-pinky",
+    "11": "right-pinky",
+    "12": "right-pinky",
+    "13": "right-pinky",
+    "14": "right-pinky",
+    "15": "left-pinky",
+    "16": "left-pinky",
+    "17": "left-ring",
+    "18": "left-middle",
+    "19": "left-index",
+    "20": "left-index",
+    "21": "right-index",
+    "22": "right-index",
+    "23": "right-middle",
+    "24": "right-ring",
+    "25": "right-pinky",
+    "26": "right-pinky",
+    "27": "right-pinky",
+    "28": "right-pinky",
+    "29": "left-pinky",
+    "30": "left-pinky",
+    "31": "left-ring",
+    "32": "left-middle",
+    "33": "left-index",
+    "34": "left-index",
+    "35": "right-index",
+    "36": "right-index",
+    "37": "right-middle",
+    "38": "right-ring",
+    "39": "right-pinky",
+    "40": "right-pinky",
+    "41": "right-pinky",
+    "42": "left-pinky",
+    "43": "left-pinky",
+    "44": "left-ring",
+    "45": "left-middle",
+    "46": "left-index",
+    "47": "left-index",
+    "48": "right-index",
+    "49": "right-index",
+    "50": "right-middle",
+    "51": "right-ring",
+    "52": "right-pinky",
+    "53": "right-pinky",
+    "54": "right-pinky",
+    "55": "left-thumb",
+    "56": "left-thumb",
+    "57": "right-thumb",
+    "58": "right-thumb",
+    "59": "right-thumb"
+  },
+  "rows": {
+    "number": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "top": [
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28
+    ],
+    "home": [
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41
+    ],
+    "bottom": [
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54
+    ],
+    "thumb": [
+      55,
+      56,
+      57,
+      58,
+      59
+    ]
+  },
+  "mirror": {},
+  "importers": [
+    "qmk-keymap"
+  ],
+  "display": {
+    "case": [
+      {
+        "hand": null,
+        "kind": "body",
+        "d": "M-0.35,-0.18 Q-0.35,-0.3 -0.23,-0.3 L15.28,-0.3 Q15.4,-0.3 15.4,-0.18 L15.4,5.33 Q15.4,5.45 15.28,5.45 L-0.23,5.45 Q-0.35,5.45 -0.35,5.33 Z"
+      },
+      {
+        "hand": null,
+        "kind": "hole",
+        "d": "M-0.25,-0.13 A0.07,0.07 0 1,0 -0.11,-0.13 A0.07,0.07 0 1,0 -0.25,-0.13 Z"
+      },
+      {
+        "hand": null,
+        "kind": "hole",
+        "d": "M4.93,-0.1 A0.07,0.07 0 1,0 5.07,-0.1 A0.07,0.07 0 1,0 4.93,-0.1 Z"
+      },
+      {
+        "hand": null,
+        "kind": "hole",
+        "d": "M9.93,-0.1 A0.07,0.07 0 1,0 10.07,-0.1 A0.07,0.07 0 1,0 9.93,-0.1 Z"
+      },
+      {
+        "hand": null,
+        "kind": "hole",
+        "d": "M15.16,-0.13 A0.07,0.07 0 1,0 15.3,-0.13 A0.07,0.07 0 1,0 15.16,-0.13 Z"
+      },
+      {
+        "hand": null,
+        "kind": "hole",
+        "d": "M-0.25,5.28 A0.07,0.07 0 1,0 -0.11,5.28 A0.07,0.07 0 1,0 -0.25,5.28 Z"
+      },
+      {
+        "hand": null,
+        "kind": "hole",
+        "d": "M7.43,5.22 A0.07,0.07 0 1,0 7.57,5.22 A0.07,0.07 0 1,0 7.43,5.22 Z"
+      },
+      {
+        "hand": null,
+        "kind": "hole",
+        "d": "M15.16,5.28 A0.07,0.07 0 1,0 15.3,5.28 A0.07,0.07 0 1,0 15.16,5.28 Z"
+      }
+    ]
+  }
+}
