@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.0](https://github.com/planetaryescape/keyloom/compare/v0.32.1...v0.33.0) (2026-10-16)
+
+
+### Features
+
+* connect a new keyboard and put my config on it (rung 21 part 1) ([bb86f07](https://github.com/planetaryescape/keyloom/commit/bb86f07ceca650b8aa0880fa1557d13c46c17a7e))
+
 ## [0.32.1](https://github.com/planetaryescape/keyloom/compare/v0.32.0...v0.32.1) (2026-10-16)
 
 
