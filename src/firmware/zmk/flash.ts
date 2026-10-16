@@ -16,6 +16,8 @@ export const BOOTLOADER_WAIT_MS = 120_000;
 export const UNMOUNT_WAIT_MS = 30_000;
 /** How long a freshly mounted boot drive may refuse the write before the refusal is reported. */
 export const WRITE_RETRY_MS = 8_000;
+/** How long a drive may stay listed after a device-gone write error before the error counts as a failed flash. */
+export const GONE_WAIT_MS = 3_000;
 export const POLL_MS = 500;
 
 export const ZMK_CHECKING_INSTRUCTION = "keyloom is checking whether it can restart the keyboard's halves into their bootloaders itself.";
@@ -55,6 +57,10 @@ export type Uf2FlashInput = {
   onLine?: (line: string) => void;
   bootloaderWaitMs?: number;
   /** How long to retry a write the drive refuses (EACCES/EPERM); defaults to WRITE_RETRY_MS. */
+  /** Writes the image to the drive; the real file write by default. Tests pass one that fails the way a rebooting bootloader does. */
+  writeImage?: (path: string, bytes: Uint8Array) => Promise<void>;
+  /** How long to wait for the drive to unmount after a device-gone write error; defaults to GONE_WAIT_MS. */
+  goneWaitMs?: number;
   writeRetryMs?: number;
   unmountWaitMs?: number;
   pollMs?: number;
@@ -169,7 +175,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       const retryUntil = Date.now() + (input.writeRetryMs ?? WRITE_RETRY_MS);
       for (;;) {
         try {
-          await writeFile(target, files[i] as Uint8Array);
+          await (input.writeImage ?? writeFile)(target, files[i] as Uint8Array);
           break;
         } catch (err) {
           const code = (err as NodeJS.ErrnoException).code;
@@ -188,9 +194,15 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     } catch (err) {
       // A bootloader that reboots as soon as the last block lands can take the drive away mid-close, which
       // shows up as a copy error; the drive being gone is still the bootloader's "written".
+      const code = (err as NodeJS.ErrnoException).code;
+      // A device-gone error can come while macOS still lists the drive, so give it a moment to unmount before calling it a failure
+      // (BK's Glove80 left half, 2026-10-16: ENXIO on the write, and the half came back running the new build).
+      if (code === "ENXIO" || code === "ENODEV" || code === "EIO") {
+        const goneBy = Date.now() + (input.goneWaitMs ?? GONE_WAIT_MS);
+        while (Date.now() < goneBy && (await input.findVolume(step.volume))) await sleep(poll, input.signal);
+      }
       if (await input.findVolume(step.volume)) {
         // macOS refuses a write to a removable drive from an app without Removable Volumes access, and the raw EACCES doesn't say so.
-        const code = (err as NodeJS.ErrnoException).code;
         const denied = code === "EACCES" || code === "EPERM" ? ` keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.` : "";
         return fail(`Copying to ${target} failed: ${(err as Error).message}. The ${step.label} was not flashed.${denied}`);
       }

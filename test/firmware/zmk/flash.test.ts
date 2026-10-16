@@ -192,6 +192,41 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(s.lines.some((l) => l.includes(`${RIGHT} has unmounted, so the write is taken as done`))).toBe(true);
   });
 
+  test("a device-gone write error while the drive is still listed waits for it to unmount, then counts as written", async () => {
+    const s = await setup();
+    // BK's Glove80 left half, 2026-10-16: the bootloader rebooted on the last block, the write failed with ENXIO, and macOS still
+    // listed the drive for a moment. The half came back running the new build.
+    for (const label of [RIGHT, LEFT]) mkdirSync(join(s.root, label), { recursive: true });
+    const real = volumes.volumeFinderAt(s.root);
+    const looks = new Map<string, number>();
+    const r = await s.flash({
+      writeImage: async () => {
+        throw Object.assign(new Error("ENXIO: no such device or address, write"), { code: "ENXIO" });
+      },
+      findVolume: async (label) => {
+        const n = (looks.get(label) ?? 0) + 1;
+        looks.set(label, n);
+        return n <= 4 ? real(label) : null;
+      },
+      goneWaitMs: 1000,
+    });
+    expect(r.state).toBe("succeeded");
+    expect(s.lines.some((l) => l.includes("ENXIO") && l.includes(`${RIGHT} has unmounted, so the write is taken as done`))).toBe(true);
+  });
+
+  test("a device-gone write error on a drive that stays mounted still fails, after the wait", async () => {
+    const s = await setup();
+    for (const label of [RIGHT, LEFT]) mkdirSync(join(s.root, label), { recursive: true });
+    const r = await s.flash({
+      writeImage: async () => {
+        throw Object.assign(new Error("ENXIO: no such device or address, write"), { code: "ENXIO" });
+      },
+      goneWaitMs: 100,
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("The right half was not flashed");
+  });
+
   test("an artifact that isn't a Glove80 UF2 is refused before any drive is looked at", async () => {
     const one = await setup(uf2Image(0x9807b007, 3));
     expect((await one.flash()).error).toContain("Not flashing: it holds 1 UF2 image");
