@@ -3,6 +3,8 @@ import type { BoardDevView } from "../boards/dev.ts";
 import { BoardDevViewSchema } from "../boards/dev.ts";
 import type { ChatBackend } from "./chat-backend.ts";
 import { handleConfigRoute } from "./config-routes.ts";
+import { handleLabRoute } from "./lab-routes.ts";
+import type { LabBackend } from "./lab-backend.ts";
 import type { ConfigsBackend } from "./configs-backend.ts";
 import { handleChatRoute } from "./chat-routes.ts";
 import type { DecisionsBackend } from "./decisions-backend.ts";
@@ -29,6 +31,8 @@ export interface ServerOptions {
   sync?: SyncBackend;
   /** The rung 23 configs and versions side. Without it the /api/configs routes fall through to a 404. */
   configs?: ConfigsBackend;
+  /** The typing lab (rung 22). Without it the /api/lab routes fall through to a 404. */
+  lab?: LabBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
   boardDev?: () => Promise<BoardDevView>;
   token?: string;
@@ -49,7 +53,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, decisions, sync, configs, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, sync, configs, lab, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -74,6 +78,10 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
       if (sync !== undefined) {
         const syncResponse = await handleSyncRoute(request, url.pathname, sync, sessionToken);
         if (syncResponse !== null) return syncResponse;
+      }
+      if (lab !== undefined) {
+        const labResponse = await handleLabRoute(request, url.pathname, lab, sessionToken);
+        if (labResponse !== null) return labResponse;
       }
       if (configs !== undefined) {
         const configResponse = await handleConfigRoute(request, url.pathname, configs, sessionToken);

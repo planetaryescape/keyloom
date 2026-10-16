@@ -56,5 +56,5 @@ export type { ConversationRow } from "../persistence/conversations.ts";
 export { type UpgradeOffer, type UpgradeOutcome, upgradeLayout, upgradeOffer } from "./upgrade.ts";
 export {
   type AnalyseOptions, type LabDeps, type PassageView, type RecordingInProgress, type StoredAnalysis, analyseSession, beginRecording, deleteSession,
-  endRecording, labPassages, realLabDeps, sessionAnalysis, sessionContent, sessions as labSessions,
+  endRecording, labPassages, realLabDeps, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
 } from "./lab.ts";

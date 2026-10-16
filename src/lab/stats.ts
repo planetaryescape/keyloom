@@ -29,6 +29,9 @@ export type FingerRow = {
   attempts: number;
   errors: number;
   errorRate: number;
+  /** Of the errors, the ones the finger made (a wrong, missed or doubled key) and the ones the firmware made of a right press (D-314). */
+  typos: number;
+  misfires: number;
   /** Time from the previous key going down to this finger's key going down. */
   interKey: Spread;
 };
@@ -83,9 +86,13 @@ export function fingerStats(input: Input): FingerStats {
   for (const a of aligned) if (a.kind === "skipped") bump(attempts, fingerOf(board, a.step.positions[0] as number));
 
   const faultyPress = new Set<number>();
+  const typos = new Map<string, number>();
+  const misfires = new Map<string, number>();
   for (const d of differences) {
+    // On the finger that pressed (the existing rule for errors), so a finger's typos and misfires add up to its errors.
     const finger = d.position !== undefined ? fingerOf(board, d.position) : d.expectedPositions?.[0] !== undefined ? fingerOf(board, d.expectedPositions[0]) : undefined;
     bump(errors, finger);
+    bump(d.kind === "misfire-hold" || d.kind === "misfire-tap" ? misfires : typos, finger);
     if (d.pressIndex !== undefined) faultyPress.add(d.pressIndex);
   }
 
@@ -122,7 +129,10 @@ export function fingerStats(input: Input): FingerStats {
     .map((finger): FingerRow => {
       const n = attempts.get(finger) as number;
       const e = errors.get(finger) ?? 0;
-      return { finger, hand: finger.startsWith("left") ? "left" : "right", attempts: n, errors: e, errorRate: n === 0 ? 0 : e / n, interKey: spread(gaps.get(finger) ?? []) };
+      return {
+        finger, hand: finger.startsWith("left") ? "left" : "right", attempts: n, errors: e, errorRate: n === 0 ? 0 : e / n,
+        typos: typos.get(finger) ?? 0, misfires: misfires.get(finger) ?? 0, interKey: spread(gaps.get(finger) ?? []),
+      };
     });
 
   const matched = new Map<number, "tap" | "hold">();

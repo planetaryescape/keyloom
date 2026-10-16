@@ -50,8 +50,8 @@ describe("the numbers", () => {
     const strokes: Stroke[] = [{ position: semi, down: 0, up: 60 }, { position: at.l as number, down: 200, up: 260 }];
     const { stats: s, differences } = stats(TEXT(";;;;"), strokes);
     expect(differences.map((d) => d.kind).sort()).toEqual(["missed", "missed", "typo"]);
-    expect(s.fingers.find((f) => f.finger === "right-ring")).toMatchObject({ attempts: 1, errors: 1, errorRate: 1 });
-    expect(s.fingers.find((f) => f.finger === "right-pinky")).toMatchObject({ attempts: 3, errors: 2 });
+    expect(s.fingers.find((f) => f.finger === "right-ring")).toMatchObject({ attempts: 1, errors: 1, errorRate: 1, typos: 1, misfires: 0 });
+    expect(s.fingers.find((f) => f.finger === "right-pinky")).toMatchObject({ attempts: 3, errors: 2, typos: 2, misfires: 0 });
     expect(s.errors).toBe(3);
   });
 

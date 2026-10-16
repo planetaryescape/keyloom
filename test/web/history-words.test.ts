@@ -35,6 +35,9 @@ describe("History rows in people's words (D-312)", () => {
   test("a swap is two caps and its layer", () => {
     expect(historyWords("Swapped Layer 0 (I) and Layer 0 (T)", layout)).toEqual({ how: null, cap: null, layer: "Layer 0", text: "Swapped", swap: ["I", "T"] });
     expect(historyWords("Swapped A on Base and 4 on Numbers", layout)).toMatchObject({ layer: "Base and Numbers", swap: ["A", "4"] });
+    // The format the editor stores (v0.29.0, BK's History): the key numbers go, the layer is said once.
+    expect(historyWords("Swapped Layer 0 key 20 (I) and Layer 0 key 25 (T)", layout)).toEqual({ how: null, cap: null, layer: "Layer 0", text: "Swapped", swap: ["I", "T"] });
+    expect(historyWords("Swapped Layer 0 key 20 (I) and Layer 2 key 5 (T)", layout)).toMatchObject({ layer: "Layer 0 and Layer 2", swap: ["I", "T"] });
   });
 
   test("anything else keeps its words", () => {

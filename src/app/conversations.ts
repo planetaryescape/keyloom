@@ -16,25 +16,14 @@ import { transact } from "../persistence/transaction.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 import { createAgentPorts } from "./agent-ports.ts";
+import { type ProposalCard, toCard } from "./proposal-card.ts";
 import { defaultAgentModel } from "./chat-model.ts";
 import type { App } from "./context.ts";
 import { BusyError, ModelError, NotFoundError, UsageError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
 import { selectLayers } from "./render.ts";
 
-export type ProposalCard = {
-  changeSetId: string;
-  /** Alternatives from one `propose_changes` call share a group (03). */
-  proposalGroup: string | null;
-  title: string;
-  explanation: string;
-  tradeoffs: { gains: string[]; costs: string[] };
-  /** What will be remembered if BK applies this (08); null for a change set that carries no reason. */
-  decisionDraft: DecisionDraft | null;
-  status: ChangeSetRow["status"];
-  validation: ValidationResult;
-  ops: ChangeSetRow["ops"];
-};
+export type { ProposalCard } from "./proposal-card.ts";
 
 /** A priority BK stated, as the chat shows it: a chip with a remove button. */
 export type PriorityCard = {
@@ -100,17 +89,6 @@ export function conversationTitle(message: string): string {
 // A second message into a conversation that is mid-turn would interleave tool results with it.
 const answering = new Set<string>();
 
-const toCard = (row: ChangeSetRow): ProposalCard => ({
-  changeSetId: row.id,
-  proposalGroup: row.proposalGroup,
-  title: row.title ?? row.explanation.slice(0, 80),
-  explanation: row.explanation,
-  tradeoffs: row.tradeoffs,
-  decisionDraft: row.decisionDraft === null ? null : { goal: row.decisionDraft.goal, choice: row.decisionDraft.choice, reason: row.decisionDraft.reason, scope: row.decisionDraft.scope },
-  status: row.status,
-  validation: ValidationResultSchema.parse(row.validation),
-  ops: row.ops,
-});
 
 const toPriorityCard = (row: DecisionRow): PriorityCard => ({
   id: row.id,

@@ -4,6 +4,8 @@ import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import { appChatBackend } from "./chat-backend.ts";
 import { appConfigsBackend } from "./configs-backend.ts";
+import { appLabBackend } from "./lab-backend.ts";
+import { type LabDeps, realLabDeps } from "../app/index.ts";
 import { appDecisionsBackend } from "./decisions-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
 import { appSyncBackend } from "./sync-backend.ts";
@@ -59,6 +61,8 @@ export type ServeOptions = {
   syncDeps?: SyncDeps;
   /** Where boot drives appear and how long a flash waits, for the Build and flash dialog and the engine. */
   flash?: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs">;
+  /** How the typing lab reads the keyboard and replays it; the real keyboard and emulator when omitted. Tests pass a scripted keyboard. */
+  lab?: LabDeps;
 };
 
 export function serve(app: App, opts: ServeOptions): RunningServer {
@@ -67,7 +71,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
-    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine), configs: appConfigsBackend(app, engine), open: opts.open,
+    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine), configs: appConfigsBackend(app, engine), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
   });
   let drained: Promise<void> | undefined;
   return {
