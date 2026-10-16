@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.22.0](https://github.com/planetaryescape/keyloom/compare/v0.21.0...v0.22.0) (2026-10-16)
+
+
+### Features
+
+* draw each board under its light ([a4a5d37](https://github.com/planetaryescape/keyloom/commit/a4a5d378d57753c33259c9656101c9ae2a4fff7f))
+
+
+### Bug Fixes
+
+* finish P1's review: front symbols per board, combo dots, phone strip ([4aed08e](https://github.com/planetaryescape/keyloom/commit/4aed08ebf25aa1333df9d30a4aae0fe332cbc201))
+* print keys in words and calm the board, from the P1 design review ([25cce92](https://github.com/planetaryescape/keyloom/commit/25cce92976f289eb092674035d5ddf7d1c0f70ad))
+
 ## [0.21.0](https://github.com/planetaryescape/keyloom/compare/v0.20.1...v0.21.0) (2026-10-15)
 
 
