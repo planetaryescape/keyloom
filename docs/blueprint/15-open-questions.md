@@ -140,7 +140,7 @@ Yes for QMK, and no for DF0 on purpose. TD0 and TD1 import as tap dances (tap Hy
 
 | # | Question | Status |
 |---|---|---|
-| Q1 | Which licence? | **Answered 2026-10-15:** MIT |
+| Q1 | Which licence? | **Answered 2026-10-15:** MIT. **Changed 2026-10-16:** AGPL-3.0-or-later (D-342) |
 | Q2 | npm's `keyloom` is taken by an unrelated password CLI. Keep the name and ship only through GitHub releases and `install.sh`, or rename? | **Answered 2026-10-15:** keep keyloom, with no npm package in v1 (D-034) |
 | Q3 | Other users: bring their own Anthropic key only, or support other model providers? | **Answered 2026-10-15** by D-106: Anthropic, OpenRouter or Codex |
 | Q4 | Should keyloom carry a typing profile from one board to another ("adapt my Moonlander habits to the Glove80")? The assistant raised it; BK never took it up | **Answered 2026-10-15** by D-220, narrowed to copying a named thing: BK: "it should be possible for me to say copy this thing from my other keyboard and apply it here". Rung 19 |

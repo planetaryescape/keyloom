@@ -373,3 +373,7 @@ CI runs it on every board in `boards/`. It checks the format. It can't check tha
 - A QMK build that stops on a missing `lib/...` path: add that submodule to `build.submodules`.
 - `... didn't appear within 120 s`: the boot drive's label differs from `volume`. Look at the drive's name while the board is in its bootloader, and use that.
 - The build log is in the keyloom data directory under `logs/`. The path is printed when a build fails.
+
+## Licence
+
+keyloom is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). By opening a pull request you agree that your contribution is licensed under the same terms.
