@@ -873,7 +873,9 @@
     bottom: var(--chat-bar-height);
     left: 0;
     height: var(--sheet-h, 46dvh);
-    border-top: 1px solid var(--color-border-strong);
+    /* The full width of the phone: the wide screen's right-hand gap would leave a strip of the stage showing (P5). */
+    margin: 0;
+    border-top: 0;
     border-left: 0;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: var(--shadow-pop);
@@ -1216,17 +1218,9 @@
   outline-offset: 1px;
 }
 
-/* Quiet labels when the stage is 1200 px or wider (a 1366 or 1440 window with nothing beside the board), icons with tooltips when
-   it is narrower: by the stage's width, never the board's, so every board shows the same and the labels never run into the strip
-   (P4 review). */
-.stage {
-  container: stage / inline-size;
-}
-
-@container stage (max-width: 1199px) {
-  .view-control-label {
-    display: none;
-  }
+/* Labels when they fit beside the strip, icons with tooltips when they would meet it (ViewControls.tsx measures). */
+.view-controls[data-compact="true"] .view-control-label {
+  display: none;
 }
 
 /* The one hint, a quiet sentence above the strip. */

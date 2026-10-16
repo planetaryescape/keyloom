@@ -9,9 +9,9 @@ import { validationForModel } from "./validation-text.ts";
 export const MAX_FAILED_PROPOSALS = 3;
 
 const ProposalSchema = z.object({
-  title: z.string().min(1).max(80).describe('Short card heading, such as "Plain Option on the symbol layer".'),
+  title: z.string().min(1).max(80).describe('Short card heading, such as "Plain Option on the symbol layer". Keys by what they print, never by number.'),
   ops: z.array(ChangeOpSchema).min(1).describe("The change as ops, applied in order. An alternative with no ops is not a proposal; describe it in your reply instead."),
-  explanation: z.string().min(1).describe("Why this solves what BK described, in plain words."),
+  explanation: z.string().min(1).describe("Why this solves what BK described, in plain words. It is also the line History shows for this change, so start with what changes, and name keys by what they print and where they sit (\"the R key on Layer 0\"), never by number."),
   tradeoffs: z.object({
     gains: z.array(z.string()).describe("What gets better, including functions that become easier to reach."),
     costs: z.array(z.string()).describe("What gets worse or moves, including anything displaced and how BK will have to relearn it."),

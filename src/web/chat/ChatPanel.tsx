@@ -36,6 +36,8 @@ interface Props {
    * reply runs past a line or two, so it reads top to bottom at full height beside the board.
    */
   onPresentation?: (presentation: "bar" | "panel") => void;
+  /** On a phone the chat is the bottom sheet: the conversation panel's design, always (P5). */
+  sheet?: boolean;
   token: string;
   layoutRef: string;
   layout: Layout;
@@ -66,7 +68,7 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
@@ -263,9 +265,9 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   // and stays there until a new conversation starts (D-310). The folded line wins in a short window, where the board needs the height.
   const longReply = transcript.turns.some((turn) => turn.kind === "assistant" && (turn.text.length > LINE_REPLY_CHARS || turn.proposals.length > 0 || turn.priorities.length > 0 || turn.failure !== null));
   const asked = transcript.turns.filter((turn) => turn.kind === "user").length;
-  const presentation: "bar" | "panel" = variant === "bar" && !folded && (longReply || asked > 1) ? "panel" : "bar";
+  const presentation: "bar" | "panel" = sheet || (variant === "bar" && !folded && (longReply || asked > 1)) ? "panel" : "bar";
   useEffect(() => {
-    if (variant === "bar") onPresentation?.(presentation);
+    if (variant === "bar" && !sheet) onPresentation?.(presentation);
     // The panel is laid out after this render; rest the log once it has its height.
     const frame = window.requestAnimationFrame(() => {
       stick.current = true;

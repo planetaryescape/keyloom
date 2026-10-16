@@ -29,3 +29,10 @@ export function withoutKeyNumbers(summary: string): string {
     .replace(/(Layer \d+|[A-Z][\w-]*) key \d+\b/g, "$1")
     .replace(/\bkey \d+\b/gi, "a key");
 }
+
+/** A long summary (a change from the chat stores the agent's whole explanation) as its first sentence, for a title or a line. */
+export function headline(summary: string): string {
+  const text = withoutKeyNumbers(summary).trim();
+  if (text.length <= 120) return text;
+  return /^(.+?[.!?])(?:\s|$)/.exec(text)?.[1] ?? text;
+}

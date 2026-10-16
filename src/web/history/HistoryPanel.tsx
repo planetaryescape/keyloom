@@ -1,4 +1,4 @@
-import { ArrowRight, LoaderCircle, RefreshCw, Undo2, Zap } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, LoaderCircle, RefreshCw, Undo2, Zap } from "lucide-react";
 import { useState } from "react";
 import type { RevisionEntry } from "../../api/http.ts";
 import type { Layout } from "../../layout/schema.ts";
@@ -51,7 +51,7 @@ export function HistoryPanel({ layout, revisions, onClose, onReload, onGoBack, o
           <ol className="sheet-rows" aria-label="Revisions">
             {revisions.items.map((revision) => {
               // Stored summaries are read into people's words here, old and new alike (D-279, D-312).
-              const row = historyWords(revision.summary, layout);
+              const row = historyWords(revision.summary, layout, revision.origin);
               const words = row.text;
               return (
                 <li key={revision.id} className="sheet-row revision" data-head={revision.isHead} data-origin={revision.origin}>
@@ -63,7 +63,14 @@ export function HistoryPanel({ layout, revisions, onClose, onReload, onGoBack, o
                         <ArrowRight size={12} className="revision-arrow" aria-label="became" role="img" />
                       </>
                     )}
-                    <p className="sheet-row-title">{words}</p>
+                    {row.swap === undefined ? null : (
+                      <span className="mini-caps" aria-label={`Swapped ${row.swap[0]} and ${row.swap[1]}`}>
+                        <MiniCap>{row.swap[0]}</MiniCap>
+                        <ArrowLeftRight size={12} className="revision-arrow" aria-hidden="true" />
+                        <MiniCap>{row.swap[1]}</MiniCap>
+                      </span>
+                    )}
+                    {row.swap === undefined ? <p className="sheet-row-title revision-title" title={words}>{words}</p> : <span className="sheet-row-title" />}
                     {revision.isHead ? <span className="sheet-pill">On screen</span> : null}
                   </div>
                   <p className="sheet-row-meta">

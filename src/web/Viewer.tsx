@@ -1094,9 +1094,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 </div>
               )}
               <ChatPanel
-                variant={narrow ? "panel" : "bar"}
+                variant="bar"
+                sheet={narrow}
                 onClose={() => setChatOpen(false)}
-                collapsed={barFit.collapsed}
+                collapsed={!narrow && barFit.collapsed}
                 onPresentation={setChatPresentation}
                 token={token}
                 layoutRef={layoutRef}

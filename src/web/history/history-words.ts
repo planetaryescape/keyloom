@@ -13,6 +13,8 @@ export interface HistoryWords {
   layer: string | null;
   /** The change itself, one sentence without a colon chain. */
   text: string;
+  /** Two keys that swapped, drawn "[I] ⇄ [T]". */
+  swap?: [string, string];
 }
 
 const PREFIX: Record<string, string> = { "Undo: ": "Undone", "Back to: ": "Went back", "Redo: ": "Redone" };
@@ -32,8 +34,18 @@ function peopleWords(text: string): string {
   return out.replace(/^Tap (.+?), hold (?!for )/, "$1, hold for ");
 }
 
-export function historyWords(summary: string, layout: Pick<Layout, "layers" | "macros" | "tapDances">): HistoryWords {
+export function historyWords(summary: string, layout: Pick<Layout, "layers" | "macros" | "tapDances">, origin?: string): HistoryWords {
   let rest = summary.trim();
+  // A change from the chat stores the agent's explanation; its first sentence says what changed, and it is already in plain words.
+  // A change from the chat stores the agent's explanation, already in plain words; only key numbers older prompts wrote are read away
+  // ("Key 19 on Layer 0 (R)" is "the R key on Layer 0"). The row clamps it to two lines; the rest shows on hover or focus.
+  if (origin === "agent") {
+    const text = rest
+      .replace(/\b[Kk]ey \d+ on (.+?) \((.+?)\)/g, "the $2 key on $1")
+      .replace(/\b[Kk]eys? \d+(?:(?:, | and )\d+)*/g, "a key")
+      .replace(/ \(position \d+\)/g, "");
+    return { how: null, cap: null, layer: null, text: sentence(text) };
+  }
   let how: string | null = null;
   // Prefixes can stack in old summaries ("Back to: Redo: X"); the first says how, the rest go.
   for (let match = /^(Undo|Back to|Redo): /.exec(rest); match !== null; match = /^(Undo|Back to|Redo): /.exec(rest)) {
@@ -48,6 +60,17 @@ export function historyWords(summary: string, layout: Pick<Layout, "layers" | "m
     return bindingLegend(binding, { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances }).tap || null;
   };
 
+  // "Swapped Layer 0 (I) and Layer 0 (T)" and "Swapped A on Base and 4 on Numbers": the two caps, and the layer once when they share it.
+  const swapped = /^Swapped (?:(.+?) \((.+?)\)|(.+?) on (.+?)) and (?:(.+?) \((.+?)\)|(.+?) on (.+?))$/.exec(rest);
+  if (swapped !== null) {
+    const [aLayer, aCap] = swapped[1] !== undefined ? [swapped[1], swapped[2]] : [swapped[4], swapped[3]];
+    const [bLayer, bCap] = swapped[5] !== undefined ? [swapped[5], swapped[6]] : [swapped[8], swapped[7]];
+    const same = aLayer === bLayer;
+    return {
+      how, cap: null, layer: same ? layerDisplayName(aLayer as string) : `${layerDisplayName(aLayer as string)} and ${layerDisplayName(bLayer as string)}`,
+      text: "Swapped", swap: [aCap as string, bCap as string],
+    };
+  }
   // "Renamed layer-3 to Numbers": the id was never a name a person saw.
   const renamed = /^Renamed (.+) to (.+)$/.exec(rest);
   if (renamed !== null) {
