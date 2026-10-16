@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.0](https://github.com/planetaryescape/keyloom/compare/v0.30.1...v0.31.0) (2026-10-16)
+
+
+### Features
+
+* configs and versions screens ([fcdf4e5](https://github.com/planetaryescape/keyloom/commit/fcdf4e543e64191e3e4bbe33128314aea4900bb3))
+
 ## [0.30.1](https://github.com/planetaryescape/keyloom/compare/v0.30.0...v0.30.1) (2026-10-16)
 
 
