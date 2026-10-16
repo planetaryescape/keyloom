@@ -39,3 +39,213 @@
 .revision:focus-within .revision-title {
   display: block;
 }
+
+/* Versions (D-315): milestones on a rail, the one on the keyboard green, changes not on it yet amber. */
+.history-pending,
+.history-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.history-pending {
+  color: var(--pending-ink);
+}
+
+.history-pending i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pending);
+}
+
+.history-rail {
+  position: relative;
+  margin-top: var(--space-3);
+}
+
+.history-rail::before {
+  position: absolute;
+  top: var(--space-5);
+  bottom: var(--space-5);
+  left: 9px;
+  width: 1px;
+  background: var(--line-2);
+  content: "";
+}
+
+.history-version {
+  position: relative;
+  padding-left: var(--space-6) !important;
+}
+
+.history-version::before {
+  position: absolute;
+  top: 18px;
+  left: 4px;
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border: 2px solid var(--ink-3);
+  border-radius: 50%;
+  background: var(--surface);
+  content: "";
+}
+
+.history-version[data-current]::before {
+  border-color: var(--ok);
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 20%, transparent);
+}
+
+.history-name {
+  font-weight: var(--weight-semibold);
+}
+
+.history-unnamed {
+  color: var(--ink-3);
+}
+
+.history-inline,
+.history-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.history-inline {
+  margin-left: var(--space-2);
+  vertical-align: 1px;
+}
+
+.history-inline:hover,
+.history-fold:hover {
+  color: var(--ink);
+}
+
+.history-on {
+  color: var(--ok-ink);
+}
+
+.history-version-what {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+/* A version's actions stay visible: they are why the row is there. */
+.history-version-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.history-folded {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--line-2);
+}
+
+.revision[data-folded] .sheet-row-title {
+  font-size: var(--text-sm);
+}
+
+.history-name-field {
+  display: grid;
+  flex: 1;
+  gap: var(--space-2);
+}
+
+.history-name-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.history-name-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Compare with now (D-315): the keys per layer as then → now, everything else in words, and the three ways to use the version. */
+.history-back {
+  margin: 0 0 var(--space-2);
+  padding: 0;
+}
+
+.history-compare-group {
+  margin-top: var(--space-4);
+}
+
+.history-compare-group + .history-compare-group {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.history-compare-group h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.history-compare-keys,
+.history-compare-other {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-compare-keys li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.history-then .mini-cap {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--ink-3) 60%, transparent);
+}
+
+.history-compare-note {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.history-compare-other li {
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.history-compare-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.history-compare-foot .bar-apply {
+  margin-left: auto;
+}

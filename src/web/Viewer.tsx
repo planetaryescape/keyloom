@@ -1,11 +1,11 @@
 import { Eye, MousePointerClick, Repeat2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
 import type { ChangeOp, Slot } from "../layout/change.ts";
 import { addLayerChange, convertLayerOps, duplicateLayerChange, moveLayerOps, niceLayerName } from "../layout/layer-ops.ts";
 import { bindingLegend } from "../layout/legend.ts";
-import type { ApplyResponse, BoardChoice, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard, RevisionEntry } from "../api/http.ts";
+import type { ApplyResponse, BoardChoice, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { undoChange, upgradeStoredLayout } from "./api-write.ts";
@@ -14,13 +14,21 @@ import { ViewControls } from "./shell/ViewControls.tsx";
 import { useLab } from "./lab/useLab.ts";
 import { applyChangeSet } from "./api-write.ts";
 import { LabPanel, LabStage } from "./lab/LabScreens.tsx";
+import { matchCommands, type Command } from "./chat/commands.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
 import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
 import { Reminders } from "./decisions/Reminders.tsx";
-import { HistoryPanel } from "./history/HistoryPanel.tsx";
-import { useRevisions } from "./history/useRevisions.ts";
+import { HistoryPanel, type Milestone } from "./history/HistoryPanel.tsx";
+import { useVersions } from "./history/useVersions.ts";
+import { VersionCompare, type Comparing } from "./history/VersionCompare.tsx";
+import { versionTitle } from "./history/version-words.ts";
+import { archiveConfig, compareVersion, createConfig, nameVersion, renameConfig, restoreConfig, restoreVersion, syncConfig, useConfig } from "./configs/api-configs.ts";
+import { ConfigMenu } from "./configs/ConfigMenu.tsx";
+import { ConfirmDialog, NewConfigDialog, RenameDialog } from "./configs/ConfigDialogs.tsx";
+import { EditingStatus } from "./configs/EditingStatus.tsx";
+import { useConfigs } from "./configs/useConfigs.ts";
 import { ComboEditor, ComboList, draftFromCombo, type ComboDraft } from "./combos/ComboPane.tsx";
 import { combosOn, newComboId } from "./combos/combo-ops.ts";
 import { bindingSummary, withBinding } from "./editor/draft.ts";
@@ -50,7 +58,7 @@ import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } fro
 import { FloatingCard, type BoardLayout } from "./card/FloatingCard.tsx";
 import { keyForChar } from "./panel/slots.ts";
 import { Caption } from "./shell/Caption.tsx";
-import { boardDisplayName, boardEntries, LayoutMenu } from "./shell/Header.tsx";
+import { boardDisplayName, boardEntries } from "./shell/Header.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
 import { boardLight, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
@@ -86,6 +94,8 @@ interface ViewerProps {
     selectedId: string;
     onSelect: (id: string) => void;
     onImport: () => void;
+    /** Fetches the layout list again after a config is made, renamed or restored; with an ID, opens that config. */
+    onReload?: (selectId?: string) => void;
     boardChoices: readonly BoardChoice[];
     release: { status: ReleaseStatus; onOpen: () => void };
   };
@@ -200,7 +210,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [labLit, setLabLit] = useState<ReadonlySet<number>>(new Set());
   const [lightingDraft, setLightingDraft] = useState<LightingDraft>(new Map());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const history = useRevisions(token, layoutRef, revision.id, historyOpen);
+  // Configs (D-315): this board's, which one the keyboard runs, and whether the one on screen is it.
+  const configs = useConfigs(token, summary.boardId, `${summary.id}:${summary.name}:${revision.id}`);
+  const keyboardConfig = boardSync === undefined
+    ? (configs.live.find((c) => c.onKeyboard) ?? null)
+    : { id: boardSync.layoutId, name: boardSync.layoutName };
+  const editingOther = keyboardConfig !== null && keyboardConfig.id !== summary.id;
+  const [configDialog, setConfigDialog] = useState<
+    { kind: "new"; start?: "version"; version?: string } | { kind: "rename" } | { kind: "put-on"; target: { id: string; name: string } } | { kind: "put-version"; milestone: Milestone } | null
+  >(null);
+  // History as versions; a finished sync records one, so the list follows the keyboard's last run as well as the head.
+  const history = useVersions(token, layoutRef, `${revision.id}:${boardSync?.last?.id ?? ""}:${boardSync?.state.kind ?? ""}`, historyOpen);
+  const [comparing, setComparing] = useState<Comparing | null>(null);
+  useEffect(() => {
+    if (!historyOpen) setComparing(null);
+  }, [historyOpen]);
   // Phones: the panel is a bottom sheet and a split board shows one hand (18#phones).
   const narrow = useMediaQuery(NARROW);
   const chatPanel = !narrow && chatOpen && chatPresentation === "panel";
@@ -338,8 +362,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   );
   const thumbs = useMemo(() => new Set(Object.entries(board.fingers).flatMap(([p, finger]) => (finger.endsWith("thumb") ? [Number(p)] : []))), [board.fingers]);
   const rippleFrom = useMemo(() => reachKey(view, view.layers[layerIndex]?.id ?? "", thumbs), [view, layerIndex, thumbs]);
+  // Compare with now (D-315): the keys on this layer that differ from the version, and what each printed then.
+  const compareThen = useMemo(() => {
+    if (comparing?.status !== "ready") return null;
+    const here = comparing.compare.diff.keys.filter((k) => k.layerId === layer?.id);
+    return here.length === 0 ? null : new Map(here.map((k) => [k.position, k.beforeLabel]));
+  }, [comparing, layer]);
   const marks = useMemo(() => {
     const own = marksOn(preview, layer?.id ?? "");
+    if (compareThen !== null) {
+      const withThen = new Map(own);
+      for (const position of compareThen.keys()) withThen.set(position, "changed");
+      return withThen;
+    }
     if (placements.length === 0 && quick === null) return own;
     const withPlaced = new Map(own);
     for (const placement of placements) if (placement.slot.layerId === layer?.id) withPlaced.set(placement.slot.position, "home");
@@ -348,7 +383,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       if (at !== undefined && at.layerId === layer?.id) withPlaced.set(at.position, "changed");
     });
     return withPlaced;
-  }, [preview, layer, placements, quick, quickTargets]);
+  }, [preview, layer, placements, quick, quickTargets, compareThen]);
   const markedLayers = useMemo(() => otherMarkedLayers(preview, layer?.id ?? ""), [preview, layer]);
   const remembered = useMemo(() => rememberedOn(preview, decisionFocus, layer?.id ?? ""), [preview, decisionFocus, layer]);
   const reminders = preview !== null && proposal !== null ? proposal.validation.diff.reminders : [];
@@ -1088,8 +1123,88 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     void onChanged().catch(() => {});
   }
 
+  // ⌘K commands (D-315): the typing lab and the config commands, offered above "Ask keyloom" when the text names them.
+  // `find` keeps its identity while the configs don't change, so the bar's highlighted row survives a re-render.
+  const findCommands = useCallback(
+    (text: string) => matchCommands(text, { configs: configs.live, currentId: summary.id, boardName: boardDisplayName(board.name) }),
+    [configs.live, summary.id, board.name],
+  );
+  const chatCommands = {
+    find: findCommands,
+    run: (command: Command) => {
+      setChatOpen(false);
+      if (command.kind === "lab") {
+        if (!labOpen) toggleLab();
+      } else if (command.kind === "new-config") setConfigDialog({ kind: "new" });
+      else if (command.kind === "switch") chrome.onSelect(command.id);
+      else setConfigDialog({ kind: "put-on", target: { id: command.id, name: command.name } });
+    },
+  };
+
+  // ---- configs and versions (D-315) ----
+  async function archiveThis() {
+    try {
+      await archiveConfig(token, summary.id);
+      toasts.show({ kind: "info", message: `Archived ${summary.name}`, detail: "It's under Archived in the config menu, with its history." });
+      configs.reload();
+      // An archived config is hidden, so the page moves to the one the keyboard runs.
+      if (keyboardConfig !== null && keyboardConfig.id !== summary.id) chrome.onSelect(keyboardConfig.id);
+    } catch (error) {
+      toasts.show({ kind: "error", message: "Couldn't archive it", ...(error instanceof Error ? { detail: error.message } : {}) });
+    }
+  }
+
+  async function restoreArchived(id: string) {
+    try {
+      const restored = await restoreConfig(token, id);
+      configs.reload();
+      chrome.onReload?.(restored.id);
+      toasts.show({ kind: "info", message: `Restored ${restored.name}` });
+    } catch (error) {
+      toasts.show({ kind: "error", message: "Couldn't restore it", ...(error instanceof Error ? { detail: error.message } : {}) });
+    }
+  }
+
+  async function compareWith(milestone: Milestone) {
+    setComparing({ milestone, status: "loading" });
+    try {
+      const compare = await compareVersion(token, layoutRef, milestone.version.id);
+      setComparing((now) => (now?.milestone.version.id === milestone.version.id ? { milestone, status: "ready", compare } : now));
+    } catch (error) {
+      setComparing({ milestone, status: "error", message: error instanceof Error ? error.message : "Couldn't compare." });
+    }
+  }
+
+  // Putting a config on the keyboard: it becomes the board's config and syncs once (the route's own checks, D-303).
+  async function putOn(target: { id: string }) {
+    await useConfig(token, target.id);
+    configs.reload();
+  }
+
+  /**
+   * Putting an old version on the keyboard (D-315). The engine syncs a config's head, so this goes back to the version first (a new
+   * revision, D-170, which also keeps auto-sync from putting the newer head back), then syncs: the config's own sync when it is the
+   * keyboard's, else the put-on. One confirm covers both.
+   */
+  async function putVersionOn(milestone: Milestone) {
+    if (milestone.version.revisionId !== revision.id) {
+      try {
+        await restoreVersion(token, layoutRef, milestone.version.id);
+      } catch (error) {
+        // The head already holds the version's document (an earlier go-back): nothing to restore, so only the sync remains.
+        if (!(error instanceof ApiError && error.status === 400 && /nothing to go back to/.test(error.message))) throw error;
+      }
+      await onChanged();
+    }
+    if (editingOther) await useConfig(token, summary.id);
+    else await syncConfig(token, summary.id);
+    setComparing(null);
+    configs.reload();
+    history.reload();
+  }
+
   // One step back or forward (the head's undo), or, with `target`, back to any earlier revision as one new revision (D-170).
-  async function undo(target?: RevisionEntry) {
+  async function undo(target?: { id: string; summary: string }) {
     setUndoing(true);
     setUnsynced([]);
     const undone = target?.summary ?? revision.summary;
@@ -1186,6 +1301,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onPin={pinProposal}
                 onApplied={onProposalApplied}
                 onOpenRelease={onOpenRelease}
+                commands={chatCommands}
               />
             </>
   );
@@ -1289,11 +1405,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           entries: boardEntries(chrome.layouts, chrome.boardChoices).map((entry) => ({ ...entry, tone: boardLight(sync.boards.find((candidate) => candidate.boardId === entry.id)) })),
           active: summary.boardId,
           onSelect: (boardId) => {
-            const first = chrome.layouts.find((candidate) => candidate.boardId === boardId);
-            if (first !== undefined && first.id !== summary.id) chrome.onSelect(first.id);
+            // A board opens on the config its keyboard runs (D-315), else its first.
+            const running = sync.boards.find((candidate) => candidate.boardId === boardId)?.layoutId;
+            const target = chrome.layouts.find((candidate) => candidate.id === running) ?? chrome.layouts.find((candidate) => candidate.boardId === boardId);
+            if (target !== undefined && target.id !== summary.id) chrome.onSelect(target.id);
           },
         }}
-        sync={<SyncStatus sync={sync} layoutId={summary.id} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} />}
+        sync={
+          editingOther && keyboardConfig !== null ? (
+            <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
+          ) : (
+            <SyncStatus sync={sync} layoutId={summary.id} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} />
+          )
+        }
         ask={{ open: chatOpen, onToggle: toggleChat }}
         undo={{
           canUndo: revision.origin !== "undo" && revision.undoable,
@@ -1344,7 +1468,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           style={{ "--board-lift": `${barFit.lift}px`, "--bar-room": `${barFit.room}px` } as CSSProperties}
         >
           <Caption
-            layoutMenu={<LayoutMenu layouts={chrome.layouts} selectedId={chrome.selectedId} onSelect={chrome.onSelect} onImport={chrome.onImport} />}
+            layoutMenu={
+              <ConfigMenu
+                live={configs.live}
+                archived={configs.archived}
+                selectedId={summary.id}
+                selectedName={summary.name}
+                boardName={boardDisplayName(board.name)}
+                onSelect={chrome.onSelect}
+                onNew={() => setConfigDialog({ kind: "new" })}
+                onRename={() => setConfigDialog({ kind: "rename" })}
+                onArchive={() => void archiveThis()}
+                onRestore={(id) => void restoreArchived(id)}
+                onImport={chrome.onImport}
+              />
+            }
             layerId={layer.id}
             layerName={layer.name}
             light={light}
@@ -1412,6 +1550,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             rippleFrom={rippleFrom}
             inspect={inspect}
             {...(labOpen ? { lab: labBoard } : {})}
+            {...(compareThen === null ? {} : { then: compareThen })}
             found={found}
             previewing={preview !== null}
           />
@@ -1541,15 +1680,40 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           }
           history={
             historyOpen ? (
-              <HistoryPanel
-                layout={layout}
-                revisions={history.revisions}
-                onClose={() => setHistoryOpen(false)}
-                onReload={history.reload}
-                onGoBack={(target) => undo(target)}
-                onFlash={(target) => onOpenRelease({ id: target.id, summary: target.summary })}
-                blockedReason={undoBlock}
-              />
+              comparing !== null ? (
+                <VersionCompare
+                  comparing={comparing}
+                  boardName={boardDisplayName(board.name)}
+                  layerId={layer.id}
+                  layerName={layerNameOf}
+                  onBack={() => setComparing(null)}
+                  onClose={() => setHistoryOpen(false)}
+                  onShowLayer={(id) => setLayerId(id)}
+                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then(() => setComparing(null))}
+                  onPutOn={() => setConfigDialog({ kind: "put-version", milestone: comparing.milestone })}
+                  onNewConfig={() => setConfigDialog({ kind: "new", start: "version", version: comparing.milestone.version.id })}
+                  blockedReason={undoBlock}
+                />
+              ) : (
+                <HistoryPanel
+                  layout={layout}
+                  versions={history.versions}
+                  configName={summary.name}
+                  boardName={boardDisplayName(board.name)}
+                  onKeyboard={!editingOther}
+                  onClose={() => setHistoryOpen(false)}
+                  onReload={history.reload}
+                  onGoBack={(target) => undo(target)}
+                  onCompare={(milestone) => void compareWith(milestone)}
+                  onPutOn={(milestone) => setConfigDialog({ kind: "put-version", milestone })}
+                  onNewConfig={(milestone) => setConfigDialog({ kind: "new", start: "version", version: milestone.version.id })}
+                  onName={async (milestone, name) => {
+                    await nameVersion(token, layoutRef, milestone.version.id, name);
+                    history.reload();
+                  }}
+                  blockedReason={undoBlock}
+                />
+              )
             ) : null
           }
           combo={
@@ -1605,6 +1769,58 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         )}
       </div>
       <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      {configDialog?.kind === "new" ? (
+        <NewConfigDialog
+          token={token}
+          source={{ id: summary.id, name: summary.name }}
+          boardId={summary.boardId}
+          boardName={boardDisplayName(board.name)}
+          {...(configDialog.start === undefined ? {} : { start: configDialog.start })}
+          {...(configDialog.version === undefined ? {} : { version: configDialog.version })}
+          onCreate={async (request) => {
+            const made = await createConfig(token, request);
+            toasts.show({ kind: "info", message: `Made ${made.name}`, detail: `It isn't on your ${boardDisplayName(board.name)} until you put it on.` });
+            chrome.onReload?.(made.id);
+            return made;
+          }}
+          onImport={chrome.onImport}
+          onClose={() => setConfigDialog(null)}
+        />
+      ) : configDialog?.kind === "rename" ? (
+        <RenameDialog
+          current={summary.name}
+          onRename={async (name) => {
+            await renameConfig(token, summary.id, name);
+            configs.reload();
+            chrome.onReload?.();
+          }}
+          onClose={() => setConfigDialog(null)}
+        />
+      ) : configDialog?.kind === "put-on" ? (
+        <ConfirmDialog
+          title={`Put ${configDialog.target.name} on your ${boardDisplayName(board.name)}?`}
+          lines={[
+            `keyloom builds ${configDialog.target.name} and puts it on the keyboard, the same press-and-sync as Apply. From then on ${configDialog.target.name} is the config that syncs.`,
+            ...(keyboardConfig === null ? [] : [`${keyboardConfig.name} comes off the keyboard. It stays here with its history, and you can put it back the same way.`]),
+          ]}
+          confirmLabel="Put it on"
+          onConfirm={() => putOn(configDialog.target)}
+          onClose={() => setConfigDialog(null)}
+        />
+      ) : configDialog?.kind === "put-version" ? (
+        <ConfirmDialog
+          title={`Put ${versionTitle(configDialog.milestone.version)} on your ${boardDisplayName(board.name)}?`}
+          lines={[
+            configDialog.milestone.version.revisionId === revision.id
+              ? `keyloom builds ${summary.name} as it is now, which is this version, and puts it on the keyboard.`
+              : `keyloom goes back to this version as a new change in ${summary.name}, so auto-sync keeps it there, then builds it and puts it on the keyboard. The newer changes stay in History.`,
+            ...(editingOther && keyboardConfig !== null ? [`${summary.name} becomes the config on your ${boardDisplayName(board.name)}; ${keyboardConfig.name} comes off it but stays here.`] : []),
+          ]}
+          confirmLabel="Put it on"
+          onConfirm={() => putVersionOn(configDialog.milestone)}
+          onClose={() => setConfigDialog(null)}
+        />
+      ) : null}
       {pendingDrop === null ? null : (
         <DropConfirm
           summary={pendingDrop.summary}

@@ -12,7 +12,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { join } from "node:path";
 import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
-import { getBuild, getLayout, listLayouts, openApp } from "../../src/app/index.ts";
+import { getBuild, getLayout, listConfigs, listLayouts, openApp } from "../../src/app/index.ts";
 import { appSyncDeps } from "../../src/app/sync-deps.ts";
 import { buildMarker } from "../../src/firmware/qmk/handsfree.ts";
 import { buildKey } from "../../src/firmware/zmk/handsfree.ts";
@@ -70,8 +70,10 @@ for (const dir of [checkoutDirFor(moonlanderBoard), checkoutDirFor(glove)]) {
 // --- the app, and what each keyboard already runs ---------------------------------------------------------------
 const app = openApp({ dataDir });
 const layouts = listLayouts(app);
-const moon = layouts.find((l) => l.boardId === "zsa/moonlander");
-const glv = layouts.find((l) => l.boardId === "moergo/glove80");
+// Each keyboard runs its board's config (D-300), which with several configs isn't necessarily the first layout listed.
+const keyboardConfig = (boardId: string) => listConfigs(app, { board: boardId }).find((c) => c.onKeyboard)?.id;
+const moon = layouts.find((l) => l.id === keyboardConfig("zsa/moonlander")) ?? layouts.find((l) => l.boardId === "zsa/moonlander");
+const glv = layouts.find((l) => l.id === keyboardConfig("moergo/glove80")) ?? layouts.find((l) => l.boardId === "moergo/glove80");
 if (!moon || !glv) throw new Error("the data dir needs a Moonlander layout and a Glove80 layout");
 
 function seedBuild(layoutId: string, boardRevision: string): string {

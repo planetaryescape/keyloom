@@ -109,6 +109,8 @@ interface KeyboardProps {
   found?: number | null;
   /** The typing lab (D-314): keys pressed just now, keys a finding is about (rose), and a heat 0..1 per key from below. */
   lab?: { lit?: ReadonlySet<number>; findings?: ReadonlySet<number>; heat?: ReadonlyMap<number, number> } | undefined;
+  /** Compare with now (D-315): what each marked key printed in the version being compared, drawn as a small "then" tag. */
+  then?: ReadonlyMap<number, string> | undefined;
   /** Inspect: kinds tinted, inherited legends and combo dots shown (D-264). */
   inspect?: boolean;
   /** How far the board slides sideways to make room for the key card, in px (P2). */
@@ -179,6 +181,7 @@ export function Keyboard({
   found = null,
   inspect = false,
   lab,
+  then,
   shiftPx = 0,
   part = null,
   scale = 1,
@@ -358,6 +361,7 @@ export function Keyboard({
               data-lab-lit={lab?.lit?.has(index) ?? false}
               data-lab-finding={lab?.findings?.has(index) ?? false}
               {...(lab?.heat?.has(index) ? { "data-lab-heat": "true", style: { ...keyStyle(rect, unit), "--heat": String(lab.heat.get(index)) } as CSSProperties } : {})}
+              {...(then?.has(index) ? { "data-then": `then: ${then.get(index) || "nothing"}` } : {})}
               data-key-index={index}
               data-hand={parts2 ? handOf.get(index) : undefined}
               data-combo-hover={comboLit?.has(index) ?? false}

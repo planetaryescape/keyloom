@@ -112,7 +112,12 @@ export function App({ token }: { token: string }) {
 
   const summary = layouts.find((layout) => layout.id === selectedId) ?? layouts[0];
   if (summary === undefined) return null;
-  const menu = { layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setSelectedId(id); }, onImport: () => setImporting(true), boardChoices };
+  // A new, renamed or restored config changes the list; the switcher asks for it again, and a new config opens (D-315).
+  const reload = (selectId?: string) => {
+    if (selectId !== undefined) setSelectedId(selectId);
+    setAttempt((count) => count + 1);
+  };
+  const menu = { layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setSelectedId(id); }, onImport: () => setImporting(true), onReload: reload, boardChoices };
   if (importing) {
     return (
       <Shell menu={menu}>
@@ -245,7 +250,7 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
   return null;
 }
 
-export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void; boardChoices?: readonly BoardChoice[] };
+export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void; onReload?: (selectId?: string) => void; boardChoices?: readonly BoardChoice[] };
 
 // `fill` is the layout page, which is exactly the window tall so the board and its panel never scroll the page. A `bare` page draws its
 // own top bar (the layout page's has the sync line, undo and the menu).

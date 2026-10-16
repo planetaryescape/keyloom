@@ -4,7 +4,7 @@ import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { ReachWords } from "../light/reach-words.ts";
 
 interface CaptionProps {
-  /** The layout picker. */
+  /** The config picker (D-315: a config is a layout, and the caption calls it what BK does). */
   layoutMenu: ReactNode;
   layerId: string;
   layerName: string;
@@ -25,7 +25,7 @@ export function Caption({ layoutMenu, layerId, layerName, light, reach, notice, 
   return (
     <div className="caption">
       <div className="caption-layout">
-        <span className="caption-layout-word">Layout</span>
+        <span className="caption-layout-word">Config</span>
         {layoutMenu}
       </div>
       <div className="caption-main">

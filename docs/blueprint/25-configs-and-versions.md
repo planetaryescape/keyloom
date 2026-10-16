@@ -1,6 +1,6 @@
 # 25: Configs and versions
 
-Status: model, sync, CLI, API and agent built (rung 23 part 1); screens are the designer's. Source baseline: origin/main after v0.25.0.
+Status: model, sync, CLI, API and agent built (rung 23 part 1); screens built on fake keyboards (D-315), 2026-10-16. Source baseline: origin/main after v0.25.0.
 
 BK: "I would like this app to keep multiple versions of my layout and version history just like oryx does so if i change something an use it for a week and don't like it I can go bto a past version or maybe I want a steno config and a qwerty config and a colemac config and I don't want to use layers for that, then I can keep layout configs that are different".
 
@@ -38,7 +38,7 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 ## How it fits the whole
 
 - **Nouns.** Board → config → layer → key. A change and a version are moments in a config's history.
-- **Map.** The top bar shows the board, then the config ("Moonlander · QWERTY ▾"), with a small mark on the config that's on the keyboard. The config menu lists that board's configs, newest first, with New, Rename and Archive. History is one click away (C/H/L controls).
+- **Map.** The top bar shows the board; the caption under it shows the config ("Config QWERTY ▾", D-315), and its menu lists that board's configs, the one on the keyboard first and marked green, with New, Rename and Archive. History is one click away (C/H/L controls).
 - **Journeys.**
   - Try a change for a week: edit, apply (a version is recorded on sync), and later History → that version → Go back.
   - Switch to Colemak for the day: config menu → Colemak → "Put on my Moonlander".
@@ -66,11 +66,10 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 
 ## Not built yet
 
-- The screens (config switcher, "Editing X, Y is on your keyboard", version milestones with compare on the board).
-- "Put a version on the keyboard" as a sync of an old revision.
+- Deleting a config from the screens (the CLI and `/api/configs/:ref/delete` have it).
 - New config from an import is `keyloom import --name`, which already makes a layout; on a board that has a config it is not put on the keyboard.
 - A real default keymap for a blank config (D-306).
 
 ## Decisions
 
-D-300 and D-301 are in [14](14-decision-log.md), with D-302 to D-309 for the build.
+D-300 and D-301 are in [14](14-decision-log.md), with D-302 to D-309 for the build and D-315 for the screens: the caption's "Config ▾" switcher, the editing line, History as versions, compare on the board, and putting a version on the keyboard as a restore followed by a sync. The screens are `src/web/configs/` and `src/web/history/`.
