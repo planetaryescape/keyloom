@@ -22,7 +22,7 @@ describe("the library", () => {
   test("a macro is used by the keys that run it and the tap dance slots that hold it", () => {
     expect(lib.macros).toHaveLength(1);
     expect(lib.macros[0]?.uses.map((u) => u.label)).toEqual(["the Esc key on Base", "the Macro key on Base", "the Esc key on Numbers"]);
-    expect(lib.macros[0]?.detail).toBe("1 step");
+    expect(lib.macros[0]?.detail).toBe("One step");
   });
 
   test("a tap dance is used by each key that has it, and says which slots it has", () => {
@@ -37,7 +37,7 @@ describe("the library", () => {
 
   test("a combo whose output is the item counts, with no key to point at", () => {
     const l = { ...tiny(), combos: [{ id: "c", name: "Paste combo", positions: [0, 1], layerIds: "all" as const, output: { kind: "macro" as const, macroId: "m1" } }] };
-    expect(libraryOf(l).macros[0]?.uses).toEqual([{ label: "Combo Paste combo" }]);
+    expect(libraryOf(l).macros[0]?.uses).toEqual([{ label: "The combo A + B" }]);
   });
 
   test("the board highlights only the uses on the layer it shows", () => {

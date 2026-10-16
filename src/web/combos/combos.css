@@ -128,3 +128,16 @@
   gap: var(--space-2);
   font-weight: var(--weight-regular);
 }
+
+/* The combos sheet (P4): a row is the keys as small caps, an arrow, and what they send. */
+.combo-pane .sheet-row .mini-caps {
+  gap: 6px;
+}
+
+.combo-arrow {
+  color: var(--ink-3);
+}
+
+.combo-sends {
+  flex: 0 1 auto;
+}

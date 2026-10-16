@@ -1,4 +1,5 @@
-import { LoaderCircle, MousePointerClick, Trash2, X } from "lucide-react";
+import { ArrowRight, LoaderCircle, MousePointerClick, Trash2, X } from "lucide-react";
+import { MiniCap, SheetHead } from "../shell/Sheet.tsx";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Binding, Combo, Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
@@ -41,7 +42,15 @@ interface ListProps {
   onClose: () => void;
 }
 
-const keysText = (positions: readonly number[]) => positions.map((position) => position + 1).join(" + ");
+// A combo's keys by what they print on the first layer, the way the board shows them (D-279).
+const keyLegends = (layout: Layout, positions: readonly number[]) => {
+  const base = layout.layers[0];
+  const ctx = { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances };
+  return positions.map((position) => {
+    const binding = base?.bindings[position];
+    return binding === undefined ? "?" : bindingLegend(binding, ctx).tap || "blank";
+  });
+};
 const layersText = (layout: Layout, layerIds: Combo["layerIds"]) =>
   layerIds === "all" ? "All layers" : layerIds.map((id) => layout.layers.find((layer) => layer.id === id)?.name ?? id).join(", ");
 
@@ -49,41 +58,50 @@ const layersText = (layout: Layout, layerIds: Combo["layerIds"]) =>
 export function ComboList({ layout, onOpen, onHover, onClose }: ListProps) {
   return (
     <section className="combo-pane" aria-label="Combos">
-      <header className="panel-head">
-        <div className="panel-title">
-          <h2>Combos</h2>
-          <p className="muted">{layout.combos.length === 0 ? "None yet" : `${layout.combos.length} in this layout`}</p>
-        </div>
-        <button type="button" className="icon-button" aria-label="Close the combos list" onClick={onClose}>
-          <X size={18} aria-hidden="true" />
-        </button>
-      </header>
-      {layout.combos.length === 0 ? (
-        <p className="muted combo-lead">No combos yet. Select two or more keys (Shift-click), then choose Make a combo.</p>
-      ) : (
-        <>
-          <p className="muted combo-lead">Hover a row to see its keys on the board.</p>
-          <ul className="combo-rows">
-            {layout.combos.map((combo) => (
-              <li key={combo.id}>
-                <button
-                  type="button"
-                  className="combo-row"
-                  onClick={() => onOpen(combo)}
-                  onPointerEnter={() => onHover(combo.id)}
-                  onPointerLeave={() => onHover(null)}
-                  onFocus={() => onHover(combo.id)}
-                  onBlur={() => onHover(null)}
-                >
-                  <strong>{combo.name}</strong>
-                  <span>Keys {keysText(combo.positions)} send {bindingSummary(combo.output, layout)}</span>
-                  <span className="muted">{layersText(layout, combo.layerIds)}</span>
-                </button>
-              </li>
-            ))}
+      <SheetHead
+        title="Combos"
+        lead={layout.combos.length === 0 ? "Keys pressed together that send something else." : "Keys pressed together that send something else. Point at one to see it on the board."}
+        closeLabel="Close the combos list"
+        onClose={onClose}
+      />
+      <div className="sheet-body">
+        {layout.combos.length === 0 ? (
+          <p className="sheet-empty">None yet. Shift-click two or more keys on the board, then choose Make a combo.</p>
+        ) : (
+          <ul className="sheet-rows">
+            {layout.combos.map((combo) => {
+              const legends = keyLegends(layout, combo.positions);
+              const sends = bindingSummary(combo.output, layout);
+              return (
+                <li key={combo.id}>
+                  <button
+                    type="button"
+                    className="sheet-row"
+                    aria-label={`${legends.join(" and ")} together send ${sends}`}
+                    onClick={() => onOpen(combo)}
+                    onPointerEnter={() => onHover(combo.id)}
+                    onPointerLeave={() => onHover(null)}
+                    onFocus={() => onHover(combo.id)}
+                    onBlur={() => onHover(null)}
+                  >
+                    <span className="mini-caps">
+                      {legends.map((legend, i) => (
+                        <span key={`${combo.positions[i]}`} className="mini-caps">
+                          {i === 0 ? null : <span className="plus" aria-hidden="true">+</span>}
+                          <MiniCap>{legend}</MiniCap>
+                        </span>
+                      ))}
+                      <ArrowRight size={13} className="combo-arrow" aria-hidden="true" />
+                      <span className="sheet-row-title combo-sends">{sends}</span>
+                    </span>
+                    <span className="sheet-row-meta">{layersText(layout, combo.layerIds)}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-        </>
-      )}
+        )}
+      </div>
     </section>
   );
 }

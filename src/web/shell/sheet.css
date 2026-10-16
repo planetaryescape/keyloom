@@ -1,0 +1,239 @@
+/* The menu's sheets (P4): one surface beside the board, a quiet head, rows without borders that lift on hover, keys as small caps,
+   and actions as quiet links until a row is pointed at. Amber only for a change not on the keyboard yet (D-263). */
+
+.sheet-head {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-3) var(--space-5);
+}
+
+.sheet-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.sheet-title h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.sheet-title p {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.sheet-close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.sheet-close:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.sheet-body {
+  min-height: 0;
+  flex: 1;
+  padding: 0 var(--space-3) var(--space-4);
+  overflow-y: auto;
+}
+
+.sheet-section + .sheet-section {
+  margin-top: var(--space-5);
+}
+
+.sheet-section > h3 {
+  margin: 0 0 var(--space-1);
+  padding: 0 var(--space-3);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.sheet-empty {
+  margin: 0;
+  padding: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.sheet-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet-row {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+button.sheet-row {
+  cursor: pointer;
+}
+
+.sheet-row:hover,
+.sheet-row:focus-within,
+button.sheet-row:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+
+.sheet-row-main {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.sheet-row-title {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.sheet-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.sheet-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.sheet-action {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.sheet-action:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.sheet-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sheet-pill {
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+}
+
+.sheet-pill[data-tone="ok"] {
+  background: color-mix(in oklab, var(--ok) 16%, transparent);
+  color: var(--ok-ink, var(--ink));
+}
+
+.sheet-pill[data-tone="pending"] {
+  background: color-mix(in oklab, var(--pending) 18%, transparent);
+  color: var(--pending-ink);
+}
+
+.sheet-note {
+  margin: 0 var(--space-5) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+/* A key as a small cap, the way the board prints it. */
+.mini-cap-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.mini-cap {
+  display: inline-flex;
+  min-width: 24px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-1);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--top-hi), var(--top-lo));
+  box-shadow: 0 1px 0 var(--skirt-lo), 0 2px 3px var(--cap-drop), inset 0 1px 0 var(--top-rim);
+  color: var(--legend);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 520;
+  white-space: nowrap;
+}
+
+.mini-cap-layer {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.mini-caps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.mini-caps .plus {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}

@@ -49,12 +49,17 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
       >
         {(close) => (
           <>
-            <p className="sync-detail">
-              <strong>{board.boardName}</strong>
-              {line.detail === null ? null : <span>{line.detail}</span>}
-            </p>
+            {/* The sync sheet (P4): the state in words with its light, why, and the one thing to do as the only filled button. */}
+            <div className="sync-detail">
+              <span className="sync-detail-board">{board.boardName}</span>
+              <span className="sync-detail-state">
+                <i className="sync-light" data-tone={lightFor(board, line)} aria-hidden="true" />
+                {line.label}
+              </span>
+              {line.detail === null ? null : <span className="sync-detail-why">{line.detail}</span>}
+            </div>
             {line.action === null ? null : (
-              <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); act(line.action!.id); }}>
+              <button type="button" role="menuitem" className="menu-item sync-primary" onClick={() => { close(); act(line.action!.id); }}>
                 <RefreshCw size={14} aria-hidden="true" />
                 <span className="menu-item-label">{line.action.label}</span>
               </button>

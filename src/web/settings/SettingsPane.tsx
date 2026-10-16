@@ -1,4 +1,4 @@
-import { LoaderCircle, Search, X } from "lucide-react";
+import { LoaderCircle, Search } from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { type OptionSpec, baselineOf, currentValue, optionsFor, otherSettings, sourceText } from "../../layout/firmware-options.ts";
@@ -11,6 +11,7 @@ import { Validation } from "../editor/Validation.tsx";
 import { LightingSection } from "./LightingSection.tsx";
 import { SettingRow } from "./SettingRow.tsx";
 import { type LightingDraft, lightingOps, lightingWords } from "./lighting-ops.ts";
+import { SheetHead } from "../shell/Sheet.tsx";
 import "./settings.css";
 
 interface Props {
@@ -109,15 +110,7 @@ export function SettingsPane(props: Props) {
 
   return (
     <section className="settings-pane" aria-label="Settings">
-      <header className="panel-head">
-        <div className="panel-title">
-          <h2>Settings</h2>
-          <p className="muted">For the whole keyboard. Timing for one key is tuned from the key.</p>
-        </div>
-        <button type="button" className="icon-button" aria-label="Close the settings" onClick={onClose}>
-          <X size={18} aria-hidden="true" />
-        </button>
-      </header>
+      <SheetHead title="Settings" lead="For the whole keyboard. One key's timing is tuned from that key's card." closeLabel="Close the settings" onClose={onClose} />
       <div className="settings-search">
         <Search size={14} aria-hidden="true" />
         <label htmlFor={search} className="sr-only">Filter the settings</label>
@@ -157,23 +150,20 @@ export function SettingsPane(props: Props) {
         {shown.length === 0 && !showLighting && others.length === 0 ? <p className="muted settings-empty">Nothing matches &ldquo;{filter}&rdquo;.</p> : null}
         <OtherSettings layout={layout} settings={others} />
       </div>
-      <footer className="settings-foot">
-        {ops === null ? (
-          <p className="muted">Nothing is saved until you apply.</p>
-        ) : (
-          <>
-            <p className="settings-summary" aria-live="polite">{problem ?? summary}</p>
-            <Validation layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} />
-          </>
-        )}
-        <div className="settings-actions">
-          <button type="button" className="button" disabled={ops === null || applying} onClick={reset}>Reset changes</button>
-          <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()}>
-            {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
-            {applying ? "Applying" : "Apply"}
-          </button>
-        </div>
-      </footer>
+      {/* Apply appears only once something changed, and says the change in words (23#shared-patterns). */}
+      {ops === null ? null : (
+        <footer className="settings-foot">
+          <p className="settings-summary" aria-live="polite">{problem ?? summary}</p>
+          <Validation layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} />
+          <div className="settings-actions">
+            <button type="button" className="sheet-action" disabled={applying} onClick={reset}>Undo these</button>
+            <button type="button" className="bar-apply" disabled={!canApply} onClick={() => void apply()}>
+              {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
+              {applying ? "Applying" : "Apply"}
+            </button>
+          </div>
+        </footer>
+      )}
     </section>
   );
 }

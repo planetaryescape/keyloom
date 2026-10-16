@@ -83,7 +83,8 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
       return { label: `${name} not connected`, short: "Not connected", detail: "Plug it in and keyloom checks it.", tone: "neutral", action: null };
     case "not_keyloom":
       return {
-        label: "Running firmware keyloom didn't build", short: "Not keyloom's", detail: `${s.detail}. keyloom never replaces it by itself.`,
+        // The reading ("the right half reports USB serial …") is why keyloom thinks so; the sentence around it says what it means.
+        label: "Running firmware keyloom didn't build", short: "Not keyloom's", detail: `Your ${name} runs firmware from somewhere else (${s.detail}). keyloom never replaces it by itself; flash keyloom's build once and it can sync from then on.`,
         tone: "warning", action: { id: "flash_keyloom", label: "Flash keyloom's build" },
       };
   }

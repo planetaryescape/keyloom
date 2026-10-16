@@ -1,7 +1,8 @@
-import { History, LoaderCircle, RefreshCw, Undo2, X, Zap } from "lucide-react";
+import { LoaderCircle, RefreshCw, Undo2, Zap } from "lucide-react";
 import { useState } from "react";
 import type { RevisionEntry } from "../../api/http.ts";
-import { tidySummary } from "../../layout/history-summary.ts";
+import { tidySummary, withoutKeyNumbers } from "../../layout/history-summary.ts";
+import { SheetHead } from "../shell/Sheet.tsx";
 import type { Revisions } from "./useRevisions.ts";
 import { formatWhen, sourceLabel } from "./words.ts";
 import "./history.css";
@@ -33,59 +34,56 @@ export function HistoryPanel({ revisions, onClose, onReload, onGoBack, onFlash, 
 
   return (
     <section className="history-panel" aria-label="History">
-      <header className="panel-head">
-        <span className="history-icon" aria-hidden="true"><History size={20} /></span>
-        <div className="panel-title">
-          <h2>History</h2>
-          <p className="muted">Every change to this layout, newest first.</p>
-        </div>
-        <button type="button" className="icon-button" aria-label="Close the history" onClick={onClose}>
-          <X size={18} aria-hidden="true" />
-        </button>
-      </header>
-      {blockedReason === null ? null : <p className="history-why" role="status">{blockedReason}</p>}
-      {revisions.status === "idle" || revisions.status === "loading" ? (
-        <p className="muted history-state" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading the history…</p>
-      ) : revisions.status === "error" ? (
-        <div className="history-state history-error" role="alert">
-          <p>{revisions.message}</p>
-          <button type="button" className="button" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>
-        </div>
-      ) : (
-        <ol className="revision-list" aria-label="Revisions">
-          {revisions.items.map((revision) => (
-            <li key={revision.id} className="revision" data-head={revision.isHead} data-origin={revision.origin}>
-              <div className="revision-text">
-                {/* Revisions stored before go-backs stopped stacking prefixes still read with one. */}
-                <p className="revision-summary">{revision.origin === "undo" ? tidySummary(revision.summary) : revision.summary}</p>
-                <p className="revision-meta">
-                  <span className="revision-source">{sourceLabel(revision.origin)}</span>
-                  <time dateTime={new Date(revision.createdAt).toISOString()} title={new Date(revision.createdAt).toLocaleString()}>{formatWhen(revision.createdAt, now)}</time>
-                  {revision.isHead ? <span className="revision-current">Current</span> : null}
-                </p>
-              </div>
-              <div className="revision-actions">
-                {revision.isHead ? null : (
-                  <button
-                    type="button"
-                    className="button"
-                    disabled={blockedReason !== null || working !== null}
-                    aria-label={`Go back to: ${revision.summary}`}
-                    onClick={() => void goBack(revision)}
-                  >
-                    {working === revision.id ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Undo2 size={14} aria-hidden="true" />}
-                    Go back
-                  </button>
-                )}
-                <button type="button" className="button" aria-label={`Flash this revision: ${revision.summary}`} onClick={() => onFlash(revision)}>
-                  <Zap size={14} aria-hidden="true" />
-                  Flash this
-                </button>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
+      <SheetHead title="History" lead="Every change to this layout, newest first. Going back is a change too, so nothing is lost." closeLabel="Close the history" onClose={onClose} />
+      {blockedReason === null ? null : <p className="sheet-note" role="status">{blockedReason}</p>}
+      <div className="sheet-body">
+        {revisions.status === "idle" || revisions.status === "loading" ? (
+          <p className="sheet-empty" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading the history…</p>
+        ) : revisions.status === "error" ? (
+          <div className="sheet-empty" role="alert">
+            <p>{revisions.message}</p>
+            <button type="button" className="sheet-action" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+          </div>
+        ) : (
+          <ol className="sheet-rows" aria-label="Revisions">
+            {revisions.items.map((revision) => {
+              // Older summaries carry key numbers and stacked prefixes; both are read away here (D-279).
+              const words = withoutKeyNumbers(revision.origin === "undo" ? tidySummary(revision.summary) : revision.summary);
+              return (
+                <li key={revision.id} className="sheet-row revision" data-head={revision.isHead} data-origin={revision.origin}>
+                  <div className="sheet-row-main">
+                    <p className="sheet-row-title">{words}</p>
+                    {revision.isHead ? <span className="sheet-pill">On screen</span> : null}
+                  </div>
+                  <p className="sheet-row-meta">
+                    <span>{sourceLabel(revision.origin)}</span>
+                    <span aria-hidden="true">·</span>
+                    <time dateTime={new Date(revision.createdAt).toISOString()} title={new Date(revision.createdAt).toLocaleString()}>{formatWhen(revision.createdAt, now)}</time>
+                  </p>
+                  <div className="sheet-row-actions">
+                    {revision.isHead ? null : (
+                      <button
+                        type="button"
+                        className="sheet-action"
+                        disabled={blockedReason !== null || working !== null}
+                        aria-label={`Go back to: ${words}`}
+                        onClick={() => void goBack(revision)}
+                      >
+                        {working === revision.id ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : <Undo2 size={13} aria-hidden="true" />}
+                        Go back to this
+                      </button>
+                    )}
+                    <button type="button" className="sheet-action" aria-label={`Put this on the keyboard: ${words}`} onClick={() => onFlash(revision)}>
+                      <Zap size={13} aria-hidden="true" />
+                      Put this on the keyboard
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
     </section>
   );
 }

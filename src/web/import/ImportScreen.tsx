@@ -1,9 +1,10 @@
-import { ArrowLeft, Check, Copy, FileUp, Keyboard, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Check, Copy, FileUp, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { BoardChoice, ImportResponse } from "../../api/http.ts";
 import { boardTitle } from "../shell/Header.tsx";
 import { fetchBoards, uploadLayout } from "./api-import.ts";
 import { acceptsFile, guideFor, importCommand } from "./export-steps.ts";
+import { Silhouette } from "../shell/TopBar.tsx";
 import "./import.css";
 
 type Boards = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; boards: BoardChoice[] };
@@ -37,15 +38,14 @@ export function ImportScreen({ token, onImported, onBack }: Props) {
   return (
     <section className="import-screen" aria-labelledby="import-title">
       {onBack === undefined ? null : (
-        <button type="button" className="button import-back" onClick={onBack}>
+        <button type="button" className="sheet-action import-back" onClick={onBack}>
           <ArrowLeft size={14} aria-hidden="true" />
           Back to your layouts
         </button>
       )}
       <header className="import-intro">
-        <span className="state-icon" aria-hidden="true"><Keyboard size={22} /></span>
         <h2 id="import-title">{onBack === undefined ? "Bring in your first layout" : "Import a layout"}</h2>
-        <p>Pick your keyboard, export your layout from its editor, and drop the file on the card. Every layer shows up here.</p>
+        <p>Export your layout from your keyboard's own editor and drop the file on its card. Every layer shows up here, and nothing reaches the keyboard until you apply a change.</p>
       </header>
       {boards.status === "loading" ? (
         <p className="loading" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading the boards…</p>
@@ -117,16 +117,12 @@ function BoardCard({ board, token, onImported }: { board: BoardChoice; token: st
   }
 
   return (
-    <article className="board-card" aria-labelledby={titleId}>
-      <header>
-        <h3 id={titleId}>{board.name}</h3>
-        <p className="muted">{board.vendor} · {board.keyCount} keys</p>
-      </header>
-      <p className="board-card-steps">{guide.steps}</p>
-      <div
-        className="dropzone"
-        data-over={over}
-        data-busy={busy}
+    // The whole card takes the drop (P4): the board is drawn as itself at the top, so the right card is found by its shape.
+    <article
+      className="board-card"
+      aria-labelledby={titleId}
+      data-over={over}
+      data-busy={busy}
         onDragEnter={(event) => {
           event.preventDefault();
           setOver(true);
@@ -143,11 +139,20 @@ function BoardCard({ board, token, onImported }: { board: BoardChoice; token: st
           setOver(false);
           void take(event.dataTransfer.files);
         }}
-      >
-        {busy ? <LoaderCircle size={20} className="spin" aria-hidden="true" /> : <FileUp size={20} aria-hidden="true" />}
-        <p>{busy ? "Importing…" : `Drop your ${guide.accepts} file here`}</p>
-        <button type="button" className="button" disabled={busy} onClick={() => picker.current?.click()}>
-          Choose a file
+    >
+      <div className="board-card-object" aria-hidden="true">
+        {board.keys === undefined ? null : <Silhouette keys={board.keys} display={board.display} width={220} height={84} />}
+      </div>
+      <header>
+        <h3 id={titleId}>{board.name}</h3>
+        <p className="muted">{board.vendor} · {board.keyCount} keys</p>
+      </header>
+      <p className="board-card-steps">{guide.steps}</p>
+      <div className="dropzone">
+        {busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <FileUp size={16} aria-hidden="true" />}
+        <p>{busy ? "Importing…" : `Drop the ${guide.accepts} here, or`}</p>
+        <button type="button" className="sheet-action dropzone-choose" disabled={busy} onClick={() => picker.current?.click()}>
+          choose it
         </button>
         <input
           ref={picker}
@@ -160,13 +165,17 @@ function BoardCard({ board, token, onImported }: { board: BoardChoice; token: st
         />
       </div>
       {problem === null ? null : <p className="board-card-problem" role="alert"><TriangleAlert size={14} aria-hidden="true" />{problem}</p>}
-      <div className="command">
-        <code>{command}</code>
-        <button type="button" className="button" onClick={copy} aria-label={`Copy the ${boardTitle(board.id)} import command`}>
-          {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
+      {/* The terminal way stays, folded: most people never need it (23#chrome-recedes). */}
+      <details className="board-card-terminal">
+        <summary>Or from the terminal</summary>
+        <div className="command">
+          <code>{command}</code>
+          <button type="button" className="sheet-action" onClick={copy} aria-label={`Copy the ${boardTitle(board.id)} import command`}>
+            {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </details>
     </article>
   );
 }

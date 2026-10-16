@@ -10,13 +10,16 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: var(--space-3) var(--space-6);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
 }
 
 .boarddev-idle,
 .boarddev-unset {
   margin: 0;
-  color: var(--color-text-muted);
+  color: var(--ink-3);
 }
 
 .boarddev-coverage {
@@ -26,12 +29,12 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  color: var(--color-text-muted);
+  color: var(--ink-3);
   font-size: var(--text-sm);
 }
 
 .boarddev-coverage li[data-complete="true"] {
-  color: var(--color-success);
+  color: var(--ok-ink);
 }
 
 .boarddev-problems {
@@ -39,8 +42,8 @@
   margin: 0;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md, 6px);
-  background: var(--color-error-bg);
-  color: var(--color-error);
+  background: var(--surface-2);
+  color: var(--ink);
   list-style: none;
 }
 
@@ -55,7 +58,7 @@
 
 /* The keyboard sizes itself to the box it sits in, so the board-dev page gives it one. */
 .boarddev-stage {
-  height: min(60vh, 560px);
+  height: min(62vh, 580px);
   padding: var(--space-2);
 }
 

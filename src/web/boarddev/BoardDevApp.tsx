@@ -90,15 +90,17 @@ export function BoardDevApp({ token }: { token: string }) {
             <li>Keys are numbered from 1; board.json counts from 0</li>
           </ul>
         </div>
-        <button type="button" className="button" onClick={load}>
+        <button type="button" className="sheet-action" onClick={load}>
           <RefreshCw size={14} aria-hidden="true" />
           Reload board.json
         </button>
       </div>
 
-      <section className="card boarddev-stage">
+      {/* The board on the room's backdrop, drawn as the editor draws it, case and all (P4): what a contributor sees is what BK will. */}
+      <section className="boarddev-stage">
         <Keyboard
           keys={keys}
+          display={view.display}
           keycaps={view.display?.keycaps}
           hands={view.hands}
           descriptions={descriptions}
@@ -113,7 +115,7 @@ export function BoardDevApp({ token }: { token: string }) {
         />
       </section>
 
-      <section className="card boarddev-facts" aria-label="What board.json says">
+      <section className="boarddev-facts" aria-label="What board.json says">
         <div className="boarddev-key" aria-live="polite">
           {facts === null || shown === null ? (
             <p className="boarddev-idle">Hover or select a key to see what board.json says about it.</p>
