@@ -2,6 +2,7 @@
 // (02#applying-undoing-and-stale-bases, 07). The agent proposes and the validator decides (D-014):
 // every path that writes a revision runs `evaluate` against the head it is about to extend.
 import { plainSummary } from "../layout/history-summary.ts";
+import { type ProposalCard, toCard } from "./proposal-card.ts";
 import { type Layout } from "../layout/schema.ts";
 import type { ChangeOp, DecisionDraft } from "../layout/change.ts";
 import { recordChoice, restoreChangeSet, subjectOf, supersedeTouched, suspendChangeSet } from "../memory/choices.ts";
@@ -198,6 +199,15 @@ export function rejectChange(app: App, changeSetId: string): ChangeSetView {
 export function listChanges(app: App, ref: string, opts: { status?: ChangeSetStatus } = {}): ChangeSetView[] {
   const view = getLayout(app, ref);
   return listChangeSets(app.db, view.layout.id, opts).map(toView);
+}
+
+/**
+ * A config's open proposals that no conversation shows (D-336): the ones `keyboard put` makes, and any other made outside the chat. The
+ * config page lists them with the chat's proposal card, so they can be previewed, applied or set aside like any other.
+ */
+export function openProposalsOutsideChat(app: App, ref: string): ProposalCard[] {
+  const view = getLayout(app, ref);
+  return listChangeSets(app.db, view.layout.id, { status: "proposed" }).filter((row) => row.conversationId === null).map(toCard);
 }
 
 export function showChange(app: App, changeSetId: string): ChangeSetView {

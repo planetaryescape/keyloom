@@ -11,9 +11,11 @@
 //   POST /api/configs/:ref/versions/name    NameVersionRequest -> NameVersionResponse (an empty name clears it)
 //   POST /api/configs/:ref/versions/restore RestoreVersionRequest -> RestoreVersionResponse (a new revision, D-170; 422 when it breaks a rule the head doesn't)
 //   GET  /api/configs/:ref/compare?to=<revision|version id|version name> -> CompareResponse (the revision against the head, key by key)
+//   GET  /api/configs/:ref/proposals   -> ProposalsResponse (open proposals no conversation shows, such as a keyboard put's; D-336)
 // `:ref` is a config's ID or exact name. A config is a layout, so `layoutId` elsewhere in the API is a config's ID.
 import { z } from "zod";
 import { BindingSchema, LayoutSchema } from "../layout/schema.ts";
+import { ProposalCardSchema } from "./http.ts";
 
 export const ConfigSchema = z.object({
   id: z.string().min(1),
@@ -117,3 +119,6 @@ export const CompareResponseSchema = z.object({
   }),
 });
 export type CompareResponse = z.infer<typeof CompareResponseSchema>;
+
+export const ProposalsResponseSchema = z.object({ proposals: z.array(ProposalCardSchema) });
+export type ProposalsResponse = z.infer<typeof ProposalsResponseSchema>;

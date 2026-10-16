@@ -27,5 +27,6 @@ export function appSyncBackend(engine: SyncEngine): SyncBackend {
     setPaused: (boardId, paused) => translate(() => (engine.setPaused(boardId, paused), engine.views())),
     disableRemapping: (boardId) => translate(async () => (await engine.disableRemapping(boardId), engine.views())),
     subscribe: (listener) => engine.subscribe(listener),
+    newKeyboards: () => engine.newKeyboards(),
   };
 }

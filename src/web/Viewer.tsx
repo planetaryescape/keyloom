@@ -16,6 +16,12 @@ import { applyChangeSet } from "./api-write.ts";
 import { LabPanel, LabStage } from "./lab/LabScreens.tsx";
 import { matchCommands, type Command } from "./chat/commands.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
+import { useNewKeyboard } from "./keyboards/useNewKeyboard.ts";
+import { NewKeyboardCard } from "./keyboards/NewKeyboardCard.tsx";
+import { NewBoardPanel, type PutSource } from "./keyboards/NewBoardPanel.tsx";
+import { NewBoardKeyboard } from "./keyboards/NewBoardKeyboard.tsx";
+import { OpenProposals } from "./keyboards/OpenProposals.tsx";
+import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import type { Turn } from "./chat/transcript.ts";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
@@ -110,7 +116,7 @@ interface ViewerProps {
 }
 
 /** What a board or config switch carries to the next layout (D-317). */
-export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null };
+export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean };
 
 // `resume` is a draft kept from an earlier visit to this key (D-317); the card opens on it.
 type Editing = { layerId: string; position: number; focus: boolean; resume?: Draft };
@@ -278,6 +284,27 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The lab's marks on the board: the keys just typed, the findings' keys (the open one's, else all), and a heat per key from its
   // finger's speed or errors (D-314).
   const labPanelShown = labOpen && lab.phase.kind === "readout" && !narrow;
+  // A new keyboard (D-336): the card over the stage, then its board on the stage and its questions in the column beside it.
+  const newBoard = useNewKeyboard(token, sync.newKeyboards);
+  const newBoardDrawn = (newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put") && newBoard.preview?.board != null ? newBoard.preview.board : null;
+  const newBoardPanel = newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put";
+  const putSources = useMemo<PutSource[]>(() => {
+    const target = newBoard.step.kind === "put" ? newBoard.step.boardId : null;
+    const names = new Map(boardEntries(chrome.layouts, chrome.boardChoices).map((e) => [e.id, e.name]));
+    return chrome.layouts
+      .filter((l) => l.boardId !== target)
+      .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, note: sync.boards.some((b) => b.layoutId === l.id) ? "on it now" : null }));
+  }, [chrome.layouts, chrome.boardChoices, sync.boards, newBoard.step]);
+  // This config's proposals that no conversation shows, such as a put's (D-336); opened by itself when the put brought the page here.
+  const [proposalsOpen, setProposalsOpen] = useState(() => chrome.arrival?.proposals === true);
+  const [waiting, setWaiting] = useState<ProposalCard[] | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOpenProposals(token, layoutRef, controller.signal).then(setWaiting, () => setWaiting([]));
+    return () => controller.abort();
+  }, [token, layoutRef, revision.id]);
+  const waitingCount = waiting?.filter((p) => p.status === "proposed").length ?? 0;
+  const proposalsShown = proposalsOpen && !newBoardPanel && !labPanelShown;
   // While listening, the top bar steps back too (D-314); it lives outside this component, so the root carries the state.
   useEffect(() => {
     if (labOpen && lab.phase.kind === "listening") document.documentElement.dataset.lab = "listening";
@@ -1204,6 +1231,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     else chrome.onSelect(id);
   }
 
+  /** After "Make": open the new config with its proposals beside the board (D-336). */
+  function openMadeConfig(configId: string) {
+    const carry: Arrival = { layerName: null, chatOpen: false, thread: null, proposals: true };
+    if (chrome.onCarry !== undefined) chrome.onCarry(configId, carry);
+    chrome.onReload?.(configId);
+  }
+
   // ⌘K commands (D-315): the typing lab and the config commands, offered above "Ask keyloom" when the text names them.
   // `find` keeps its identity while the configs don't change, so the bar's highlighted row survives a re-render.
   const findCommands = useCallback(
@@ -1510,6 +1544,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
           },
         }}
+        boardsAfter={newBoard.waiting.length === 0 || newBoard.step.kind !== "idle" ? null : (
+          // A keyboard keyloom hasn't met stays one click away after "Not now" (D-336).
+          <button type="button" className="nb-chip" onClick={() => newBoard.reopen(newBoard.waiting[0] as (typeof newBoard.waiting)[number])}>
+            <i aria-hidden="true" /><span>New keyboard</span>
+          </button>
+        )}
         sync={
           editingOther && keyboardConfig !== null ? (
             <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
@@ -1556,7 +1596,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           release: chrome.release,
         }}
       />
-      <div className="workbench" data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
+      <div className="workbench" data-newboard={newBoardDrawn !== null || undefined} data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown || (newBoardPanel && !narrow) || (proposalsShown && !narrow) ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
         <section
           ref={stageRef}
           className="stage"
@@ -1587,7 +1627,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             layerName={layer.name}
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
-            notice={offer}
+            notice={offer ?? (waitingCount === 0 || proposalsOpen ? null : (
+              <button type="button" className="sheet-action nb-waiting" onClick={() => setProposalsOpen(true)}>
+                {waitingCount === 1 ? "1 proposal waiting" : `${waitingCount} proposals waiting`} · Show
+              </button>
+            ))}
             aside={shownHalf === null ? null : <HalfSwitcher value={half} onChange={setHalf} hands={board.hands} />}
           />
           <SelectionBar
@@ -1605,6 +1649,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             onQuickCancel={() => setQuick(null)}
             busy={changing}
           />
+          {newBoardDrawn !== null ? (
+            <NewBoardKeyboard
+              board={newBoardDrawn}
+              mode={newBoard.step.kind === "put" ? "put" : newBoard.step.kind === "review" ? "review" : "confirm"}
+              homeRow={newBoard.step.kind === "confirm" ? (newBoard.step.homeRow ?? newBoard.preview?.guessedHomeRow ?? null) : newBoard.step.kind === "review" ? newBoard.step.homeRow : null}
+              mapped={newBoard.putPreview}
+              placed={new Set(newBoard.step.kind === "put" && newBoard.putPreview !== null
+                ? newBoard.putPreview.placements.flatMap((p) => p.blocked === undefined && p.candidates[0] !== undefined ? [newBoard.step.kind === "put" ? (newBoard.step.choices[String(p.source)] ?? p.candidates[0].target) : p.candidates[0].target] : [])
+                : [])}
+              onPickRow={newBoard.setHomeRow}
+              half={shownHalf}
+            />
+          ) : (
           <Keyboard
             handle={keyboard}
             keys={keys}
@@ -1654,6 +1711,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             found={found}
             previewing={preview !== null}
           />
+          )}
+          <NewKeyboardCard flow={newBoard} />
+          {/* A phone shows one half of the new board too, with its own Left and Right, since the caption that holds them steps aside. */}
+          {newBoardDrawn !== null && shownHalf !== null ? (
+            <div className="nb-half"><HalfSwitcher value={half} onChange={setHalf} hands={newBoardDrawn.hands} /></div>
+          ) : null}
+          {/* A phone has no column: the new keyboard's questions are a sheet at the stage's foot, as the lab's read-out is (D-336). */}
+          {narrow && newBoardPanel ? (
+            <div className="lab-sheet nb-sheet">
+              <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
+            </div>
+          ) : null}
           {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} /> : null}
           {/* A narrow screen has no column beside the board, so a past session's read-out is a sheet at the stage's foot (D-314). */}
           {labOpen && narrow && lab.phase.kind === "readout" ? (
@@ -1852,6 +1921,32 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
         {/* One chat, mounted once: the bar over the stage's foot, or the panel beside the board for a conversation (D-310). A key opened
             from the panel takes its place and the conversation waits, still mounted. */}
+        {newBoardPanel && !narrow ? (
+          <div className="nb-column">
+            <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
+          </div>
+        ) : proposalsShown ? (
+          // A phone has no column: the proposals are a sheet at the foot, as the lab's read-out is.
+          <div className={narrow ? "lab-sheet nb-sheet" : "nb-column"}>
+            <OpenProposals
+              proposals={waiting}
+              layout={layout}
+              board={board}
+              configName={summary.name}
+              firstFlash={boardSync === undefined || boardSync.state.kind === "not_connected" || boardSync.last === null}
+              pinnedId={pinnedProposal?.changeSetId ?? null}
+              onPin={pinProposal}
+              onPreview={setHoveredProposal}
+              onApply={async (card) => {
+                const result = await applyChangeSet(token, card.changeSetId);
+                await onProposalApplied(card, result);
+                setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
+              }}
+              onClose={() => setProposalsOpen(false)}
+              onOpenRelease={() => onOpenRelease()}
+            />
+          </div>
+        ) : null}
         {labPanelShown ? (
           <div className="lab-column">
             <LabPanel lab={lab} heat={labHeat} onHeat={setLabHeat} onTry={(card) => setPinnedProposal(card)} onApply={labApply} onClose={() => toggleLab()} />

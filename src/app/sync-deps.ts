@@ -9,6 +9,8 @@ import { type FlashOptions, startBuild, startFlash, waitForBuild, waitForFlash }
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import { applyToRemapper, disableRemapperFor } from "./remapper.ts";
 import { type KeyboardReading, readKeyboards } from "./sync-keyboard.ts";
+import { type DetectedKeyboard, detectKeyboards } from "./keyboard-detect.ts";
+import type { UsbDevice } from "../firmware/toolchain/usb.ts";
 
 export type BuildOutcome = { ok: true; buildId: string; reused: boolean } | { ok: false; error: string; buildId?: string };
 export type FlashOutcome = { ok: true; flashId: string; verified: boolean; note: string | null } | { ok: false; flashId?: string; error: string };
@@ -24,6 +26,11 @@ export type SyncDeps = {
   /** Present when a software-remapper board can be synced; the default implementation is the kanata use cases (21). */
   remapper?: RemapperDeps;
   readKeyboards(): Promise<Map<string, KeyboardReading>>;
+  /**
+   * The keyboards on USB that keyloom has no board for, from the devices the last `readKeyboards` saw (D-336): the new-keyboard card
+   * follows the engine's own reads instead of polling USB again. Read-only.
+   */
+  newKeyboards?(): Promise<DetectedKeyboard[]>;
   /** Builds `revisionId` for `boardRevision`, or reuses a successful build of exactly that. Never throws; aborting `signal` stops the build and leaves the keyboard alone. */
   build(a: { layoutId: string; revisionId: string; boardRevision: string; signal: AbortSignal; onBuildId: (id: string) => void }): Promise<BuildOutcome>;
   /** Flashes a build. Never throws. `verified` is true only when the flasher saw the keyboard come back running the build. */
@@ -38,8 +45,12 @@ export type DefaultDepsOptions = Pick<FlashOptions, "volumesRoot" | "bootloaderW
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
+  let devices: UsbDevice[] = [];
   return {
-    readKeyboards: () => readKeyboards(opts.handsFree ?? {}),
+    readKeyboards: () => readKeyboards(opts.handsFree ?? {}, (seen) => {
+      devices = seen;
+    }),
+    newKeyboards: async () => (await detectKeyboards({ usb: async () => devices })).filter((k) => k.status !== "known"),
 
     remapper: {
       async apply(a) {

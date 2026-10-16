@@ -1,7 +1,7 @@
 // The server's configs and versions interface over the app (rung 23). The server stays ignorant of storage and the sync
 // engine; this adapter is the one place that knows both.
 import {
-  NotFoundError, StaleBaseError, UsageError, ValidationFailedError, archiveConfig, compareRevision, deleteConfig, listConfigs, nameVersion, newConfig, renameConfig, restoreConfig,
+  NotFoundError, StaleBaseError, UsageError, ValidationFailedError, archiveConfig, compareRevision, deleteConfig, listConfigs, nameVersion, newConfig, openProposalsOutsideChat, renameConfig, restoreConfig,
   restoreVersion, versionHistory, ValidationResultSchema, type App,
 } from "../app/index.ts";
 import type { SyncEngine } from "../app/sync-engine.ts";
@@ -46,5 +46,6 @@ export function appConfigsBackend(app: App, engine: SyncEngine): ConfigsBackend 
         return { revisionId: out.revision.id, restoredRevisionId: out.restoredRevisionId };
       }),
     compare: (ref, target) => translate(() => compareRevision(app, ref, target)),
+    proposals: (ref) => translate(() => openProposalsOutsideChat(app, ref)),
   };
 }

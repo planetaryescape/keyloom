@@ -37,7 +37,8 @@ export function App({ token }: { token: string }) {
     const controller = new AbortController();
     fetchBoards(token, controller.signal).then(setBoardChoices, () => {});
     return () => controller.abort();
-  }, [token]);
+    // Again on a reload: a keyboard just added is a board the switch should draw (D-336).
+  }, [token, attempt]);
 
   useEffect(() => {
     const controller = new AbortController();

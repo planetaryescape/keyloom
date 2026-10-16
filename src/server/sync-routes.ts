@@ -3,6 +3,7 @@
 import {
   AutoSyncRequestSchema, DisableRemappingRequestSchema, PauseRequestSchema, SyncEventSchema, SyncNowRequestSchema, SyncNowResponseSchema, SyncStatusResponseSchema, type ApiErrorBody, type BoardSync,
 } from "../api/http.ts";
+import type { DetectedKeyboard } from "../api/detected-keyboards.ts";
 import { checkToken } from "./guard.ts";
 import { SyncError, type SyncBackend } from "./sync-backend.ts";
 
@@ -38,7 +39,7 @@ async function readJson(request: Request): Promise<unknown | Response> {
   }
 }
 
-const frame = (boards: BoardSync[]): string => `event: sync\ndata: ${JSON.stringify(SyncEventSchema.parse({ type: "sync", boards }))}\n\n`;
+const frame = (boards: BoardSync[], newKeyboards: DetectedKeyboard[]): string => `event: sync\ndata: ${JSON.stringify(SyncEventSchema.parse({ type: "sync", boards, newKeyboards }))}\n\n`;
 
 function events(request: Request, backend: SyncBackend): Response {
   const encoder = new TextEncoder();
@@ -66,10 +67,10 @@ function events(request: Request, backend: SyncBackend): Response {
         }
       };
       // Subscribed before the snapshot is read, so a change in between is not lost; the browser takes the later frame.
-      unsubscribe = backend.subscribe((boards) => send(frame(boards)));
+      unsubscribe = backend.subscribe((boards, newKeyboards) => send(frame(boards, newKeyboards)));
       heartbeat = setInterval(() => send(": keepalive\n\n"), EVENTS_HEARTBEAT_MS);
       request.signal.addEventListener("abort", end, { once: true });
-      void backend.status().then((boards) => send(frame(boards)), () => send(": status unavailable\n\n"));
+      void backend.status().then((boards) => send(frame(boards, backend.newKeyboards())), () => send(": status unavailable\n\n"));
     },
     cancel() {
       closed = true;

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import {
   CompareResponseSchema, ConfigListResponseSchema, ConfigResponseSchema, DeleteConfigRequestSchema, NameVersionRequestSchema, NameVersionResponseSchema, NewConfigRequestSchema,
-  RenameConfigRequestSchema, RestoreVersionRequestSchema, RestoreVersionResponseSchema, VersionHistoryResponseSchema,
+  ProposalsResponseSchema, RenameConfigRequestSchema, RestoreVersionRequestSchema, RestoreVersionResponseSchema, VersionHistoryResponseSchema,
 } from "../api/configs.ts";
 import { SyncNowResponseSchema, type ApiErrorBody } from "../api/http.ts";
 import { ConfigsError, type ConfigsBackend } from "./configs-backend.ts";
@@ -15,7 +15,7 @@ const EmptyBody = z.object({}).strict();
 const errorResponse = (status: number, code: string, message: string, validation?: ApiErrorBody["validation"]): Response =>
   Response.json({ error: { code, message }, ...(validation === undefined ? {} : { validation }) } satisfies ApiErrorBody, { status });
 
-type Action = "list" | "create" | "rename" | "archive" | "restore" | "delete" | "use" | "versions" | "name" | "restoreVersion" | "compare";
+type Action = "list" | "create" | "rename" | "archive" | "restore" | "delete" | "use" | "versions" | "name" | "restoreVersion" | "compare" | "proposals";
 const ROUTES: ReadonlyArray<{ method: "GET" | "POST"; shape: string; action: Action }> = [
   { method: "GET", shape: "configs", action: "list" },
   { method: "POST", shape: "configs", action: "create" },
@@ -28,6 +28,7 @@ const ROUTES: ReadonlyArray<{ method: "GET" | "POST"; shape: string; action: Act
   { method: "POST", shape: "configs/:/versions/name", action: "name" },
   { method: "POST", shape: "configs/:/versions/restore", action: "restoreVersion" },
   { method: "GET", shape: "configs/:/compare", action: "compare" },
+  { method: "GET", shape: "configs/:/proposals", action: "proposals" },
 ];
 
 /** The route a path names, with its one captured segment URL-decoded; "wrong-method" when only the method is off. */
@@ -97,6 +98,7 @@ export async function handleConfigRoute(request: Request, pathname: string, back
       return Response.json(ConfigListResponseSchema.parse({ configs }));
     }
     if (action === "versions") return Response.json(VersionHistoryResponseSchema.parse(await backend.versions(ref)));
+    if (action === "proposals") return Response.json(ProposalsResponseSchema.parse({ proposals: await backend.proposals(ref) }));
     if (action === "compare") {
       const to = new URL(request.url).searchParams.get("to");
       if (!to) return errorResponse(400, "schema", "Name the revision or version to compare: ?to=...");

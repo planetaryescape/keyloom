@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SyncNowResponseSchema, SyncStatusResponseSchema, type BoardSync } from "../../api/http.ts";
 import { request } from "../api-write.ts";
+import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import { createEventParser } from "./events.ts";
 
 export interface SyncApi {
   boards: readonly BoardSync[];
+  /** Keyboards on USB keyloom has no board for, from the engine's reads (D-336). */
+  newKeyboards: readonly DetectedKeyboard[];
   /** False until the first state arrives, and while the stream is being reopened. */
   live: boolean;
   /** Why the last action failed, until the next one starts. */
@@ -23,6 +26,7 @@ const RETRY_MAX_MS = 10_000;
 // pause; the first frame of each is a whole snapshot, so nothing missed meanwhile matters.
 export function useSync(token: string): SyncApi {
   const [boards, setBoards] = useState<readonly BoardSync[]>([]);
+  const [newKeyboards, setNewKeyboards] = useState<readonly DetectedKeyboard[]>([]);
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,10 +41,12 @@ export function useSync(token: string): SyncApi {
         if (response.status === 404 || response.status === 401 || response.body === null) return;
         if (!response.ok) throw new Error(String(response.status));
         const decoder = new TextDecoder();
-        const parser = createEventParser((next) => {
+        const parser = createEventParser((next, keyboards) => {
           delay = RETRY_MIN_MS;
           setLive(true);
           setBoards(next);
+          // A new array each frame; keep the old one while nothing changed, so the card doesn't reset under a choice being made.
+          setNewKeyboards((old) => (JSON.stringify(old) === JSON.stringify(keyboards) ? old : keyboards));
         }, () => setLive(false));
         const reader = response.body.getReader();
         for (;;) {
@@ -78,7 +84,7 @@ export function useSync(token: string): SyncApi {
   }, []);
 
   return {
-    boards, live, error,
+    boards, newKeyboards, live, error,
     syncNow: (layoutId) => act(async () => (await request("POST", "/api/sync", token, SyncNowResponseSchema, undefined, { layoutId })).boards),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),
     disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
