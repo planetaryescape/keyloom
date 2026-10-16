@@ -700,3 +700,304 @@
   flex-basis: 100%;
   margin-top: 0;
 }
+
+/* The thread from the card to its key (comp b). */
+.card-thread {
+  position: absolute;
+  z-index: 11;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.card-thread line {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+
+.card-thread circle {
+  fill: var(--ink);
+}
+
+/* The card is capped to the board's row and its body scrolls; the head and the footer stay. */
+.floating-card .key-card,
+.floating-card .combo-editor {
+  min-height: 0;
+  max-height: inherit;
+}
+
+/* ---------- P2 review ---------- */
+
+/* The head: the title in its own column, stopping before the tools; the tools evenly spaced, close last. */
+.key-card > .card-head,
+.combo-editor > .card-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.card-heading h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.card-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.card-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.card-tools .card-moves {
+  gap: var(--space-1);
+}
+
+.card-tools .key-colour summary {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+}
+
+/* The body scrolls inside the card; a fieldset doesn't clip its own overflow, so a wrapper does. */
+.card-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.card-scroll > .card-body {
+  overflow: visible;
+}
+
+/* Only the slots the change touches are lit (P2 review); the cap keeps its own shadow. */
+.hero-cap[data-draft="true"] .cap-body {
+  box-shadow:
+    0 calc(var(--u) * 0.035) calc(var(--u) * 0.03) var(--cap-drop),
+    0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop),
+    inset 0 0 0 1px rgb(0 0 0 / 0.08);
+}
+
+.hero-cap[data-draft="true"] .cap-front {
+  color: var(--front);
+}
+
+.hero-region[data-changed="true"] {
+  box-shadow: 0 0 0 1.5px var(--pending), 0 0 12px color-mix(in oklab, var(--pending) 40%, transparent);
+}
+
+.hero-region[data-changed="true"] .cap-front,
+.hero-region.hero-corner[data-changed="true"] {
+  color: var(--pending-ink);
+}
+
+/* The empty corners say what they'd hold only when the cap is pointed at or focused. */
+.hero-corner[data-empty="true"] {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.hero-cap:hover .hero-corner[data-empty="true"],
+.hero-cap:focus-within .hero-corner[data-empty="true"] {
+  opacity: 0.85;
+}
+
+/* The picker: its slot's name and quiet links on one line, search first, the categories on one scrolling row. */
+.card-picker-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.card-picker-head b {
+  margin-right: auto;
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+.card-picker-head .link-button,
+.card-reason-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: 3px;
+}
+
+.card-picker-head .link-button:hover,
+.card-reason-link:hover {
+  color: var(--ink);
+}
+
+.key-card .picker-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hold-groups {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hold-group-name {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.hold-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.hold-choice {
+  display: flex;
+  min-width: 0;
+  height: 36px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hold-choice:hover {
+  color: var(--ink);
+}
+
+.hold-choice[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.hold-mark {
+  width: 14px;
+  color: inherit;
+  font-size: 15px;
+  text-align: center;
+}
+
+.hold-all {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.card-chip-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 6px var(--dot);
+}
+
+.card-chip-dot[data-unlit="true"] {
+  border: 1.2px solid currentColor;
+  background: none;
+  box-shadow: none;
+}
+
+.card-sentence {
+  text-wrap: balance;
+}
+
+.card-steps h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.card-steps ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card-steps li {
+  display: flex;
+  height: 36px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.card-steps b {
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+.card-step-n {
+  width: 14px;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.card-foot-row .card-reason-link {
+  margin-right: auto;
+}
+
+.card-reason input {
+  margin-top: 0;
+}
+
+/* Where the key is runs under both the title and the tools, so it never wraps beside them. */
+.key-card > .card-head .card-heading,
+.combo-editor > .card-head .card-heading {
+  display: contents;
+}
+
+.card-head .card-heading h2 {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+}
+
+.card-head .card-heading p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.card-head .card-tools {
+  grid-column: 2;
+  grid-row: 1;
+}

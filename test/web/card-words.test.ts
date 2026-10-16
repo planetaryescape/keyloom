@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { applyWords, cardTitle, modWords } from "../../src/web/card/card-words.ts";
-import { placeCard } from "../../src/web/card/card-place.ts";
+import { seatCard } from "../../src/web/card/card-seat.ts";
 import type { Binding } from "../../src/layout/schema.ts";
 
 const layout = {
@@ -32,25 +32,39 @@ describe("the key card's words", () => {
   });
 });
 
-describe("where the card goes", () => {
-  const stage = { x: 0, y: 0, w: 1440, h: 800 };
-  const card = { w: 340, h: 400 };
+describe("where the card sits (BK: the halves part only when needed)", () => {
+  const area = { x: 0, y: 100, w: 1366, h: 500 };
+  const card = { w: 352, h: 380 };
+  const row = (x0: number, n: number) => Array.from({ length: n }, (_, i) => ({ x: x0 + i * 50, y: 200, w: 46, h: 46 }));
+  const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-  test("beside the key, on the side with more room, never over the key or its neighbours", () => {
-    const key = { x: 1000, y: 300, w: 50, h: 50 };
-    const keep = [key, { x: 950, y: 300, w: 50, h: 50 }, { x: 1050, y: 300, w: 50, h: 50 }];
-    const at = placeCard({ stage, key, keep, card });
-    expect(at.shift).toBe(0);
-    expect(at.x + card.w).toBeLessThanOrEqual(950);
+  test("a card that fits beside the board doesn't move it", () => {
+    const left = row(500, 3);
+    const right = row(700, 3);
+    const seat = seatCard({ area, key: left[0]!, keyHand: "left", left, right, card });
+    expect(seat.part).toBeNull();
+    expect(seat.shift).toBe(0);
+    expect([...left, ...right].some((b) => overlaps(b, { x: seat.x, y: seat.y, w: card.w, h: card.h }))).toBe(false);
   });
 
-  test("when neither side has room the board slides and the card still clears the keys", () => {
-    const narrow = { x: 0, y: 0, w: 700, h: 800 };
-    const key = { x: 330, y: 300, w: 50, h: 50 };
-    const at = placeCard({ stage: narrow, key, keep: [key], card });
-    expect(at.shift).not.toBe(0);
-    const moved = { ...key, x: key.x + at.shift };
-    expect(moved.x + moved.w <= at.x || moved.x >= at.x + card.w).toBe(true);
+  const narrowArea = { x: 0, y: 100, w: 1000, h: 500 };
+
+  test("a wide board parts: the half without the key slides by what the card needs, and the card sits in the gap", () => {
+    const left = row(60, 7);
+    const right = row(460, 7);
+    const key = left[6]!;
+    const seat = seatCard({ area: narrowArea, key, keyHand: "left", left, right, card });
+    expect(seat.part?.hand).toBe("right");
+    const moved = (b: (typeof right)[number], dx: number) => ({ ...b, x: b.x + dx });
+    const placed = { x: seat.x, y: seat.y, w: card.w, h: card.h };
+    expect(left.some((b) => overlaps(moved(b, seat.shift), placed))).toBe(false);
+    expect(right.some((b) => overlaps(moved(b, seat.shift + (seat.part?.px ?? 0)), placed))).toBe(false);
+  });
+
+  test("a key on the right half parts the left half the other way", () => {
+    const seat = seatCard({ area: narrowArea, key: row(460, 7)[0]!, keyHand: "right", left: row(60, 7), right: row(460, 7), card });
+    expect(seat.part?.hand).toBe("left");
+    expect(seat.part?.px).toBeLessThan(0);
   });
 });
 

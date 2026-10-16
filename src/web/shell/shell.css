@@ -847,7 +847,12 @@
    the grabber and the two buttons in its bar. --sheet-h comes from sheet.ts, so the board's scroll room agrees with it. */
 @media (max-width: 900px) {
   .app {
-    --chat-bar-height: 44px;
+    --chat-bar-height: 0px;
+  }
+
+  /* The sheet runs to the bottom edge, resized by its handle alone (P2 review). */
+  .sheet-bar .icon-button {
+    display: none !important;
   }
 
   /* The skeleton's panel is a block beside the board; as a fixed sheet it would sit over it. */

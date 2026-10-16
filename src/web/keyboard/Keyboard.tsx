@@ -106,6 +106,10 @@ interface KeyboardProps {
   inspect?: boolean;
   /** How far the board slides sideways to make room for the key card, in px (P2). */
   shiftPx?: number;
+  /** The halves part for the key card: which hand slides, and by how far in px (BK: "halves part only when needed"). */
+  part?: { hand: "left" | "right"; px: number } | null;
+  /** The board's scale about its centre, below 1 while a parted board would otherwise run off the stage. */
+  scale?: number;
 }
 
 function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined, remembered = false): string {
@@ -164,7 +168,15 @@ export function Keyboard({
   found = null,
   inspect = false,
   shiftPx = 0,
+  part = null,
+  scale = 1,
 }: KeyboardProps) {
+  const handOf = useMemo(() => {
+    const map = new Map<number, "left" | "right">();
+    for (const p of hands.left) map.set(p, "left");
+    for (const p of hands.right) map.set(p, "right");
+    return map;
+  }, [hands]);
   // A phone draws the board small, so its legend floor is 10 px; everywhere else 11 (18#legends-stay-readable).
   const floorPx = useMediaQuery(PHONE) ? PHONE_FLOOR_PX : LEGEND_FLOOR_PX;
   const { drag, onPointerDown: dragStart, wasDrag } = useKeyDrag({ enabled: dragEnabled, onDrop: (from, to, copy) => onDropKey?.(from, to, copy) });
@@ -182,6 +194,8 @@ export function Keyboard({
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const { delays, outgoing, origin: rippleOrigin } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
+  // Only a board whose case is in two pieces can part; a laptop's keys belong to hands but sit on one deck.
+  const parts2 = parts.some((part) => part.hand !== null);
   // Measured once the web font is in, since the fallback font is a different width.
   const [fontsReady, setFontsReady] = useState(false);
   useEffect(() => {
@@ -253,17 +267,19 @@ export function Keyboard({
         data-surface={display?.surface ?? "slab"}
         role="group"
         aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}
-        style={{ width: canvas.width * unit, height: canvas.height * unit, transform: shiftPx === 0 ? undefined : `translateX(${shiftPx}px)` }}
+        data-part={part === null || part.px === 0 ? undefined : part.hand}
+        style={{ width: canvas.width * unit, height: canvas.height * unit, transform: shiftPx === 0 && scale === 1 ? undefined : `translateX(${shiftPx}px) scale(${scale})`, "--part": `${part?.px ?? 0}px`, "--part-units": `${(part?.px ?? 0) / unit}` } as CSSProperties}
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
           {parts.map((part, i) => (
-            <path key={i} className={`case-${part.kind}`} d={part.d} />
+            <path key={i} className={`case-${part.kind}`} d={part.d} data-hand={part.hand ?? undefined} />
           ))}
           {(display?.statusLeds ?? []).map((led, i) => {
             // The LEDs change with the ripple, at the delay a key in their place would have.
             const delay = rippleOrigin === null ? 0 : Math.hypot(led.x - canvas.minX - rippleOrigin.x, led.y - canvas.minY - rippleOrigin.y) * RIPPLE_MS_PER_UNIT;
-            return <circle key={`led-${i}`} className="case-led" data-lit={light !== null} cx={led.x} cy={led.y} r={0.055} style={{ "--led-colour": light ?? "transparent", "--ripple": `${Math.round(delay)}ms` } as CSSProperties} />;
+            const ledHand = parts2 ? statusLedHand(led.x, keys, hands) : null;
+            return <circle key={`led-${i}`} data-hand={ledHand ?? undefined} className="case-led" data-lit={light !== null} cx={led.x} cy={led.y} r={0.055} style={{ "--led-colour": light ?? "transparent", "--ripple": `${Math.round(delay)}ms` } as CSSProperties} />;
           })}
         </svg>
         {keys.map((geometryKey, index) => {
@@ -307,6 +323,7 @@ export function Keyboard({
               data-applied={appliedIndex === index}
               data-found={found === index}
               data-key-index={index}
+              data-hand={parts2 ? handOf.get(index) : undefined}
               data-combo-hover={comboLit?.has(index) ?? false}
               data-highlight={highlighted?.has(index) ?? false}
               data-dragging={drag?.from === index}
@@ -347,6 +364,15 @@ export function Keyboard({
       )}
     </div>
   );
+}
+
+// A status LED belongs to the hand whose keys it sits over, so it parts with that half.
+function statusLedHand(x: number, keys: readonly GeometryKey[], hands: { left: readonly number[]; right: readonly number[] }): "left" | "right" | null {
+  const xs = (positions: readonly number[]) => positions.flatMap((p) => (keys[p] === undefined ? [] : [(keys[p] as GeometryKey).x]));
+  const leftMax = Math.max(...xs(hands.left), Number.NEGATIVE_INFINITY);
+  const rightMin = Math.min(...xs(hands.right), Number.POSITIVE_INFINITY);
+  if (!Number.isFinite(leftMax) || !Number.isFinite(rightMin)) return null;
+  return x <= (leftMax + rightMin + 1) / 2 ? "left" : "right";
 }
 
 // Real caps print their legends turned with the cap; the Moonlander's 30 degree thumbs read fine that way. Past this, the

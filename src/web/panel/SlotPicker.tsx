@@ -142,7 +142,7 @@ export function SlotPicker({
           aria-autocomplete="list"
           autoComplete="off"
           spellCheck={false}
-          placeholder={slot === "hold" ? "Search modifiers and layers" : "Search: a, enter, volume, nav"}
+          placeholder={slot === "hold" ? "Search modifiers and layers" : "Search, or press a key"}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onKeyDown}

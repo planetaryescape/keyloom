@@ -191,7 +191,16 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
     const binding = layer?.bindings[position];
     return binding === undefined ? { kind: "none" as const, tap: "" } : bindingLegend(binding, ctx);
   });
-  const outputLegend = draft.output === null ? null : bindingLegend(draft.output, ctx);
+  // A macro's cap shortens what it sends ("⌘…"); the combo's hero has room to show every key it taps (P2 review).
+  const outputLegend = (() => {
+    if (draft.output === null) return null;
+    const legend = bindingLegend(draft.output, ctx);
+    if (draft.output.kind !== "macro") return legend;
+    const output = draft.output;
+    const steps = layout.macros.find((macro) => macro.id === output.macroId)?.steps ?? [];
+    const taps = steps.flatMap((step) => (step.op === "tap" && step.code !== undefined ? [bindingLegend({ kind: "key", code: step.code, ...(step.mods === undefined ? {} : { mods: step.mods }) }, ctx).tap] : []));
+    return taps.length === 0 ? legend : { ...legend, tap: taps.join(" ") };
+  })();
   const title = draft.positions.length === 0 ? "New combo" : keyLegends.map((legend, i) => legend.tap || `key ${(draft.positions[i] ?? 0) + 1}`).join(" + ");
   const where = draft.layerIds === "all" ? "every layer" : draft.layerIds.map((id) => layerDisplayName(layout.layers.find((candidate) => candidate.id === id)?.name ?? id)).join(", ");
   const applyText = applying ? "Applying" : draft.output === null ? (draft.isNew ? "Add combo" : "Apply") : `Send ${cardTitle(draft.output, layout)} from ${title}`;
@@ -199,11 +208,11 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
   return (
     <section ref={root} className="combo-pane combo-editor key-card" aria-label={draft.isNew ? "New combo" : `Combo ${draft.name}`}>
       <header className="card-head">
-        <div className="card-title">
+        <div className="card-heading">
           <h2>{title}</h2>
           <p>{draft.isNew ? "New combo" : "Combo"} · {where}</p>
         </div>
-        <div className="card-actions">
+        <div className="card-tools">
           {draft.isNew ? null : confirmDelete ? (
             <button type="button" className="card-chip card-chip-danger" disabled={applying} onClick={() => void save({ ops: removeComboOps(draft.id), summary: comboSummary(layout, layout.combos.find((c) => c.id === draft.id) ?? (combo as Combo), "Removed") })}>
               Delete for good
@@ -213,12 +222,13 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
               <Trash2 size={15} aria-hidden="true" />
             </button>
           )}
+          <button type="button" className="card-icon" aria-label="Close the combo" title="Close (Esc)" onClick={onBack}>
+            <X size={16} aria-hidden="true" />
+          </button>
         </div>
-        <button type="button" className="card-icon" aria-label="Close the combo" title="Close (Esc)" onClick={onBack}>
-          <X size={16} aria-hidden="true" />
-        </button>
       </header>
 
+      <div className="card-scroll">
       <fieldset className="card-body" disabled={applying}>
         <div className="combo-hero" aria-label={`${title} pressed together`}>
           {keyLegends.map((legend, i) => (
@@ -330,6 +340,7 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
           <Validation layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />
         )}
       </fieldset>
+      </div>
 
       {same && error === null ? null : (
         <footer className="card-foot">

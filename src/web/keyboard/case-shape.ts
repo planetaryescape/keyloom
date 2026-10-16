@@ -3,14 +3,17 @@
 import type { BoardDefinition, GeometryKey } from "../../boards/schema.ts";
 import { boardBounds, MAX_SPLIT_OVERLAP, rotatedCorners, type Point } from "./geometry.ts";
 
+/** Which hand a part belongs to, so a split board's halves can part (P2); null for one-piece boards. */
+type Hand = "left" | "right" | null;
+
 export type CasePart =
   /** A body or a module: a filled outline. */
-  | { kind: "body"; d: string }
+  | { kind: "body"; d: string; hand: Hand }
   /** A sculpted key well, darker than the body (the Glove80's columns). */
-  | { kind: "well"; d: string }
+  | { kind: "well"; d: string; hand: Hand }
   /** A laptop's aluminium deck, and the recess its keys sit in. */
-  | { kind: "deck"; d: string }
-  | { kind: "recess"; d: string };
+  | { kind: "deck"; d: string; hand: Hand }
+  | { kind: "recess"; d: string; hand: Hand };
 
 // How far the case reaches past its keys, in key units.
 const BODY_PAD = 0.28;
@@ -92,8 +95,8 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
     if (all.length === 0) return [];
     const b = boardBounds(all);
     return [
-      { kind: "deck", d: roundedPath(rect(b.minX - DECK_PAD, b.minY - DECK_PAD, b.width + 2 * DECK_PAD, b.height + 2 * DECK_PAD), 0.55) },
-      { kind: "recess", d: roundedPath(rect(b.minX - 0.12, b.minY - 0.12, b.width + 0.24, b.height + 0.24), 0.22) },
+      { kind: "deck", d: roundedPath(rect(b.minX - DECK_PAD, b.minY - DECK_PAD, b.width + 2 * DECK_PAD, b.height + 2 * DECK_PAD), 0.55), hand: null },
+      { kind: "recess", d: roundedPath(rect(b.minX - 0.12, b.minY - 0.12, b.width + 0.24, b.height + 0.24), 0.22), hand: null },
     ];
   }
 
@@ -109,7 +112,8 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
     // group's own rx is where the module was before the halves were spread.
     const b = boardBounds(turned.map((key) => ({ ...key, r: 0, rx: 0, ry: 0 })));
     const corners = rotatedCorners({ x: b.minX - MODULE_PAD, y: b.minY - MODULE_PAD, w: b.width + 2 * MODULE_PAD, h: b.height + 2 * MODULE_PAD, r: pivot.r, rx: pivot.rx, ry: pivot.ry });
-    parts.push({ kind: "body", d: roundedPath(corners, 0.3) });
+    const hand: Hand = hands.left.includes(group.positions[0] ?? -1) ? "left" : hands.right.includes(group.positions[0] ?? -1) ? "right" : null;
+    parts.push({ kind: "body", d: roundedPath(corners, 0.3), hand });
   }
 
   const body = (positions: readonly number[]) => at(positions.filter((p) => visible(p) && !inModule.has(p)));
@@ -120,18 +124,20 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
       const l = boardBounds(left);
       return l.minX + l.width - boardBounds(right).minX > MAX_SPLIT_OVERLAP;
     })();
-  const bodies = interleaved ? [[...left, ...right]] : [left, right].filter((group) => group.length > 0);
+  const bodies: { keys: GeometryKey[]; hand: Hand }[] = interleaved
+    ? [{ keys: [...left, ...right], hand: null }]
+    : [{ keys: left, hand: "left" as const }, { keys: right, hand: "right" as const }].filter((group) => group.keys.length > 0);
   // Bodies go first so the modules, drawn after, sit on top of them where they meet.
-  const drawn: CasePart[] = bodies.map((group) => ({ kind: "body", d: outline(group, group.every((k) => k.r === 0) ? BODY_PAD : HULL_PAD, 0.36) }));
+  const drawn: CasePart[] = bodies.map(({ keys: group, hand }) => ({ kind: "body", d: outline(group, group.every((k) => k.r === 0) ? BODY_PAD : HULL_PAD, 0.36), hand }));
   if (display?.surface === "wells") {
-    for (const group of bodies) {
+    for (const { keys: group, hand } of bodies) {
       const columns = new Map<number, GeometryKey[]>();
       for (const key of group) if (key.r === 0) columns.set(key.x, [...(columns.get(key.x) ?? []), key]);
       for (const column of columns.values()) {
         const b = boardBounds(column);
-        drawn.push({ kind: "well", d: roundedPath(rect(b.minX + 0.03, b.minY + 0.02, b.width - 0.06, b.height - 0.04), 0.3) });
+        drawn.push({ kind: "well", d: roundedPath(rect(b.minX + 0.03, b.minY + 0.02, b.width - 0.06, b.height - 0.04), 0.3), hand });
       }
-      for (const key of group) if (key.r !== 0) drawn.push({ kind: "well", d: roundedPath(grown(key, -0.02), 0.25) });
+      for (const key of group) if (key.r !== 0) drawn.push({ kind: "well", d: roundedPath(grown(key, -0.02), 0.25), hand });
     }
   }
   return [...drawn, ...parts];

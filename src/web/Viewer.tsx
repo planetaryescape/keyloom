@@ -42,7 +42,7 @@ import { type LightingDraft, withKeyColour, withLighting } from "./settings/ligh
 import { colourAt, hsvToHex, isDark } from "../layout/colour.ts";
 import type { LayerLighting } from "../layout/schema.ts";
 import { KeyPanel, type DraftState, type KeyPanelHandle, type PlaceRequest } from "./panel/KeyPanel.tsx";
-import { FloatingCard } from "./card/FloatingCard.tsx";
+import { FloatingCard, type BoardLayout } from "./card/FloatingCard.tsx";
 import { keyForChar } from "./panel/slots.ts";
 import { Caption } from "./shell/Caption.tsx";
 import { boardDisplayName, boardEntries, LayoutMenu } from "./shell/Header.tsx";
@@ -158,10 +158,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
   const stageRef = useRef<HTMLElement>(null);
-  // How far the board slides aside for the key card, when the card can't fit beside the key (P2).
-  const [boardShift, setBoardShift] = useState(0);
+  // How the board moves for the key card: its halves part when the card would cover a key, and it slides only if that can't fit (P2).
+  const [boardLayout, setBoardLayout] = useState<BoardLayout>({ shift: 0, part: null, scale: 1 });
   // A key another key's card points at ("Also on Colemak"), lit on the board while pointed at.
   const [pointAt, setPointAt] = useState<Slot | null>(null);
+  // With no card open the halves come back together, however the card was closed.
+  useEffect(() => {
+    if (editing === null && comboDraft === null) setBoardLayout((now) => (now.shift === 0 && now.part === null && now.scale === 1 ? now : { shift: 0, part: null, scale: 1 }));
+  }, [editing, comboDraft]);
   const panel = useRef<KeyPanelHandle>(null);
   // History is a panel of its own; it stays chosen while a key or the chat is looked at, and comes back when they close.
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -760,7 +764,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   function closeEditor(refocus: boolean) {
     const position = editing?.position ?? null;
-    setBoardShift(0);
+    setBoardLayout({ shift: 0, part: null, scale: 1 });
     setPointAt(null);
     setEditing(null);
     setDraft(CLEAN);
@@ -1199,7 +1203,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             pendingIndex={editingHere && draft.binding !== null ? editing.position : null}
             appliedIndex={applied !== null && applied.layerId === layer.id ? applied.position : null}
             pressSeq={pressSeq}
-            shiftPx={!narrow && (editing !== null || comboDraft !== null) ? boardShift : 0}
+            shiftPx={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.shift : 0}
+            part={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.part : null}
+            scale={!narrow && (editing !== null || comboDraft !== null) ? boardLayout.scale : 1}
             chatSelected={chatSelected}
             highlighted={libraryHighlight}
             marks={marks}
@@ -1279,12 +1285,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             )}
           </div>
           {!narrow && comboDraft !== null && comboCard !== null && comboDraft.positions.length > 0 ? (
-            <FloatingCard stage={stageRef} position={comboDraft.positions[0] as number} alsoKeep={comboDraft.positions} placeKey={`combo:${comboDraft.id}:${layer.id}`} shift={boardShift} onShift={setBoardShift}>
+            <FloatingCard stage={stageRef} position={comboDraft.positions[0] as number} placeKey={`combo:${comboDraft.id}:${layer.id}`} layout={boardLayout} onLayout={setBoardLayout}>
               {comboCard}
             </FloatingCard>
           ) : null}
           {!narrow && editing !== null && keyCard !== null ? (
-            <FloatingCard stage={stageRef} position={editing.position} placeKey={`${editing.layerId}:${editing.position}:${layer.id}`} shift={boardShift} onShift={setBoardShift}>
+            <FloatingCard stage={stageRef} position={editing.position} placeKey={`${editing.layerId}:${editing.position}:${layer.id}`} layout={boardLayout} onLayout={setBoardLayout}>
               {keyCard}
             </FloatingCard>
           ) : null}

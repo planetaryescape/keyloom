@@ -423,8 +423,8 @@ button.cap[aria-pressed="true"] .cap-body {
   box-shadow: 0 0 0 2px var(--ink-2), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
 }
 
-/* The chord partners of the inspected key. */
-button.cap[data-partner="true"] .cap-body {
+/* The chord partners of the inspected key, under Inspect only: at rest a ring on two other keys reads as a stray mark (P2 review). */
+.keyboard[data-inspect="true"] button.cap[data-partner="true"] .cap-body {
   box-shadow: 0 0 0 1.5px var(--ink-3), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
 }
 
@@ -747,4 +747,27 @@ button.cap[data-dragging="true"] {
 
 .selection-bar[data-mode="quick"] {
   box-shadow: 0 0 0 1.5px var(--pending), var(--card-shadow);
+}
+
+/* ---------- the halves part for the key card (P2) ----------
+   One hand slides by --part; the CSS translate property composes with each cap's own rotation. The card's spring carries it. */
+.keyboard [data-hand] {
+  transition: translate 0.46s var(--ease-spring);
+}
+
+.keyboard[data-part="right"] [data-hand="right"],
+.keyboard[data-part="left"] [data-hand="left"] {
+  translate: var(--part) 0;
+}
+
+/* The case is drawn in key units, so its parts move by the same distance in those units. */
+.keyboard[data-part="right"] .keyboard-case [data-hand="right"],
+.keyboard[data-part="left"] .keyboard-case [data-hand="left"] {
+  translate: calc(var(--part-units) * 1px) 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .keyboard [data-hand] {
+    transition: none;
+  }
 }

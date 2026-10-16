@@ -29,7 +29,7 @@ export function keyPhrase(code: string, mods?: readonly Mod[]): string {
 
 const layerName = (layout: Pick<Layout, "layers">, id: string): string => layerDisplayName(layout.layers.find((layer) => layer.id === id)?.name ?? id);
 
-function slotPhrase(action: SlotAction, layout: Pick<Layout, "layers" | "macros">): string {
+export function slotPhrase(action: SlotAction, layout: Pick<Layout, "layers" | "macros">): string {
   switch (action.kind) {
     case "key": return keyPhrase(action.code, action.mods);
     case "modifier": return modWords(action.mods);
@@ -111,4 +111,26 @@ export function applyWords(before: Binding, after: Binding, layout: Pick<Layout,
     case "native":
       return "Apply";
   }
+}
+
+// What macOS does with a few shortcuts people put on keys, said on the card so ⇧⌘4 reads as more than symbols.
+const MAC_MEANING: Readonly<Record<string, string>> = {
+  "⇧⌘N3": "a screenshot of the screen",
+  "⇧⌘N4": "a screenshot of an area",
+  "⇧⌘N5": "the screenshot tools",
+  "⌘C": "copy",
+  "⌘V": "paste",
+  "⌘X": "cut",
+  "⌘Z": "undo",
+  "⇧⌘Z": "redo",
+  "⌘SPACE": "Spotlight",
+  "⌘TAB": "switching apps",
+  "⌘GRAVE": "switching windows",
+};
+
+/** "macOS reads ⇧⌘4 as a screenshot of an area.", or null when keyloom doesn't know what the shortcut means. */
+export function macMeaning(code: string, mods: readonly Mod[] | undefined, printed: string): string | null {
+  if (mods === undefined || mods.length === 0) return null;
+  const meaning = MAC_MEANING[`${capMods(mods)}${code}`];
+  return meaning === undefined ? null : `macOS reads ${printed} as ${meaning}.`;
 }

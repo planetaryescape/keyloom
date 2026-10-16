@@ -1,5 +1,5 @@
-import { LoaderCircle, TriangleAlert, X } from "lucide-react";
-import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { LoaderCircle, Timer, TriangleAlert, X } from "lucide-react";
+import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { describeKey, modsWords } from "../../layout/describe.ts";
 import { bindingLegend } from "../../layout/legend.ts";
 import { deepEqual } from "../../layout/equal.ts";
@@ -23,7 +23,10 @@ import { Validation } from "../editor/Validation.tsx";
 import { advancedLegend } from "../keyboard/advanced-legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
 import { layerDisplayName } from "../../layout/cap-words.ts";
-import { applyWords, cardTitle, keyPhrase } from "../card/card-words.ts";
+import { applyWords, cardTitle, keyPhrase, macMeaning, slotPhrase } from "../card/card-words.ts";
+import { layerLight } from "../light/layer-light.ts";
+import { capMods } from "../../layout/cap-words.ts";
+import { tapSlotAction } from "./dance.ts";
 import { HeroCap, type HeroSlot } from "../card/HeroCap.tsx";
 import { CardMods } from "../card/CardMods.tsx";
 import type { Slot } from "../../layout/change.ts";
@@ -119,8 +122,18 @@ export function KeyPanel(props: Props) {
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
   const layer = layout.layers[layerIndex];
   const original = layer?.bindings[position];
+  // A macro that only taps one key with modifiers (Oryx's way of sending ⇧⌘4) is shown and edited as that key; it stays a macro until
+  // something on the card changes (P2 review).
+  const macroAsKey = useMemo<Binding | null>(() => {
+    if (original?.kind !== "macro") return null;
+    const steps = layout.macros.find((macro) => macro.id === original.macroId)?.steps ?? [];
+    const only = steps[0];
+    return steps.length === 1 && only?.op === "tap" && only.code !== undefined ? { kind: "key", code: only.code, ...(only.mods === undefined ? {} : { mods: only.mods }) } : null;
+    // Read once, like the draft below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const initial = useMemo(
-    () => (original === undefined ? null : draftFromBinding(original, layout, layerId)),
+    () => (original === undefined ? null : draftFromBinding(macroAsKey ?? original, layout, layerId)),
     // The panel is keyed by key and revision, so the layout it opened on is the one it edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -139,6 +152,12 @@ export function KeyPanel(props: Props) {
   const root = useRef<HTMLElement>(null);
   // Replacing a native binding drops behaviour keyloom cannot rebuild, so it takes a second press.
   const [confirmingNative, setConfirmingNative] = useState(false);
+  // Quiet by default (P2 review): the hold's timing opens from the picker's header, the dance's wait from its chip, a reason from a link.
+  const [timingOpen, setTimingOpen] = useState(false);
+  const [waitOpen, setWaitOpen] = useState(false);
+  const [reasonOpen, setReasonOpen] = useState(false);
+  // The hold opens on the comp's two groups, modifiers and layers; every key is one link away.
+  const [holdAll, setHoldAll] = useState(false);
   useEffect(() => {
     setFocusPicker(false);
     // After an apply the panel is made again from the saved layout, and the focus that was in the old one is gone.
@@ -163,7 +182,7 @@ export function KeyPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draft, layout, slot, original, placements],
   );
-  const changed = planned !== null && planned.after !== null && !deepEqual(planned.after, layout);
+  const changed = planned !== null && planned.after !== null && !deepEqual(planned.after, layout) && !(macroAsKey !== null && draftBinding !== null && deepEqual(draftBinding, macroAsKey));
   const binding = changed && planned !== null ? planned.binding : null;
   const after = changed && planned !== null ? planned.after : null;
   const replacedBy = useMemo(
@@ -386,6 +405,31 @@ export function KeyPanel(props: Props) {
     };
   }
 
+  const timingSection = draft === null || original === undefined ? null : (
+    <Timing
+            layout={layout}
+            profile={profile}
+            profileId={draft.profileId}
+            holdLayer={draft.holdType === "layer"}
+            choosing={choosingProfile}
+            onChoosing={setChoosingProfile}
+            onProfile={(id) => {
+              setProfileTouched(true);
+              update((previous) => ({ ...previous, profileId: id }));
+              setChoosingProfile(false);
+            }}
+            tuning={tuning}
+            onTuning={setTuning}
+            savedHoldTap={original.kind === "holdTap" && original.profileId === draft.profileId && !changed ? original : null}
+            tuneBlockedReason={original.kind !== "holdTap" ? "Apply this hold first, then tune how it feels." : changed ? "Apply your change first, then tune how it feels." : original.profileId !== draft.profileId ? "Apply the profile change first, then tune it." : null}
+            tuner={
+              original.kind === "holdTap" && !changed && original.profileId === draft.profileId ? (
+                <ProfileTuner token={token} layoutRef={layoutRef} layout={layout} revisionId={revisionId} slot={slot} binding={original} onApplied={onTuned} onStale={onStale} />
+              ) : null
+            }
+          />
+  );
+
   // The one picker, for whichever slot is open (16#one-picker-for-every-slot), under the cap.
   function openSlotPicker() {
     if (picker === null || draft === null) return null;
@@ -398,14 +442,24 @@ export function KeyPanel(props: Props) {
         : isExtraSlot(which) && extra !== null
           ? { label: which === "doubleTap" ? "Remove the double tap" : "Remove tap, then hold", run: () => update((previous) => clearExtraSlot(previous, which as ExtraSlot)) }
           : null;
+    const holdGroups = which === "hold" && !holdAll && !advanced;
     return (
       <div className="card-picker">
-        {clear === null ? null : (
-          <button type="button" className="link-button card-picker-clear" onClick={() => { clear.run(); setPicker(null); }}>
-            {clear.label}
-          </button>
-        )}
-        <SlotPicker
+        <div className="card-picker-head">
+          <b>{SLOT_TITLE[which]}</b>
+          {which === "hold" && hasHold(draft) && !isDance(draft) && profile !== undefined ? (
+            <button type="button" className="link-button" aria-expanded={timingOpen} onClick={() => setTimingOpen((open) => !open)}>
+              {profile.name} timing
+            </button>
+          ) : null}
+          {clear === null ? null : (
+            <button type="button" className="link-button" onClick={() => { clear.run(); setPicker(null); }}>
+              {clear.label}
+            </button>
+          )}
+        </div>
+        {holdGroups ? <HoldGroups draft={draft} layout={layout} layerId={layerId} onMods={chooseHoldMods} onLayer={(id) => chooseHoldLayer(id)} onAll={() => setHoldAll(true)} /> : null}
+        {holdGroups ? null : <SlotPicker
           slot={which}
           tab={picker.tab}
           onTab={(tab) => setPicker({ slot: which, tab })}
@@ -430,9 +484,24 @@ export function KeyPanel(props: Props) {
               : () => {}
           }
           {...macroPaneFor(which)}
-        />
+        />}
+        {which === "hold" && timingOpen && hasHold(draft) && !isDance(draft) ? timingSection : null}
       </div>
     );
+  }
+
+  // The hold's two groups keep the picker open, so the choice shows lit in place, as in the comp.
+  function chooseHoldMods(mods: Mod[]) {
+    update((previous) => {
+      const next = pickHold(previous, { t: "mods", mods });
+      return profileTouched ? next : { ...next, profileId: profileFor(layout, "mods", homeRow) };
+    });
+  }
+  function chooseHoldLayer(id: string) {
+    update((previous) => {
+      const next = pickHold(previous, { t: "layer", layerId: id });
+      return profileTouched ? next : { ...next, profileId: profileFor(layout, "layer", homeRow) };
+    });
   }
 
   // Opening a part of the cap opens its picker; a hold or an extra slot that isn't there yet is added first.
@@ -465,7 +534,7 @@ export function KeyPanel(props: Props) {
     return null;
   })();
 
-  const holdRegion = draft.kind === "native" || draft.kind === "macro" ? null : hasHold(draft) ? { text: shownLegend.hold ?? holdText, name: "When held" } : canAddHold(draft) ? { text: null, ghost: "hold…", name: "When held" } : null;
+  const holdRegion = draft.kind === "native" || draft.kind === "macro" ? null : hasHold(draft) ? (draft.holdType === "mods" ? draft.holdMods.length === 0 : draft.holdLayerId === null) ? { text: null, ghost: "hold…", name: "When held" } : { text: shownLegend.hold ?? holdText, name: "When held" } : canAddHold(draft) ? { text: null, ghost: "hold…", name: "When held" } : null;
   const extras = draft.kind !== "macro" && draft.kind !== "native" && (canAddExtraSlot(draft) || isDance(draft));
   const doubleRegion = !extras ? null : draft.doubleTap === null ? { text: null, ghost: "2×", name: "When double-tapped" } : { text: `2× ${shownLegend.double ?? ""}`.trim(), name: "When double-tapped" };
   const thenHoldRegion = !extras ? null : draft.tapThenHold === null ? { text: null, ghost: "tap+hold", name: "When tapped, then held" } : { text: "tap+hold ●", name: "When tapped, then held" };
@@ -478,27 +547,57 @@ export function KeyPanel(props: Props) {
   // A firmware-only key and a macro say what they do in their own words; their headlines quote firmware names (D-270).
   const restSentence =
     draft.kind === "native" ? "" : draft.kind === "macro" ? macroSentence(layout.macros.find((macro) => macro.id === draft.macroId)) : null;
-  const sentence = dirty && binding !== null ? (restSentence === null ? `Before: ${lowered}` : "") : restSentence !== null ? restSentence : draft.kind === "key" || draft.kind === "holdTap" || draft.kind === "transparent" || draft.kind === "none" ? (picker === null ? "Press a key on your keyboard to put it here." : "") : (current?.headline ?? "");
+  const dance = isDance(draft) ? danceSentence(draft, drawn, draft.danceTermMs ?? defaultTermMs(layout)) : null;
+  const meaning = draft.kind === "key" && draft.key.code !== null ? macMeaning(draft.key.code, draft.key.mods, shownLegend.tap) : null;
+  const layerLine =
+    draft.kind === "layer" && draft.layerId !== null
+      ? (() => {
+          const name = layerDisplayName(layout.layers.find((candidate) => candidate.id === draft.layerId)?.name ?? "the layer");
+          return { momentary: `Hold for ${name}.`, toggle: `Tap to turn ${name} on or off.`, to: `Tap to go to ${name}.`, oneShot: `Tap for ${name}, for the next key only.` }[draft.layerAction];
+        })()
+      : null;
+  const sentence = dirty && binding !== null ? (restSentence === null ? `Before: ${lowered}` : "") : dance !== null ? dance : layerLine !== null ? layerLine : meaning !== null ? meaning : restSentence !== null ? restSentence : draft.kind === "key" || draft.kind === "holdTap" || draft.kind === "transparent" || draft.kind === "none" ? (picker === null ? "Press a key on your keyboard to put it here." : "") : (current?.headline ?? "");
   // One chip per place, named by where it is; two functions on the same other key, or two keys on the same other layer, are one chip.
   const chipName = (other: Slot) => (other.layerId === layerId ? `key ${other.position + 1}` : `on ${layerDisplayName(layout.layers.find((candidate) => candidate.id === other.layerId)?.name ?? "")}`);
   const also = where
     .flatMap((entry) => entry.others)
+    // Only other layers: a duplicate on this layer is in view on the board already.
+    .filter((other) => other.layerId !== layerId)
     .filter((other, i, all) => all.findIndex((x) => chipName(x) === chipName(other)) === i)
     .slice(0, draft.kind === "layer" ? 2 : 3);
+  const lightOf = (id: string) => {
+    const index = layout.layers.findIndex((candidate) => candidate.id === id);
+    return index < 0 ? null : layerLight(layout.layers, index, layout.layers[index]?.bindings.length ?? 0);
+  };
+  // The slots this change touches, lit on the hero; everything else stays as it was.
+  const originalLegend = bindingLegend(macroAsKey ?? original, { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances, passthrough: layout.passthrough });
+  const changedSlots = new Set<HeroSlot>(
+    binding === null
+      ? []
+      : ([
+          shownLegend.tap !== originalLegend.tap ? "tap" : null,
+          shownLegend.hold !== originalLegend.hold ? "hold" : null,
+          shownLegend.double !== originalLegend.double ? "doubleTap" : null,
+          shownLegend.tapHold !== originalLegend.tapHold ? "tapThenHold" : null,
+        ].filter((slot) => slot !== null) as HeroSlot[]),
+  );
 
   return (
     <section ref={root} tabIndex={-1} className="key-panel key-card" aria-label={`Key ${position + 1}: ${title}`} onKeyDown={onKeyDown}>
       <header className="card-head">
-        <div className="card-title">
+        <div className="card-heading">
           <h2>{title}</h2>
           <p>{where2}{advanced ? ` · key ${position + 1}` : ""}</p>
         </div>
-        <div className="card-actions">{actions}</div>
-        <button type="button" className="card-icon" aria-label="Close the key card" title="Close (Esc)" onClick={onClose}>
-          <X size={16} aria-hidden="true" />
-        </button>
+        <div className="card-tools">
+          {actions}
+          <button type="button" className="card-icon" aria-label="Close the key card" title="Close (Esc)" onClick={onClose}>
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
       </header>
 
+      <div className="card-scroll">
       <fieldset className="card-body" disabled={applying}>
         <div className="card-hero">
           <HeroCap
@@ -513,6 +612,7 @@ export function KeyPanel(props: Props) {
             tapThenHold={thenHoldRegion}
             open={picker === null ? null : (picker.slot as HeroSlot)}
             draft={binding !== null}
+            changed={changedSlots}
             onOpen={openRegion}
             label={current?.headline ?? ""}
           />
@@ -537,7 +637,8 @@ export function KeyPanel(props: Props) {
           ) : null}
         </div>
 
-        {sentence === "" ? null : <p className="card-sentence" aria-live="polite">{sentence}</p>}
+        {sentence === "" || (draft.kind === "macro" && picker === null && !dirty) ? null : <p className="card-sentence" aria-live="polite">{sentence}</p>}
+        {draft.kind === "macro" && picker === null && !dirty ? <MacroSteps macro={layout.macros.find((macro) => macro.id === draft.macroId)} /> : null}
         {draft.kind === "native" && draft.native !== null ? (
           <p className="card-note">
             keyloom keeps this key as your firmware wrote it. Picking something else replaces it.
@@ -548,10 +649,20 @@ export function KeyPanel(props: Props) {
         {draft.kind === "transparent" ? <p className="card-note">{transparentNote(layout, layerId)}</p> : null}
         {notice}
 
-        {also.length > 0 || (draft.kind === "layer" && draft.layerId !== null) ? (
+        {also.length > 0 || (draft.kind === "layer" && draft.layerId !== null) || isDance(draft) ? (
           <div className="card-chips">
+            {isDance(draft) ? (
+              <button type="button" className="card-chip" aria-expanded={waitOpen} onClick={() => setWaitOpen((open) => !open)}>
+                <Timer size={13} aria-hidden="true" />
+                Tune the wait
+              </button>
+            ) : null}
             {draft.kind === "layer" && draft.layerId !== null ? (
               <button type="button" className="card-chip" onClick={() => onShowLayer(draft.layerId as string)}>
+                {(() => {
+                  const light = lightOf(draft.layerId as string);
+                  return light === null ? null : <i className="card-chip-dot" style={{ "--dot": light } as CSSProperties} aria-hidden="true" />;
+                })()}
                 Show {layerDisplayName(layout.layers.find((candidate) => candidate.id === draft.layerId)?.name ?? "the layer")}
               </button>
             ) : null}
@@ -567,6 +678,10 @@ export function KeyPanel(props: Props) {
                 onBlur={() => onPointAt?.(null)}
                 onClick={() => onShowLayer(other.layerId)}
               >
+                {(() => {
+                  const light = lightOf(other.layerId);
+                  return light === null ? null : <i className="card-chip-dot" style={{ "--dot": light } as CSSProperties} aria-hidden="true" />;
+                })()}
                 Also {chipName(other)}
               </button>
             ))}
@@ -576,7 +691,7 @@ export function KeyPanel(props: Props) {
         {openSlotPicker()}
         {advanced && modTarget !== null ? <ModifierToggles legend={`${modTarget.label}, by side`} mods={modTarget.mods} onToggle={modTarget.toggle} /> : null}
 
-        {isDance(draft) ? (
+        {isDance(draft) && waitOpen ? (
           <DanceTiming
             term={draft.danceTermMs}
             fallback={defaultTermMs(layout)}
@@ -585,31 +700,6 @@ export function KeyPanel(props: Props) {
             forAll={draft.danceForAll}
             onTerm={(ms) => update((previous) => ({ ...previous, danceTermMs: ms }))}
             onForAll={(value) => update((previous) => ({ ...previous, danceForAll: value }))}
-          />
-        ) : null}
-
-        {hasHold(draft) && !isDance(draft) ? (
-          <Timing
-            layout={layout}
-            profile={profile}
-            profileId={draft.profileId}
-            holdLayer={draft.holdType === "layer"}
-            choosing={choosingProfile}
-            onChoosing={setChoosingProfile}
-            onProfile={(id) => {
-              setProfileTouched(true);
-              update((previous) => ({ ...previous, profileId: id }));
-              setChoosingProfile(false);
-            }}
-            tuning={tuning}
-            onTuning={setTuning}
-            savedHoldTap={original.kind === "holdTap" && original.profileId === draft.profileId && !changed ? original : null}
-            tuneBlockedReason={original.kind !== "holdTap" ? "Apply this hold first, then tune how it feels." : changed ? "Apply your change first, then tune how it feels." : original.profileId !== draft.profileId ? "Apply the profile change first, then tune it." : null}
-            tuner={
-              original.kind === "holdTap" && !changed && original.profileId === draft.profileId ? (
-                <ProfileTuner token={token} layoutRef={layoutRef} layout={layout} revisionId={revisionId} slot={slot} binding={original} onApplied={onTuned} onStale={onStale} />
-              ) : null
-            }
           />
         ) : null}
 
@@ -636,13 +726,13 @@ export function KeyPanel(props: Props) {
         {binding === null || !(check.state.status === "error" || (check.state.status === "done" && (!check.state.result.ok || check.state.result.warnings.length > 0))) ? null : (
           <Validation layout={layout} slot={slot} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />
         )}
-        {binding === null ? null : (
-          <details className="card-reason">
-            <summary>Why this change?</summary>
-            <input id={reasonId} aria-label="Why this change" value={reason} maxLength={300} placeholder="So you remember it later" onChange={(event) => setReason(event.target.value)} />
-          </details>
+        {binding === null || !(reasonOpen || reason !== "") ? null : (
+          <div className="card-reason">
+            <input id={reasonId} aria-label="Why this change" value={reason} maxLength={300} placeholder="Why this change? So you remember it later" autoFocus={reasonOpen && reason === ""} onChange={(event) => setReason(event.target.value)} />
+          </div>
         )}
       </fieldset>
+      </div>
 
       {showFoot ? (
         <footer className="card-foot">
@@ -668,6 +758,11 @@ export function KeyPanel(props: Props) {
             >
               Discard
             </button>
+            {binding === null || reasonOpen || reason !== "" ? <span /> : (
+              <button type="button" className="link-button card-reason-link" onClick={() => setReasonOpen(true)}>
+                Add a reason
+              </button>
+            )}
             <button type="button" className="card-apply" disabled={!canApply} title={warnings > 0 ? `${warnings} ${warnings === 1 ? "warning" : "warnings"}, listed above` : summary ?? undefined} aria-describedby={whyNot === null ? undefined : "apply-why"} onClick={() => void apply()}>
               {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
               {applyText}
@@ -899,5 +994,86 @@ function DanceTiming({
         </label>
       )}
     </section>
+  );
+}
+
+const SLOT_TITLE: Record<SlotName, string> = { tap: "When tapped", hold: "When held", doubleTap: "When tapped twice", tapThenHold: "When tapped, then held" };
+
+/** "Tap for Hyper + Space. Tap twice for [. It waits 200 ms for the second tap." (comp b2) */
+function danceSentence(draft: Draft, layout: Layout, termMs: number): string {
+  const tapAction = tapSlotAction(draft);
+  const parts: string[] = [];
+  if (tapAction !== null) parts.push(`Tap for ${slotPhrase(tapAction, layout)}.`);
+  if (draft.doubleTap !== null) parts.push(`Tap twice for ${slotPhrase(draft.doubleTap, layout)}.`);
+  if (draft.tapThenHold !== null) parts.push(`Tap, then hold, for ${slotPhrase(draft.tapThenHold, layout)}.`);
+  parts.push(`It waits ${termMs} ms for the second tap.`);
+  return parts.join(" ");
+}
+
+// A macro's steps, as the comp lists them: "Sends, in order", one row per step.
+function MacroSteps({ macro }: { macro: Macro | undefined }) {
+  if (macro === undefined || macro.steps.length === 0) return null;
+  return (
+    <section className="card-steps" aria-label="Sends, in order">
+      <h3>Sends, in order</h3>
+      <ol>
+        {macro.steps.map((step, i) => (
+          <li key={i}>
+            <span className="card-step-n">{i + 1}</span>
+            {step.op === "waitMs" ? (
+              <span className="card-step-wait">Wait {step.ms} ms</span>
+            ) : step.op === "text" ? (
+              <span>Type <b>“{step.text}”</b></span>
+            ) : (
+              <span>
+                {step.op === "tap" ? "Tap" : step.op === "press" ? "Press" : "Release"} <b>{step.code === undefined ? "" : `${step.mods === undefined ? "" : capMods(step.mods)} ${keyPhrase(step.code)}`.trim()}</b>
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+// The hold's picker, as the comp draws it: the modifiers and the layers, then every key behind one link.
+const HOLD_MODS: readonly { label: string; mark: string; mods: Mod[] }[] = [
+  { label: "Control", mark: "⌃", mods: ["LCTL"] },
+  { label: "Option", mark: "⌥", mods: ["LALT"] },
+  { label: "Shift", mark: "⇧", mods: ["LSFT"] },
+  { label: "Command", mark: "⌘", mods: ["LGUI"] },
+  { label: "Hyper", mark: "✦", mods: ["LCTL", "LSFT", "LALT", "LGUI"] },
+  { label: "Meh", mark: "◆", mods: ["LCTL", "LSFT", "LALT"] },
+];
+
+function HoldGroups({ draft, layout, layerId, onMods, onLayer, onAll }: { draft: Draft; layout: Layout; layerId: string; onMods: (mods: Mod[]) => void; onLayer: (id: string) => void; onAll: () => void }) {
+  const held = draft.holdType === "mods" ? capMods(draft.holdMods) : null;
+  return (
+    <div className="hold-groups">
+      <p className="hold-group-name">Modifier</p>
+      <div className="hold-grid">
+        {HOLD_MODS.map((choice) => (
+          <button key={choice.label} type="button" className="hold-choice" aria-pressed={held !== null && held !== "" && held === capMods(choice.mods)} onClick={() => onMods(choice.mods)}>
+            <span className="hold-mark" aria-hidden="true">{choice.mark}</span>
+            {choice.label}
+          </button>
+        ))}
+      </div>
+      <p className="hold-group-name">Layer</p>
+      <div className="hold-grid">
+        {layout.layers.map((candidate, index) =>
+          candidate.id === layerId ? null : (
+            <button key={candidate.id} type="button" className="hold-choice" aria-pressed={draft.holdType === "layer" && draft.holdLayerId === candidate.id} onClick={() => onLayer(candidate.id)}>
+              {(() => {
+                const light = layerLight(layout.layers, index, candidate.bindings.length);
+                return <i className="card-chip-dot" data-unlit={light === null} style={light === null ? undefined : ({ "--dot": light } as CSSProperties)} aria-hidden="true" />;
+              })()}
+              {layerDisplayName(candidate.name)}
+            </button>
+          ),
+        )}
+      </div>
+      <button type="button" className="link-button hold-all" onClick={onAll}>Any key…</button>
+    </div>
   );
 }

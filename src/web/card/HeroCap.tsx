@@ -30,8 +30,10 @@ interface Props {
   tapThenHold: Region | null;
   /** The slot whose picker is open, drawn with a ring. */
   open: HeroSlot | null;
-  /** A change is waiting: the cap shows its amber draft mark. */
+  /** A change is waiting. */
   draft: boolean;
+  /** The slots the change touches: only those are lit amber (P2 review), not the whole cap. */
+  changed?: ReadonlySet<HeroSlot>;
   onOpen: (slot: HeroSlot) => void;
   /** Words under the cap for a screen reader: what the key does now. */
   label: string;
@@ -44,7 +46,7 @@ const withSpaceMark = (text: string): ReactNode[] =>
 // The card's hero (23#the-key-card): the key drawn large, in the same five layers as on the board. Its parts are its slots: the top face
 // is what a tap sends, the front skirt what a hold does, the top corners a double tap and a tap-then-hold. An empty slot is a faint word
 // on the cap, never a row of dashed boxes. Each part is a button that opens that slot's picker under the cap.
-export function HeroCap({ legend, tone, keycap, led, reach, hold, staticFront = null, doubleTap, tapThenHold, open, draft, onOpen, label, size = 112 }: Props) {
+export function HeroCap({ legend, tone, keycap, led, reach, hold, staticFront = null, doubleTap, tapThenHold, open, draft, changed, onOpen, label, size = 112 }: Props) {
   const tapSize = [...legend.tap].length <= 1 ? 0.42 : [...legend.tap].length <= 3 ? 0.32 : 0.22;
   const region = (slot: HeroSlot, value: Region | null, className: string, children: ReactNode) =>
     value === null ? null : (
@@ -52,6 +54,7 @@ export function HeroCap({ legend, tone, keycap, led, reach, hold, staticFront = 
         type="button"
         className={`hero-region ${className}`}
         data-open={open === slot}
+        data-changed={changed?.has(slot) === true}
         data-empty={value.text === null}
         aria-label={`${value.name}: ${value.text ?? "nothing yet"}. ${value.text === null ? "Add" : "Change"}`}
         aria-expanded={open === slot}

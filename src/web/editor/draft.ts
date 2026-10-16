@@ -298,7 +298,12 @@ export function bindingSummary(binding: Binding, layout: Layout): string {
       return `${ACTION_WORD[binding.action]} ${layerName(binding.layerId)}`;
     case "macro":
       // An imported macro named only by its firmware slot says what it sends instead (D-270).
-      return `Macro ${macroWords(layout.macros.find((macro) => macro.id === binding.macroId)).replace(/^A macro$/, binding.macroId)}`;
+    {
+      // A named macro is "Macro Copy"; one named only by its firmware slot is said by what it sends ("Command, then C").
+      const macro = layout.macros.find((candidate) => candidate.id === binding.macroId);
+      const words = macroWords(macro);
+      return macro !== undefined && words !== macro.name ? words : `Macro ${macro?.name ?? binding.macroId}`;
+    }
     case "tapDance": {
       const td = layout.tapDances.find((t) => t.id === binding.tapDanceId);
       return td ? `Tap dance ${td.name}` : "Tap dance";
