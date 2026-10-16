@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PreviewBoard, PutPreviewResponse } from "../../api/keyboards.ts";
 import { describeKey } from "../../layout/describe.ts";
+import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { Keyboard } from "../keyboard/Keyboard.tsx";
 import "./keyboards.css";
@@ -56,7 +57,7 @@ export function NewBoardKeyboard({ board, mode, homeRow, mapped, placed, onPickR
       hands={board.hands}
       descriptions={descriptions}
       fingers={board.fingers}
-      layerName={mode === "put" ? (mapped?.after.layers[0]?.name ?? "Base") : "Base"}
+      layerName={mode === "put" ? niceLayerName(mapped?.after.layers[0]?.name ?? "Base") : "Base"}
       selected={null}
       partners={NONE}
       comboKeys={NONE}

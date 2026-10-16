@@ -1,5 +1,5 @@
-/* History (18#words, P4): the sheet's rows (shell/sheet.css). A row's actions show when it is pointed at or focused; the row on
-   screen says so. */
+/* History (18#words, P4): the sheet's rows (shell/sheet.css). A row's actions are always shown, quiet, never only on a hover (the
+   gate since v0.32.1, D-337); the row on screen says so. */
 .history-panel {
   display: flex;
   min-height: 0;
@@ -8,18 +8,7 @@
 }
 
 .revision .sheet-row-actions {
-  display: none;
-}
-
-.revision:hover .sheet-row-actions,
-.revision:focus-within .sheet-row-actions {
   display: flex;
-}
-
-@media (hover: none) {
-  .revision .sheet-row-actions {
-    display: flex;
-  }
 }
 
 .revision-arrow {

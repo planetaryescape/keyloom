@@ -1104,6 +1104,14 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
   - `GET /api/configs/:ref/proposals`.
 - **Visible at rest.** Every action in the flow is a button, chip, radio row or field. Nothing waits for a hover.
 
+### D-337: Nothing waits for a hover: per-row and per-cap actions are shown at rest, quiet; and the put panel names layers as the strip does. (Visible actions, Claude; asked by the coordinator)
+- A search of every stylesheet for actions or hints that only a hover or focus reveals found three. Each is now always shown, quiet at rest and full when pointed at:
+  - History's per-revision "Go back to this", which showed on hover except on touch screens;
+  - the layer strip's add and layer-menu buttons, which showed on hover or focus;
+  - the key card's empty corner slots ("2×", "tap+hold"), which showed on hover of the hero cap. v0.32.1 already names those slots under the key.
+- Hover highlights that only preview, with the action a visible click (combo rows, library uses, "Also on" chips, proposal cards), are not affordances, and stay as they are. History's long change text is clamped to two lines and reads in full on hover or focus; it's text, not an action, and stays.
+- The "Put a config on" panel names layers as the strip does ("Default layer", not "default_layer"), in its per-layer list and in the list of keys that stay behind. The engine keeps the firmware's names; the screen reads them through `niceLayerName`. The put's proposal texts carry no layer names.
+
 ## Typing lab (2026-10-16)
 
 ### D-280: An explicit, opt-in typing session records physical key events so keyloom can tune timings from evidence. (BK. Replaces D-035 for sessions BK starts)

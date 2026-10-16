@@ -365,20 +365,14 @@
   height: 28px;
 }
 
-/* The strip's actions (add, and the selected layer's menu) stay out of sight until the strip is pointed at or focused; right-click
-   or the context-menu key on a layer opens its menu too (P1 review). */
+/* The strip's actions (add, and the selected layer's menu) are always there, quiet at rest and full when the strip is pointed at or
+   focused, never only on a hover (D-337); right-click or the context-menu key on a layer opens its menu too (P1 review). */
 .layer-tabs-wrap .layer-tab-actions {
-  opacity: 0;
+  opacity: 0.6;
   transition: opacity 0.2s;
 }
 
 .layer-tabs-wrap:hover .layer-tab-actions,
 .layer-tabs-wrap:focus-within .layer-tab-actions {
   opacity: 1;
-}
-
-@media (hover: none) {
-  .layer-tabs-wrap .layer-tab-actions {
-    opacity: 1;
-  }
 }
