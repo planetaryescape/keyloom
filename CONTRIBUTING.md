@@ -145,7 +145,7 @@ Then prove the board works end to end with your own layout. [Test the board end 
 
 ### 7. Open the pull request
 
-Put only `boards/<vendor>/<board>/` in the PR. Do not change any other file.
+Put only `boards/<vendor>/<board>/` in the PR. Do not change any other file, except for a note in `docs/issues/` when the board needs a code change (below).
 
 The PR description must say all of this:
 
@@ -174,7 +174,7 @@ A recipe says how keyloom builds and flashes a board. It is the `kind` of `build
 
 Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds from is the `source` of the revision, so mainline QMK and a vendor's fork both work.
 
-`manual` means keyloom builds the file but can't flash it. `keyloom flash` then fails with the file's path and your `instructions`. Flash the file yourself with QMK Toolbox, `qmk flash`, `dfu-util` or `avrdude`, and say so in the PR. Only `zapp` and `uf2-drives` flash from keyloom today. A new flasher needs code, and that is the one case where a board PR is more than data. Open an issue first.
+`manual` means keyloom builds the file but can't flash it. `keyloom flash` then fails with the file's path and your `instructions`. Flash the file yourself with QMK Toolbox, `qmk flash`, `dfu-util` or `avrdude`, and say so in the PR. Only `zapp` and `uf2-drives` flash from keyloom today. A new flasher needs code, and that is the one case where a board PR is more than data. This project tracks issues as Markdown in `docs/issues/`, not on GitHub: describe what's needed in the PR, or add a short note there in the same PR. The same goes for a part of the real board the drawing can't express: draw what `display` can, and say in the PR what differs, rather than working around it in `board.json`.
 
 ### QMK: `qmk-docker`
 
@@ -203,7 +203,7 @@ Import a real layout. Use a stock keymap if you have no layout of your own.
 ```sh
 # ZMK: a folder with one .keymap file, or the file itself
 keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/config
-# QMK: a folder with keymap.c, such as keyboards/crkbd/keymaps/default
+# QMK: a keymap folder, such as keyboards/crkbd/keymaps/default, or the keymap.json in one
 keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/keymap-folder
 ```
 
