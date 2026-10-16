@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.23.0](https://github.com/planetaryescape/keyloom/compare/v0.22.1...v0.23.0) (2026-10-16)
+
+
+### Features
+
+* edit a key on a card beside it, with the key as its hero ([3509dcc](https://github.com/planetaryescape/keyloom/commit/3509dcc52b214cf8debdde63801b695838c1691b))
+
+
+### Bug Fixes
+
+* keep the key card's picker in view and the legend floor when parted ([40cf2f7](https://github.com/planetaryescape/keyloom/commit/40cf2f7ddde6bc7eb68d53ba55d4400e46a61d0d))
+* part the halves for the key card and quiet its middle, from the P2 review ([ee0f84e](https://github.com/planetaryescape/keyloom/commit/ee0f84e4df23f22eb1b414bc91e1ef237cd89b2e))
+
 ## [0.22.1](https://github.com/planetaryescape/keyloom/compare/v0.22.0...v0.22.1) (2026-10-16)
 
 
