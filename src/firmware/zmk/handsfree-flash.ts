@@ -179,8 +179,13 @@ export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTar
       // Retried until the deadline, like a half that has not appeared yet.
     }
     if (seen.state === "keyloom" && seen.key === key) return { ok: true, message: `the ${label} is running build ${opts.buildId}` };
+    // A half comes back on USB a moment before its serial port does, so it can first show only as a USB device. Its serial number
+    // already names the build it runs: this build is a pass, and another keyloom build may still be its port coming up, so wait.
+    // (BK's Glove80, 2026-10-16: the right half was flashed and verified as "not running this build" from its USB device.)
+    const usbMarker = seen.state === "other" ? parseSerial(seen.serial) : undefined;
+    if (usbMarker !== undefined && usbMarker.half === t.half.marker && usbMarker.key === key) return { ok: true, message: `the ${label} is running build ${opts.buildId}` };
     // A half that is back running something else won't change by waiting longer.
-    if (seen.state !== "absent") break;
+    if (seen.state !== "absent" && usbMarker === undefined) break;
     if (Date.now() >= deadline) break;
     await sleep(poll);
   }

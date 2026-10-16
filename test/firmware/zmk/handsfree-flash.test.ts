@@ -113,6 +113,14 @@ describe("a Glove80 whose halves run keyloom's firmware", () => {
     expect(r.saved.map(([h]) => h)).toEqual(["R", "L"]);
   });
 
+  test("a half that shows on USB before its serial port is up is verified by its USB serial, not failed", async () => {
+    // BK's Glove80, 2026-10-16: the right half came back as a USB device naming the new build a moment before its port appeared.
+    const r = await run(GLOVE80, glove80Image(KEY), (root) => fakeWorld({ root, halves: [running("L"), running("R")], portLagMs: 300 }));
+    expect(r.result).toMatchObject({ state: "succeeded", error: null });
+    expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }, { letter: "L", key: KEY }]);
+    expect(r.lines.at(-1)).toBe(`keyloom: Verified: the right half is running build ${BUILD}, and the left half is running build ${BUILD}.`);
+  });
+
   test("a right half with no port of its own is restarted through the left half at 1201 baud", async () => {
     const r = await run(GLOVE80, glove80Image(KEY), (root) => fakeWorld({ root, halves: [running("L"), { letter: "R", volume: "GLV80RHBOOT" }] }));
     expect(r.result.state).toBe("succeeded");
