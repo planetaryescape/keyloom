@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.29.0](https://github.com/planetaryescape/keyloom/compare/v0.28.0...v0.29.0) (2026-10-16)
+
+
+### Features
+
+* P5 phone and polish under the light ([02d0e08](https://github.com/planetaryescape/keyloom/commit/02d0e08d38039707107643965e6ca450e6ff25da))
+
+
+### Bug Fixes
+
+* report flash states in order and before the flash finishes ([bccdaee](https://github.com/planetaryescape/keyloom/commit/bccdaee08a2c5809d44cf121a692085b669d971e))
+
 ## [0.28.0](https://github.com/planetaryescape/keyloom/compare/v0.27.0...v0.28.0) (2026-10-16)
 
 
