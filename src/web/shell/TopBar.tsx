@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Keyboard as KeyboardIcon, Library, ListTree, LoaderCircle, Monitor, Moon, MousePointer2, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
+import { Activity, Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Keyboard as KeyboardIcon, Library, ListTree, LoaderCircle, Monitor, Moon, MousePointer2, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { PHONE, useMediaQuery } from "./useMediaQuery.ts";
 import type { BoardChoice } from "../../api/http.ts";
@@ -24,6 +24,8 @@ export interface MenuActions {
   library?: { open: boolean; onToggle: () => void };
   combos?: { open: boolean; onToggle: () => void };
   settings?: { open: boolean; onToggle: () => void };
+  /** The typing lab (D-314). */
+  lab?: { open: boolean; onToggle: () => void };
   advanced?: { on: boolean; onToggle: () => void };
   /** Taps select keys instead of opening them, for screens without a Shift key. */
   select?: { on: boolean; onToggle: () => void };
@@ -151,6 +153,7 @@ export function TopBar({ boards, sync, ask, undo, menu }: TopBarProps) {
               {!phone || menu?.history === undefined ? null : <Item icon={History} label="History" hint="⌥H" checked={menu.history.open} onSelect={() => { close(); menu.history?.onToggle(); }} />}
               {!phone || menu?.library === undefined ? null : <Item icon={Library} label="Library" hint="⌥L" checked={menu.library.open} onSelect={() => { close(); menu.library?.onToggle(); }} />}
               {menu?.combos === undefined ? null : <Item icon={ListTree} label="All combos" checked={menu.combos.open} onSelect={() => { close(); menu.combos?.onToggle(); }} />}
+              {menu?.lab === undefined ? null : <Item icon={Activity} label="Typing lab" checked={menu.lab.open} onSelect={() => { close(); menu.lab?.onToggle(); }} />}
               {menu?.settings === undefined ? null : <Item icon={SlidersHorizontal} label="Settings" checked={menu.settings.open} onSelect={() => { close(); menu.settings?.onToggle(); }} />}
               {menu?.release === undefined ? null : (
                 <>

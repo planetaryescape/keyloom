@@ -18,12 +18,12 @@ const RING = new Set(["s", "w", "x"]);
 const PINKY_TYPOS = new Set([3, 7]);
 
 /** The strokes of the script: 150 ms a key, the left ring finger 90 ms slower, every "sd" a roll with S down 260 ms. */
-export function scriptEvents(layout: Layout, start: number): TypingEvent[] {
+export function scriptEvents(layout: Layout, start: number, script = SCRIPT): TypingEvent[] {
   const at = letterPositions(layout);
   const space = (layout.layers[0]?.bindings ?? []).findIndex((b) => (b.kind === "key" && b.code === "SPACE") || (b.kind === "holdTap" && b.tap.code === "SPACE"));
   const events: TypingEvent[] = [];
   let t = start;
-  const chars = [...SCRIPT];
+  const chars = [...script];
   let aCount = 0;
   for (let i = 0; i < chars.length; i++) {
     const ch = chars[i] as string;
@@ -51,12 +51,12 @@ export function scriptEvents(layout: Layout, start: number): TypingEvent[] {
 }
 
 /** Lab deps whose keyboard types the script a moment after it starts listening, and whose replay is the model. */
-export function scriptedLabDeps(board: BoardDefinition, layoutOf: () => Layout, opts: { delayMs?: number } = {}): LabDeps {
+export function scriptedLabDeps(board: BoardDefinition, layoutOf: () => Layout, opts: { delayMs?: number; script?: () => string } = {}): LabDeps {
   return {
     async startCapture(_board, hooks) {
       const keyboard = fakeMoonlander();
       const capture = await startQmkCapture(keyboard.transport, moonlanderInterface(), hooks);
-      setTimeout(() => keyboard.press(scriptEvents(layoutOf(), 1_000_100)), opts.delayMs ?? 50);
+      setTimeout(() => keyboard.press(scriptEvents(layoutOf(), 1_000_100, opts.script?.() ?? SCRIPT)), opts.delayMs ?? 50);
       return capture;
     },
     replay: () => modelReplay(board),

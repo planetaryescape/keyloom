@@ -70,7 +70,7 @@ export const LabReadoutSchema = z.object({
     title: z.string(),
     before: z.number(), after: z.number(), removed: z.number(), introduced: z.number(),
     /** One misfire it removes, slowed down: the key held, the next key, the times. */
-    example: z.object({ held: z.string(), next: z.string().nullable(), heldMs: z.number(), overlapMs: z.number(), termMs: z.number().nullable() }).nullable(),
+    example: z.object({ position: z.number().int(), held: z.string(), next: z.string().nullable(), heldMs: z.number(), overlapMs: z.number(), termMs: z.number().nullable() }).nullable(),
     proposal: ProposalCardSchema.nullable(),
   })),
   notes: z.array(z.string()),

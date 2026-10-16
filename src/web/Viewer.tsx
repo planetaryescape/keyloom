@@ -11,6 +11,9 @@ import { ApiError } from "./api.ts";
 import { undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
 import { ViewControls } from "./shell/ViewControls.tsx";
+import { useLab } from "./lab/useLab.ts";
+import { applyChangeSet } from "./api-write.ts";
+import { LabPanel, LabStage } from "./lab/LabScreens.tsx";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
@@ -190,6 +193,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [libraryKeys, setLibraryKeys] = useState<readonly number[] | null>(null);
   // The settings page shares the column with History and the library. Its staged layer colours are drawn on the board before they are applied (D-190).
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The typing lab (D-314): over the stage while choosing and listening, beside the board for the read-out.
+  const [labOpen, setLabOpen] = useState(false);
+  const lab = useLab(token, layoutRef, labOpen);
+  const [labHeat, setLabHeat] = useState<"speed" | "errors">("speed");
+  const [labLit, setLabLit] = useState<ReadonlySet<number>>(new Set());
   const [lightingDraft, setLightingDraft] = useState<LightingDraft>(new Map());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const history = useRevisions(token, layoutRef, revision.id, historyOpen);
@@ -222,6 +230,33 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       ? null
       : (decisionFocus.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? decisionFocus[0])?.layerId ?? null;
   const layer = layout.layers.find((candidate) => candidate.id === (preview?.layerId ?? focusLayerId)) ?? layout.layers[headIndex];
+  // The lab's marks on the board: the keys just typed, the findings' keys (the open one's, else all), and a heat per key from its
+  // finger's speed or errors (D-314).
+  const labPanelShown = labOpen && lab.phase.kind === "readout" && !narrow;
+  // While listening, the top bar steps back too (D-314); it lives outside this component, so the root carries the state.
+  useEffect(() => {
+    if (labOpen && lab.phase.kind === "listening") document.documentElement.dataset.lab = "listening";
+    else delete document.documentElement.dataset.lab;
+    return () => {
+      delete document.documentElement.dataset.lab;
+    };
+  }, [labOpen, lab.phase.kind]);
+  const labBoard = useMemo(() => {
+    const phase = lab.phase;
+    if (phase.kind !== "readout") return { lit: labLit };
+    const open = phase.readout.findings.find((f) => f.id === phase.open);
+    const findings = new Set((open ? [open] : phase.readout.findings).flatMap((f) => f.positions));
+    const rows = phase.readout.fingers;
+    const value = (r: (typeof rows)[number]) => (labHeat === "speed" ? r.medianMs : r.keys === 0 ? 0 : r.errors / r.keys);
+    const top = Math.max(...rows.map(value), 0.0001);
+    const byFinger = new Map(rows.map((r) => [r.finger, value(r) / top]));
+    const heat = new Map<number, number>();
+    for (const [p, finger] of Object.entries(board.fingers)) {
+      const h = byFinger.get(finger);
+      if (h !== undefined && !finger.endsWith("thumb")) heat.set(Number(p), h);
+    }
+    return { lit: labLit, findings, heat };
+  }, [lab.phase, labLit, labHeat, board.fingers]);
   const unsyncedHere = useMemo(() => new Set(unsynced.filter((slot) => slot.layerId === layer?.id).map((slot) => slot.position)), [unsynced, layer?.id]);
 
   // While a draft is complete the board shows it, so the key reads as it will once applied.
@@ -594,6 +629,42 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setSettingsOpen(false);
     setCombosOpen(false);
     setHistoryOpen((open) => !open);
+  }
+
+  function toggleLab() {
+    if (labOpen) {
+      setLabOpen(false);
+      setPinnedProposal(null);
+      return;
+    }
+    if (draftBlocks()) return;
+    if (editing !== null) closeEditor(false);
+    setChatOpen(false);
+    setHistoryOpen(false);
+    setLibraryOpen(false);
+    setSettingsOpen(false);
+    setCombosOpen(false);
+    // Findings are on the first layer's keys, so the lab shows it.
+    const first = layout.layers[0];
+    if (first !== undefined) setLayerId(first.id);
+    setLabOpen(true);
+  }
+
+  // A key typed in the lab lights on the board for a moment: the first-layer key that types it.
+  function labType(ch: string) {
+    const code = keyForChar(ch)?.name;
+    const bindings = layout.layers[0]?.bindings ?? [];
+    const at = bindings.findIndex((b) => (b.kind === "key" && b.code === code) || (b.kind === "holdTap" && b.tap.code === code));
+    if (at < 0) return;
+    setLabLit(new Set([at]));
+    window.setTimeout(() => setLabLit((now) => (now.has(at) && now.size === 1 ? new Set() : now)), 220);
+  }
+
+  async function labApply(card: ProposalCard) {
+    const result = await applyChangeSet(token, card.changeSetId);
+    setLabOpen(false);
+    await onProposalApplied(card, result);
+    toasts.show({ kind: "success", message: "Applied", detail: `${card.title}. Type again in a few days to see if it stuck.` });
   }
 
   function toggleLibrary() {
@@ -1241,6 +1312,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           library: { open: libraryOpen, onToggle: toggleLibrary },
           inspect: { on: inspect, onToggle: toggleInspect },
           showCombos: { on: showCombos, onToggle: toggleCombos },
+          lab: { open: labOpen, onToggle: () => toggleLab() },
           settings: {
             open: settingsOpen,
             onToggle: () => {
@@ -1261,7 +1333,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           release: chrome.release,
         }}
       />
-      <div className="workbench" data-side={chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
+      <div className="workbench" data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
         <section
           ref={stageRef}
           className="stage"
@@ -1339,9 +1411,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             reach={reach}
             rippleFrom={rippleFrom}
             inspect={inspect}
+            {...(labOpen ? { lab: labBoard } : {})}
             found={found}
             previewing={preview !== null}
           />
+          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} /> : null}
+          {/* A narrow screen has no column beside the board, so a past session's read-out is a sheet at the stage's foot (D-314). */}
+          {labOpen && narrow && lab.phase.kind === "readout" ? (
+            <div className="lab-sheet">
+              <LabPanel lab={lab} heat={labHeat} onHeat={setLabHeat} onTry={(card) => setPinnedProposal(card)} onApply={labApply} onClose={() => toggleLab()} />
+            </div>
+          ) : null}
           {/* Kept in the layout while the bar is open, only unseen, so the board keeps the unit it rests at (P3 review). */}
           <div className="stage-floor" data-under-bar={!narrow && chatOpen && !chatPanel}>
             {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
@@ -1507,6 +1587,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
         {/* One chat, mounted once: the bar over the stage's foot, or the panel beside the board for a conversation (D-310). A key opened
             from the panel takes its place and the conversation waits, still mounted. */}
+        {labPanelShown ? (
+          <div className="lab-column">
+            <LabPanel lab={lab} heat={labHeat} onHeat={setLabHeat} onTry={(card) => setPinnedProposal(card)} onApply={labApply} onClose={() => toggleLab()} />
+          </div>
+        ) : null}
         {narrow ? null : (
           <div
             className="command-bar"

@@ -176,7 +176,8 @@ function proposalFor(layout: Layout, s: Suggestion, recordedOn: number) {
   const date = new Date(recordedOn).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
   const gained = `${e.removed} of ${e.before} ${plural(e.before, "misfire", "misfires")} gone`;
   const cost = e.introduced === 0 ? "none new" : `${e.introduced} new`;
-  const examples = e.examples.slice(0, 2).map((x) => exampleText(layout, x));
+  // A scripted or very regular typist repeats the same misfire word for word; saying it twice adds nothing.
+  const examples = [...new Set(e.examples.map((x) => exampleText(layout, x)))].slice(0, 2);
   return {
     title: s.candidate.title,
     explanation: `${s.candidate.title}. Replaying your ${date} recording with this change: ${gained}, ${cost}.${examples.length ? ` For example ${examples.join("; ")}.` : ""}`,
@@ -314,8 +315,9 @@ export function fingersLead(rows: readonly { finger: string; keys: number; error
   const measured = rows.filter((r) => r.keys >= 5);
   if (measured.length === 0) return "Not enough typing yet to tell your fingers apart.";
   const slow = [...measured].filter((r) => r.medianMs > 0).sort((a, b) => b.medianMs - a.medianMs)[0];
+  // "Most errors" is a count, as the engine's errors-by-finger finding counts them; the rate only breaks a tie.
   const rate = (r: { keys: number; errors: number }) => r.errors / r.keys;
-  const err = [...measured].filter((r) => r.errors > 0).sort((a, b) => rate(b) - rate(a) || b.errors - a.errors)[0];
+  const err = [...measured].filter((r) => r.errors > 0).sort((a, b) => b.errors - a.errors || rate(b) - rate(a))[0];
   const parts: string[] = [];
   if (slow !== undefined) parts.push(`Your ${fingerWords(slow.finger)} is your slowest finger`);
   if (err === undefined) parts.push("no finger made an error");
@@ -332,7 +334,7 @@ export type LabReadout = {
   findings: Array<{ id: string; kind: string; sentence: string; positions: number[] }>;
   suggestions: Array<{
     title: string; before: number; after: number; removed: number; introduced: number;
-    example: { held: string; next: string | null; heldMs: number; overlapMs: number; termMs: number | null } | null;
+    example: { position: number; held: string; next: string | null; heldMs: number; overlapMs: number; termMs: number | null } | null;
     proposal: ReturnType<typeof toCard> | null;
   }>;
   notes: string[];
@@ -376,7 +378,7 @@ export function labReadout(app: App, id: string): { session: TypingSessionSummar
         return {
           title: s.candidate.title, before: s.evidence.before, after: s.evidence.after, removed: s.evidence.removed, introduced: s.evidence.introduced,
           example: e === undefined ? null : {
-            held: keyName(layout, e.position), next: e.nextPosition === undefined ? null : keyName(layout, e.nextPosition), heldMs: e.facts.heldMs, overlapMs: e.facts.overlapMs,
+            position: e.position, held: keyName(layout, e.position), next: e.nextPosition === undefined ? null : keyName(layout, e.nextPosition), heldMs: e.facts.heldMs, overlapMs: e.facts.overlapMs,
             termMs: binding?.kind === "holdTap" ? (tappingTermOf(layout, binding.profileId) ?? null) : null,
           },
           proposal: cs === undefined ? null : toCard(cs),

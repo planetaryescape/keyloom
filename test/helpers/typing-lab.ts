@@ -20,7 +20,8 @@ export async function bkMoonlander(): Promise<{ board: BoardDefinition; layout: 
 export function letterPositions(layout: Layout): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [position, b] of (layout.layers[0]?.bindings ?? []).entries()) {
-    const code = b.kind === "key" ? b.code : b.kind === "holdTap" ? b.tap.code : undefined;
+    // A key with mods on it (BK's ^B) types a shortcut, not the letter.
+    const code = b.kind === "key" && b.mods === undefined ? b.code : b.kind === "holdTap" && b.tap.mods === undefined ? b.tap.code : undefined;
     if (code !== undefined && /^[A-Z]$/.test(code) && out[code.toLowerCase()] === undefined) out[code.toLowerCase()] = position;
   }
   return out;
@@ -115,6 +116,13 @@ export function modelReplay(board: BoardDefinition): Replay {
           const from = heldBack.get(p) ?? p.down;
           emit({ at: from, kind: "keyDown", code: b.code });
           emit({ at: Math.max(p.up, from), kind: "keyUp", code: b.code });
+        } else if (b?.kind === "holdTap") {
+          // A layer-tap let go inside its term types its tap; the model has no layers, so a held one types nothing.
+          const r = resolve(layout, b.profileId);
+          if (p.up - p.down < r.term) {
+            emit({ at: p.up, kind: "keyDown", code: b.tap.code });
+            emit({ at: p.up + 1, kind: "keyUp", code: b.tap.code });
+          }
         }
         previousTouch = Math.max(previousTouch, p.up);
         continue;

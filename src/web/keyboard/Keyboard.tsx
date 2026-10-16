@@ -107,6 +107,8 @@ interface KeyboardProps {
   rippleFrom?: number | null;
   /** A key the person just pressed on the real keyboard, lit for a moment so it can be found. */
   found?: number | null;
+  /** The typing lab (D-314): keys pressed just now, keys a finding is about (rose), and a heat 0..1 per key from below. */
+  lab?: { lit?: ReadonlySet<number>; findings?: ReadonlySet<number>; heat?: ReadonlyMap<number, number> } | undefined;
   /** Inspect: kinds tinted, inherited legends and combo dots shown (D-264). */
   inspect?: boolean;
   /** How far the board slides sideways to make room for the key card, in px (P2). */
@@ -176,6 +178,7 @@ export function Keyboard({
   rippleFrom = null,
   found = null,
   inspect = false,
+  lab,
   shiftPx = 0,
   part = null,
   scale = 1,
@@ -352,6 +355,9 @@ export function Keyboard({
               data-applied={appliedKeys?.has(index) ?? false}
               data-unsynced={unsynced?.has(index) ?? false}
               data-found={found === index}
+              data-lab-lit={lab?.lit?.has(index) ?? false}
+              data-lab-finding={lab?.findings?.has(index) ?? false}
+              {...(lab?.heat?.has(index) ? { "data-lab-heat": "true", style: { ...keyStyle(rect, unit), "--heat": String(lab.heat.get(index)) } as CSSProperties } : {})}
               data-key-index={index}
               data-hand={parts2 ? handOf.get(index) : undefined}
               data-combo-hover={comboLit?.has(index) ?? false}
