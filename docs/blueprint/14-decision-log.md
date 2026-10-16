@@ -1073,3 +1073,16 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 
 ### D-301: A version is a revision that went onto the keyboard, recorded automatically on a verified sync and nameable; History shows versions as milestones. (BK's request; design Claude)
 - **BK:** "keep multiple versions of my layout and version history just like oryx does so if i change something an use it for a week and don't like it I can go bto a past version".
+
+## Desktop app (2026-10-16)
+
+### D-320: keyloom ships as a Tauri v2 desktop app with the unchanged keyloom binary as its sidecar. (BK proposed; Claude chose Tauri from the spike)
+- **BK:** "Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
+- **Options rejected:** Electron (about 130 MB runtime alone, a second JS runtime); Electrobun (bun main process only in daily betas, no launch-at-login, as of 2026-10-16).
+- **Evidence:** [../research/desktop-shell.md](../research/desktop-shell.md).
+
+### D-321: `keyloom serve` accepts port 0 and exits when its stdin closes. (Claude, from the spike)
+- **Why:** the shell picks the port and must never orphan the server; a SIGKILL'd shell orphaned it in the spike.
+
+### D-322: Browser mode stays; the desktop app is a client of the same server. (Claude)
+- **Why:** a phone or another machine still reaches keyloom, and the app adds no second code path.

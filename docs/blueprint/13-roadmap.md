@@ -477,6 +477,24 @@ Only BK can do these:
 
 **Left out:** sharing configs between people.
 
+## Rung 24: Car: keyloom is an app on my Mac
+
+**Previously:** a browser tab. **Now:** a desktop app with its own window, shortcuts, and a menu-bar sync status.
+
+**Promise:** "keyloom lives in my Dock, my shortcuts never fight the browser, and the menu bar tells me when my keyboard is behind."
+
+**Build:** [26](26-desktop-app.md) (D-320 to D-322).
+
+**Design:** the menu-bar extra and its menu, the notifications, and the window chrome in [23](23-design-concept.md)'s language.
+
+**New unknowns:** notarisation in CI; the tray glyph's appearance on BK's menu bar.
+
+**Demo:** install from the cask, launch, edit and apply, and watch the menu bar go amber then green.
+
+**Done when:** a signed, notarised `.app` from a release is installed on BK's Mac and used for a full edit, apply and sync.
+
+**Left out:** Windows and Linux builds.
+
 ## After the car (not planned yet)
 
 - Conditional layers (tri-layer) in the editor.
