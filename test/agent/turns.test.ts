@@ -151,4 +151,19 @@ describe("failures before and during the model call", () => {
     expect(showConversation(app, conv.id).messages[0]?.selection).toEqual({ layerId: "layer-0", positions: [30, 31] });
     expect(layoutId).toBeTruthy();
   });
+
+  test("an unapplied draft goes to the model with the message, and the bubble shows only what was typed (D-317)", async () => {
+    const { app } = await run([{ blocks: [{ text: "ok" }] }]);
+    const layoutId = (app.db.query("SELECT id FROM layouts LIMIT 1").get() as { id: string }).id;
+    const fake = fakeAnthropic([{ blocks: [{ text: "ok" }] }]);
+    const drafts = [{ layerId: "layer-0", position: 30, binding: { kind: "key" as const, code: "Q" } }];
+    await sendMessage(app, layoutId, { message: "is this better?", drafts, model: anthropicModel(fake.client) });
+    const sent = fake.requests[0]?.body.messages[0].content[0].text as string;
+    expect(sent).toStartWith("Unapplied draft on Layer 0 (layer id layer-0), S hold ⌥ (left ring, home row) at position 30: would become Q");
+    expect(sent).toEndWith("\n\nis this better?");
+    const conv = app.db.query("SELECT id FROM conversations ORDER BY created_at DESC LIMIT 1").get() as { id: string };
+    expect(showConversation(app, conv.id).messages[0]?.text).toBe("is this better?");
+    // A draft for a position the board doesn't have is refused, as a selection's is.
+    await expect(sendMessage(app, layoutId, { message: "x", drafts: [{ ...drafts[0]!, position: 999 }], model: anthropicModel(fakeAnthropic([]).client) })).rejects.toBeInstanceOf(UsageError);
+  });
 });

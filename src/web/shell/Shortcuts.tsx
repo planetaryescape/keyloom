@@ -16,6 +16,7 @@ const SHORTCUTS: readonly { keys: readonly string[]; range?: true; does: string 
   { keys: ["⌥", "I"], does: "Inspect: show what kind each key is and what transparent keys pass through to" },
   { keys: ["⌥", "H"], does: "Open or close History" },
   { keys: ["⌥", "L"], does: "Open or close the Library" },
+  { keys: ["⌥", "S"], does: "Swap the open key with the next key you click, on any layer" },
   { keys: ["A"], does: "Press a letter or punctuation key on your keyboard to find it on the board" },
   { keys: ["?"], does: "Show this list" },
 ];

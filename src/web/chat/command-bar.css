@@ -1153,3 +1153,10 @@
   font-family: inherit;
   font-size: var(--text-xs);
 }
+
+.composer-drafts {
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-3);
+  color: var(--pending-ink);
+  font-size: var(--text-xs);
+}

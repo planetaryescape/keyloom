@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { ChatSelection, ConversationSummary } from "../../api/http.ts";
+import type { ChatRequest, ChatSelection, ConversationSummary } from "../../api/http.ts";
+
+export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
 import { fetchConversation, fetchConversations, forgetPriority, streamChat } from "./api-chat.ts";
 import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action } from "./transcript.ts";
@@ -42,7 +44,7 @@ export function useChat(token: string, layoutRef: string) {
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
 
   const run = useCallback(
-    async (text: string, selection: ChatSelection | null, begin: Action, onRejected?: (text: string) => void) => {
+    async (text: string, selection: ChatSelection | null, begin: Action, onRejected?: (text: string) => void, drafts: ChatDrafts = []) => {
       setProblem(null);
       dispatch(begin);
       const mine = new AbortController();
@@ -52,7 +54,7 @@ export function useChat(token: string, layoutRef: string) {
         await streamChat(
           token,
           layoutRef,
-          { message: text, ...(conversationId.current === null ? {} : { conversationId: conversationId.current }), ...(selection === null ? {} : { selection }) },
+          { message: text, ...(conversationId.current === null ? {} : { conversationId: conversationId.current }), ...(selection === null ? {} : { selection }), ...(drafts.length === 0 ? {} : { drafts }) },
           mine.signal,
           (event) => {
             if (event.type === "start") started = true;
@@ -84,8 +86,9 @@ export function useChat(token: string, layoutRef: string) {
   );
 
   const send = useCallback(
-    (text: string, selection: ChatSelection | null, onRejected?: (text: string) => void) =>
-      run(text, selection, { type: "sent", userId: nextId("you"), assistantId: nextId("reply"), text, selection }, onRejected),
+    // `drafts` are key changes kept on the board and not applied, which the agent is told of (D-317).
+    (text: string, selection: ChatSelection | null, onRejected?: (text: string) => void, drafts: ChatDrafts = []) =>
+      run(text, selection, { type: "sent", userId: nextId("you"), assistantId: nextId("reply"), text, selection }, onRejected, drafts),
     [run],
   );
 

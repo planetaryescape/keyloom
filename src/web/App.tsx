@@ -13,7 +13,7 @@ import { releaseStatus, type ReleaseStatus } from "./release/status.ts";
 import { useNow } from "./release/useNow.ts";
 import { useRelease } from "./release/useRelease.ts";
 import { useSync, type SyncApi } from "./sync/useSync.ts";
-import { Viewer } from "./Viewer.tsx";
+import { Viewer, type Arrival } from "./Viewer.tsx";
 
 type Failure = { message: string; retryable: boolean };
 type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
@@ -22,6 +22,8 @@ export function App({ token }: { token: string }) {
   const [layouts, setLayouts] = useState<LayoutSummary[] | null>(null);
   const [listError, setListError] = useState<Failure | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // What a board or config switch carries to the layout it opens (D-317), kept with that layout's ID so nothing else picks it up.
+  const [carry, setCarry] = useState<(Arrival & { id: string }) | null>(null);
   const [view, setView] = useState<View | null>(null);
   // The import screen from the layout menu; with no layouts it is the page itself.
   const [importing, setImporting] = useState(false);
@@ -155,6 +157,12 @@ export function App({ token }: { token: string }) {
       boardChoices={boardChoices}
       sync={sync}
       onChanged={refresh}
+      arrival={carry !== null && carry.id === summary.id ? carry : null}
+      onCarry={(id, next) => {
+        setCarry({ id, ...next });
+        setImporting(false);
+        setSelectedId(id);
+      }}
     />
   );
 }
@@ -167,6 +175,8 @@ function LayoutPage({
   boardChoices,
   sync,
   onChanged,
+  arrival,
+  onCarry,
 }: {
   token: string;
   summary: LayoutSummary;
@@ -175,6 +185,8 @@ function LayoutPage({
   boardChoices: readonly BoardChoice[];
   sync: SyncApi;
   onChanged: () => Promise<void>;
+  arrival: Arrival | null;
+  onCarry: (id: string, carry: Arrival) => void;
 }) {
   const { document: layout, board, geometry } = detail;
   const release = useRelease(token, summary.id);
@@ -219,7 +231,7 @@ function LayoutPage({
           sync={sync}
           onChanged={onChanged}
           onOpenRelease={openRelease}
-          chrome={{ ...menu, boardChoices, release: { status, onOpen: () => openRelease() } }}
+          chrome={{ ...menu, boardChoices, release: { status, onOpen: () => openRelease() }, arrival, onCarry }}
         />
       )}
       <ReleaseDialog

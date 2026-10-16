@@ -20,7 +20,7 @@ export function KeyMoves({ swapping, onSwap, onCopy, copied, pasteTargets, onPas
   const pasteWords = copied === null ? "Paste: copy a key first" : `Paste ${copied} on ${pasteTargets === 1 ? "this key" : `${pasteTargets} keys`} (⌘V)`;
   return (
     <div className="card-moves" role="group" aria-label="Move or copy this key">
-      <button type="button" className="card-icon" aria-pressed={swapping} aria-label={blockedReason ?? "Swap: then click the key to swap with, on any layer"} title={blockedReason ?? "Swap: then click the key to swap with, on any layer (S)"} disabled={blockedReason !== null} onClick={onSwap}>
+      <button type="button" className="card-icon" aria-pressed={swapping} aria-label={blockedReason ?? "Swap: then click the key to swap with, on any layer"} title={blockedReason ?? "Swap: then click the key to swap with, on any layer (⌥S)"} disabled={blockedReason !== null} onClick={onSwap}>
         <ArrowLeftRight size={15} aria-hidden="true" />
       </button>
       <button type="button" className="card-icon" aria-label={blockedReason ?? "Copy this key"} title={blockedReason ?? "Copy this key (⌘C)"} disabled={blockedReason !== null} onClick={onCopy}>

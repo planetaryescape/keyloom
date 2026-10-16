@@ -16,6 +16,8 @@ import { applyChangeSet } from "./api-write.ts";
 import { LabPanel, LabStage } from "./lab/LabScreens.tsx";
 import { matchCommands, type Command } from "./chat/commands.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
+import type { CarriedThread } from "./chat/CarriedThread.tsx";
+import type { Turn } from "./chat/transcript.ts";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
 import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
@@ -32,7 +34,8 @@ import { EditingStatus } from "./configs/EditingStatus.tsx";
 import { useConfigs } from "./configs/useConfigs.ts";
 import { ComboEditor, ComboList, draftFromCombo, type ComboDraft } from "./combos/ComboPane.tsx";
 import { combosOn, newComboId } from "./combos/combo-ops.ts";
-import { bindingSummary, withBinding } from "./editor/draft.ts";
+import { bindingSummary, withBinding, type Draft } from "./editor/draft.ts";
+import { draftsForChat, draftsOn, park, slotKey, stillApplying, unpark, type ParkedDrafts } from "./editor/parked-drafts.ts";
 import { DropConfirm } from "./editor/DropConfirm.tsx";
 import { bindingAt, copyOps, copySummary, pasteOps, pasteSummary, quickAssignOps, quickAssignSummary, swapOps, swapSummary } from "./editor/move-ops.ts";
 import { useChange, type ChangeOutcome } from "./editor/useChange.ts";
@@ -95,6 +98,10 @@ interface ViewerProps {
     selectedId: string;
     onSelect: (id: string) => void;
     onImport: () => void;
+    /** What a switch carries to the next layout (D-317): the layer by name, and the chat if it was open. */
+    arrival?: Arrival | null;
+    /** Opens another layout with what the switch carries; without it, a switch is a plain `onSelect`. */
+    onCarry?: (id: string, carry: Arrival) => void;
     /** Fetches the layout list again after a config is made, renamed or restored; with an ID, opens that config. */
     onReload?: (selectId?: string) => void;
     boardChoices: readonly BoardChoice[];
@@ -102,7 +109,11 @@ interface ViewerProps {
   };
 }
 
-type Editing = { layerId: string; position: number; focus: boolean };
+/** What a board or config switch carries to the next layout (D-317). */
+export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null };
+
+// `resume` is a draft kept from an earlier visit to this key (D-317); the card opens on it.
+type Editing = { layerId: string; position: number; focus: boolean; resume?: Draft };
 const CLEAN: DraftState = { binding: null, dirty: false, after: null };
 const NONE: ReadonlySet<number> = new Set();
 const ADVANCED_KEY = "keyloom.advanced";
@@ -131,11 +142,17 @@ const typing = (target: EventTarget | null) =>
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
 export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, sync, chrome }: ViewerProps) {
   const { document: layout, board, revision } = detail;
-  const [layerId, setLayerId] = useState<string | null>(null);
+  // Arriving from another board or config lands on the layer of the same name, if this layout has one (D-317).
+  const [layerId, setLayerId] = useState<string | null>(() => {
+    const name = chrome.arrival?.layerName?.trim().toLowerCase();
+    return name === undefined ? null : (detail.document.layers.find((candidate) => candidate.name.trim().toLowerCase() === name)?.id ?? null);
+  });
   const [selected, setSelected] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [draft, setDraft] = useState<DraftState>(CLEAN);
+  // Drafts kept when their card closed (D-317): on the board as dashed amber until applied or discarded.
+  const [parked, setParked] = useState<ParkedDrafts>(new Map());
   const [blocked, setBlocked] = useState(false);
   // Place mode (D-092): a lost function waiting for the next key clicked on the board, and the keys already chosen.
   const [placing, setPlacing] = useState<PlaceRequest | null>(null);
@@ -156,7 +173,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const setApplied = (slot: { layerId: string; position: number } | null) => setAppliedKeys(slot === null ? null : { layerId: slot.layerId, positions: [slot.position] });
   const [undoing, setUndoing] = useState(false);
   // The chat drawer. Open, a click on a key adds it to the "Asking about" chips; closed, it opens the key's panel (D-099).
-  const [chatOpen, setChatOpen] = useState(false);
+  // The chat stays open across a switch, with the thread that was on screen carried above this layout's own (D-317).
+  const [chatOpen, setChatOpen] = useState(() => chrome.arrival?.chatOpen === true);
+  const [carriedThread] = useState<CarriedThread | null>(() => chrome.arrival?.thread ?? null);
+  const turnsNow = useRef<readonly Turn[]>([]);
   // Where the open conversation reads (D-310): the bar at the stage's foot, or the panel beside the board.
   const [chatPresentation, setChatPresentation] = useState<"bar" | "panel">("bar");
   // The keys in the chips, on one layer, and the proposal being previewed (hovered or pinned).
@@ -287,15 +307,30 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // While a draft is complete the board shows it, so the key reads as it will once applied.
   const shown = useMemo(() => {
     const base = preview?.layout ?? layout;
-    if (editing === null || draft.binding === null) return base;
-    // A change that brings a tap dance or a macro with it is drawn from the layout it makes.
-    if (draft.after !== null) return draft.after;
-    // The board shows both keys of the change: the edited one and every key a kept function was put on.
-    return placements.reduce(
-      (acc, placement) => withBinding(acc, placement.slot.layerId, placement.slot.position, placement.binding),
-      withBinding(base, editing.layerId, editing.position, draft.binding),
-    );
-  }, [layout, preview, editing, draft.binding, draft.after, placements]);
+    const open = (() => {
+      if (editing === null || draft.binding === null) return base;
+      // A change that brings a tap dance or a macro with it is drawn from the layout it makes.
+      if (draft.after !== null) return draft.after;
+      // The board shows both keys of the change: the edited one and every key a kept function was put on.
+      return placements.reduce(
+        (acc, placement) => withBinding(acc, placement.slot.layerId, placement.slot.position, placement.binding),
+        withBinding(base, editing.layerId, editing.position, draft.binding),
+      );
+    })();
+    // Kept drafts draw on their keys over that, so the board reads as it will once they are applied (D-317).
+    let drawn = open;
+    for (const entry of parked.values()) if (entry.binding !== null) drawn = withBinding(drawn, entry.slot.layerId, entry.slot.position, entry.binding);
+    return drawn;
+  }, [layout, preview, editing, draft.binding, draft.after, placements, parked]);
+  // A kept draft is a change to the key as it was; once the key changes under it (an undo, the chat, a paste), it is dropped, and said.
+  useEffect(() => {
+    const { kept, dropped } = stillApplying(parked, layout);
+    if (dropped.length === 0) return;
+    setParked(kept);
+    toasts.show({ kind: "info", message: dropped.length === 1 ? "A kept draft was dropped" : `${dropped.length} kept drafts were dropped`, detail: "Its key changed since, so the draft no longer applies." });
+    // Only when the layout moves; parked changes are this effect's own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout]);
   // Keys typed in a quick-assign run show on the board before they are applied, like a draft.
   const quickTargets = useMemo<Slot[]>(
     () => (chatSelection === null ? [] : chatSelection.positions.map((position) => ({ layerId: chatSelection.layerId, position }))),
@@ -370,7 +405,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     return here.length === 0 ? null : new Map(here.map((k) => [k.position, k.beforeLabel]));
   }, [comparing, layer]);
   const marks = useMemo(() => {
-    const own = marksOn(preview, layer?.id ?? "");
+    const own = new Map(marksOn(preview, layer?.id ?? ""));
+    // A kept draft is dashed amber: changed on screen, not applied (D-317). The open key's own draft keeps the solid mark.
+    for (const position of draftsOn(parked, layer?.id ?? "")) if (!own.has(position)) own.set(position, "draft");
     if (compareThen !== null) {
       const withThen = new Map(own);
       for (const position of compareThen.keys()) withThen.set(position, "changed");
@@ -384,7 +421,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       if (at !== undefined && at.layerId === layer?.id) withPlaced.set(at.position, "changed");
     });
     return withPlaced;
-  }, [preview, layer, placements, quick, quickTargets, compareThen]);
+  }, [preview, layer, placements, quick, quickTargets, compareThen, parked]);
   const markedLayers = useMemo(() => otherMarkedLayers(preview, layer?.id ?? ""), [preview, layer]);
   const remembered = useMemo(() => rememberedOn(preview, decisionFocus, layer?.id ?? ""), [preview, decisionFocus, layer]);
   const reminders = preview !== null && proposal !== null ? proposal.validation.diff.reminders : [];
@@ -835,6 +872,29 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quick, quickTargets, layout, revision.id]);
 
+  // ---- kept drafts (D-317) ----
+  // A resumed draft is for the card's first mount only; a later remount (after Apply) starts from the key as applied.
+  useEffect(() => {
+    if (editing?.resume !== undefined) setEditing((now) => (now === null || now.resume === undefined ? now : { layerId: now.layerId, position: now.position, focus: now.focus }));
+  }, [editing?.resume]);
+
+  /** Keeps the open card's unapplied draft on its key, dashed amber on the board, until it is applied or discarded. */
+  function keepOpenDraft() {
+    if (editing === null || !draft.dirty) return;
+    const kept = panel.current?.snapshot() ?? null;
+    const original = layout.layers.find((candidate) => candidate.id === editing.layerId)?.bindings[editing.position];
+    if (kept === null || original === undefined) return;
+    setParked((now) => park(now, { slot: { layerId: editing.layerId, position: editing.position }, panel: kept, binding: draft.binding, original }));
+  }
+
+  /** The kept draft for a key, taken off the board while its card is open, as Editing's `resume`. */
+  function resumeFor(layerId: string, position: number): { resume?: Draft } {
+    const entry = parked.get(slotKey({ layerId, position }));
+    if (entry === undefined) return {};
+    setParked((now) => unpark(now, entry.slot));
+    return { resume: entry.panel };
+  }
+
   function select(index: number | null) {
     // Place, swap and combo-key modes own clicks; moving focus must not choose anything.
     if (placing !== null || swapping !== null || comboPicking) return;
@@ -842,13 +902,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       setSelected(index);
       return;
     }
-    // A draft is the person's work; moving to another key doesn't get to discard it silently.
-    if (draft.dirty && index !== editing.position) {
-      setBlocked(true);
-      return;
-    }
+    // A draft is the person's work: moving to another key keeps it on its key, dashed amber, to come back to (D-317).
     setSelected(index);
-    if (index !== editing.position) setEditing({ layerId: editing.layerId, position: index, focus: false });
+    if (index !== editing.position) {
+      keepOpenDraft();
+      setDraft(CLEAN);
+      setEditing({ layerId: editing.layerId, position: index, focus: false, ...resumeFor(editing.layerId, index) });
+    }
   }
 
   function press(index: number, via: "pointer" | "keyboard", extend = false) {
@@ -893,35 +953,34 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       setLayerId(id);
       return;
     }
-    if (editing !== null && !chatOpen && draft.dirty) {
-      setBlocked(true);
-      return;
-    }
+    // Switching layer keeps the open key's draft on its key instead of refusing to move (D-317).
     setLayerId(id);
-    if (editing !== null) setEditing({ ...editing, layerId: id, focus: false });
+    if (editing !== null) {
+      keepOpenDraft();
+      setDraft(CLEAN);
+      setEditing({ layerId: id, position: editing.position, focus: false, ...resumeFor(id, editing.position) });
+    }
   }
 
   function openEditor(position: number, onLayer?: string) {
     if (layer === undefined) return;
-    if (editing !== null && draft.dirty && (position !== editing.position || (onLayer ?? layer.id) !== editing.layerId)) {
-      setBlocked(true);
-      return;
-    }
     setSelected(position);
     setBlocked(false);
     // A key opens over the combo being made; the combo is not kept.
     setComboDraft(null);
     setComboPicking(false);
     if (editing?.position === position && editing.layerId === (onLayer ?? layer.id)) return;
+    keepOpenDraft();
     setDraft(CLEAN);
     setPlacing(null);
     setPlacements([]);
     setRepeating(false);
     setSwapping(null);
-    setEditing({ layerId: onLayer ?? layer.id, position, focus: true });
+    setEditing({ layerId: onLayer ?? layer.id, position, focus: true, ...resumeFor(onLayer ?? layer.id, position) });
   }
 
   function closeEditor(refocus: boolean) {
+    keepOpenDraft();
     const position = editing?.position ?? null;
     setBoardLayout({ shift: 0, part: null, scale: 1 });
     setPointAt(null);
@@ -934,10 +993,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   function openChat() {
-    if (editing !== null && draft.dirty) {
-      toasts.show({ kind: "info", message: "Apply or reset the key you are editing first" });
-      return;
-    }
+    // The open key's draft is kept on the board and sent with the next message, so asking about it is one step (D-317).
     if (editing !== null) closeEditor(false);
     setRepeating(false);
     setChatOpen(true);
@@ -1035,6 +1091,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         toggleInspect();
         return;
       }
+      // ⌥S swaps the open key (D-317). Not a plain S: with a card open a plain letter types that key into the tap slot.
+      if (event.code === "KeyS" && event.altKey && !event.metaKey && !event.ctrlKey && !typing(event.target) && editing !== null) {
+        event.preventDefault();
+        if (draft.dirty) toasts.show({ kind: "info", message: "Apply or discard this key's change first" });
+        else setSwapping((current) => (current === null ? { layerId: editing.layerId, position: editing.position } : null));
+        return;
+      }
       // ⌥C, ⌥H and ⌥L, like ⌥I: a plain letter finds that key on the board, which pressing the real keyboard relies on (D-311).
       // event.code, since ⌥ and a letter type a dead key or a symbol on a Mac. Not while typing or with a key's card open.
       if (event.altKey && !event.metaKey && !event.ctrlKey && !typing(event.target) && editing === null && (event.code === "KeyC" || event.code === "KeyH" || event.code === "KeyL")) {
@@ -1124,6 +1187,23 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     void onChanged().catch(() => {});
   }
 
+  const chatDrafts = useMemo(() => draftsForChat(parked), [parked]);
+
+  /**
+   * Opens another board or config, carrying the layer by name and the chat (D-317). A conversation belongs to one layout, so the thread
+   * travels as what was on screen: this layout's turns, after any it had carried in itself, so a run of switches keeps the whole thread.
+   */
+  function switchLayout(id: string) {
+    const turns = [...(carriedThread?.turns ?? []), ...turnsNow.current];
+    const carry: Arrival = {
+      layerName: layer?.name ?? null,
+      chatOpen,
+      thread: turns.length === 0 ? null : { fromName: carriedThread !== null && turnsNow.current.length === 0 ? carriedThread.fromName : `${summary.name} on your ${boardDisplayName(board.name)}`, turns },
+    };
+    if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
+    else chrome.onSelect(id);
+  }
+
   // ⌘K commands (D-315): the typing lab and the config commands, offered above "Ask keyloom" when the text names them.
   // `find` keeps its identity while the configs don't change, so the bar's highlighted row survives a re-render.
   const findCommands = useCallback(
@@ -1137,7 +1217,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       if (command.kind === "lab") {
         if (!labOpen) toggleLab();
       } else if (command.kind === "new-config") setConfigDialog({ kind: "new" });
-      else if (command.kind === "switch") chrome.onSelect(command.id);
+      else if (command.kind === "switch") switchLayout(command.id);
       else setConfigDialog({ kind: "put-on", target: { id: command.id, name: command.name } });
     },
   };
@@ -1161,7 +1241,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       const moving = keyboardConfig !== null && keyboardConfig.id !== summary.id;
       toastAcross({ kind: "info", message: `Archived ${summary.name}`, detail: "It's under Archived in the config menu, with its history." }, moving);
       configs.reload();
-      if (moving && keyboardConfig !== null) chrome.onSelect(keyboardConfig.id);
+      if (moving && keyboardConfig !== null) switchLayout(keyboardConfig.id);
     } catch (error) {
       toasts.show({ kind: "error", message: "Couldn't archive it", ...(error instanceof Error ? { detail: error.message } : {}) });
     }
@@ -1315,6 +1395,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onApplied={onProposalApplied}
                 onOpenRelease={onOpenRelease}
                 commands={chatCommands}
+                drafts={chatDrafts}
+                carried={carriedThread}
+                onTurns={(turns) => {
+                  turnsNow.current = turns;
+                }}
               />
             </>
   );
@@ -1349,6 +1434,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             editing === null ? null : (
               <KeyPanel
                 key={`${revision.id}:${editing.layerId}:${editing.position}`}
+                resume={editing.resume}
                 handle={panel}
                 token={token}
                 layoutRef={layoutRef}
@@ -1421,7 +1507,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             // A board opens on the config its keyboard runs (D-315), else its first.
             const running = sync.boards.find((candidate) => candidate.boardId === boardId)?.layoutId;
             const target = chrome.layouts.find((candidate) => candidate.id === running) ?? chrome.layouts.find((candidate) => candidate.boardId === boardId);
-            if (target !== undefined && target.id !== summary.id) chrome.onSelect(target.id);
+            if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
           },
         }}
         sync={
@@ -1488,7 +1574,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 selectedId={summary.id}
                 selectedName={summary.name}
                 boardName={boardDisplayName(board.name)}
-                onSelect={chrome.onSelect}
+                onSelect={switchLayout}
                 onNew={() => setConfigDialog({ kind: "new" })}
                 onRename={() => setConfigDialog({ kind: "rename" })}
                 onArchive={() => void archiveThis()}

@@ -979,3 +979,15 @@ button.cap[data-then]::before {
   transform: translateX(-50%);
   white-space: nowrap;
 }
+
+/* ---------- a kept draft (D-317) ----------
+   A change kept from a closed card: the cap already shows it, ringed in dashed amber until it is applied or discarded. Dashed, where a
+   proposal's ring is solid, because nobody has decided on it yet. */
+button.cap[data-draft="true"] .cap-body {
+  outline: 1.5px dashed var(--pending);
+  outline-offset: 2px;
+}
+
+button.cap[data-draft="true"] .cap-front {
+  color: var(--pending-ink);
+}

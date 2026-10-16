@@ -1,6 +1,6 @@
 # 18: Visual and interaction design
 
-Status: proposal, 2026-10-15. Source baseline: origin/main at `65cc12a` (v0.10.1).
+Status: built where [23](23-design-concept.md) didn't replace it: the legend floor, the words, the states, keyboard use and the 1440 and 390 screenshot gate (rungs 14 to P5, 2026-10-16). Proposed 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
 
 **Partly replaced on 2026-10-16 by [23](23-design-concept.md) (D-260).** These rules no longer hold: kind shown by fill and shape at rest (D-264), one blue accent (D-263), no gradients or glow (D-263), Inter (D-261), trays (D-266), the toolbar row, the permanent side panel and the bottom chat bar (D-260). The rest of this chapter (legend floor, words, states, keyboard use, the 1440 and 390 screenshot gate) still holds.
 
@@ -166,7 +166,7 @@ Kept: one tab stop for the board, arrow keys moving by geometry, the ARIA tablis
 | ⌘Z, ⇧⌘Z | Undo and redo revisions |
 | ⌘K | Open the chat |
 | ⌘C, ⌘V | Copy and paste keys |
-| S | Swap mode on the focused key |
+| ⌥S | Swap mode on the open key (D-317: a plain S would type S into the tap slot, below) |
 | ? | Show the shortcut list |
 
 Typing a character while a key's panel is open and its picker is closed fills the tap slot. Oryx does this by accident; keyloom does it on purpose, because it makes "click the key, press A" a complete edit.
