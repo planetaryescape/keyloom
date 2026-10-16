@@ -1,4 +1,4 @@
-import { SendHorizontal, Sparkles, Square, X } from "lucide-react";
+import { LoaderCircle, SendHorizontal, Square, X } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 export interface SelectedKeys {
@@ -81,7 +81,8 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
         </div>
       )}
       <div className="composer-row">
-        {quiet === undefined ? null : <Sparkles size={14} className="composer-mark" data-busy={streaming} aria-hidden="true" />}
+        {/* No sparkle at rest: it reads as generic AI decoration (BK, 2026-10-16). While a reply streams, a spinner says so. */}
+        {quiet === undefined || !streaming ? null : <LoaderCircle size={14} className="composer-mark" data-busy="true" aria-hidden="true" />}
         <textarea
           ref={(element) => {
             fit(element);
