@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/planetaryescape/keyloom/compare/v0.35.1...v0.36.0) (2026-10-16)
+
+
+### Features
+
+* board review screens ([75a095c](https://github.com/planetaryescape/keyloom/commit/75a095cf4343db20dd5abe2a7847a4759b0669c7))
+
 ## [0.35.1](https://github.com/planetaryescape/keyloom/compare/v0.35.0...v0.35.1) (2026-10-16)
 
 
