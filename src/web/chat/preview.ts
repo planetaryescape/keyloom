@@ -7,7 +7,8 @@ import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { evaluate } from "../../validation/validate.ts";
 
-export type Mark = "changed" | "home";
+// "draft" is a key change kept from a closed card (D-317): dashed amber, where "changed" is a proposal's solid amber.
+export type Mark = "changed" | "home" | "draft";
 
 export interface Preview {
   /** The layout with the proposal applied; the head itself when the proposal no longer applies cleanly. */

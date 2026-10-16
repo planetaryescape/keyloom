@@ -137,6 +137,11 @@ Yes for QMK, and no for DF0 on purpose. TD0 and TD1 import as tap dances (tap Hy
 | Q22 | OpenRouter for Claude models only, or other models too (which needs a Chat Completions adapter)? | Open; blueprint assumes Claude only (D-107) |
 | Q23 | Is Codex acceptable without token streaming and without a cost figure? | Open; blueprint assumes yes, showing whole messages and tokens only (D-108) |
 | Q24 | Would BK build the Glove80 against the community fork behind `moergo-sc/zmk#36` to get per-key, per-layer colours, given it is unmerged and on a different base from MoErgo's v26.09? | Open; blueprint assumes no, and the Glove80 has no lighting (D-225, S21) |
+| Q25 | 3D or 2.5D for the board on screen? (concept, 23) | Open; blueprint assumes 2.5D: DOM caps keep the 11 px legend floor, the front-printed hold legend, phones, accessibility and the contrast tests; 3D on desktop only would mean two renderers (D-260) |
+| Q26 | Should the case colourway follow the room (black in the dark theme, white in the light), or always be the colour of the board BK owns? | Open; blueprint assumes it follows the room, with a setting to pin it to the owned colourway later (D-262; the pin isn't built) |
+| Q27 | BK's Moonlander layer names don't match their contents ("Navigation" holds the F-keys). Should keyloom suggest names from what a layer holds ("mostly arrows")? | Open; blueprint assumes no suggestions; layers keep BK's names |
+| Q28 | Symbols and Mouse share one LED colour in BK's layout. Should keyloom flag layers that share a colour? | Open; blueprint assumes it leaves them as he set them |
+| Q29 | Should the halves part for every key card, or only when the card would otherwise cover the key? | Open; blueprint assumes only when needed, as built (D-275) |
 
 ### S50 result, build half only (2026-10-16)
 

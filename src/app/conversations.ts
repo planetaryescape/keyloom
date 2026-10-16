@@ -3,7 +3,7 @@ import { type AgentModel, type ModelMessage } from "../agent/model.ts";
 import { neutralBlock } from "../agent/blocks.ts";
 import type { ProviderId } from "../agent/provider.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
-import { typedText, userMessageText } from "../agent/prompt.ts";
+import { type Draft, typedText, userMessageText } from "../agent/prompt.ts";
 import type { DecisionDraft } from "../layout/change.ts";
 import type { Usage } from "../agent/model.ts";
 import {
@@ -67,6 +67,8 @@ export type SendMessageInput = {
   conversationId?: string;
   /** `layer` is an ID, index or name, as for `layout show --layer`. */
   selection?: { layer: string; positions: number[] };
+  /** Key changes drafted on the board and not applied (D-317); the agent is told of them with the message. */
+  drafts?: Draft[];
   model?: AgentModel;
   /** `--provider`: which provider answers when `model` isn't given. */
   provider?: ProviderId;
@@ -112,6 +114,15 @@ function resolveSelection(app: App, ref: string, input: SendMessageInput["select
   return { layerId: layer.id, positions };
 }
 
+/** Drafts on keys that exist; a draft for a layer or position this layout doesn't have is a usage error, as a selection's is. */
+function checkedDrafts(view: ReturnType<typeof getLayout>, drafts: SendMessageInput["drafts"]): Draft[] {
+  for (const d of drafts ?? []) {
+    if (!view.document.layers.some((l) => l.id === d.layerId)) throw new NotFoundError(`no layer "${d.layerId}"`);
+    if (d.position >= view.board.definition.keyCount) throw new UsageError(`position ${d.position} is not on ${view.board.definition.id} (0-${view.board.definition.keyCount - 1})`);
+  }
+  return drafts ?? [];
+}
+
 function logTurn(app: App, base: Record<string, unknown>, started: number, extra: Record<string, unknown>): void {
   // IDs and numbers only: message text is already in the database (11#logs).
   appendLog(app.dataDir, { event: "agent_turn", ...base, durationMs: Date.now() - started, ...extra });
@@ -143,7 +154,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   const started = Date.now();
   const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
   try {
-    const text = userMessageText(input.message, selection, view.document, view.board);
+    const text = userMessageText(input.message, selection, view.document, view.board, checkedDrafts(view, input.drafts));
     const userMessage = insertMessage(app.db, {
       conversationId: conversation.id, role: "user", content: [{ type: "text", text }], ...(selection ? { selection } : {}),
     });
@@ -245,7 +256,8 @@ export function showConversation(app: App, id: string): ConversationView {
   for (const m of listMessages(app.db, id)) {
     const stored = m.content.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("");
     // The selection travels beside the message, so the bubble shows what BK typed, not the header the model was given.
-    const text = m.role === "user" && m.selection ? typedText(stored) : stored;
+    // A header is only stripped where one was put: a selection, or drafts (D-317); otherwise BK's own text could lose its first lines.
+    const text = m.role === "user" && (m.selection || stored.startsWith("Unapplied draft on ")) ? typedText(stored) : stored;
     const toolCalls = m.content.flatMap((b) => (b.type === "tool_use" && typeof b.name === "string" ? [b.name] : []));
     if (text === "" && toolCalls.length === 0) continue;
     messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt });

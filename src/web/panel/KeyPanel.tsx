@@ -67,6 +67,8 @@ export interface KeyPanelHandle {
   apply: () => void;
   /** Closes an open picker and says whether there was one, so Escape closes the picker before the panel. */
   closePicker: () => boolean;
+  /** The draft as the panel holds it, so the page can keep it when the card closes and give it back when the key opens (D-317). */
+  snapshot: () => Draft | null;
 }
 
 interface Props {
@@ -85,6 +87,8 @@ interface Props {
   /** The person tried to select another key while this draft had unsaved changes. */
   blocked: boolean;
   onDraft: (state: DraftState) => void;
+  /** A draft kept from an earlier visit to this key (D-317); the panel opens on it instead of the key as applied. */
+  resume?: Draft | null | undefined;
   /** Keys the person chose to keep a lost function on, and the function waiting for a click on the board. */
   placements: readonly Placement[];
   placing: PlaceRequest | null;
@@ -117,7 +121,7 @@ type OpenPicker = { slot: SlotName; tab: PickerTab } | null;
 // applied change starts it fresh from the saved layout.
 export function KeyPanel(props: Props) {
   const {
-    token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, placements, placing,
+    token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, resume, placements, placing,
     onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, actions, notice, keycap, led, reach, onPointAt, handle,
   } = props;
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
@@ -139,7 +143,8 @@ export function KeyPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const [draft, setDraft] = useState<Draft | null>(initial);
+  // A kept draft opens where it was left; `initial` stays the key as applied, so the panel still knows it is a change.
+  const [draft, setDraft] = useState<Draft | null>(() => resume ?? initial);
   // An empty key opens its tap picker at once, so "click the key, pick A" is two clicks.
   const [picker, setPicker] = useState<OpenPicker>(() => (original?.kind === "transparent" || original?.kind === "none" ? { slot: "tap", tab: "letters" } : null));
   const [focusPicker, setFocusPicker] = useState(autoFocus);
@@ -168,8 +173,8 @@ export function KeyPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // The handle outlives renders, so it calls through a ref to the latest apply and closePicker.
-  const latest = useRef({ apply: () => {}, closePicker: (): boolean => false });
-  useImperativeHandle(handle, () => ({ apply: () => latest.current.apply(), closePicker: () => latest.current.closePicker() }), []);
+  const latest = useRef({ apply: () => {}, closePicker: (): boolean => false, snapshot: (): Draft | null => null });
+  useImperativeHandle(handle, () => ({ apply: () => latest.current.apply(), closePicker: () => latest.current.closePicker(), snapshot: () => latest.current.snapshot() }), []);
 
   const draftBinding = draft === null ? null : bindingFromDraft(draft, layout);
   const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(initial);
@@ -358,7 +363,7 @@ export function KeyPanel(props: Props) {
     }
   }
 
-  latest.current = { apply: () => void apply(), closePicker };
+  latest.current = { apply: () => void apply(), closePicker, snapshot: () => draft };
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;

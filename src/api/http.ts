@@ -200,6 +200,8 @@ export const ChatRequestSchema = z.object({
   message: z.string().min(1).max(8000),
   // The keys selected in the editor when the message was sent (D-012).
   selection: ChatSelectionSchema.optional(),
+  // Key changes kept on the board but not applied (D-317), so the agent knows what BK is in the middle of.
+  drafts: z.array(z.object({ layerId: z.string().min(1), position: z.number().int().nonnegative(), binding: BindingSchema })).max(100).optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 

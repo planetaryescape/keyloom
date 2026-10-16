@@ -5,7 +5,7 @@ import { capabilityLine } from "../boards/capabilities.ts";
 import { keyName } from "../boards/key-names.ts";
 import type { Board } from "../boards/load.ts";
 import { bindingLabel } from "../layout/render-grid.ts";
-import type { Layout } from "../layout/schema.ts";
+import type { Binding, Layout } from "../layout/schema.ts";
 import type { ChoiceFact, PriorityFact } from "./ports.ts";
 import type { Selection } from "./selection.ts";
 import system from "./prompts/system.md" with { type: "text" };
@@ -133,16 +133,30 @@ export function assembleSystemPrompt(
  * each user message carries the selection made when it was sent (D-012). The name is how the agent speaks of the key; the position is
  * only for ops (D-279). The header ends at the first blank line.
  */
-export function userMessageText(text: string, selection: Selection | undefined, document: Layout, board: Board): string {
-  if (!selection) return text;
-  const layer = document.layers.find((l) => l.id === selection.layerId);
-  const keys = selection.positions.map((p) => `${keyName(board.definition, document, { layerId: selection.layerId, position: p }, { geometry: board.geometry, withLayer: false })} at position ${p}`);
-  return `Selected on ${layer?.name ?? selection.layerId} (layer id ${selection.layerId}): ${keys.join("; ")}\n\n${text}`;
+export function userMessageText(text: string, selection: Selection | undefined, document: Layout, board: Board, drafts: readonly Draft[] = []): string {
+  const lines: string[] = [];
+  if (selection) {
+    const layer = document.layers.find((l) => l.id === selection.layerId);
+    const keys = selection.positions.map((p) => `${keyName(board.definition, document, { layerId: selection.layerId, position: p }, { geometry: board.geometry, withLayer: false })} at position ${p}`);
+    lines.push(`Selected on ${layer?.name ?? selection.layerId} (layer id ${selection.layerId}): ${keys.join("; ")}`);
+  }
+  // Changes BK made on a key's card and hasn't applied (D-317): dashed on his board, not in the layout. Proposals are against the
+  // layout as it is; the agent can build on a draft or say when a proposal would undo one.
+  for (const d of drafts) {
+    const layer = document.layers.find((l) => l.id === d.layerId);
+    const key = keyName(board.definition, document, { layerId: d.layerId, position: d.position }, { geometry: board.geometry, withLayer: false });
+    const ctx = { layers: document.layers, macros: document.macros, tapDances: document.tapDances };
+    lines.push(`Unapplied draft on ${layer?.name ?? d.layerId} (layer id ${d.layerId}), ${key} at position ${d.position}: would become ${bindingLabel(d.binding, ctx)} ${JSON.stringify(d.binding)}`);
+  }
+  return lines.length === 0 ? text : `${lines.join("\n")}\n\n${text}`;
 }
 
-/** What BK typed, without the selection header `userMessageText` put in front of it. */
+/** A key change BK has drafted but not applied (D-317). */
+export type Draft = { layerId: string; position: number; binding: Binding };
+
+/** What BK typed, without the selection and draft header `userMessageText` put in front of it. */
 export function typedText(stored: string): string {
-  if (!stored.startsWith("Selected")) return stored;
+  if (!stored.startsWith("Selected") && !stored.startsWith("Unapplied draft on ")) return stored;
   const end = stored.indexOf("\n\n");
   return end < 0 ? stored : stored.slice(end + 2);
 }

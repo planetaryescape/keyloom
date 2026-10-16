@@ -20,7 +20,9 @@ const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", codex
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { ProposalCard as ProposalCardView } from "./ProposalCard.tsx";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
-import { useChat } from "./useChat.ts";
+import { useChat, type ChatDrafts } from "./useChat.ts";
+import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
+import type { Turn } from "./transcript.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
 import "./chat.css";
 import "./command-bar.css";
@@ -61,6 +63,12 @@ interface Props {
   /** Called once the server has applied a proposal, to refresh the board; resolves when it has. */
   onApplied: (proposal: ProposalCard, result: ApplyResponse) => Promise<void>;
   onOpenRelease: () => void;
+  /** The thread on screen before a board or config switch (D-317), shown read-only above this layout's own. */
+  carried?: CarriedThread | null;
+  /** Told of every change to the thread, so a switch can carry it (D-317). */
+  onTurns?: (turns: readonly Turn[]) => void;
+  /** Key changes kept on the board and not applied (D-317); sent with each message so the agent knows them. */
+  drafts?: ChatDrafts;
   /** ⌘K commands (D-315): what the typed text can just do, offered above "Ask keyloom". */
   commands?: { find: (text: string) => Command[]; run: (command: Command) => void };
 }
@@ -71,7 +79,7 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onTurns }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
@@ -130,7 +138,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
     void chat.send(message, selection, (restored) => {
       setDraft((current) => (current === "" ? restored : current));
       if (selection !== null) onRestoreSelection(selection);
-    });
+    }, drafts);
     input.current?.focus();
   }
 
@@ -227,6 +235,11 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   }, [view, onHighlightDecision]);
 
   const empty = transcript.turns.length === 0;
+  useEffect(() => {
+    onTurns?.(transcript.turns);
+    // The callback is the parent's setter through a ref; only the turns matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcript.turns]);
   // A new conversation can't start without a credential for the provider it would use, so say so before anything is typed.
   // A conversation already going keeps working on its own provider.
   const status = provider.status;
@@ -290,7 +303,8 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   // and stays there until a new conversation starts (D-310). The folded line wins in a short window, where the board needs the height.
   const longReply = transcript.turns.some((turn) => turn.kind === "assistant" && (turn.text.length > LINE_REPLY_CHARS || turn.proposals.length > 0 || turn.priorities.length > 0 || turn.failure !== null));
   const asked = transcript.turns.filter((turn) => turn.kind === "user").length;
-  const presentation: "bar" | "panel" = sheet || (variant === "bar" && !folded && (longReply || asked > 1)) ? "panel" : "bar";
+  // A carried thread is a conversation already, so it reads in the panel (D-317).
+  const presentation: "bar" | "panel" = sheet || (variant === "bar" && !folded && (longReply || asked > 1 || carried !== null)) ? "panel" : "bar";
   useEffect(() => {
     if (variant === "bar" && !sheet) onPresentation?.(presentation);
     // The panel is laid out after this render; rest the log once it has its height.
@@ -425,7 +439,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
               </div>
             ) : needsModel && chat.problem === null ? (
               <MissingKey providers={status.providers} onRetry={provider.reload} retryLabel="Check again" />
-            ) : empty && chat.problem === null ? (
+            ) : empty && chat.problem === null && carried === null ? (
               <EmptyChat
                 onPick={(prompt) => {
                   setDraft(prompt);
@@ -433,7 +447,9 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                 }}
               />
             ) : (
-              transcript.turns.map((turn) =>
+              <>
+              {carried === null ? null : <CarriedThreadView thread={carried} boardName={board.name.replace(/ keyboard \(ANSI\)$/, "")} />}
+              {transcript.turns.map((turn) =>
                 turn.kind === "user" ? (
                   <UserMessage key={turn.id} turn={turn} layout={layout} />
                 ) : (
@@ -455,7 +471,8 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                     compact={variant === "bar"}
                   />
                 ),
-              )
+              )}
+              </>
             )}
             {chat.problem === null ? null : <ProblemNotice problem={chat.problem} providers={provider.status?.providers ?? []} onRetry={retryDraft} onDismiss={chat.dismissProblem} />}
           </div>
@@ -480,6 +497,13 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                 </button>
               </li>
             </ul>
+          )}
+          {drafts.length === 0 ? null : (
+            // Said, so BK knows what the agent is told besides his words (D-317).
+            <p className="composer-drafts">
+              {drafts.length === 1 ? "Your draft on " : "Your drafts on "}
+              {drafts.map((d) => keyLabel(layout, { layerId: d.layerId, position: d.position })).join(", ")} {drafts.length === 1 ? "goes" : "go"} with your message, not applied yet.
+            </p>
           )}
           <Composer
             onCommandKey={onCommandKey}

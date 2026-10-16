@@ -71,7 +71,7 @@ interface KeyboardProps {
   /** Keys in the chat's "Asking about" chips. */
   chatSelected?: ReadonlySet<number>;
   /** Keys a hovered proposal changes, and where a displaced function lands. */
-  marks?: ReadonlyMap<number, "changed" | "home">;
+  marks?: ReadonlyMap<number, "changed" | "home" | "draft">;
   /** Keys where keyloom remembers a reason: an earlier decision a previewed change would override, or one being pointed at. */
   remembered?: ReadonlySet<number>;
   /** Arrows from a displaced function's old key to its new home, for the hovered proposal. */
@@ -123,7 +123,7 @@ interface KeyboardProps {
   scale?: number;
 }
 
-function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | undefined, remembered = false): string {
+function ariaLabel(index: number, description: KeyDescription, finger: string | undefined, pending: boolean, mark: "changed" | "home" | "draft" | undefined, remembered = false): string {
   // The headline carries the meaning in words; the printed legend can be a symbol a screen
   // reader says badly.
   const parts = [`Key ${index + 1}`, description.headline];
@@ -133,6 +133,7 @@ function ariaLabel(index: number, description: KeyDescription, finger: string | 
   if (pending) parts.push("Draft change, not applied yet");
   if (mark === "changed") parts.push("Proposed change, not applied yet");
   if (mark === "home") parts.push("Where a moved function would go");
+  if (mark === "draft") parts.push("Draft kept, not applied yet");
   if (remembered) parts.push("keyloom remembers why this key is set up this way");
   return parts.join(". ");
 }
@@ -355,6 +356,7 @@ export function Keyboard({
               data-partner={partners.has(index)}
               data-pending={pendingIndex === index || marks?.get(index) === "changed"}
               data-home={marks?.get(index) === "home"}
+              data-draft={marks?.get(index) === "draft"}
               data-applied={appliedKeys?.has(index) ?? false}
               data-unsynced={unsynced?.has(index) ?? false}
               data-found={found === index}

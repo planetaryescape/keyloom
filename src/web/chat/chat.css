@@ -619,3 +619,20 @@
   color: var(--ink-3);
   font-size: var(--text-xs);
 }
+
+/* The thread carried across a board or config switch (D-317): read-only, quieter than this layout's own. */
+.carried-thread {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  opacity: 0.78;
+}
+
+.carried-head,
+.carried-foot,
+.carried-note {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
