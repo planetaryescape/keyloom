@@ -6,7 +6,7 @@ A board is a folder in this repo. You add one with a pull request that holds onl
 
 You need the keyboard on your desk. keyloom's maintainer can't test hardware he doesn't own, so your PR must say you built the firmware and flashed it to your own board.
 
-The folder is `boards/<vendor>/<board>/`. The board ID is the folder path, such as `foostan/corne`. Use lowercase letters, digits and dashes.
+The folder is `boards/<vendor>/<board>/`. The board ID is the folder path, such as `foostan/corne`. Use lowercase letters, digits and dashes. The vendor is the maker as people know them, not the folder their firmware happens to live in: the Unix60 is by mkdl, so it is `mkdl/unix60`, though QMK keeps it under `keyboards/fr4/`.
 
 ## Before you start
 
@@ -47,7 +47,9 @@ Use a scratch data directory for your own layouts, so test imports don't mix wit
 
 keyloom builds from an exact commit of the firmware source. Find the repo that builds your board.
 
-For QMK, that is usually [`qmk/qmk_firmware`](https://github.com/qmk/qmk_firmware). Find your keyboard under `keyboards/`. Some boards have a revision folder, such as `keyboards/crkbd/rev1`.
+For QMK, that is usually [`qmk/qmk_firmware`](https://github.com/qmk/qmk_firmware). Find your keyboard under `keyboards/`. Some boards have a revision folder, such as `keyboards/crkbd/rev1`. Read the folders at the commit you pin, not the board's readme, which can be out of date.
+
+Use mainline QMK when it has a folder for the controller your board has. Some makers keep newer controllers only in their own fork (Bastard Keyboards' RP2040 boards are in `bastardkb/bastardkb-qmk`). Then pin the fork: `source.repo` can be any GitHub repo, and each controller is its own entry in `revisions`.
 
 For ZMK, that is [`zmkfirmware/zmk`](https://github.com/zmkfirmware/zmk). Find your board's shield under `app/boards/shields/<name>/`. A split board lists its two halves in `<name>.zmk.yml` under `siblings`, such as `corne_left` and `corne_right`.
 
@@ -83,7 +85,7 @@ cp -r boards/_template/zmk boards/foostan/corne     # or boards/_template/qmk
 
 Open `boards/foostan/corne/board.json` and replace every value. The template is a four-key toy board, so you will replace the key facts too. [How to pick a recipe](#how-to-pick-a-recipe) says which build and flash recipe to use. [The field reference](#boardjson-field-reference) says what each field means.
 
-Leave `hands`, `fingers`, `rows` and `mirror` as they are for now. Step 4 fills them in. Set `keyCount` to the number of keys on the board, counting both halves.
+Leave `hands`, `fingers`, `rows` and `mirror` as they are for now. Step 4 fills them in. Set `keyCount` to the number of keys on the board, counting both halves. The QMK template's `layoutFile` points at an `info.json`; delete it when the layouts are in `keyboards/<qmkTarget>/keyboard.json`, as they are for most boards in current QMK.
 
 ### 3. Generate `geometry.json`
 
@@ -107,7 +109,7 @@ keyloom's agent and validator need to know which hand and finger each key belong
 keyloom serve --board-dev foostan/corne
 ```
 
-It prints a link with a `?t=` token on the end. Open that exact link; the bare address shows "This page needs keyloom's link". If port 4477 is taken (another `keyloom serve` is running), add `--port 4478`. Each key shows its position number, counted from 0. Those are the numbers `board.json` uses.
+It prints a link with a `?t=` token on the end. Open that exact link; the bare address shows "This page needs keyloom's link". If port 4477 is taken (another `keyloom serve` is running), add `--port 4478`. Each key shows its number counted from 1, as the editor does. `board.json` counts from 0, so the key the overlay calls 1 is position 0 in `board.json`. The panel shows both.
 
 Hover or select a key to see what `board.json` says about it. The page reads `board.json` again when you press **Reload board.json**, so edit the file and reload to check your work. The panel counts how many positions each fact covers.
 
@@ -116,7 +118,10 @@ Fill in these four fields. Every position from 0 to `keyCount - 1` must appear e
 - `hands` has `left` and `right`, each a list of positions.
 - `fingers` maps every position to a name. Use `left-pinky`, `left-ring`, `left-middle`, `left-index`, `left-thumb`, and the same with `right-`. Give each key to the finger that normally presses it. On a column-staggered split, the index finger usually takes the two inner columns, and on a 6-column board the pinky takes the two outer columns.
 - `rows` maps a row name to its positions. Use names like `number`, `top`, `home`, `bottom`, `thumb`.
-- `mirror` maps each left-hand position to the right-hand key at the mirrored spot: same row, same distance from the outer edge. Thumb keys pair the same way, outermost with outermost and innermost with innermost. It lets keyloom answer "do that on the other hand too". Every left position needs an entry, or `boards check` warns.
+- `mirror` maps a left-hand position to the right-hand key at the mirrored spot. It lets keyloom answer "do that on the other hand too", such as copying home-row mods across. Each pair is on one row (the same name in `rows`) and under the same finger, and each right-hand key is the target of one entry at most. On a split board with halves of the same size, pair every key: same row, same distance from the outer edge. The tests then check that the pairs are mirror images in the drawing.
+  - Uneven thumb clusters (five thumb keys on the left, three on the right): pair the thumb keys that sit in the same place under the thumb, such as the key the thumb rests on with its opposite, and leave the extra keys out. Don't pair a key with one that is somewhere else just to fill the map.
+  - A one-piece board (a 60%, a laptop): pair each key with the one the same finger presses on the same row, counting out from the touch-typing line (F with J, D with K, and so on). Leave out keys with no opposite, such as a spacebar or the extra keys at the right end of a row. You may also leave `mirror` empty; `boards check` then doesn't warn.
+  - `boards check` warns about each left key without a partner on a split board. A warning for a key that has no opposite is expected.
 
 The overlay keeps going without a `board.json`, so you can open it before step 2 is done.
 
@@ -140,7 +145,7 @@ Then prove the board works end to end with your own layout. [Test the board end 
 
 ### 7. Open the pull request
 
-Put only `boards/<vendor>/<board>/` in the PR. Do not change any other file.
+Put only `boards/<vendor>/<board>/` in the PR. Do not change any other file, except for a note in `docs/issues/` when the board needs a code change (below).
 
 The PR description must say all of this:
 
@@ -169,15 +174,15 @@ A recipe says how keyloom builds and flashes a board. It is the `kind` of `build
 
 Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds from is the `source` of the revision, so mainline QMK and a vendor's fork both work.
 
-`manual` means keyloom builds the file but can't flash it. `keyloom flash` then fails with the file's path and your `instructions`. Flash the file yourself with QMK Toolbox, `qmk flash`, `dfu-util` or `avrdude`, and say so in the PR. Only `zapp` and `uf2-drives` flash from keyloom today. A new flasher needs code, and that is the one case where a board PR is more than data. Open an issue first.
+`manual` means keyloom builds the file but can't flash it. `keyloom flash` then fails with the file's path and your `instructions`. Flash the file yourself with QMK Toolbox, `qmk flash`, `dfu-util` or `avrdude`, and say so in the PR. Only `zapp` and `uf2-drives` flash from keyloom today. A new flasher needs code, and that is the one case where a board PR is more than data. This project tracks issues as Markdown in `docs/issues/`, not on GitHub: describe what's needed in the PR, or add a short note there in the same PR. The same goes for a part of the real board the drawing can't express: draw what `display` can, and say in the PR what differs, rather than working around it in `board.json`.
 
 ### QMK: `qmk-docker`
 
 - `qmkTarget` is what you give `make`, such as `crkbd/rev1`. It is the folder under `keyboards/`.
 - `layoutMacro` is the `LAYOUT_*` name the keymap is written with, such as `LAYOUT_split_3x6_3`. Find it in the board's `keymap.c` or its `info.json`.
-- `layoutFile` is the JSON file that holds the board's `layouts`. Mainline QMK keeps it in the keyboard's own `info.json`, such as `keyboards/crkbd/info.json`, which is one folder above the revision. Leave it out when the layouts are in `keyboards/<qmkTarget>/keyboard.json`.
+- `layoutFile` is the JSON file that holds the board's `layouts`, when that isn't `keyboards/<qmkTarget>/keyboard.json`. Some boards keep them in an `info.json` one folder above the revision, such as `keyboards/crkbd/info.json`. Delete the field when the layouts are in `keyboards/<qmkTarget>/keyboard.json`.
 - `keymapsDir` is the folder keyloom writes its keymap into, such as `keyboards/crkbd/keymaps`.
-- `submodules` lists the git submodules the build needs, such as `lib/lufa` for AVR boards. Other submodules are skipped to keep the checkout small. If the build fails on a missing file under `lib/`, add that submodule here.
+- `submodules` lists the git submodules the build needs. Other submodules are skipped to keep the checkout small. An AVR board (a Pro Micro or Elite-C, whose bootloader is `caterina`, `atmel-dfu`, `qmk-dfu`, `lufa-dfu`, `halfkay` or `lufa-ms`) needs `lib/lufa`. An ARM board needs `lib/chibios`, `lib/chibios-contrib` and `lib/printf`, and an RP2040 also `lib/pico-sdk`. These are what `keyboard add` puts in a derived board; if the build fails on a missing file under `lib/`, add that submodule here.
 - `artifact` is `bin` (the default), `hex` or `uf2`. It is the file `make` produces.
 - Each revision of a board with several hardware revisions is its own entry in `revisions`. keyloom can pick one from a connected keyboard when you set `detect.usbProductId`. Otherwise people pass `--board-rev`.
 
@@ -198,7 +203,7 @@ Import a real layout. Use a stock keymap if you have no layout of your own.
 ```sh
 # ZMK: a folder with one .keymap file, or the file itself
 keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/config
-# QMK: a folder with keymap.c, such as keyboards/crkbd/keymaps/default
+# QMK: a keymap folder, such as keyboards/crkbd/keymaps/default, or the keymap.json in one
 keyloom --data-dir /tmp/keyloom-test import --board foostan/corne path/to/keymap-folder
 ```
 
@@ -247,7 +252,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `schemaVersion` | all | Always `1`. |
 | `id` | all | `<vendor>/<board>`. Must equal the folder path. |
 | `name` | all | The board's name as people say it, such as `Corne`. |
-| `vendor` | all | The maker, such as `foostan`. |
+| `vendor` | all | The maker as people know them, such as `foostan` or `Bastard Keyboards`. |
 | `firmware` | all | `qmk` or `zmk`. It decides the importer, the generator and the validator rules. |
 | `keyCount` | all | The number of keys. It must equal the number of keys in `geometry.json`. |
 | `revisions` | all | A list of hardware revisions. One entry when there is only one. |
@@ -309,7 +314,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `hands.right` | all | The right hand's positions. |
 | `fingers` | all | An object from every position number, as a string, to a finger name such as `left-index`. |
 | `rows` | all | An object from a row name to its positions. Every position is in exactly one row. |
-| `mirror` | all | An object from each left-hand position to the right-hand position it mirrors to. |
+| `mirror` | all | An object from a left-hand position to the right-hand position it mirrors to, on the same row and under the same finger. Each target once. Keys with no opposite are left out. |
 | `physicalKeys` | `kanata-config`, optional | The key each position is on the device, in binding order: KeyCode names, plus `FN` for the Apple fn/globe key. A software remapper grabs keys by name. |
 | `holdKeyPreference` | optional | Positions where a layer or hold key lands first when the board it came from had more thumb keys, best first. |
 | `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
@@ -327,7 +332,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.shift` | all | Optional. A list of slides to draw, applied after rotation. |
 | `display.shift[].positions` | all | The keys to slide. |
 | `display.shift[].dx` | all | How far to slide them, in key units. Use it when a split board's halves are drawn too close for their tilted thumb clusters. |
-| `display.shift[].dy` | all | Optional. How far to move them down, in key units, when a row above is drawn taller than the geometry has it. |
+| `display.shift[].dy` | all | Optional. How far to move them down, in key units; negative moves them up. Use it when a row above is drawn taller than the geometry has it, or to draw column stagger the geometry lacks: one entry per column, each with its own `dy`. |
 | `display.keycaps` | all | Optional. An object from a position, as a string, to the physical keycap colour where it is not the board's usual one. Only `red` exists, for the Moonlander's two big thumb keys. |
 | `display.surface` | all | Optional. How the editor draws the case under the keys: `wells` sinks each column into a sculpted well (the Glove80), `deck` draws a laptop's aluminium deck with the keys in a recess (the MacBook). Leave it out for a flat case. |
 | `display.statusLeds` | all | Optional. The case's status LEDs (the Moonlander has three per half). The editor lights each one in the layer's colour. |
@@ -337,7 +342,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. Drawing only: binding order never changes. |
 | `display.case` | all | Optional. The case drawn from photos of the real board instead of computed from the keys. Each part is an SVG path in key units after `rotate` and `shift`. Leave it out and the editor draws a case from the keys. |
 | `display.case[].hand` | all | `left`, `right`, or `null` for a one-piece case. A split board's halves part for the key card by hand. |
-| `display.case[].kind` | all | `body` or `module` (a separate hinged plate) for the case; `deck` and `recess` for a laptop's top case and keyboard well; `screen` for a display's dark cover; `grille` for a speaker grille; `sensor` for a fingerprint key; `leg` and `knob` for metal tenting parts; `knurl` for fine lines, such as a knob's knurling or a fingerprint key's ring; `hole` for a pinhole. |
+| `display.case[].kind` | all | `body` for each piece of the case, including a thumb cluster printed or milled as part of it; `module` only for a physically separate plate, such as the Moonlander's hinged thumb block; `deck` and `recess` for a laptop's top case and keyboard well; `screen` for a display's dark cover; `grille` for a speaker grille; `sensor` for a fingerprint key; `leg` and `knob` for metal tenting parts; `knurl` for fine lines, such as a knob's knurling or a fingerprint key's ring; `hole` for a pinhole or a screw head; `ball` for a trackball, given as the ball's circle (the editor draws its socket ring and shading). |
 | `display.case[].d` | all | The part's path, using absolute `M`, `L`, `Q`, `A` and `Z` commands. |
 
 Use `display.rotate` only when the firmware's own geometry doesn't tilt keys that really tilt. The Moonlander's thumbs are the example.
@@ -356,11 +361,11 @@ It fails when:
 - The `id` differs from the folder path.
 - `keyCount` differs from the number of keys in `geometry.json`.
 - A position is missing from `hands`, `fingers` or `rows`, or appears twice.
-- A `mirror` entry points the wrong way: its source must be a left key and its target a right key.
+- A `mirror` entry points the wrong way (its source must be a left key and its target a right key), uses a target that another entry already uses, or pairs keys on different rows or under different fingers.
 - The recipes don't fit the firmware, or the flash steps and build targets don't line up.
 - `geometry.json` differs from what the pinned firmware file generates. Run `keyloom boards geometry` again.
 
-It warns when a left-hand key has no mirror entry, or when `SKILL.md` is past 400 lines.
+It warns when a left-hand key of a split board has no mirror entry, or when `SKILL.md` is past 400 lines. A one-piece board with an empty `mirror` gets no mirror warnings.
 
 CI runs it on every board in `boards/`. It checks the format. It can't check that your board builds or flashes. You do that in step 6.
 

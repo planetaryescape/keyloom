@@ -171,6 +171,15 @@ describe("boards check", () => {
     expect(e).toContain("mirror target 1 is used twice");
   });
 
+  test("a mirror pair across rows is an error; an empty mirror warns per key on a split board and not at all on a one-piece one", async () => {
+    const crossed = await boardCopy((b) => { b.mirror = { "15": 40 }; });
+    expect(errors(await checkBoardDir(crossed, { offline: true })).some((m) => m.startsWith("mirror 15 -> 40 crosses rows"))).toBe(true);
+    const warnings = async (dir: string) => (await checkBoardDir(dir, { offline: true })).issues.filter((i) => i.level === "warning" && i.message.includes("mirror"));
+    expect((await warnings(await boardCopy((b) => { b.mirror = {}; }))).length).toBe(36);
+    const onePiece = await boardCopy((b) => { b.mirror = {}; b.display.case = [{ hand: null, kind: "body", d: "M-1,-1 L20,-1 L20,8 L-1,8 Z" }]; });
+    expect(await warnings(onePiece)).toEqual([]);
+  });
+
   test("a folder whose path doesn't match the board id is an error", async () => {
     const root = tempDir();
     const dir = join(root, "zsa", "other");

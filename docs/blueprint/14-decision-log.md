@@ -1355,3 +1355,42 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - BK's `42-key-map` branch of `bhekanik/glove80-zmk-config`, from its first commit with the binding (`6c425b5`, "layer 2", 2025-05-29) to its head (`93b6ac8`), binds `&magic 5 0` on a keymap whose layers run default (0), one_shot, numbers, navigate, magic_layer (4) and factory_test_layer (5). The default branch `main` is a different keymap and uses `&magic MAGIC 0`. The `#define MAGIC 2` above it is stale from the four-layer keymap before.
 - keyloom's import stored the binding as it was: the first revision of "Glove80 (42-key-map)" already has `&magic 5 0`, and no revision since has reordered layers or touched that key. Reorder does not renumber anything; it refuses when a kept block names layer numbers (`passthroughLayerIndex`, [docs/issues/reorder-blocked-by-layer-numbers.md](../issues/reorder-blocked-by-layer-numbers.md)).
 - The review reports it twice: the check `layer_unreachable` (nothing opens the Magic layer) and, when a model is set up, the agent's suggestion with a validated change set. No importer change was needed.
+
+### D-350: A mirror map pairs what really mirrors; unpaired keys are allowed. (Board-contribution fixes, Claude; asked by the coordinator after the Unix60 and Charybdis tests)
+- The old test required every key to have a partner and every pair to be symmetric about one axis. An uneven thumb cluster (the Charybdis's five left, three right) and a one-piece staggered board (the Unix60) can't meet that honestly, so contributors either broke the test or fudged the map.
+- What the agent relies on stays guaranteed, by `mirrorProblems` in `src/boards/mirror.ts`, which `boards check` runs as errors: each source is a left key and each target a right key, a target is used once (the two-way partner map would lose a pair otherwise), and a pair is on one row and under one finger (so a mirrored home-row modifier lands on the key the same finger rests on).
+- Unpaired keys are allowed. `boards check` still warns about each unpaired left key of a split board; a one-piece board with an empty `mirror` gets no warnings.
+- Geometric symmetry is tested only where the drawing is a mirror image: halves of the same key count on a split board (D-359). There every key must also be paired, as before.
+
+### D-351: A one-piece board stays whole on a phone. (Board-contribution fixes, Claude; asked by the coordinator)
+- The phone showed one hand at a time for any board with keys in both hands. For the Unix60 and the MacBook that dropped the drawn `hand: null` case for computed trays and ran the 34- and 43-key right halves off a 390 px screen.
+- A board is one piece when its drawn case has a body or deck with `hand: null`, or, without a drawn case, when less than 0.5u separates its hands' key boxes (`isOnePiece`, `src/boards/one-piece.ts`). The narrowest split shipped, the Moonlander, has 1u.
+- A one-piece board is drawn whole and scrolls sideways when its keys would otherwise go under the minimum size, rather than shrink further. Split boards keep the Left and Right switch.
+
+### D-352: A QMK keymap.json imports as the keymap.c `qmk json2c` would write. (Board-contribution fixes, Claude; asked by the coordinator)
+- QMK's stock keymaps are often only a Configurator `keymap.json`, and import failed with "no keymap.c". A folder whose keymap.json has `layers`, or that file on its own, is turned into a `keymaps[]` array of `[n] = LAYOUT(...)` calls and parsed by the keymap.c path, so keycodes go through the one parser and mapping.
+- Each keycode must be one C argument (balanced parentheses, no comma outside them, only identifier, digit, `(`, `)`, `,`, `|` and space characters), so a string can't change a layer's key count or end the call. Anything else is refused by layer and key.
+- The keymap.json's own fields (keyboard, keymap, layout, layers, author, notes, version, documentation) are not kept; any other field (config, modules) is kept as the keymap.json passthrough the generator writes back.
+- Tested on the Charybdis 4x6 default keymap at qmk_firmware `180f394b`, kept as a fixture with QMK's GPL-2.0 licence (GPL-2.0-or-later, which AGPL-3.0-or-later can include).
+
+### D-353: `ball` is a case-part kind for a trackball. (Board-contribution fixes, Claude; asked by the coordinator)
+- The Charybdis drew its trackball as a `sensor`, which is near invisible on the dark theme. A `ball` part is the ball's outline; the editor draws a dark socket ring just outside it, the sphere with a radial gradient lit from the top left, and a faint rim. The gradient's stops take theme tokens (`--ball-hi`, `--ball-lo`, `--ball-socket`, `--ball-socket-rim`), so it reads on a pale case and a dark one.
+
+### D-354: The stage-fit test sizes every shipped board in measured stage sizes. (Board-contribution fixes, Claude; asked by the coordinator)
+- `test/web/fit.test.ts` only checks that legends fit their caps; nothing caught a board running off the stage. `test/web/stage-fit.test.ts` sizes each shipped board as the editor does (`canvasAround`, `fitUnit`, now pure) in the `.keyboard-well` content box measured in the demo editor: 1376×545 at 1440×900, 1216×356 at 1280×577 and 366×592 at 390×844. A shell layout change that moves those should update the table.
+- The phone row uses the mouse's 34 px floor, as the screenshot browser does. Under a fingertip the floor is 44 px, and a half wider than 8.3u (the Moonlander's, the Glove80's) scrolls a little by design; a half that needs under 34 px overflows under either pointer, which is what the test catches.
+
+### D-355: Contributors number keys from 1, as the overlay does. (Board-contribution fixes, Claude; asked by the coordinator)
+- CONTRIBUTING said the overlay's numbers count from 0; the overlay says "Keys are numbered from 1; board.json counts from 0", as the editor's key labels ("Key 1") do. The overlay is right: CONTRIBUTING now says key 1 is position 0 in `board.json`.
+
+### D-356: `module` is only a physically separate plate. (Board-contribution fixes, Claude; asked by the coordinator)
+- A thumb cluster printed or milled as part of the case is part of its `body`; `module` is for a separate plate such as the Moonlander's hinged thumb block. CONTRIBUTING's `display.case[].kind` row and the skill say so.
+
+### D-357: A board's vendor folder is its maker as people know them. (Board-contribution fixes, Claude; asked by the coordinator)
+- The Unix60 is `mkdl/unix60`, though QMK keeps it under `keyboards/fr4/`. The firmware's folder is a detail of the pin, not the board's identity.
+
+### D-358: A renderer limit is reported in the board's PR, not worked around in its data. (Board-contribution fixes, Claude; asked by the coordinator)
+- A contributor draws what `display` can and says in the PR what differs from the photos (the Unix60's layered FR4 edges and decal). A needed code change is described in the PR or written as a short note in `docs/issues/` in the same PR, the only file outside the board folder a board PR may touch. The skill no longer says "open an issue", which pointed at GitHub Issues this project doesn't use.
+
+### D-359: Whether a board's drawing must be a mirror image is derived, not declared. (Board-contribution fixes, Claude; asked by the coordinator)
+- Symmetry is checked for a split board (one that isn't one piece, D-351) whose hands have the same key count and whose mirror isn't empty: the Corne, the Glove80 and the Moonlander. A `board.json` flag would let a contributor switch the check off for a board it should hold for; a board that needs an exception is a code change, made with the maintainer.

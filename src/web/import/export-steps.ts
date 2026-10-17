@@ -31,9 +31,9 @@ const GUIDES: Record<string, ExportGuide> = {
   },
   "qmk-keymap": {
     tool: "your QMK keymap",
-    steps: "Zip your keymap folder, the one with keymap.c in it, and drop the .zip.",
-    accepts: ".zip",
-    extensions: [".zip"],
+    steps: "Drop your keymap's keymap.json, or zip the keymap folder with keymap.c in it and drop the .zip.",
+    accepts: ".zip or keymap.json",
+    extensions: [".zip", ".json"],
   },
 };
 

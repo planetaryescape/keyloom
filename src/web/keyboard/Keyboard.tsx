@@ -8,19 +8,18 @@ import { MoveArrows } from "./MoveArrows.tsx";
 import { LEGEND_FLOOR_PX } from "./fit.ts";
 import { useKeyDrag } from "./useKeyDrag.ts";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
-import { caseBounds, caseParts } from "./case-shape.ts";
+import { canvasAround } from "./canvas.ts";
+import { caseParts } from "./case-shape.ts";
 import { frontMode, WIDEST_WITH_SYMBOL, WIDEST_WORD } from "./front-words.ts";
 import { measureText } from "./measure.ts";
-import { boardBounds, keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
+import { keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { minUnit, useFitUnit } from "./useFitUnit.ts";
 import "./keyboard.css";
 
-// Space between neighbouring caps, and the margin around the board, in key units. The margin leaves room for the case, which reaches
-// past the keys, and for its shadow.
+// Space between neighbouring caps, in key units.
 export const GAP = 0.09;
-export const MARGIN = 0.6;
-const CASE_MARGIN = 0.3;
+export { MARGIN } from "./canvas.ts";
 const ARROWS: Record<string, Direction> = {
   ArrowLeft: "left",
   ArrowRight: "right",
@@ -203,16 +202,8 @@ export function Keyboard({
   // One hand's keys, when only one is shown. The canvas, the trays, the caps and the arrow keys all follow it.
   const visible = useMemo(() => (half === null ? null : new Set(hands[half])), [half, hands]);
   const shownKeys = useMemo(() => (visible === null ? keys : keys.filter((_, index) => visible.has(index))), [keys, visible]);
-  const bounds = boardBounds(shownKeys);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
-  // The margin around the keys holds most cases and their shadow; a case can reach further (the Moonlander's top edge and tenting
-  // legs, a laptop's deck), so the canvas also covers the case itself plus room for its shadow.
-  const drawnCase = caseBounds(parts);
-  const minX = Math.min(bounds.minX - MARGIN, (drawnCase?.minX ?? Infinity) - CASE_MARGIN);
-  const minY = Math.min(bounds.minY - MARGIN, (drawnCase?.minY ?? Infinity) - CASE_MARGIN);
-  const maxX = Math.max(bounds.minX + bounds.width + MARGIN, (drawnCase?.maxX ?? -Infinity) + CASE_MARGIN);
-  const maxY = Math.max(bounds.minY + bounds.height + MARGIN, (drawnCase?.maxY ?? -Infinity) + CASE_MARGIN);
-  const canvas: Bounds = { minX, minY, width: maxX - minX, height: maxY - minY };
+  const canvas = canvasAround(shownKeys, parts);
   const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
   // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
   // the size it is drawn, so the 11 px floor still holds (P2 review).
@@ -302,17 +293,30 @@ export function Keyboard({
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
-          {parts.some((part) => part.kind === "grille") ? (
-            // A speaker grille's holes, as a pattern in key units: drawn one by one they would be a thousand paths.
+          {parts.some((part) => part.kind === "grille" || part.kind === "ball") ? (
             <defs>
+              {/* A speaker grille's holes, as a pattern in key units: drawn one by one they would be a thousand paths. */}
               <pattern id={`${caseId}-grille`} width={0.09} height={0.09} patternUnits="userSpaceOnUse">
                 <circle className="case-grille-hole" cx={0.045} cy={0.045} r={0.022} />
               </pattern>
+              {/* A trackball's shading, in the ball's own box so one gradient lights any size of ball from the same side. */}
+              <radialGradient id={`${caseId}-ball`} cx="0.36" cy="0.3" r="0.75" fx="0.32" fy="0.26">
+                <stop offset="0" className="case-ball-hi" />
+                <stop offset="1" className="case-ball-lo" />
+              </radialGradient>
             </defs>
           ) : null}
-          {parts.map((part, i) => (
-            <path key={i} className={`case-${part.kind}`} d={part.d} data-hand={part.hand ?? undefined} style={part.kind === "grille" ? { fill: `url(#${caseId}-grille)` } : undefined} />
-          ))}
+          {parts.map((part, i) =>
+            part.kind === "ball" ? (
+              <g key={i} data-hand={part.hand ?? undefined}>
+                <path className="case-ball-socket" d={part.d} />
+                <path className="case-ball" d={part.d} style={{ fill: `url(#${caseId}-ball)` }} />
+                <path className="case-ball-rim" d={part.d} />
+              </g>
+            ) : (
+              <path key={i} className={`case-${part.kind}`} d={part.d} data-hand={part.hand ?? undefined} style={part.kind === "grille" ? { fill: `url(#${caseId}-grille)` } : undefined} />
+            ),
+          )}
           {(display?.statusLeds ?? []).map((led, i) => {
             // The LEDs change with the ripple, at the delay a key in their place would have.
             const delay = rippleOrigin === null ? 0 : Math.hypot(led.x - canvas.minX - rippleOrigin.x, led.y - canvas.minY - rippleOrigin.y) * RIPPLE_MS_PER_UNIT;
