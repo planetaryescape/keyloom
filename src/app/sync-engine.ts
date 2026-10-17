@@ -268,7 +268,7 @@ export class SyncEngine {
     const left = findRevision(this.app.db, layoutId, a);
     const right = findRevision(this.app.db, layoutId, b);
     const same = left !== undefined && right !== undefined && deepEqual(withoutLayerNumbers(left.layout), withoutLayerNumbers(right.layout));
-    // The recorded layer numbers (D-377) don't change what is generated for a layout whose keys and kept code are the same, so a
+    // The recorded layer numbers (D-378) don't change what is generated for a layout whose keys and kept code are the same, so a
     // head that differs only in them is what the keyboard already runs. Revisions never change, so a verdict never goes stale.
     this.sameDocument.set(key, same);
     return same;

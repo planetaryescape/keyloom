@@ -50,7 +50,7 @@ export function missingLayerNumbers(layout: Layout): string[] {
 
 /**
  * The layout with the recorded layer numbers taken off kept source and kept keys. Two documents equal in this sense generate
- * the same firmware for the same layers, so nothing needs putting on a keyboard to move from one to the other (D-377).
+ * the same firmware for the same layers, so nothing needs putting on a keyboard to move from one to the other (D-378).
  */
 export function withoutLayerNumbers(layout: Layout): Layout {
   const strip = (b: Binding): Binding => {

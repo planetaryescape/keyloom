@@ -129,7 +129,7 @@ describe("Apply to both halves of a Glove80", () => {
   });
 });
 
-describe("a layout whose layer numbers are read after it was flashed (D-377)", () => {
+describe("a layout whose layer numbers are read after it was flashed (D-378)", () => {
   test("the backfill revision is the build already on the keyboard: nothing is built or flashed, until a real edit", async () => {
     const s = await setup([half("L"), half("R")]);
     // The layout as it was stored before layer numbers were read, which is what BK's keyboard was flashed from.
