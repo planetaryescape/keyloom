@@ -5,7 +5,7 @@ import type { Node } from "web-tree-sitter";
 import {
   type LayerArg, type LayerDefine, type NameUse, type Resolved, resolveLayerRefs,
 } from "../../layout/layer-ref-resolve.ts";
-import type { Binding, Layout } from "../../layout/schema.ts";
+import type { Binding, Layout, Passthrough } from "../../layout/schema.ts";
 import { withTree } from "./c-parse.ts";
 
 /** Calls whose arguments, at these positions, are layer numbers. */
@@ -237,11 +237,14 @@ function dedupe(args: LayerArg[]): LayerArg[] {
 
 type Parts = Pick<Layout, "layers" | "combos" | "passthrough">;
 
+/** Whether the importer reads this kept block for layer numbers (the rest is not C). */
+export const isReadableQmk = (p: Passthrough): boolean => p.firmware === "qmk" && (p.file === "keymap.c" || p.file === "config.h");
+
 /** Writes what `readQmkLayerRefs` found onto the kept source and kept keys of a layout being imported. */
 export async function annotateQmkLayerRefs(parts: Parts, layerIds: readonly string[]): Promise<Parts> {
   const sites: QmkSite[] = [];
   parts.passthrough.forEach((p, i) => {
-    if (p.file === "keymap.c" || p.file === "config.h") sites.push({ site: `p${i}`, source: p.source, kind: p.anchor.startsWith("process_record_user:") ? "cases" : "code" });
+    if (isReadableQmk(p)) sites.push({ site: `p${i}`, source: p.source, kind: p.anchor.startsWith("process_record_user:") ? "cases" : "code" });
   });
   const nativeAt = (b: Binding, site: string): void => {
     if (b.kind === "native" && b.firmware === "qmk") sites.push({ site, source: b.source, kind: "binding" });
