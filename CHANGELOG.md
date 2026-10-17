@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.37.0](https://github.com/planetaryescape/keyloom/compare/v0.36.1...v0.37.0) (2026-10-17)
+
+
+### Features
+
+* blank configs start from the firmware default keymap, configs from a file, and a put_config agent tool ([#95](https://github.com/planetaryescape/keyloom/issues/95)) ([25db61c](https://github.com/planetaryescape/keyloom/commit/25db61c6fe7ac74ad06f605a8fdeb796489bba8c))
+* keyloom desktop app (Tauri shell, menu-bar sync, one server per data dir) ([c32c064](https://github.com/planetaryescape/keyloom/commit/c32c0644e1b4b1ec05a53e5d8c382ac9debd9934))
+* the QMK importer reads enum layer names, and a test pins that a put never starts a sync ([#97](https://github.com/planetaryescape/keyloom/issues/97)) ([73f864c](https://github.com/planetaryescape/keyloom/commit/73f864c888cd544e87746bac56d6d7712561136c))
+
+
+### Bug Fixes
+
+* renumber layers that preserved code names, so reorder and delete work ([730a625](https://github.com/planetaryescape/keyloom/commit/730a625cc50f681788cfdaaabd41d2c8ca7c581f))
+
 ## [0.36.1](https://github.com/planetaryescape/keyloom/compare/v0.36.0...v0.36.1) (2026-10-17)
 
 
