@@ -47,3 +47,21 @@ export function missingLayerNumbers(layout: Layout): string[] {
   const keys = [...layout.layers.flatMap((l) => l.bindings), ...layout.combos.map((c) => c.output)].flatMap((b) => (b.kind === "native" ? gone(b.layerRefs) : []));
   return [...new Set([...layout.passthrough.flatMap((p) => gone(p.layerRefs)), ...keys])];
 }
+
+/**
+ * The layout with the recorded layer numbers taken off kept source and kept keys. Two documents equal in this sense generate
+ * the same firmware for the same layers, so nothing needs putting on a keyboard to move from one to the other (D-378).
+ */
+export function withoutLayerNumbers(layout: Layout): Layout {
+  const strip = (b: Binding): Binding => {
+    if (b.kind !== "native") return b;
+    const { layerRefs: _r, unprovable: _u, ...rest } = b;
+    return rest;
+  };
+  return {
+    ...layout,
+    layers: layout.layers.map((l) => ({ ...l, bindings: l.bindings.map(strip) })),
+    combos: layout.combos.map((c) => ({ ...c, output: strip(c.output) })),
+    passthrough: layout.passthrough.map(({ layerRefs: _r, unprovable: _u, refersToLayerIndices: _f, ...rest }) => ({ ...rest, refersToLayerIndices: false })),
+  };
+}

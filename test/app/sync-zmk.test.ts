@@ -3,9 +3,12 @@
 import { describe, expect, test, setDefaultTimeout } from "bun:test";
 import { join } from "node:path";
 import { type ChangeOp, applyOps, buildAndWait, flashAndWait, getBuild, getLayout } from "../../src/app/index.ts";
+import { backfillLayerRefs } from "../../src/app/index.ts";
 import { appSyncDeps } from "../../src/app/sync-deps.ts";
 import { SyncEngine } from "../../src/app/sync-engine.ts";
 import { buildKey } from "../../src/firmware/zmk/handsfree.ts";
+import { withoutLayerNumbers } from "../../src/layout/layer-refs.ts";
+import { appendRevision } from "../../src/persistence/revisions.ts";
 import { bindingFunctions } from "../../src/layout/functions.ts";
 import { getBoardSync, lastSyncOfBoard, recentSyncs } from "../../src/persistence/syncs.ts";
 import { OLD_KEY, fakeWorld, glove80Image, serialOf } from "../helpers/fake-zmk-halves.ts";
@@ -123,5 +126,37 @@ describe("Apply to both halves of a Glove80", () => {
       await engine.stop();
     });
     s.world.stop();
+  });
+});
+
+describe("a layout whose layer numbers are read after it was flashed (D-378)", () => {
+  test("the backfill revision is the build already on the keyboard: nothing is built or flashed, until a real edit", async () => {
+    const s = await setup([half("L"), half("R")]);
+    // The layout as it was stored before layer numbers were read, which is what BK's keyboard was flashed from.
+    const view = getLayout(s.e.app, "glove80");
+    appendRevision(s.e.app.db, { layoutId: view.layout.id, expectedHeadId: view.revision.id, layout: withoutLayerNumbers(view.document), origin: "editor", summary: "stored before" });
+    const first = await s.proveByHand();
+    const flashedAfterProof = s.world.flashed.length;
+    const touchesAfterProof = s.world.touches.length;
+
+    await s.e.run(async () => {
+      const outcome = await backfillLayerRefs(s.e.app, () => {});
+      expect(outcome.map((o) => o.status)).toEqual(["written"]);
+      const engine = new SyncEngine(s.e.app, s.deps, { quietMs: 80, tickMs: 10, pollMs: 30 });
+      await engine.start();
+      // Several quiet periods and keyboard readings with the backfill revision as head.
+      await new Promise((r) => setTimeout(r, 600));
+      expect(engine.views()[0]?.state.kind).toBe("in_sync");
+      expect(recentSyncs(s.e.app.db)).toHaveLength(0);
+      expect(s.world.flashed).toHaveLength(flashedAfterProof);
+      expect(s.world.touches).toHaveLength(touchesAfterProof);
+      expect(getLayout(s.e.app, "glove80").revision.id).not.toBe(first.revisionId);
+
+      // A real edit still syncs as normal.
+      const changed = s.apply("W");
+      await waitFor(() => lastSyncOfBoard(s.e.app.db, BOARD)?.status === "succeeded", "the sync", 8000);
+      await engine.stop();
+      expect(lastSyncOfBoard(s.e.app.db, BOARD)).toMatchObject({ trigger: "auto", revisionId: changed.revisionId });
+    });
   });
 });

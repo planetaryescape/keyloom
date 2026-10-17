@@ -61,6 +61,7 @@ export { type ProviderStatus, chooseNextProvider, defaultAgentModel, providerSta
 export type { AgentModel } from "../agent/model.ts";
 export { PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
 export type { ConversationRow } from "../persistence/conversations.ts";
+export { type BackfillOutcome, backfillLayerRefs } from "./layer-ref-backfill.ts";
 export { type UpgradeOffer, type UpgradeOutcome, upgradeLayout, upgradeOffer } from "./upgrade.ts";
 export {
   type AnalyseOptions, type LabDeps, type PassageView, type RecordingInProgress, type StoredAnalysis, analyseSession, beginRecording, deleteSession,

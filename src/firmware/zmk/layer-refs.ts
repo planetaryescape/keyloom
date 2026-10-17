@@ -4,10 +4,11 @@
 import {
   type LayerArg, type LayerDefine, type NameUse, type Resolved, resolveLayerRefs,
 } from "../../layout/layer-ref-resolve.ts";
-import type { Binding, Layout } from "../../layout/schema.ts";
-import type { BehaviorCall } from "./cells.ts";
-import { type CellArray, cellArrays, defineBodies } from "./dts.ts";
+import type { Binding, Layout, Passthrough } from "../../layout/schema.ts";
+import { type BehaviorCall, parseCalls } from "./cells.ts";
+import { type CellArray, cellArrays, defineBodies, parseDts } from "./dts.ts";
 import { KEYMAP_FILE } from "./files.ts";
+import { cellsOf, stringOf } from "./props.ts";
 
 /** ZMK's own layer behaviours, and MoErgo's `&magic` and `&layer_on_hold`, with the position of the layer in their parameters. */
 const BASE_LAYER_BEHAVIOURS: ReadonlyArray<readonly [string, number]> = [
@@ -55,6 +56,30 @@ class Collector {
   }
 }
 
+const READABLE_SECTIONS = ["define", "behavior", "macro", "root", "combo", "top"];
+const sectionOf = (p: Passthrough): string => p.anchor.slice(0, Math.max(0, p.anchor.indexOf(":")));
+
+/** Whether the importer reads this kept block for layer numbers (includes, `#if` blocks and the .conf are not read). */
+export const isReadableZmk = (p: Passthrough): boolean => p.firmware === "zmk" && p.file === KEYMAP_FILE && READABLE_SECTIONS.includes(sectionOf(p));
+
+/**
+ * The layer behaviours a stored layout defines, for a layout whose original keymap is gone: hold-tap profiles the model
+ * holds with a layer, and kept hold-taps whose first binding is a layer behaviour (the importer reads the same from the file).
+ */
+export async function storedLayerBehaviours(layout: Layout): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  for (const l of layout.layers) for (const b of l.bindings) if (b.kind === "holdTap" && "layerId" in b.hold) out.set(b.profileId, 0);
+  for (const p of layout.passthrough) {
+    if (!isReadableZmk(p) || sectionOf(p) !== "behavior") continue;
+    for (const item of await parseDts(p.source)) {
+      if (item.kind !== "node" || stringOf(item.node, "compatible") !== "zmk,behavior-hold-tap") continue;
+      const first = cellsOf(item.node, "bindings").flatMap((c) => parseCalls(c).calls)[0]?.name ?? "";
+      if (["mo", "to", "tog", "sl", "lt"].includes(first) && item.node.label !== undefined) out.set(item.node.label, 0);
+    }
+  }
+  return out;
+}
+
 export type ZmkSite = { site: string; source: string; kind: "node" | "define" | "binding" };
 
 export async function readZmkLayerRefs(sites: readonly ZmkSite[], ctx: ZmkLayerContext): Promise<Map<string, Resolved>> {
@@ -94,10 +119,8 @@ export async function readZmkLayerRefs(sites: readonly ZmkSite[], ctx: ZmkLayerC
 export async function annotateZmkLayerRefs(parts: Parts, ctx: ZmkLayerContext): Promise<Parts> {
   const sites: ZmkSite[] = [];
   parts.passthrough.forEach((p, i) => {
-    if (p.file !== KEYMAP_FILE) return;
-    const section = p.anchor.slice(0, p.anchor.indexOf(":"));
-    if (section === "define") sites.push({ site: `p${i}`, source: p.source, kind: "define" });
-    else if (["behavior", "macro", "root", "combo", "top"].includes(section)) sites.push({ site: `p${i}`, source: p.source, kind: "node" });
+    if (!isReadableZmk(p)) return;
+    sites.push({ site: `p${i}`, source: p.source, kind: sectionOf(p) === "define" ? "define" : "node" });
   });
   const nativeAt = (b: Binding, site: string): void => {
     if (b.kind === "native" && b.firmware === "zmk") sites.push({ site, source: b.source, kind: "binding" });
