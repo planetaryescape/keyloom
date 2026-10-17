@@ -1,13 +1,14 @@
 // Use cases for talking to the agent: send a message, list and show conversations (03, 10).
-import { type AgentModel, type ModelMessage } from "../agent/model.ts";
+import { type AgentModel, type ContentBlock, type ModelMessage } from "../agent/model.ts";
 import { neutralBlock } from "../agent/blocks.ts";
 import type { ProviderId } from "../agent/provider.ts";
+import { type AskedQuestion, AskUserSchema, ASK_USER } from "../agent/tools/ask-user.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
 import { type Draft, typedText, userMessageText } from "../agent/prompt.ts";
 import type { DecisionDraft } from "../layout/change.ts";
 import type { Usage } from "../agent/model.ts";
 import {
-  type ConversationRow, type Selection, findConversation, insertConversation, insertMessage, listConversations, listMessages,
+  type ConversationRow, type MessageRow, type Selection, findConversation, insertConversation, insertMessage, listConversations, listMessages,
 } from "../persistence/conversations.ts";
 import { type ChangeSetRow, listConversationChangeSets } from "../persistence/change-sets.ts";
 import { type DecisionRow, type Subject, listConversationPriorities } from "../persistence/decisions.ts";
@@ -45,6 +46,9 @@ export type ChatEvent =
   | { type: "priority"; priority: PriorityCard }
   | { type: "done"; outcome: ChatOutcome };
 
+/** A question the agent asked BK, as the chat shows it: the options as buttons; `answer` is null while it is open (D-381). */
+export type QuestionCard = AskedQuestion & { toolUseId: string; allowOther: boolean; answer: string | null };
+
 export type ChatOutcome = {
   conversationId: string;
   /** The IDs of the messages stored for this turn, BK's first. */
@@ -53,6 +57,8 @@ export type ChatOutcome = {
   text: string;
   proposals: ProposalCard[];
   priorities: PriorityCard[];
+  /** Set with the status `awaiting_answer`. */
+  question?: QuestionCard;
   provider: ProviderId;
   model: string;
   effort: string;
@@ -63,7 +69,10 @@ export type ChatOutcome = {
 };
 
 export type SendMessageInput = {
-  message: string;
+  /** BK's words. Exactly one of this and `answer`. */
+  message?: string;
+  /** The answer to the question the conversation is waiting on; it becomes that tool call's result (D-382). */
+  answer?: { toolUseId: string; text: string };
   conversationId?: string;
   /** `layer` is an ID, index or name, as for `layout show --layer`. */
   selection?: { layer: string; positions: number[] };
@@ -91,6 +100,18 @@ export function conversationTitle(message: string): string {
 // A second message into a conversation that is mid-turn would interleave tool results with it.
 const answering = new Set<string>();
 
+
+const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => ({ ...q, allowOther: q.allowOther === true, toolUseId, answer });
+
+/** The question a conversation is waiting on: an `ask_user` call in the stored messages with no result after it (D-382). */
+function openQuestion(messages: readonly MessageRow[]): { toolUseId: string } | undefined {
+  const blocks = (m: MessageRow) => m.content.map(neutralBlock);
+  const answered = new Set(messages.flatMap((m) => blocks(m).flatMap((b) => (b.type === "tool_result" ? [b.tool_use_id] : []))));
+  for (const m of messages.toReversed()) {
+    for (const b of blocks(m)) if (b.type === "tool_use" && b.name === ASK_USER && !answered.has(b.id)) return { toolUseId: b.id };
+  }
+  return undefined;
+}
 
 const toPriorityCard = (row: DecisionRow): PriorityCard => ({
   id: row.id,
@@ -129,7 +150,10 @@ function logTurn(app: App, base: Record<string, unknown>, started: number, extra
 }
 
 export async function sendMessage(app: App, ref: string, input: SendMessageInput): Promise<ChatOutcome> {
-  if (!input.message.trim()) throw new UsageError("the message must not be empty");
+  if ((input.message === undefined) === (input.answer === undefined)) throw new UsageError("send either a message or an answer to the open question");
+  if (input.message !== undefined && !input.message.trim()) throw new UsageError("the message must not be empty");
+  if (input.answer !== undefined && !input.answer.text.trim()) throw new UsageError("the answer must not be empty");
+  if (input.answer !== undefined && input.conversationId === undefined) throw new UsageError("an answer belongs to a conversation");
   const view = getLayout(app, ref);
   const selection = resolveSelection(app, ref, input.selection);
   // A conversation stays on the provider and model that started it (D-111); only a new one takes the flag or config.
@@ -147,16 +171,22 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   const model = input.model ?? await defaultAgentModel(app.dataDir, existing ? { provider: existing.provider, ...(existing.model ? { model: existing.model } : {}) } : input.provider ? { provider: input.provider } : {});
 
   const conversation: ConversationRow =
-    existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: conversationTitle(input.message), provider: model.provider, model: model.model });
+    existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: conversationTitle(input.message ?? ""), provider: model.provider, model: model.model });
   if (answering.has(conversation.id)) throw new BusyError(`conversation ${conversation.id} is still answering the last message`);
   answering.add(conversation.id);
 
   const started = Date.now();
   const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
   try {
-    const text = userMessageText(input.message, selection, view.document, view.board, checkedDrafts(view, input.drafts));
+    const open = openQuestion(listMessages(app.db, conversation.id));
+    if (input.answer !== undefined && open?.toolUseId !== input.answer.toolUseId) throw new UsageError("that question is not open any more");
+    // Typing instead of pressing an option still answers it: the API needs a result for every call before the next message.
+    const results: ContentBlock[] = input.answer !== undefined
+      ? [{ type: "tool_result", tool_use_id: input.answer.toolUseId, content: input.answer.text }]
+      : open === undefined ? [] : [{ type: "tool_result", tool_use_id: open.toolUseId, content: "BK did not pick an option; he wrote his own message instead." }];
+    const text = input.message === undefined ? undefined : userMessageText(input.message, selection, view.document, view.board, checkedDrafts(view, input.drafts));
     const userMessage = insertMessage(app.db, {
-      conversationId: conversation.id, role: "user", content: [{ type: "text", text }], ...(selection ? { selection } : {}),
+      conversationId: conversation.id, role: "user", content: [...results, ...(text === undefined ? [] : [{ type: "text" as const, text }])], ...(selection ? { selection } : {}),
     });
     input.onEvent?.({ type: "start", conversationId: conversation.id, messageId: userMessage.id });
 
@@ -214,6 +244,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
     const result: ChatOutcome = {
       conversationId: conversation.id, messageIds, status: outcome.status, text: outcome.text, proposals, priorities,
       provider: model.provider, model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
+      ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, null) }),
       ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
     };
     input.onEvent?.({ type: "done", outcome: result });
@@ -244,6 +275,8 @@ export type DisplayMessage = {
   toolCalls: string[];
   selection: Selection | null;
   createdAt: number;
+  /** The question this reply asked, open or answered. */
+  question?: QuestionCard;
 };
 
 export type ConversationView = { conversation: ConversationRow; messages: DisplayMessage[]; proposals: ProposalCard[]; priorities: PriorityCard[] };
@@ -253,14 +286,19 @@ export function showConversation(app: App, id: string): ConversationView {
   const conversation = findConversation(app.db, id);
   if (!conversation) throw new NotFoundError(`no conversation "${id}"`);
   const messages: DisplayMessage[] = [];
-  for (const m of listMessages(app.db, id)) {
-    const stored = m.content.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("");
+  const stored = listMessages(app.db, id);
+  const answers = new Map(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" ? [[b.tool_use_id, b.content] as const] : []))));
+  for (const m of stored) {
+    const typed = m.content.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("");
     // The selection travels beside the message, so the bubble shows what BK typed, not the header the model was given.
     // A header is only stripped where one was put: a selection, or drafts (D-317); otherwise BK's own text could lose its first lines.
-    const text = m.role === "user" && (m.selection || stored.startsWith("Unapplied draft on ")) ? typedText(stored) : stored;
+    const text = m.role === "user" && (m.selection || typed.startsWith("Unapplied draft on ")) ? typedText(typed) : typed;
     const toolCalls = m.content.flatMap((b) => (b.type === "tool_use" && typeof b.name === "string" ? [b.name] : []));
     if (text === "" && toolCalls.length === 0) continue;
-    messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt });
+    const asked = m.content.map(neutralBlock).find((b) => b.type === "tool_use" && b.name === ASK_USER);
+    const parsed = asked?.type === "tool_use" ? AskUserSchema.safeParse(asked.input) : undefined;
+    const question = asked?.type === "tool_use" && parsed?.success ? cardOf(parsed.data, asked.id, answers.get(asked.id) ?? null) : undefined;
+    messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt, ...(question === undefined ? {} : { question }) });
   }
   return {
     conversation, messages, proposals: listConversationChangeSets(app.db, id).map(toCard),

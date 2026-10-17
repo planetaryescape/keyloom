@@ -6,10 +6,11 @@ import { keyName, keyPlace } from "../boards/key-names.ts";
 import { boardCapabilities, lightingRefusal } from "../boards/capabilities.ts";
 import type { KeyMapping, UnmatchedWhy } from "../boards/correspondence.ts";
 import { keySlots, slotDistance } from "../boards/key-slots.ts";
+import { holdKeyCandidates } from "../boards/placement.ts";
 import type { Board } from "../boards/load.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { LayerMatch } from "../layout/layer-match.ts";
-import { tapOnly } from "../layout/rewrap.ts";
+import { ownTap, tapOnly } from "../layout/rewrap.ts";
 import type { Binding, Layer, Layout } from "../layout/schema.ts";
 import { BindingTransfer } from "../layout/transfer.ts";
 import { evaluate } from "../validation/validate.ts";
@@ -94,10 +95,14 @@ const structureOps = (source: Layout, ids: ReadonlyMap<string, string>): ChangeO
   });
 
 const isEmpty = (b: Binding): boolean => b.kind === "none" || b.kind === "transparent";
+const holdsLayer = (b: Binding): boolean => (b.kind === "layer" && b.action === "momentary") || (b.kind === "holdTap" && "layerId" in b.hold);
+/** The source id for a momentary layer key turned into a hold-tap: no source profile has this id, so the translation falls back to defaults. */
+const HOLD_KEY_PROFILE = "layer-hold";
 const isLayerKey = (b: Binding): boolean => b.kind === "layer" || (b.kind === "holdTap" && "layerId" in b.hold);
 
 /** `choices`: for a layer key with no counterpart (by its source position), the target key the person chose among the candidates (D-336). */
-export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: ReadonlyMap<number, number> = new Map()): PutPlan {
+/** `start`: what the target's new config holds before the put, so a layer key placed on a key the board prefers for holds keeps that key's own tap. */
+export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: ReadonlyMap<number, number> = new Map(), start?: Layout): PutPlan {
   const ids = layerIds(from.document);
   const targetDoc = scaffold(from.document, target, ids);
   const to: LayoutSnapshot = { layoutId: "", layoutName: target.definition.name, revisionId: "", document: targetDoc, board: target, onKeyboard: false, archived: false };
@@ -196,35 +201,53 @@ export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: Read
   const sourceSlots = keySlots(from.board.definition, from.board.geometry).slots;
   const placeName = (p: number) => keyPlace(target.definition, p, target.geometry);
   const sourceNameAt = (p: number) => keyName(from.board.definition, from.document, { layerId: base.id, position: p }, { geometry: from.board.geometry, withLayer: false });
+  // What a key holds once the carried keys are in: the carried binding, else what the new config started with.
+  const ownBinding = (p: number): Binding | null => {
+    const carried = carriedOps.findLast((o) => o.op === "setBinding" && o.at.layerId === "base" && o.at.position === p);
+    const b = carried?.op === "setBinding" ? carried.binding : start?.layers[0]?.bindings[p];
+    return b !== undefined && ownTap(b) !== null ? b : null;
+  };
   const taken = new Set<number>();
   const replaced = new Set<number>();
   const placementOps: ChangeOp[] = [];
   for (const placement of placements) {
     const sourceSlot = sourceSlots.get(placement.source);
     if (sourceSlot === undefined) continue;
+    const holds = holdKeyCandidates(target.definition, new Set()).map((c) => c.target);
+    // A layer held from a key (momentary, or a hold-tap that enters a layer) can sit on a key that keeps its own tap, which is what the
+    // board lists for holds (D-234: Space-hold first). Any other layer action takes the key over, so it is only offered keys that hold nothing sure.
+    const source = base.bindings[placement.source] as Binding;
+    const asHold = holds.length > 0 && holdsLayer(source);
     const rank = (p: number) => {
       const slot = slots.get(p);
       const guess = baseCarried.get(p);
       return [guess === undefined ? 0 : 1, slot?.thumb === true ? 0 : 1, slot?.thumb === true ? slot.thumbRank : slotDistance(sourceSlot, slot)] as const;
     };
-    placement.candidates = target.definition.hands[sourceSlot.hand]
-      .filter((p) => !taken.has(p) && (baseCarried.get(p) === undefined || (baseCarried.get(p) as { confidence: number }).confidence < SURE))
+    const free = (p: number) => baseCarried.get(p) === undefined || (baseCarried.get(p) as { confidence: number }).confidence < SURE;
+    const pool = holds.length > 0 ? holds.filter((p) => asHold || free(p)) : target.definition.hands[sourceSlot.hand].filter(free);
+    placement.candidates = pool
+      .filter((p) => !taken.has(p))
       .sort((a, b) => {
+        if (holds.length > 0) return holds.indexOf(a) - holds.indexOf(b);
         const [ra, rb] = [rank(a), rank(b)];
         return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || a - b;
       })
       .slice(0, 3)
       .map((p): PlacementCandidate => {
         const there = baseCarried.get(p);
-        return { target: p, name: placeName(p), ...(there === undefined ? {} : { replaces: sourceNameAt(there.source) }) };
+        const own = ownBinding(p);
+        const name = holds.length > 0 && start !== undefined ? keyName(target.definition, { ...start, layers: [{ ...(start.layers[0] as Layer), id: "base" }] }, { layerId: "base", position: p }, { geometry: target.geometry, withLayer: false }) : placeName(p);
+        return { target: p, name, ...(there === undefined || (asHold && own !== null) ? {} : { replaces: sourceNameAt(there.source) }) };
       });
     // The person's pick among the candidates, where they made one; keyloom's first choice otherwise.
     const chosen = choices.get(placement.source);
     const first = (chosen === undefined ? undefined : placement.candidates.find((c) => c.target === chosen)) ?? placement.candidates[0];
     if (first === undefined) continue;
-    const binding = base.bindings[placement.source] as Binding;
+    const own = holds.length > 0 && asHold ? ownBinding(first.target) : null;
+    // Onto a hold key the tap is the key's own, so Space stays Space; a plain momentary layer key becomes a hold-tap on it with the board's default timing.
+    const binding: Binding = own !== null && source.kind === "layer" ? { kind: "holdTap", tap: ownTap(own) as NonNullable<ReturnType<typeof ownTap>>, hold: { layerId: source.layerId }, profileId: HOLD_KEY_PROFILE } : source;
     const checkpoint = transfer.checkpoint();
-    const result = transfer.bind(binding, binding.kind === "holdTap" ? tapOnly(binding.tap) : { kind: "none" }, first.target);
+    const result = transfer.bind(binding, own !== null ? own : binding.kind === "holdTap" ? tapOnly(binding.tap) : { kind: "none" }, first.target);
     if ("skip" in result) {
       transfer.rollback(checkpoint);
       continue;
@@ -237,7 +260,7 @@ export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: Read
       continue;
     }
     taken.add(first.target);
-    if (baseCarried.has(first.target)) replaced.add(first.target);
+    if (baseCarried.has(first.target) || own !== null) replaced.add(first.target);
     placementOps.push(op);
   }
   const kept = carriedOps.filter((o) => !(o.op === "setBinding" && o.at.layerId === "base" && replaced.has(o.at.position)));

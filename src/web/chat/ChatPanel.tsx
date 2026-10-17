@@ -141,12 +141,12 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   }
 
   // Follows the reply as it streams unless the person has scrolled up to read. Once the newest reply
-  // has proposals, it stops at the first card instead, so the options are read from the top.
+  // has proposals or an open question, it stops at the first card instead, so the options are read from the top.
   useEffect(() => {
     const element = log.current;
     if (element === null || !stick.current) return;
     const replies = element.querySelectorAll<HTMLElement>(".msg-assistant");
-    const firstCard = replies[replies.length - 1]?.querySelector<HTMLElement>(".proposal-group");
+    const firstCard = replies[replies.length - 1]?.querySelector<HTMLElement>(".proposal-group, .ask-card:not(.ask-card-done)");
     if (firstCard) {
       const view = element.getBoundingClientRect();
       const at = (el: HTMLElement) => element.scrollTop + el.getBoundingClientRect().top - view.top - 8;
@@ -461,6 +461,8 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                     onAskAgain={() => send(ASK_AGAIN)}
                     onOpenRelease={onOpenRelease}
                     onRetry={() => void chat.retry()}
+                    onAnswer={(toolUseId, text) => void chat.answer(toolUseId, text)}
+                    busy={streaming}
                     switchTo={readyOthers}
                     onSwitch={switchProvider}
                     compact={variant === "bar"}

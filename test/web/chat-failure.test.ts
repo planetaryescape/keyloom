@@ -10,14 +10,14 @@ const board = await moonlander();
 const { layout } = await importOryxSource(FIXTURE_DIR, board.definition);
 
 const failed = (code: string, message: string): AssistantTurn => ({
-  kind: "assistant", id: "a1", text: "", activity: null, proposals: [], priorities: [], phase: "failed", failure: { code, message }, ending: null,
+  kind: "assistant", id: "a1", text: "", activity: null, proposals: [], priorities: [], question: null, phase: "failed", failure: { code, message }, ending: null,
 });
 
 const render = (turn: AssistantTurn, switchTo: { id: string; name: string }[] = []) =>
   renderToStaticMarkup(
     createElement(AssistantMessage, {
       turn, layout, board: board.definition, pinnedId: null, switchTo,
-      onPreview: () => {}, onPin: () => {}, onApply: async () => {}, onRemovePriority: async () => {}, onAskAgain: () => {}, onOpenRelease: () => {}, onRetry: () => {}, onSwitch: () => {},
+      onPreview: () => {}, onPin: () => {}, onApply: async () => {}, onRemovePriority: async () => {}, onAskAgain: () => {}, onOpenRelease: () => {}, onRetry: () => {}, onAnswer: () => {}, onSwitch: () => {},
     }),
   );
 

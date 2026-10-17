@@ -45,6 +45,21 @@ function fakeCodexHome(signedInWithFile: boolean): string {
 
 const changeSetCount = (db: { query: (sql: string) => { get: () => unknown } }) => (db.query("SELECT COUNT(*) AS n FROM change_sets").get() as { n: number }).n;
 
+describe("a Codex turn that asks a question (D-382)", () => {
+  test("stops at ask_user, stores the call with no result, and drops what Codex said after it", async () => {
+    const { outcome, app } = await run([
+      { say: "One thing only you can decide." },
+      { call: "ask_user", input: { question: "Replace it or add a new one?", options: [{ label: "Add a new one" }, { label: "Replace it" }] } },
+      { say: "I went ahead anyway." },
+    ]);
+    expect(outcome.status).toBe("awaiting_answer");
+    expect(outcome.question).toMatchObject({ question: "Replace it or add a new one?", answer: null });
+    const stored = listMessages(app.db, outcome.conversationId).map((m) => [m.role, m.content.map((b) => b.type)]);
+    expect(stored).toEqual([["user", ["text"]], ["assistant", ["text", "tool_use"]]]);
+    expect(showConversation(app, outcome.conversationId).messages.at(-1)?.question).toMatchObject({ answer: null });
+  });
+});
+
 describe("a Codex turn", () => {
   test("serves keyloom's tools, validates proposals the same way, and stores a transcript the other providers would", async () => {
     const { outcome, fake, app, events } = await run([
@@ -195,7 +210,7 @@ describe("the lockdown", () => {
     const { fake } = await run([{ say: "ok" }]);
     const tools = fake.record()?.tools ?? [];
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ["analyse_change", "find_function", "get_layout", "get_typing_findings", "list_layouts", "map_keys", "mirror_keys", "propose_changes", "put_config", "record_priority", "update_decision_outcome"],
+      ["analyse_change", "ask_user", "find_function", "get_layout", "get_typing_findings", "list_layouts", "map_keys", "mirror_keys", "propose_changes", "put_config", "record_priority", "update_decision_outcome"],
     );
     const schema = JSON.stringify(tools.find((t) => t.name === "propose_changes")?.inputSchema);
     expect(schema.length).toBeGreaterThan(5_000);

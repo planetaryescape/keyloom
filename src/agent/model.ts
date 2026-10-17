@@ -24,8 +24,16 @@ export type ModelTool = {
   inputSchema: z.ZodObject;
   /** Send the schema as `strict`. The API refuses a grammar that is too large, which the ChangeOp union is. Defaults to true. */
   strict?: boolean;
+  /**
+   * Calling it ends the turn: the question goes to the person, who may take hours to answer or reload meanwhile, so no process waits.
+   * The adapter stops the loop at the call and stores the `tool_use` with no result; the answer arrives later as that call's `tool_result`
+   * (D-382). Other tools called in the same reply get an error result saying they were not run.
+   */
+  pauses?: boolean;
   run: (rawInput: unknown) => Promise<string> | string;
 };
+
+export const AWAITING_ANSWER = "awaiting_answer";
 
 export type Usage = { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number };
 
@@ -52,10 +60,12 @@ export type ModelRequest = {
 export type ModelResult = {
   /** Every message the loop added after `request.messages`: assistant turns and the user turns carrying tool results. */
   messages: ModelMessage[];
-  /** The last response's stop reason. `tool_use` means the iteration limit stopped a loop that still wanted tools. */
+  /** The last response's stop reason. `tool_use` means the iteration limit stopped a loop that still wanted tools; `awaiting_answer` means a pausing tool was called. */
   stopReason: string;
   iterations: number;
   usage: Usage;
+  /** Set with stopReason `awaiting_answer`: the pausing tool call the turn stopped on. */
+  pending?: { id: string; name: string; input: unknown };
   /** What the provider charged, when it says (OpenRouter's `usage.cost`). Absent for a provider that doesn't, such as Codex. */
   costUsd?: number;
 };

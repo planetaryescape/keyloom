@@ -4,7 +4,7 @@
 // mid-reply. Proposals are validated by the real validator and stored in the FakeEditor, so
 // applying one goes through POST /api/change-sets/:id/apply like the real thing.
 import type {
-  ChatEvent, ChatOutcome, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard,
+  ChatEvent, ChatOutcome, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard, QuestionCard,
 } from "../../src/api/http.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { ChatError, type ChatBackend } from "../../src/server/chat-backend.ts";
@@ -140,11 +140,15 @@ export class FakeChat implements ChatBackend {
     }
     if (this.options.busy) throw new ChatError(409, "busy", "This conversation is still answering the last message.");
 
-    const conversation = request.conversationId === undefined ? this.open(request.message) : this.conversations.get(request.conversationId);
+    const conversation = request.conversationId === undefined ? this.open(request.message ?? "") : this.conversations.get(request.conversationId);
     if (conversation === undefined) throw new ChatError(404, "not_found", `no conversation "${request.conversationId}"`);
     const now = Date.now();
     const messageId = `msg_${++this.counter}`;
-    conversation.messages.push({ id: `msg_${++this.counter}`, role: "user", text: request.message, toolCalls: [], selection: request.selection ?? null, createdAt: now });
+    if (request.answer !== undefined) return this.answered(conversation, request.answer, messageId, emit, signal);
+    const message = request.message ?? "";
+    conversation.messages.push({ id: `msg_${++this.counter}`, role: "user", text: message, toolCalls: [], selection: request.selection ?? null, createdAt: now });
+    // A request that really is the person's call: the agent asks one question and stops (D-380).
+    if (/\b(replace|swap)\b/i.test(message)) return this.ask(conversation, messageId, emit, signal);
     const askedBefore = conversation.messages.filter((m) => m.role === "user").length > 1;
     emit({ type: "start", conversationId: conversation.summary.id, messageId });
 
@@ -209,6 +213,43 @@ export class FakeChat implements ChatBackend {
       iterations: 1,
     };
     emit({ type: "done", outcome });
+  }
+
+  private async ask(conversation: Conversation, messageId: string, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void> {
+    emit({ type: "start", conversationId: conversation.summary.id, messageId });
+    emit({ type: "tool", name: "ask_user" });
+    await this.pause(this.options.stepMs, signal);
+    const question: QuestionCard = {
+      toolUseId: `toolu_${++this.counter}`, question: "Replace the config on your keyboard, or add this one beside it?",
+      options: [{ label: "Add it as a new config", description: "Your current config stays on the keyboard until you switch." }, { label: "Replace the current config", description: "The old one stays in History and can be restored." }],
+      allowOther: true, answer: null,
+    };
+    conversation.messages.push({ id: messageId, role: "assistant", text: "", toolCalls: ["ask_user"], selection: null, createdAt: Date.now(), question });
+    emit({ type: "done", outcome: this.outcome(conversation, messageId, "awaiting_answer", "", [], question) });
+  }
+
+  private async answered(conversation: Conversation, answer: { toolUseId: string; text: string }, messageId: string, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void> {
+    const asked = conversation.messages.find((m) => m.question?.toolUseId === answer.toolUseId);
+    if (asked?.question === undefined || asked.question.answer !== null) throw new ChatError(400, "usage", "that question is not open any more");
+    asked.question = { ...asked.question, answer: answer.text };
+    emit({ type: "start", conversationId: conversation.summary.id, messageId });
+    const reply = `Done: I went with "${answer.text}". Nothing is applied until you say so.`;
+    for (const word of reply.match(/\S+\s*/g) ?? []) {
+      if (signal.aborted) return;
+      emit({ type: "text", delta: word });
+      await this.pause(this.options.tokenDelayMs, signal);
+    }
+    conversation.messages.push({ id: messageId, role: "assistant", text: reply, toolCalls: [], selection: null, createdAt: Date.now() });
+    emit({ type: "done", outcome: this.outcome(conversation, messageId, "complete", reply, []) });
+  }
+
+  private outcome(conversation: Conversation, messageId: string, status: ChatOutcome["status"], text: string, proposals: ProposalCard[], question?: QuestionCard): ChatOutcome {
+    return {
+      conversationId: conversation.summary.id, messageIds: [messageId], status, text, proposals, priorities: [],
+      provider: "openrouter", model: "anthropic/claude-opus-5.5", effort: "medium",
+      usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1,
+      ...(question === undefined ? {} : { question }),
+    };
   }
 
   private open(firstMessage: string): Conversation {

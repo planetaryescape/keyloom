@@ -53,11 +53,12 @@ Space stays a hold-layer key on the MacBook (D-234). When BK's thumb-layer keys 
 
 ## Copying the other boards' setup onto it
 
-Rung 19's cross-board mapping ([20](20-cross-board.md)) does the work.
+Rung 19's cross-board mapping ([20](20-cross-board.md)) does the work, and a put runs it over every layer at once (D-383): "put my Glove80 config on this keyboard" makes a new config here, like on any other board.
 
 - **Matched by function.** Most of the typing block matches by what the keys do.
 - **No counterpart.** Thumb clusters and extra layer keys have none on a MacBook, which has two Command keys, two Option keys and one Space for both thumbs. Those come back as placement proposals among Space-hold, Caps Lock and right Option. BK picks, the way D-019's "make room" works.
 - **Combos** are translated through the mapping.
+- **What kanata or keyloom's output can't say** is left off with a reason (a macro that holds a non-modifier, a tap dance with a hold, native ZMK or QMK code), never a refusal. kanata's `tap-dance` accepts a nested `tap-hold` (checked with `kanata --check` on v1.12.0); keyloom's generator doesn't write one yet (D-383).
 - **Hold-tap profiles** are translated from QMK/ZMK option names to kanata's variants and timings. Nothing is dropped silently (D-024).
 
 ## Karabiner-Elements later

@@ -110,6 +110,8 @@ export type PutInput = {
   name?: string;
   /** For a layer key with no counterpart, by its source position: the target key chosen among the candidates. */
   placements?: Record<string, number>;
+  /** Source layers to carry, by id or name; omitted, every layer except factory and test ones. */
+  layers?: string[];
 };
 
 /** A put (22#putting-bks-config-on-it): a new config on the other board and its proposals. Nothing is applied and nothing reaches a keyboard. */

@@ -5,7 +5,7 @@
 import { spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
-import { type AgentModel, type ContentBlock, type ModelMessage, type ModelRequest, type ModelTool, type Usage, emptyUsage } from "./model.ts";
+import { AWAITING_ANSWER, type AgentModel, type ContentBlock, type ModelMessage, type ModelRequest, type ModelTool, type Usage, emptyUsage } from "./model.ts";
 import { type CodexEvent, type McpToolCall, parseEventLine, resultText } from "./codex/events.ts";
 import { CodexError, codexErrorFor, notInstalled } from "./codex/errors.ts";
 import { codexBin } from "./codex/login.ts";
@@ -39,20 +39,22 @@ function usageOf(u: Extract<CodexEvent, { kind: "turn.completed" }>["usage"]): U
 }
 
 /** The assistant and tool-result messages a finished Codex turn amounts to, in the order things happened. */
-export function synthesise(steps: Array<{ text: string } | { call: McpToolCall }>): ModelMessage[] {
+export function synthesise(steps: Array<{ text: string } | { call: McpToolCall }>, pending?: string): ModelMessage[] {
   const messages: ModelMessage[] = [];
-  let pending: ContentBlock[] = [];
+  let pendingText: ContentBlock[] = [];
   for (const step of steps) {
     if ("text" in step) {
-      pending.push({ type: "text", text: step.text });
+      pendingText.push({ type: "text", text: step.text });
       continue;
     }
     const { call } = step;
-    messages.push({ role: "assistant", content: [...pending, { type: "tool_use", id: call.id, name: call.tool, input: call.arguments ?? {} }] });
+    messages.push({ role: "assistant", content: [...pendingText, { type: "tool_use", id: call.id, name: call.tool, input: call.arguments ?? {} }] });
+    // The call a paused turn waits on has no result yet; the answer becomes it (D-382).
+    if (call.id === pending) break;
     messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: call.id, content: resultText(call), ...(call.error ? { is_error: true } : {}) }] });
-    pending = [];
+    pendingText = [];
   }
-  if (pending.length > 0) messages.push({ role: "assistant", content: pending });
+  if (pendingText.length > 0 && pending === undefined) messages.push({ role: "assistant", content: pendingText });
   return messages;
 }
 
@@ -74,6 +76,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       // Counting here, not in Codex: it has no iteration cap of its own, so the cap is enforced where the tools run.
       let toolCalls = 0;
       let limitHit = false;
+      let paused = false;
       let abortRun: (() => void) | undefined;
       const tools: ModelTool[] = request.tools.map((tool) => ({
         ...tool,
@@ -83,14 +86,17 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
             abortRun?.();
             throw new Error("keyloom stopped this turn: too many tool calls");
           }
-          return tool.run(raw);
+          const out = await tool.run(raw);
+          // A question for the person. Codex is stopped when the call's completed item arrives, which is the id the answer will attach to (D-382).
+          if (tool.pauses === true) paused = true;
+          return out;
         },
       }));
 
       const server = await startToolServer(tools);
       const scratch = prepareScratch(server.token, env);
       try {
-        return await runCodex({ request, server, scratch, model, effort, env, timeoutMs, isLimitHit: () => limitHit, setAbort: (f) => (abortRun = f) });
+        return await runCodex({ request, server, scratch, model, effort, env, timeoutMs, isLimitHit: () => limitHit || paused, isPaused: () => paused, pausing: new Set(request.tools.filter((t) => t.pauses === true).map((t) => t.name)), setAbort: (f) => (abortRun = f) });
       } finally {
         await server.stop();
         scratch.remove();
@@ -108,6 +114,8 @@ async function runCodex(input: {
   env: Record<string, string | undefined>;
   timeoutMs: number;
   isLimitHit: () => boolean;
+  isPaused: () => boolean;
+  pausing: ReadonlySet<string>;
   setAbort: (abort: () => void) => void;
 }): ReturnType<AgentModel["run"]> {
   const { request, scratch } = input;
@@ -186,6 +194,7 @@ async function runCodex(input: {
             spoke = true;
           } else if (item.kind === "mcp_tool_call") {
             steps.push({ call: item.call });
+            if (input.pausing.has(item.call.tool)) kill("limit");
           } else if (item.kind === "error") {
             lastError = item.message;
           }
@@ -214,6 +223,16 @@ async function runCodex(input: {
     if (child.exitCode === null && child.signalCode === null) kill("abort");
   }
 
+  const at = steps.findIndex((s) => "call" in s && input.pausing.has(s.call.tool));
+  if (input.isPaused() && at >= 0) {
+    // Everything after the question is dropped: the person's answer may change what comes next.
+    const kept = steps.slice(0, at + 1);
+    const call = (kept.at(-1) as { call: McpToolCall }).call;
+    return {
+      messages: synthesise(kept, call.id), stopReason: AWAITING_ANSWER, iterations: kept.filter((s) => "call" in s).length + 1, usage,
+      pending: { id: call.id, name: call.tool, input: call.arguments ?? {} },
+    };
+  }
   const limited = input.isLimitHit();
   // A cut-off turn keeps only what finished: a tool call without its result would be unreplayable.
   const completedSteps = limited ? steps.filter((s, i) => "call" in s || steps.slice(i).some((later) => "call" in later)) : steps;

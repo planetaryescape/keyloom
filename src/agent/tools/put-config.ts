@@ -6,6 +6,7 @@ const InputSchema = z.object({
   from: z.string().min(1).describe("The layout to copy BK's setup from: its id or name, from list_layouts."),
   board: z.string().min(1).describe("The board to put it on, by id such as local/corne, from list_layouts or boards BK has added. It must not be the board `from` is already on."),
   name: z.string().min(1).optional().describe('The new config\'s name. Omit for "<layout> on <board>". Give another name if one is already taken.'),
+  layers: z.array(z.string().min(1)).max(40).optional().describe("Only when BK named particular layers: their ids or names on the source layout. Omit for every layer except factory and test layers."),
   placements: z.record(z.string(), z.number().int().nonnegative()).optional().describe("For a layer key with no counterpart: its position on the SOURCE layout -> the position on the target chosen among the candidates a first call listed. Only when BK chose; omit otherwise."),
 });
 
@@ -32,7 +33,7 @@ function describe(r: PutResult): string {
     lines.push(`Combos: ${r.combos.copied.length} copied${r.combos.skipped.length > 0 ? `; skipped: ${r.combos.skipped.map((s) => `${s.id} (${s.why})`).join("; ")}` : ""}.`);
   }
   if (r.notes.length > 0) lines.push("Notes:", ...r.notes.map((n) => `- ${n}`));
-  lines.push("Tell BK in plain words what came across and what did not, and that the proposals wait in the new config (the config menu's switcher, then its open proposals); he applies them, and putting the config on a keyboard is a separate step he takes.");
+  lines.push("Tell BK in plain words what came across and what did not, and that the proposals wait in the new config (the config menu's switcher, then its open proposals); he applies them, and putting the config on a keyboard is a separate step he takes. Then offer the choices in one line, such as: I matched keys by what they type; say if you'd rather keep positions. Don't name this tool or any command to him.");
   return lines.join("\n");
 }
 
@@ -40,9 +41,9 @@ export const putConfigTool = (ports: AgentPorts) =>
   defineTool({
     name: "put_config",
     description:
-      'Put BK\'s setup from one of his layouts onto another board, such as "put my Glove80 setup on my Corne": it makes a NEW config on that board and stores the mapping of every layer (keys, layer keys, hold-taps, combos) as proposals on it, checked by the validator. Nothing is applied and nothing reaches a keyboard; this conversation\'s layout is not changed. Call list_layouts first to find the layout and the board, and tell BK which board and layout you used. A name already taken is an error: call again with another name. Use map_keys instead to carry parts of another layout into THIS conversation\'s layout.',
+      'Put BK\'s setup from one of his layouts onto another board, such as "put my Glove80 setup on my Corne": it makes a NEW config on that board and stores the mapping of every layer (keys, layer keys, hold-taps, combos) as proposals on it, checked by the validator. Nothing is applied and nothing reaches a keyboard; this conversation\'s layout is not changed. Call it at once on a request like "put my Glove80 config on this keyboard", with the defaults: a new config that leaves the current one untouched, every layer except factory and test layers, keys matched by what they type and then by place, layer keys placed by the rules. Do not ask BK which parts or how to match first; show the result, then offer the choices in one line. It works on the MacBook keyboard too. Call list_layouts first to find the layout and the board, and tell BK which board and layout you used. A name already taken is an error: call again with another name. Use map_keys instead to carry parts of another layout into THIS conversation\'s layout.',
     inputSchema: InputSchema,
     // `placements` is a record, which strict structured output does not accept (it needs every object closed).
     strict: false,
-    run: ({ from, board, name, placements }) => describe(ports.put({ from, board, ...(name === undefined ? {} : { name }), ...(placements === undefined ? {} : { placements }) })),
+    run: ({ from, board, name, placements, layers }) => describe(ports.put({ from, board, ...(name === undefined ? {} : { name }), ...(placements === undefined ? {} : { placements }), ...(layers === undefined ? {} : { layers }) })),
   });

@@ -165,10 +165,9 @@ describe("BK's Glove80 setup on the derived Corne", () => {
     expect(out.layers[0]!.carried).toBeGreaterThan(30);
   });
 
-  test("refusals: the same board, a laptop keyboard, and a name already taken", async () => {
+  test("refusals: the same board and a name already taken (a laptop keyboard is no longer one: D-383)", async () => {
     const { app, glove } = await put();
     expect(() => putConfig(app, { from: glove.layoutId, board: "moergo/glove80" })).toThrow(/already a Glove80 config/);
-    expect(() => putConfig(app, { from: glove.layoutId, board: "apple/macbook-ansi" })).toThrow(/laptop keyboard/);
     expect(() => putConfig(app, { from: glove.layoutId, board: "local/corne" })).toThrow(/already exists/);
     expect(listConfigs(app).filter((c) => c.boardId === "local/corne")).toHaveLength(1);
   });
