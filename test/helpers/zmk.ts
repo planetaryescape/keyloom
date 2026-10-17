@@ -124,10 +124,17 @@ export async function zmkEnv(opts: { keymap?: string } = {}) {
   return { app, root, dataDir, volumes, checkout: dir, run, imported, vars, closeApp: () => closeApp(app) };
 }
 
-/** A fake bootloader for `volumes`: each boot drive that gets a .uf2 written to it unmounts, as a real one does. */
-export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[] } = {}) {
+/**
+ * A fake bootloader for `volumes`: each boot drive that gets a .uf2 written to it unmounts, as a real one does. With `onDemand`
+ * only the first drive appears by itself; the test calls `mount(label)` for the others, as a person puts the next half into its
+ * bootloader once keyloom has asked, so no fixed delay has to outlast a slow runner.
+ */
+export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[]; onDemand?: boolean } = {}) {
   const written: string[] = [];
-  labels.forEach((label, i) => setTimeout(() => mkdirSync(joinPath(volumes, label), { recursive: true }), opts.mountAfterMs?.[i] ?? 50 + i * 400));
+  const mount = (label: string) => mkdirSync(joinPath(volumes, label), { recursive: true });
+  labels.forEach((label, i) => {
+    if (!opts.onDemand || i === 0) setTimeout(() => mount(label), opts.mountAfterMs?.[i] ?? 50 + i * 400);
+  });
   const timer = setInterval(() => {
     for (const label of labels) {
       if (!written.includes(label) && existsSync(joinPath(volumes, label, "glove80.uf2"))) {
@@ -136,5 +143,5 @@ export function fakeBootloaders(volumes: string, labels: readonly string[], opts
       }
     }
   }, 10);
-  return { written, stop: () => clearInterval(timer) };
+  return { written, mount, stop: () => clearInterval(timer) };
 }
