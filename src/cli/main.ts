@@ -241,7 +241,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   registerFirmwareCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}) });
   const syncCommandDeps = { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) };
   registerSyncCommands(program, syncCommandDeps);
-  registerConfigCommands(program, syncCommandDeps);
+  registerConfigCommands(program, syncCommandDeps, keyboards ?? {});
   registerVersionCommands(program, syncCommandDeps);
   registerRemapCommands(program, { io, format, withApp, ...(handsFree ? { handsFree } : {}) });
   registerKeyboardCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(keyboards ? { keyboards } : {}) });

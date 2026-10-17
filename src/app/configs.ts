@@ -1,5 +1,7 @@
 // Use cases for configs (25, D-300): a config is a layout; this lists them, makes new ones, and renames, archives and deletes them.
 // Which config is on a keyboard is the sync engine's to act on (`useConfig` in sync.ts); here it is only read and protected.
+import type { GeometryOptions } from "../boards/geometry.ts";
+import type { ImportReport } from "../layout/import-report.ts";
 import { identityLayout } from "../firmware/kanata/identity.ts";
 import { plainSummary } from "../layout/history-summary.ts";
 import type { Layout } from "../layout/schema.ts";
@@ -11,7 +13,10 @@ import { activeSyncs } from "../persistence/syncs.ts";
 import { transact } from "../persistence/transaction.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
+import { readDefaultKeymap } from "./default-keymap.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
+import { type UploadInput, importUpload } from "./import-upload.ts";
+import { importLayout } from "./layouts.ts";
 import { versionRevision } from "./versions.ts";
 
 export type ConfigView = {
@@ -70,13 +75,13 @@ function checkedName(name: string): string {
 export type NewConfigInput = { name: string } & (
   /** A copy of the config's head, or of one revision of it, or of the revision a version names. */
   | { from: "config"; config: string; revision?: string; version?: string }
-  /** The board's starting point: see `blankDocument`. */
-  | { from: "blank"; board: string }
+  /** The board's empty starting point (`blankDocument`), or `start` where `newBlankConfig` found the firmware's default keymap. */
+  | { from: "blank"; board: string; start?: { layout: Layout; summary: string } }
 );
 
 /**
- * The document a blank config starts from. keyloom holds no default keymap for a QMK or ZMK board (the firmware tree's own is not
- * in the repo), so those start as one empty Base layer; a software remapper starts as the identity map, because an empty one would
+ * The empty document a blank config falls back to. `newBlankConfig` looks for the firmware's default keymap first (D-370); a QMK or ZMK
+ * board with none, and a keyboard put (which maps onto an empty board), start as one empty Base layer; a software remapper starts as the identity map, because an empty one would
  * leave the laptop's keyboard typing nothing the moment it is put on.
  */
 export function blankDocument(boardId: string): Layout {
@@ -99,8 +104,8 @@ export function newConfig(app: App, input: NewConfigInput): ConfigView {
   let summary: string;
   let copiedFrom: { layoutId: string; revisionId: string } | undefined;
   if (input.from === "blank") {
-    layout = blankDocument(input.board);
-    summary = `Started from the ${showBoard(input.board).definition.name} blank`;
+    layout = input.start?.layout ?? blankDocument(input.board);
+    summary = input.start?.summary ?? `Started from the ${showBoard(input.board).definition.name} blank`;
   } else {
     const source = requireConfig(app, input.config);
     let revisionId = source.headRevisionId;
@@ -123,6 +128,58 @@ export function newConfig(app: App, input: NewConfigInput): ConfigView {
     if (err instanceof NameTakenError) throw new UsageError(`a config named "${name}" already exists; pick another name`);
     throw err;
   }
+}
+
+export type NewBlankOutcome = {
+  config: ConfigView;
+  /** Whether the config starts from the firmware's default keymap or from the empty Base layer. */
+  started: "default" | "empty";
+  /** One sentence saying where it started, and for "empty" on a firmware board why there was no default. */
+  note: string;
+};
+
+/**
+ * A blank config (D-370): the board's firmware default keymap where keyloom can read one from the pinned tree, otherwise the empty
+ * starting point with the reason in its first revision's summary, so History says it too. A software remapper's blank is the identity map and
+ * needs no lookup. It never fails for want of a default; only the network or the file being wrong sends it to the fallback.
+ */
+export async function newBlankConfig(app: App, input: { name: string; board: string }, opts: GeometryOptions = {}): Promise<NewBlankOutcome> {
+  checkedName(input.name);
+  const def = showBoard(input.board).definition;
+  if (def.firmware === "kanata") {
+    const config = newConfig(app, { name: input.name, from: "blank", board: input.board });
+    return { config, started: "empty", note: `Started from the ${def.name} identity map` };
+  }
+  const found = await readDefaultKeymap(def, opts);
+  if (found.layout === null) {
+    const summary = `Started from the ${def.name} blank (no default keymap: ${found.reason})`;
+    return { config: newConfig(app, { name: input.name, from: "blank", board: input.board, start: { layout: blankDocument(input.board), summary } }), started: "empty", note: summary };
+  }
+  const summary = `Started from the ${def.name} default keymap (${found.from})`;
+  return { config: newConfig(app, { name: input.name, from: "blank", board: input.board, start: { layout: found.layout, summary } }), started: "default", note: summary };
+}
+
+const requireFreeName = (app: App, name: string): string => {
+  const checked = checkedName(name);
+  if (findLayoutRow(app.db, checked)) throw new UsageError(`a config named "${checked}" already exists; pick another name`);
+  return checked;
+};
+
+/**
+ * A config made from an exported file (D-371), by path. It is the import that `keyloom import` runs with the config's name given, so it
+ * is never put on the keyboard (except as a board's first config); `config use` does that.
+ */
+export async function newConfigFromImport(app: App, input: { name: string; board: string; source: string }): Promise<{ config: ConfigView; report: ImportReport }> {
+  const name = requireFreeName(app, input.name);
+  const out = await importLayout(app, { board: input.board, source: input.source, name });
+  return { config: showConfig(app, out.layoutId), report: out.report };
+}
+
+/** The same from bytes the browser sent (D-171): the file goes to a private folder and the path above reads it. */
+export async function newConfigFromUpload(app: App, input: Omit<UploadInput, "name"> & { name: string }): Promise<{ config: ConfigView; report: ImportReport }> {
+  const name = requireFreeName(app, input.name);
+  const out = await importUpload(app, { board: input.board, filename: input.filename, bytes: input.bytes, name });
+  return { config: showConfig(app, out.layoutId), report: out.report };
 }
 
 export function renameConfig(app: App, ref: string, to: string): ConfigView {

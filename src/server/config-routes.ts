@@ -2,7 +2,7 @@
 // request after its Host check, and serves the Response when one comes back.
 import { z } from "zod";
 import {
-  CompareResponseSchema, ConfigListResponseSchema, ConfigResponseSchema, DeleteConfigRequestSchema, NameVersionRequestSchema, NameVersionResponseSchema, NewConfigRequestSchema,
+  CompareResponseSchema, ConfigListResponseSchema, ConfigResponseSchema, DeleteConfigRequestSchema, NameVersionRequestSchema, NameVersionResponseSchema, NewConfigRequestSchema, NewConfigResponseSchema,
   ProposalsResponseSchema, RenameConfigRequestSchema, RestoreVersionRequestSchema, RestoreVersionResponseSchema, VersionHistoryResponseSchema,
 } from "../api/configs.ts";
 import { SyncNowResponseSchema, type ApiErrorBody } from "../api/http.ts";
@@ -10,6 +10,8 @@ import { ConfigsError, type ConfigsBackend } from "./configs-backend.ts";
 import { checkToken } from "./guard.ts";
 
 const MAX_BODY_BYTES = 10_000;
+// A config made from a file carries the file (base64) in its body.
+const MAX_IMPORT_BODY_BYTES = 1_400_000;
 const EmptyBody = z.object({}).strict();
 
 const errorResponse = (status: number, code: string, message: string, validation?: ApiErrorBody["validation"]): Response =>
@@ -62,11 +64,11 @@ function match(method: string, pathname: string): { action: Action; ref: string 
   return pathMatched ? "wrong-method" : null;
 }
 
-async function readBody<T>(request: Request, schema: z.ZodType<T>): Promise<T | Response> {
+async function readBody<T>(request: Request, schema: z.ZodType<T>, max = MAX_BODY_BYTES): Promise<T | Response> {
   const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
   if (type !== "application/json") return errorResponse(415, "content_type", "Send this request as application/json.");
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return errorResponse(413, "too_large", "The request body is too large.");
+  if (text.length > max) return errorResponse(413, "too_large", "The request body is too large.");
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -106,9 +108,9 @@ export async function handleConfigRoute(request: Request, pathname: string, back
     }
 
     if (action === "create") {
-      const body = await readBody(request, NewConfigRequestSchema);
+      const body = await readBody(request, NewConfigRequestSchema, MAX_IMPORT_BODY_BYTES);
       if (body instanceof Response) return body;
-      return Response.json(ConfigResponseSchema.parse({ config: await backend.create(body) }), { status: 201 });
+      return Response.json(NewConfigResponseSchema.parse(await backend.create(body)), { status: 201 });
     }
     if (action === "rename") {
       const body = await readBody(request, RenameConfigRequestSchema);

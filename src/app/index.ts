@@ -9,13 +9,14 @@ export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, impor
 export { type UploadInput, importUpload } from "./import-upload.ts";
 export { listRevisions } from "./history.ts";
 export {
-  type ConfigView, type ListConfigsOptions, type NewConfigInput, archiveConfig, blankDocument, deleteConfig, listConfigs, newConfig, renameConfig, restoreConfig, showConfig,
+  type ConfigView, type ListConfigsOptions, type NewConfigInput, archiveConfig, blankDocument, deleteConfig, listConfigs, newBlankConfig, newConfig, newConfigFromImport, newConfigFromUpload, type NewBlankOutcome, renameConfig, restoreConfig, showConfig,
 } from "./configs.ts";
 export {
   type CompareView, type KeyChange, type RevisionBrief, type VersionHistory, type VersionMilestone, type VersionView, compareRevision, nameVersion, resolveRevision,
   restoreVersion, versionHistory,
 } from "./versions.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, loadUserBoards, regenerateGeometry, showBoard } from "./boards.ts";
+export type { GeometryOptions } from "../boards/geometry.ts";
 export { type AddDeps, type AddInput, type AddOutcome, type KeyboardPreview, type PreviewBoard, addKeyboard, previewKeyboard } from "./keyboard-add.ts";
 export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKeyboards, findCandidate, searchKeyboards } from "./keyboard-detect.ts";
 export { type PutInput, type PutOutcome, type PutPreview, type PutProposal, previewPut, putConfig } from "./keyboard-put.ts";

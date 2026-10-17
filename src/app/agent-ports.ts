@@ -12,6 +12,7 @@ import { checkChange, proposeChange } from "./changes.ts";
 import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
 import { ValidationFailedError } from "./errors.ts";
+import { putConfig } from "./keyboard-put.ts";
 import { getLayout, listLayouts } from "./layouts.ts";
 import { typingFindings } from "./lab.ts";
 
@@ -50,6 +51,14 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
     layouts: () => listLayouts(app).map((row) => viewOf(row.id)),
     // getLayout reports a name that no layout has as "no layout"; the agent reads that and goes back to list_layouts.
     layout: (ref) => viewOf(ref),
+    put(input) {
+      // The new config belongs to no conversation, so its proposals are found in the config's open proposals (D-336), not in this chat.
+      const out = putConfig(app, { ...input, source: "agent" });
+      return {
+        config: { id: out.config.id, name: out.config.name, boardName: out.config.boardName }, proposals: out.proposals, placements: out.placements, layers: out.layers,
+        notCarried: out.notCarried, combos: out.combos, notes: out.notes,
+      };
+    },
     check: (ops) => checkChange(app, layoutId, { ops, ...scope }),
     priorities: () => layoutPriorities(app, layoutId).map(toPriorityFact),
     recordPriority(input) {

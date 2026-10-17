@@ -2,12 +2,14 @@
 // every route's shape, and the refusals as the status and code the config switcher acts on.
 import { afterAll, afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { applyOps, getLayout } from "../../src/app/index.ts";
-import { CompareResponseSchema, ConfigListResponseSchema, ConfigResponseSchema, VersionHistoryResponseSchema } from "../../src/api/configs.ts";
+import { CompareResponseSchema, ConfigListResponseSchema, ConfigResponseSchema, NewConfigResponseSchema, VersionHistoryResponseSchema } from "../../src/api/configs.ts";
 import { appConfigsBackend } from "../../src/cli/configs-backend.ts";
 import { getBoardConfig } from "../../src/persistence/configs.ts";
 import { handleConfigRoute } from "../../src/server/config-routes.ts";
 import { BOARD, type SyncWorld, syncWorld } from "../helpers/fake-sync.ts";
+import { defaultKeymapTree } from "../helpers/default-keymaps.ts";
 import { setKey } from "../helpers/ops.ts";
+import { tempDir } from "../helpers/tmp.ts";
 
 setDefaultTimeout(20_000);
 
@@ -26,7 +28,7 @@ async function serve() {
   w.flashed();
   const engine = w.engine();
   await engine.start();
-  const backend = appConfigsBackend(w.app, engine);
+  const backend = appConfigsBackend(w.app, engine, { fetchText: defaultKeymapTree(), cacheDir: tempDir() });
   const server = Bun.serve({
     port: 0,
     fetch: async (request) => (await handleConfigRoute(request, new URL(request.url).pathname, backend, TOKEN)) ?? new Response("not a config route", { status: 404 }),
@@ -76,6 +78,28 @@ describe("configs", () => {
     expect((await post(`/api/configs/${colemak.id}/delete`, { name: "nope" })).status).toBe(400);
     expect((await post(`/api/configs/${colemak.id}/delete`, { name: "Colemak DH" })).status).toBe(200);
     expect(ConfigListResponseSchema.parse(await (await call("/api/configs")).json()).configs).toHaveLength(2);
+  });
+
+  test("a blank config says where it started, and a file becomes a config (the same importers as /api/import)", async () => {
+    const { w, post } = await serve();
+    const blank = await (await post("/api/configs", { from: "blank", name: "Steno", board: BOARD })).json();
+    expect(blank.note).toContain("default keymap");
+    expect(getLayout(w.app, blank.config.id).document.layers.length).toBeGreaterThan(1);
+    const noDefault = await (await post("/api/configs", { from: "blank", name: "Plain", board: "foostan/corne" })).json();
+    expect(noDefault.config.boardId).toBe("foostan/corne");
+
+    const bytes = await Bun.file(`${import.meta.dir}/../fixtures/zmk/corne/corne.keymap`).arrayBuffer();
+    const res = await post("/api/configs", { from: "import", name: "From file", board: "foostan/corne", filename: "corne.keymap", data: Buffer.from(bytes).toString("base64") });
+    expect(res.status).toBe(201);
+    const made = NewConfigResponseSchema.parse(await res.json()).config;
+    expect(made).toMatchObject({ name: "From file", boardId: "foostan/corne", copiedFrom: null });
+    expect(getLayout(w.app, made.id).revision.origin).toBe("import");
+    // Refusals: a taken name, a file that isn't one, and one that is the wrong shape.
+    const again = await post("/api/configs", { from: "import", name: "From file", board: "foostan/corne", filename: "corne.keymap", data: Buffer.from(bytes).toString("base64") });
+    expect(again.status).toBe(400);
+    expect((await again.json()).error.message).toContain("already exists");
+    expect((await post("/api/configs", { from: "import", name: "Bad", board: "foostan/corne", filename: "notes.txt", data: "aGk=" })).status).toBe(400);
+    expect((await post("/api/configs", { from: "import", name: "Bad", board: "foostan/corne", filename: "corne.keymap" })).status).toBe(400);
   });
 
   test("refusals carry the status and code the switcher acts on", async () => {

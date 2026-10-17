@@ -2,7 +2,7 @@
 // Thin: each calls one use case in src/app.
 import type { Command } from "commander";
 import {
-  type ConfigView, archiveConfig, deleteConfig, listConfigs, newConfig, renameConfig, restoreConfig, UsageError,
+  type ConfigView, type GeometryOptions, archiveConfig, deleteConfig, listConfigs, newBlankConfig, newConfig, newConfigFromImport, renameConfig, restoreConfig, UsageError,
 } from "../../app/index.ts";
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import { type SyncCommandDeps, syncAndPrint } from "./sync.ts";
@@ -15,7 +15,8 @@ export const configJson = (c: ConfigView) => ({
 
 const statusWords = (c: ConfigView): string => (c.archivedAt !== null ? "archived" : c.onKeyboard ? `on your ${c.boardName}` : "");
 
-export function registerConfigCommands(program: Command, deps: SyncCommandDeps): void {
+/** `firmware` is where a blank config's default keymap is read from; tests pass fixtures, otherwise the pinned tree on GitHub (D-370). */
+export function registerConfigCommands(program: Command, deps: SyncCommandDeps, firmware: GeometryOptions = {}): void {
   const { io, format, quiet, withApp } = deps;
   const config = program.command("config").description("configs: the layouts you keep for a board, and which one is on its keyboard");
 
@@ -38,27 +39,37 @@ export function registerConfigCommands(program: Command, deps: SyncCommandDeps):
 
   config
     .command("new")
-    .description("make a config: a copy of one (its head, a revision or a version) or a blank one; it is not put on the keyboard")
+    .description("make a config: a copy of one (its head, a revision or a version), a blank one, or one from an exported file; it is not put on the keyboard")
     .argument("<name>", "the new config's name")
-    .option("--from <config>", "copy this config (ID or name)")
+    .argument("[file]", "with --from import: the Oryx zip or folder, QMK keymap folder, ZMK .keymap or Karabiner json to read")
+    .option("--from <config>", "copy this config (ID or name), or `import` to read a file (needs --board and the file)")
     .option("--rev <revision>", "copy this revision of --from instead of its head")
     // Not --version: the program's own -V/--version flag would take it before this command saw it.
     .option("--from-version <version>", "copy the revision this version of --from names (ID or name)")
-    .option("--blank", "start from the board's blank instead of a copy; needs --board")
-    .option("--board <board>", "the board for --blank")
-    .action(async (name: string, opts: { from?: string; rev?: string; fromVersion?: string; blank?: boolean; board?: string }) => {
+    .option("--blank", "start from the board's firmware default keymap where keyloom can get one, else an empty Base layer; needs --board")
+    .option("--board <board>", "the board for --blank or --from import")
+    .action(async (name: string, file: string | undefined, opts: { from?: string; rev?: string; fromVersion?: string; blank?: boolean; board?: string }) => {
+      const importing = opts.from === "import";
       if (opts.blank && (opts.from !== undefined || opts.rev !== undefined || opts.fromVersion !== undefined)) throw new UsageError("--blank starts from nothing; leave out --from, --rev and --from-version");
       if (opts.blank && opts.board === undefined) throw new UsageError("--blank needs --board");
-      if (!opts.blank && opts.from === undefined) throw new UsageError("say what to start from: --from <config> or --blank --board <board>");
-      const made = await withApp((app) =>
-        opts.blank
-          ? newConfig(app, { name, from: "blank", board: opts.board as string })
-          : newConfig(app, { name, from: "config", config: opts.from as string, ...(opts.rev === undefined ? {} : { revision: opts.rev }), ...(opts.fromVersion === undefined ? {} : { version: opts.fromVersion }) }),
-      );
+      if (!opts.blank && opts.from === undefined) throw new UsageError("say what to start from: --from <config>, --from import <file> --board <board>, or --blank --board <board>");
+      if (importing && (opts.board === undefined || file === undefined)) throw new UsageError("--from import needs the file and --board: keyloom config new <name> --from import <file> --board <board>");
+      if (importing && (opts.rev !== undefined || opts.fromVersion !== undefined)) throw new UsageError("--rev and --from-version copy a config; leave them out with --from import");
+      if (!importing && file !== undefined) throw new UsageError("a file is only read with --from import");
+      const made = await withApp(async (app) => {
+        if (opts.blank) return newBlankConfig(app, { name, board: opts.board as string }, firmware);
+        if (importing) {
+          const out = await newConfigFromImport(app, { name, board: opts.board as string, source: file as string });
+          return { config: out.config, note: `Imported ${out.report.layers} layers of ${out.report.keysPerLayer} keys from ${file}` };
+        }
+        return { config: newConfig(app, { name, from: "config", config: opts.from as string, ...(opts.rev === undefined ? {} : { revision: opts.rev }), ...(opts.fromVersion === undefined ? {} : { version: opts.fromVersion }) }) };
+      });
+      const c = made.config;
+      const note = "note" in made ? made.note : undefined;
       print(io, format(), {
-        json: { config: configJson(made) },
-        ids: [made.id],
-        table: quiet() ? made.id : `${made.id}\n${made.name} on your ${made.boardName}${made.copiedFrom ? `, copied from ${made.copiedFrom.layoutName ?? made.copiedFrom.layoutId} at ${made.copiedFrom.revisionId}` : ", blank"}; not on the keyboard (keyloom config use "${made.name}")`,
+        json: { config: configJson(c), ...(note === undefined ? {} : { note }) },
+        ids: [c.id],
+        table: quiet() ? c.id : `${c.id}\n${c.name} on your ${c.boardName}${c.copiedFrom ? `, copied from ${c.copiedFrom.layoutName ?? c.copiedFrom.layoutId} at ${c.copiedFrom.revisionId}` : note === undefined ? "" : `. ${note}`}; not on the keyboard (keyloom config use "${c.name}")`,
       });
     });
 

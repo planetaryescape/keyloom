@@ -57,7 +57,7 @@ keyloom
   sync <layout> [--wait]                   build the head, flash it hands-free and check the keyboard came back running it
   sync status                              each board's state, and the config on its keyboard
   config list [--board B] [--archived]     a board's configs, marking the one on the keyboard
-  config new <name> --from <config> [--rev R | --from-version V] | --blank --board B
+  config new <name> --from <config> [--rev R | --from-version V] | --from import <file> --board B | --blank --board B
   config rename|archive|restore <config> [name]   archive hides a config; it refuses the one on the keyboard
   config delete <config> <name>            name typed again; refuses the one on the keyboard
   config use <config> [--wait]             make it the config on the keyboard and sync it once
@@ -124,7 +124,7 @@ The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor doe
 A config is a layout. Each board has one config on its keyboard (D-300); `keyloom sync <config>` refuses any other and names `keyloom config use`. All JSON carries `schema_version`.
 
 - `config list` prints `{ configs: [{ id, name, board_id, board_name, head_revision_id, created_at, updated_at, on_keyboard, archived_at, copied_from: { layout_id, layout_name, revision_id } | null }] }`. `config new|rename|archive|restore` print `{ config }`; `delete` prints `{ deleted: { id, name } }`. A taken name, a missing source and the refusals above are exit 2 or 3.
-- `config use` prints what `sync` prints, and has `sync`'s exit codes. The keyboard must be attached and running keyloom firmware, or it is exit 2 and the choice is unchanged. `config new` takes `--from-version`, not `--version`, which is the program's own flag.
+- `config use` prints what `sync` prints, and has `sync`'s exit codes. The keyboard must be attached and running keyloom firmware, or it is exit 2 and the choice is unchanged. `config new` takes `--from-version`, not `--version`, which is the program's own flag. `--blank` starts from the board's firmware default keymap where keyloom can read one, else the empty Base layer, and `config new` prints the note saying which and why (JSON: `note`). `--from import <file> --board B` reads a file with the importers `keyloom import` runs (D-370, D-371).
 - `version list` prints `{ layout_id, head_revision_id, pending: [revision], versions: [{ id, revision_id, name, put_on_at, ended_at, current, summary, created_at, revisions: [revision] }] }`. `pending` is revisions newer than the newest version. A version with `put_on_at: null` was named without being put on a keyboard.
 - `version compare` prints `{ layout_id, from, to, same, keys: [{ layer_id, layer_name, position, before, after, before_label, after_label }], layers_added, layers_removed, layers_renamed, layers_reordered, lighting, macros, tap_dances, combos, hold_tap_profiles, settings, passthrough }`. `before` is the revision's binding and `after` the head's.
 - `version restore` prints `{ revision_id, restored_revision_id }` and is refused like `undo --to` (exit 4 for a rule it would break, exit 2 for no change).

@@ -6,7 +6,10 @@ import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
 import { getBoardConfig } from "../../src/persistence/configs.ts";
 import { BOARD, type SyncWorld, syncWorld } from "../helpers/fake-sync.ts";
+import { FIXTURE_DIR } from "../helpers/board.ts";
+import { defaultKeymapTree, emptyTree } from "../helpers/default-keymaps.ts";
 import { setKey } from "../helpers/ops.ts";
+import { tempDir } from "../helpers/tmp.ts";
 
 let current: SyncWorld | undefined;
 afterEach(async () => {
@@ -15,11 +18,11 @@ afterEach(async () => {
 });
 
 type Result = { code: number; out: string; err: string };
-async function cli(w: SyncWorld, args: string[]): Promise<Result> {
+async function cli(w: SyncWorld, args: string[], fetchText = defaultKeymapTree()): Promise<Result> {
   let out = "";
   let err = "";
   const io: Io = { out: (t) => void (out += t), err: (t) => void (err += t), isTTY: false };
-  const code = await runCli([...args, "--data-dir", w.app.dataDir], io, {}, undefined, w.deps);
+  const code = await runCli([...args, "--data-dir", w.app.dataDir], io, {}, undefined, w.deps, undefined, { fetchText, cacheDir: tempDir() });
   return { code, out, err };
 }
 const json = (r: Result) => JSON.parse(r.out);
@@ -58,11 +61,47 @@ describe("keyloom config", () => {
     const blank = await cli(w, ["config", "new", "Steno", "--blank", "--board", BOARD, "--format", "json"]);
     expect(blank.code).toBe(0);
     expect(json(blank).config.copied_from).toBeNull();
+    expect(json(blank).note).toContain("default keymap");
 
     for (const args of [["config", "new", "x"], ["config", "new", "x", "--blank"], ["config", "new", "x", "--blank", "--board", BOARD, "--from", w.layoutId], ["config", "new", "synchronized", "--from", w.layoutId]]) {
       expect((await cli(w, args)).code).toBe(2);
     }
     expect((await cli(w, ["config", "new", "x", "--from", "nope"])).code).toBe(3);
+  });
+
+  test("blank without a default keymap falls back to the Base layer and says why", async () => {
+    const w = await world();
+    const blank = await cli(w, ["config", "new", "Steno", "--blank", "--board", "foostan/corne"], emptyTree);
+    expect(blank.code).toBe(0);
+    expect(blank.out).toContain("no default keymap");
+    expect(getLayout(w.app, "Steno").document.layers.map((l) => l.name)).toEqual(["Base"]);
+  });
+
+  test("new --from import reads a file into a config that is not on the keyboard, and use then puts it there", async () => {
+    const w = await world();
+    w.flashed();
+    const made = await cli(w, ["config", "new", "Imported", "--from", "import", FIXTURE_DIR, "--board", BOARD, "--format", "json"]);
+    expect(made.code).toBe(0);
+    expect(json(made)).toMatchObject({ config: { name: "Imported", board_id: BOARD, on_keyboard: false, copied_from: null }, note: expect.stringContaining("Imported") });
+    const id = json(made).config.id as string;
+    expect(getLayout(w.app, id).revision.origin).toBe("import");
+    expect(getBoardConfig(w.app.db, BOARD)).toBe(w.layoutId);
+    const used = await cli(w, ["config", "use", "Imported", "--format", "json"]);
+    expect(used.code).toBe(0);
+    expect(json(used)).toMatchObject({ status: "synced", layout_id: id });
+    expect(getBoardConfig(w.app.db, BOARD)).toBe(id);
+    expect(w.calls.flashes).toHaveLength(1);
+  });
+
+  test("new --from import needs the file and the board, and refuses a taken name or a missing file", async () => {
+    const w = await world();
+    for (const args of [["config", "new", "x", "--from", "import", "--board", BOARD], ["config", "new", "x", "--from", "import", FIXTURE_DIR], ["config", "new", "x", "--from", "import", FIXTURE_DIR, "--board", BOARD, "--rev", "r"], ["config", "new", "x", "--from", w.layoutId, FIXTURE_DIR]]) {
+      expect((await cli(w, args)).code).toBe(2);
+    }
+    const taken = await cli(w, ["config", "new", "synchronized", "--from", "import", FIXTURE_DIR, "--board", BOARD]);
+    expect(taken.code).toBe(2);
+    expect(taken.err).toContain("already exists; pick another name");
+    expect((await cli(w, ["config", "new", "x", "--from", "import", "/nope/nothing", "--board", BOARD])).code).toBe(2);
   });
 
   test("rename, archive, restore and delete", async () => {

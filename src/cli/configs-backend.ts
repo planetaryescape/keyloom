@@ -1,8 +1,8 @@
 // The server's configs and versions interface over the app (rung 23). The server stays ignorant of storage and the sync
 // engine; this adapter is the one place that knows both.
 import {
-  NotFoundError, StaleBaseError, UsageError, ValidationFailedError, archiveConfig, compareRevision, deleteConfig, listConfigs, nameVersion, newConfig, openProposalsOutsideChat, renameConfig, restoreConfig,
-  restoreVersion, versionHistory, ValidationResultSchema, type App,
+  NotFoundError, StaleBaseError, UsageError, ValidationFailedError, archiveConfig, compareRevision, deleteConfig, listConfigs, nameVersion, newBlankConfig, newConfig, newConfigFromUpload, openProposalsOutsideChat, renameConfig, restoreConfig,
+  restoreVersion, versionHistory, ValidationResultSchema, type App, type GeometryOptions,
 } from "../app/index.ts";
 import type { SyncEngine } from "../app/sync-engine.ts";
 import { ConfigsError, type ConfigsBackend } from "../server/configs-backend.ts";
@@ -20,13 +20,26 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-export function appConfigsBackend(app: App, engine: SyncEngine): ConfigsBackend {
+/** `firmware` is where a blank config's default keymap is read from; tests pass fixtures, otherwise the pinned tree on GitHub (D-370). */
+export function appConfigsBackend(app: App, engine: SyncEngine, firmware: GeometryOptions = {}): ConfigsBackend {
   return {
     list: (opts) => translate(() => listConfigs(app, { ...(opts.board === undefined ? {} : { board: opts.board }), includeArchived: opts.includeArchived })),
     create: (request) =>
-      translate(() => (request.from === "blank" ? newConfig(app, request) : newConfig(app, {
-        name: request.name, from: "config", config: request.config, ...(request.revision === undefined ? {} : { revision: request.revision }), ...(request.version === undefined ? {} : { version: request.version }),
-      }))),
+      translate(async () => {
+        if (request.from === "blank") {
+          const made = await newBlankConfig(app, request, firmware);
+          return { config: made.config, note: made.note };
+        }
+        if (request.from === "import") {
+          const made = await newConfigFromUpload(app, { name: request.name, board: request.board, filename: request.filename, bytes: Buffer.from(request.data, "base64") });
+          return { config: made.config };
+        }
+        return {
+          config: newConfig(app, {
+            name: request.name, from: "config", config: request.config, ...(request.revision === undefined ? {} : { revision: request.revision }), ...(request.version === undefined ? {} : { version: request.version }),
+          }),
+        };
+      }),
     rename: (ref, name) => translate(() => renameConfig(app, ref, name)),
     archive: (ref) => translate(() => archiveConfig(app, ref)),
     restore: (ref) => translate(() => restoreConfig(app, ref)),

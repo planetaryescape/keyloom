@@ -1,4 +1,4 @@
-import type { CompareResponse, NewConfigRequest, ApiConfig, VersionHistoryResponse } from "../api/configs.ts";
+import type { CompareResponse, NewConfigRequest, NewConfigResponse, ApiConfig, VersionHistoryResponse } from "../api/configs.ts";
 import type { ProposalCard, SyncNowResponse } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 
@@ -6,7 +6,7 @@ import type { ValidationResult } from "../validation/result.ts";
 // implementation, so the server knows nothing about storage or the sync engine.
 export interface ConfigsBackend {
   list(opts: { board?: string; includeArchived: boolean }): Promise<ApiConfig[]>;
-  create(request: NewConfigRequest): Promise<ApiConfig>;
+  create(request: NewConfigRequest): Promise<NewConfigResponse>;
   rename(ref: string, name: string): Promise<ApiConfig>;
   archive(ref: string): Promise<ApiConfig>;
   restore(ref: string): Promise<ApiConfig>;

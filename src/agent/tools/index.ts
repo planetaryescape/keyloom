@@ -9,6 +9,7 @@ import { listLayoutsTool } from "./list-layouts.ts";
 import { mapKeysTool } from "./map-keys.ts";
 import { mirrorKeysTool } from "./mirror-keys.ts";
 import { proposeChangesTool } from "./propose-changes.ts";
+import { putConfigTool } from "./put-config.ts";
 import { recordPriorityTool } from "./record-priority.ts";
 import { updateDecisionOutcomeTool } from "./update-decision-outcome.ts";
 
@@ -26,6 +27,7 @@ export function createTools(ports: AgentPorts, recorder: TurnRecorder, events: T
     proposeChangesTool(ports, recorder, events.onProposal),
     mirrorKeysTool(ports),
     mapKeysTool(ports),
+    putConfigTool(ports),
     getTypingFindingsTool(ports),
   ];
 }

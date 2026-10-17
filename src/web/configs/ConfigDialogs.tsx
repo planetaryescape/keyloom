@@ -128,8 +128,9 @@ type Start = "copy" | "version" | "blank" | "file";
 type Versions = VersionHistoryResponse["versions"];
 
 /**
- * A new config (c4, D-315): a name, then where it starts. "Blank" is one empty layer sized to the board (D-306: boards carry no
- * default keymap). "A file" hands over to the import screen. It never goes on the keyboard by itself.
+ * A new config (c4, D-315): a name, then where it starts. "Blank" is the board's firmware default keymap where keyloom can read one,
+ * else one empty layer sized to the board (D-370); the History entry says which. "A file" hands over to the import screen, which posts the
+ * file to /api/import, the same importers the new-config route's `from: "import"` runs (D-371). It never goes on the keyboard by itself.
  */
 export function NewConfigDialog({ token, source, boardId, boardName, start: initialStart = "copy", version: initialVersion, onCreate, onImport, onClose }: {
   token: string;
@@ -230,7 +231,7 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
                 </select>
               ) : null,
             )}
-        {choice("blank", "Blank", "One empty layer to start from")}
+        {choice("blank", "Blank", "The keyboard's own default keymap where keyloom can get it, otherwise one empty layer")}
         {choice("file", "A file", "Oryx, QMK keymap.c or ZMK .keymap")}
       </fieldset>
       {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
