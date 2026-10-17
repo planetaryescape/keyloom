@@ -9,6 +9,8 @@ This log holds every decision from the planning conversation (2026-09-28 and 202
 
 Change a decision only by adding a new entry that replaces the old one.
 
+Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
+
 ## The arc, briefly
 
 1. BK pitched the idea on 2026-09-28. He's a keyboard enthusiast who owns several ergonomic boards. He wants "one configurator to rule them all" for QMK and ZMK, with a chat agent he can describe his habits and layout to, which "is able to just go rip and build the thing for me" and suggest improvements.
