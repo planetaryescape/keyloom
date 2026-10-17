@@ -150,6 +150,17 @@
   cursor: pointer;
 }
 
+a.menu-item {
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+}
+
+.menu-version {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
 .menu-item-label {
   flex: 1;
 }
