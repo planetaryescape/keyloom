@@ -190,6 +190,19 @@ describe("Host check covers the page and its assets", () => {
     }
   });
 
+  test("Instrument Sans is served from the app itself, so the page works offline (D-326)", async () => {
+    const { port } = start();
+    const host = { host: `127.0.0.1:${port}` };
+    const html = await (await api(port, "/", host)).text();
+    expect(html).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
+    const cssPath = html.match(/href="(?:\.)?(\/[^"]+\.css)"/)?.[1];
+    const css = await (await api(port, cssPath!, host)).text();
+    expect(css).not.toContain("fonts.googleapis.com");
+    // The bundler inlines the two subsets into the stylesheet, so no font request leaves the app at all.
+    const faces = css.match(/@font-face\{[^}]*Instrument Sans[^}]*url\(data:font\/woff2;base64,/g) ?? [];
+    expect(faces).toHaveLength(2);
+  });
+
   test("an unknown path or a traversal attempt is 403 for a foreign Host, and 404 for the right one", async () => {
     const { port } = start();
     for (const path of ["/nope", "/../../etc/passwd", "/%2e%2e/secret"]) {

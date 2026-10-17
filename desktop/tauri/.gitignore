@@ -1,0 +1,7 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+# The keyloom release binary, copied in by scripts/fetch-sidecar.sh; ~68 MB.
+src-tauri/binaries/
+# Holds the updater's public key in CI; never committed.
+tauri.updater.json

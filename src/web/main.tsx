@@ -5,6 +5,7 @@ import { tokenFromSearch } from "./api.ts";
 import { Header } from "./shell/Header.tsx";
 import { ErrorState } from "./shell/States.tsx";
 import { applyTheme, readTheme } from "./shell/theme.ts";
+import "./fonts/fonts.css";
 import "./tokens.css";
 import "./app.css";
 import "./shell/shell.css";

@@ -1159,6 +1159,30 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 ### D-322: Browser mode stays; the desktop app is a client of the same server. (Claude)
 - **Why:** a phone or another machine still reaches keyloom, and the app adds no second code path.
 
+### D-323: One keyloom server serves a data directory; the app attaches to a live one instead of starting its own. (Rung 24, Claude)
+- **Why:** each `keyloom serve` runs its own sync engine and board review over the same database. Syncs are guarded across processes, but the review and the auto-sync decision are not, and nothing stopped a second server. BK already runs one on port 4477.
+- **How:** a server writes `serve.json` in the data directory (pid, token URL, mode 0600) and removes it on exit; a record counts only if its pid exists and the server answers with its token. `keyloom serve` refuses to start beside a live server; `--reuse` prints that server's URL and exits 0. The shell passes `--reuse`, attaches, and never stops a server it did not start. The check runs before the database opens, so a refused start runs no migration.
+- **Limit:** a server started before this change writes no record, so it is not found. The app then starts its own until that server is restarted. If an attached server goes away, the shell starts its own after three failed reads.
+
+### D-324: The shell stays behind flags the CLI owns: `--exit-on-stdin-close` and `--reuse`, not always-on behaviour. (Rung 24, Claude)
+- **Why:** D-321 has the server exit when stdin closes, but a server started by launchd, `nohup` or `< /dev/null` has a closed stdin, so doing it by default would stop such a server at once. The shell opts in; this refines D-321.
+
+### D-325: The server words everything the menu bar and notifications say. (Rung 24, Claude)
+- **Why:** the spike's Rust re-implemented the header's wording and the transition rules. Product text in Rust drifts from the web app and can't be tested with it. `menuBar` in each `/api/events` frame (`src/server/menu-bar.ts`) reuses `syncLine` and `syncNotice`; the shell displays strings, enables Sync now when `syncLayoutId` is set, and shows `notices`.
+- **Unplugged is not news:** a board that is not connected with nothing waiting for it does not decide the summary; "All keyboards are on their latest change" shows instead.
+
+### D-326: Instrument Sans is bundled into the web app, for the desktop window and the browser alike. (Rung 24, Claude)
+- **Why:** the window must work offline, and one code path beats a desktop-only font. Two woff2 subsets (latin, latin-ext; about 76 KB) with the OFL licence in `src/web/fonts/`, inlined by the bundler. The Google Fonts links are gone, which also removes a request to a third party.
+
+### D-327: The shell is signed with hardened runtime and one entitlements file applied to both binaries. (Rung 24, Claude)
+- **Observed:** Tauri applies `bundle.macOS.entitlements` to the sidecar and to the shell. The shell then carries `allow-jit` and the other two entitlements it does not need. Per-binary entitlements would mean signing by hand around Tauri's bundler; not worth it for a thin shell. Revisit if notarisation objects.
+
+### D-328: The updater is compiled in only with the `updater` Cargo feature, and the release job turns it on only when its keys exist. (Rung 24, Claude)
+- **Why:** Tauri's updater needs its own key and refuses to start without a public key, and BK has not generated one. Compiling it out means a build without a key cannot half-work. Setup is in `desktop/tauri/README.md`.
+
+### D-329: Signing, notarisation and the updater each switch on their own secrets; without them the release still ships the app, marked. (Rung 24, Claude)
+- The `build-desktop` job (macos-15) builds always, signs when the certificate secrets exist, notarises when an API key or Apple ID set exists, and appends a note to the release when it did not notarise. The cask in `packaging/homebrew/` is prepared in the repo and pushed to the tap by hand.
+
 ### D-310: A conversation reads in a full-height panel beside the board; the bar is for quick asks. (BK on v0.25.0, Claude)
 - **BK:** "I don't like this version of the ai, it's short so i have to scroll a lot to read, plus it's on top of the layer switcher."
 - Once a reply runs past about two lines of the bar (180 characters), carries an option, a priority or a failure, or there is a second message, ⌘K moves the conversation to a panel on the right of the stage, from below the top bar to the bottom edge, about 65 characters a line (`--chat-width`). It reads top to bottom and scrolls only when the conversation is taller than the panel, resting on the newest exchange. The board moves left whole and re-fits to the width that's left, at the legend floor; proposals still light its caps. The layer strip stays in view under the board, a size smaller.
