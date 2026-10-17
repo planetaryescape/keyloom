@@ -68,6 +68,16 @@ describe("buildZmk (fake docker)", () => {
     expect((await Bun.file(again.dockerLog).text()).includes("\nbuild ") || (await Bun.file(again.dockerLog).text()).startsWith("build ")).toBe(false);
   });
 
+  test("hashes the config files, the module and default.nix inside the container before the build, and waits out a stale view", async () => {
+    const s = await setup();
+    await s.build("ok", { FAKE_STALE_CALLS: "2" });
+    const calls = (await Bun.file(s.dockerLog).text()).split("\n");
+    const hashes = calls.filter((l) => l.includes("--entrypoint sha256sum"));
+    expect(hashes).toHaveLength(3);
+    for (const f of ["config/default.nix", "config/glove80.keymap", "keyloom-zmk/CMakeLists.txt"]) expect(hashes[0]).toContain(`/config/${f}`);
+    expect(calls.lastIndexOf(hashes[2] as string)).toBeLessThan(calls.findIndex((l) => l.includes(" --name keyloom-test ")));
+  });
+
   test("the image tag names the firmware ref and the Dockerfile, so a change to either builds a new image", () => {
     expect(imageTag(ZMK_SHA)).toMatch(/^keyloom-glove80:ce69e85f585c-[0-9a-f]{10}$/);
     expect(imageTag("0".repeat(40))).not.toBe(imageTag(ZMK_SHA));
@@ -77,7 +87,7 @@ describe("buildZmk (fake docker)", () => {
     const s = await setup();
     await s.build("ok");
     await expect(s.build("nobin")).rejects.toThrow(/glove80\.uf2 was not produced/);
-    const probe = (await Bun.file(s.dockerLog).text()).split("\n").filter((l) => l.includes("--entrypoint sh"));
+    const probe = (await Bun.file(s.dockerLog).text()).split("\n").filter((l) => l.includes("--entrypoint sh "));
     expect(probe).toHaveLength(2);
     expect(probe[0]).toContain("rm -f glove80.uf2");
   });

@@ -11,7 +11,7 @@ import { buildZmkWest, westManifest, westScript } from "../../../src/firmware/zm
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { uf2Problem } from "../../../src/firmware/toolchain/uf2.ts";
 import { templateCopy } from "../../helpers/board-recipes.ts";
-import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
+import { fakeBinDir, fakeSha256Probe, withPath } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import { uf2Image } from "../../helpers/zmk.ts";
 
@@ -22,6 +22,7 @@ esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/work}"; prev="$a"; done
+${fakeSha256Probe("/work")}
 case " $* " in *" test -f config/west.yml "*) [ -f "$vol/config/west.yml" ] && exit 0 || exit 1;; esac
 case "$FAKE_MODE" in
   ok) for t in left right; do mkdir -p "$vol/build/$t/zephyr"; cp "$FAKE_UF2" "$vol/build/$t/zephyr/zmk.uf2"; done; echo "Wrote zmk.uf2"; exit 0;;
@@ -87,6 +88,16 @@ describe("buildZmkWest (fake docker)", () => {
     expect(run).toContain("west build -p always -s zmk/app -d build/left -b nice_nano_v2 -- -DSHIELD=board_left -DZMK_CONFIG=/work/config");
     expect(run).toContain("-DSHIELD=board_right");
     expect(run.indexOf("west update")).toBeLessThan(run.indexOf("west build"));
+  });
+
+  test("hashes west.yml and the config files inside the container before west runs, and waits out a stale view", async () => {
+    const s = await setup();
+    await s.build("ok", { FAKE_STALE_CALLS: "2" });
+    const calls = (await Bun.file(s.dockerLog).text()).split("\n");
+    const hashes = calls.filter((l) => l.includes("--entrypoint sha256sum"));
+    expect(hashes).toHaveLength(3);
+    for (const f of ["west.yml", "board.keymap", "board.conf"]) expect(hashes[0]).toContain(`/work/config/${f}`);
+    expect(calls.lastIndexOf(hashes[2] as string)).toBeLessThan(calls.findIndex((l) => l.includes(" --name keyloom-test ")));
   });
 
   test("the script clears old output inside the container and stops at the first failing target", async () => {

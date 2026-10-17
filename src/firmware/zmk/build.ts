@@ -6,6 +6,7 @@ import type { BoardDefinition } from "../../boards/schema.ts";
 import { BuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
+import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { writeFresh } from "../toolchain/write-fresh.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
 import { zmkRevision } from "./board-config.ts";
@@ -13,7 +14,7 @@ import type { GeneratedSource } from "./generate.ts";
 import { ImageBuildError, ensureImage } from "./image.ts";
 import { GLOVE80_NIX, halfConfFile, moduleReport } from "./handsfree.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
-import { writeModule } from "./module.ts";
+import { MODULE_DIR, MODULE_FILES, writeModule } from "./module.ts";
 import { CONF_FILE, KEYMAP_FILE } from "./files.ts";
 import { describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 
@@ -72,6 +73,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       }
 
       // The template's build reads config/glove80.keymap and config/glove80.conf (default.nix).
+      const written = input.source.files.map((f) => join(input.checkoutDir, "config", f.path));
       for (const f of input.source.files) await writeFresh(join(input.checkoutDir, "config", f.path), f.content);
       const uid = process.getuid?.() ?? 1000;
       const gid = process.getgid?.() ?? 1000;
@@ -97,10 +99,15 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
         // an earlier build must not be used in its place.
         for (const half of handsFree.halves) {
           const path = halfConfFile(half.marker);
-          if (!input.source.files.some((f) => f.path === path)) await writeFresh(join(input.checkoutDir, "config", path), "# keyloom: no build marker\n");
+          if (!input.source.files.some((f) => f.path === path)) {
+            await writeFresh(join(input.checkoutDir, "config", path), "# keyloom: no build marker\n");
+            written.push(join(input.checkoutDir, "config", path));
+          }
         }
         await writeFresh(join(input.checkoutDir, "config", "default.nix"), GLOVE80_NIX);
+        written.push(join(input.checkoutDir, "config", "default.nix"), ...Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)));
       }
+      await awaitMountedFiles({ image, mountArgs: mount, hostRoot: input.checkoutDir, containerRoot: "/config", files: written, log: input.log, ...(input.signal ? { signal: input.signal } : {}) });
 
       const output: string[] = [];
       say(`keyloom: building glove80.uf2 from moergo-sc/zmk ${rev.source.ref} (${rev.source.sha.slice(0, 9)}) in ${image}`);

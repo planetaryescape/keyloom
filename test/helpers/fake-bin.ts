@@ -45,6 +45,26 @@ export function dfuImage(bootloader: string, payloadBytes = 64): Uint8Array {
   return out;
 }
 
+/**
+ * The part of a fake docker that answers keyloom's "does the container see the files as written" check
+ * (`--entrypoint sha256sum`). It needs `$vol`, the host folder behind the mount, and `root`, where the
+ * container sees it. FAKE_STALE_CALLS=N makes the first N checks report a wrong hash for every file, as a
+ * stale sshfs view does; FAKE_STALE_CALLS=forever never settles. Calls are counted in "$FAKE_DOCKER_LOG.sha".
+ */
+export const fakeSha256Probe = (root: string): string => `
+case " $* " in *" --entrypoint sha256sum "*)
+  n=1000000; if [ -n "$FAKE_DOCKER_LOG" ]; then n=$(cat "$FAKE_DOCKER_LOG.sha" 2>/dev/null || echo 0); echo $((n+1)) > "$FAKE_DOCKER_LOG.sha"; fi
+  stale="\${FAKE_STALE_CALLS:-0}"; [ "$stale" = forever ] && stale=1000000
+  rc=0
+  for a in "$@"; do case "$a" in ${root}/*)
+    if [ ! -f "$vol/\${a#${root}/}" ]; then echo "sha256sum: $a: No such file or directory" >&2; rc=1; continue; fi
+    if [ "$n" -lt "$stale" ]; then hash=0000000000000000000000000000000000000000000000000000000000000000
+    else hash=$(shasum -a 256 "$vol/\${a#${root}/}" | cut -d' ' -f1); fi
+    printf '%s  %s\\n' "$hash" "$a";;
+  esac; done
+  exit $rc;;
+esac`;
+
 // Stands in for `docker`: `version`, `rm`, the "can the container see the checkout" probe, and `make`.
 // Modes (FAKE_MODE): ok, nobin, compile, disk, hang, nodaemon.
 export const FAKE_DOCKER = `
@@ -55,6 +75,7 @@ esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/qmk_firmware}"; prev="$a"; done
+${fakeSha256Probe("/qmk_firmware")}
 case " $* " in *" test -f Makefile "*) [ -f "$vol/Makefile" ] && exit 0 || exit 1;; esac
 for a in "$@"; do target="$a"; done
 id="$(echo "\${target%%:*}" | tr / _)_keyloom"

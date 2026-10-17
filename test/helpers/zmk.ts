@@ -77,6 +77,7 @@ esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/config}"; prev="$a"; done
+${fakeSha256Probe("/config")}
 case " $* " in *" --entrypoint sh "*) [ -f "$vol/config/default.nix" ] || exit 1; rm -f "$vol/glove80.uf2"; exit 0;; esac
 case "$FAKE_MODE" in
   ok) cp "$FAKE_UF2" "$vol/glove80.uf2"; echo "building zmk_glove80_lh.drv"; exit 0;;
@@ -95,7 +96,7 @@ import { join as joinPath } from "node:path";
 import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { closeApp, importLayout, openApp } from "../../src/app/index.ts";
-import { FAKE_GIT, fakeBinDir, withPath } from "./fake-bin.ts";
+import { FAKE_GIT, fakeBinDir, fakeSha256Probe, withPath } from "./fake-bin.ts";
 
 export async function zmkEnv(opts: { keymap?: string } = {}) {
   const root = tempDir();

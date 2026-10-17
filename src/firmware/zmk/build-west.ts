@@ -8,13 +8,14 @@ import { zipSync } from "fflate";
 import type { ZmkWestDockerBuild } from "../../boards/recipes.ts";
 import { BuildFailure } from "../toolchain/build-failure.ts";
 import { withLock } from "../toolchain/lock.ts";
+import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { writeFresh } from "../toolchain/write-fresh.ts";
 import { run } from "../toolchain/run.ts";
 import { describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import { zmkRevision } from "./board-config.ts";
 import { BUILD_TIMEOUT_MS, type ZmkBuildInput, type ZmkBuildResult, hint } from "./build.ts";
 import { moduleReport } from "./handsfree.ts";
-import { MODULE_DIR, OVERLAY_FILE, writeModule } from "./module.ts";
+import { MODULE_DIR, MODULE_FILES, OVERLAY_FILE, writeModule } from "./module.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
 
 /** The user config's manifest: ZMK at the pinned SHA, with its own `app/west.yml` for Zephyr and the modules. */
@@ -72,6 +73,20 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       if (visible.exitCode !== 0) {
         throw new BuildFailure(`Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
       }
+
+      await awaitMountedFiles({
+        image: build.image,
+        mountArgs: base.slice(3),
+        hostRoot: input.checkoutDir,
+        containerRoot: "/work",
+        files: [
+          join(config, "west.yml"),
+          ...input.source.files.map((f) => join(config, f.path)),
+          ...(handsFree ? Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)) : []),
+        ],
+        log: input.log,
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
 
       const output: string[] = [];
       say(`keyloom: building ${build.targets.map((t) => t.shield).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads Zephyr and takes a while`);

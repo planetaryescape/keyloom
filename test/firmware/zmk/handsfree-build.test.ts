@@ -14,7 +14,7 @@ import { generateZmkSource } from "../../../src/firmware/zmk/generate.ts";
 import { GLOVE80_NIX, RELAY_BAUD, LOCAL_BAUD, halfConfFile, handsFreeConf, keyInArtifact, moduleReport } from "../../../src/firmware/zmk/handsfree.ts";
 import { MODULE_DIR, MODULE_FILES, OVERLAY_FILE, writeModule } from "../../../src/firmware/zmk/module.ts";
 import { importZmkSource } from "../../../src/firmware/zmk/import.ts";
-import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
+import { fakeBinDir, fakeSha256Probe, withPath } from "../../helpers/fake-bin.ts";
 import { OLD_KEY, glove80Image, serialOf, uf2Carrying } from "../../helpers/fake-zmk-halves.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import { TEMPLATE_FIXTURE, boardWithTemplate, combinedUf2, templateRepo, uf2Image } from "../../helpers/zmk.ts";
@@ -188,6 +188,7 @@ describe("west builds with the module (Corne)", () => {
       docker: `echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/work}"; prev="$a"; done
+${fakeSha256Probe("/work")}
 case " $* " in *" test -f config/west.yml "*) exit 0;; esac
 for t in left right; do mkdir -p "$vol/build/$t/zephyr"; cp "$FAKE_UF2" "$vol/build/$t/zephyr/zmk.uf2"; done; exit 0`,
     });
@@ -228,6 +229,7 @@ describe("the Glove80 build with the module (fake docker)", () => {
       docker: `case "$1" in version) echo 28.0.0; exit 0;; image) exit 0;; esac
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/config}"; prev="$a"; done
+${fakeSha256Probe("/config")}
 case " $* " in *" --entrypoint sh "*) exit 0;; esac
 cp "$FAKE_UF2" "$vol/glove80.uf2"; exit 0`,
       git: `exec /usr/bin/git "$@"`,
