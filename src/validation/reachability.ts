@@ -2,6 +2,7 @@
 // document; the rules in rules.ts compare the answers for the layout before and after a change.
 import type { Slot } from "../layout/change.ts";
 import { bindingFunctions, tapDanceSlots } from "../layout/functions.ts";
+import { renumber, withLayerNumbers } from "../layout/layer-refs.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
 
 export type LayerAction = "momentary" | "toggle" | "to" | "oneShot";
@@ -13,12 +14,22 @@ export type LayerEdge = { from: string; to: string; action: LayerAction; slot?: 
 // They name layers by index, the same pinning passthrough_layer_index guards.
 const QMK_LAYER_MACROS: Record<string, LayerAction> = { MO: "momentary", LT: "momentary", TT: "momentary", OSL: "oneShot", TG: "toggle", TO: "to", DF: "to" };
 
+const renumbered = new WeakMap<Layout, Layout>();
+const numbered = (doc: Layout): Layout => {
+  let out = renumbered.get(doc);
+  if (out === undefined) renumbered.set(doc, (out = withLayerNumbers(doc)));
+  return out;
+};
+
 /**
  * A native binding's QMK layer macro, looking through one `#define NAME ...` kept in a passthrough
  * block (Oryx writes a layer-tap with a dual function as `#define DUAL_FUNC_0 LT(5, KC_4)`). Without this,
  * the layer only that key reaches would look unreachable on a layout where it works.
  */
-function nativeLayerTarget(b: Extract<Binding, { kind: "native" }>, doc: Layout): { layerId: string; action: LayerAction } | undefined {
+function nativeLayerTarget(binding: Extract<Binding, { kind: "native" }>, current: Layout): { layerId: string; action: LayerAction } | undefined {
+  // Kept source numbers layers as they were when it was imported; the graph is of the layers as they are now.
+  const doc = numbered(current);
+  const b = { ...binding, source: renumber(binding.source, binding.layerRefs, doc.layers.map((l) => l.id)) };
   if (b.firmware === "zmk") return zmkLayerTarget(b.source, doc);
   if (b.firmware !== "qmk") return undefined;
   const define = !/^\w+$/.test(b.source) ? undefined : doc.passthrough.map((p) => new RegExp(`^\\s*#define\\s+${b.source}\\s+(.+?)\\s*$`, "m").exec(p.source)?.[1]).find((v) => v !== undefined);

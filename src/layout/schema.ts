@@ -28,6 +28,15 @@ export const HoldActionSchema = z.union([
 ]);
 export type HoldAction = z.infer<typeof HoldActionSchema>;
 
+// Where kept firmware source names a layer by number. `layerRefs` are the number literals keyloom proved to be layer numbers
+// (offsets into `source`), tied to the layer by id so a reorder can renumber them; `unprovable` are the lines that
+// use a layer number in a way keyloom can't rewrite. Both are absent on a layout stored before keyloom read them.
+export const LayerRefSchema = z.object({ start: z.number().int().nonnegative(), end: z.number().int().positive(), layerId: z.string().min(1) });
+export type LayerRef = z.infer<typeof LayerRefSchema>;
+export const UnprovableLineSchema = z.object({ line: z.number().int().positive(), text: z.string() });
+export type UnprovableLine = z.infer<typeof UnprovableLineSchema>;
+const layerNumberFields = { layerRefs: z.array(LayerRefSchema).optional(), unprovable: z.array(UnprovableLineSchema).optional() };
+
 export const BindingSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("key"), code: KeyCodeNameSchema, mods: mods.optional() }),
   z.object({ kind: z.literal("modifier"), mods }),
@@ -52,6 +61,7 @@ export const BindingSchema = z.discriminatedUnion("kind", [
     firmware: FirmwareSchema,
     source: z.string().min(1),
     label: z.string().min(1),
+    ...layerNumberFields,
   }),
 ]);
 export type Binding = z.infer<typeof BindingSchema>;
@@ -154,8 +164,9 @@ export const PassthroughSchema = z.object({
   file: z.string().min(1),
   anchor: z.string().min(1),
   source: z.string(),
-  // True when the source refers to layers by index (S3), which pins layer order.
+  // True when the source refers to layers by index (S3). With `layerRefs` it follows the layers; without, it pins their order.
   refersToLayerIndices: z.boolean(),
+  ...layerNumberFields,
 });
 export type Passthrough = z.infer<typeof PassthroughSchema>;
 

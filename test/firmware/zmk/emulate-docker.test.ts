@@ -5,6 +5,8 @@
 //   KEYLOOM_DOCKER_TESTS=zmk bun test test/firmware/zmk/emulate-docker.test.ts   (KEYLOOM_DOCKER_TESTS=1 runs it too)
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { applyOps } from "../../../src/layout/apply-ops.ts";
+import type { Layout } from "../../../src/layout/schema.ts";
 import { checkoutDirFor } from "../../../src/app/firmware.ts";
 import { loadBoardDir } from "../../../src/boards/load.ts";
 import { parseScript } from "../../../src/firmware/emulate/script.ts";
@@ -14,15 +16,16 @@ import { generateZmkSource } from "../../../src/firmware/zmk/generate.ts";
 import { importZmkSource } from "../../../src/firmware/zmk/import.ts";
 import { cacheDir } from "../../../src/persistence/paths.ts";
 import { tempDir } from "../../helpers/tmp.ts";
-import { STYLE_FIXTURE } from "../../helpers/zmk.ts";
+import { STYLE_FIXTURE, TEMPLATE_FIXTURE } from "../../helpers/zmk.ts";
 
 const gated = ["1", "zmk"].includes(process.env.KEYLOOM_DOCKER_TESTS ?? "") ? describe : describe.skip;
 const TIMEOUT = 280_000;
 const ROOT = `${import.meta.dir}/../../..`;
 
-async function emulate(boardDir: string, keymap: string, script: string) {
+async function emulate(boardDir: string, keymap: string, script: string, edit: (layout: Layout) => Layout = (l) => l) {
   const board = await loadBoardDir(`${ROOT}/${boardDir}`);
-  const { layout } = await importZmkSource(keymap, board.definition);
+  const imported = await importZmkSource(keymap, board.definition);
+  const layout = edit(imported.layout);
   const rev = board.definition.revisions[0];
   const source = generateZmkSource({
     layout, board: board.definition, geometry: board.geometry, revisionId: "rev_test",
@@ -72,6 +75,35 @@ gated("the Glove80 (moergo-sc/zmk in the MoErgo image)", () => {
     expect(consumer.map((x) => x.usages)).toEqual([["AUDIO_VOL_UP"], []]);
     expect(r.reports.filter((x) => x.kind === "keyboard").every((x) => x.keys.length === 0)).toBe(true);
     expect(r.text).toBe("");
+  }, TIMEOUT);
+});
+
+gated("the Glove80 with a layer moved, on MoErgo's own default keymap (D-360)", () => {
+  // The factory test layer goes from last to second, so Lower and Magic each move one place right. The keymap's #defines,
+  // the kept tap dance and the kept &magic all name layers by number.
+  const moveFactoryLeft = (layout: Layout): Layout => {
+    const r = applyOps(layout, [{ op: "moveLayer", layerId: "factory-test-layer", afterLayerId: "default-layer" }]);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.layout.layers.map((l) => l.id)).toEqual(["default-layer", "factory-test-layer", "lower-layer", "magic-layer"]);
+    return r.layout;
+  };
+  const run = (script: string, edit?: (l: Layout) => Layout) => emulate("boards/moergo/glove80", TEMPLATE_FIXTURE, script, edit);
+
+  test("the layer key (a tap dance whose hold is &mo LOWER) still opens Lower: key 26 is Up there, E on the base layer", async () => {
+    const script = "hold 55 300 then tap 26";
+    const before = await run(script);
+    const after = await run(script, moveFactoryLeft);
+    expect(before.reports.some((x) => x.kind === "keyboard" && x.keys.includes("UP"))).toBe(true);
+    expect(after.reports).toEqual(before.reports);
+  }, TIMEOUT);
+
+  test("&magic MAGIC 0 still opens Magic, whose last key still goes to the factory test layer, where key 1 is 0", async () => {
+    const script = "hold 65 300 then tap 80; tap 1";
+    const before = await run(script);
+    const after = await run(script, moveFactoryLeft);
+    expect(before.text).toBe("0");
+    expect(after.reports).toEqual(before.reports);
+    expect(after.text).toBe("0");
   }, TIMEOUT);
 });
 

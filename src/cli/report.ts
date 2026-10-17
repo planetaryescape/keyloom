@@ -21,7 +21,7 @@ export function importTable(o: ImportOutcome): string {
   for (const [source, g] of groups) lines.push(`  ${source} x${g.at.length}  ${g.reason}`, `    at ${g.at.join(" ")}`);
 
   lines.push("", `passthrough kept verbatim (${r.passthrough.length}):`);
-  for (const p of r.passthrough) lines.push(`  ${p.file} ${p.anchor}${p.refersToLayerIndices ? "  (refers to layer numbers, so layer order is fixed)" : ""}`);
+  for (const p of r.passthrough) lines.push(`  ${p.file} ${p.anchor}${p.refersToLayerIndices ? "  (refers to layer numbers)" : ""}`);
 
   if (r.warnings.length > 0) lines.push("", "warnings:", ...r.warnings.map((w) => `  ${w}`));
   if (r.instructions) lines.push("", "to do yourself:", ...r.instructions.split("\n").map((l) => `  ${l}`));

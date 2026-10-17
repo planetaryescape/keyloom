@@ -5,6 +5,8 @@ import { keyExprText } from "./key-expr.ts";
 
 export type EmitContext = {
   layerIndex: ReadonlyMap<string, number>;
+  /** A layer's `#define`d name, when kept source defines one (D-360); keys are written with it so the define stays what the keymap reads. */
+  layerNames?: ReadonlyMap<string, string>;
   /** Profile id to the devicetree label its uses are written with. */
   profileLabels: ReadonlyMap<string, string>;
   macroLabels: ReadonlyMap<string, string>;
@@ -17,10 +19,10 @@ const LAYER_BEHAVIOR = { momentary: "mo", toggle: "tog", to: "to", oneShot: "sl"
 /** A label or node name devicetree accepts: letters, digits and underscores. */
 export const labelOf = (id: string): string => id.replace(/[^A-Za-z0-9_]/g, "_");
 
-function layer(id: string, ctx: EmitContext): number {
+function layer(id: string, ctx: EmitContext): string {
   const i = ctx.layerIndex.get(id);
   if (i === undefined) throw new GenerateError(`it refers to layer "${id}", which doesn't exist`);
-  return i;
+  return ctx.layerNames?.get(id) ?? String(i);
 }
 
 function key(e: { code?: string; mods?: readonly Mod[] }): string {
@@ -40,7 +42,7 @@ export function bindingToDts(b: Binding, ctx: EmitContext): string {
     case "holdTap": {
       const label = ctx.profileLabels.get(b.profileId);
       if (!label) throw new GenerateError(`it uses the hold-tap profile "${b.profileId}", which doesn't exist`);
-      const hold = "mods" in b.hold ? key({ mods: b.hold.mods }) : String(layer(b.hold.layerId, ctx));
+      const hold = "mods" in b.hold ? key({ mods: b.hold.mods }) : layer(b.hold.layerId, ctx);
       return `&${label} ${hold} ${key({ code: b.tap.code, ...(b.tap.mods ? { mods: b.tap.mods } : {}) })}`;
     }
     case "layer":

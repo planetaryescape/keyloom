@@ -20,6 +20,8 @@ const U = 23; // right hand
 const C = 45;
 const V = 46;
 const OSM_LSFT = 57; // OSM(MOD_LSFT)
+const DUAL_FUNC_0 = 7; // LT(5, KC_4) with its tap and hold in process_record_user
+const Z_ON_LAYER_5 = 44; // X on the base layer
 
 const tap = (position: number, at: number, ms = 40): EmulatorEvent[] => [
   { at, position, action: "press" },
@@ -98,6 +100,20 @@ gated("a Moonlander layout on QMK's real core", () => {
     // Not C and V: the combo's macro replaces them, with the macro's 100 ms wait between its two taps.
     expect(result.reports.map((r) => (r.kind === "keyboard" ? [...r.mods, ...r.keys].join("+") : "consumer"))).toEqual(["LGUI", "", "C", ""]);
     expect(result.reports[2]?.at).toBe((result.reports[0]?.at ?? 0) + 100);
+  }, TIMEOUT);
+
+  test("a layer key still opens the same layer after that layer is moved (D-360)", async () => {
+    // Oryx's dual-function key LT(5, KC_4) holds layer 5 through #define and layer_move(5) in kept C. Layer 5 has Z where layer 0 has X.
+    const hold: EmulatorEvent[] = [{ at: 0, position: DUAL_FUNC_0, action: "press" }, ...tap(Z_ON_LAYER_5, 400), { at: 600, position: DUAL_FUNC_0, action: "release" }];
+    const before = await emulate(hold);
+    expect(before.text).toBe("z");
+    const after = await emulate(hold, ({ app, layoutId }) => {
+      const view = getLayout(app, layoutId);
+      applyOps(app, layoutId, { baseRevisionId: view.revision.id, summary: "Move layer 5 left", ops: [{ op: "moveLayer", layerId: "layer-5", afterLayerId: "layer-1" }] });
+      expect(getLayout(app, layoutId).document.layers.map((l) => l.id)).toEqual(["layer-0", "layer-1", "layer-5", "layer-2", "layer-3", "layer-4"]);
+    });
+    expect(after.reports).toEqual(before.reports);
+    expect(after.text).toBe("z");
   }, TIMEOUT);
 
   test("a position that is not on the board is refused before Docker runs", async () => {

@@ -53,15 +53,15 @@ describe("validate on BK's Moonlander import", () => {
     expect(codes(r.errors)).toEqual(["native_edit"]);
   });
 
-  test("the importer's passthrough pins layer order and the 8-bit layer state caps the count", () => {
+  test("the importer reads which numbers in kept code are layers, and the 8-bit layer state caps the count", () => {
     expect(codes(validate(board, layout, [{ op: "removeLayer", layerId: "layer-5" }]).errors)).toContain("passthrough_layer_index");
     const add = addReachableLayer;
     expect(validate(board, layout, [...add("layer-6", "layer-5"), ...add("layer-7", "layer-6")]).ok).toBe(true); // 8 layers
     const nine = validate(board, layout, [...add("layer-6", "layer-5"), ...add("layer-7", "layer-6"), ...add("layer-8", "layer-7")]);
     expect(codes(nine.errors)).toEqual(["layer_limit"]);
-    // Inserting shifts every layer number after it, so the native LT(5, KC_4) now points one layer up and
-    // layer-5 loses the only key that reached it: the validator sees both halves of the harm.
-    expect(codes(validate(board, layout, add("layer-6", "layer-0")).errors).sort()).toEqual(["function_lost", "layer_unreachable", "passthrough_layer_index"]);
+    // Inserting shifts every layer number after it, but the kept code follows its layers (D-360): the native LT(5, KC_4)
+    // is renumbered with layer-5, which the key still reaches.
+    expect(validate(board, layout, add("layer-6", "layer-0")).errors).toEqual([]);
   });
 
   test("a mod-tap with a modified tap is refused", () => {

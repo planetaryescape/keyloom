@@ -10,6 +10,7 @@ import type { Expr } from "./c-parse.ts";
 import { PASSTHROUGH_DEFINES, parseDefines, settingsFrom, tapHoldOptions } from "./config-h.ts";
 import { type ParsedKeymap, parseKeymapC } from "./keymap-c.ts";
 import { macroNames } from "./emit-macros.ts";
+import { annotateQmkLayerRefs } from "./layer-refs.ts";
 import { importTapDances } from "./import-tap-dance.ts";
 import { readLighting } from "./import-lighting.ts";
 import { macroFor, parseMacroCase } from "./send-string.ts";
@@ -19,12 +20,6 @@ export { ImportError } from "./source.ts";
 export type { ImportReport, NativeItem, PassthroughItem } from "../../layout/import-report.ts";
 
 export type ImportResult = { layout: Layout; report: ImportReport; suggestedName: string };
-
-// Code that names layers by number pins their order (S3): the generator can't rewrite it yet.
-const LAYER_INDEX_REFS =
-  /\b(layer_move|layer_on|layer_off|layer_invert|layer_clear|layer_state_set|layer_state_cmp|biton32|get_highest_layer|IS_LAYER_ON|IS_LAYER_OFF|default_layer_set|set_single_persistent_default_layer)\b|\b(LT|MO|TG|TO|OSL|TT|DF|LM)\s*\(|\bledmap\b|\bcase\s+\d+\s*:/;
-
-const refersToLayerIndices = (source: string): boolean => LAYER_INDEX_REFS.test(source);
 
 /** Normal form for matching a combo's key to the base-layer binding that produces it: KC_ESC equals KC_ESCAPE. */
 function canon(e: Expr): string {
@@ -121,24 +116,28 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
 
   const combos = importCombos(parsed, parsed.layers[0] ?? [], tapDanceCtx, warnings);
 
-  const passthrough: Passthrough[] = [
-    ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor) && !(lightingRead?.consumed.has(c.anchor) ?? false)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),
+  // Which numbers in the kept code are layer numbers is read once everything kept is known (D-360); until then none is marked.
+  const kept: Passthrough[] = [
+    ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor) && !(lightingRead?.consumed.has(c.anchor) ?? false)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: false })),
     ...parsed.cases
       .filter((c) => !consumedCases.has(c.label))
-      .map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: `process_record_user:${c.label}`, source: c.source, refersToLayerIndices: refersToLayerIndices(c.source) })),
+      .map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: `process_record_user:${c.label}`, source: c.source, refersToLayerIndices: false })),
     ...configPassthrough,
     ...(files.rulesMk === undefined ? [] : [wholeFile("rules.mk", files.rulesMk)]),
     ...(files.keymapJson === undefined ? [] : [wholeFile("keymap.json", files.keymapJson)]),
   ];
 
+  const numbered = await annotateQmkLayerRefs({ layers, combos, passthrough: kept }, layerIds);
+  const passthrough = numbered.passthrough;
+
   const layout = LayoutSchema.parse({
     schemaVersion: 1,
     boardId: board.id,
     firmware: "qmk",
-    layers,
+    layers: numbered.layers,
     macros,
     tapDances: danceRead.tapDances,
-    combos,
+    combos: numbered.combos,
     holdTapProfiles,
     settings,
     passthrough,
@@ -194,7 +193,7 @@ function importConfig(files: SourceFiles, warnings: string[]) {
     }
   }
   for (const f of functionLike) {
-    passthrough.push({ firmware: "qmk", file: "config.h", anchor: `define:${f.name}`, source: f.source, refersToLayerIndices: refersToLayerIndices(f.source) });
+    passthrough.push({ firmware: "qmk", file: "config.h", anchor: `define:${f.name}`, source: f.source, refersToLayerIndices: false });
   }
   const settings = settingsFrom(defines);
   return { settings, profileOptions: tapHoldOptions(settings), passthrough };

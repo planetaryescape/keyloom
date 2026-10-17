@@ -4,6 +4,7 @@
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { RULES_KEYS } from "../../layout/firmware-options.ts";
 import type { FirmwareSetting, Layout, Passthrough } from "../../layout/schema.ts";
+import { missingLayerNumbers, withLayerNumbers } from "../../layout/layer-refs.ts";
 import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { renderCombos } from "./emit-combos.ts";
 import { LIGHTING_PRELUDE, renderLighting } from "./emit-lighting.ts";
@@ -78,7 +79,8 @@ function checkLayers(layout: Layout): void {
 const passthroughIn = (layout: Layout, file: string): Passthrough[] => layout.passthrough.filter((p) => p.firmware === "qmk" && p.file === file);
 
 export function generateQmkSource(input: GenerateInput): GeneratedSource {
-  const { layout, board } = input;
+  const { board } = input;
+  const layout = withLayerNumbers(input.layout);
   if (board.firmware !== "qmk" || layout.firmware !== "qmk") throw new GenerateError(`${board.id} is not a QMK board`);
   if (layout.boardId !== board.id) throw new GenerateError(`the layout is for ${layout.boardId}, not ${board.id}`);
   for (const p of layout.passthrough) {
@@ -182,6 +184,8 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   const keymapJson = passthroughIn(layout, "keymap.json")[0]?.source ?? (rev.build.modules ? `${JSON.stringify({ modules: rev.build.modules }, null, 4)}\n` : undefined);
   if (keymapJson !== undefined) files.push({ path: "keymap.json", content: keymapJson.endsWith("\n") ? keymapJson : `${keymapJson}\n` });
 
+  const gone = missingLayerNumbers(input.layout);
+  if (gone.length > 0) throw new GenerateError(`kept firmware source names ${gone.map((id) => `layer "${id}"`).join(", ")} by number, and no layer has that id any more`);
   return { keymapName: KEYMAP_NAME, files, ...(marker !== undefined ? { requiredSymbols: [WRAPPER_SYMBOL, STREAM_SYMBOL] } : {}) };
 }
 

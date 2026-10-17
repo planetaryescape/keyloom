@@ -48,7 +48,7 @@ For each spike, record the command or request, the output (with private data rem
 BK's layout "Synchronized" (`QxKPz`, revision `zLQ3Md`, `qmkVersion` 25.0) is public on Oryx, and its source zip downloads without a session. The full inventory and conclusions are in [../research/spikes/S3.md](../research/spikes/S3.md). The ones that change the design:
 
 - QMK combos are keycode-based.
-- Oryx's passthrough code refers to layer indices, so removing or reordering layers is an error until the generator can rewrite those references.
+- Oryx's passthrough code refers to layer indices. D-360 has the generator rewrite the references the importer can prove; a layout stored before that keeps the error until its firmware is imported again.
 - `LAYER_STATE_8BIT` caps the layout at 8 layers.
 - The build needs ZSA's `zsa/oryx` and `zsa/defaults` modules.
 

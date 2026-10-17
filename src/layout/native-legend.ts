@@ -5,6 +5,7 @@ import { fromQmk, fromZmk } from "./keycodes.ts";
 import type { GridContext } from "./render-grid.ts";
 import type { Binding, Mod } from "./schema.ts";
 import { capMods, layerLegend } from "./cap-words.ts";
+import { renumber } from "./layer-refs.ts";
 
 type Native = Extract<Binding, { kind: "native" }>;
 export type NativePrint = { tap: string; hold?: string; layerId?: string };
@@ -50,8 +51,12 @@ const layerAt = (ctx: GridContext, index: number): string | undefined => ctx.lay
 
 // An Oryx "dual function" key is a placeholder (LT(n, KC_x)) whose real tap and hold are in process_record_user (S16).
 function dualFunction(name: string, ctx: GridContext): NativePrint | null {
-  const define = ctx.passthrough?.find((p) => p.anchor === `define:${name}`)?.source ?? "";
-  const handler = ctx.passthrough?.find((p) => p.anchor === `process_record_user:${name}`)?.source ?? "";
+  const kept = (anchor: string): string => {
+    const p = ctx.passthrough?.find((q) => q.anchor === anchor);
+    return p === undefined ? "" : renumber(p.source, p.layerRefs, ctx.layers.map((l) => l.id));
+  };
+  const define = kept(`define:${name}`);
+  const handler = kept(`process_record_user:${name}`);
   const lt = /LT\(\s*(\d+)\s*,\s*(KC_\w+)\s*\)/.exec(define);
   const tapCode = /register_code16\(\s*(KC_\w+)\s*\)/.exec(handler)?.[1] ?? lt?.[2];
   const layerIndex = Number(/layer_move\(\s*(\d+)\s*\)/.exec(handler)?.[1] ?? lt?.[1] ?? Number.NaN);
@@ -62,7 +67,8 @@ function dualFunction(name: string, ctx: GridContext): NativePrint | null {
 }
 
 export function nativeLegend(binding: Native, ctx: GridContext): NativePrint {
-  const source = binding.source.trim();
+  // The numbers in the source are the ones the layers had when it was imported; the cap reads them as the layers are now.
+  const source = renumber(binding.source, binding.layerRefs, ctx.layers.map((l) => l.id)).trim();
   // QMK
   const osm = /^OSM\(\s*([A-Z_|\s]+)\)$/.exec(source);
   if (osm !== null) {

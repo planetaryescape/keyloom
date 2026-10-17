@@ -4,6 +4,7 @@
 import type { BoardDefinition, Geometry } from "../../boards/schema.ts";
 import type { HandsFree } from "../../boards/recipes.ts";
 import type { Layout, Passthrough } from "../../layout/schema.ts";
+import { missingLayerNumbers, withLayerNumbers } from "../../layout/layer-refs.ts";
 import { BUILTIN_PROFILES } from "./builtins.ts";
 import { settingLine } from "./conf.ts";
 import { type EmitContext, labelOf } from "./emit-binding.ts";
@@ -72,8 +73,21 @@ function checkLabels(layout: Layout): void {
   }
 }
 
+/** Layers that kept source names with `#define NAME <number>`, where the whole body is the layer number. */
+function layerDefineNames(layout: Layout): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const p of layout.passthrough) {
+    const [ref, ...more] = p.layerRefs ?? [];
+    const name = p.anchor.startsWith("define:") ? p.anchor.slice("define:".length) : undefined;
+    if (ref === undefined || more.length > 0 || name === undefined || names.has(ref.layerId)) continue;
+    if (p.source.slice(0, ref.start).trim() === `#define ${name}` && p.source.slice(ref.end).trim() === "") names.set(ref.layerId, name);
+  }
+  return names;
+}
+
 export function generateZmkSource(input: GenerateInput): GeneratedSource {
-  const { layout, board } = input;
+  const { board } = input;
+  const layout = withLayerNumbers(input.layout);
   if (board.firmware !== "zmk" || layout.firmware !== "zmk") throw new GenerateError(`${board.id} is not a ZMK board`);
   if (layout.boardId !== board.id) throw new GenerateError(`the layout is for ${layout.boardId}, not ${board.id}`);
   if (layout.layers.length > MAX_LAYERS) throw new GenerateError(`${layout.layers.length} layers; ZMK supports at most ${MAX_LAYERS}`);
@@ -92,6 +106,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
 
   const ctx: EmitContext = {
     layerIndex: new Map(layout.layers.map((l, i) => [l.id, i])),
+    layerNames: layerDefineNames(input.layout),
     profileLabels: new Map(layout.holdTapProfiles.map((p) => [p.id, labelOf(p.id)])),
     macroLabels: new Map(layout.macros.map((m) => [m.id, labelOf(m.id)])),
     tapDanceLabels: new Map(layout.tapDances.map((t) => [t.id, labelOf(t.id)])),
@@ -156,6 +171,8 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
   // KEYMAP_FILE and CONF_FILE label the layout's passthrough (they are stored in saved layouts); the
   // files written to disk are named for the board.
   const name = input.keymapName ?? "glove80";
+  const gone = missingLayerNumbers(input.layout);
+  if (gone.length > 0) throw new GenerateError(`kept firmware source names ${gone.map((id) => `layer "${id}"`).join(", ")} by number, and no layer has that id any more`);
   return {
     keymapName: name,
     files: [

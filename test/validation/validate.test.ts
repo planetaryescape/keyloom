@@ -241,6 +241,70 @@ describe("validate: passthrough_layer_index", () => {
   });
 });
 
+describe("validate: passthrough_layer_index with the layer numbers read (D-360)", () => {
+  const code = "layer_move(1);\nif (get_highest_layer(s) == 2) {}\nlayer_state_set(1UL << 2);";
+  const kept = (over: Partial<Layout["passthrough"][number]> = {}): Layout =>
+    tiny({
+      passthrough: [{
+        firmware: "qmk", file: "keymap.c", anchor: "rgb", source: code, refersToLayerIndices: true,
+        layerRefs: [{ start: 11, end: 12, layerId: "num" }, { start: 43, end: 44, layerId: "nav" }], ...over,
+      }],
+    });
+  const move: ChangeOp[] = [{ op: "moveLayer", layerId: "nav", afterLayerId: "base" }];
+  const removeNav: ChangeOp[] = [...dropFunctions(["layer:momentary:nav"]), { op: "removeLayer", layerId: "nav" }, { op: "removeCombo", comboId: "go-nav" }];
+  const removeNum: ChangeOp[] = [...dropFunctions(["layer:momentary:num", "key:N1", "key:N2", "key:N4"]), set("base", 2, { kind: "none" }), { op: "removeLayer", layerId: "num" }];
+
+  test("reordering and inserting pass, because the numbers follow the layers", () => {
+    expect(errorsOf(move, kept())).toEqual([]);
+    expect(errorsOf(addReachableLayer("fn", "base"), kept())).toEqual([]);
+  });
+
+  test("a layer nothing names can be removed from the middle", () => {
+    expect(errorsOf(removeNum, kept({ layerRefs: [{ start: 43, end: 44, layerId: "nav" }] }))).toEqual([]);
+  });
+
+  test("removing a layer the code names is refused, naming the line", () => {
+    const [e, ...rest] = errorsOf(removeNav, kept());
+    expect(rest).toEqual([]);
+    expect(e?.code).toBe("passthrough_layer_index");
+    expect(e?.message).toContain("keymap.c rgb line 2 (if (get_highest_layer(s) == 2) {})");
+    expect(e?.plain).toContain("Nav can't be removed");
+  });
+
+  test("a native key that names a layer blocks its removal, and the issue carries the key", () => {
+    const key9: Binding = { kind: "native", firmware: "zmk", source: "&magic 2 0", label: "Magic", layerRefs: [{ start: 7, end: 8, layerId: "nav" }] };
+    const layout = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [key("A"), key("B"), l.bindings[2] as Binding, key9] } : l)) });
+    const [e] = errorsOf(removeNav, layout);
+    expect(e?.code).toBe("passthrough_layer_index");
+    expect(e?.slots).toEqual([at("base", 3)]);
+    expect(e?.message).toContain('layer "base", position 3');
+  });
+
+  const stuck = { unprovable: [{ line: 3, text: "layer_state_set(1UL << 2);" }] };
+  test("a line that uses a layer number in a way that can't be rewritten refuses a reorder, naming the line", () => {
+    const [e] = errorsOf(move, kept(stuck));
+    expect(e?.code).toBe("passthrough_layer_index");
+    expect(e?.message).toContain("keymap.c rgb line 3 (layer_state_set(1UL << 2);)");
+    expect(codes(errorsOf(removeNum, kept({ ...stuck, layerRefs: [{ start: 43, end: 44, layerId: "nav" }] })))).toEqual(["passthrough_layer_index"]);
+  });
+
+  test("adding at the end still passes beside such a line, since no layer's number changes", () => {
+    expect(errorsOf(addReachableLayer("fn", "nav"), kept(stuck))).toEqual([]);
+  });
+
+  test("a layout stored before the numbers were read keeps the old refusal", () => {
+    expect(codes(errorsOf(move, kept({ layerRefs: undefined })))).toEqual(["passthrough_layer_index"]);
+  });
+
+  test("a kept key written without the numbers is not the kept key that was imported", () => {
+    const withRefs: Binding = { kind: "native", firmware: "qmk", source: "X(1)", label: "X", layerRefs: [{ start: 2, end: 3, layerId: "num" }] };
+    const layout = tiny({ layers: tiny().layers.map((l) => (l.id === "num" ? { ...l, bindings: [withRefs, ...l.bindings.slice(1)] } : l)) });
+    const copy: Binding = { kind: "native", firmware: "qmk", source: "X(1)", label: "X" };
+    expect(codes(errorsOf([set("nav", 0, copy)], layout))).toContain("native_edit");
+    expect(codes(errorsOf([set("nav", 0, withRefs)], layout))).not.toContain("native_edit");
+  });
+});
+
 describe("validate: layer_limit", () => {
   test("32 layers on QMK", () => {
     expect(errorsOf([{ op: "renameLayer", layerId: "l0", name: "x" }], withLayers(32))).toEqual([]);
