@@ -6,7 +6,7 @@ import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
-import type { Binding, Layout, Mod } from "../layout/schema.ts";
+import type { Binding, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
@@ -14,7 +14,7 @@ import { kanataProfileOptions, kanataSupport, remapperLockout } from "./kanata-r
 import { tapDanceRules } from "./tap-dance-rules.ts";
 import { functionHomes, lostFunctions, reachableLayers, trappedLayers } from "./reachability.ts";
 
-import { keyOn, layerName } from "./words.ts";
+import { keyIn, keyOn, layerName } from "./words.ts";
 
 /** `plain` is the sentence for people; `message` is the precise text the CLI and logs keep. */
 const issue = (code: string, message: string, plain: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, plain, slots } : { code, message, plain });
@@ -225,7 +225,8 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...remapperLockout(board, doc),
 ];
 
-const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b.firmware, b.source, b.label]);
+// The layer numbers are part of what a kept key is: one written without them would not follow its layers.
+const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b.firmware, b.source, b.label, b.layerRefs ?? null]);
 
 /**
  * `native_edit`: keyloom can't reason about source it doesn't model (D-024), so a native binding
@@ -250,13 +251,67 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
 }
 
 /**
- * `passthrough_layer_index`: custom code that names layers by number keeps working only while
- * every existing layer keeps its index. Adding at the end passes. Removing the last layers passes
- * too, unless a pinned block names a removed layer's number (a layer that was just added is named
- * by nothing). Inserting, reordering and replacing a layer do not, however the ops got there.
+ * `passthrough_layer_index`: kept firmware source and kept keys name layers by number. Where the importer proved which
+ * numbers are layer numbers (`layerRefs`, D-360), they follow their layers and a reorder passes. A change is refused when it
+ * removes a layer that kept source or a kept key names, or renumbers layers while some line names a layer in a way that
+ * can't be rewritten. A layout stored before the importer read them (no `layerRefs`) keeps the old rule: adding at the end
+ * passes, removing the last layers passes unless a pinned block names a removed layer's number, and anything else is refused.
  */
 export function passthroughLayerIndex(before: Layout, after: Layout): Issue[] {
-  const pinned = before.passthrough.filter((p) => p.refersToLayerIndices);
+  return [...legacyLayerIndex(before, after), ...keptLayerNumbers(before, after)];
+}
+
+type KeptSite = { label: string; refs: LayerRef[]; unprovable: { line: number; text: string }[]; slot?: Slot; source: string };
+
+/** The kept source and kept keys of a document that carry the importer's reading of their layer numbers. */
+function keptSites(doc: Layout): KeptSite[] {
+  const sites: KeptSite[] = doc.passthrough.flatMap((p) => (p.layerRefs === undefined ? [] : [{ label: `${p.file} ${p.anchor}`, refs: p.layerRefs, unprovable: p.unprovable ?? [], source: p.source }]));
+  for (const { binding: b, slot, where } of bindingsOf(doc)) {
+    if (b.kind === "native" && (b.layerRefs !== undefined || b.unprovable !== undefined)) {
+      sites.push({ label: where, refs: b.layerRefs ?? [], unprovable: b.unprovable ?? [], source: b.source, ...(slot ? { slot } : {}) });
+    }
+  }
+  return sites;
+}
+
+const lineOf = (source: string, at: number): { line: number; text: string } => {
+  const before = source.slice(0, at).split("\n");
+  return { line: before.length, text: (source.split("\n")[before.length - 1] ?? "").trim() };
+};
+const quoted = (s: { line: number; text: string }) => `line ${s.line}${s.text === "" ? "" : ` (${s.text})`}`;
+
+function keptLayerNumbers(before: Layout, after: Layout): Issue[] {
+  const sites = keptSites(after);
+  if (sites.length === 0) return [];
+  const afterIndex = new Map(after.layers.map((l, i) => [l.id, i]));
+  const removed = before.layers.filter((l) => !afterIndex.has(l.id));
+  const shifted = before.layers.some((l, i) => afterIndex.has(l.id) && afterIndex.get(l.id) !== i);
+  const out: Issue[] = [];
+  for (const layer of removed) {
+    const named = sites.flatMap((site) => {
+      const hit = site.refs.find((r) => r.layerId === layer.id);
+      if (hit === undefined) return [];
+      const at = quoted(lineOf(site.source, hit.start));
+      return [{ site, message: site.slot ? site.label : `${site.label} ${at}`, plain: site.slot ? keyIn(before, site.slot) : `${site.label}, ${at}` }];
+    });
+    if (named.length === 0) continue;
+    out.push(issue("passthrough_layer_index",
+      `this change removes layer "${layer.id}", but ${named.map((n) => n.message).join("; ")} refers to it by number and would point at the wrong layer or none`,
+      `${layerName(before, layer.id)} can't be removed: your custom code refers to it by number (${named.map((n) => n.plain).join("; ")}).`,
+      named.flatMap((n) => (n.site.slot ? [n.site.slot] : []))));
+  }
+  const stuck = sites.flatMap((s) => s.unprovable.map((u) => ({ site: s, u })));
+  if ((shifted || removed.length > 0) && stuck.length > 0) {
+    out.push(issue("passthrough_layer_index",
+      `this change renumbers layers, but ${stuck.map(({ site, u }) => `${site.label} ${quoted(u)}`).join("; ")} uses a layer number that keyloom can't rewrite safely`,
+      `Your custom code uses layer numbers in a way keyloom can't follow when layers move: ${stuck.map(({ site, u }) => `${site.slot ? keyIn(after, site.slot) : site.label}, ${quoted(u)}`).join("; ")}.`,
+      stuck.flatMap(({ site }) => (site.slot ? [site.slot] : []))));
+  }
+  return out;
+}
+
+function legacyLayerIndex(before: Layout, after: Layout): Issue[] {
+  const pinned = before.passthrough.filter((p) => p.refersToLayerIndices && p.layerRefs === undefined);
   if (pinned.length === 0) return [];
   let kept = 0;
   while (kept < before.layers.length && before.layers[kept]?.id === after.layers[kept]?.id) kept++;
@@ -269,11 +324,11 @@ export function passthroughLayerIndex(before: Layout, after: Layout): Issue[] {
     if (naming.length === 0) return [];
     const where = naming.map((p) => `${p.file} ${p.anchor}`).join(", ");
     return [issue("passthrough_layer_index", `this change removes a layer, but ${where} refers to it by number and would point at the wrong layer or none`,
-      "Your custom code refers to this layer by number, so it can't be removed.")];
+      "Your custom code refers to this layer by number, so it can't be removed. Importing the firmware again lets keyloom renumber it.")];
   }
   const where = pinned.map((p) => `${p.file} ${p.anchor}`).join(", ");
   return [issue("passthrough_layer_index", `this change removes or reorders layers, but ${where} refers to layers by number and would point at the wrong ones`,
-    "Your custom code refers to layers by number, and this change would move layers so it points at the wrong ones.")];
+    "Your custom code refers to layers by number, and this change would move layers so it points at the wrong ones. Importing the firmware again lets keyloom renumber it.")];
 }
 
 /**

@@ -155,3 +155,64 @@ function toProp(n: Node, text: string): DtProp {
 function unquote(literal: string): string {
   return literal.slice(1, -1).replace(/\\(["\\ntr])/g, (_, c: string) => (c === "n" ? "\n" : c === "t" ? "\t" : c === "r" ? "\r" : c));
 }
+
+/** One cell of a `<...>` array, located in the text that was parsed. */
+export type Cell = { text: string; start: number; end: number; line: number; kind: "int" | "name" | "other" };
+/** A `&behaviour a b` call inside a cell array. */
+export type CellCall = { name: string; line: number; params: Cell[] };
+/** One `<...>` value: what comes before its first `&` (`layers = <0 1>`), then its behaviour calls. */
+export type CellArray = { prop: string; leading: Cell[]; calls: CellCall[] };
+
+const cellOf = (c: Node): Cell => ({
+  text: c.text, start: c.startIndex, end: c.endIndex, line: c.startPosition.row + 1,
+  kind: c.type === "integer_literal" ? "int" : c.type === "identifier" ? "name" : "other",
+});
+
+/**
+ * Every `<...>` array in `source`, with the offset of each cell, so a layer number can be found and renumbered where it is written.
+ * `asCells` parses a bare binding (`&magic 5 0`) by putting it in a property first; offsets still index `source`.
+ * An empty list when the text isn't devicetree, which only means nothing in it can be read.
+ */
+export async function cellArrays(source: string, asCells = false): Promise<CellArray[]> {
+  const prefix = asCells ? "/ { p = <" : "";
+  const text = `${prefix}${source}${asCells ? ">; };" : ""}`;
+  const parser = await getParser();
+  const tree: Tree | null = parser.parse(text);
+  if (!tree) return [];
+  try {
+    if (tree.rootNode.hasError) return [];
+    return tree.rootNode.descendantsOfType("integer_cells").flatMap((cells) => {
+      if (!cells) return [];
+      const prop = cells.parent?.type === "property" ? (cells.parent.namedChildren.find((c) => c.type === "identifier")?.text ?? "") : "";
+      const shift = (c: Cell): Cell => ({ ...c, start: c.start - prefix.length, end: c.end - prefix.length });
+      const array: CellArray = { prop, leading: [], calls: [] };
+      for (const c of cells.namedChildren) {
+        if (c.type === "comment") continue;
+        if (c.type === "reference") array.calls.push({ name: c.text.slice(1).trim(), line: c.startPosition.row + 1, params: [] });
+        else (array.calls.at(-1)?.params ?? array.leading).push(shift(cellOf(c)));
+      }
+      return [array];
+    });
+  } finally {
+    tree.delete();
+  }
+}
+
+/** The `#define` lines of `source`, with where each body sits. `fn` marks a function-like define, whose body takes parameters. */
+export async function defineBodies(source: string): Promise<{ name: string; body: string; start: number; end: number; line: number; fn: boolean }[]> {
+  const parser = await getParser();
+  const tree: Tree | null = parser.parse(source);
+  if (!tree) return [];
+  try {
+    return tree.rootNode.descendantsOfType(["preproc_def", "preproc_function_def"]).flatMap((d) => {
+      const name = d?.namedChildren.find((c) => c.type === "identifier");
+      const value = d?.namedChildren.find((c) => c.type === "preproc_arg");
+      if (!d || !name || !value) return [];
+      const start = value.startIndex + (value.text.length - value.text.trimStart().length);
+      const body = value.text.trim();
+      return [{ name: name.text, body, start, end: start + body.length, line: value.startPosition.row + 1, fn: d.type === "preproc_function_def" }];
+    });
+  } finally {
+    tree.delete();
+  }
+}

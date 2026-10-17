@@ -37,7 +37,7 @@ What an Oryx export of BK's actual layout contains was spike S3 ([../research/sp
 - **Combos are keycode-based in QMK.** The importer resolves each combo key to the base-layer position whose binding produces that keycode, and imports the combo with `layerIds: "all"`. The generator writes the base-layer bindings at those positions back as keycodes.
 - **`keymap.json` is kept as a passthrough file.** It carries `{"modules": ["zsa/oryx", "zsa/defaults"]}`, so the build needs ZSA's `qmk_modules` beside the fork.
 - **`LAYER_STATE_8BIT` in `config.h` caps the layout at 8 layers.** It's imported as a setting and enforced by the validator.
-- **Some of Oryx's generated code uses layer indices:** the `ledmap`, `rgb_matrix_indicators_user`'s `case n:`, and `layer_move(n)` and `LT(n, …)` inside `process_record_user`. That code is passthrough, so layer order is fixed for such a layout until the generator learns to rewrite it.
+- **Some of Oryx's generated code uses layer indices:** the `ledmap`, `rgb_matrix_indicators_user`'s `case n:`, and `layer_move(n)` and `LT(n, …)` inside `process_record_user`. That code is passthrough, and the importer records which of those numbers are layer numbers so the generator can renumber them when layers move (D-360, [07](07-change-validation.md#layer-numbers-in-kept-code)).
 
 ## Generation writes `keymap.c`, `config.h` and `rules.mk`
 

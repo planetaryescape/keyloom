@@ -106,7 +106,7 @@ describe("editing the layout and writing it again", () => {
     expect(text).toContain("home_row_mods: home_row_mods {");
     expect(text).toContain("&home_row_mods LGUI A");
     expect(text).toContain("&opt_opt");
-    expect(text).toContain("&mo 1");
+    expect(text).toContain("&mo LOWER"); // the template defines LOWER, so keys are written with its name (D-360)
     expect(text).toContain("&kp LC(LS(N1))");
     expect(text).toContain("<&kp LALT>,\n");
     // The pause sits around the binding it follows and the default comes back after it.

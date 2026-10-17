@@ -6,12 +6,12 @@ import {
 } from "../../layout/schema.ts";
 import { type KeptBehavior, type MapContext, mapBinding } from "./bindings.ts";
 import { BUILTIN_NAMES, BUILTIN_OPTIONS, BUILTIN_PROFILES, type HoldKind } from "./builtins.ts";
-import { parseCalls } from "./cells.ts";
+import { type BehaviorCall, parseCalls } from "./cells.ts";
 import { parseConf } from "./conf.ts";
-import { type Defines, evalInt } from "./defines.ts";
 import { type DtItem, type DtNode, parseDts } from "./dts.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
 import { importCombo } from "./import-combos.ts";
+import { annotateZmkLayerRefs } from "./layer-refs.ts";
 import { importHoldTap, importMacro, isHoldTap, isMacro } from "./import-behaviors.ts";
 import { ZmkImportError } from "./import-error.ts";
 import { type OptionValue, cellsOf, optionOf, stringOf } from "./props.ts";
@@ -28,8 +28,6 @@ const SECTION_ORDER = ["include", "define", "cpp", "behavior", "macro", "root", 
 type Section = (typeof SECTION_ORDER)[number];
 
 type Kept = { section: Section; file: string; anchor: string; source: string };
-
-const LAYER_REF = /&(mo|tog|to|sl|lt)\s/;
 
 const emptyCounts = (): ImportReport["bindings"] => ({
   key: 0, modifier: 0, holdTap: 0, layer: 0, macro: 0, tapDance: 0, transparent: 0, none: 0, native: 0,
@@ -128,9 +126,11 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   const counts = emptyCounts();
   const native: NativeItem[] = [];
   const usedProfiles = new Set<string>();
+  const keymapCalls: BehaviorCall[] = [];
   const layers = layerNodes.map((n, li) => {
     const layerId = layerIds[li] as string;
     const calls = cellsOf(n, "bindings").flatMap((c) => parseCalls(c).calls);
+    keymapCalls.push(...calls);
     if (calls.length !== board.keyCount) {
       throw new ZmkImportError(`layer ${n.name} has ${calls.length} bindings, but ${board.id} has ${board.keyCount}`);
     }
@@ -184,23 +184,27 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   if (files.conf === undefined) warnings.push("no .conf beside the .keymap; no settings imported");
 
   // --- assemble --------------------------------------------------------------------------------
-  const passthrough: Passthrough[] = SECTION_ORDER.flatMap((section) =>
+  const keptInOrder: Passthrough[] = SECTION_ORDER.flatMap((section) =>
     kept
       .filter((k) => k.section === section)
-      .map((k) => ({
-        firmware: "zmk" as const, file: k.file, anchor: k.anchor, source: k.source,
-        refersToLayerIndices: refersToLayers(k, defines, layers.length),
-      })),
+      .map((k) => ({ firmware: "zmk" as const, file: k.file, anchor: k.anchor, source: k.source, refersToLayerIndices: false })),
   );
+  // Which numbers in the kept source are layer numbers is read once everything kept is known (D-360).
+  const layerBehaviours = new Map<string, number>([...holdKinds].filter(([, kind]) => kind === "layer").map(([name]) => [name, 0]));
+  for (const [label, b] of keptBehaviors) {
+    if (b.compatible === "zmk,behavior-hold-tap" && ["mo", "to", "tog", "sl", "lt"].includes(b.bindings[0] ?? "")) layerBehaviours.set(label, 0);
+  }
+  const numbered = await annotateZmkLayerRefs({ layers, combos, passthrough: keptInOrder }, { layerIds, layerBehaviours, keymapCalls, defines });
+  const passthrough = numbered.passthrough;
 
   const layout = LayoutSchema.parse({
     schemaVersion: 1,
     boardId: board.id,
     firmware: "zmk",
-    layers,
+    layers: numbered.layers,
     macros,
     tapDances: [],
-    combos,
+    combos: numbered.combos,
     holdTapProfiles,
     settings: conf.settings,
     passthrough,
@@ -241,14 +245,4 @@ function sortItem(item: DtItem, defines: Map<string, string>, kept: Kept[], root
     case "node":
       (item.node.name === "/" ? roots : topLevel).push(item.node);
   }
-}
-
-/** Source that names layers by number pins their order (S3 for QMK; the same applies here). */
-function refersToLayers(k: Kept, defines: Defines, layerCount: number): boolean {
-  if (k.section === "define") {
-    const body = defines.get(k.anchor.slice("define:".length));
-    const n = body === undefined ? undefined : evalInt(body, new Map());
-    return n !== undefined && n >= 0 && n < layerCount;
-  }
-  return LAYER_REF.test(k.source);
 }
