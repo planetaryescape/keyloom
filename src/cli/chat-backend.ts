@@ -22,7 +22,8 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
     async send(ref, request, emit, signal) {
       try {
         await sendMessage(app, ref, {
-          message: request.message,
+          ...(request.message === undefined ? {} : { message: request.message }),
+          ...(request.answer === undefined ? {} : { answer: request.answer }),
           ...(request.conversationId ? { conversationId: request.conversationId } : {}),
           ...(request.selection ? { selection: { layer: request.selection.layerId, positions: request.selection.positions } } : {}),
           ...(request.drafts && request.drafts.length > 0 ? { drafts: request.drafts } : {}),

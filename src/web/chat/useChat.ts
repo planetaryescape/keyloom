@@ -44,7 +44,7 @@ export function useChat(token: string, layoutRef: string) {
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
 
   const run = useCallback(
-    async (text: string, selection: ChatSelection | null, begin: Action, onRejected?: (text: string) => void, drafts: ChatDrafts = []) => {
+    async (text: string, selection: ChatSelection | null, begin: Action, onRejected?: (text: string) => void, drafts: ChatDrafts = [], answer?: { toolUseId: string }) => {
       setProblem(null);
       dispatch(begin);
       const mine = new AbortController();
@@ -54,7 +54,7 @@ export function useChat(token: string, layoutRef: string) {
         await streamChat(
           token,
           layoutRef,
-          { message: text, ...(conversationId.current === null ? {} : { conversationId: conversationId.current }), ...(selection === null ? {} : { selection }), ...(drafts.length === 0 ? {} : { drafts }) },
+          { ...(answer === undefined ? { message: text } : { answer: { toolUseId: answer.toolUseId, text } }), ...(conversationId.current === null ? {} : { conversationId: conversationId.current }), ...(selection === null ? {} : { selection }), ...(drafts.length === 0 ? {} : { drafts }) },
           mine.signal,
           (event) => {
             if (event.type === "start") started = true;
@@ -66,6 +66,10 @@ export function useChat(token: string, layoutRef: string) {
         if (!started && begin.type === "retry") {
           // The user turn before it is already on screen and stored, so a refused retry fails in place.
           dispatch(isAbort(error) ? { type: "stopped" } : { type: "failed", code: "retry", message: classify(error).message });
+        } else if (!started && answer !== undefined) {
+          // The question is still open on the server, so it opens again here for another try.
+          dispatch({ type: "answerRejected", toolUseId: answer.toolUseId });
+          if (!isAbort(error)) setProblem(classify(error));
         } else if (!started) {
           // The reply never opened, so the turn leaves no trace; the message goes back to the composer.
           dispatch({ type: "rolledBack" });
@@ -89,6 +93,12 @@ export function useChat(token: string, layoutRef: string) {
     // `drafts` are key changes kept on the board and not applied, which the agent is told of (D-317).
     (text: string, selection: ChatSelection | null, onRejected?: (text: string) => void, drafts: ChatDrafts = []) =>
       run(text, selection, { type: "sent", userId: nextId("you"), assistantId: nextId("reply"), text, selection }, onRejected, drafts),
+    [run],
+  );
+
+  /** Answers the question the agent is waiting on; the reply continues from it. */
+  const answer = useCallback(
+    (toolUseId: string, text: string) => run(text, null, { type: "answering", toolUseId, text, assistantId: nextId("reply") }, undefined, [], { toolUseId }),
     [run],
   );
 
@@ -145,5 +155,5 @@ export function useChat(token: string, layoutRef: string) {
     [token],
   );
 
-  return { transcript, streaming, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, retry, stop, newConversation, open, markApplied, removePriority };
+  return { transcript, streaming, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, answer, retry, stop, newConversation, open, markApplied, removePriority };
 }

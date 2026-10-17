@@ -44,13 +44,14 @@ describe("list_layouts and configs", () => {
 });
 
 describe("the prompt", () => {
-  test("says a Colemak config is a new config and not a layer, and that the agent can't make one", async () => {
+  test("says a Colemak config is a new config and not a layer, and that the agent makes it with create_config, naming no command", async () => {
     const { app, qwerty } = await setup();
     const view = getLayout(app, qwerty.layoutId);
     const prompt = assembleSystemPrompt(view.board, view.document);
     expect(prompt).toContain("# Configs");
     expect(prompt).toMatch(/"Make me a Colemak config".*new config, never a layer/);
-    expect(prompt).toContain("keyloom config new");
+    expect(prompt).toContain("Call `create_config` at once");
+    expect(prompt).not.toMatch(/`keyloom [a-z]/);
     expect(prompt).toContain("`list_layouts`: every layout (config)");
   });
 });

@@ -5,18 +5,20 @@ import type { AgentModel, ModelMessage, ModelTool, Usage } from "./model.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
 import type { AgentPorts, ProposalResult, RecordedPriority } from "./ports.ts";
 import { type ToolCallTrace, TurnRecorder, type ValidationFailureTrace } from "./recorder.ts";
+import { type AskedQuestion, AskUserSchema } from "./tools/ask-user.ts";
 import { createTools } from "./tools/index.ts";
 
 export const DEFAULT_MAX_ITERATIONS = 12;
 
 /**
+ * - `awaiting_answer`: the model asked BK a question with `ask_user`; the turn is stored with that call open (D-382).
  * - `complete`: the model finished (possibly with a question for BK).
  * - `refused`: the model declined, even after the server-side fallback.
  * - `truncated`: it hit max_tokens mid-reply.
  * - `context_full`: the conversation no longer fits the context window.
  * - `iteration_limit`: it still wanted tools after `maxIterations` requests.
  */
-export type TurnStatus = "complete" | "refused" | "truncated" | "context_full" | "iteration_limit";
+export type TurnStatus = "awaiting_answer" | "complete" | "refused" | "truncated" | "context_full" | "iteration_limit";
 
 export type AgentCallbacks = {
   onText?: (delta: string) => void;
@@ -40,7 +42,11 @@ export type TurnOutcome = {
   iterations: number;
   toolCalls: ToolCallTrace[];
   validationFailures: ValidationFailureTrace[];
+  /** The open question, when the status is `awaiting_answer`. */
+  question?: OpenQuestion;
 };
+
+export type OpenQuestion = AskedQuestion & { toolUseId: string };
 
 /** Consecutive user messages (a tool result, then BK's reply) are one turn to the API; merging keeps stored history untouched. */
 export function mergeConsecutiveUsers(messages: ModelMessage[]): ModelMessage[] {
@@ -79,6 +85,7 @@ function instrument(tools: ModelTool[], recorder: TurnRecorder, onToolCall?: (na
 
 function classify(stopReason: string): TurnStatus {
   switch (stopReason) {
+    case "awaiting_answer": return "awaiting_answer";
     case "refusal": return "refused";
     case "max_tokens": return "truncated";
     case "model_context_window_exceeded": return "context_full";
@@ -139,6 +146,7 @@ export async function runAgentTurn(input: {
   });
 
   const status = classify(result.stopReason);
+  const asked = result.pending === undefined ? undefined : AskUserSchema.safeParse(result.pending.input);
   const messages = resumable(result.messages, status);
   return {
     status,
@@ -152,5 +160,6 @@ export async function runAgentTurn(input: {
     iterations: result.iterations,
     toolCalls: recorder.toolCalls,
     validationFailures: recorder.validationFailures,
+    ...(result.pending !== undefined && asked?.success ? { question: { ...asked.data, toolUseId: result.pending.id } } : {}),
   };
 }

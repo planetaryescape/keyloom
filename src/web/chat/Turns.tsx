@@ -4,6 +4,7 @@ import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { groupProposals } from "./compare.ts";
 import { Markdown } from "./Markdown.tsx";
+import { QuestionCard } from "./QuestionCard.tsx";
 import { PriorityChips } from "./PriorityChips.tsx";
 import { ProposalCompare } from "./ProposalCompare.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
@@ -59,6 +60,10 @@ interface Props {
   onAskAgain: () => void;
   onOpenRelease: () => void;
   onRetry: () => void;
+  /** The person's answer to the question this reply asked. */
+  onAnswer: (toolUseId: string, text: string) => void;
+  /** A reply is streaming, so a question can't be answered until it ends. */
+  busy?: boolean;
   /** Other providers that are ready, offered when this one refused the account (out of credits, a key it rejects). */
   switchTo?: readonly { id: string; name: string }[];
   /** Starts a new conversation on that provider with the message that failed back in the box. */
@@ -67,7 +72,7 @@ interface Props {
   compact?: boolean;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, switchTo = [], onSwitch, compact = false }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -86,6 +91,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
           {turn.activity ?? (turn.text === "" ? "Thinking…" : "Writing…")}
         </p>
       ) : null}
+      {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
       {turn.phase === "stopped" ? <p className="msg-note">Stopped. What came through is above.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}
       {compact

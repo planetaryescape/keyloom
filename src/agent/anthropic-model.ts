@@ -6,7 +6,7 @@ import { transformJSONSchema } from "@anthropic-ai/sdk/lib/transform-json-schema
 import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { z } from "zod";
 import {
-  type AgentModel, type ModelErrorKind, type ModelMessage, type ModelTool, type Usage, addUsage, emptyUsage,
+  AWAITING_ANSWER, type AgentModel, type ModelErrorKind, type ModelMessage, type ModelTool, type Usage, addUsage, emptyUsage,
 } from "./model.ts";
 import { neutralBlock, wireBlock } from "./blocks.ts";
 import { DEFAULT_MODELS } from "./provider.ts";
@@ -100,6 +100,8 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
       let costUsd: number | undefined;
       let iterations = 0;
       let stopReason: string | null = null;
+      let pause: { message: { content: unknown[] }; call: { id: string; name: string; input: unknown } } | undefined;
+      const pausing = new Set(request.tools.filter((t) => t.pauses === true).map((t) => t.name));
       for await (const stream of runner) {
         if (request.onText) stream.on("text", (delta) => request.onText?.(delta));
         // The SDK's final message copies only the usage fields it knows, so OpenRouter's `cost` (sent in
@@ -115,6 +117,24 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         usage = addUsage(usage, usageOf(message.usage));
         if (cost !== undefined) costUsd = (costUsd ?? 0) + cost;
         stopReason = message.stop_reason;
+        // A question for the person ends the turn here, before the runner runs any tool or asks the model again (D-382).
+        const call = message.content.find((b) => b.type === "tool_use" && pausing.has(b.name));
+        if (call !== undefined && call.type === "tool_use") {
+          pause = { message, call: { id: call.id, name: call.name, input: call.input } };
+          break;
+        }
+      }
+      if (pause !== undefined) {
+        // The runner appends the assistant message only when it goes on to answer the calls, so the stopped one is added here. Calls beside
+        // the question get an error result: they did not run, and the API wants a result for every call before the next message.
+        const uses = pause.message.content as Array<{ type: string; id?: string; name?: string }>;
+        const others = uses.filter((b) => b.type === "tool_use" && b.id !== pause?.call.id);
+        const stored: ModelMessage[] = [
+          toStored({ role: "assistant", content: pause.message.content }),
+          ...(others.length === 0 ? [] : [{ role: "user" as const, content: others.map((b) => ({ type: "tool_result" as const, tool_use_id: b.id as string, content: "Not run: you asked BK a question in the same reply. Call it again after the answer if it is still needed.", is_error: true })) }]),
+        ];
+        const before = runner.params.messages.slice(request.messages.length).map((m) => toStored(m as { role: "user" | "assistant"; content: unknown }));
+        return { messages: [...before, ...stored], stopReason: AWAITING_ANSWER, iterations, usage, pending: pause.call, ...(costUsd === undefined ? {} : { costUsd }) };
       }
       // The runner's own copy of the conversation now holds the assistant turns and tool results it added.
       const added = runner.params.messages.slice(request.messages.length);

@@ -171,3 +171,43 @@ describe("priority chips", () => {
     expect(turns.map((turn) => turn.priorities.map((p) => p.id))).toEqual([[], ["d1"], ["orphan"]]);
   });
 });
+
+describe("the agent's question (D-381, D-382)", () => {
+  const question = { toolUseId: "toolu_1", question: "Replace it or add a new one?", options: [{ label: "Add a new one" }, { label: "Replace it" }], allowOther: false, answer: null };
+
+  test("the outcome puts the question on the reply, open and not streaming", () => {
+    const t = run([sent, ev({ type: "start", conversationId: "c1", messageId: "m1" }), ev({ type: "done", outcome: outcome({ status: "awaiting_answer", question }) })]);
+    expect(assistant(t)).toMatchObject({ phase: "done", ending: "awaiting_answer", question: { toolUseId: "toolu_1", answer: null } });
+    expect(isStreaming(t)).toBe(false);
+  });
+
+  test("answering marks it answered at once and opens the reply that continues; a refusal opens it again", () => {
+    const asked = run([sent, ev({ type: "done", outcome: outcome({ status: "awaiting_answer", question }) })]);
+    const answering: Action = { type: "answering", toolUseId: "toolu_1", text: "Add a new one", assistantId: "a2" };
+    const after = run([answering], asked);
+    expect(after.turns.filter((turn) => turn.kind === "assistant")[0]).toMatchObject({ question: { answer: "Add a new one" } });
+    expect(isStreaming(after)).toBe(true);
+    const rejected = run([{ type: "answerRejected", toolUseId: "toolu_1" }], after);
+    expect(assistant(rejected)).toMatchObject({ question: { answer: null } });
+    expect(isStreaming(rejected)).toBe(false);
+  });
+
+  test("a reload shows the question still open, and an answered one quietly", () => {
+    const detail = (answer: string | null): ConversationDetail => ({
+      conversation: { id: "c1", title: "t", createdAt: 1, layoutId: "l", provider: "anthropic", model: "m" },
+      messages: [
+        { id: "u1", role: "user", text: "move it", toolCalls: [], selection: null, createdAt: 1 },
+        { id: "a1", role: "assistant", text: "", toolCalls: ["ask_user"], selection: null, createdAt: 2, question: { ...question, answer } },
+      ],
+      proposals: [], priorities: [],
+    });
+    expect(assistant(fromConversation(detail(null)))).toMatchObject({ question: { answer: null }, ending: "awaiting_answer" });
+    expect(assistant(fromConversation(detail("Replace it")))).toMatchObject({ question: { answer: "Replace it" }, ending: "complete" });
+  });
+
+  test("typing a message instead answers the open question", () => {
+    const asked = run([sent, ev({ type: "done", outcome: outcome({ status: "awaiting_answer", question }) })]);
+    const typed = run([{ type: "sent", userId: "u2", assistantId: "a3", text: "keep it", selection: null }], asked);
+    expect(typed.turns.find((turn): turn is AssistantTurn => turn.kind === "assistant")?.question?.answer).toBe("Answered in your own words");
+  });
+});

@@ -12,6 +12,7 @@ import { checkChange, proposeChange } from "./changes.ts";
 import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
 import { ValidationFailedError } from "./errors.ts";
+import { newConfig } from "./configs.ts";
 import { putConfig } from "./keyboard-put.ts";
 import { getLayout, listLayouts } from "./layouts.ts";
 import { typingFindings } from "./lab.ts";
@@ -58,6 +59,12 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         config: { id: out.config.id, name: out.config.name, boardName: out.config.boardName }, proposals: out.proposals, placements: out.placements, layers: out.layers,
         notCarried: out.notCarried, combos: out.combos, notes: out.notes,
       };
+    },
+    newConfig(input) {
+      const made = input.from === "this"
+        ? newConfig(app, { name: input.name, from: "config", config: layoutId })
+        : newConfig(app, { name: input.name, from: "blank", board: getLayout(app, layoutId).board.definition.id });
+      return { id: made.id, name: made.name, boardName: made.boardName };
     },
     check: (ops) => checkChange(app, layoutId, { ops, ...scope }),
     priorities: () => layoutPriorities(app, layoutId).map(toPriorityFact),

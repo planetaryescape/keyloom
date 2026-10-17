@@ -8,6 +8,8 @@ import type { ChangeOp } from "./change.ts";
 import { deepEqual } from "./equal.ts";
 import { translateHoldTapProfile } from "./kanata/profiles.ts";
 import { type Hand, modsForHand } from "./mirror.ts";
+import { GenerateError } from "./kanata/generate-error.ts";
+import { macroAction } from "./kanata/macro.ts";
 import { NO_TAP, ownTap } from "./rewrap.ts";
 import type { Binding, Hsv, HoldTapProfile, LayerLighting, Layout, Macro, SlotAction, TapDance } from "./schema.ts";
 
@@ -108,7 +110,10 @@ export class BindingTransfer {
       }
       case "macro": {
         const macro = this.env.source.macros.find((m) => m.id === source.macroId);
-        return macro === undefined ? { skip: `it runs macro "${source.macroId}", which the source layout does not have` } : { binding: { kind: "macro", macroId: this.macroFor(macro) } };
+        if (macro === undefined) return { skip: `it runs macro "${source.macroId}", which the source layout does not have` };
+        const unwritable = this.kanataRefusal(() => macroAction(macro));
+        if (unwritable !== null) return { skip: `its macro "${macro.name}" can't be written for kanata: ${unwritable}` };
+        return { binding: { kind: "macro", macroId: this.macroFor(macro) } };
       }
       case "tapDance": {
         const dance = this.env.source.tapDances.find((t) => t.id === source.tapDanceId);
@@ -137,6 +142,18 @@ export class BindingTransfer {
     }
   }
 
+  /** Why kanata's output can't say what the generator was asked to, or null when it can, or when the target isn't kanata. Skipping here keeps a put a set of warnings, not a validation failure. */
+  private kanataRefusal(write: () => unknown): string | null {
+    if (this.env.target.firmware !== "kanata") return null;
+    try {
+      write();
+      return null;
+    } catch (err) {
+      if (err instanceof GenerateError) return err.message;
+      throw err;
+    }
+  }
+
   private noLayer(id: string): string {
     const name = this.env.source.layers.find((l) => l.id === id)?.name ?? id;
     return `it switches to the ${name} layer, and the target has no layer that does the same job`;
@@ -152,7 +169,10 @@ export class BindingTransfer {
       }
       case "macro": {
         const macro = this.env.source.macros.find((m) => m.id === a.macroId);
-        return macro === undefined ? { skip: `a tap dance slot runs macro "${a.macroId}", which the source layout does not have` } : { action: { kind: "macro", macroId: this.macroFor(macro) } };
+        if (macro === undefined) return { skip: `a tap dance slot runs macro "${a.macroId}", which the source layout does not have` };
+        const unwritable = this.kanataRefusal(() => macroAction(macro));
+        if (unwritable !== null) return { skip: `a tap dance slot runs macro "${macro.name}", which can't be written for kanata: ${unwritable}` };
+        return { action: { kind: "macro", macroId: this.macroFor(macro) } };
       }
     }
   }
@@ -230,8 +250,9 @@ export class BindingTransfer {
     const base = from ?? { id: source.profileId, name: "Hold-tap", firmware: this.env.source.firmware, options: {} };
     const { profile: translated, notes } = translateHoldTapProfile(base, this.env.source.settings, (positions) =>
       hand !== null && this.env.sourceTriggerIsOppositeHand?.(positions, hand) === true ? "opposite" : "other");
-    const id = uniqueId(new Set(this.profiles.map((p) => p.id)), "home-row-mods");
-    const profile: HoldTapProfile = { ...translated, id, name: from?.name ?? "Home-row mods" };
+    // With no source profile (a layer held from a key that had no hold-tap) the timing is the default, and it isn't a home-row-mods profile.
+    const id = uniqueId(new Set(this.profiles.map((p) => p.id)), from === undefined ? "layer-hold" : "home-row-mods");
+    const profile: HoldTapProfile = { ...translated, id, name: from?.name ?? (from === undefined ? "Layer hold" : "Home-row mods") };
     this.notes.push(...notes);
     this.profiles.push(profile);
     this.made.set(key, id);

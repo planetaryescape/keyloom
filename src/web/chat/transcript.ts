@@ -1,7 +1,7 @@
 // What the chat panel shows, as a pure reducer over the stream's frames. Keeping it free of React
 // and fetch lets the streaming rules (partial text, a dropped connection, superseded siblings) be
 // tested directly.
-import type { ChatEvent, ChatOutcome, ChatSelection, ConversationDetail, PriorityCard, ProposalCard } from "../../api/http.ts";
+import type { ChatEvent, ChatOutcome, ChatSelection, ConversationDetail, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
 import { toolActivity } from "./activity.ts";
 
 export type UserTurn = { kind: "user"; id: string; text: string; selection: ChatSelection | null };
@@ -14,6 +14,8 @@ export type AssistantTurn = {
   proposals: ProposalCard[];
   /** What BK said that keyloom remembered during this reply, as chips he can remove (08). */
   priorities: PriorityCard[];
+  /** What the agent asked BK, open until he answers (D-381). */
+  question: QuestionCard | null;
   phase: "streaming" | "done" | "failed" | "stopped";
   failure: { code: string; message: string } | null;
   /** How the model ended the reply: anything but "complete" means the reply is incomplete. */
@@ -29,6 +31,8 @@ export const EMPTY: Transcript = { conversationId: null, pinned: null, turns: []
 export type Action =
   | { type: "sent"; userId: string; assistantId: string; text: string; selection: ChatSelection | null }
   | { type: "event"; event: ChatEvent }
+  | { type: "answering"; toolUseId: string; text: string; assistantId: string }
+  | { type: "answerRejected"; toolUseId: string }
   | { type: "failed"; code: string; message: string }
   | { type: "stopped" }
   | { type: "rolledBack" }
@@ -39,7 +43,7 @@ export type Action =
   | { type: "reset" };
 
 const streamingAssistant = (assistantId: string): AssistantTurn => ({
-  kind: "assistant", id: assistantId, text: "", activity: null, proposals: [], priorities: [], phase: "streaming", failure: null, ending: null,
+  kind: "assistant", id: assistantId, text: "", activity: null, proposals: [], priorities: [], question: null, phase: "streaming", failure: null, ending: null,
 });
 
 function updateLast(state: Transcript, change: (turn: AssistantTurn) => AssistantTurn): Transcript {
@@ -76,6 +80,7 @@ function onEvent(state: Transcript, event: ChatEvent): Transcript {
         text: turn.text === "" ? event.outcome.text : turn.text,
         proposals: event.outcome.proposals.reduce(withProposal, turn.proposals),
         priorities: event.outcome.priorities.reduce(withPriority, turn.priorities),
+        question: event.outcome.question ?? turn.question,
         activity: null,
         phase: "done",
         ending: event.outcome.status,
@@ -91,13 +96,27 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
       return {
         ...state,
         turns: [
-          ...state.turns,
+          // Typing instead of pressing a button still answers an open question (D-382).
+          ...state.turns.map((turn) => (turn.kind === "assistant" && turn.question?.answer === null ? { ...turn, question: { ...turn.question, answer: "Answered in your own words" } } : turn)),
           { kind: "user", id: action.userId, text: action.text, selection: action.selection },
           streamingAssistant(action.assistantId),
         ],
       };
     case "event":
       return onEvent(state, action.event);
+    case "answering":
+      return {
+        ...state,
+        turns: [
+          ...state.turns.map((turn) => (turn.kind === "assistant" && turn.question?.toolUseId === action.toolUseId ? { ...turn, question: { ...turn.question, answer: action.text } } : turn)),
+          streamingAssistant(action.assistantId),
+        ],
+      };
+    case "answerRejected":
+      return {
+        ...state,
+        turns: state.turns.slice(0, -1).map((turn) => (turn.kind === "assistant" && turn.question?.toolUseId === action.toolUseId ? { ...turn, question: { ...turn.question, answer: null } } : turn)),
+      };
     case "failed":
       return updateLast(state, (turn) => ({ ...turn, activity: null, phase: "failed", failure: { code: action.code, message: action.message } }));
     case "stopped":
@@ -140,11 +159,11 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
 /** A stored conversation. Proposals aren't linked to a message, so they hang off the last reply. */
 export function fromConversation(detail: ConversationDetail): Transcript {
   // An assistant turn that only called tools has no words to show; as a turn it would be an empty "keyloom" label.
-  const spoken = detail.messages.filter((message) => message.role === "user" || message.text.trim() !== "");
+  const spoken = detail.messages.filter((message) => message.role === "user" || message.text.trim() !== "" || message.question !== undefined);
   const turns: Turn[] = spoken.map((message) =>
     message.role === "user"
       ? { kind: "user", id: message.id, text: message.text, selection: message.selection }
-      : { ...streamingAssistant(message.id), text: message.text, phase: "done", ending: "complete" },
+      : { ...streamingAssistant(message.id), text: message.text, question: message.question ?? null, phase: "done", ending: message.question?.answer === null ? "awaiting_answer" : "complete" },
   );
   const last = turns.findLastIndex((turn) => turn.kind === "assistant");
   const target = turns[last];

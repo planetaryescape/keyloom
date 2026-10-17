@@ -76,8 +76,10 @@ export const BoardDefinitionSchema = z.strictObject({
   // A software remapper needs it because it grabs physical keys by name (`defsrc`); a firmware board's keymap needs no such list.
   physicalKeys: z.array(z.string().min(1)).optional(),
   // Positions where a layer or hold key lands first when the board it came from had more thumb keys than this one has, best first (D-234:
-  // Space-hold, then Caps Lock, then right Option on the MacBook). The key keeps its own tap; BK picks among them (D-019's "make room").
+  // Space-hold, then Caps Lock, right Command, right Option, left Option and fn on the MacBook). The key keeps its own tap; BK picks among them (D-019's "make room").
   holdKeyPreference: z.array(z.number().int().nonnegative()).optional(),
+  // Keys a layer may be held from once the preferred ones are used, so no layer is left with no way in: less-used letters, such as ; and ' on a MacBook.
+  holdKeyFallback: z.array(z.number().int().nonnegative()).optional(),
   // A firmware board's keys come in mirrored pairs; a staggered laptop keyboard has none, so a software board may leave this empty.
   mirror: z.record(z.string(), z.number().int().nonnegative()),
   importers: z.array(z.enum(IMPORTER_IDS)).min(1),

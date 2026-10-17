@@ -14,7 +14,7 @@ import { keyOn } from "./words.ts";
 
 const issue = (code: string, message: string, plain: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, plain, slots } : { code, message, plain });
 
-/** `firmware_unsupported` for what kanata can't write: a hold slot on a tap dance, a macro that holds a non-modifier, a kept binding that runs a command. */
+/** `firmware_unsupported` for what kanata can't write: a macro that holds a non-modifier, a kept binding that runs a command. */
 export function kanataSupport(doc: Layout): Issue[] {
   if (doc.firmware !== "kanata") return [];
   const out: Issue[] = [];
@@ -33,12 +33,6 @@ export function kanataSupport(doc: Layout): Issue[] {
   }
   for (const combo of doc.combos) if (combo.output.kind === "native" && combo.output.firmware === "kanata") attempt(() => nativeAction("kanata", (combo.output as Extract<Binding, { kind: "native" }>).source, `combo "${combo.id}"`), undefined, `Combo "${combo.name}"`);
   for (const m of doc.macros) attempt(() => macroAction(m), undefined, `Macro "${m.name}"`);
-  for (const td of doc.tapDances) {
-    if (td.hold || td.tapThenHold) {
-      out.push(issue("firmware_unsupported", `tap dance "${td.name}" has a ${td.hold ? "hold" : "tap-then-hold"} slot, and kanata's tap-dance only counts taps`,
-        `The tap dance "${td.name}" has a hold, and the MacBook's remapper can only count taps. Remove the hold or use a hold-tap.`));
-    }
-  }
   return out;
 }
 

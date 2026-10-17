@@ -1,7 +1,7 @@
 // `keyloom keyboard put <layout> --on <board>` (22#putting-bks-config-on-it): BK's chosen layout, mapped onto a board that has no config
 // yet. It makes a new config on that board and proposes the mapping as change sets on it; the proposals wait for BK, and nothing is
 // built or flashed (D-014: the validator decides, and a person applies).
-import { planLayoutPut } from "../agent/put-plan.ts";
+import { type PutPlan, planLayoutPut } from "../agent/put-plan.ts";
 import type { LayoutSnapshot } from "../agent/ports.ts";
 import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
@@ -10,6 +10,7 @@ import type { ChangeSetSource } from "../persistence/change-sets.ts";
 import { type ChangeSetView, proposeChange } from "./changes.ts";
 import { type ConfigView, blankDocument, newConfig } from "./configs.ts";
 import { evaluate } from "../validation/validate.ts";
+import type { ChangeOp } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
@@ -26,6 +27,8 @@ export type PutInput = {
   name?: string;
   /** For a layer key with no counterpart, by its source position: the target key chosen among the candidates (D-336). */
   placements?: Record<string, number>;
+  /** Source layers to carry, by id or name. Omitted: every layer except factory and test layers, which only mean something on the board they shipped on. */
+  layers?: string[];
   /** Who is asking: the editor and the CLI, or the agent (D-372). The proposals are the same either way. */
   source?: ChangeSetSource;
 };
@@ -63,24 +66,54 @@ export function previewPut(app: App, input: PutInput): PutPreview {
   };
 }
 
-function summaryOf(from: string, plan: ReturnType<typeof planLayoutPut>): string {
+function summaryOf(from: string, plan: PutPlan): string {
   const carried = plan.layers.reduce((n, l) => n + l.carried, 0);
   const guessed = plan.layers.reduce((n, l) => n + l.guessed, 0);
   return `${plural(carried, "key")} across ${plural(plan.layers.length, "layer")} from ${from}${guessed > 0 ? `, ${guessed} of them nearest-place guesses` : ""}${plan.combos.copied.length > 0 ? `, ${plural(plan.combos.copied.length, "combo")}` : ""}`;
+}
+
+const FACTORY_LAYER = /(^|[^a-z])(factory|test)([^a-z]|$)/i;
+
+/** The layers a put carries and the ones it leaves out, with the reason for each. The base layer is always carried: it is the new config's first. */
+function chooseLayers(doc: Layout, wanted: readonly string[] | undefined): { kept: Layout; notes: string[] } {
+  const named = (l: Layout["layers"][number]) => wanted?.some((w) => w === l.id || w === l.name) === true;
+  const out: string[] = [];
+  const layers = doc.layers.filter((l, i) => {
+    const keep = i === 0 || (wanted === undefined ? !FACTORY_LAYER.test(`${l.id} ${l.name}`) : named(l));
+    if (!keep) out.push(l.name);
+    return keep;
+  });
+  const unknown = (wanted ?? []).filter((w) => !doc.layers.some((l) => l.id === w || l.name === w));
+  if (unknown.length > 0) throw new UsageError(`no layer called ${unknown.map((u) => `"${u}"`).join(", ")}; the layers are ${doc.layers.map((l) => l.name).join(", ")}`);
+  const why = wanted === undefined ? "a factory or test layer, which only means something on the keyboard it shipped on" : "not chosen";
+  return { kept: { ...doc, layers }, notes: out.length > 0 ? [`Left out ${out.join(", ")}: ${why}`] : [] };
 }
 
 function planFor(app: App, input: PutInput) {
   const view = getLayout(app, input.from);
   const target = showBoard(input.board);
   if (target.definition.id === view.layout.boardId) throw new UsageError(`${view.layout.name} is already a ${target.definition.name} config; to copy it, use \`keyloom config new\``);
-  if (target.definition.firmware === "kanata") throw new UsageError(`${target.definition.name} is a laptop keyboard; its config comes from \`keyloom remap\`, not from a keyboard put`);
   // A stored Oryx layout still holds its colours and tap dances as code; read it the way a fresh import would, in memory (D-193, D-222).
   const upgraded = upgradeStoredOryx(view.document, view.board.definition);
   const source: LayoutSnapshot = {
     layoutId: view.layout.id, layoutName: view.layout.name, revisionId: view.revision.id, document: upgraded === null ? view.document : upgraded.layout, board: view.board,
     onKeyboard: getBoardConfig(app.db, view.layout.boardId) === view.layout.id, archived: view.layout.archivedAt !== null,
   };
-  return { view, target, plan: planLayoutPut(source, target, choicesOf(input)) };
+  const { kept, notes } = chooseLayers(source.document, input.layers);
+  const start = blankDocument(target.definition.id);
+  const planned = planLayoutPut({ ...source, document: kept }, target, choicesOf(input), start);
+  // A software remapper's new config starts as the identity map, so the put replaces keys that type something and the validator asks for
+  // each lost function to be kept or dropped (D-014). A put is a replacement by intent: drop them, and say which, so nothing goes silently (D-024).
+  const dropped = new Set<string>();
+  const dropLost = (ops: ChangeOp[]): ChangeOp[] => {
+    if (ops.length === 0 || target.definition.firmware !== "kanata") return ops;
+    const lost = evaluate(target.definition, start, ops).result.errors.filter((e) => e.code === "function_lost" && e.function !== undefined).map((e) => e.function as string);
+    for (const f of lost) dropped.add(f);
+    return [...ops, ...lost.map((f): ChangeOp => ({ op: "dropFunction", function: f, reason: `${view.layout.name}'s setup has no key for it on the ${target.definition.name}` }))];
+  };
+  const plan = { ...planned, ops: dropLost(planned.ops), opsWithPlacements: dropLost(planned.opsWithPlacements) };
+  const droppedNote = dropped.size > 0 ? [`${plural(dropped.size, "function")} the ${target.definition.name} typed before no longer has a plain key of its own: ${[...dropped].slice(0, 12).map((f) => f.replace(/^key:/, "")).join(", ")}${dropped.size > 12 ? ", and more" : ""}. The old config is untouched and restoring it is one step`] : [];
+  return { view, target, plan: { ...plan, notes: [...notes, ...plan.notes, ...droppedNote] } };
 }
 
 export function putConfig(app: App, input: PutInput): PutOutcome {

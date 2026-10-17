@@ -195,15 +195,27 @@ export const ChatSelectionSchema = z.object({
 });
 export type ChatSelection = z.infer<typeof ChatSelectionSchema>;
 
+// The agent's question to BK (D-380): the options as buttons, the recommended one first. `answer` is null while it is open.
+export const QuestionCardSchema = z.object({
+  toolUseId: z.string().min(1),
+  question: z.string().min(1),
+  options: z.array(z.object({ label: z.string().min(1), description: z.string().min(1).optional() })).min(2).max(4),
+  allowOther: z.boolean(),
+  answer: z.string().nullable(),
+});
+export type QuestionCard = z.infer<typeof QuestionCardSchema>;
+
 export const ChatRequestSchema = z.object({
   // Omitted to start a conversation; its id comes back in the `start` event.
   conversationId: z.string().min(1).optional(),
-  message: z.string().min(1).max(8000),
+  message: z.string().min(1).max(8000).optional(),
+  // The answer to the question the conversation is waiting on, in place of a message (D-382).
+  answer: z.object({ toolUseId: z.string().min(1), text: z.string().min(1).max(500) }).optional(),
   // The keys selected in the editor when the message was sent (D-012).
   selection: ChatSelectionSchema.optional(),
   // Key changes kept on the board but not applied (D-317), so the agent knows what BK is in the middle of.
   drafts: z.array(z.object({ layerId: z.string().min(1), position: z.number().int().nonnegative(), binding: BindingSchema })).max(100).optional(),
-});
+}).refine((r) => (r.message === undefined) !== (r.answer === undefined), { message: "send either a message or an answer to the open question" });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
 export const ProposalCardSchema = z.object({
@@ -278,10 +290,12 @@ export const ChatUsageSchema = z.object({
 export const ChatOutcomeSchema = z.object({
   conversationId: z.string().min(1),
   messageIds: z.array(z.string().min(1)),
-  status: z.enum(["complete", "refused", "truncated", "context_full", "iteration_limit"]),
+  status: z.enum(["awaiting_answer", "complete", "refused", "truncated", "context_full", "iteration_limit"]),
   text: z.string(),
   proposals: z.array(ProposalCardSchema),
   priorities: z.array(PriorityCardSchema),
+  // Set with the status `awaiting_answer`.
+  question: QuestionCardSchema.optional(),
   provider: ChatProviderIdSchema,
   model: z.string(),
   effort: z.string(),
@@ -330,6 +344,8 @@ export const ChatMessageSchema = z.object({
   toolCalls: z.array(z.string()),
   selection: ChatSelectionSchema.nullable(),
   createdAt: z.number().finite(),
+  // The question this reply asked, open or answered (D-381).
+  question: QuestionCardSchema.optional(),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 

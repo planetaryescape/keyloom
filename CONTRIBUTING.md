@@ -322,6 +322,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `mirror` | all | An object from a left-hand position to the right-hand position it mirrors to, on the same row and under the same finger. Each target once. Keys with no opposite are left out. |
 | `physicalKeys` | `kanata-config`, optional | The key each position is on the device, in binding order: KeyCode names, plus `FN` for the Apple fn/globe key. A software remapper grabs keys by name. |
 | `holdKeyPreference` | optional | Positions where a layer or hold key lands first when the board it came from had more thumb keys, best first. |
+| `holdKeyFallback` | optional | Positions a layer may be held from once the preferred ones are used, so no carried layer has no way in; less-used keys such as `;` and `'`. |
 | `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
 | `lighting` | qmk | Optional. Present on a board with per-key RGB that keyloom writes layer colours for. |
 | `lighting.ledPositions` | qmk | For each LED number, the key position it sits under. Read it from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates. |

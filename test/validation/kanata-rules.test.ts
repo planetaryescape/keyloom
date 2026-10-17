@@ -61,9 +61,9 @@ describe("the MacBook's layouts", () => {
 describe("what kanata can't write is refused before Apply", () => {
   const withDance = (td: object): Layout => ({ ...identityLayout(board), tapDances: [td as never] });
 
-  test("a tap dance with a hold slot", () => {
+  test("a tap dance with a hold slot is written now (nested tap-hold), so it is not refused", () => {
     const layout = withDance({ id: "t", name: "Tab", tap: { kind: "key", code: "TAB" }, hold: { kind: "key", code: "ESCAPE" } });
-    expect(issues(layout).some((e) => e.code === "firmware_unsupported" && e.message.includes("hold"))).toBe(true);
+    expect(issues(layout).some((e) => e.code === "firmware_unsupported")).toBe(false);
   });
 
   test("a kept kanata binding that runs a command, whatever it is called", () => {
