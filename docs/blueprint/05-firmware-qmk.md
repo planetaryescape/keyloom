@@ -39,6 +39,8 @@ What an Oryx export of BK's actual layout contains was spike S3 ([../research/sp
 - **`LAYER_STATE_8BIT` in `config.h` caps the layout at 8 layers.** It's imported as a setting and enforced by the validator.
 - **Some of Oryx's generated code uses layer indices:** the `ledmap`, `rgb_matrix_indicators_user`'s `case n:`, and `layer_move(n)` and `LT(n, …)` inside `process_record_user`. That code is passthrough, so layer order is fixed for such a layout until the generator learns to rewrite it.
 
+- **Layers named with an enum (D-375):** QMK's own keymaps write `enum layers { BASE, NAV }`, `[BASE] = LAYOUT(...)`, `MO(NAV)` and `LT(NAV, KC_A)`. The tree-sitter parse resolves each enum member to its index (explicit values, `= BASE + 1` and the members after them included), reads the layer keys by those indexes, and keeps the member as the layer's name, minus leading underscores. Layers must come out numbered 0 to n-1; a member with no value keyloom can compute, a gap or a repeat is an import error that says so. Generation still writes numbers (`[0] = LAYOUT`), and the enum itself is not kept.
+
 ## Generation writes `keymap.c`, `config.h` and `rules.mk`
 
 keyloom generates C, not `keymap.json` (D-042). QMK's JSON format can't express combo definitions or tap dance, and Oryx's export is already C. A JSON-plus-C hybrid (QMK supports one through `OTHER_KEYMAP_C`) would split one layout across two generated files for no gain.

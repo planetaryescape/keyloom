@@ -1,14 +1,19 @@
 // Reads keymap.c into plain data: layers, combos, process_record_user cases, and the blocks
 // keyloom keeps as Passthrough. Everything tree-sitter-specific stays in this file.
 import type { Node } from "web-tree-sitter";
-import { type Expr, findFunction, findInitializer, functionName, toExpr, withTree } from "./c-parse.ts";
+import { type Expr, enumConstants, findFunction, findInitializer, functionName, toExpr, withTree } from "./c-parse.ts";
 import { ImportError } from "./source.ts";
 
 export type Chunk = { anchor: string; source: string };
 
 export type ParsedKeymap = {
-  /** One entry per `[n] = LAYOUT...(...)`, in file order. */
+  /** One entry per `[n] = LAYOUT...(...)`, by layer index. */
   layers: Expr[][];
+  /**
+   * The enum member each layer was written with (`[NAV] = LAYOUT(...)`), by layer index; empty when the keymap indexes by number.
+   * Code and keys name layers by these (`MO(NAV)`), so the importer reads them as the layer they stand for (D-375).
+   */
+  layerNames: string[];
   combos: { arrays: Map<string, Expr[]>; entries: Array<{ array: string; output: Expr }>; unsupported: string[] };
   /** `case X:` blocks of process_record_user, verbatim. */
   cases: Array<{ label: string; source: string }>;
@@ -94,25 +99,41 @@ function chunksOf(root: Node, source: string, used: ReadonlySet<string>, modelle
   return chunks;
 }
 
-function parseLayers(root: Node): Expr[][] {
+function parseLayers(root: Node): { layers: Expr[][]; layerNames: string[] } {
   const init = findInitializer(root, "keymaps");
   if (!init) throw new ImportError("keymap.c has no `keymaps[]` array");
-  const layers: Expr[][] = [];
+  const constants = enumConstants(root);
+  const found: Array<{ index: number; name: string | undefined; args: Expr[] }> = [];
   for (const pair of init.namedChildren) {
     if (pair.type === "comment") continue;
     const value = pair.type === "initializer_pair" ? pair.childForFieldName("value") : null;
     const expr = value ? toExpr(value) : undefined;
     if (expr?.kind !== "call" || !expr.name.startsWith("LAYOUT")) {
-      throw new ImportError(`keymaps[] entry ${layers.length} is not a LAYOUT...(...) call`);
+      throw new ImportError(`keymaps[] entry ${found.length} is not a LAYOUT...(...) call`);
     }
     const designator = pair.childForFieldName("designator")?.text.trim();
-    if (designator !== `[${layers.length}]`) {
-      throw new ImportError(`keymaps[] entry ${layers.length} is written ${designator ?? "without an index"}; keyloom reads layers indexed [0], [1], ... in order`);
+    const written = /^\[\s*([^\]]+?)\s*\]$/.exec(designator ?? "")?.[1];
+    const numeric = written !== undefined && /^\d+$/.test(written) ? Number(written) : undefined;
+    const named = written !== undefined && numeric === undefined ? constants.get(written) : undefined;
+    const index = numeric ?? named;
+    if (index === undefined) {
+      throw new ImportError(
+        written !== undefined && numeric === undefined && /^[A-Za-z_]\w*$/.test(written)
+          ? `keymaps[] entry ${found.length} is written ${designator}, and keyloom can't find a value for ${written} in an enum of keymap.c`
+          : `keymaps[] entry ${found.length} is written ${designator ?? "without an index"}; keyloom reads layers indexed by a number or an enum member`,
+      );
     }
-    layers.push(expr.args);
+    found.push({ index, name: numeric === undefined ? written : undefined, args: expr.args });
   }
-  if (layers.length === 0) throw new ImportError("keymaps[] has no layers");
-  return layers;
+  if (found.length === 0) throw new ImportError("keymaps[] has no layers");
+  const byIndex = [...found].sort((a, b) => a.index - b.index);
+  byIndex.forEach((l, i) => {
+    if (l.index !== i) {
+      throw new ImportError(i > 0 && byIndex[i - 1]?.index === l.index ? `keymaps[] has two layers numbered ${l.index}` : `keymaps[] has no layer ${i}; its layers must be numbered 0 to ${found.length - 1} with no gaps`);
+    }
+  });
+  const layerNames = byIndex.every((l) => l.name !== undefined) ? byIndex.map((l) => l.name as string) : [];
+  return { layers: byIndex.map((l) => l.args), layerNames };
 }
 
 function parseCombos(root: Node): ParsedKeymap["combos"] {
@@ -156,7 +177,7 @@ function parseCases(root: Node, source: string): ParsedKeymap["cases"] {
 
 export function parseKeymapC(source: string): Promise<ParsedKeymap> {
   return withTree(source, (root) => {
-    const layers = parseLayers(root);
+    const { layers, layerNames } = parseLayers(root);
     const usedIds = new Set<string>();
     for (const layer of layers) for (const e of layer) if (e.kind === "id") usedIds.add(e.name);
 
@@ -171,6 +192,7 @@ export function parseKeymapC(source: string): Promise<ParsedKeymap> {
     const modelled = new Set(["keymaps", "key_combos", ...combos.arrays.keys()]);
     return {
       layers,
+      layerNames,
       combos,
       cases: parseCases(root, source),
       customKeycodes,

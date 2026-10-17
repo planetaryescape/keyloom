@@ -12,7 +12,7 @@ describe("the firmware default keymap", () => {
     const urls: string[] = [];
     const found = await readDefaultKeymap(showBoard("zsa/moonlander").definition, { fetchText: defaultKeymapTree(urls), cacheDir: tempDir() });
     expect(urls).toEqual(["https://raw.githubusercontent.com/zsa/qmk_firmware/93b2b9ec3368f86c5eb5a2e3f934049f8daef885/keyboards/zsa/moonlander/keymaps/default/keymap.c"]);
-    expect(found.layout?.layers.length).toBeGreaterThan(1);
+    expect(found.layout?.layers.map((l) => l.name)).toEqual(["BASE", "SYMB", "MDIA"]);
     expect(found.layout?.boardId).toBe("zsa/moonlander");
   });
 
