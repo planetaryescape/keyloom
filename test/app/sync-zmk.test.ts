@@ -161,7 +161,7 @@ describe("a layout whose layer numbers are read after it was flashed (D-378)", (
   });
 });
 
-describe("a layout whose conditional layers are read into the model after it was flashed (D-390)", () => {
+describe("a layout whose conditional layers are read into the model after it was flashed (D-391)", () => {
   test("the two backfill revisions are the build already on the keyboard: nothing is built or flashed, until a real edit", async () => {
     const s = await setup([half("L"), half("R")]);
     // The layout as it was stored before conditions were modelled: the container is kept source, and no layer numbers were read.

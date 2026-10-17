@@ -1,4 +1,4 @@
-// A stored layout whose kept code holds a conditional layer gets it read into the model once, at startup, as one revision (D-390). It runs
+// A stored layout whose kept code holds a conditional layer gets it read into the model once, at startup, as one revision (D-391). It runs
 // right after the layer-number backfill (D-378) and has the same safety rules: the parsers run outside the transaction, the write is one
 // `appendRevision` inside it that checks the head hasn't moved, a layout it can't read is left as it is with a logged reason, and a
 // layout it has read, or that holds nothing it can read, is not written again.

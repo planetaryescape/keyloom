@@ -262,7 +262,7 @@ export class SyncEngine {
   // --- facts and views ----------------------------------------------------------------------
 
   /**
-   * Every step from the older revision to the newer one is a recorded-numbers revision or a conditional-layers backfill (D-390), so the
+   * Every step from the older revision to the newer one is a recorded-numbers revision or a conditional-layers backfill (D-391), so the
    * two generate the same firmware even though their documents differ. The line is the head's own, so an edit in between is not skipped.
    */
   private sameAlongTheLine(layoutId: string, a: string, b: string): boolean {

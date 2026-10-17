@@ -1,4 +1,4 @@
-// A stored layout whose kept code holds a conditional layer gets it read into the model at startup, as one revision (D-390).
+// A stored layout whose kept code holds a conditional layer gets it read into the model at startup, as one revision (D-391).
 import { describe, expect, test } from "bun:test";
 import { backfillConditionalLayers, backfillLayerRefs, checkChange, closeApp, getLayout, listRevisions, openApp } from "../../src/app/index.ts";
 import { generateQmkSource } from "../../src/firmware/qmk/generate.ts";

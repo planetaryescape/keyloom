@@ -221,7 +221,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         // Before the server takes a request, so no edit sees a layout whose kept code is not yet read (D-361).
         if (app !== undefined) {
           await backfillLayerRefs(app, (m) => io.err(`${m}\n`));
-          // After the numbers are read, which it relies on (D-390).
+          // After the numbers are read, which it relies on (D-391).
           await backfillConditionalLayers(app, (m) => io.err(`${m}\n`));
         }
         const running = start(app);

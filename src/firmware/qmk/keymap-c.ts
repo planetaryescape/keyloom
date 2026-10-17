@@ -259,7 +259,7 @@ function declaredParam(decl: Node): string | undefined {
   return d?.text;
 }
 
-/** The condition calls of a kept `layer_state_set_user` on its own, as `parseKeymapC` reads them from a whole keymap (D-390). */
+/** The condition calls of a kept `layer_state_set_user` on its own, as `parseKeymapC` reads them from a whole keymap (D-391). */
 export const readTriLayerCalls = (source: string): Promise<Expr[][] | null> => withTree(source, parseTriLayerCalls);
 
 export function parseKeymapC(source: string): Promise<ParsedKeymap> {

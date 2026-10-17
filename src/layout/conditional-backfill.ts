@@ -1,4 +1,4 @@
-// Moving tri-layer code a stored layout kept as source into the model (D-390). Pure: the importers' parsers run elsewhere; this says which
+// Moving tri-layer code a stored layout kept as source into the model (D-391). Pure: the importers' parsers run elsewhere; this says which
 // kept blocks that move replaces and whether a pair of documents differs only by it, which is what lets the sync engine call the two the
 // same build.
 import { deepEqual } from "./equal.ts";
