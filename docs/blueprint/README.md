@@ -2,7 +2,7 @@
 
 > An open-source, local-first configurator for QMK and ZMK keyboards. It's a bun web app on localhost plus a CLI. You describe a frustration with your layout, an agent proposes structured changes that keyloom validates and shows on the keyboard, and keyloom builds and flashes the firmware, remembering why each change was made.
 
-BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10-11. The blueprint was written on 2026-10-15, before any code existed. It is meant to be built by a coding agent that never saw that conversation, so it has to carry everything: what we're building, how, what we decided against, and why.
+keyloom is built and at v0.36.1 (2026-10-17). This blueprint is the design it was built from and the record of why. It was written on 2026-10-15 from BK's design conversations of 2026-09-28 and 2026-10-11, before any code existed, and has been extended since. Where a chapter says "proposal" or "not built", check its status line and [13-roadmap.md](13-roadmap.md), which says what each rung shipped in and what was observed on hardware. Where text and code disagree, the code is current and the text is stale. Tell BK, then fix the text.
 
 ## Reading order
 
@@ -21,7 +21,7 @@ BK designed this in a conversation with a coding agent on 2026-09-28 and 2026-10
 | 10 | [CLI](10-cli.md) | Command tree, output contract, exit codes, agent skill |
 | 11 | [Observability and evals](11-observability-and-evals.md) | Logs, recovering from a bad flash, the agent eval set |
 | 12 | [Cost model](12-cost-model.md) | Model cost per turn and per session |
-| 13 | [Roadmap](13-roadmap.md) | Phase 0, eight usable rungs from "see my layout" to "someone else adds a keyboard", then rungs 9 to 18 for configurator parity and the new UI |
+| 13 | [Roadmap](13-roadmap.md) | Phase 0 and rungs 1 to 25, each with the release that built it and whether its done-when check was observed |
 | 14 | [Decision log](14-decision-log.md) | Every decision, the options rejected, and how the design got here |
 | 15 | [Open questions](15-open-questions.md) | Spikes to run against BK's real boards, and product questions |
 | 16 | [Key editor](16-key-editor.md) | The Oryx-style key panel, tap dance, macros, combos and layers made on the board, and the parity matrix against keymap-editor, Oryx and Vial |
@@ -51,7 +51,7 @@ Research behind these decisions:
 - [../research/spikes/S21.md](../research/spikes/S21.md): what MoErgo's firmware can and can't do for per-key colours on the Glove80.
 - [../research/software-remappers.md](../research/software-remappers.md): Karabiner-Elements and kanata as targets for the MacBook keyboard, with BK's existing config and the spikes.
 - [../research/new-keyboard.md](../research/new-keyboard.md): identifying QMK and ZMK boards from USB, deriving board definitions, and flashing unknown boards.
-- `docs/research/spikes/`: spike evidence, one file per spike. None run yet.
+- `docs/research/spikes/`: spike evidence, one file per spike. The index says which have results.
 
 ## Summary
 
@@ -67,7 +67,7 @@ Research behind these decisions:
   - a business and hosting (D-007)
   - "all keyboards" (D-008)
   - a plugin marketplace (D-009)
-  - keystroke logging (D-035)
+  - always-on keystroke logging (D-035; opt-in typing sessions came later with D-280)
   - runtime updates through ZMK Studio, VIA or Vial (D-039)
   - Oryx GraphQL import (D-041)
 
