@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { processAlive } from "../firmware/toolchain/lock.ts";
 import { deepEqual } from "../layout/equal.ts";
+import { withoutLayerNumbers } from "../layout/layer-refs.ts";
 import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash } from "../persistence/builds.ts";
 import { getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
@@ -266,8 +267,9 @@ export class SyncEngine {
     if (cached !== undefined) return cached;
     const left = findRevision(this.app.db, layoutId, a);
     const right = findRevision(this.app.db, layoutId, b);
-    const same = left !== undefined && right !== undefined && deepEqual(left.layout, right.layout);
-    // Revisions never change, so a verdict never goes stale.
+    const same = left !== undefined && right !== undefined && deepEqual(withoutLayerNumbers(left.layout), withoutLayerNumbers(right.layout));
+    // The recorded layer numbers (D-377) don't change what is generated for a layout whose keys and kept code are the same, so a
+    // head that differs only in them is what the keyboard already runs. Revisions never change, so a verdict never goes stale.
     this.sameDocument.set(key, same);
     return same;
   }

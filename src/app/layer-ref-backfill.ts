@@ -3,7 +3,8 @@
 // parsers are async, so they run first and the write happens in a synchronous transaction afterwards. It changes no key's
 // behaviour (only the numbers recorded on kept keys), and a layout it can't read is left as it is.
 import { deepEqual } from "../layout/equal.ts";
-import { type Binding, type Layout, LayoutSchema } from "../layout/schema.ts";
+import { withoutLayerNumbers } from "../layout/layer-refs.ts";
+import { type Layout, LayoutSchema } from "../layout/schema.ts";
 import { annotateQmkLayerRefs, isReadableQmk } from "../firmware/qmk/layer-refs.ts";
 import { annotateZmkLayerRefs, isReadableZmk, storedLayerBehaviours } from "../firmware/zmk/layer-refs.ts";
 import { appendRevision } from "../persistence/revisions.ts";
@@ -14,16 +15,6 @@ import { getLayout, listLayouts } from "./layouts.ts";
 export const BACKFILL_SUMMARY = "Read the layer numbers in the kept code";
 
 export type BackfillOutcome = { layoutId: string; name: string; status: "written" | "unchanged" | "failed" | "head moved"; reason?: string };
-
-/** The same layout without the layer numbers recorded on kept keys: what must not change. */
-const withoutRefs = (layout: Layout): unknown => {
-  const strip = (b: Binding): Binding => {
-    if (b.kind !== "native") return b;
-    const { layerRefs: _r, unprovable: _u, ...rest } = b;
-    return rest;
-  };
-  return { ...layout, layers: layout.layers.map((l) => ({ ...l, bindings: l.bindings.map(strip) })), combos: layout.combos.map((c) => ({ ...c, output: strip(c.output) })), passthrough: layout.passthrough.map(({ layerRefs: _r, unprovable: _u, refersToLayerIndices: _f, ...rest }) => rest) };
-};
 
 async function read(layout: Layout): Promise<Layout | null> {
   const ids = layout.layers.map((l) => l.id);
@@ -66,7 +57,7 @@ export async function backfillLayerRefs(app: App, log: (message: string) => void
         continue;
       }
       if (!LayoutSchema.safeParse(next).success) throw new Error("the result doesn't parse");
-      if (!deepEqual(withoutRefs(next), withoutRefs(view.document))) throw new Error("reading would have changed a key");
+      if (!deepEqual(withoutLayerNumbers(next), withoutLayerNumbers(view.document))) throw new Error("reading would have changed a key");
       const moved = transact(app.db, () => {
         // Parsing took time; if the head moved meanwhile, the next start reads the new one.
         if (getLayout(app, row.id).revision.id !== view.revision.id) return true;
