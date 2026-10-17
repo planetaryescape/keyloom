@@ -4,6 +4,9 @@ import type { Node } from "web-tree-sitter";
 import { type Expr, enumConstants, findFunction, findInitializer, functionName, toExpr, withTree } from "./c-parse.ts";
 import { ImportError } from "./source.ts";
 
+/** Where the keymap's own custom keycodes (`enum custom_keycodes`) are kept as passthrough, one `NAME` or `NAME = value` per line (D-377). */
+export const CUSTOM_KEYCODES_ANCHOR = "custom-keycodes";
+
 export type Chunk = { anchor: string; source: string };
 
 export type ParsedKeymap = {
@@ -15,8 +18,13 @@ export type ParsedKeymap = {
    */
   layerNames: string[];
   combos: { arrays: Map<string, Expr[]>; entries: Array<{ array: string; output: Expr }>; unsupported: string[] };
-  /** `case X:` blocks of process_record_user, verbatim. */
-  cases: Array<{ label: string; source: string }>;
+  /**
+   * `case X:` blocks of process_record_user, verbatim. `pressedOnly` is set when the switch sits inside `if (record->event.pressed)`,
+   * as QMK's own keymaps write it: the case then runs on a press only, which a bare case in a generated switch would not.
+   */
+  cases: Array<{ label: string; source: string; pressedOnly: boolean }>;
+  /** The keymap's own `enum custom_keycodes`, in order: `VRSN = SAFE_RANGE` is `{ name: "VRSN", value: "SAFE_RANGE" }`. */
+  keycodeEnum: Array<{ name: string; value?: string }>;
   /** Top-level `#define NAME body` in keymap.c that the keymap uses as a keycode. */
   customKeycodes: Map<string, string>;
   chunks: Chunk[];
@@ -166,13 +174,31 @@ function parseCases(root: Node, source: string): ParsedKeymap["cases"] {
   const sw = fn?.descendantsOfType("switch_statement")[0];
   const body = sw?.childForFieldName("body");
   const cases: ParsedKeymap["cases"] = [];
+  // Only a guard that wraps nothing but the switch counts: anything else beside it is code keyloom doesn't keep.
+  let guard: Node | null = sw?.parent ?? null;
+  while (guard && guard.type === "compound_statement" && guard.namedChildren.length === 1) guard = guard.parent;
+  const pressedOnly = guard?.type === "if_statement" && /^\(\s*record\s*->\s*event\.pressed\s*\)$/.test(guard.childForFieldName("condition")?.text.trim() ?? "");
   for (const c of body?.namedChildren ?? []) {
     if (c.type !== "case_statement") continue;
     const text = source.slice(c.startIndex, c.endIndex);
     const label = /^(?:case\s+([^:]+?)|default)\s*:/.exec(text)?.[1]?.replace(/\s+/g, " ");
-    cases.push({ label: label ?? "default", source: text });
+    cases.push({ label: label ?? "default", source: text, pressedOnly });
   }
   return cases;
+}
+
+function parseKeycodeEnum(root: Node): ParsedKeymap["keycodeEnum"] {
+  const members: ParsedKeymap["keycodeEnum"] = [];
+  for (const spec of root.descendantsOfType("enum_specifier")) {
+    if (spec?.childForFieldName("name")?.text !== "custom_keycodes") continue;
+    for (const m of spec.childForFieldName("body")?.namedChildren ?? []) {
+      if (m.type !== "enumerator") continue;
+      const name = m.childForFieldName("name")?.text;
+      const value = m.childForFieldName("value")?.text.replace(/\s+/g, " ").trim();
+      if (name) members.push(value === undefined ? { name } : { name, value });
+    }
+  }
+  return members;
 }
 
 export function parseKeymapC(source: string): Promise<ParsedKeymap> {
@@ -195,6 +221,7 @@ export function parseKeymapC(source: string): Promise<ParsedKeymap> {
       layerNames,
       combos,
       cases: parseCases(root, source),
+      keycodeEnum: parseKeycodeEnum(root),
       customKeycodes,
       chunks: chunksOf(root, source, new Set(customKeycodes.keys()), modelled),
     };

@@ -9,6 +9,7 @@ import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { renderCombos } from "./emit-combos.ts";
 import { LIGHTING_PRELUDE, renderLighting } from "./emit-lighting.ts";
 import { LIGHTING_ANCHORS } from "./import-lighting.ts";
+import { CUSTOM_KEYCODES_ANCHOR } from "./keymap-c.ts";
 import { renderKeymaps } from "./emit-keymap.ts";
 import { macroCase, macroNames } from "./emit-macros.ts";
 import { danceEnumName, renderTapDances } from "./emit-tap-dance.ts";
@@ -107,7 +108,9 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   const dances = renderTapDances(layout.tapDances, layout.macros, ctx);
   const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes");
   const cases = keymapC.filter((p) => p.anchor.startsWith("process_record_user:"));
-  const rest = keymapC.filter((p) => !before.includes(p) && !cases.includes(p));
+  // The keymap's own custom keycodes join keyloom's enum below instead of being a block of their own (D-377).
+  const ownKeycodes = keymapC.filter((p) => p.anchor === CUSTOM_KEYCODES_ANCHOR);
+  const rest = keymapC.filter((p) => !before.includes(p) && !cases.includes(p) && !ownKeycodes.includes(p));
   // Oryx writes chordal_hold_layout between keymaps[] and the combos, and everything else after them.
   // Order in C only matters to the linker's layout, but keeping Oryx's makes the binary identical to Oryx's.
   const beforeCombos = rest.filter((p) => p.anchor === "chordal-hold-layout");
@@ -127,7 +130,15 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
 
   // Custom keycodes: ZSA's own RGB_SLD comes first, as Oryx writes it, then one per macro.
   const names = layout.macros.map((m) => ctx.macroNames.get(m.id) as string);
-  const enumEntries = zsa ? ["RGB_SLD = ZSA_SAFE_RANGE", ...names] : names.map((n, i) => (i === 0 ? `${n} = SAFE_RANGE` : n));
+  const own = ownKeycodes.flatMap((p) => p.source.split("\n").filter(Boolean));
+  const taken = new Set([...(zsa ? ["RGB_SLD"] : []), ...names]);
+  for (const entry of own) {
+    const name = entry.split("=")[0]?.trim() as string;
+    if (taken.has(name)) throw new GenerateError(`keymap.c keeps the custom keycode ${name}, which keyloom's generated enum also writes (a macro or ZSA's own); rename one`);
+    taken.add(name);
+  }
+  const all = [...names, ...own];
+  const enumEntries = zsa ? ["RGB_SLD = ZSA_SAFE_RANGE", ...all] : all.map((n, i) => (i === 0 && !n.includes("=") ? `${n} = SAFE_RANGE` : n));
 
   const c: string[] = [header(input.revisionId, "//"), "#include QMK_KEYBOARD_H", '#include "version.h"'];
   if (zsa) {

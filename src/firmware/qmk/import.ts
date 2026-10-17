@@ -8,7 +8,7 @@ import {
 import { type MapContext, PROFILE_HOME_ROW, PROFILE_LAYER_TAP, PROFILE_MOD_TAP, mapKey } from "./bindings.ts";
 import type { Expr } from "./c-parse.ts";
 import { PASSTHROUGH_DEFINES, parseDefines, settingsFrom, tapHoldOptions } from "./config-h.ts";
-import { type ParsedKeymap, parseKeymapC } from "./keymap-c.ts";
+import { CUSTOM_KEYCODES_ANCHOR, type ParsedKeymap, parseKeymapC } from "./keymap-c.ts";
 import { macroNames } from "./emit-macros.ts";
 import { annotateQmkLayerRefs } from "./layer-refs.ts";
 import { importTapDances } from "./import-tap-dance.ts";
@@ -46,6 +46,36 @@ const PROFILE_NAMES: Array<[string, string]> = [
   [PROFILE_MOD_TAP, "Mod-tap"],
   [PROFILE_LAYER_TAP, "Layer-tap"],
 ];
+
+const SAFE_RANGES = new Set(["SAFE_RANGE", "ZSA_SAFE_RANGE"]);
+
+/**
+ * The members of the keymap's own `enum custom_keycodes` that keyloom does not write itself, as passthrough. keyloom writes one enum:
+ * ZSA's `RGB_SLD`, a member per macro (`ST_MACRO_n`, which the macros it imported already stand for), then these. The member that starts the enum
+ * (`= SAFE_RANGE`) is re-based by the generator. A member keyloom's enum also writes under a name that isn't the same thing is an error.
+ */
+function customKeycodes(members: ParsedKeymap["keycodeEnum"], board: BoardDefinition, macros: readonly Macro[]): Passthrough[] {
+  const imported = new Set(macros.map((m) => m.name));
+  const generated = new Set(macroNames(macros).values());
+  const kept: string[] = [];
+  for (const m of members) {
+    const startsRange = m.value === undefined || SAFE_RANGES.has(m.value);
+    if (m.name === "RGB_SLD" && board.vendor === "ZSA") {
+      if (!startsRange) throw new ImportError(`keymap.c's enum custom_keycodes has RGB_SLD = ${m.value}, but keyloom writes ZSA's RGB_SLD itself (= ZSA_SAFE_RANGE); rename or remove yours`);
+      continue;
+    }
+    if (imported.has(m.name)) continue;
+    if (generated.has(m.name)) throw new ImportError(`keymap.c's enum custom_keycodes has ${m.name}, which keyloom's generated enum writes for a macro; rename it in the keymap`);
+    kept.push(m.value === undefined || SAFE_RANGES.has(m.value) ? m.name : `${m.name} = ${m.value}`);
+  }
+  return kept.length === 0 ? [] : [{ firmware: "qmk", file: "keymap.c", anchor: CUSTOM_KEYCODES_ANCHOR, source: kept.join("\n"), refersToLayerIndices: false }];
+}
+
+/** A case that ran only on a press in its keymap, because its switch was inside `if (record->event.pressed)`: the guard moves into the case. */
+function pressedOnly(source: string): string {
+  const m = /^(case\s+[^:]+:|default\s*:)([\s\S]*)$/.exec(source);
+  return m === null ? source : `${m[1]} if (record->event.pressed) {${m[2]}\n    }\n    break;`;
+}
 
 /** An enum member as the layer's name: `_BASE` is written that way to avoid a clash in C, so the leading underscores are dropped. */
 const displayName = (member: string): string => member.replace(/^_+/, "") || member;
@@ -114,14 +144,19 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     id, name, firmware: "qmk", options: { ...profileOptions },
   }));
 
+  const keycodes = customKeycodes(parsed.keycodeEnum, board, macros);
   const combos = importCombos(parsed, parsed.layers[0] ?? [], tapDanceCtx, warnings);
 
   // Which numbers in the kept code are layer numbers is read once everything kept is known (D-360); until then none is marked.
   const kept: Passthrough[] = [
     ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor) && !(lightingRead?.consumed.has(c.anchor) ?? false)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: false })),
+    ...keycodes,
     ...parsed.cases
       .filter((c) => !consumedCases.has(c.label))
-      .map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: `process_record_user:${c.label}`, source: c.source, refersToLayerIndices: false })),
+      .map((c) => {
+        const source = c.pressedOnly ? pressedOnly(c.source) : c.source;
+        return { firmware: "qmk" as const, file: "keymap.c", anchor: `process_record_user:${c.label}`, source, refersToLayerIndices: false };
+      }),
     ...configPassthrough,
     ...(files.rulesMk === undefined ? [] : [wholeFile("rules.mk", files.rulesMk)]),
     ...(files.keymapJson === undefined ? [] : [wholeFile("keymap.json", files.keymapJson)]),

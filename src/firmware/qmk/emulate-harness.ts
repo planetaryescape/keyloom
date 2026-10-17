@@ -55,6 +55,8 @@ export type HarnessInput = {
   zsa: boolean;
   /** Community modules the board builds with; `zsa/defaults` supplies ZSA's keycodes. */
   modules: readonly string[];
+  /** The `qmk compile -kb` target (`zsa/moonlander/reva`), which a real build passes to the compiler as QMK_KEYBOARD (D-377). */
+  qmkTarget: string;
 };
 
 const TEST_MK = (name: string, rules: string): string => `CUSTOM_MATRIX = yes
@@ -86,6 +88,10 @@ extern keyloom_rawhid_state_t rawhid_state;
 typedef struct { bool enable; HSV hsv; } rgb_config_t;
 extern rgb_config_t rgb_matrix_config;
 #define LED_FLAG_NONE 0
+// QMK's own default keymap for the Moonlander has a WebUSB pairing key; WebUSB is a USB feature this host build doesn't have, so the key does nothing.
+#ifndef WEBUSB_PAIR
+#define WEBUSB_PAIR KC_NO
+#endif
 void rgb_matrix_set_color(int index, uint8_t red, uint8_t green, uint8_t blue);
 void rgb_matrix_set_color_all(uint8_t red, uint8_t green, uint8_t blue);
 uint8_t rgb_matrix_get_flags(void);
@@ -213,7 +219,7 @@ export function harnessFiles(input: HarnessInput, rules: string): GeneratedFile[
     { path: "user_config.h", content: user("config.h") },
     { path: "config.h", content: '#pragma once\n#include "info_config.h"\n#define QMK_KEYBOARD_H "keyloom_board.h"\n#include "user_config.h"\n' },
     // Oryx's keymap includes version.h, which a real build generates.
-    { path: "version.h", content: '#pragma once\n#define QMK_VERSION "keyloom-emulate"\n#define QMK_BUILDDATE "1970-01-01-00:00:00"\n' },
+    { path: "version.h", content: `#pragma once\n#define QMK_VERSION "keyloom-emulate"\n#define QMK_BUILDDATE "1970-01-01-00:00:00"\n// The build system defines these two on the compiler's command line; a keymap may print them (QMK's own default does, on its version key).\n#define QMK_KEYBOARD "${input.qmkTarget}"\n#define QMK_KEYMAP "keyloom"\n` },
     { path: "test.mk", content: TEST_MK(input.name, rules) },
     { path: "keyloom_board.h", content: input.zsa ? BOARD_HEADER_ZSA(input.modules) : BOARD_HEADER_PLAIN },
     { path: "stubs.c", content: `#include QMK_KEYBOARD_H\n${input.zsa ? STUBS_ZSA : ""}${probeSource(input.layoutMacro, input.keyCount)}` },

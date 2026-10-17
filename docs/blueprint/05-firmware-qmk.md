@@ -41,6 +41,8 @@ What an Oryx export of BK's actual layout contains was spike S3 ([../research/sp
 
 - **Layers named with an enum (D-375):** QMK's own keymaps write `enum layers { BASE, NAV }`, `[BASE] = LAYOUT(...)`, `MO(NAV)` and `LT(NAV, KC_A)`. The tree-sitter parse resolves each enum member to its index (explicit values, `= BASE + 1` and the members after them included), reads the layer keys by those indexes, and keeps the member as the layer's name, minus leading underscores. Layers must come out numbered 0 to n-1; a member with no value keyloom can compute, a gap or a repeat is an import error that says so. Generation still writes numbers (`[0] = LAYOUT`), and the enum itself is not kept.
 
+- **Custom keycodes (D-377):** a keymap's own `enum custom_keycodes` is kept as passthrough (anchor `custom-keycodes`, one member per line) and the generated enum writes it after ZSA's `RGB_SLD` and the macros, so `VRSN` in a layer and `case VRSN:` in `process_record_user` compile. Members keyloom writes itself (`RGB_SLD` on a ZSA board, the `ST_MACRO_n` of macros it imported) are not carried. A case whose switch sat inside `if (record->event.pressed)` keeps that guard. A member with a name keyloom's enum also writes is an import error naming it (and a generation error if a later edit creates the clash).
+
 ## Generation writes `keymap.c`, `config.h` and `rules.mk`
 
 keyloom generates C, not `keymap.json` (D-042). QMK's JSON format can't express combo definitions or tap dance, and Oryx's export is already C. A JSON-plus-C hybrid (QMK supports one through `OTHER_KEYMAP_C`) would split one layout across two generated files for no gain.
@@ -95,6 +97,7 @@ The code is `src/firmware/qmk/emulate.ts` (orchestration), `emulate-harness.ts` 
 
 What is replaced, and said in the result's `warnings`:
 
+- **Names the build system defines.** `QMK_KEYBOARD` (the board's target) and `QMK_KEYMAP` (`keyloom`) are defined in the stand-in `version.h`, as a real build passes them on the compiler's command line, and the WebUSB pairing key is a no-op.
 - **Oryx's output-only code.** The Oryx keymap calls RGB, layer-LED, raw HID and keyboard-config code that only exists on the keyboard. A stand-in header and `stubs.c` give those no-ops, and the keymap itself is not edited. A symbol with no stand-in fails at link time with a message naming it.
 - **Hardware features in `rules.mk`.** Only the feature flags in `CARRIED_FEATURES` reach the harness. `ORYX_ENABLE`, RGB and the rest are listed in the warnings.
 - **Scanning, debounce, USB and the host.** QMK sees each event on a 1 ms tick. Key repeat, mouse movement and Caps Lock state belong to the host, so they are not shown.
