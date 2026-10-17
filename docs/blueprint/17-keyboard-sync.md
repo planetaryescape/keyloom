@@ -1,6 +1,6 @@
 # 17: Keyboard sync: Apply puts the change on the keyboard
 
-Status: proposal, 2026-10-15. Source baseline: origin/main at `65cc12a` (v0.10.1).
+Status: hands-free flashing and auto-sync are built (rungs 12 and 13: the Moonlander in v0.9.0, the `keyloom-zmk` module in v0.12.0, the sync engine in v0.14.0), as of v0.36.1. On hardware, the Glove80 has been flashed hands-free on both halves with a verified result (S12, 2026-10-16). The Corne has not (S13 not run). The week of use that rung 13 asks for is not recorded. Live writes (rung 17: Moonlander set-keycode, ZMK Studio) are not built, on purpose: they wait on rung 13's verdict about the wait. Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
 
 BK on Vial: "vial is really really user friendly in terms of not needing to manually flash, you click a key, click what you want it to be and done." Then: "so is there no way for me to flash without needing to physically interact with the boards, similar to what vial does? Would be great if we could figure this out and build it into keyloom". And: "Not just for glove 80 but for all my boards".
 

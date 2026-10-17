@@ -9,6 +9,7 @@
 - **Ceremony is named and pulled into the nearest useful turn.** That covers the skeleton, CI, dependency rules and the release chain. There is no foundation turn: rung 1 carries the ceremony and is still usable.
 - **Stop after any rung and there's a working product.**
 - **Later rungs take letters.** A rung added later gets a letter (3b), so cited numbers keep their meaning.
+- **Each rung opens with a status line.** It names the release that built it, then says whether its done-when check was observed. "Not recorded" means no spike, decision, log or ledger in this repo shows the check, which is different from showing it failed. Written at v0.36.1, 2026-10-17.
 - **Tests pass, but that isn't done.** Every rung is done only when its completion check is observed on the **installed release binary** against BK's real layout and, from rung 2, his real keyboard. Its demo must also have been run.
 
 ## Phase 0: accounts and spikes (before product code)
@@ -26,6 +27,8 @@ Only BK can do these. The coding agent asks which are done and doesn't create ac
 Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-questions.md). Before rung 1, run S3 and S10 (C grammar). Before rung 2, run S1, S5, S9 and S11, plus S2 if S1 says rev B.
 
 ## Rung 1: Skateboard: see my Moonlander layout in keyloom
+
+**Status:** Built in v0.1.0. Done when: not recorded. S3 and the compiled-binary import (S10) were run.
 
 **Previously:** nothing. **Now:** keyloom installs, imports BK's Oryx export, and shows every layer on a picture of the Moonlander in the browser and as grids in the terminal.
 
@@ -59,6 +62,8 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 
 ## Rung 2: Scooter: change a key by hand and type with it
 
+**Status:** Built in v0.2.0. Done when: partly observed. BK's unchanged layout, built by keyloom, flashed to his Moonlander and he typed on it (S9, 2026-10-15). The one-key change, undo plus reflash and `flash --build` are not recorded.
+
 **Previously:** read-only. **Now:** BK edits a key in the browser or CLI, keyloom builds firmware in Docker and flashes the Moonlander through Zapp, and he types with the change. Undo and reflash work.
 
 **Promise:** "I can change a key in keyloom and type with it on my Moonlander a few minutes later, and put it back if I don't like it."
@@ -85,6 +90,8 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 
 ## Rung 3: Bicycle: fix Option–Option by describing it
 
+**Status:** Built in v0.3.0. Done when: partly observed. The Option–Option eval passes on OpenRouter and Codex (S19, S20). Option–Option working on the keyboard, in the app BK names, is not recorded.
+
 **Previously:** hand edits. **Now:** BK describes the Option–Option problem in the chat panel. The agent asks what it needs and proposes valid alternatives, shown on the keyboard with their trade-offs. BK applies one, flashes, and presses Option–Option.
 
 **Promise:** "I can tell keyloom I can't press Option–Option because Option lives on S, get a fix I understand, and use it on my keyboard."
@@ -109,6 +116,8 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 **Left out:** displacement alternatives, priorities, decisions and the Glove80.
 
 ## Rung 4: Bicycle: make room for Command–Shift
+
+**Status:** Built in v0.6.0. Done when: not recorded.
 
 **Previously:** single-purpose fixes. **Now:** BK asks for a Command–Shift key on a full layout. keyloom asks what matters, remembers it, and offers two or three placements, each showing what moves and what it costs. Applying one moves everything together, and one undo reverts it all.
 
@@ -135,6 +144,8 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 
 ## Rung 5: Motorbike: the same on the Glove80
 
+**Status:** Built in v0.4.0. Done when: partly observed. The import, generate, import round trip is identical and the unmodified build is byte-identical to BK's own (S6). A build flashed to both halves booted and BK typed on it (S8). The Option–Option fix on the Glove80 is not recorded.
+
 **Previously:** the Moonlander only. **Now:** BK imports his Glove80 layout, edits it by hand and by chat, and builds and flashes it, with the same flows on ZMK.
 
 **Promise:** "I can do everything I do for my Moonlander on my Glove80 too."
@@ -158,6 +169,8 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 **Left out:** decision memory.
 
 ## Rung 6: Motorbike: keyloom remembers why, and hears how it feels
+
+**Status:** Built in v0.8.0. Done when: not recorded.
 
 **Previously:** changes without memory. **Now:** every applied change records its goal and reason. Changing a key with a recorded reason brings that reason up. BK can tell keyloom how a change feels ("Command is slow to trigger now"), which updates the decision and leads to tap-hold tuning through hold-tap profiles.
 
@@ -184,6 +197,8 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 
 ## Rung 7: Motorbike: do that here too
 
+**Status:** Built in v0.7.0. Done when: not recorded.
+
 **Previously:** one change at a time. **Now:** BK selects keys on the picture and asks for something across them ("same hold behaviour as F", "mirror this onto the right hand"). Or he repeats his last edit on a selection.
 
 **Promise:** "I can do something once and say 'do the same thing on these keys', without describing every position."
@@ -202,6 +217,8 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 **Left out:** contributions.
 
 ## Rung 8: Car: someone else can add their keyboard
+
+**Status:** Built in v0.5.0. Done when: partly observed. The Corne went in as a data-only board in PR #6 with the board check in CI (Q10). Building and flashing it end to end is not recorded, and S13 has not run.
 
 **Previously:** BK's two boards. **Now:** the board format is documented, `keyloom boards check` validates a contribution, and a contributor can add a board with a pull request containing only data and an optional skill.
 
@@ -235,6 +252,8 @@ Only BK can do these:
 
 ## Rung 9: Fix: change any key in the editor
 
+**Status:** Built in v0.11.0. Done when: not recorded.
+
 **Previously:** the editor refuses most single-key changes with validator text. **Now:** any key can be changed, and every problem is a sentence with a way forward.
 
 **Promise:** "I click F16, make it F17, and keyloom asks whether to drop F16 or put it somewhere first."
@@ -250,6 +269,8 @@ Only BK can do these:
 **Left out:** the new key panel (rung 11).
 
 ## Rung 10: Scooter: keyloom's chat runs on my Codex subscription or OpenRouter key
+
+**Status:** Built in v0.12.0. Done when: partly observed. All four evals pass through OpenRouter (S19) and the Option–Option and hostile-prompt probes pass through Codex (S20). Both ran on the rung's branch, not the installed binary.
 
 **Previously:** the agent needs Anthropic API credits, which ran out. **Now:** BK picks a provider: his Codex subscription, an OpenRouter key, or an Anthropic key.
 
@@ -267,6 +288,8 @@ Only BK can do these:
 
 ## Rung 11: Scooter: the key panel
 
+**Status:** Built in v0.13.0. Done when: not recorded (click counts, screenshot gate).
+
 **Previously:** a binding editor under the board, picked by kind. **Now:** the Oryx-style key panel beside a board that fills the stage.
 
 **Promise:** "I click A, click held, click Ctrl, and it's a home-row mod, while I can still see the key."
@@ -282,6 +305,8 @@ Only BK can do these:
 **Left out:** double-tap slots and macros (rung 14).
 
 ## Rung 12: Bicycle: flash my Glove80 and Corne without touching them
+
+**Status:** Built in v0.12.0 (the `keyloom-zmk` module and the host flasher), with proof reporting in v0.14.0. Done when: partly observed on the Glove80, not on the Corne. keyloom restarted both halves at 1200 baud with no keypress and verified both on one build (S12, 2026-10-16). It took three attempts and two fixes (v0.34.6, v0.34.7), and two fault-free hands-free flashes in a row have not been observed. S13 (the Corne) has not run.
 
 **Previously:** ZMK flashes need a key combo on each half. **Now:** after one more manual flash, keyloom restarts each half into its bootloader itself.
 
@@ -299,6 +324,8 @@ Only BK can do these:
 
 ## Rung 13: Bicycle: Apply puts it on the keyboard
 
+**Status:** Built in v0.14.0. Done when: not observed. The week of use and BK's answer on the wait are not recorded. On 2026-10-17 `keyloom sync status` shows auto-sync on and proven for the Glove80, which is in sync.
+
 **Previously:** Apply, then a separate Build and flash dialog. **Now:** Apply ends on the keyboard, with the sync state in the header.
 
 **Promise:** "I click a key, pick what it should be, and a minute later I'm typing with it, without another click."
@@ -314,6 +341,8 @@ Only BK can do these:
 **Left out:** live writes (rung 17).
 
 ## Rung 14: Motorbike: tap dances and macros on the key
+
+**Status:** Built in v0.15.0 (tap dance model, generators, Oryx importer) and v0.18.0 (slots, Macro tab, library). Done when: partly observed. TD0 and TD1 import and send identical reports on QMK's real core (S16). DF0 stays native on purpose. The click counts are not recorded.
 
 **Previously:** tap dance is impossible and macros need the CLI. **Now:** double-tap, tap-then-hold and macros are built on the key.
 
@@ -331,6 +360,8 @@ Only BK can do these:
 
 ## Rung 15: Motorbike: combos, layers and moving keys
 
+**Status:** Built in v0.17.0. Done when: not recorded.
+
 **Previously:** combos are read-only and layers can only be switched. **Now:** combos are made from a selection, layers are managed in their tabs, and keys swap, drag, copy and paste.
 
 **Promise:** "I selected J and K, made them Esc, renamed Layer 2 to Nav, and swapped two keys across layers."
@@ -346,6 +377,8 @@ Only BK can do these:
 **Left out:** conditional layers.
 
 ## Rung 16: Motorbike: history, states, themes and phones
+
+**Status:** Built in v0.16.0 (history, go back, import screen, provider picker, phone sheet). Done when: not recorded.
 
 **Previously:** History lists chats, the theme follows the OS, and a phone scrolls the board sideways. **Now:** the rest of [18](18-visual-design.md).
 
@@ -363,6 +396,8 @@ Only BK can do these:
 
 ## Rung 17: Car: live writes (only if rung 13 says the wait hurts)
 
+**Status:** Not built, by design. Rung 13's verdict on the wait decides it, and no code for Moonlander set-keycode or ZMK Studio exists at v0.36.1. S14 and S15 have not run.
+
 **Previously:** every change flashes. **Now:** a binding-only change goes live in under a second, and everything else still syncs by flash.
 
 **Promise:** "I swapped two keys and they were swapped before I lifted my hand."
@@ -378,6 +413,8 @@ Only BK can do these:
 **Left out:** live combos and macros on ZMK, which Studio can't do.
 
 ## Rung 18: Car: settings and lighting
+
+**Status:** Built in v0.19.0. Done when: partly observed. Oryx's ledmap is read in and regenerated identically (v0.19.0 changelog). The settings round trip is not recorded.
 
 **Previously:** firmware options are only in the timing tuner and passthrough. **Now:** a settings page and per-key and per-layer colours.
 
@@ -395,6 +432,8 @@ Only BK can do these:
 
 ## Rung 19: Car: copy from my other keyboard
 
+**Status:** Built in v0.20.0. Done when: not recorded. S21 answered the lighting question (no).
+
 **Previously:** the agent sees only the layout it is working on, so "make this like my Moonlander" gets a request for an Oryx link. **Now:** it sees every layout, knows what each board can do, and copies colours, behaviours and combos across boards that differ in size and shape.
 
 **Promise:** "I said copy my home row mods from my Moonlander, and it looked at the Moonlander itself and put them on the right keys of the Glove80."
@@ -410,6 +449,8 @@ Only BK can do these:
 **Left out:** Glove80 lighting (Q24); carrying a typing profile inferred from habits rather than a named thing.
 
 ## Rung 20: Car: my MacBook keyboard behaves like my other keyboards
+
+**Status:** Built in v0.21.0. Done when: not observed. kanata runs keyloom's config on BK's Mac and one automatic sync applied and verified (`syn_01M53B4CQBCACRJDCTGJJG799H`, 2026-10-16, 5.1 s), which is not the under-a-second target. The exit chord, Disable remapping and untouched external boards are unrecorded, and S30, S31, S32 and S36 have not run.
 
 **Previously:** keyloom configures QMK and ZMK boards. **Now:** the MacBook's built-in keyboard is a keyloom board through kanata, and changes apply instantly.
 
@@ -427,6 +468,8 @@ Only BK can do these:
 
 ## Rung 21: Car: connect a new keyboard and put my config on it
 
+**Status:** Built in v0.33.0 (engine and CLI), v0.34.0 (screens) and v0.36.1 (gaps the add-keyboard tests found). Done when: not observed. Detection named the Glove80 on the real bus (S42), and the README says the screens have run on fake keyboards only.
+
 **Previously:** a board needs a contributed definition. **Now:** keyloom recognises a QMK or ZMK keyboard on USB, builds its definition, and puts BK's config on it.
 
 **Promise:** "I plugged in a keyboard keyloom had never seen, confirmed which board it was, and put my Glove80 setup on it."
@@ -441,9 +484,13 @@ Only BK can do these:
 
 **Left out:** reading the keymap off boards without Vial, VIA or Studio; hands-free flashing for non-ZSA QMK boards (S41).
 
-**Built so far (part 1, D-330 to D-335):** detection against a committed index of the QMK and ZMK trees, the generalised keyboard reader, board derivation with the heuristics' accuracy reproduced in tests, local boards in the data directory, "put my config on this" as proposals on a new config, and `keyloom keyboard detect|add|put`. S42 ran on BK's Glove80; S40 is closed. The stage card, the atmel-dfu and stm32-dfu recipes and the smoke build are part 2.
+**Built (part 1, D-330 to D-335, v0.33.0):** detection against a committed index of the QMK and ZMK trees, the generalised keyboard reader, board derivation with the heuristics' accuracy reproduced in tests, local boards in the data directory, "put my config on this" as proposals on a new config, and `keyloom keyboard detect|add|put`. S42 ran on BK's Glove80; S40 is closed.
+
+**Built (part 2, D-336, v0.34.0):** the stage card, the question column and the open proposals screen. **Still not built:** flash recipes for `atmel-dfu`, `stm32-dfu` and the rest of the DFU family, so a derived QMK board other than an RP2040 one is flashed by hand (`src/boards/derive/flash-recipe.ts`), and the smoke build of a derived board (S43 has not run).
 
 ## Rung 22: Car: keyloom watches me type and tunes my home row mods
+
+**Status:** Built in v0.27.0 (capture and analysis engine) and v0.30.0 (screens and routes), with a retune fix in v0.30.1. Done when: not observed. Nothing has run on a keyboard: S50 and S51 are runbooks and S53's keyboard half is not done.
 
 **Previously:** timings are guessed. **Now:** a typing session records what BK's hands do and proves fixes on his own keystrokes.
 
@@ -455,7 +502,7 @@ Only BK can do these:
 
 **New unknowns:** S50/S51 (firmware capture); S53 (replay fidelity).
 
-**Built so far (part 1, D-284 to D-289):** the stream in all three boards' firmware, the host readers, the `typing_sessions` table, replay, classification, the counterfactual search, per-finger numbers and sentences, the passages, `keyloom lab` and the agent tool. S50 and S51 have runbooks and have not run on a keyboard; S53's emulator half is done. The lab screens, the recording light and the findings on the caps are part 2.
+**Built (part 1, D-284 to D-289, v0.27.0):** the stream in all three boards' firmware, the host readers, the `typing_sessions` table, replay, classification, the counterfactual search, per-finger numbers and sentences, the passages, `keyloom lab` and the agent tool. **Built (part 2, D-314, v0.30.0):** the lab screens, the recording light and the findings on the caps, run on a scripted fake keyboard. S50 and S51 have runbooks and have not run on a keyboard; S53's emulator half is done.
 
 **Demo:** on the Moonlander, record a session, see findings per finger, try a timing fix, see before and after, apply it, and type again.
 
@@ -464,6 +511,8 @@ Only BK can do these:
 **Left out:** the MacBook (S52); key-frequency statistics outside a session.
 
 ## Rung 23: Car: several configs per board, and versions I can go back to
+
+**Status:** Built in v0.27.0 (engine) and v0.31.0 (screens), with polish in v0.31.1 and v0.32.0. Done when: partly observed. "Editing a non-active config never syncs" is a test. Versions after real syncs on BK's Moonlander are not recorded.
 
 **Previously:** one implicit layout per board, a flat revision list. **Now:** named configs per board, one explicitly on the keyboard, and versions as milestones.
 
@@ -483,6 +532,8 @@ Only BK can do these:
 
 ## Rung 24: Car: keyloom is an app on my Mac
 
+**Status:** Not built at v0.36.1. The desktop shell is being built on another branch, and chapter 26 is still a proposal.
+
 **Previously:** a browser tab. **Now:** a desktop app with its own window, shortcuts, and a menu-bar sync status.
 
 **Promise:** "keyloom lives in my Dock, my shortcuts never fight the browser, and the menu bar tells me when my keyboard is behind."
@@ -498,6 +549,24 @@ Only BK can do these:
 **Done when:** a signed, notarised `.app` from a release is installed on BK's Mac and used for a full edit, apply and sync.
 
 **Left out:** Windows and Linux builds.
+
+## Rung 25: Car: keyloom looks over my board without being asked
+
+**Previously:** warnings appeared only in a proposal's validation, and BK had to ask the agent what it thought of a layout. **Now:** every revision of every config gets a review: the checks at once, the agent's suggestions after, shown as a marker, marks on the keys and a review in the side column.
+
+**Promise:** "I connected my keyboard and keyloom had already told me which keys do nothing and what it would change, without my asking."
+
+**Build:** [27](27-board-review.md) (D-340, D-343, D-344): `board_reviews` and `review_items`, the standing checks plus `keys_do_nothing`, the agent's run through `submit_review`, level-triggered triggers, hiding and the fixed tick, `GET /api/layouts/:ref/review`, the events stream and `keyloom review`, then the screens.
+
+**New unknowns:** whether the agent's suggestions earn their cost (about $0.25 to $0.40 a review on OpenRouter in the logged runs); whether the triggers fire at the right moments.
+
+**Demo:** connect the Glove80, watch the marker go from "Looking over your change…" to a count, open the review, show a suggestion on the board and apply it.
+
+**Done when:** a review appears on BK's real configs without a request, survives a restart, and a suggestion applies through the ordinary change-set path.
+
+**Status:** Built in v0.35.0 (engine, checks, agent part, triggers, routes, events, CLI) and v0.36.0 (screens), with fixes in v0.36.1. Done when: partly observed. `keyloom.log` records two completed reviews on BK's Glove80 and MacBook layouts on 2026-10-16 (`rvw_01M53GZ1XET8E4SZ4XZ709143D`, 61 s, $0.39; `rvw_01M53H0XHFJQCJ54ADPDC4S8Z2`, $0.26). A review surviving a restart and a suggestion applied from the panel are not recorded.
+
+**Left out:** reviews of configs nothing touched while their keyboard was away, which run only when asked (D-343).
 
 ## After the car (not planned yet)
 

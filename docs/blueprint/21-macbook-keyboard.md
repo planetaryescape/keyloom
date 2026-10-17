@@ -1,6 +1,6 @@
 # 21: The MacBook keyboard, through kanata
 
-Status: proposal, 2026-10-15. Source baseline: origin/main after v0.19.1.
+Status: built in v0.21.0 (rung 20), as of v0.36.1: the kanata family, the `apple/macbook-ansi` board, Karabiner import, apply by reload with verify, and the setup doctor. kanata is running keyloom's `keyloom.kbd` on BK's Mac (seen with `pgrep`, 2026-10-17), and one automatic sync applied and verified (`syn_01M53B4CQBCACRJDCTGJJG799H`, 2026-10-16, 5.1 s). Not recorded: S30, S31, S32 and S36 have not run, the board's geometry says `verified: false`, and S33 waits on a kanata build from source. Written 2026-10-15 against origin/main after v0.19.1.
 
 BK: "I would like to have the features that karabiner has or if I install karabiner elements kanata, this configurator should be able to configure that as well so that I can get my macbook keyboard to behave like the other keyboards."
 
@@ -88,4 +88,4 @@ The opposite-hand variants are written with `(timeout hold)` and `(same-hand tap
 
 ## Built in rung 20
 
-The board, the key names, the generator, apply with verify and "Disable remapping", the setup doctor, the validator rule and the Karabiner import are built and tested against a fake kanata server and the real `kanata --check` (v1.12.0). Nothing here has run on the keyboard BK types on: S30 and S31 (the install and coexistence) are runbooks in [../research/spikes/S30.md](../research/spikes/S30.md) and [S31.md](../research/spikes/S31.md), and S32 and S36 (key capture) in [S32.md](../research/spikes/S32.md) and [S36.md](../research/spikes/S36.md).
+The board, the key names, the generator, apply with verify and "Disable remapping", the setup doctor, the validator rule and the Karabiner import are built and tested against a fake kanata server and the real `kanata --check` (v1.12.0). A sync to the keyboard BK types on has since applied and verified (see the status line), but none of the spikes have a recorded result: S30 and S31 (the install and coexistence) are runbooks in [../research/spikes/S30.md](../research/spikes/S30.md) and [S31.md](../research/spikes/S31.md), and S32 and S36 (key capture) in [S32.md](../research/spikes/S32.md) and [S36.md](../research/spikes/S36.md).
