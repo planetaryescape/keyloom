@@ -108,6 +108,20 @@ describe("apply and import", () => {
     expect(r.model.requests).toHaveLength(2);
   });
 
+  test("an Apply on a connected board is labelled apply, not connect; connect is for a head that was already there", async () => {
+    const w = await world();
+    w.flashed();
+    const sync = w.engine();
+    const r = reviewer(w);
+    r.engine.start(sync);
+    await sync.start();
+    const first = w.head();
+    await waitFor(() => findReviewOfRevision(w.app.db, w.layoutId, first)?.ai.status === "done", "the connect review");
+    const next = w.apply();
+    await waitFor(() => findReviewOfRevision(w.app.db, w.layoutId, next)?.ai.status === "done", "the apply review");
+    expect(reviews(w).map((x) => x.trigger)).toEqual(["connect", "apply"]);
+  });
+
   test("a revision that has a review is not reviewed again, whatever else changes", async () => {
     const w = await world();
     const r = reviewer(w);

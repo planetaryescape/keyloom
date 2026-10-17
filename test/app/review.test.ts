@@ -3,6 +3,11 @@
 import { describe, expect, test } from "bun:test";
 import { getLayout, openProposalsOutsideChat } from "../../src/app/index.ts";
 import { createReview, dismissReviewItem, restoreReviewItem, runReviewAi, showReview } from "../../src/app/review.ts";
+import { defaultAgentModel } from "../../src/app/chat-model.ts";
+import { writeAgentConfig } from "../../src/app/agent-config.ts";
+import { chooseProvider } from "../../src/app/chat-model.ts";
+import { fakeCodex } from "../helpers/fake-codex.ts";
+import { NO_CODEX } from "../helpers/no-credentials.ts";
 import { findChangeSet } from "../../src/persistence/change-sets.ts";
 import { EMPTY_KEYS_ID, finished, fillKey, noModel, proposeStep, reviewWorld, savedId, scriptedModel, submit, touch } from "../helpers/review-world.ts";
 
@@ -266,5 +271,102 @@ describe("the agent's part", () => {
     const second = createReview(w.app, w.layoutId, "apply").review;
     const done = await runReviewAi(w.app, second.id, noModel);
     expect(done.fixed).toEqual([]);
+  });
+});
+
+describe("the agent repeating the checks", () => {
+  test("an item about the same kind, layers and keys as a check is dropped whatever code the model gave it", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const both = [{ layerId: "layer-0", position: 36 }, { layerId: "layer-0", position: 33 }];
+    const m = scriptedModel([
+      submit([
+        { kind: "hint", code: "empty-function-row", title: "Empty keys", body: "Two keys are empty.", keys: both, layers: [] },
+        { kind: "hint", code: "one-empty-key", title: "One empty key", body: "One is empty.", keys: [both[1] as (typeof both)[number]] },
+        { kind: "problem", code: "empty-keys-problem", title: "Same keys, other kind", body: "Kept.", keys: both },
+      ]),
+      finished,
+    ]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.items.filter((i) => i.source === "agent").map((i) => i.code)).toEqual(["one-empty-key", "empty-keys-problem"]);
+  });
+
+  test("the model is given the checks with their ids and codes and told not to restate them", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([submit([]), finished]);
+    await runReviewAi(w.app, review.id, m.deps);
+    const body = m.requests[0]?.body as { system: string; messages: Array<{ content: unknown }> };
+    const asked = JSON.stringify(body.messages[0]?.content);
+    expect(asked).toContain(EMPTY_KEYS_ID);
+    expect(asked).toContain("code keys_do_nothing");
+    expect(asked).toContain("do not restate");
+    expect(JSON.stringify(body.system)).toContain("Never restate a check");
+  });
+});
+
+describe("every proposal a run saves is shown or withdrawn", () => {
+  const openIds = (w: Awaited<ReturnType<typeof reviewWorld>>) => openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId);
+
+  test("one the model never referenced becomes a suggestion with its own title and summary, tied to the check it touches", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([proposeStep, submit([]), finished]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    const suggestion = done.items.find((i) => i.kind === "suggestion");
+    expect(suggestion).toMatchObject({
+      source: "agent", code: "proposed-change", title: "Put F17 on the empty key", body: "That key does nothing now.", fixes: [EMPTY_KEYS_ID], keys: [{ layerId: "layer-0", position: 33 }],
+    });
+    expect(openIds(w)).toEqual([suggestion?.proposalId as string]);
+  });
+
+  test("one the model did reference is not attached twice", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([proposeStep, (seen) => submit([{ kind: "suggestion", code: "empty-key-use", title: "Use it", body: "Use it.", proposalId: savedId(seen.toolResults), keys: [{ layerId: "layer-0", position: 33 }] }]), finished]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.items.filter((i) => i.kind === "suggestion")).toHaveLength(1);
+    expect(done.items.find((i) => i.kind === "suggestion")?.code).toBe("empty-key-use");
+  });
+
+  test("one that cannot be shown, because the review is full, is withdrawn and not left open", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const hints = Array.from({ length: 6 }, (_, i) => ({ kind: "hint" as const, code: `note-${i}`, title: `Note ${i}`, body: "A note.", layers: ["layer-0"], keys: [{ layerId: "layer-0", position: i }] }));
+    const m = scriptedModel([proposeStep, submit(hints), finished]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.items.filter((i) => i.kind === "suggestion")).toEqual([]);
+    expect(openIds(w)).toEqual([]);
+  });
+});
+
+
+describe("why there is no model", () => {
+  test("a provider that was chosen but has no key is said so, and is not 'no provider'", async () => {
+    const w = await reviewWorld();
+    writeAgentConfig(w.dir, { provider: "openrouter" });
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const env = { KEYLOOM_CODEX_BIN: NO_CODEX };
+    const done = await runReviewAi(w.app, review.id, { model: () => defaultAgentModel(w.dir, {}, env) });
+    expect(done.ai).toMatchObject({ status: "unavailable", reason: "OpenRouter is chosen but has no key. Set OPENROUTER_API_KEY, or choose another provider." });
+  });
+
+  test("it does what chat does: a chosen provider is not swapped for a ready one, and with nothing chosen a ready one is used", async () => {
+    const w = await reviewWorld();
+    const env = { KEYLOOM_CODEX_BIN: fakeCodex({ loggedIn: true }).bin };
+    // Chat keeps the chosen provider even though Codex is signed in, so the review reports it rather than quietly using another.
+    expect(await chooseProvider({}, { provider: "openrouter" }, env)).toBe("openrouter");
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    writeAgentConfig(w.dir, { provider: "openrouter" });
+    expect((await runReviewAi(w.app, review.id, { model: () => defaultAgentModel(w.dir, {}, env) })).ai.status).toBe("unavailable");
+    // With no choice made, chat falls back to the signed-in Codex, and the review asks for the same model.
+    expect(await chooseProvider({}, {}, env)).toBe("codex");
+  });
+
+  test("with nothing chosen and nothing ready it is still no provider", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const done = await runReviewAi(w.app, review.id, { model: () => defaultAgentModel(w.dir, {}, { KEYLOOM_CODEX_BIN: NO_CODEX }) });
+    expect(done.ai.reason).toContain("No model provider is set up");
   });
 });

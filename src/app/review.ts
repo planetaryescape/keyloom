@@ -12,7 +12,8 @@ import {
   listReviewItems, restoreItem,
 } from "../persistence/reviews.ts";
 import { transact } from "../persistence/transaction.ts";
-import { type FixedItem, type ReviewItem } from "../validation/review-item.ts";
+import { type FixedItem, type ReviewItem, itemId } from "../validation/review-item.ts";
+import { ValidationResultSchema } from "../validation/result.ts";
 import { reviewChecks } from "../validation/review-checks.ts";
 import { createAgentPorts } from "./agent-ports.ts";
 import type { App } from "./context.ts";
@@ -121,8 +122,20 @@ export type ReviewAiDeps = {
   model(): Promise<AgentModel>;
 };
 
-// ModelError's own text for this says how to start a chat; a review is not one.
+// ModelError's own text for these says how to start a chat; a review is not one.
 const NO_PROVIDER = "No model provider is set up. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or sign in with `codex login`.";
+const KEYED = { ANTHROPIC_API_KEY: "Anthropic", OPENROUTER_API_KEY: "OpenRouter" } as const;
+
+/**
+ * Why there is no model, in words. Chat does not fall back from a provider that was chosen (flag, KEYLOOM_PROVIDER or config) to a ready
+ * one, so neither does a review; what differs is the sentence: a chosen provider without a key is not "no provider".
+ */
+function unavailableReason(err: ModelError): string {
+  if (err.message.startsWith("No model provider is set up")) return NO_PROVIDER;
+  const keyed = /\b(ANTHROPIC_API_KEY|OPENROUTER_API_KEY) is not set/.exec(err.message)?.[1] as keyof typeof KEYED | undefined;
+  if (keyed !== undefined) return `${KEYED[keyed]} is chosen but has no key. Set ${keyed}, or choose another provider.`;
+  return err.message;
+}
 
 const usageLine = (u: Usage) => ({ inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens });
 
@@ -153,7 +166,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     model = await deps.model();
   } catch (err) {
     // No provider set up is the normal state of a fresh install, not a fault.
-    if (err instanceof ModelError && err.kind === "missing_key") finish("unavailable", NO_PROVIDER, null, []);
+    if (err instanceof ModelError && err.kind === "missing_key") finish("unavailable", unavailableReason(err), null, []);
     else if (err instanceof ModelError) finish("failed", err.message, null, []);
     else finish("failed", `keyloom could not start the model: ${err instanceof Error ? err.message : String(err)}`, null, []);
     return toReview(app, findReview(app.db, row.id) as BoardReviewRow);
@@ -182,7 +195,10 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       // head that is gone; the newer revision gets its own review.
       if (getLayout(app, row.layoutId).revision.id !== row.revisionId) {
         finish("failed", "Your layout changed while keyloom was looking; it will look at the new version.", model.model, [], proposed);
-      } else if (outcome.status === "done") finish("done", null, model.model, outcome.items);
+      } else if (outcome.status === "done") {
+        const { items, withdrawn } = attachProposals(app, outcome.items, proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
+        finish("done", null, model.model, items, withdrawn);
+      }
       else finish("failed", outcome.reason, model.model, [], proposed);
     }
   } catch (err) {
@@ -196,6 +212,39 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     finish("failed", known?.message ?? `keyloom hit an error while reviewing: ${err instanceof Error ? err.message : String(err)}`, model.model, [], proposed);
   }
   return toReview(app, findReview(app.db, row.id) as BoardReviewRow);
+}
+
+const MAX_AGENT_ITEMS = 6;
+
+/**
+ * A proposal saved in the run must show as a suggestion or not stay open. One the model didn't reference (or whose suggestion was dropped)
+ * becomes a suggestion with the change set's own title and explanation, tied to the checks it touches; one past the cap is withdrawn.
+ */
+function attachProposals(app: App, items: ReviewItem[], proposed: readonly string[], checks: readonly ReviewItemRow[]): { items: ReviewItem[]; withdrawn: string[] } {
+  const referenced = new Set(items.map((i) => i.proposalId));
+  const out = [...items];
+  const withdrawn: string[] = [];
+  const taken = new Set([...checks.map((c) => c.id), ...items.map((i) => i.id)]);
+  for (const id of new Set(proposed)) {
+    if (referenced.has(id)) continue;
+    const cs = findChangeSet(app.db, id);
+    if (cs?.status !== "proposed") continue;
+    const changed = ValidationResultSchema.parse(cs.validation).diff.changed;
+    const keys = changed.map((s) => ({ layerId: s.layerId, position: s.position }));
+    const layers = [...new Set(changed.map((s) => s.layerId))];
+    const suggestionId = itemId({ source: "agent", code: "proposed-change", layers, keys });
+    if (out.filter((i) => i.source === "agent").length >= MAX_AGENT_ITEMS || taken.has(suggestionId)) {
+      withdrawn.push(id);
+      continue;
+    }
+    taken.add(suggestionId);
+    const touches = (c: ReviewItemRow) => (c.keys.length > 0 ? c.keys.some((k) => changed.some((s) => s.layerId === k.layerId && s.position === k.position)) : c.layers.some((l) => layers.includes(l)));
+    out.push({
+      id: suggestionId, source: "agent", kind: "suggestion", severity: "info", code: "proposed-change", title: (cs.title ?? cs.explanation).slice(0, 100), body: cs.explanation.slice(0, 400),
+      keys, layers, proposalId: id, fixes: checks.filter((c) => c.kind !== "suggestion" && touches(c)).map((c) => c.id), dismissedAt: null,
+    });
+  }
+  return { items: out, withdrawn };
 }
 
 /** The previous review's agent findings that this review's agent did not repeat. Only when both agents finished: a missing look is not a fix. */
