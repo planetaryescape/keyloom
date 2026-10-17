@@ -87,10 +87,23 @@ describe("keyloom.kbd for the MacBook", () => {
     }
   });
 
+  test("a tap dance with a hold is written as kanata's own forms (S33's simulator ran each of them)", () => {
+    const base = richLayout();
+    const dance = (extra: object) => ({ ...base, tapDances: [{ id: "td-tab", name: "Tab", tap: { kind: "key" as const, code: "TAB" as const }, ...extra }], layers: base.layers.map((l, i) => (i === 0 ? { ...l, bindings: l.bindings.map((b, p) => (p === at("Q") ? { kind: "tapDance" as const, tapDanceId: "td-tab" } : b)) } : l)) });
+    const esc = { kind: "key" as const, code: "ESCAPE" as const };
+    const grave = { kind: "key" as const, code: "GRAVE" as const };
+    // Tap plus hold needs no dance: a plain tap-hold, with no extra wait before the hold.
+    expect(file(gen(dance({ hold: esc })), KBD_FILE)).toContain("(tap-hold 200 200 tab esc)");
+    expect(file(gen(dance({ hold: esc })), KBD_FILE)).not.toContain("(tap-dance 200 ((tap-hold");
+    // A hold beside a double tap is a hold-tap nested as the dance's first action.
+    expect(file(gen(dance({ hold: esc, doubleTap: grave })), KBD_FILE)).toContain("(tap-dance 200 ((tap-hold 200 200 tab esc) grv))");
+    // Tap-then-hold is one nested in the second.
+    expect(file(gen(dance({ doubleTap: grave, tapThenHold: esc })), KBD_FILE)).toContain("(tap-dance 200 (tab (tap-hold 200 200 grv esc)))");
+    expect(file(gen(dance({ tapThenHold: esc })), KBD_FILE)).toContain("(tap-dance 200 (tab (tap-hold 200 200 tab esc)))");
+  });
+
   test("what kanata can't do is refused, not dropped", () => {
     const base = richLayout();
-    const withHold = { ...base, tapDances: [{ id: "td-tab", name: "Tab", tap: { kind: "key" as const, code: "TAB" as const }, hold: { kind: "key" as const, code: "ESCAPE" as const } }] };
-    expect(() => gen(withHold)).toThrow(/hold or tap-then-hold slot/);
     const foreign = { ...base, layers: base.layers.map((l, i) => (i === 0 ? { ...l, bindings: l.bindings.map((b, p) => (p === at("Q") ? { kind: "native" as const, firmware: "qmk" as const, source: "KC_MY_THING", label: "x" } : b)) } : l)) };
     expect(() => gen(foreign)).toThrow(GenerateError);
     const cmd = { ...base, layers: base.layers.map((l, i) => (i === 0 ? { ...l, bindings: l.bindings.map((b, p) => (p === at("Q") ? { kind: "native" as const, firmware: "kanata" as const, source: '(cmd rm -rf /)', label: "x" } : b)) } : l)) };

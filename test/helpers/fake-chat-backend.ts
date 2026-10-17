@@ -1,6 +1,5 @@
 // A scripted ChatBackend for the dev harness and the server tests. It plays the Option-Option story
-// from the rung 3 brief: the first message gets a clarifying question, the next one gets three
-// proposals. Streaming is word by word with a delay, so the panel can be seen (and screenshotted)
+// from the rung 3 brief: every message gets three proposals at once, with its assumption in one line. Streaming is word by word with a delay, so the panel can be seen (and screenshotted)
 // mid-reply. Proposals are validated by the real validator and stored in the FakeEditor, so
 // applying one goes through POST /api/change-sets/:id/apply like the real thing.
 import type {
@@ -24,20 +23,14 @@ export interface FakeChatOptions {
   busy?: boolean;
 }
 
-const CLARIFYING = [
-  "Thanks, that helps.",
-  "**Option lives on your S key as a hold**, so tapping S twice types S, and the second Option never arrives as its own press.",
-  "Before I suggest anything, two questions:",
-  "- Which hand do you hold the `Nav` layer with, and is that thumb free while you type with the left?",
-  "- Do you want to keep home-row mods on the left hand, or is it fine for Option to move off S?",
-].join("\n\n");
-
+// Nothing is asked first: every reply acts on the obvious default and says what it assumed, in one line (D-380).
 const PROPOSAL_INTRO = [
   "Here are three ways to get **Option, Option** without fighting the home-row mod on `S`.",
   "Each one is checked against your current layout, and none of them touches the home row:",
   "- A macro on a free key sends both presses for you.",
   "- A plain Option on the `Nav` layer keeps it under your hand, one layer away.",
   "- A plain Option on an empty base key is the simplest, but it uses a key you may want later.",
+  "I assumed you hold `Nav` with your right thumb; say if it is the left and I'll redo the second one.",
   "Hover a card to see it on the keyboard, then apply the one you like.",
 ].join("\n\n");
 
@@ -147,9 +140,8 @@ export class FakeChat implements ChatBackend {
     if (request.answer !== undefined) return this.answered(conversation, request.answer, messageId, emit, signal);
     const message = request.message ?? "";
     conversation.messages.push({ id: `msg_${++this.counter}`, role: "user", text: message, toolCalls: [], selection: request.selection ?? null, createdAt: now });
-    // A request that really is the person's call: the agent asks one question and stops (D-380).
-    if (/\b(replace|swap)\b/i.test(message)) return this.ask(conversation, messageId, emit, signal);
-    const askedBefore = conversation.messages.filter((m) => m.role === "user").length > 1;
+    // Only a request that leaves the person's real choice open gets a question; "replace" is already a choice, so it is acted on (D-380).
+    if (/move my setup/i.test(message)) return this.ask(conversation, messageId, emit, signal);
     emit({ type: "start", conversationId: conversation.summary.id, messageId });
 
     const toolCalls: string[] = [];
@@ -174,14 +166,12 @@ export class FakeChat implements ChatBackend {
     };
 
     if (this.options.failMidStream) {
-      await stream(askedBefore ? PROPOSAL_INTRO : CLARIFYING, 14);
+      await stream(PROPOSAL_INTRO, 14);
       throw new ChatError(502, "model_connection", "The connection to the model dropped before the reply finished.");
     }
 
     const cards: ProposalCard[] = [];
-    if (!askedBefore) {
-      await stream(CLARIFYING);
-    } else {
+    {
       await stream(PROPOSAL_INTRO);
       if (!signal.aborted) {
         await tool("propose_changes");

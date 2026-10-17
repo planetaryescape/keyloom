@@ -129,11 +129,11 @@ describe("auto-apply", () => {
     const first = await e.syncNow(world.layoutId);
     if (first.kind === "started") await first.done;
     const before = readFileSync(world.paths.kbd, "utf8");
-    // The validator is the gate for edits; here the generator's own refusal is exercised through a tap dance with a hold slot.
+    // The validator is the gate for edits; here the generator's own refusal is exercised through a binding that runs a command as root.
     const { createLayout } = await import("../../src/persistence/layouts.ts");
     const { identityLayout } = await import("../../src/firmware/kanata/identity.ts");
-    const bad = { ...identityLayout(macbook()), tapDances: [{ id: "t", name: "T", tap: { kind: "key" as const, code: "TAB" as const }, hold: { kind: "key" as const, code: "ESCAPE" as const } }] };
-    bad.layers[0]!.bindings[at("TAB")] = { kind: "tapDance", tapDanceId: "t" };
+    const bad = identityLayout(macbook());
+    bad.layers[0]!.bindings[at("TAB")] = { kind: "native", firmware: "kanata", source: "(cmd rm -rf /)", label: "x" };
     const created = createLayout(world.app.db, { name: "bad", layout: bad, summary: "bad", origin: "import" });
     const r = await e.syncNow(created.layout.id).catch((err) => err);
     if (!(r instanceof Error) && r.kind === "started") {

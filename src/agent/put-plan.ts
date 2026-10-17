@@ -193,8 +193,6 @@ export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: Read
     notCarried.push({ layerName: from_.layerName, source: from_.source, sourceName: from_.sourceName, why: "the layer it enters has no key that leads back to the base layer on the new board" });
     return false;
   });
-  const ops: ChangeOp[] = [...structure, ...prerequisites, ...carriedOps, ...comboOps];
-
   // Placement: a layer key with no counterpart is offered a key of the same hand, thumbs first, nearest the middle first. A free key
   // comes before one that holds a nearest-place guess, and a key carried with confidence is never offered (D-249: offered, not forced).
   const base = from.document.layers[0] as Layer;
@@ -264,10 +262,64 @@ export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: Read
     placementOps.push(op);
   }
   const kept = carriedOps.filter((o) => !(o.op === "setBinding" && o.at.layerId === "base" && replaced.has(o.at.position)));
-  const opsWithPlacements: ChangeOp[] =
-    placementOps.length === 0 ? [] : [...structure, ...dedupe([...transfer.prerequisiteOps(), ...comboPlan.ops.filter((o) => o.op !== "upsertCombo")]), ...kept, ...placementOps, ...comboOps];
+  // Reachability (D-383): on a board that lists keys to hold a layer from, every carried layer gets a way in, and a layer that can't is
+  // left out and said so, never proposed unreachable. The key a layer is held from keeps its own tap.
+  const pool = [...(target.definition.holdKeyPreference ?? []), ...(target.definition.holdKeyFallback ?? [])];
+  const sourceLayerOf = (targetId: string) => [...ids].find(([, t]) => t === targetId)?.[0];
+  const assemble = (sets: ChangeOp[]): ChangeOp[] => [...structure, ...dedupe([...transfer.prerequisiteOps(), ...comboPlan.ops.filter((o) => o.op !== "upsertCombo")]), ...sets, ...comboOps];
+  const unreachable = (sets: ChangeOp[]): string[] =>
+    [...new Set((() => { const r = evaluate(target.definition, blank, assemble(sets)).result; return [...r.errors, ...r.warnings]; })().filter((i) => i.code === "layer_unreachable" && i.layerId !== undefined).map((i) => i.layerId as string))];
+  const reach = (sets: ChangeOp[], used: ReadonlySet<number>): { sets: ChangeOp[]; entries: string[]; stuck: string[] } => {
+    if (pool.length === 0) return { sets, entries: [], stuck: [] };
+    const free = pool.filter((p) => p < target.definition.keyCount && !used.has(p));
+    const entries: string[] = [];
+    const out = [...sets];
+    for (;;) {
+      const [layer] = unreachable(out);
+      if (layer === undefined) return { sets: out, entries, stuck: [] };
+      let placed = false;
+      while (!placed) {
+        const p = free.shift();
+        if (p === undefined) return { sets: out, entries, stuck: [layer, ...unreachable(out).filter((l) => l !== layer)] };
+        const earlier = out.findLast((o) => o.op === "setBinding" && o.at.layerId === "base" && o.at.position === p);
+        const own = earlier?.op === "setBinding" ? earlier.binding : start?.layers[0]?.bindings[p];
+        const tap = own === undefined ? null : ownTap(own);
+        const sourceLayer = sourceLayerOf(layer);
+        let binding: Binding;
+        if (tap === null) binding = { kind: "layer", action: "momentary", layerId: layer };
+        else {
+          const checkpoint = transfer.checkpoint();
+          const result = transfer.bind({ kind: "holdTap", tap, hold: { layerId: sourceLayer ?? layer }, profileId: HOLD_KEY_PROFILE }, own as Binding, p);
+          if ("skip" in result) {
+            transfer.rollback(checkpoint);
+            continue;
+          }
+          binding = result.binding;
+        }
+        const candidate: ChangeOp = { op: "setBinding", at: { layerId: "base", position: p }, binding };
+        if (unreachable([...out, candidate]).includes(layer) && tap !== null) continue;
+        out.push(candidate);
+        entries.push(`${layerNames.get(layer) ?? layer} from ${keyName(target.definition, { ...(start as Layout), layers: [{ ...((start as Layout).layers[0] as Layer), id: "base" }] }, { layerId: "base", position: p }, { geometry: target.geometry, withLayer: false })}`);
+        placed = true;
+      }
+    }
+  };
+  const layerNames = new Map(from.document.layers.map((l) => [ids.get(l.id) as string, l.name]));
+  const placedTargets = new Set(placementOps.flatMap((o) => (o.op === "setBinding" ? [o.at.position] : [])));
+  const mainReach = reach(carriedOps, new Set());
+  if (mainReach.stuck.length > 0 && start !== undefined) {
+    // No key is left to enter these: carry fewer layers instead of an unreachable one.
+    const names = mainReach.stuck.map((l) => layerNames.get(l) ?? l);
+    const drop = new Set(mainReach.stuck.flatMap((l) => sourceLayerOf(l) ?? []));
+    const smaller = planLayoutPut({ ...from, document: { ...from.document, layers: from.document.layers.filter((l) => !drop.has(l.id)) } }, target, choices, start);
+    return { ...smaller, notes: [`Left out ${names.join(", ")}: every key a layer can be held from is already used, and a layer with no way in can't be reached`, ...smaller.notes] };
+  }
+  const ops: ChangeOp[] = assemble(mainReach.sets);
+  const placedReach = placementOps.length === 0 ? undefined : reach([...kept, ...placementOps], placedTargets);
+  const opsWithPlacements: ChangeOp[] = placedReach === undefined || placedReach.stuck.length > 0 ? [] : assemble(placedReach.sets);
 
   const notes = [...new Set(transfer.notes)];
+  if (mainReach.entries.length > 0) notes.push(`To keep every layer reachable, ${mainReach.entries.join("; ")} (held, keeping the key's own tap)`);
   const coloured = from.document.layers.some((l) => l.lighting !== undefined);
   if (coloured && !boardCapabilities(target.definition).lighting.supported) notes.push(`LED colours were not carried: ${lightingRefusal(target.definition)}`);
   if (from.document.settings.length > 0) notes.push(`${from.document.settings.length} firmware setting${from.document.settings.length === 1 ? "" : "s"} on ${from.layoutName} (timings, features) were not carried; set them for this board once it works`);

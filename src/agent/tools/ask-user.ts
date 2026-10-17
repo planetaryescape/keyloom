@@ -17,7 +17,7 @@ export const askUserTool = () =>
   defineTool({
     name: "ask_user",
     description:
-      "Ask BK one question when the choice is really his and nothing sensible can be assumed: replacing the config he runs versus adding a new one when the request does not say, or a step that cannot be undone. Never for anything you can decide or default; act on the default and say what you chose. At most once per turn, and call no other tool in the same reply. The turn stops here and BK's answer comes back as this call's result.",
+      "Ask BK one question when the choice is really his and nothing sensible can be assumed: replacing the config he runs versus adding a new one when the request does not say, or a step that cannot be undone. Never for anything you can decide or default, and never for what he already asked for: an explicit instruction such as replace my config is never asked again, so do it, and when it is destructive but one click to undo (the old config stays in History) say so in one line. Act on the default and say what you chose. At most once per turn, and call no other tool in the same reply. The turn stops here and BK's answer comes back as this call's result.",
     inputSchema: AskUserSchema,
     pauses: true,
     run: () => "The question is on BK's screen. His answer will arrive as this call's result.",

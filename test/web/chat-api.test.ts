@@ -43,17 +43,16 @@ async function collect(message: string, conversationId?: string, signal = new Ab
 }
 
 describe("streamChat", () => {
-  test("the first message is a clarifying question, the next is three proposals, and the frames reduce to a transcript", async () => {
+  test("the first message gets three proposals at once, and the frames reduce to a transcript", async () => {
     start();
-    const first = await collect("I can't press Option-Option because Option is on S");
-    const conversationId = (first[0] as Extract<ChatEvent, { type: "start" }>).conversationId;
-    expect(first[0]?.type).toBe("start");
-    expect(first.at(-1)?.type).toBe("done");
-    expect(first.filter((e) => e.type === "proposal")).toHaveLength(0);
-
-    const second = await collect("Right thumb holds Nav", conversationId);
+    const second = await collect("I can't press Option-Option because Option is on S");
+    const conversationId = (second[0] as Extract<ChatEvent, { type: "start" }>).conversationId;
+    expect(second[0]?.type).toBe("start");
+    expect(second.at(-1)?.type).toBe("done");
     expect(second.filter((e) => e.type === "proposal")).toHaveLength(3);
     expect(second.some((e) => e.type === "tool" && e.name === "propose_changes")).toBe(true);
+    expect(second.filter((e) => e.type === "text").map((e) => (e as { delta: string }).delta).join("")).not.toContain("?");
+
 
     const t = second.reduce(
       (state, event) => transcriptReducer(state, { type: "event", event }),
@@ -62,6 +61,20 @@ describe("streamChat", () => {
     const reply = t.turns.at(-1);
     expect(reply).toMatchObject({ kind: "assistant", phase: "done" });
     expect(reply?.kind === "assistant" && reply.proposals.map((p) => p.validation.ok)).toEqual([true, true, true]);
+  });
+
+  test("an explicit replace is acted on, and only a request that leaves the choice open gets a question (D-380)", async () => {
+    start();
+    const explicit = await collect("Please replace my config with the Glove80 one");
+    expect(explicit.filter((e) => e.type === "tool" && e.name === "ask_user")).toHaveLength(0);
+    expect(explicit.filter((e) => e.type === "proposal")).toHaveLength(3);
+    const done = explicit.at(-1);
+    expect(done?.type === "done" && done.outcome.question).toBeFalsy();
+
+    const open = await collect("Please move my setup over");
+    expect(open.some((e) => e.type === "tool" && e.name === "ask_user")).toBe(true);
+    const asked = open.at(-1);
+    expect(asked?.type === "done" && asked.outcome.status).toBe("awaiting_answer");
   });
 
   test("refusals before the stream opens carry the server's status and code", async () => {
@@ -114,14 +127,14 @@ describe("conversations and applying a proposal", () => {
     expect(list.map((c) => c.id)).toEqual([id]);
     const detail = await fetchConversation(TOKEN, id, new AbortController().signal);
     expect(detail.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
-    expect(detail.proposals).toHaveLength(3);
+    expect(detail.proposals).toHaveLength(6);
   });
 
   test("applying one proposal supersedes the others, and a second apply or a stale one is refused", async () => {
     const { editor } = start();
     const first = await collect("hello");
     const id = (first[0] as Extract<ChatEvent, { type: "start" }>).conversationId;
-    const proposals = (await collect("go on", id)).flatMap((e) => (e.type === "proposal" ? [e.proposal] : []));
+    const proposals = first.flatMap((e) => (e.type === "proposal" ? [e.proposal] : []));
     const [macro, nav, empty] = proposals;
 
     const result = await applyChangeSet(TOKEN, nav!.changeSetId);

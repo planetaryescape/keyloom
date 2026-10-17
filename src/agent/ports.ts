@@ -136,6 +136,11 @@ export interface AgentPorts {
    * (D-372). Nothing is applied, and this conversation's layout is untouched. Throws a readable Error for an unknown layout or board, or a name already taken.
    */
   put(input: PutInput): PutResult;
+  /**
+   * Makes a new config on this conversation's board: a copy of this one, or the board's blank start. It is never put on the keyboard, and
+   * this conversation's layout is untouched. Throws a readable Error for a name already taken.
+   */
+  newConfig(input: { name: string; from: "this" | "blank" }): { id: string; name: string; boardName: string };
   /** Validates against the head without saving anything. */
   check(ops: ChangeOp[]): ValidationResult;
   /** Validates each alternative and stores the valid ones as proposed change sets sharing one group. */

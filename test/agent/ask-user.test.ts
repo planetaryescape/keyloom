@@ -113,6 +113,40 @@ describe("ask_user", () => {
   });
 });
 
+describe("an explicit instruction is not asked again (D-380)", () => {
+  test("the prompt says so, and a turn for \"replace\" goes straight to the work with no ask_user", async () => {
+    const { app, mac } = await world();
+    const view = getLayout(app, mac.layout.id);
+    expect(assembleSystemPrompt(view.board, view.document)).toContain('"replace my config with the Glove80 one" means replace, so do it');
+    const { client, requests } = fakeAnthropic([
+      { blocks: [{ tool: "create_config", input: { name: "Glove80 setup", from: "this" } }] },
+      { blocks: [{ text: "Done. Your old config stays in History and can be restored." }] },
+    ]);
+    const out = await sendMessage(app, mac.layout.id, { message: "Please replace my config with the Glove80 one", model: anthropicModel(client) });
+    expect(out.status).toBe("complete");
+    expect(out.question).toBeUndefined();
+    expect(requests[0]?.body.tools.find((t: { name: string }) => t.name === "ask_user").description).toContain("never asked again");
+    expect(JSON.stringify(listMessages(app.db, out.conversationId).map((m) => m.content))).not.toContain('"ask_user"');
+  });
+});
+
+describe("a request to make a new config", () => {
+  test("create_config makes it from this config at once, leaves this one untouched, and the prompt names no command", async () => {
+    const { app, mac } = await world();
+    const before = getLayout(app, mac.layout.id).revision.id;
+    const { client, requests } = fakeAnthropic([
+      { blocks: [{ tool: "create_config", input: { name: "Colemak", from: "this" } }] },
+      { blocks: [{ text: "Made a Colemak config. Switch to it from the config menu." }] },
+    ]);
+    const out = await sendMessage(app, mac.layout.id, { message: "make me a Colemak config", model: anthropicModel(client) });
+    expect(out.status).toBe("complete");
+    expect(requests[1]?.toolResults.join("\n")).toContain('Made the config "Colemak"');
+    expect(listConfigs(app).some((c) => c.name === "Colemak")).toBe(true);
+    expect(getLayout(app, mac.layout.id).revision.id).toBe(before);
+    expect(requests[0]?.body.system).not.toMatch(/`keyloom [a-z]/);
+  });
+});
+
 describe("a request to copy a setup onto the keyboard", () => {
   test("goes ahead on the first turn: put_config is called, no ask_user, and no question comes back", async () => {
     const { app, mac } = await world();

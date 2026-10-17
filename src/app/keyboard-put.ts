@@ -112,7 +112,7 @@ function planFor(app: App, input: PutInput) {
     return [...ops, ...lost.map((f): ChangeOp => ({ op: "dropFunction", function: f, reason: `${view.layout.name}'s setup has no key for it on the ${target.definition.name}` }))];
   };
   const plan = { ...planned, ops: dropLost(planned.ops), opsWithPlacements: dropLost(planned.opsWithPlacements) };
-  const droppedNote = dropped.size > 0 ? [`${plural(dropped.size, "function")} the ${target.definition.name} typed before no longer has a key: ${[...dropped].slice(0, 12).map((f) => f.replace(/^key:/, "")).join(", ")}${dropped.size > 12 ? ", and more" : ""}. The old config is untouched and restoring it is one step`] : [];
+  const droppedNote = dropped.size > 0 ? [`${plural(dropped.size, "function")} the ${target.definition.name} typed before no longer has a plain key of its own: ${[...dropped].slice(0, 12).map((f) => f.replace(/^key:/, "")).join(", ")}${dropped.size > 12 ? ", and more" : ""}. The old config is untouched and restoring it is one step`] : [];
   return { view, target, plan: { ...plan, notes: [...notes, ...plan.notes, ...droppedNote] } };
 }
 

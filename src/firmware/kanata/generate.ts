@@ -3,7 +3,6 @@
 // action in every `deflayer`, the same "binding N is key N" shape as the layout.
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Binding, Layout, SlotAction, TapDance } from "../../layout/schema.ts";
-import { tapDanceSlots } from "../../layout/functions.ts";
 import { type PhysicalKey, kanataRevision, physicalKeys } from "./board-config.ts";
 import { GenerateError } from "../../layout/kanata/generate-error.ts";
 import { macroAction } from "../../layout/kanata/macro.ts";
@@ -157,14 +156,20 @@ class Emitter {
     return td;
   }
 
+  /**
+   * kanata's tap-dance counts taps, but its action list takes any action, so a hold is a `tap-hold` placed in it (run through
+   * kanata_simulated_input, v1.12.0: tap, hold, double tap and tap-then-hold each fire their own action). Tap plus hold alone needs no
+   * dance at all. In a dance the hold only starts once the dance's own wait is over, so it fires a dance term later than a plain hold-tap.
+   */
   danceAction(td: TapDance): string {
-    if (td.hold || td.tapThenHold) {
-      throw new GenerateError(`tap dance "${td.name}": kanata's tap-dance counts taps, so a hold or tap-then-hold slot has no equivalent. Remove the ${td.hold ? "hold" : "tap-then-hold"} slot or use a hold-tap`);
-    }
     const where = `tap dance "${td.name}"`;
-    const slots = tapDanceSlots(td).map(([, a]) => this.slot(a, where));
-    if (slots.length === 1) return slots[0] as string;
-    return `(tap-dance ${td.termMs ?? DEFAULT_TAP_DANCE_MS} (${slots.join(" ")}))`;
+    const term = td.termMs ?? DEFAULT_TAP_DANCE_MS;
+    const slot = (a: SlotAction | undefined) => (a === undefined ? undefined : this.slot(a, where));
+    const [tap, hold, dbl, tapThenHold] = [slot(td.tap) as string, slot(td.hold), slot(td.doubleTap), slot(td.tapThenHold)];
+    const withHold = (onTap: string, onHold: string | undefined) => (onHold === undefined ? onTap : `(tap-hold ${term} ${term} ${onTap} ${onHold})`);
+    const second = dbl === undefined && tapThenHold === undefined ? undefined : withHold(dbl ?? tap, tapThenHold);
+    const first = withHold(tap, hold);
+    return second === undefined ? first : `(tap-dance ${term} (${first} ${second}))`;
   }
 }
 

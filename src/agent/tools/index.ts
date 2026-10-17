@@ -3,6 +3,7 @@ import type { AgentPorts, ProposalResult, RecordedPriority } from "../ports.ts";
 import type { TurnRecorder } from "../recorder.ts";
 import { askUserTool } from "./ask-user.ts";
 import { analyseChangeTool } from "./analyse-change.ts";
+import { createConfigTool } from "./create-config.ts";
 import { findFunctionTool } from "./find-function.ts";
 import { getLayoutTool } from "./get-layout.ts";
 import { getTypingFindingsTool } from "./get-typing-findings.ts";
@@ -31,5 +32,6 @@ export function createTools(ports: AgentPorts, recorder: TurnRecorder, events: T
     putConfigTool(ports),
     getTypingFindingsTool(ports),
     askUserTool(),
+    createConfigTool(ports),
   ];
 }

@@ -58,19 +58,40 @@ describe("a put onto the MacBook keyboard", () => {
     expect(() => previewPut(app, { from: glove.layoutId, board: MAC, layers: ["nope"] })).toThrow(/no layer called "nope"/);
   });
 
-  test("a tap dance with a hold is left off with a reason that blames keyloom's output, not the keyboard", async () => {
+  test("a tap dance with a hold is carried now: the generator writes it, so the proposal validates and nothing is left off for it", async () => {
     const { app, glove } = await world();
     const doc = getLayout(app, glove.layoutId).document;
     const at = doc.layers[0]!.bindings.findIndex((b) => b.kind === "key" && /^[A-Z]$/.test(b.code));
     expect(at).toBeGreaterThan(-1);
     const bindings = doc.layers[0]!.bindings.map((b, i) => (i === at ? { kind: "tapDance" as const, tapDanceId: "td-hold" } : b));
-    const dance = { id: "td-hold", name: "J or Escape", tap: { kind: "key" as const, code: "A" }, hold: { kind: "key" as const, code: "ESCAPE" } };
+    const dance = { id: "td-hold", name: "A or Escape", tap: { kind: "key" as const, code: "A" }, hold: { kind: "key" as const, code: "ESCAPE" } };
     const made = createLayout(app.db, { name: "glove-dance", layout: { ...doc, layers: [{ ...doc.layers[0]!, bindings }, ...doc.layers.slice(1)], tapDances: [dance] }, summary: "test", origin: "import" });
 
     const preview = previewPut(app, { from: made.layout.id, board: MAC });
-    const skipped = preview.notCarried.find((n) => n.why.includes("tap dance"));
-    expect(skipped?.why).toContain("keyloom's kanata output only writes tap-counting dances");
-    expect(skipped?.why).not.toContain("keyboard can't");
-    expect(putConfig(app, { from: made.layout.id, board: MAC }).proposals.length).toBeGreaterThan(0);
+    expect(preview.notCarried.some((n) => n.why.includes("tap dance"))).toBe(false);
+    const out = putConfig(app, { from: made.layout.id, board: MAC });
+    expect(listChanges(app, out.config.id).every((c) => c.validation.ok)).toBe(true);
+  });
+
+  test("no carried layer is left without a way in: the default proposal has no layer_unreachable warning (D-383)", async () => {
+    const { app, glove } = await world();
+    const out = putConfig(app, { from: glove.layoutId, board: MAC });
+    for (const c of listChanges(app, out.config.id)) {
+      expect(c.validation.warnings.filter((w) => w.code === "layer_unreachable")).toEqual([]);
+      expect(c.validation.ok).toBe(true);
+    }
+    expect(out.layers.length).toBeGreaterThan(1);
+  });
+
+  test("with more layers than keys to hold them from, the extra layers are left out and named, not proposed unreachable", async () => {
+    const { app, glove } = await world();
+    const doc = getLayout(app, glove.layoutId).document;
+    const spare = (n: number) => ({ ...doc.layers[1]!, id: `spare-${n}`, name: `Spare ${n}`, bindings: doc.layers[1]!.bindings.map((b) => (b.kind === "layer" || (b.kind === "holdTap" && "layerId" in b.hold) ? { kind: "none" as const } : b)) });
+    const layers = [doc.layers[0]!, ...Array.from({ length: 12 }, (_, i) => spare(i))].map((l, i) => (i === 0 ? { ...l, bindings: l.bindings.map((b) => (b.kind === "layer" || (b.kind === "holdTap" && "layerId" in b.hold) ? { kind: "none" as const } : b)) } : l));
+    const made = createLayout(app.db, { name: "many-layers", layout: { ...doc, layers }, summary: "test", origin: "import" });
+    const out = putConfig(app, { from: made.layout.id, board: MAC });
+    expect(out.notes.join("\n")).toMatch(/Left out .*Spare/);
+    expect(out.layers.length).toBeLessThan(13);
+    for (const c of listChanges(app, out.config.id)) expect(c.validation.warnings.filter((w) => w.code === "layer_unreachable")).toEqual([]);
   });
 });

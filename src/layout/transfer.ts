@@ -118,11 +118,6 @@ export class BindingTransfer {
       case "tapDance": {
         const dance = this.env.source.tapDances.find((t) => t.id === source.tapDanceId);
         if (dance === undefined) return { skip: `it uses tap dance "${source.tapDanceId}", which the source layout does not have` };
-        // kanata's tap-dance only counts taps. Its action list does take other actions (a tap-hold passes `kanata --check` inside one, v1.12.0),
-        // but keyloom's generator does not write that nesting, so this is a gap in keyloom, not in the keyboard.
-        if (this.env.target.firmware === "kanata" && (dance.hold !== undefined || dance.tapThenHold !== undefined)) {
-          return { skip: `it is the tap dance "${dance.name}" with a hold, and keyloom's kanata output only writes tap-counting dances (kanata could nest a hold-tap inside one; keyloom does not generate that yet)` };
-        }
         const slots: Partial<Record<"tap" | "hold" | "doubleTap" | "tapThenHold", SlotAction>> = {};
         for (const name of ["tap", "hold", "doubleTap", "tapThenHold"] as const) {
           const slot = dance[name];
@@ -255,8 +250,9 @@ export class BindingTransfer {
     const base = from ?? { id: source.profileId, name: "Hold-tap", firmware: this.env.source.firmware, options: {} };
     const { profile: translated, notes } = translateHoldTapProfile(base, this.env.source.settings, (positions) =>
       hand !== null && this.env.sourceTriggerIsOppositeHand?.(positions, hand) === true ? "opposite" : "other");
-    const id = uniqueId(new Set(this.profiles.map((p) => p.id)), "home-row-mods");
-    const profile: HoldTapProfile = { ...translated, id, name: from?.name ?? "Home-row mods" };
+    // With no source profile (a layer held from a key that had no hold-tap) the timing is the default, and it isn't a home-row-mods profile.
+    const id = uniqueId(new Set(this.profiles.map((p) => p.id)), from === undefined ? "layer-hold" : "home-row-mods");
+    const profile: HoldTapProfile = { ...translated, id, name: from?.name ?? (from === undefined ? "Layer hold" : "Home-row mods") };
     this.notes.push(...notes);
     this.profiles.push(profile);
     this.made.set(key, id);
