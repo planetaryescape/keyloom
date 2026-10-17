@@ -62,6 +62,17 @@ describe("buildQmk (fake docker)", () => {
     expect(s.lines.some((l) => l.includes("DFU 3297:2003"))).toBe(true);
   });
 
+  test("hashes the keymap files inside the container before make, and builds once the container sees what the host wrote", async () => {
+    const s = await setup();
+    await s.build("ok", { FAKE_STALE_CALLS: "2" });
+    const calls = (await Bun.file(s.dockerLog).text()).split("\n");
+    const hashes = calls.filter((l) => l.includes("--entrypoint sha256sum"));
+    expect(hashes).toHaveLength(3);
+    expect(hashes[0]).toContain(`-v ${join(s.dir, "checkout")}:/qmk_firmware`);
+    expect(hashes[0]).toContain("/qmk_firmware/keyboards/zsa/moonlander/keymaps/keyloom/keymap.c");
+    expect(calls.lastIndexOf(hashes[2] as string)).toBeLessThan(calls.findIndex((l) => l.includes(" make ")));
+  });
+
   test("a stale .bin from an earlier build can't pass for this one", async () => {
     const s = await setup();
     await s.build("ok");

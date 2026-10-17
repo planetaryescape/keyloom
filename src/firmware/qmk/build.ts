@@ -6,6 +6,7 @@ import { BuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { withLock } from "../toolchain/lock.ts";
+import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
 import { qmkRevision } from "./board-config.ts";
 import { artifactKind, artifactProblem } from "./artifact.ts";
@@ -85,6 +86,15 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
           `Docker can't see ${input.checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`,
         );
       }
+      await awaitMountedFiles({
+        image: rev.build.image,
+        mountArgs: base.slice(3),
+        hostRoot: input.checkoutDir,
+        containerRoot: "/qmk_firmware",
+        files: input.source.files.map((f) => join(keymapDir, f.path)),
+        log: input.log,
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
       const cmd = [
         ...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), "-e", "SKIP_GIT=1", "-e", "MAKEFLAGS=-j4", "-e", "QMK_USERSPACE=",
         rev.build.image, "make", `${rev.qmkTarget}:${input.source.keymapName}`,

@@ -77,6 +77,7 @@ esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/config}"; prev="$a"; done
+${fakeSha256Probe("/config")}
 case " $* " in *" --entrypoint sh "*) [ -f "$vol/config/default.nix" ] || exit 1; rm -f "$vol/glove80.uf2"; exit 0;; esac
 case "$FAKE_MODE" in
   ok) cp "$FAKE_UF2" "$vol/glove80.uf2"; echo "building zmk_glove80_lh.drv"; exit 0;;
@@ -95,7 +96,7 @@ import { join as joinPath } from "node:path";
 import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { closeApp, importLayout, openApp } from "../../src/app/index.ts";
-import { FAKE_GIT, fakeBinDir, withPath } from "./fake-bin.ts";
+import { FAKE_GIT, fakeBinDir, fakeSha256Probe, withPath } from "./fake-bin.ts";
 
 export async function zmkEnv(opts: { keymap?: string } = {}) {
   const root = tempDir();
@@ -123,10 +124,17 @@ export async function zmkEnv(opts: { keymap?: string } = {}) {
   return { app, root, dataDir, volumes, checkout: dir, run, imported, vars, closeApp: () => closeApp(app) };
 }
 
-/** A fake bootloader for `volumes`: each boot drive that gets a .uf2 written to it unmounts, as a real one does. */
-export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[] } = {}) {
+/**
+ * A fake bootloader for `volumes`: each boot drive that gets a .uf2 written to it unmounts, as a real one does. With `onDemand`
+ * only the first drive appears by itself; the test calls `mount(label)` for the others, as a person puts the next half into its
+ * bootloader once keyloom has asked, so no fixed delay has to outlast a slow runner.
+ */
+export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[]; onDemand?: boolean } = {}) {
   const written: string[] = [];
-  labels.forEach((label, i) => setTimeout(() => mkdirSync(joinPath(volumes, label), { recursive: true }), opts.mountAfterMs?.[i] ?? 50 + i * 400));
+  const mount = (label: string) => mkdirSync(joinPath(volumes, label), { recursive: true });
+  labels.forEach((label, i) => {
+    if (!opts.onDemand || i === 0) setTimeout(() => mount(label), opts.mountAfterMs?.[i] ?? 50 + i * 400);
+  });
   const timer = setInterval(() => {
     for (const label of labels) {
       if (!written.includes(label) && existsSync(joinPath(volumes, label, "glove80.uf2"))) {
@@ -135,5 +143,5 @@ export function fakeBootloaders(volumes: string, labels: readonly string[], opts
       }
     }
   }, 10);
-  return { written, stop: () => clearInterval(timer) };
+  return { written, mount, stop: () => clearInterval(timer) };
 }
