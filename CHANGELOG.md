@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.36.1](https://github.com/planetaryescape/keyloom/compare/v0.36.0...v0.36.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* close the gaps the add-keyboard tests found ([#88](https://github.com/planetaryescape/keyloom/issues/88)) ([7bb9e26](https://github.com/planetaryescape/keyloom/commit/7bb9e26b3313c6fd68eb14d079be19f47745b73a))
+* review trigger label, agent repeating checks, unlinked proposals, provider wording ([#90](https://github.com/planetaryescape/keyloom/issues/90)) ([676fd77](https://github.com/planetaryescape/keyloom/commit/676fd77e833d15dc874660b1141b3b8f59adf983))
+
 ## [0.36.0](https://github.com/planetaryescape/keyloom/compare/v0.35.1...v0.36.0) (2026-10-16)
 
 
