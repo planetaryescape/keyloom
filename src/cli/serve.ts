@@ -85,7 +85,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
-    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
+    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
   });
   let drained: Promise<void> | undefined;
   return {

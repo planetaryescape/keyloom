@@ -6,6 +6,7 @@ import type { LayoutSnapshot } from "../agent/ports.ts";
 import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import { newId } from "../persistence/ids.ts";
+import type { ChangeSetSource } from "../persistence/change-sets.ts";
 import { type ChangeSetView, proposeChange } from "./changes.ts";
 import { type ConfigView, blankDocument, newConfig } from "./configs.ts";
 import { evaluate } from "../validation/validate.ts";
@@ -25,6 +26,8 @@ export type PutInput = {
   name?: string;
   /** For a layer key with no counterpart, by its source position: the target key chosen among the candidates (D-336). */
   placements?: Record<string, number>;
+  /** Who is asking: the editor and the CLI, or the agent (D-372). The proposals are the same either way. */
+  source?: ChangeSetSource;
 };
 
 /** What a put would make, without making it (D-336): the plan, and the layout the placed proposal would give the board, to draw. */
@@ -98,7 +101,7 @@ export function putConfig(app: App, input: PutInput): PutOutcome {
   });
   const proposals: PutProposal[] = [];
   const main = proposeChange(app, config.id, {
-    ops: plan.ops, explanation, source: "editor", title: `Put ${view.layout.name} on the ${target.definition.name}`,
+    ops: plan.ops, explanation, source: input.source ?? "editor", title: `Put ${view.layout.name} on the ${target.definition.name}`,
     tradeoffs: { gains: [summary], costs: plan.notCarried.length > 0 ? [`${plural(plan.notCarried.length, "key")} stay off: ${plan.notCarried.slice(0, 6).map((n) => n.sourceName).join(", ")}${plan.notCarried.length > 6 ? ", and more" : ""}`] : [] },
     proposalGroup: group,
   });
@@ -114,7 +117,7 @@ export function putConfig(app: App, input: PutInput): PutOutcome {
     };
     const text = `the same, with ${plural(placed.length, "layer key")} that had no key of its own placed: ${placed.map(where).join("; ")}`;
     const alt = proposeChange(app, config.id, {
-      ops: plan.opsWithPlacements, explanation: `${explanation} ${text}.`, source: "editor", title: `Put ${view.layout.name} on the ${target.definition.name}, with its layer keys placed`,
+      ops: plan.opsWithPlacements, explanation: `${explanation} ${text}.`, source: input.source ?? "editor", title: `Put ${view.layout.name} on the ${target.definition.name}, with its layer keys placed`,
       tradeoffs: { gains: [text], costs: ["the placed keys are keyloom's first choice of the keys on offer; the other candidates are listed so you can pick differently"] }, proposalGroup: group,
     });
     proposals.push(asProposal(alt, alt.title ?? "", text));

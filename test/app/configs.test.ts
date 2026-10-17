@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   type App, NotFoundError, UsageError, ValidationFailedError, applyOps, archiveConfig, blankDocument, compareRevision, deleteConfig, getLayout, importLayout, listConfigs,
-  listRevisions, newConfig, nameVersion, openApp, proposeChange, recordPriority, renameConfig, resolveRevision, restoreConfig, restoreVersion, showConfig, versionHistory,
+  listRevisions, newConfig, newConfigFromImport, nameVersion, openApp, proposeChange, recordPriority, renameConfig, resolveRevision, restoreConfig, restoreVersion, showConfig, versionHistory,
 } from "../../src/app/index.ts";
 import { diffLayouts } from "../../src/layout/diff.ts";
 import { deepEqual } from "../../src/layout/equal.ts";
@@ -98,6 +98,18 @@ describe("making a config", () => {
     // It can be edited like any config: the rules that check a change accept the first key.
     const head = view.revision.id;
     expect(() => applyOps(app, blank.id, { baseRevisionId: head, ops: [{ op: "setBinding", at: { layerId: "base", position: 0 }, binding: { kind: "key", code: "Q" } }], summary: "Q" })).not.toThrow();
+  });
+
+  test("from an import is the import with the config's name, never on the keyboard of a board that has one", async () => {
+    const { app, ref } = await setup();
+    const made = await newConfigFromImport(app, { name: "Fresh import", board: BOARD, source: FIXTURE_DIR });
+    expect(made.config).toMatchObject({ name: "Fresh import", boardId: BOARD, onKeyboard: false, copiedFrom: null });
+    expect(made.report.layers).toBeGreaterThan(1);
+    expect(getLayout(app, made.config.id).revision.origin).toBe("import");
+    expect(getBoardConfig(app.db, BOARD)).toBe(ref);
+    await expect(newConfigFromImport(app, { name: "Fresh import", board: BOARD, source: FIXTURE_DIR })).rejects.toThrow(/already exists; pick another name/);
+    await expect(newConfigFromImport(app, { name: "lay_x", board: BOARD, source: FIXTURE_DIR })).rejects.toThrow(/lay_/);
+    await expect(newConfigFromImport(app, { name: "Gone", board: BOARD, source: "/nope/nothing" })).rejects.toThrow(UsageError);
   });
 
   test("blank for a software remapper is the identity map, so putting it on doesn't silence the laptop", () => {

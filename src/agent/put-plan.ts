@@ -14,7 +14,7 @@ import type { Binding, Layer, Layout } from "../layout/schema.ts";
 import { BindingTransfer } from "../layout/transfer.ts";
 import { evaluate } from "../validation/validate.ts";
 import { findLayer, mapLayer, planComboCopy, primaryTargets, transferEnv } from "./copy-plan.ts";
-import type { LayoutSnapshot } from "./ports.ts";
+import type { LayerReport, LayoutSnapshot, NotCarried, PlacementCandidate, PlacementProposal } from "./ports.ts";
 
 /** Position matches are the only kind against an empty board; down to a nearer column is still "the same finger, the same row". Anything weaker is not carried. */
 export const PUT_MIN_CONFIDENCE = 0.3;
@@ -22,22 +22,7 @@ export const PUT_MIN_CONFIDENCE = 0.3;
 const SURE = 0.6;
 
 /** `name` is the place ("right thumb, inner"). `replaces` is what the base layer would lose there: the key carried to that place by a nearest-place guess. Absent for a free key. */
-export type PlacementCandidate = { target: number; name: string; replaces?: string };
-export type PlacementProposal = {
-  /** Set when no candidate can take the key: the validator would refuse it (a layer it enters has no way back on the new board). */
-  blocked?: string;
-  /** The key on the source layout and the layer it is on. */
-  layerId: string;
-  layerName: string;
-  source: number;
-  sourceName: string;
-  /** Free keys on the same hand that could take it, best first. */
-  candidates: PlacementCandidate[];
-};
-
-export type NotCarried = { layerName: string; source: number; sourceName: string; why: string };
-
-export type LayerReport = { source: string; target: string; carried: number; guessed: number; notCarried: number };
+export type { LayerReport, NotCarried, PlacementCandidate, PlacementProposal } from "./ports.ts";
 
 export type PutPlan = {
   /** The mapped proposal: layers, behaviours and every key with a counterpart. */

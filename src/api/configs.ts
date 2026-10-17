@@ -1,6 +1,6 @@
 // Configs and versions (rung 23, 25): the routes the config switcher and History's version milestones call.
 //   GET  /api/configs[?board=<id>][&archived=1]    -> ConfigListResponse (newest edited first; archived ones only with archived=1)
-//   POST /api/configs                  NewConfigRequest -> ConfigResponse (201; 400 usage for a taken or empty name, 404 for an unknown source)
+//   POST /api/configs                  NewConfigRequest -> NewConfigResponse (201; from "import" carries the file as base64, up to about 1 MB; 400 usage for a taken or empty name, 404 for an unknown source)
 //   POST /api/configs/:ref/rename      RenameConfigRequest -> ConfigResponse
 //   POST /api/configs/:ref/archive     {} -> ConfigResponse (400 usage for the config on the keyboard)
 //   POST /api/configs/:ref/restore     {} -> ConfigResponse
@@ -35,11 +35,17 @@ export type ApiConfig = z.infer<typeof ConfigSchema>;
 
 export const ConfigListResponseSchema = z.object({ configs: z.array(ConfigSchema) });
 export const ConfigResponseSchema = z.object({ config: ConfigSchema });
+// A new config also says where it started, such as the reason a blank one has no default keymap (D-370).
+export const NewConfigResponseSchema = ConfigResponseSchema.extend({ note: z.string().optional() });
+export type NewConfigResponse = z.infer<typeof NewConfigResponseSchema>;
 
 export const NewConfigRequestSchema = z.discriminatedUnion("from", [
   // revision and version are alternatives; a version is named by ID or by name.
   z.object({ from: z.literal("config"), name: z.string(), config: z.string().min(1), revision: z.string().min(1).optional(), version: z.string().min(1).optional() }),
+  // The board's firmware default keymap where keyloom can read one, otherwise the empty Base layer (D-370).
   z.object({ from: z.literal("blank"), name: z.string(), board: z.string().min(1) }),
+  // A file BK exported, as the bytes in base64 and the name it had (D-371); the same importers as POST /api/import.
+  z.object({ from: z.literal("import"), name: z.string(), board: z.string().min(1), filename: z.string().min(1), data: z.string().min(1) }),
 ]);
 export type NewConfigRequest = z.infer<typeof NewConfigRequestSchema>;
 

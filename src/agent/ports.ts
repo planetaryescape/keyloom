@@ -85,12 +85,55 @@ export type TypingFindings = {
   };
 };
 
+export type PlacementCandidate = { target: number; name: string; replaces?: string };
+export type PlacementProposal = {
+  /** Set when no candidate can take the key: the validator would refuse it (a layer it enters has no way back on the new board). */
+  blocked?: string;
+  /** The key on the source layout and the layer it is on. */
+  layerId: string;
+  layerName: string;
+  source: number;
+  sourceName: string;
+  /** Free keys on the same hand that could take it, best first. */
+  candidates: PlacementCandidate[];
+};
+
+export type NotCarried = { layerName: string; source: number; sourceName: string; why: string };
+
+export type LayerReport = { source: string; target: string; carried: number; guessed: number; notCarried: number };
+
+export type PutInput = {
+  /** The layout (config) to copy from: its id or name. */
+  from: string;
+  /** The board to put it on, such as `local/corne`. */
+  board: string;
+  name?: string;
+  /** For a layer key with no counterpart, by its source position: the target key chosen among the candidates. */
+  placements?: Record<string, number>;
+};
+
+/** A put (22#putting-bks-config-on-it): a new config on the other board and its proposals. Nothing is applied and nothing reaches a keyboard. */
+export type PutResult = {
+  config: { id: string; name: string; boardName: string };
+  proposals: Array<{ changeSetId: string; title: string; summary: string; warnings: number; changedKeys: number }>;
+  placements: PlacementProposal[];
+  layers: LayerReport[];
+  notCarried: NotCarried[];
+  combos: { copied: string[]; skipped: Array<{ id: string; why: string }> };
+  notes: string[];
+};
+
 export interface AgentPorts {
   snapshot(): LayoutSnapshot;
   /** The head of every layout keyloom holds, this conversation's included. Read-only: a proposal can only target `snapshot()` (D-014, D-220). */
   layouts(): LayoutSnapshot[];
   /** The head of another layout by id or name. Throws a readable Error when no layout is called that, or the name is ambiguous. */
   layout(ref: string): LayoutSnapshot;
+  /**
+   * Maps another layout onto a board that has none of BK's config yet: makes a new config there and stores the mapping as proposals on it
+   * (D-372). Nothing is applied, and this conversation's layout is untouched. Throws a readable Error for an unknown layout or board, or a name already taken.
+   */
+  put(input: PutInput): PutResult;
   /** Validates against the head without saving anything. */
   check(ops: ChangeOp[]): ValidationResult;
   /** Validates each alternative and stores the valid ones as proposed change sets sharing one group. */

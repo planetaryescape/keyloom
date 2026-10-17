@@ -1,6 +1,6 @@
 # 25: Configs and versions
 
-Status: model, sync, CLI, API and agent built (rung 23 part 1); screens built on fake keyboards (D-315), 2026-10-16. Source baseline: origin/main after v0.25.0.
+Status: model, sync, CLI, API and agent built (rung 23 part 1); screens built on fake keyboards (D-315); a blank config starts from the firmware's default keymap where there is one and a config can be made from a file (D-370, D-371), 2026-10-17. Source baseline: origin/main after v0.25.0.
 
 BK: "I would like this app to keep multiple versions of my layout and version history just like oryx does so if i change something an use it for a week and don't like it I can go bto a past version or maybe I want a steno config and a qwerty config and a colemac config and I don't want to use layers for that, then I can keep layout configs that are different".
 
@@ -64,10 +64,16 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 - **Versions.** Written in the transaction that finishes a verified sync (D-307). History is `versions` with the revisions between two folded under the later one, plus the revisions newer than the newest version as `pending`. Restore is the go-back path; compare is a key-by-key diff (D-309).
 - **Surfaces.** CLI in [10](10-cli.md#config-and-version-keep-several-layouts-per-board-and-go-back-to-old-ones); routes in [01](01-architecture.md) and `src/api/configs.ts`; the agent's `list_layouts` marks the config on each keyboard and its prompt says a "Colemak config" is a new config, which it tells BK how to make.
 
+## Blank and from a file
+
+- **Blank** (D-370, replacing the empty start of D-306). `keyloom config new <name> --blank --board B`, `POST /api/configs` with `from: "blank"` and the New config dialog's Blank read the board's default keymap from its pinned firmware tree: QMK's `keymaps/default` (`keymap.c`, else `keymap.json`), the ZMK shield's own `.keymap`, or for the Glove80 MoErgo's template keymap. It is fetched like `boards geometry` reads a layout, kept by SHA in the cache folder, and read by the importer for that firmware (`src/app/default-keymap.ts`). With none, or none that fits the board, the config starts as the empty Base layer, and the reason is in its first revision's summary, the CLI's note and the API's `note`. A software remapper starts as the identity map with no lookup.
+- **From a file** (D-371). `keyloom config new <name> --from import <file> --board B` and `POST /api/configs` with `from: "import"` (the file as base64 with its name) run the importers `keyloom import` runs, with the config's name. The New config dialog's "A file" hands over to the import screen, which posts to `POST /api/import`: the same importers and the same use case underneath. A taken name is refused before anything is read.
+- **Putting it on the keyboard** is `config use`, unchanged: a config from a file or a default keymap is like any other config (the board's first becomes its config; a later one waits).
+- The Moonlander's `keymaps/default` at the pinned SHA names its layers with an enum (`[BASE]`), which the importer does not read, so a blank Moonlander config falls back to the empty Base layer and says so (checked against GitHub on 2026-10-17; the Corne and the Glove80 read). Tests use fixtures and never the network.
+
 ## Not built yet
 
-- New config from an import is `keyloom import --name`, which already makes a layout; on a board that has a config it is not put on the keyboard.
-- A real default keymap for a blank config (D-306).
+- A default keymap for a QMK `community_layouts` board or a ZMK board without a shield file of its own name: they fall back to the empty Base layer with the reason.
 
 ## Decisions
 

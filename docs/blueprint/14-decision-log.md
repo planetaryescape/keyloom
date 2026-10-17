@@ -1240,7 +1240,7 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 
 ### D-306: A blank config is one empty Base layer sized to the board; a software remapper starts as its identity map. (Claude, rung 23)
 - **Why:** boards carry no default keymap (the firmware tree's own is not in the repo). A remapper with an empty map would silence the laptop's keyboard the moment it is put on.
-- **Open:** a real default keymap per board would need a pinned file in each board folder (04).
+- **Open:** a real default keymap per board would need a pinned file in each board folder (04). D-370 closes it: the board's revision already pins the tree, and the default is read from there; the empty layer is the fallback.
 
 ### D-307: A version is one row per revision; putting a revision on again moves its put-on time forward and reopens it. (Claude, rung 23)
 - **Why:** it keeps names attached to the revision. The cost is that an earlier stay of the same revision is not kept. Versions are written inside the transaction that finishes a verified sync, so one exists exactly when the other does, including after a crash recovery that confirms a flash.
@@ -1396,3 +1396,25 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 
 ### D-359: Whether a board's drawing must be a mirror image is derived, not declared. (Board-contribution fixes, Claude; asked by the coordinator)
 - Symmetry is checked for a split board (one that isn't one piece, D-351) whose hands have the same key count and whose mirror isn't empty: the Corne, the Glove80 and the Moonlander. A `board.json` flag would let a contributor switch the check off for a board it should hold for; a board that needs an exception is a code change, made with the maintainer.
+
+### D-370: A blank config starts from the firmware's default keymap where keyloom can read one, and says why when it can't. (Configs gaps, Claude; asked by the coordinator; replaces D-306's empty start)
+- The default is QMK's `keymaps/default` in the board's pinned tree, the ZMK shield's own `.keymap`, or for the Glove80 the template's keymap. It is fetched the way `boards geometry` fetches a layout, cached by SHA, and read by the board's own importer, so it is what importing that file would give. Nothing new is pinned: the board's revision already names the SHA.
+- No default is a reason, not an error: the config starts as the empty Base layer and the first revision's summary, the CLI and the API's `note` say why (a 404, a layout the importer can't read, a file that isn't the board's size). The lookup runs after the name is checked, so a bad name costs no request.
+- A keyboard put still maps onto the empty board, because its plan is written against it (D-334); only `config new --blank`, `POST /api/configs` and the dialog look for a default.
+- The tests read fixtures. The real tree was checked once by hand: the Corne and the Glove80 read; the Moonlander's default names its layers with an enum, so it falls back, honestly.
+
+### D-371: A config can be made from a file in the CLI and the API, over the importers `keyloom import` runs. (Configs gaps, Claude; asked by the coordinator)
+- `config new <name> --from import <file> --board B` and `POST /api/configs` with `from: "import"` make a config from the file with the given name; `config use` puts it on the keyboard like any other. The "file" is a second positional argument because `--from` already takes a config.
+- The API carries the bytes as base64 in the JSON body (up to about 1 MB), so the route keeps its JSON-only guard; the bytes go through the same temporary folder as `POST /api/import` (D-171).
+- The New config dialog's "A file" already reaches the importers through the import screen and `POST /api/import`, which makes a layout, that is a config. It stays, because the screen has each board's export guide and the drop target.
+
+### D-372: The agent's `put_config` runs `keyboard put` as proposals on a new config and applies nothing. (Configs gaps, Claude; asked by the coordinator; from D-334 and D-014)
+- It calls the same `putConfig` as the CLI and the screens, with the change sets' source set to `agent`. The agent gets what was carried, what was not and why, and the keys that could take each unplaced layer key; it tells BK where the proposals wait.
+- It creates a config, which is a write, but no proposal is applied, nothing is built or flashed, and the conversation's own layout is untouched. The validator checks each proposal exactly as for the screens. A taken name is an error the agent reads and answers with another name.
+- The new config belongs to no conversation, so no proposal card is raised in the chat (D-336's open proposals show it).
+
+### D-373: The default-keymap lookup is injected like the geometry fetch. (Configs gaps, Claude)
+- `newBlankConfig`, the config commands and the configs backend take the same `fetchText` and `cacheDir` as `keyboard add`, so every test passes a fixture tree and none reads GitHub. The cache is `<cache>/keymaps`, keyed by the firmware tree's SHA.
+
+### D-374: The empty fallback is the same document a keyboard put starts from. (Configs gaps, Claude)
+- `blankDocument` is unchanged and still the fallback, so a blank config with no default is indistinguishable from the one D-306 made, apart from the summary that says why.

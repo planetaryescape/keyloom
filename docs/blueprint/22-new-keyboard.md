@@ -1,6 +1,6 @@
 # 22: A new keyboard: connect it and put my config on it
 
-Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on origin/main at `f0ac50d` (v0.31.1); the screens built on fake USB (part 2, D-336); the new flash recipes are not (see "What is built so far"). The rest of this chapter is the design it follows. Detection ran against BK's real USB bus once (S42, in [15](15-open-questions.md)); nothing here has put a config on a physical keyboard.
+Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on origin/main at `f0ac50d` (v0.31.1); the screens built on fake USB (part 2, D-336); the agent's `put_config` tool runs the put from chat (D-372); the new flash recipes are not (see "What is built so far"). The rest of this chapter is the design it follows. Detection ran against BK's real USB bus once (S42, in [15](15-open-questions.md)); nothing here has put a config on a physical keyboard.
 
 BK: "If I get a new keyboard I just connect it and say put my config on this. Doesn't matter what keyboard it is as long as it uses ZMK or QMK."
 
@@ -58,7 +58,7 @@ Part 1 is the engine and the CLI, with no screens. The demo runs with fakes in `
 - **Add** (`keyloom keyboard add`): reads the layout from the pinned tree (`keyboards/**/info.json` merged down to the keyboard, or ZMK's `zmk,physical-layout`, now addressable as `file#label` where a file holds several; 29 of 66 ZMK shields have one keyloom can read), derives hands, thumbs, fingers, rows and mirror pairs (D-332), builds the recipes (D-333), runs `boards check` on a copy, and stores the board (D-330). The home row, and for a ZMK shield the controller, are the confirmations. One to five small files are fetched from GitHub the first time and cached by SHA, as `boards geometry` does.
 - **Put** (`keyloom keyboard put <layout> --on <board>`): D-334.
 - **The keyboard-state reader** (D-335): a derived QMK board is seen by doctor; sync still needs a keyboard keyloom can restart.
-- **The agent** knows the three commands (`src/agent/prompts/system.md`), and a derived board's configs are in `list_layouts` like any other. A chat tool that runs `keyboard put` is not built.
+- **The agent** knows the three commands (`src/agent/prompts/system.md`), and a derived board's configs are in `list_layouts` like any other. `put_config` (D-372) runs `keyboard put` from chat as proposals on a new config; it applies nothing, and the validator checks every proposal (D-014).
 
 Not built, and not guessed at:
 
