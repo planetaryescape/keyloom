@@ -1,7 +1,6 @@
-// The flash recipe for a derived board (22#building-the-board-definition). keyloom flashes three ways today: Zapp (ZSA boards only),
-// UF2 boot drives, and "manual", where it shows what to do and waits. A derived board gets a UF2 recipe where it knows the boot
-// drive's name, and manual otherwise, with the reason. New recipes for atmel-dfu, stm32-dfu and the rest are not built yet (22,
-// "What is built so far"); a manual flash is the honest answer meanwhile. Pure.
+// The flash recipe for a derived board (22#building-the-board-definition). keyloom flashes four ways: Zapp (ZSA boards only), UF2 boot
+// drives, a command-line DFU tool (atmel-dfu, stm32-dfu and caterina: 76% of QMK boards with USB IDs, D-365), and "manual", where it
+// shows what to do and waits. A derived board gets the first that fits its bootloader, and manual with the reason when none does. Pure.
 import type { FlashRecipe, FlashStep } from "../recipes.ts";
 
 export type QmkFlash = { flash: FlashRecipe; artifact: "bin" | "hex" | "uf2"; /** Why the recipe is manual, in a sentence a person can read; absent for a recipe keyloom runs. */ manualReason?: string };
@@ -33,7 +32,32 @@ const MANUAL: Record<string, string> = {
 /** The RP2040 ROM bootloader's drive is always called RPI-RP2 (qmk_firmware docs/flashing.md, "Raspberry Pi RP2040 UF2"). */
 const RP2040_VOLUME = "RPI-RP2";
 
-export function qmkFlash(bootloader: string | undefined, bootInstructions?: string): QmkFlash {
+// The USB product ID atmel-dfu's bootloader reports for each chip, all under Atmel's vendor ID 03eb. dfu-programmer's own target table
+// (src/arguments.c, `device_id`, dfu-programmer/dfu-programmer master, read 2026-10-17) is the source; its names are the ones the tool takes.
+const ATMEL_VENDOR_ID = "03eb";
+const ATMEL_DFU_PRODUCT: Record<string, string> = {
+  atmega8u2: "2fee", atmega16u2: "2fef", atmega32u2: "2ff0", atmega16u4: "2ff3", atmega32u4: "2ff4", atmega32u6: "2ff2",
+  at90usb82: "2ff7", at90usb162: "2ffa", at90usb646: "2ff9", at90usb647: "2ff9", at90usb1286: "2ffb", at90usb1287: "2ffb",
+};
+/** The STM32 ROM bootloader, the same for every STM32 (qmk_firmware docs/flashing.md, "STM32/APM32 DFU"). */
+const STM32_DFU_ID = "0483:df11";
+
+const DFU_ENTER = "Press the QK_BOOT key, press the RESET button on the PCB, or short RST to GND.";
+const STM32_ENTER = "Press the QK_BOOT key, press the RESET button, or hold BOOT0 while plugging in the USB cable.";
+const CATERINA_ENTER = "Press the QK_BOOT key or the RESET button, or short RST to GND (some boards need it twice within 750 ms). The bootloader only waits about 7 seconds, so keyloom is ready first.";
+
+/** The recipe that runs a DFU tool for this bootloader, or the reason it can't be written. */
+function dfuToolFlash(bootloader: string, processor: string | undefined, bootInstructions: string | undefined): FlashRecipe | string {
+  const enter = (fallback: string): string => bootInstructions ?? fallback;
+  if (bootloader === "stm32-dfu") return { kind: "dfu-tool", tool: "dfu-util", bootloader: STM32_DFU_ID, enter: enter(STM32_ENTER) };
+  if (processor === undefined) return `QMK's data doesn't say which chip this ${bootloader} keyboard has, and the tool needs its name`;
+  if (bootloader === "caterina") return { kind: "dfu-tool", tool: "avrdude", mcu: processor, enter: enter(CATERINA_ENTER) };
+  const product = ATMEL_DFU_PRODUCT[processor];
+  if (product === undefined) return `keyloom doesn't know the atmel-dfu USB ID of the ${processor}`;
+  return { kind: "dfu-tool", tool: "dfu-programmer", bootloader: `${ATMEL_VENDOR_ID}:${product}`, mcu: processor, enter: enter(DFU_ENTER) };
+}
+
+export function qmkFlash(bootloader: string | undefined, bootInstructions?: string, processor?: string): QmkFlash {
   const artifact = (bootloader === undefined ? undefined : ARTIFACT[bootloader]) ?? "bin";
   if (bootloader === "rp2040") {
     return {
@@ -44,12 +68,18 @@ export function qmkFlash(bootloader: string | undefined, bootInstructions?: stri
       },
     };
   }
+  let unwritable: string | undefined;
+  if (bootloader === "atmel-dfu" || bootloader === "stm32-dfu" || bootloader === "caterina") {
+    const recipe = dfuToolFlash(bootloader, processor, bootInstructions);
+    if (typeof recipe !== "string") return { artifact, flash: recipe };
+    unwritable = recipe;
+  }
   const how = bootloader === undefined ? undefined : MANUAL[bootloader];
-  const reason = bootloader === undefined
+  const reason = unwritable ?? (bootloader === undefined
     ? "QMK's data doesn't say which bootloader this keyboard has"
     : bootloader === "tinyuf2" || bootloader === "uf2boot"
       ? `keyloom doesn't know the name of ${bootloader}'s boot drive yet`
-      : `keyloom has no flash recipe for ${bootloader} yet`;
+      : `keyloom has no flash recipe for ${bootloader} yet`);
   const instructions = [bootInstructions, how ?? "Put the board in its bootloader with its own reset method (QMK's flashing guide, docs/flashing.md, lists the tool for each bootloader), then write the built file with that tool."]
     .filter((s): s is string => s !== undefined)
     .join(" ");

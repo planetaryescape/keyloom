@@ -15,9 +15,12 @@ import * as volumes from "../../src/firmware/zmk/volumes.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "keyloom-no-flash-"));
 mkdirSync(dir, { recursive: true });
-const zapp = join(dir, "zapp");
-writeFileSync(zapp, '#!/bin/sh\necho "the real zapp is blocked in tests; pass a fake" >&2\nexit 97\n');
-chmodSync(zapp, 0o755);
+// The DFU tools write to whatever bootloader is on the bus (22, D-365), so they get the same refusal as zapp.
+for (const name of ["zapp", "dfu-programmer", "dfu-util", "avrdude"]) {
+  const path = join(dir, name);
+  writeFileSync(path, `#!/bin/sh\necho "the real ${name} is blocked in tests; pass a fake" >&2\nexit 97\n`);
+  chmodSync(path, 0o755);
+}
 process.env.PATH = `${dir}:${process.env.PATH ?? ""}`;
 
 // Where a Glove80's boot drive appears on a real machine. Tests give the flash a temporary directory instead.

@@ -38,7 +38,7 @@ const QmkKeySchema = z.object({
 export type QmkKey = z.infer<typeof QmkKeySchema>;
 const LayoutsSchema = z.record(z.string(), z.object({ layout: z.array(QmkKeySchema) }));
 
-export type DevBoards = Record<string, { bootloader?: string }>;
+export type DevBoards = Record<string, { bootloader?: string; processor?: string }>;
 
 export type QmkResolved = {
   name: string | undefined;
@@ -49,6 +49,8 @@ export type QmkResolved = {
   bcd: string | undefined;
   /** `bootloader` as written, else the development board's (a Pro Micro is Caterina). Undefined when neither says; rules.mk-only boards land here. */
   bootloader: string | undefined;
+  /** `processor` as written, else the development board's (a Pro Micro is an atmega32u4): the chip a DFU tool is told to write. */
+  processor: string | undefined;
   /** `bootloader_instructions`: the maintainer's own words on how to reach the bootloader, where they wrote any. */
   bootInstructions: string | undefined;
   split: boolean;
@@ -72,6 +74,7 @@ export function resolveQmk(chain: readonly Json[], devBoards: DevBoards = {}): Q
     pid: hex4(usb.pid),
     bcd: bcdOfVersion(usb.device_version),
     bootloader,
+    processor: typeof info.processor === "string" ? info.processor : dev?.processor,
     bootInstructions: typeof info.bootloader_instructions === "string" ? info.bootloader_instructions : undefined,
     split,
     layouts: layouts.success ? Object.fromEntries(Object.entries(layouts.data).map(([k, v]) => [k, v.layout])) : {},

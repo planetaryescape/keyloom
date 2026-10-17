@@ -25,7 +25,7 @@ describe("CONTRIBUTING.md field reference", () => {
   });
 
   test("names every recipe kind the schema accepts, in the recipe table", () => {
-    for (const kind of ["qmk-docker", "zmk-west-docker", "zmk-moergo-template", "zapp", "uf2-drives", "manual"]) expect(doc).toContain(`\`${kind}\``);
+    for (const kind of ["qmk-docker", "zmk-west-docker", "zmk-moergo-template", "zapp", "uf2-drives", "dfu-tool", "manual"]) expect(doc).toContain(`\`${kind}\``);
   });
 });
 

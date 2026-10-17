@@ -28,7 +28,7 @@ const world = () => ({ app: openApp({ dataDir: tempDir() }), deps: deps() });
 afterAll(() => setUserBoards([]));
 
 describe("a QMK keyboard", () => {
-  test("a Moonlander derives to BK's committed hands, thumbs, fingers, rows and mirror, with a manual flash for stm32-dfu", async () => {
+  test("a Moonlander derives to BK's committed hands, thumbs, fingers, rows and mirror, with a dfu-util flash for stm32-dfu", async () => {
     const { app, deps: d } = world();
     const out = await addKeyboard(app, { candidate: "qmk:zsa/moonlander", homeRow: 3 }, { ...d, boards: [] });
     expect(out.boardId).toBe("local/zsa-moonlander");
@@ -43,9 +43,9 @@ describe("a QMK keyboard", () => {
     expect(rev.qmkTarget).toBe("zsa/moonlander");
     expect(rev.detect).toEqual({ usbProductId: "0x1969", usbVendorId: "0x3297" });
     expect(rev.build).toMatchObject({ kind: "qmk-docker", layoutMacro: "LAYOUT", layoutFile: "keyboards/zsa/moonlander/keyboard.json", artifact: "bin" });
-    // Zapp is ZSA's own flasher for ZSA's own fork; a derived board is mainline QMK, so it is flashed by hand until stm32-dfu has a recipe.
-    expect(rev.flash.kind).toBe("manual");
-    expect(out.derived.manualFlashReason).toContain("stm32-dfu");
+    // Zapp is ZSA's own flasher for ZSA's own fork; a derived board is mainline QMK, so it is flashed with dfu-util.
+    expect(rev.flash).toMatchObject({ kind: "dfu-tool", tool: "dfu-util", bootloader: "0483:df11" });
+    expect(out.derived.manualFlashReason).toBeNull();
   });
 
   test("a Corne walks QMK's info.json chain, takes the alias for its layout, and stores two files where the shipped boards live", async () => {
@@ -54,10 +54,8 @@ describe("a QMK keyboard", () => {
     const derived = showBoard(out.boardId).definition;
     expect(derived.keyCount).toBe(42);
     expect(derived.revisions[0]?.build).toMatchObject({ layoutMacro: "LAYOUT_split_3x6_3", layoutFile: "keyboards/crkbd/info.json", artifact: "hex" });
-    expect(derived.revisions[0]?.flash).toMatchObject({ kind: "manual" });
-    const flash = derived.revisions[0]?.flash;
-    expect(flash?.kind === "manual" && flash.instructions).toContain("avrdude");
-    expect(out.derived.manualFlashReason).toContain("caterina");
+    expect(derived.revisions[0]?.flash).toMatchObject({ kind: "dfu-tool", tool: "avrdude", mcu: "atmega32u4" });
+    expect(out.derived.manualFlashReason).toBeNull();
     const committed = (await loadBoardDir(CORNE_DIR)).definition;
     expect(derived.hands).toEqual(committed.hands);
     expect(derived.fingers).toEqual(committed.fingers);

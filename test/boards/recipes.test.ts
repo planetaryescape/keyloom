@@ -83,6 +83,24 @@ describe("recipe rules that span fields", () => {
     expect(errors(await check(zapp, QMK_INFO)).join(" ")).toContain('zapp flashing needs build.artifact "bin"');
   });
 
+  test("a dfu-tool flash needs the artifact its tool writes; the chip and the USB ID follow the tool", async () => {
+    const flash = { kind: "dfu-tool", tool: "dfu-programmer", mcu: "atmega32u4", bootloader: "03eb:2ff4", enter: "Press reset." };
+    const ok = await check(await templateCopy("qmk", (b) => { b.revisions[0].flash = flash; }), QMK_INFO);
+    expect(errors(ok)).toEqual([]);
+    const bin = await check(await templateCopy("qmk", (b) => { b.revisions[0].flash = flash; b.revisions[0].build.artifact = "bin"; }), QMK_INFO);
+    expect(errors(bin).join("\n")).toContain('dfu-programmer flashing needs build.artifact "hex"');
+    const util = await check(await templateCopy("qmk", (b) => { b.revisions[0].flash = { kind: "dfu-tool", tool: "dfu-util", bootloader: "0483:df11", enter: "x" }; }), QMK_INFO);
+    expect(errors(util).join("\n")).toContain('dfu-util flashing needs build.artifact "bin"');
+    // These two are the schema's own refinements, so the board does not load at all.
+    await expect(templateCopy("qmk", (b) => { b.revisions[0].flash = { ...flash, mcu: undefined }; })).rejects.toThrow("need the chip");
+    await expect(templateCopy("qmk", (b) => { b.revisions[0].flash = { kind: "dfu-tool", tool: "avrdude", mcu: "atmega32u4", bootloader: "03eb:2ff4", enter: "x" }; })).rejects.toThrow("waits for a serial port");
+  });
+
+  test("a ZMK board can't use a dfu-tool flash", async () => {
+    const r = await check(await templateCopy("zmk", (b) => { b.revisions[0].flash = { kind: "dfu-tool", tool: "dfu-util", bootloader: "0483:df11", enter: "x" }; }), ZMK_LAYOUT);
+    expect(errors(r).join("\n")).toContain("a ZMK board flashes with uf2-drives");
+  });
+
   test("an importer for the other firmware is an error", async () => {
     const dir = await templateCopy("zmk", (b) => {
       b.importers = ["oryx-source"];

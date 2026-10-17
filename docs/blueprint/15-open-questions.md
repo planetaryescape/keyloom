@@ -37,7 +37,7 @@ For each spike, record the command or request, the output (with private data rem
 | S40 | The Corne's committed `fingers` against the column-from-home-row rule: which is wrong? **Answered 2026-10-16:** the committed table was one column off and was fixed in rung 19 (D-227); the rule was right, and `test/boards/derive/heuristics.test.ts` reproduces it: 132 of 132 on the Moonlander and Glove80 and 36 of 36 on the Corne (result below) | Finger heuristics for new boards (D-236) | [22](22-new-keyboard.md) | Rung 21 |
 | S41 | Can QMK hands-free flashing (D-070) extend beyond ZSA boards, e.g. through Vial's jump or a generic raw-HID packet? | Hands-free on new QMK boards | [22](22-new-keyboard.md) | Nothing; record before claiming it |
 | S42 | Detection on BK's three boards: does keyloom name each from USB alone, and what does it ask when it can't? **Part answered 2026-10-16:** the Glove80, on the real bus; the Moonlander and Corne were not plugged in (result below) See the conflict with S1 on the Moonlander's revision. | D-236 | [22](22-new-keyboard.md) | Rung 21 |
-| S43 | Does a derived board's default keymap build from the pinned tree, and are the submodule lists, build images and (for ZMK) hardware-model-v2 controller names the generator writes right? | Derived boards build (D-333) | [22](22-new-keyboard.md) | Rung 21 part 2 |
+| S43 | Does a derived board's default keymap build from the pinned tree, and are the submodule lists, build images and (for ZMK) hardware-model-v2 controller names the generator writes right? **Answered 2026-10-17:** five boards build; the one correction was `lib/lufa` for every ChibiOS board (result below) | Derived boards build (D-333, D-368) | [22](22-new-keyboard.md) | Rung 21 part 2 |
 | S50 | Does a keyloom raw-HID key-event stream (position, press/release, timer) fit beside Oryx's modules on the Moonlander, keep up at fast typing without dropping events, and stop on timeout or disconnect? | Lab capture on QMK (D-281) | [24](24-typing-lab.md) | Rung 22 |
 | S51 | Does the keyloom-zmk module stream position events from the Glove80's central for both halves in order, and what is the split latency? | Lab capture on ZMK (D-281) | [24](24-typing-lab.md) | Rung 22 |
 | S52 | Can kanata's debug output give a usable event trace on the MacBook? | Lab on the MacBook | [24](24-typing-lab.md) | Nothing yet |
@@ -103,6 +103,21 @@ Glove80 Right  0x16c0:0x27d9  v0x0305  MoErgo     your Glove80 (moergo/glove80)
 - The Moonlander: not plugged in during the run. By the index alone, `0x3297:0x1969` names `zsa/moonlander` uniquely (a test). BK's running Moonlander is `revb`, `0x3297:0x1972`, which upstream QMK's data does not list (a ZSA fork ID, as the research found), so it is recognised by the board definition's `detect`, not by the index.
 - The Corne: not plugged in. With a fake bus, `Corne` over ZMK's default ID gives `zmk:corne` at 80%, and keyloom's own Corne is then recognised as known. The right half's product string is still unobserved (spike 4). The QMK Corne is a list: `crkbd/rev1` and `crkbd/r2g` share every ID.
 - What it asks when it can't: a list of candidates with the reason each fits, a ZMK keyboard whose string names nothing as `unknown` with `--search`, and for a shared or placeholder ID a list that is never reduced to one.
+
+### S43 result (2026-10-17, rung 21 part 2)
+
+Four derived QMK boards and a derived ZMK Corne build from the pinned trees in Docker, with one correction to the generator: every ChibiOS board needs `lib/lufa` as well. The QMK image is `ghcr.io/qmk/qmk_cli@sha256:b7d7fa8f…` and the ZMK one `zmkfirmware/zmk-build-arm@sha256:edb1c953…`, both as `pins.ts` has them. Each board was written by `keyloom keyboard add` and built by `keyloom build` through `agent-work`, on a blank config from `keyloom keyboard put`; nothing was flashed. Details, times and the failing log line are in [../research/spikes/S43.md](../research/spikes/S43.md).
+
+| Board | Bootloader | Submodules | Result |
+|---|---|---|---|
+| `planck/rev4` | atmel-dfu | `lib/lufa` | `.hex`, 60,780 bytes, 31 s |
+| `crkbd/rev1` | caterina | `lib/lufa` | `.hex`, 57,458 bytes, 36 s |
+| `ferris/0_2/base` | stm32-dfu | as first written, without `lib/lufa` | failed: `lib/lufa/LUFA/Drivers/USB/Class/Common/HIDClassCommon.h: No such file or directory` |
+| `ferris/0_2/base` | stm32-dfu | with `lib/lufa` | `.bin`, 28,184 bytes, 47 s |
+| `crkbd/rev4_1/standard` | rp2040 | with `lib/lufa` | `.uf2`, 119,296 bytes, 80 s |
+| ZMK `corne` on `nice_nano//zmk` | uf2-drives | none (west) | `left.uf2` and `right.uf2`, 617 s with the image already pulled and ZMK fetched by west |
+
+The ZMK build used the generator's output unchanged: `west` reported `Board: nice_nano, Revision: 2.0.0, qualifiers: nrf52840/zmk`, so the hardware-model-v2 name is right for the pinned ZMK. The RP2040 board was built only with `lib/lufa`; whether it also builds without it was not tried.
 
 ### S35 result (2026-10-16)
 

@@ -6,6 +6,7 @@ import { type Candidate } from "../../../src/boards/derive/detect.ts";
 import { qmkFlash, targetId, zmkFlash } from "../../../src/boards/derive/flash-recipe.ts";
 import { checkBoardDir } from "../../../src/boards/check.ts";
 import type { QmkEntry } from "../../../src/boards/derive/index-schema.ts";
+import { keyboardIndex } from "../../../src/boards/derive/keyboard-index.ts";
 import { writeUserBoard } from "../../../src/boards/user-boards.ts";
 import { sourceBoards } from "../../helpers/derive-sources.ts";
 import { tempDir } from "../../helpers/tmp.ts";
@@ -32,8 +33,31 @@ describe("flash recipes by bootloader", () => {
     expect(out.manualReason).toBeUndefined();
   });
 
+  test("atmel-dfu, stm32-dfu and caterina run their tool, with the chip the tool is told about and the bootloader's USB ID", () => {
+    expect(qmkFlash("atmel-dfu", undefined, "atmega32u4")).toMatchObject({ artifact: "hex", flash: { kind: "dfu-tool", tool: "dfu-programmer", mcu: "atmega32u4", bootloader: "03eb:2ff4" } });
+    expect(qmkFlash("atmel-dfu", undefined, "atmega32u2").flash).toMatchObject({ bootloader: "03eb:2ff0" });
+    expect(qmkFlash("stm32-dfu", undefined, "STM32F303")).toMatchObject({ artifact: "bin", flash: { kind: "dfu-tool", tool: "dfu-util", bootloader: "0483:df11" } });
+    const caterina = qmkFlash("caterina", undefined, "atmega32u4");
+    expect(caterina).toMatchObject({ artifact: "hex", flash: { kind: "dfu-tool", tool: "avrdude", mcu: "atmega32u4" } });
+    expect(caterina.flash).not.toHaveProperty("bootloader");
+    expect(caterina.manualReason).toBeUndefined();
+  });
+
+  test("every atmel-dfu, stm32-dfu and caterina keyboard in the pinned index gets a recipe keyloom runs", () => {
+    const wanted = keyboardIndex().qmk.filter((e) => e.bootloader === "atmel-dfu" || e.bootloader === "stm32-dfu" || e.bootloader === "caterina");
+    expect(wanted.length).toBeGreaterThan(2500);
+    const manual = wanted.filter((e) => qmkFlash(e.bootloader, e.bootInstructions, e.processor).flash.kind === "manual").map((e) => `${e.target} (${e.bootloader}, ${e.processor})`);
+    expect(manual).toEqual([]);
+  });
+
+  test("a DFU bootloader whose chip is missing or unknown stays manual, and says why", () => {
+    expect(qmkFlash("atmel-dfu").manualReason).toContain("which chip");
+    expect(qmkFlash("caterina").flash.kind).toBe("manual");
+    expect(qmkFlash("atmel-dfu", undefined, "atmega99x9").manualReason).toContain("atmega99x9");
+  });
+
   test("every other bootloader is manual, with the reason and the tool QMK's guide names", () => {
-    for (const [bootloader, tool, artifact] of [["atmel-dfu", "dfu-programmer", "hex"], ["stm32-dfu", "dfu-util", "bin"], ["caterina", "avrdude", "hex"], ["halfkay", "Teensy", "hex"]] as const) {
+    for (const [bootloader, tool, artifact] of [["halfkay", "Teensy", "hex"], ["usbasploader", "avrdude", "hex"], ["wb32-dfu", "wb32-dfu-updater", "bin"]] as const) {
       const out = qmkFlash(bootloader);
       expect(out.flash.kind).toBe("manual");
       expect(out.flash.kind === "manual" && out.flash.instructions).toContain(tool);
@@ -48,8 +72,8 @@ describe("flash recipes by bootloader", () => {
   });
 
   test("the maintainer's own words about reaching the bootloader come first", () => {
-    const out = qmkFlash("atmel-dfu", "Hold Escape while plugging in.");
-    expect(out.flash.kind === "manual" && out.flash.instructions.startsWith("Hold Escape while plugging in.")).toBe(true);
+    expect(qmkFlash("halfkay", "Hold Escape while plugging in.").flash).toMatchObject({ kind: "manual", instructions: expect.stringMatching(/^Hold Escape while plugging in\./) });
+    expect(qmkFlash("atmel-dfu", "Hold Escape while plugging in.", "atmega32u4").flash).toMatchObject({ kind: "dfu-tool", enter: "Hold Escape while plugging in." });
   });
 
   test("a ZMK controller keyloom knows the boot drive of gets one UF2 step per half; others are refused", () => {
@@ -77,11 +101,22 @@ describe("deriveBoard", () => {
     expect(result.issues.filter((i) => i.level === "error")).toEqual([]);
   });
 
-  test("a Pro Micro board (caterina) is manual and AVR builds take LUFA", async () => {
-    const derived = deriveBoard({ candidate: qmkCandidate({ bootloader: "caterina" }), geometry: { keys, path: "keyboards/handwired/pico_split/keyboard.json" }, homeRow: 2, layout: "LAYOUT" });
-    expect(derived.definition.revisions[0]?.flash.kind).toBe("manual");
+  test("a Pro Micro board (caterina) flashes with avrdude, has no manual reason, and AVR builds take LUFA", async () => {
+    const derived = deriveBoard({ candidate: qmkCandidate({ bootloader: "caterina", processor: "atmega32u4" }), geometry: { keys, path: "keyboards/handwired/pico_split/keyboard.json" }, homeRow: 2, layout: "LAYOUT" });
+    expect(derived.definition.revisions[0]?.flash).toMatchObject({ kind: "dfu-tool", tool: "avrdude" });
+    expect(derived.summary.manualFlashReason).toBeNull();
     expect(derived.definition.revisions[0]?.build).toMatchObject({ submodules: ["lib/lufa"], artifact: "hex" });
     expect((await check(derived)).ok).toBe(true);
+  });
+
+  test("an stm32-dfu board builds with ChibiOS and LUFA's USB headers (S43), and a chip-less atmel-dfu board stays manual", async () => {
+    const stm = deriveBoard({ candidate: qmkCandidate({ bootloader: "stm32-dfu", processor: "STM32F303" }), geometry: { keys, path: "p" }, homeRow: 2, layout: "LAYOUT" });
+    expect(stm.definition.revisions[0]?.build).toMatchObject({ submodules: ["lib/chibios", "lib/chibios-contrib", "lib/printf", "lib/lufa"], artifact: "bin" });
+    expect(stm.definition.revisions[0]?.flash).toMatchObject({ kind: "dfu-tool", tool: "dfu-util" });
+    expect((await check(stm)).ok).toBe(true);
+    const bare = deriveBoard({ candidate: qmkCandidate({ bootloader: "atmel-dfu" }), geometry: { keys, path: "p" }, homeRow: 2, layout: "LAYOUT" });
+    expect(bare.definition.revisions[0]?.flash.kind).toBe("manual");
+    expect(bare.summary.manualFlashReason).toContain("which chip");
   });
 
   test("the home row names the rows around it", () => {

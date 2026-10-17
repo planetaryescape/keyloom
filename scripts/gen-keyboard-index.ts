@@ -75,6 +75,7 @@ for (const target of keyboardDirs.sort()) {
     pid: r.pid,
     ...(r.bcd === undefined ? {} : { bcd: r.bcd }),
     ...(r.bootloader === undefined ? {} : { bootloader: r.bootloader }),
+    ...(r.processor === undefined ? {} : { processor: r.processor }),
     ...(r.bootInstructions === undefined ? {} : { bootInstructions: r.bootInstructions }),
     split: r.split,
     layouts: Object.fromEntries(Object.entries(r.layouts).filter(([, keys]) => keys.length > 0).map(([n, keys]) => [n, keys.length])),

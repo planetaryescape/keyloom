@@ -151,7 +151,7 @@ export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddD
     board = {
       name: derived.definition.name, keys: geometry.keys, hands: derived.definition.hands, fingers: derived.definition.fingers,
       thumbs: derived.summary.thumbs, rows: derived.summary.rows, homeRow: derived.summary.homeRow,
-      flash: { kind: flash?.kind ?? "manual", manualReason: derived.summary.manualFlashReason, steps: flash?.kind === "uf2-drives" ? flash.steps.map((st) => st.enter) : [] },
+      flash: { kind: flash?.kind ?? "manual", manualReason: derived.summary.manualFlashReason, steps: flash?.kind === "uf2-drives" ? flash.steps.map((st) => st.enter) : flash?.kind === "dfu-tool" ? [flash.enter] : [] },
       assumedController: assumed,
     };
   } catch (err) {

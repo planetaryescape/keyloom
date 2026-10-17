@@ -4,6 +4,7 @@ import type { Board } from "../boards/load.ts";
 import { artifactKind } from "../firmware/qmk/artifact.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { buildQmk } from "../firmware/qmk/build.ts";
+import { type DfuFlashInput, flashWithDfuTool } from "../firmware/qmk/dfu-flash.ts";
 import { CHECKING_INSTRUCTION, flashWithZapp, resetInstruction } from "../firmware/qmk/flash.ts";
 import { type HandsFreeDeps, handsFreeHooks, keyboardTarget, realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { GenerateError as QmkGenerateError, generateQmkSource } from "../firmware/qmk/generate.ts";
@@ -45,7 +46,12 @@ export type BuildArgs = {
 };
 
 /** How a keyboard is found and restarted: USB and raw HID for a ZSA board, serial ports for a ZMK one. Tests pass fakes; otherwise the machine's own are used. */
-export type HandsFreeOverrides = Partial<HandsFreeDeps> & { zmk?: Partial<ZmkHandsFreeDeps>; remapper?: RemapperOverrides };
+export type HandsFreeOverrides = Partial<HandsFreeDeps> & {
+  zmk?: Partial<ZmkHandsFreeDeps>;
+  remapper?: RemapperOverrides;
+  /** The DFU tools and serial ports a `dfu-tool` flash uses (22, D-365); `usb` above is how it sees the bootloader and the keyboard coming back. */
+  dfu?: Pick<DfuFlashInput, "tools" | "ports">;
+};
 
 export type FlashArgs = {
   board: Board;
@@ -86,6 +92,7 @@ const qmk: FirmwareDriver = {
     const flash = qmkRevision(board.definition).flash;
     if (flash.kind === "uf2-drives") return instructionFor(flash.steps[0] as FlashStep, 0, flash.steps.length, waitMs);
     if (flash.kind === "manual") return flash.instructions;
+    if (flash.kind === "dfu-tool") return flash.enter;
     // Until the flasher has looked at the keyboard, the person can't be told to press anything: if it runs keyloom's
     // firmware there is nothing to press (D-070), and a wrong "press reset" for the few seconds it takes to look is worse than none.
     return keyboardTarget(board.definition, qmkRevision(board.definition)) ? CHECKING_INSTRUCTION : resetInstruction(waitMs);
@@ -126,6 +133,16 @@ const qmk: FirmwareDriver = {
       });
     }
     const rev = qmkRevision(a.board.definition, a.boardRevision);
+    if (flash.kind === "dfu-tool") {
+      const ids = rev.usbVendorId !== null && rev.usbProductId !== null ? { vendorId: rev.usbVendorId, productId: rev.usbProductId } : undefined;
+      return flashWithDfuTool({
+        artifactPath: a.artifactPath, recipe: flash, log: a.log, onState: a.onState, ...(ids ? { running: ids } : {}),
+        ...(a.handsFree?.usb ? { usb: a.handsFree.usb } : {}), ...(a.handsFree?.pollMs === undefined ? {} : { pollMs: a.handsFree.pollMs }),
+        ...(a.handsFree?.dfu?.tools ? { tools: a.handsFree.dfu.tools } : {}), ...(a.handsFree?.dfu?.ports ? { ports: a.handsFree.dfu.ports } : {}),
+        ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
+        ...(a.signal ? { signal: a.signal } : {}),
+      });
+    }
     const hooks = await handsFreeHooks({
       deps: realHandsFreeDeps(a.handsFree), board: a.board.definition, rev, buildId: a.buildId, log: a.log,
       artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))),
