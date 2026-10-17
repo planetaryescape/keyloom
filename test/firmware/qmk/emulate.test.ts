@@ -119,7 +119,7 @@ describe("the harness files", () => {
     const files = harnessFiles(
       {
         name: "keyloom_emu_x", keymapFiles: [{ path: "keymap.c", content: "KEYMAP" }, { path: "config.h", content: "#define TAPPING_TERM 175\n" }],
-        layoutMacro: "LAYOUT_moonlander", keyCount: 3, zsa: true, modules: ["zsa/defaults"],
+        layoutMacro: "LAYOUT_moonlander", keyCount: 3, zsa: true, modules: ["zsa/defaults"], qmkTarget: "zsa/moonlander/reva",
       },
       "COMBO_ENABLE = yes\n",
     );
@@ -128,11 +128,14 @@ describe("the harness files", () => {
     expect(byPath("user_config.h")).toBe("#define TAPPING_TERM 175\n");
     expect(byPath("stubs.c")).toContain("LAYOUT_moonlander(1,2,3)");
     expect(byPath("keyloom_board.h")).toContain("zsa/defaults/defaults.h");
+    expect(byPath("version.h")).toContain('#define QMK_KEYBOARD "zsa/moonlander/reva"');
+    expect(byPath("version.h")).toContain('#define QMK_KEYMAP "keyloom"');
+    expect(byPath("keyloom_board.h")).toContain("#define WEBUSB_PAIR KC_NO");
     expect(byPath("test.mk")).toContain("COMBO_ENABLE = yes\nSRC += tests/keyloom_emu_x/stubs.c");
   });
 
   test("a board that is not ZSA's gets no Oryx stand-ins", () => {
-    const files = harnessFiles({ name: "n", keymapFiles: [], layoutMacro: "LAYOUT", keyCount: 1, zsa: false, modules: [] }, "");
+    const files = harnessFiles({ name: "n", keymapFiles: [], layoutMacro: "LAYOUT", keyCount: 1, zsa: false, modules: [], qmkTarget: "x/y" }, "");
     expect(files.find((f) => f.path === "keyloom_board.h")?.content).not.toContain("rgb_matrix");
     expect(files.find((f) => f.path === "stubs.c")?.content).not.toContain("rgb_matrix");
   });

@@ -97,6 +97,7 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
       keyCount: board.keyCount,
       zsa: board.vendor === "ZSA",
       modules: rev.build.modules ?? [],
+      qmkTarget: rev.qmkTarget ?? "",
     },
     rulesWithDefaults(rules.carried),
   );
