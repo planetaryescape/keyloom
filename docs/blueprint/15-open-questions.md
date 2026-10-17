@@ -30,7 +30,7 @@ For each spike, record the command or request, the output (with private data rem
 | S30 | kanata 1.12.0 on BK's MacBook built-in keyboard only, with driver 6.5.0: remapped built-in, untouched external boards, permissions understood, exit chord works, TCP reload with wait returns ok | kanata as the MacBook target (D-231) | [21](21-macbook-keyboard.md) | Rung 20 |
 | S31 | kanata alongside Karabiner-Elements, with Karabiner ignoring the built-in: output arrives once, Karabiner still works elsewhere | Coexistence (D-231) | [21](21-macbook-keyboard.md) | Rung 20 |
 | S32 | What kanata sees for fn/globe, the F-row, Esc, Touch ID and arrows on BK's MacBook | The board's key list | [21](21-macbook-keyboard.md) | Rung 20 |
-| S33 | kanata's simulator against keyloom's QMK emulator for home-row-mod scripts: same results, or documented per option | Hold-tap feel on the MacBook (D-231) | [21](21-macbook-keyboard.md) | Rung 20 |
+| S33 | kanata's simulator against keyloom's QMK emulator for home-row-mod scripts: same results, or documented per option. **Answered 2026-10-18:** 144 of 150 pairs agree, the 6 others are two kanata semantics, and one translation bug (`CHORDAL_HOLD` alone) was fixed (result below) | Hold-tap feel on the MacBook (D-231, D-390) | [21](21-macbook-keyboard.md) | Rung 20 |
 | S34 | Option–Option through kanata reaches the app BK needs it for | BK's first problem (D-025) on the MacBook | [21](21-macbook-keyboard.md) | Rung 20 |
 | S35 | Importing BK's existing Karabiner rules (Space layer, home-row mods, six combos, Hyper) round-trips through keyloom's recognisers | D-232 | [21](21-macbook-keyboard.md) | Rung 20 |
 | S36 | The 77-key ANSI geometry and position order on BK's MacBook, by pressing every key under `kanata -d` | The board's geometry | [21](21-macbook-keyboard.md) | Rung 20 |
@@ -123,9 +123,9 @@ The ZMK build used the generator's output unchanged: `west` reported `Board: nic
 
 Yes. A synthetic Karabiner file with BK's patterns imports as a Space-hold layer, hold-taps (home-row mods and Hyper), combos and key remaps; a switched-off rule and one keyloom can't read are listed. BK's own file was imported once, read-only, with the same result. The file was read and never written. See [../research/spikes/S35.md](../research/spikes/S35.md).
 
-### S33 result, not run (2026-10-16)
+### S33 result (2026-10-18)
 
-kanata's v1.12.0 macOS release has no `kanata_simulated_input` binary, so the differential tests wait for a build from source. `kanata --check` passes on every generated fixture. See [../research/spikes/S33.md](../research/spikes/S33.md).
+The same 15 home-row-mod scenarios, with 10 QMK option sets, went through keyloom's QMK emulator (BK's Moonlander layout, QMK's real core in Docker) and through kanata's simulator (the MacBook layout keyloom generates from the translated profile). The release has no simulator, so `kanata_simulated_input` was built from `v1.12.0` (`02242ef`) in `~/.cache/keyloom-s33`, through `agent-work`, and never touched a keyboard. 144 of 150 pairs give the same reports within 10 ms. The 6 that don't are two kanata semantics: `tap-repress-ms` counts from the first press where QMK's `QUICK_TAP_TERM` counts from the release, and kanata keeps a tapped key down until a following hold-tap key resolves. One translation bug: QMK `CHORDAL_HOLD` alone was `tap-hold-opposite-hand`, which holds the moment an opposite-hand key goes down; it is now `tap-hold-tap-keys` over the key's own hand (D-390). The test is `KEYLOOM_KANATA_SIM=<binary> bun test test/firmware/kanata/sim.test.ts`, with no Docker. Details and the table are in [../research/spikes/S33.md](../research/spikes/S33.md).
 
 ### S30, S31, S32 and S36: runbooks written, not run (2026-10-16)
 

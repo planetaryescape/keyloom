@@ -20,10 +20,11 @@ One file per spike, `S<n>.md`, with the command or request, the output (private 
 | S19 | Done. The Anthropic adapter through OpenRouter | [S19.md](S19.md) |
 | S20 | Done. Codex through a loopback MCP server | [S20.md](S20.md) |
 | S21 | Done. The Glove80 cannot light single keys (no) | [S21.md](S21.md) |
+| S33 | Done. 144 of 150 home-row-mod pairs agree between kanata's simulator and the QMK emulator; one translation bug fixed (`CHORDAL_HOLD`) | [S33.md](S33.md) |
 | S35 | Done. Karabiner rules import | [S35.md](S35.md) |
 | S40 | Done. The rules reproduce all three boards once the Corne table was fixed | [S40.md](S40.md) |
 | S42 | Part answered. Both Glove80 halves named from USB; Moonlander and Corne not plugged in | [S42.md](S42.md) |
 | S50, S51 | Build half only. Nothing has run on a keyboard | [S50.md](S50.md), [S51.md](S51.md) |
 | S53 | Emulator half done. The keyboard half is a runbook | [S53.md](S53.md) |
 
-S33 has a file but did not run: kanata's macOS release has no simulator binary. S18 has its static half done and no hardware half. S13, S30, S31, S32 and S36 are runbooks with no result. S41 has no result and no file.
+S18 has its static half done and no hardware half. S13, S30, S31, S32 and S36 are runbooks with no result. S41 has no result and no file.

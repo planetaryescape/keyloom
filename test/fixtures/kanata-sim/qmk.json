@@ -1,0 +1,4143 @@
+{
+ "plain": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "permissive-hold": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "hold-on-other-key-press": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 120,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 120,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 30,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 50,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "both-permissive-and-hold-on-other": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 120,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 120,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 30,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 50,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "chordal-hold": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "chordal-hold-hold-on-other": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 120,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 120,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 30,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 50,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 50,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "chordal-hold-permissive": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 160,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "quick-tap-120": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 280,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "flow-tap-150": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "J",
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F",
+     "U"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": [
+     "F"
+    ]
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ },
+ "flow-tap-150-permissive": {
+  "tap-alone": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "hold-alone": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-same-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "roll-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-same-hand": [
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "nested-opposite-hand": [
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-then-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "same-hand-past-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 300,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "other-key-after-term": [
+   {
+    "at": 200,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 250,
+    "mods": [
+     "LALT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 290,
+    "mods": [
+     "LALT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "quick-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 100,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 500,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-typing": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 400,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "flow-then-key": [
+   {
+    "at": 0,
+    "mods": [],
+    "keys": [
+     "E"
+    ]
+   },
+   {
+    "at": 40,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 120,
+    "mods": [],
+    "keys": [
+     "S",
+     "U"
+    ]
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 220,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "two-hrm-roll": [
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "J",
+     "S"
+    ]
+   },
+   {
+    "at": 80,
+    "mods": [],
+    "keys": [
+     "J"
+    ]
+   },
+   {
+    "at": 110,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "slow-retap": [
+   {
+    "at": 50,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 50,
+    "mods": [],
+    "keys": []
+   },
+   {
+    "at": 160,
+    "mods": [],
+    "keys": [
+     "S"
+    ]
+   },
+   {
+    "at": 560,
+    "mods": [],
+    "keys": []
+   }
+  ],
+  "shift-chord": [
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": [
+     "U"
+    ]
+   },
+   {
+    "at": 90,
+    "mods": [
+     "LSFT"
+    ],
+    "keys": []
+   },
+   {
+    "at": 150,
+    "mods": [],
+    "keys": []
+   }
+  ]
+ }
+}

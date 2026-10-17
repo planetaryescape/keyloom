@@ -189,7 +189,7 @@ Mostly yes, with one real difference.
 - Client commands that matter: `Reload`, `ReloadFile {path}`, `ReloadNext`, `ReloadPrev`, `ReloadNum {index}`, each with optional `wait: true, timeout_ms` which makes the server answer `{"ReloadResult":{"ok":true}}`. Also `RequestLayerNames`, `RequestCurrentLayerName`, `RequestFakeKeyNames`, `ChangeLayer`, `ActOnFakeKey`, `Hello` (version, protocol, capabilities). Notifications: `LayerChange`, `ConfigFileReload`, `MessagePush`, `HoldActivated`, `TapActivated`, `Error`. `#L5927-L6090`. Verified. All of these are present at v1.12.0 (grep of `ReloadResult`, `ReloadFile`, `HoldActivated`).
 - There is no TCP command to exit the process. Verified by reading the command table.
 - `kanata --check` validates a config and exits. `args.rs#L97`, present at v1.12.0. Verified.
-- `kanata_simulated_input -c file.kbd -s sim.txt` runs a config against a scripted key sequence without touching the keyboard (`docs/config.adoc#L6810-L6860`, crate at `simulated_input/`). Whether release builds ship this binary is unverified.
+- `kanata_simulated_input -c file.kbd -s sim.txt` runs a config against a scripted key sequence without touching the keyboard (`docs/config.adoc#L6810-L6860`, crate at `simulated_input/`). The v1.12.0 macOS release does not ship it; S33 built it from the tag.
 - Because the TCP port is plaintext and unauthenticated, anything local can send `ActOnFakeKey`, `ChangeLayer` and `Reload*`. That is acceptable on a single-user laptop bound to loopback; keyloom should say so. Inference.
 
 ### Licence

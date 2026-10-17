@@ -66,15 +66,15 @@ A second target in the same family, with the same editor (D-231). keyloom would 
 
 ## Hold-tap translation
 
-Hold-tap profiles from QMK and ZMK boards become kanata ones with this table (D-242). The code is `src/layout/kanata/profiles.ts`. kanata's variants are from `docs/config.adoc` at `jtroo/kanata@02242ef` (v1.12.0). The QMK and ZMK sides are the research's reading of their options; rows marked (S6) await the differential tests.
+Hold-tap profiles from QMK and ZMK boards become kanata ones with this table (D-242). The code is `src/layout/kanata/profiles.ts`. kanata's variants are from `docs/config.adoc` at `jtroo/kanata@02242ef` (v1.12.0). The QMK and ZMK sides are the research's reading of their options; S33 checked the QMK rows against kanata's simulator (144 of 150 scenario pairs agree; [../research/spikes/S33.md](../research/spikes/S33.md)). The ZMK rows marked (S6) were not exercised.
 
 | From | To kanata |
 |---|---|
 | QMK `TAPPING_TERM` | `hold-ms` (default 200) |
-| QMK `QUICK_TAP_TERM` | `tap-repress-ms` (QMK defaults it to the tapping term) |
+| QMK `QUICK_TAP_TERM` | `tap-repress-ms` (QMK defaults it to the tapping term). kanata counts from the first press, QMK from its release, so a set `QUICK_TAP_TERM` comes with a note (S33) |
 | QMK `PERMISSIVE_HOLD` | `tap-hold-release` |
 | QMK `HOLD_ON_OTHER_KEY_PRESS` | `tap-hold-press`; it wins when both are on, as in QMK |
-| QMK `CHORDAL_HOLD` | `tap-hold-opposite-hand`, or `-release` with `PERMISSIVE_HOLD` (S6) |
+| QMK `CHORDAL_HOLD` | `tap-hold-tap-keys` over the key's own hand (`tap-keys: same-hand`); with `HOLD_ON_OTHER_KEY_PRESS` `tap-hold-opposite-hand`; with `PERMISSIVE_HOLD` `tap-hold-opposite-hand-release` (S33, D-390) |
 | QMK `FLOW_TAP_TERM` | `require-prior-idle-ms` |
 | ZMK flavor `hold-preferred` | `tap-hold-press` |
 | ZMK flavor `balanced` | `tap-hold-release` |
