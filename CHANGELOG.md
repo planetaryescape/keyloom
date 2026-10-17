@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.38.0](https://github.com/planetaryescape/keyloom/compare/v0.37.0...v0.38.0) (2026-10-17)
+
+
+### Features
+
+* flash derived QMK boards through dfu-programmer, dfu-util and avrdude, and record the smoke build ([#100](https://github.com/planetaryescape/keyloom/issues/100)) ([fec6a8e](https://github.com/planetaryescape/keyloom/commit/fec6a8e358c91250b03d0d050391a10b923d045e))
+
+
+### Bug Fixes
+
+* an imported QMK keymap's custom keycodes survive into the generated keymap ([#101](https://github.com/planetaryescape/keyloom/issues/101)) ([fbc0d46](https://github.com/planetaryescape/keyloom/commit/fbc0d467b4bdb599e26933e977699486a7d3c8b1))
+* read the layer numbers in stored layouts' kept code at startup ([#102](https://github.com/planetaryescape/keyloom/issues/102)) ([6f64a5c](https://github.com/planetaryescape/keyloom/commit/6f64a5cf3b857f68719e98392457a5914e627881))
+
 ## [0.37.0](https://github.com/planetaryescape/keyloom/compare/v0.36.1...v0.37.0) (2026-10-17)
 
 
