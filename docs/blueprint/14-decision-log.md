@@ -1503,7 +1503,6 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - **How:** a kanata profile gets the option `tap-keys` (`all`, the default, or `same-hand`, only with `tap-hold-tap-keys`). The generator writes `left-keys` and `right-keys` from the board's `hands` and each key uses its own hand's list; a key with no hand is refused. `CHORDAL_HOLD` with `HOLD_ON_OTHER_KEY_PRESS` stays `tap-hold-opposite-hand`, and with `PERMISSIVE_HOLD` `tap-hold-opposite-hand-release`; both were run and match.
 - **Not translated:** kanata's `tap-repress-ms` counts from the first press and QMK's `QUICK_TAP_TERM` from its release, so they differ by the first tap's length. `translateHoldTapProfile` reports it as a note when `QUICK_TAP_TERM` is set. A tapped key that precedes another hold-tap key is released a few ms later on kanata; the keys typed are the same.
 - **Tested:** `test/layout/kanata-hold-tap.test.ts`, and `test/firmware/kanata/sim.test.ts` (gated by `KEYLOOM_KANATA_SIM`) against `test/fixtures/kanata-sim/qmk.json`, recorded by `scripts/record-hrm-qmk.ts`.
-||||||| parent of 8c31edd (fix: put onto the MacBook keyboard, act on defaults, and add ask_user)
 
 
 ### D-380: The agent has an `ask_user` tool for the one question that is really BK's, and the prompt says to act on defaults first. (Ask user, Claude; asked by the coordinator; BK: "the agent also needs an ask user command")
