@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { readStored, writeStored } from "./storage.ts";
 
 export type ThemeChoice = "light" | "dark" | "auto";
@@ -26,4 +26,27 @@ export function useTheme(): [ThemeChoice, (choice: ThemeChoice) => void] {
     writeStored(KEY, next);
   }, []);
   return [choice, set];
+}
+
+/** The room the page is drawn in now: the chosen theme, or the operating system's when it is "auto". */
+export function useRoom(): "light" | "dark" {
+  const dark = useSyncExternalStore(
+    (notify) => {
+      const list = window.matchMedia("(prefers-color-scheme: dark)");
+      list.addEventListener("change", notify);
+      // The theme switch writes the attribute on <html>; nothing else announces it.
+      const observer = new MutationObserver(notify);
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      return () => {
+        list.removeEventListener("change", notify);
+        observer.disconnect();
+      };
+    },
+    () => {
+      const chosen = document.documentElement.getAttribute("data-theme");
+      return chosen === "dark" || (chosen !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    },
+    () => false,
+  );
+  return dark ? "dark" : "light";
 }

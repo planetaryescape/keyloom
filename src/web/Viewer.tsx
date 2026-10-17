@@ -55,6 +55,7 @@ import type { LastChange } from "./editor/repeat-plan.ts";
 import { advancedLegend } from "./keyboard/advanced-legend.ts";
 import type { ComboLine } from "./keyboard/ComboLines.tsx";
 import { Keyboard, type KeyboardHandle } from "./keyboard/Keyboard.tsx";
+import { useColourway } from "./keyboard/colourway.ts";
 import { LayerTabs, type LayerActions } from "./keyboard/LayerTabs.tsx";
 import { SelectionBar } from "./keyboard/SelectionBar.tsx";
 import { layerLight, reachedLayer, reachKey } from "./light/layer-light.ts";
@@ -198,6 +199,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The keys of the decision being pointed at in the decisions list.
   const [decisionFocus, setDecisionFocus] = useState<Slot[] | null>(null);
   const [advanced, setAdvanced] = useState(() => readStored(ADVANCED_KEY) === "1");
+  const [colourway, setColourway] = useColourway(board.id, board.display?.colourways);
   // Inspect shows what calm hides: kinds, what transparent keys pass through to, and combos (D-264).
   const [inspect, setInspect] = useState(() => readStored(INSPECT_KEY) === "1");
   // Combos drawn as lines, the combos list, and the combo being made or edited (16#combos-are-made-from-a-selection).
@@ -1700,6 +1702,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ) : (
           <Keyboard
             handle={keyboard}
+            colourway={colourway}
             keys={keys}
             keycaps={board.display?.keycaps}
             hands={board.hands}
@@ -1857,6 +1860,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 currentLayerId={layer.id}
                 onShowLayer={chooseLayer}
                 offer={detail.upgrade?.colours === true ? offer : null}
+                colourway={colourway?.id ?? null}
+                onColourway={setColourway}
+                boardName={boardDisplayName(board.name)}
                 onClose={() => setSettingsOpen(false)}
                 onApplied={async (summaryText) => {
                   await onChanged();

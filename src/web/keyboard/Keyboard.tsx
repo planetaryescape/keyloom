@@ -1,5 +1,5 @@
 import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type Ref } from "react";
-import type { BoardDefinition, GeometryKey, KeycapColour } from "../../boards/schema.ts";
+import type { BoardDefinition, Colourway, GeometryKey, KeycapColour } from "../../boards/schema.ts";
 import type { Legend } from "../../layout/legend.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "./Cap.tsx";
@@ -15,7 +15,10 @@ import { measureText } from "./measure.ts";
 import { keyCenter, keyRect, type Bounds, type KeyRect } from "./geometry.ts";
 import { neighbour, type Direction } from "./navigate.ts";
 import { minUnit, useFitUnit } from "./useFitUnit.ts";
+import { colourwayAttributes } from "./colourway.ts";
+import { useRoom } from "../shell/theme.ts";
 import "./keyboard.css";
+import "./colourway.css";
 
 // Space between neighbouring caps, in key units.
 export const GAP = 0.09;
@@ -120,6 +123,8 @@ interface KeyboardProps {
   part?: { hand: "left" | "right"; px: number } | null;
   /** A proposal is on the board: keys it doesn't touch step back, so the change is what's seen (comp d). */
   previewing?: boolean;
+  /** The colourway BK pinned the board to (D-395); null or absent follows the theme. */
+  colourway?: Pick<Colourway, "case" | "caps"> | null;
   /** The board's scale about its centre, below 1 while a parted board would otherwise run off the stage. */
   scale?: number;
 }
@@ -189,7 +194,9 @@ export function Keyboard({
   part = null,
   scale = 1,
   previewing = false,
+  colourway = null,
 }: KeyboardProps) {
+  const room = useRoom();
   const handOf = useMemo(() => {
     const map = new Map<number, "left" | "right">();
     for (const p of hands.left) map.set(p, "left");
@@ -286,6 +293,7 @@ export function Keyboard({
         data-inspect={inspect}
         data-previewing={previewing}
         data-surface={display?.surface ?? "slab"}
+        {...colourwayAttributes(colourway, room)}
         role="group"
         aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}
         data-part={part === null || part.px === 0 ? undefined : part.hand}
