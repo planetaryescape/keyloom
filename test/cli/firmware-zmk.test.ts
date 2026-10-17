@@ -7,10 +7,11 @@ import { STYLE_FIXTURE, TEMPLATE_FIXTURE, fakeBootloaders, zmkEnv } from "../hel
 import { tempDir } from "../helpers/tmp.ts";
 
 type Result = { code: number; out: string; err: string };
-async function cli(args: string[]): Promise<Result> {
+/** `onErr` sees stderr as it is printed, so a test can act when the command asks for something instead of after a fixed delay. */
+async function cli(args: string[], onErr?: (text: string) => void): Promise<Result> {
   let out = "";
   let err = "";
-  const io: Io = { out: (t) => void (out += t), err: (t) => void (err += t), isTTY: false };
+  const io: Io = { out: (t) => void (out += t), err: (t) => { err += t; onErr?.(t); }, isTTY: false };
   return { code: await runCli(args, io), out, err };
 }
 const json = (r: Result) => JSON.parse(r.out);
@@ -55,8 +56,11 @@ describe("keyloom generate, build and flash for a Glove80 layout", () => {
       expect(b).toMatchObject({ status: "succeeded", board_revision: "default" });
       expect(b.artifact_path).toBe(join(e.dataDir, "artifacts", `${b.build_id}.uf2`));
 
-      const boot = fakeBootloaders(e.volumes, ["GLV80RHBOOT", "GLV80LHBOOT"], { mountAfterMs: [100, 2500] });
-      const r = await cli(["flash", "--layout", "glove80", "--volumes-root", e.volumes, "--data-dir", e.dataDir, "--format", "json"]);
+      const boot = fakeBootloaders(e.volumes, ["GLV80RHBOOT", "GLV80LHBOOT"], { mountAfterMs: [100], onDemand: true });
+      // The left half goes into its bootloader once keyloom has asked for it.
+      const r = await cli(["flash", "--layout", "glove80", "--volumes-root", e.volumes, "--data-dir", e.dataDir, "--format", "json"], (text) => {
+        if (text.includes("Flash the left half")) boot.mount("GLV80LHBOOT");
+      });
       boot.stop();
       expect(r.code).toBe(0);
       expect(json(r)).toMatchObject({ status: "succeeded", build_id: b.build_id });

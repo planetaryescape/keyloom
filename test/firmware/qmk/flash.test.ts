@@ -8,6 +8,12 @@ import { dfuImage, fakeBinDir } from "../../helpers/fake-bin.ts";
 import { SLOW_RUNNER_MS } from "../../helpers/timeouts.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
+/**
+ * The bootloader wait starts when flashing starts and again at "Firmware loaded", so it must outlast starting the fake zapp: at
+ * 400 ms a loaded runner timed out before zapp had printed, keyloom never tried the restart, and the stranded warning was missing.
+ */
+const LOADED_WAIT_MS = 3000;
+
 const REVB = "3297:2003";
 const REVA = "0483:df11";
 
@@ -171,17 +177,17 @@ describe("flashWithZapp, hands-free", () => {
 
   test("a keyboard restarted into its bootloader that zapp never writes to is reported as stranded there", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
-    const r = await s.flash({ bootloaderWaitMs: 400, enterBootloader: async () => ({ ok: true }) });
+    const r = await s.flash({ bootloaderWaitMs: LOADED_WAIT_MS, enterBootloader: async () => ({ ok: true }) });
     expect(r.state).toBe("failed");
     expect(r.error).toContain("restarted the keyboard into its bootloader");
     expect(r.error).toContain("unplugged and plugged in again");
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a failed restart does not add that warning, because the keyboard was never moved", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
-    const r = await s.flash({ bootloaderWaitMs: 400, enterBootloader: async () => ({ ok: false, reason: "no raw HID" }) });
+    const r = await s.flash({ bootloaderWaitMs: LOADED_WAIT_MS, enterBootloader: async () => ({ ok: false, reason: "no raw HID" }) });
     expect(r.error).not.toContain("plugged in again");
-  });
+  }, SLOW_RUNNER_MS);
 
   test("after zapp succeeds the flash is verified, and the verdict goes in the log", async () => {
     const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
