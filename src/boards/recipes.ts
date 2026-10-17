@@ -162,7 +162,26 @@ export const KanataReloadSchema = z.strictObject({
 });
 export type KanataReload = z.infer<typeof KanataReloadSchema>;
 
-export const FlashRecipeSchema = z.discriminatedUnion("kind", [ZappFlashSchema, Uf2DrivesFlashSchema, ManualFlashSchema, KanataReloadSchema]);
+/**
+ * A command-line DFU flasher run against a bootloader that has no drive to copy to: dfu-programmer for Atmel DFU, dfu-util for STM32 DFU,
+ * avrdude (avr109) for Caterina (22, D-365). The person installs the tool; `keyloom doctor` says how.
+ */
+export const DfuToolFlashSchema = z
+  .strictObject({
+    kind: z.literal("dfu-tool"),
+    tool: z.enum(["dfu-programmer", "dfu-util", "avrdude"]),
+    /** USB `VID:PID` keyloom waits for before it runs the tool. Left out for Caterina, which shows up as a new serial port instead (QMK's own method). */
+    bootloader: z.string().regex(/^[0-9a-f]{4}:[0-9a-f]{4}$/).optional(),
+    /** The chip, as dfu-programmer and avrdude name it (`atmega32u4`). dfu-util does not take one. */
+    mcu: z.string().regex(/^[a-z0-9]+$/).optional(),
+    /** How to put the board into its bootloader; shown while keyloom waits. */
+    enter: z.string().min(1),
+  })
+  .refine((f) => (f.tool === "dfu-util") === (f.mcu === undefined), { message: "dfu-programmer and avrdude need the chip (mcu); dfu-util takes none", path: ["mcu"] })
+  .refine((f) => (f.tool === "avrdude") === (f.bootloader === undefined), { message: "dfu-programmer and dfu-util wait for the bootloader's USB ID; avrdude (Caterina) waits for a serial port and has none", path: ["bootloader"] });
+export type DfuToolFlash = z.infer<typeof DfuToolFlashSchema>;
+
+export const FlashRecipeSchema = z.discriminatedUnion("kind", [ZappFlashSchema, Uf2DrivesFlashSchema, ManualFlashSchema, KanataReloadSchema, DfuToolFlashSchema]);
 export type FlashRecipe = z.infer<typeof FlashRecipeSchema>;
 
 

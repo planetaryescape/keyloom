@@ -166,15 +166,17 @@ A recipe says how keyloom builds and flashes a board. It is the `kind` of `build
 | Your board | `build.kind` | `flash.kind` |
 | --- | --- | --- |
 | ZSA Moonlander, Voyager or another ZSA board built from ZSA's QMK fork | `qmk-docker` | `zapp` |
-| QMK board on STM32 or similar, from any QMK tree | `qmk-docker` | `manual` |
-| QMK board on AVR (Pro Micro, Elite-C), from any QMK tree | `qmk-docker` with `artifact: "hex"` | `manual` |
+| QMK board on STM32 with the stm32-dfu bootloader, from any QMK tree | `qmk-docker` with `artifact: "bin"` | `dfu-tool` (dfu-util) |
+| QMK board on AVR with the atmel-dfu bootloader | `qmk-docker` with `artifact: "hex"` | `dfu-tool` (dfu-programmer) |
+| QMK board on AVR with a Caterina bootloader (Pro Micro, Elite-C) | `qmk-docker` with `artifact: "hex"` | `dfu-tool` (avrdude) |
+| Any other QMK bootloader | `qmk-docker` | `manual` |
 | QMK board on RP2040 with a UF2 bootloader | `qmk-docker` with `artifact: "uf2"` | `uf2-drives` |
 | ZMK split board from upstream ZMK, such as the Corne on a nice!nano | `zmk-west-docker` | `uf2-drives` |
 | MoErgo Glove80 | `zmk-moergo-template` | `uf2-drives` |
 
 Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds from is the `source` of the revision, so mainline QMK and a vendor's fork both work.
 
-`manual` means keyloom builds the file but can't flash it. `keyloom flash` then fails with the file's path and your `instructions`. Flash the file yourself with QMK Toolbox, `qmk flash`, `dfu-util` or `avrdude`, and say so in the PR. Only `zapp` and `uf2-drives` flash from keyloom today. A new flasher needs code, and that is the one case where a board PR is more than data. This project tracks issues as Markdown in `docs/issues/`, not on GitHub: describe what's needed in the PR, or add a short note there in the same PR. The same goes for a part of the real board the drawing can't express: draw what `display` can, and say in the PR what differs, rather than working around it in `board.json`.
+`manual` means keyloom builds the file but can't flash it. `keyloom flash` then fails with the file's path and your `instructions`. Flash the file yourself with QMK Toolbox, `qmk flash`, `dfu-util` or `avrdude`, and say so in the PR. `dfu-tool` runs dfu-programmer, dfu-util or avrdude, which the person installs (`keyloom doctor` says how). `zapp`, `uf2-drives` and `dfu-tool` flash from keyloom today. A new flasher needs code, and that is the one case where a board PR is more than data. This project tracks issues as Markdown in `docs/issues/`, not on GitHub: describe what's needed in the PR, or add a short note there in the same PR. The same goes for a part of the real board the drawing can't express: draw what `display` can, and say in the PR what differs, rather than working around it in `board.json`.
 
 ### QMK: `qmk-docker`
 
@@ -282,8 +284,11 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.targets[].shield` | `zmk-west-docker` | The `-DSHIELD` value, such as `corne_left`. |
 | `revisions[].build.kanataVersion` | `kanata-config` | The kanata release the generated config targets, such as `1.12.0`. Software-remapper boards only; `source.ref` must be `v<version>`. |
 | `revisions[].flash` | all | The flash recipe. |
-| `revisions[].flash.kind` | all | `zapp`, `uf2-drives`, `manual` or, for a software remapper, `kanata-reload`. |
-| `revisions[].flash.bootloader` | `zapp` | The bootloader's USB `VID:PID`, such as `0483:df11`. |
+| `revisions[].flash.kind` | all | `zapp`, `uf2-drives`, `dfu-tool`, `manual` or, for a software remapper, `kanata-reload`. |
+| `revisions[].flash.bootloader` | `zapp`, `dfu-tool` | The bootloader's USB `VID:PID`, such as `0483:df11`. A `dfu-tool` with `tool: "avrdude"` has none: Caterina is found as a new serial port. |
+| `revisions[].flash.tool` | `dfu-tool` | `dfu-programmer`, `dfu-util` or `avrdude`. |
+| `revisions[].flash.mcu` | `dfu-tool` | The chip as the tool names it, such as `atmega32u4`. `dfu-util` takes none. |
+| `revisions[].flash.enter` | `dfu-tool` | How to put the board into its bootloader. keyloom shows it while it waits. |
 | `revisions[].flash.tcpPort` | `kanata-reload` | The loopback port the daemon starts kanata's TCP server on. |
 | `revisions[].flash.driverVersions` | `kanata-reload` | The Karabiner VirtualHID driver versions this kanata release can use. |
 | `revisions[].flash.steps` | `uf2-drives` | The boot drives to flash, in order. |

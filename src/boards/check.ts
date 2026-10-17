@@ -57,6 +57,10 @@ function checkRecipes(def: BoardDefinition, rev: BoardRevision, err: (message: s
     if (rev.build.kind !== "qmk-docker") err(`${at}: a QMK board builds with qmk-docker, not ${rev.build.kind}`);
     if (rev.flash.kind === "uf2-drives" && rev.build.kind === "qmk-docker" && rev.build.artifact !== "uf2") err(`${at}: uf2-drives flashing needs build.artifact "uf2"`);
     if (rev.flash.kind === "zapp" && rev.build.kind === "qmk-docker" && (rev.build.artifact ?? "bin") !== "bin") err(`${at}: zapp flashing needs build.artifact "bin"`);
+    if (rev.flash.kind === "dfu-tool" && rev.build.kind === "qmk-docker") {
+      const want = rev.flash.tool === "dfu-util" ? "bin" : "hex";
+      if ((rev.build.artifact ?? "bin") !== want) err(`${at}: ${rev.flash.tool} flashing needs build.artifact "${want}"`);
+    }
     return;
   }
   if (rev.build.kind === "qmk-docker") err(`${at}: a ZMK board builds with zmk-moergo-template or zmk-west-docker, not qmk-docker`);

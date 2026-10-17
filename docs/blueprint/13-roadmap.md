@@ -486,7 +486,7 @@ Only BK can do these:
 
 **Built (part 1, D-330 to D-335, v0.33.0):** detection against a committed index of the QMK and ZMK trees, the generalised keyboard reader, board derivation with the heuristics' accuracy reproduced in tests, local boards in the data directory, "put my config on this" as proposals on a new config, and `keyloom keyboard detect|add|put`. S42 ran on BK's Glove80; S40 is closed.
 
-**Built (part 2, D-336, v0.34.0):** the stage card, the question column and the open proposals screen. **Still not built:** flash recipes for `atmel-dfu`, `stm32-dfu` and the rest of the DFU family, so a derived QMK board other than an RP2040 one is flashed by hand (`src/boards/derive/flash-recipe.ts`), and the smoke build of a derived board (S43 has not run).
+**Built (part 2, D-336, v0.34.0):** the stage card, the question column and the open proposals screen. **Built (part 2, D-365 to D-369):** the `dfu-tool` flash for `atmel-dfu` (dfu-programmer), `stm32-dfu` (dfu-util) and `caterina` (avrdude), which together cover 76% of the QMK boards with USB IDs, with `keyloom doctor` checking for the tools; and the smoke build (S43), which built four QMK boards and a ZMK Corne in Docker and corrected one submodule list. **Still not built:** a flash on a physical keyboard (the recipes run against fake tools only), and recipes for the other QMK bootloaders (`halfkay`, `usbasploader`, `bootloadhid`, `stm32duino`, `wb32-dfu`), which stay `manual`.
 
 ## Rung 22: Car: keyloom watches me type and tunes my home row mods
 

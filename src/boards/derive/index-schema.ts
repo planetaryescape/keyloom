@@ -17,6 +17,8 @@ export const QmkEntrySchema = z.strictObject({
   /** bcdDevice, from `usb.device_version`. */
   bcd: usbId.optional(),
   bootloader: z.string().optional(),
+  /** `processor`, else the development board's: `atmega32u4`, `STM32F303`, `RP2040`. */
+  processor: z.string().optional(),
   bootInstructions: z.string().optional(),
   split: z.boolean(),
   /** Layout macro to its key count. */

@@ -49,13 +49,13 @@ const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").
 export const localBoardId = (c: Candidate): string => `local/${slug(c.entry.kind === "qmk" ? c.entry.qmk.target : c.entry.zmk.id)}`;
 
 // Submodules a QMK build needs by platform (qmk_firmware .gitmodules): LUFA for AVR, ChibiOS for ARM, and the Pico SDK on top for the RP2040.
-// Taken from the platform's bootloader, not a measured build: the first smoke build of a derived board will confirm or correct them (22).
+// Measured by the smoke build (S43): AVR builds with LUFA alone; ChibiOS ones fail without LUFA too, because tmk_core/protocol/chibios includes its USB headers.
 function qmkSubmodules(bootloader: string | undefined): string[] {
-  if (bootloader === "rp2040") return ["lib/chibios", "lib/chibios-contrib", "lib/printf", "lib/pico-sdk"];
+  if (bootloader === "rp2040") return ["lib/chibios", "lib/chibios-contrib", "lib/printf", "lib/lufa", "lib/pico-sdk"];
   const avr = ["atmel-dfu", "qmk-dfu", "lufa-dfu", "caterina", "halfkay", "lufa-ms"];
   if (bootloader !== undefined && avr.includes(bootloader)) return ["lib/lufa"];
   if (bootloader === "usbasploader" || bootloader === "bootloadhid") return ["lib/vusb"];
-  return ["lib/chibios", "lib/chibios-contrib", "lib/printf"];
+  return ["lib/chibios", "lib/chibios-contrib", "lib/printf", "lib/lufa"];
 }
 
 function revisionFor(input: DeriveInput): { revision: BoardRevision; manualFlashReason: string | null } {
@@ -63,7 +63,7 @@ function revisionFor(input: DeriveInput): { revision: BoardRevision; manualFlash
   if (c.entry.kind === "qmk") {
     const e = c.entry.qmk;
     if (input.layout === undefined) throw new DeriveError("a QMK board needs the layout macro its keymaps are written with");
-    const { flash, artifact, manualReason } = qmkFlash(e.bootloader, e.bootInstructions);
+    const { flash, artifact, manualReason } = qmkFlash(e.bootloader, e.bootInstructions, e.processor);
     return {
       manualFlashReason: manualReason ?? null,
       revision: {

@@ -8,6 +8,7 @@ import { driverFor } from "../../src/app/firmware-drivers.ts";
 import { loadBoardDir } from "../../src/boards/load.ts";
 import { LogSink } from "../../src/firmware/toolchain/run.ts";
 import { templateCopy } from "../helpers/board-recipes.ts";
+import { fakeBinDir } from "../helpers/fake-bin.ts";
 import { tempDir } from "../helpers/tmp.ts";
 import { MOONLANDER_DIR } from "../helpers/board.ts";
 import { uf2Image } from "../helpers/zmk.ts";
@@ -41,6 +42,29 @@ describe("QMK driver", () => {
     expect(states).toEqual(["failed"]);
     expect(driverFor(board).waitingInstruction(board)).toContain("QMK Toolbox");
   });
+
+  test("a dfu-tool board shows its own bootloader instruction and flashes through the injected bus and tool", async () => {
+    const board = await load("qmk", (b) => {
+      b.revisions[0].flash = { kind: "dfu-tool", tool: "dfu-programmer", mcu: "atmega32u4", bootloader: "03eb:2ff4", enter: "Press the QK_BOOT key." };
+      b.revisions[0].detect = { usbProductId: "0x6456", usbVendorId: "0xcb10" };
+    });
+    const d = driverFor(board);
+    expect(d.waitingInstruction(board)).toBe("Press the QK_BOOT key.");
+    const dir = tempDir();
+    const calls = join(dir, "calls.log");
+    const bin = fakeBinDir({ "dfu-programmer": `echo "$@" >> "${calls}"` });
+    const bus: Array<{ vendorId: string; productId: string; name: string; maker: string }> = [{ vendorId: "0x03eb", productId: "0x2ff4", name: "", maker: "" }];
+    const artifact = join(dir, "a.hex");
+    await Bun.write(artifact, ":00000001FF\n");
+    const r = await d.flash({
+      board, buildId: "bld_test", boardRevision: "default", artifactPath: artifact, log: new LogSink(join(dir, "f.log")), bootloaderWaitMs: 3000,
+      // The board returns once the flasher is verifying, as the real one does after the tool resets it.
+      onState: (_s, _i, note) => { if (note?.verifying) bus.splice(0, bus.length, { vendorId: "0xcb10", productId: "0x6456", name: "", maker: "" }); },
+      handsFree: { usb: async () => [...bus], pollMs: 20, dfu: { tools: { "dfu-programmer": join(bin, "dfu-programmer") } } },
+    });
+    expect(r.state).toBe("succeeded");
+    expect((await Bun.file(calls).text()).trim().split("\n")).toEqual(["atmega32u4 erase --force", `atmega32u4 flash --force ${artifact}`, "atmega32u4 reset"]);
+  }, 15_000);
 
   test("a UF2 board flashes its one file to the drive the step names", async () => {
     const board = await load("qmk", (b) => {

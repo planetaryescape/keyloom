@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { Database } from "bun:sqlite";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
+import { BREW_FORMULA, type DfuTool } from "../firmware/qmk/dfu-flash.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { imageTag } from "../firmware/zmk/image.ts";
 import { type CheckoutSpec, checkoutState } from "../firmware/toolchain/checkout.ts";
@@ -99,6 +100,22 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     ...(zapp ? {} : { warn: true }),
     detail: zapp ?? "not on PATH; install it with `brew install zapp` to flash from keyloom",
   });
+
+  // The DFU tools a derived board's flash recipe runs (22, D-365). keyloom doesn't install them; a warning names the formula.
+  const needed = new Map<DfuTool, string[]>();
+  for (const board of qmkBoards) {
+    for (const rev of board.definition.revisions) {
+      if (rev.flash.kind === "dfu-tool") needed.set(rev.flash.tool, [...(needed.get(rev.flash.tool) ?? []), board.definition.name]);
+    }
+  }
+  for (const [tool, boards] of needed) {
+    const path = which(tool);
+    const names = [...new Set(boards)];
+    checks.push({
+      name: tool, ok: true, ...(path ? {} : { warn: true }),
+      detail: path ?? `not on PATH; keyloom flashes ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""} with it. Install it with \`brew install ${BREW_FORMULA[tool]}\``,
+    });
+  }
 
   const specs: Array<{ board: string; spec: CheckoutSpec }> = [
     ...qmkBoards.flatMap((board) => {
