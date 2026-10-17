@@ -65,6 +65,7 @@ function rowsOf(board: BoardDefinition): number[][] {
 class Emitter {
   readonly aliases = new Map<string, { name: string; text: string; comment: string }>();
   usesAllKeys = false;
+  usesSameHand = false;
   usesHands = false;
   private counter = 0;
 
@@ -113,7 +114,7 @@ class Emitter {
     }
   }
 
-  holdTap(b: Extract<Binding, { kind: "holdTap" }>, where: string): string {
+  holdTap(b: Extract<Binding, { kind: "holdTap" }>, where: string, position?: number): string {
     const profile = this.layout.holdTapProfiles.find((p) => p.id === b.profileId);
     if (!profile) throw new GenerateError(`${where}: hold-tap profile "${b.profileId}" doesn't exist`);
     if (profile.firmware !== "kanata") throw new GenerateError(`${where}: hold-tap profile "${profile.id}" is for ${profile.firmware}; translate it for kanata first (translateHoldTapProfile)`);
@@ -121,17 +122,26 @@ class Emitter {
     if (!read.ok) throw new GenerateError(`${where}: hold-tap profile "${profile.id}": ${read.problems.join("; ")}`);
     const tap = chord(b.tap.code, b.tap.mods);
     const hold = "mods" in b.hold ? modAction(b.hold.mods) : this.layerAction("momentary", b.hold.layerId, where);
-    if (read.spec.variant === "tap-hold-tap-keys") this.usesAllKeys = true;
+    let tapKeys = "$all-keys";
+    if (read.spec.variant === "tap-hold-tap-keys") {
+      if (read.spec.tapKeys === "all") this.usesAllKeys = true;
+      else {
+        const hand = position === undefined ? undefined : (["left", "right"] as const).find((h) => this.board.hands[h].includes(position));
+        if (hand === undefined) throw new GenerateError(`${where}: hold-tap profile "${profile.id}" taps on the same hand's keys, but this key has no hand on ${this.board.id}`);
+        this.usesSameHand = true;
+        tapKeys = `$${hand}-keys`;
+      }
+    }
     if (isOppositeHand(read.spec.variant)) this.usesHands = true;
-    const text = tapHoldAction(read.spec, tap, hold);
+    const text = tapHoldAction(read.spec, tap, hold, tapKeys);
     return this.alias(text, `${b.tap.code} taps, ${"mods" in b.hold ? b.hold.mods.join("+") : `layer ${b.hold.layerId}`} holds (profile ${profile.id})`);
   }
 
-  binding(b: Binding, where: string, wayBack?: string): string {
+  binding(b: Binding, where: string, wayBack?: string, position?: number): string {
     switch (b.kind) {
       case "key": return chord(b.code, b.mods);
       case "modifier": return modAction(b.mods);
-      case "holdTap": return this.holdTap(b, where);
+      case "holdTap": return this.holdTap(b, where, position);
       case "layer": return b.action === "toggle" && wayBack !== undefined ? wayBack : this.layerAction(b.action, b.layerId, where);
       case "macro": return this.macro(b.macroId, where);
       case "tapDance": return `@td-${safeName(this.dance(b.tapDanceId, where).id)}`;
@@ -191,7 +201,7 @@ export function generateKanataSource(input: KanataGenerateInput): KanataSource {
 
   const deflayers = layout.layers.map((l) => {
     const lines = rows.map((row) =>
-      `  ${row.map((p) => e.binding(l.bindings[p] as Binding, `layer "${l.id}", position ${p}`, wayBackAt(l, p, l.bindings[p] as Binding))).join(" ")}`);
+      `  ${row.map((p) => e.binding(l.bindings[p] as Binding, `layer "${l.id}", position ${p}`, wayBackAt(l, p, l.bindings[p] as Binding), p)).join(" ")}`);
     return `(deflayer ${safeName(l.id)}\n${lines.join("\n")}\n)`;
   });
 
@@ -214,6 +224,10 @@ export function generateKanataSource(input: KanataGenerateInput): KanataSource {
 
   const blocks: string[] = [defcfg(rev.deviceName, chords.length > 0)];
   if (e.usesAllKeys) blocks.push(`(defvar\n  ;; Every key, for hold-taps where another key's press makes the held key a tap.\n  all-keys (${names.join(" ")})\n)`);
+  if (e.usesSameHand) {
+    const side = (hand: "left" | "right") => board.hands[hand].map((p) => names[p]).join(" ");
+    blocks.push(`(defvar\n  ;; Each hand's keys, for hold-taps where a key on the same hand makes the held key a tap.\n  left-keys (${side("left")})\n  right-keys (${side("right")})\n)`);
+  }
   if (e.usesHands) {
     const side = (hand: "left" | "right") => board.hands[hand].map((p) => names[p]).join(" ");
     blocks.push(`(defhands\n  (left ${side("left")})\n  (right ${side("right")})\n)`);

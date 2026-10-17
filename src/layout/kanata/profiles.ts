@@ -11,8 +11,10 @@
 //   QUICK_TAP_TERM n                             tap-repress-ms n (QMK defaults it to TAPPING_TERM)
 //   PERMISSIVE_HOLD                              tap-hold-release
 //   HOLD_ON_OTHER_KEY_PRESS                      tap-hold-press (wins over PERMISSIVE_HOLD)
-//   CHORDAL_HOLD                                 tap-hold-opposite-hand (S6)
-//   CHORDAL_HOLD + PERMISSIVE_HOLD               tap-hold-opposite-hand-release (S6)
+//   CHORDAL_HOLD                                 tap-hold-tap-keys over the key's own hand (S33: tap-hold-opposite-hand also
+//                                                holds the moment an opposite-hand key goes down, which QMK does not)
+//   CHORDAL_HOLD + HOLD_ON_OTHER_KEY_PRESS       tap-hold-opposite-hand (S33)
+//   CHORDAL_HOLD + PERMISSIVE_HOLD               tap-hold-opposite-hand-release (S33)
 //   FLOW_TAP_TERM n                              require-prior-idle-ms n
 //   RETRO_TAPPING and the rest                   no equivalent: reported
 //
@@ -31,14 +33,17 @@ export const KANATA_VARIANTS = [
 ] as const;
 export type KanataVariant = (typeof KANATA_VARIANTS)[number];
 
-export type KanataTapHold = { variant: KanataVariant; holdMs: number; tapRepressMs: number; requirePriorIdleMs: number | undefined };
+/** Which keys make a `tap-hold-tap-keys` key a tap: every key, or only the keys on its own hand. */
+export type TapKeys = "all" | "same-hand";
+
+export type KanataTapHold = { variant: KanataVariant; holdMs: number; tapRepressMs: number; requirePriorIdleMs: number | undefined; tapKeys: TapKeys };
 
 export const isOppositeHand = (v: KanataVariant): boolean => v === "tap-hold-opposite-hand" || v === "tap-hold-opposite-hand-release";
 
 const MS_MAX = 65535;
 const isMs = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= MS_MAX;
 
-export const DEFAULT_KANATA_PROFILE: KanataTapHold = { variant: "tap-hold-release", holdMs: 200, tapRepressMs: 0, requirePriorIdleMs: undefined };
+export const DEFAULT_KANATA_PROFILE: KanataTapHold = { variant: "tap-hold-release", holdMs: 200, tapRepressMs: 0, requirePriorIdleMs: undefined, tapKeys: "all" };
 
 /** The profile's options as a spec, or what is wrong with them. */
 export function readKanataProfile(profile: HoldTapProfile): { ok: true; spec: KanataTapHold } | { ok: false; problems: string[] } {
@@ -58,14 +63,17 @@ export function readKanataProfile(profile: HoldTapProfile): { ok: true; spec: Ka
   const holdMs = num("hold-ms", DEFAULT_KANATA_PROFILE.holdMs) as number;
   const tapRepressMs = num("tap-repress-ms", 0) as number;
   const requirePriorIdleMs = num("require-prior-idle-ms", undefined);
-  const known = new Set(["variant", "hold-ms", "tap-repress-ms", "require-prior-idle-ms"]);
+  const tapKeys = o["tap-keys"] ?? "all";
+  if (tapKeys !== "all" && tapKeys !== "same-hand") problems.push(`tap-keys must be "all" or "same-hand", not ${JSON.stringify(tapKeys)}`);
+  else if (tapKeys === "same-hand" && variant !== "tap-hold-tap-keys") problems.push(`tap-keys is only for tap-hold-tap-keys, not ${JSON.stringify(variant)}`);
+  const known = new Set(["variant", "hold-ms", "tap-repress-ms", "require-prior-idle-ms", "tap-keys"]);
   for (const key of Object.keys(o)) if (!known.has(key)) problems.push(`"${key}" is not a kanata hold-tap option`);
   if (problems.length > 0) return { ok: false, problems };
-  return { ok: true, spec: { variant: variant as KanataVariant, holdMs, tapRepressMs, requirePriorIdleMs } };
+  return { ok: true, spec: { variant: variant as KanataVariant, holdMs, tapRepressMs, requirePriorIdleMs, tapKeys: tapKeys as TapKeys } };
 }
 
-/** `(tap-hold ...)` for one key. `allKeys` is the name of the defvar list of every physical key, for the variant that needs it. */
-export function tapHoldAction(spec: KanataTapHold, tap: string, hold: string, allKeys = "$all-keys"): string {
+/** `(tap-hold ...)` for one key. `tapKeys` is the defvar list of keys that make a tap-hold-tap-keys key a tap: `$all-keys` or the key's own hand. */
+export function tapHoldAction(spec: KanataTapHold, tap: string, hold: string, tapKeys = "$all-keys"): string {
   const idle = spec.requirePriorIdleMs === undefined ? "" : ` (require-prior-idle ${spec.requirePriorIdleMs})`;
   switch (spec.variant) {
     case "tap-hold":
@@ -76,7 +84,7 @@ export function tapHoldAction(spec: KanataTapHold, tap: string, hold: string, al
       // The timeout action is the tap: a key held alone is still a tap, and only another key's press makes it a hold.
       return `(tap-hold-press-timeout ${spec.tapRepressMs} ${spec.holdMs} ${tap} ${hold} ${tap}${idle})`;
     case "tap-hold-tap-keys":
-      return `(tap-hold-tap-keys ${spec.tapRepressMs} ${spec.holdMs} ${tap} ${hold} ${allKeys}${idle})`;
+      return `(tap-hold-tap-keys ${spec.tapRepressMs} ${spec.holdMs} ${tap} ${hold} ${tapKeys}${idle})`;
     case "tap-hold-opposite-hand":
     case "tap-hold-opposite-hand-release": {
       // Held past the timeout is a hold, as on QMK and ZMK; the same hand's keys are a tap, which is what stops a roll becoming a modifier.
@@ -112,12 +120,19 @@ export function translateHoldTapProfile(
     const quick = get("QUICK_TAP_TERM");
     out["hold-ms"] = holdMs;
     out["tap-repress-ms"] = isMs(quick) ? quick : holdMs;
+    if (isMs(quick) && quick > 0) {
+      notes.push(`${profile.name}: QUICK_TAP_TERM ${quick} ms runs from the first tap's release in QMK, but kanata's tap-repress-ms (${quick}) runs from its press, so a re-press that QMK treats as a repeat can be a hold on kanata by as much as the first tap lasted (S33)`);
+    }
     const flow = get("FLOW_TAP_TERM");
     if (isMs(flow) && flow > 0) out["require-prior-idle-ms"] = flow;
     const permissive = truthy(get("PERMISSIVE_HOLD"));
     const onPress = truthy(get("HOLD_ON_OTHER_KEY_PRESS"));
-    if (truthy(get("CHORDAL_HOLD"))) variant = permissive ? "tap-hold-opposite-hand-release" : "tap-hold-opposite-hand";
-    else if (onPress) variant = "tap-hold-press";
+    if (truthy(get("CHORDAL_HOLD"))) {
+      // QMK settles on a tap when the next key is on the same hand; an opposite-hand key decides nothing by itself
+      // unless HOLD_ON_OTHER_KEY_PRESS (hold at once) or PERMISSIVE_HOLD (hold on its release) says so (S33).
+      variant = onPress ? "tap-hold-opposite-hand" : permissive ? "tap-hold-opposite-hand-release" : "tap-hold-tap-keys";
+      if (variant === "tap-hold-tap-keys") out["tap-keys"] = "same-hand";
+    } else if (onPress) variant = "tap-hold-press";
     else if (permissive) variant = "tap-hold-release";
     else variant = "tap-hold";
     if (onPress && permissive) notes.push(`${profile.name}: QMK has both HOLD_ON_OTHER_KEY_PRESS and PERMISSIVE_HOLD on; HOLD_ON_OTHER_KEY_PRESS decides, as it does in QMK`);
