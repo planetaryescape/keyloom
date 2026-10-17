@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.1](https://github.com/planetaryescape/keyloom/compare/v0.38.0...v0.38.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* reliability: Colima stale reads and four flaky tests ([#104](https://github.com/planetaryescape/keyloom/issues/104)) ([b39d32d](https://github.com/planetaryescape/keyloom/commit/b39d32d2f77a82b28af7a84674e9d5066f5c186c))
+
 ## [0.38.0](https://github.com/planetaryescape/keyloom/compare/v0.37.0...v0.38.0) (2026-10-17)
 
 
