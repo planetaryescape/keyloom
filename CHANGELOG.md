@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.39.0](https://github.com/planetaryescape/keyloom/compare/v0.38.2...v0.39.0) (2026-10-17)
+
+
+### Features
+
+* pin the drawn board to its colourway ([#109](https://github.com/planetaryescape/keyloom/issues/109)) ([073a356](https://github.com/planetaryescape/keyloom/commit/073a356575e8a7db7e8c02c85e93b376f0d4e560))
+
+
+### Bug Fixes
+
+* drop a leftover conflict marker and test for them ([#112](https://github.com/planetaryescape/keyloom/issues/112)) ([95e6160](https://github.com/planetaryescape/keyloom/commit/95e616029f3e48eb1517c1479caf8c8954cea2d5))
+
 ## [0.38.2](https://github.com/planetaryescape/keyloom/compare/v0.38.1...v0.38.2) (2026-10-17)
 
 
