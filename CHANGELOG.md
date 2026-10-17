@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.38.2](https://github.com/planetaryescape/keyloom/compare/v0.38.1...v0.38.2) (2026-10-17)
+
+
+### Bug Fixes
+
+* put onto the MacBook keyboard, act on defaults, and add ask_user ([#107](https://github.com/planetaryescape/keyloom/issues/107)) ([ee42248](https://github.com/planetaryescape/keyloom/commit/ee422486232d5fc03151435a741604f13239caa6))
+* QMK CHORDAL_HOLD translates to a same-hand tap on kanata (S33 differential test) ([#108](https://github.com/planetaryescape/keyloom/issues/108)) ([93fe89d](https://github.com/planetaryescape/keyloom/commit/93fe89df2210e8a27567856941c74c6f0cfe6538))
+
 ## [0.38.1](https://github.com/planetaryescape/keyloom/compare/v0.38.0...v0.38.1) (2026-10-17)
 
 
