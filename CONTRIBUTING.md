@@ -350,7 +350,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.colourways[].id` | all | A short id, kept in the browser when it is pinned, such as `black`. |
 | `display.colourways[].name` | all | What the setting says: `Black`, `Grey`, `White`. |
 | `display.colourways[].maker` | all | Optional. The maker's own name where it differs, such as ZSA's `Dark Matter`. |
-| `display.colourways[].case` | all | `dark` or `light`: the case's tone. |
+| `display.colourways[].case` | all | `dark`, `grey` or `light`: the case's tone. `grey` is a charcoal case lighter than black (MoErgo's grey Glove80). |
 | `display.colourways[].caps` | all | `dark` or `light`: the caps' tone, separate from the case because a grey Glove80 has white caps. |
 | `display.case` | all | Optional. The case drawn from photos of the real board instead of computed from the keys. Each part is an SVG path in key units after `rotate` and `shift`. Leave it out and the editor draws a case from the keys. |
 | `display.case[].hand` | all | `left`, `right`, or `null` for a one-piece case. A split board's halves part for the key card by hand. |

@@ -58,8 +58,10 @@
   --layer-6: #ff9f1a;
 }
 
-/* A black case in a light room: the dark room's case, a touch lifted, its edges catching the room's light, and a softer shadow. */
-.keyboard[data-case-room="dark"] {
+/* A black case in a light room: the dark room's case, a touch lifted, its edges catching the room's light, and a softer shadow.
+   A grey case takes the same marks, since they read on it as on black, and its own charcoal below. */
+.keyboard[data-case-room="dark"],
+.keyboard[data-case-room="grey"] {
   --room: #0e0f12;
   --ink: #eef0f3;
   --ink-2: #b3b7bf;
@@ -105,6 +107,25 @@
   --layer-4: #2bd67b;
   --layer-5: #9466ff;
   --layer-6: #ffa52e;
+}
+
+/* MoErgo's grey Glove80: charcoal, not black. Sampled from MoErgo's studio photo of the grey board (its lit palm rest #4b4a48 to
+   #534f4e) and BK's own photo (evidence/glove80-ref/22.png, a darker, cooler #22292f to #2a333a in room light); the two bracket a
+   neutral charcoal, lit on top and a step darker in its shade. */
+.keyboard[data-case-room="grey"] {
+  --case-hi: #47484b;
+  --case-lo: #313235;
+  --case-rim: rgb(255 255 255 / 0.16);
+  --case-seam: rgb(0 0 0 / 0.55);
+  --well: rgb(0 0 0 / 0.32);
+}
+
+/* The grey case in a dark room: the room's deep shadow on the stage, and a quieter rim. */
+.keyboard[data-case-room="grey"][data-room="dark"] {
+  --case-shadow: rgb(0 0 0 / 0.7);
+  --case-rim: rgb(255 255 255 / 0.11);
+  --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
 }
 
 /* White caps in a dark room: lit from above, their skirts falling into the room's shade, and a deeper drop. */

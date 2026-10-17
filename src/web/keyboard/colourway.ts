@@ -28,10 +28,15 @@ export function useColourway(boardId: string, colourways: readonly Colourway[] |
  * What the board's element carries for colourway.css: a part's tone only when it differs from the room's, since a part that matches
  * the room is drawn by the theme's own tokens. Marks around the caps follow the case they sit on.
  */
-export function colourwayAttributes(colourway: Pick<Colourway, "case" | "caps"> | null, room: "light" | "dark"): { "data-case-room"?: "light" | "dark"; "data-caps-room"?: "light" | "dark" } {
+export function colourwayAttributes(
+  colourway: Pick<Colourway, "case" | "caps"> | null,
+  room: "light" | "dark",
+): { "data-case-room"?: Colourway["case"]; "data-caps-room"?: Colourway["caps"]; "data-room"?: "light" | "dark" } {
   if (colourway === null) return {};
   return {
     ...(colourway.case === room ? {} : { "data-case-room": colourway.case }),
     ...(colourway.caps === room ? {} : { "data-caps-room": colourway.caps }),
+    // A grey case is out of both rooms, so its shadow on the stage depends on which room it is in.
+    ...(colourway.case === "grey" ? { "data-room": room } : {}),
   };
 }

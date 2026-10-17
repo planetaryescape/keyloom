@@ -472,6 +472,10 @@
   background: #1f2024;
 }
 
+.colourway-choice i[data-case="grey"] {
+  background: #47484b;
+}
+
 .colourway-choice i[data-case="light"] {
   background: #ececea;
 }

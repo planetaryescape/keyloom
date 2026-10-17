@@ -144,7 +144,8 @@ export const BoardDefinitionSchema = z.strictObject({
             name: z.string().min(1),
             // The maker's own name for it, where it differs ("Dark Matter").
             maker: z.string().min(1).optional(),
-            case: z.enum(["dark", "light"]),
+            // grey is a charcoal case, lighter than black, that matches neither room (MoErgo's grey Glove80).
+            case: z.enum(["dark", "grey", "light"]),
             caps: z.enum(["dark", "light"]),
           }),
         )

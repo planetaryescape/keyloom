@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { colourwayAttributes } from "../../src/web/keyboard/colourway.ts";
 
 // Reads the real stylesheet, so a token change that drops a pair below WCAG fails here.
 const css = await Bun.file(new URL("../../src/web/tokens.css", import.meta.url)).text();
@@ -206,30 +207,32 @@ describe("non-text contrast", () => {
 });
 
 // A pinned colourway (D-395): colourway.css redraws a case or the caps out of their room. Every board pair must hold for every pin in
-// both rooms, with the room's own tokens under whatever the pin replaces, as the page composes them.
+// both rooms, with the room's own tokens under whatever the pin replaces, applied in the stylesheet's order as the page composes them.
 const colourwayCss = await Bun.file(new URL("../../src/web/keyboard/colourway.css", import.meta.url)).text();
-function block(selector: string): Map<string, string> {
-  const start = colourwayCss.indexOf(selector);
-  if (start < 0) throw new Error(`colourway.css has no ${selector}`);
-  const body = colourwayCss.slice(colourwayCss.indexOf("{", start) + 1, colourwayCss.indexOf("}", start));
-  return new Map([...body.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/g)].map((m) => [m[1] as string, m[2] as string]));
+type Attrs = Record<string, string>;
+// Each rule: its selectors' attribute conditions, and its colour tokens. A selector applies when every [name="value"] in it holds.
+const rules = [...colourwayCss.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => ({
+  selectors: (m[1] as string).split(",").map((sel) => [...sel.matchAll(/\[([a-z-]+)="([a-z]+)"\]/g)].map((a) => [a[1] as string, a[2] as string] as const)),
+  tokens: [...(m[2] as string).matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/g)].map((t) => [t[1] as string, t[2] as string] as const),
+}));
+function composed(room: "light" | "dark", attrs: Attrs): Map<string, string> {
+  const values = new Map(themes[room]);
+  for (const rule of rules) {
+    if (!rule.selectors.some((conds) => conds.every(([name, value]) => attrs[name] === value))) continue;
+    for (const [name, value] of rule.tokens) values.set(name, value);
+  }
+  return values;
 }
-const pinned = {
-  case: { light: block('.keyboard[data-case-room="light"]'), dark: block('.keyboard[data-case-room="dark"]') },
-  caps: { light: block('.keyboard[data-caps-room="light"]'), dark: block('.keyboard[data-caps-room="dark"]') },
-};
 // What a pin can't change: chrome outside the board, and the laptop's keys (a MacBook has no colourways).
 // Combo labels inside the board are drawn on --surface with --ink, so those pairs stay in; the status inks on a card are chrome.
 const BOARD_PAIRS = PAIRS.filter(([fg, bg]) => fg === "color-combo" || (!fg.startsWith("color-") && !fg.startsWith("mac-") && bg !== "room-spot" && !(fg.endsWith("-ink") && bg === "surface")));
 
 describe("a pinned colourway keeps the board readable", () => {
   for (const room of ["light", "dark"] as const) {
-    for (const caseTone of ["light", "dark"] as const) {
+    for (const caseTone of ["light", "dark", "grey"] as const) {
       for (const capsTone of ["light", "dark"] as const) {
         test(`${caseTone} case, ${capsTone} caps, in the ${room} room`, () => {
-          const values = new Map(themes[room]);
-          if (caseTone !== room) for (const [k, v] of pinned.case[caseTone]) values.set(k, v);
-          if (capsTone !== room) for (const [k, v] of pinned.caps[capsTone]) values.set(k, v);
+          const values = composed(room, colourwayAttributes({ case: caseTone, caps: capsTone }, room) as Attrs);
           const failures: string[] = [];
           for (const [fg, bg, minimum] of BOARD_PAIRS) {
             const got = ratio(values.get(fg) as string, values.get(bg) as string);
@@ -250,9 +253,19 @@ describe("a pinned colourway keeps the board readable", () => {
   test("a pin's case or caps declare every board token the theme does, so nothing falls through to the room's", () => {
     const capNames = ["skirt-hi", "skirt-lo", "top-hi", "top-lo", "legend", "front", "ghost", "pending-ink", "red-skirt-hi", "red-skirt-lo", "red-top-hi", "red-top-lo", "red-legend", "red-front", "keycap-red", "cap-key", "cap-key-ink", "cap-modifier", "cap-hold", "cap-layer", "cap-macro", "cap-dance", "cap-native"];
     const caseNames = ["room", "ink", "ink-2", "ink-3", "surface", "pending", "ok", "bad", "finding", "case-hi", "case-lo", "leg", "knob", "knurl", "hole", "ball-hi", "ball-lo", "screen", "color-combo", "layer-1", "layer-6"];
-    for (const tone of ["light", "dark"] as const) {
-      expect(capNames.filter((n) => !pinned.caps[tone].has(n))).toEqual([]);
-      expect(caseNames.filter((n) => !pinned.case[tone].has(n))).toEqual([]);
+    for (const [room, tone] of [["dark", "light"], ["light", "dark"]] as const) {
+      const caps = composed(room, { "data-caps-room": tone });
+      const kase = composed(room, { "data-case-room": tone });
+      expect(capNames.filter((n) => caps.get(n) === themes[room].get(n) && themes[room].get(n) !== themes[tone].get(n))).toEqual([]);
+      expect(caseNames.filter((n) => kase.get(n) === themes[room].get(n) && themes[room].get(n) !== themes[tone].get(n))).toEqual([]);
+    }
+  });
+
+  test("the grey case is its own charcoal in both rooms, lighter than the black case", () => {
+    for (const room of ["light", "dark"] as const) {
+      const grey = composed(room, colourwayAttributes({ case: "grey", caps: "light" }, room) as Attrs);
+      const black = composed(room, colourwayAttributes({ case: "dark", caps: "dark" }, room) as Attrs);
+      expect(ratio(grey.get("case-hi") as string, black.get("case-hi") as string)).toBeGreaterThan(1.2);
     }
   });
 });

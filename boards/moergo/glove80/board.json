@@ -196,7 +196,7 @@
   ],
   "display": {
     "colourways": [
-      { "id": "grey", "name": "Grey", "case": "dark", "caps": "light" },
+      { "id": "grey", "name": "Grey", "case": "grey", "caps": "light" },
       { "id": "white", "name": "White", "case": "light", "caps": "light" }
     ],
     "surface": "wells",
