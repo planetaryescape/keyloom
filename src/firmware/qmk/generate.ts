@@ -9,8 +9,9 @@ import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { renderCombos } from "./emit-combos.ts";
 import { LIGHTING_PRELUDE, renderLighting } from "./emit-lighting.ts";
 import { LIGHTING_ANCHORS } from "./import-lighting.ts";
-import { CUSTOM_KEYCODES_ANCHOR } from "./keymap-c.ts";
+import { CUSTOM_KEYCODES_ANCHOR, LAYER_STATE_ANCHOR } from "./keymap-c.ts";
 import { renderKeymaps } from "./emit-keymap.ts";
+import { renderLayerState } from "./emit-layer-state.ts";
 import { macroCase, macroNames } from "./emit-macros.ts";
 import { danceEnumName, renderTapDances } from "./emit-tap-dance.ts";
 import { tappingCallbacks } from "./emit-tapping.ts";
@@ -105,6 +106,12 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   if (layout.tapDances.length > 0 && keymapC.some((p) => p.anchor.startsWith("tap-dance"))) {
     throw new GenerateError("keymap.c keeps tap dance code from Oryx that keyloom couldn't read, so keyloom can't add tap dances beside it");
   }
+  // Kept code that already defines layer_state_set_user would define it twice; the validator refuses the change that adds a condition
+  // beside it (conditional_layer_blocked), and this is the same check for a document that didn't come through the validator.
+  const layerState = renderLayerState(layout, ctx);
+  if (layerState !== undefined && keymapC.some((p) => p.anchor === LAYER_STATE_ANCHOR)) {
+    throw new GenerateError("keymap.c keeps its own layer_state_set_user, so keyloom can't write one for the conditional layers beside it");
+  }
   const dances = renderTapDances(layout.tapDances, layout.macros, ctx);
   const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes");
   const cases = keymapC.filter((p) => p.anchor.startsWith("process_record_user:"));
@@ -155,6 +162,8 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   for (const block of lightingBlocks) c.push("", block);
   if (dances) c.push("", dances.code);
   if (tapping.functions.length > 0) c.push("", ...tapping.functions.flatMap((f, i) => (i === 0 ? [f] : ["", f])));
+
+  if (layerState !== undefined) c.push("", layerState);
 
   const macroCases = layout.macros.map((m) => macroCase(ctx.macroNames.get(m.id) as string, m));
   // Oryx's own case for modifier-wrapped mouse keys comes first, then the macros, then the rest. The compiler

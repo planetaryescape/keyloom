@@ -25,6 +25,11 @@ export type ParsedKeymap = {
   cases: Array<{ label: string; source: string; pressedOnly: boolean }>;
   /** The keymap's own `enum custom_keycodes`, in order: `VRSN = SAFE_RANGE` is `{ name: "VRSN", value: "SAFE_RANGE" }`. */
   keycodeEnum: Array<{ name: string; value?: string }>;
+  /**
+   * The `update_tri_layer_state(state, A, B, C)` calls of a `layer_state_set_user` whose whole body is a chain of them, in order, as the
+   * three layer arguments of each; null when the function is absent or does anything else (D-387). Such a function stays kept code.
+   */
+  triLayerCalls: Expr[][] | null;
   /** Top-level `#define NAME body` in keymap.c that the keymap uses as a keycode. */
   customKeycodes: Map<string, string>;
   chunks: Chunk[];
@@ -201,6 +206,59 @@ function parseKeycodeEnum(root: Node): ParsedKeymap["keycodeEnum"] {
   return members;
 }
 
+/** The anchor the function gets as a kept chunk, and the one the importer drops when it models the function. */
+export const LAYER_STATE_ANCHOR = "function:layer_state_set_user";
+
+const TRI_LAYER_CALL = "update_tri_layer_state";
+
+/** `p = update_tri_layer_state(p, A, B, C)` or `return update_tri_layer_state(p, A, B, C)`: the call's layer arguments, else null. */
+function triCall(expr: Node | null, param: string): Expr[] | null {
+  if (expr === null) return null;
+  const e = toExpr(expr);
+  if (e.kind !== "call" || e.name !== TRI_LAYER_CALL || e.args.length !== 4) return null;
+  const [state, ...layers] = e.args as [Expr, Expr, Expr, Expr];
+  return state.kind === "id" && state.name === param ? layers : null;
+}
+
+/**
+ * `layer_state_t layer_state_set_user(layer_state_t state) { state = update_tri_layer_state(state, 1, 2, 3); return state; }` and the
+ * forms QMK's docs write: a chain of assignments then `return state;`, or ending in `return update_tri_layer_state(state, ...);`.
+ * Any other statement means the function does something keyloom doesn't model, so none of it is read.
+ */
+function parseTriLayerCalls(root: Node): Expr[][] | null {
+  const fn = findFunction(root, "layer_state_set_user");
+  const params = (fn?.childForFieldName("declarator")?.childForFieldName("parameters")?.namedChildren ?? []).filter((c) => c.type === "parameter_declaration");
+  const body = fn?.childForFieldName("body");
+  const param = params.length === 1 ? declaredParam(params[0] as Node) : undefined;
+  if (!fn || !body || param === undefined) return null;
+  const calls: Expr[][] = [];
+  let returned = false;
+  for (const stmt of body.namedChildren) {
+    if (stmt.type === "comment") continue;
+    if (returned) return null;
+    if (stmt.type === "return_statement") {
+      const value = stmt.namedChildren.find((c) => c.type !== "comment") ?? null;
+      const call = triCall(value, param);
+      if (call !== null) calls.push(call);
+      else if (!(value?.type === "identifier" && value.text === param)) return null;
+      returned = true;
+    } else if (stmt.type === "expression_statement") {
+      const assign = stmt.namedChildren[0];
+      const left = assign?.type === "assignment_expression" ? assign.childForFieldName("left") : null;
+      const call = left?.type === "identifier" && left.text === param && assign?.childForFieldName("operator")?.text === "=" ? triCall(assign.childForFieldName("right"), param) : null;
+      if (call === null) return null;
+      calls.push(call);
+    } else return null;
+  }
+  return returned && calls.length > 0 ? calls : null;
+}
+
+function declaredParam(decl: Node): string | undefined {
+  let d: Node | null = decl.childForFieldName("declarator");
+  while (d && d.type !== "identifier") d = d.childForFieldName("declarator");
+  return d?.text;
+}
+
 export function parseKeymapC(source: string): Promise<ParsedKeymap> {
   return withTree(source, (root) => {
     const { layers, layerNames } = parseLayers(root);
@@ -222,6 +280,7 @@ export function parseKeymapC(source: string): Promise<ParsedKeymap> {
       combos,
       cases: parseCases(root, source),
       keycodeEnum: parseKeycodeEnum(root),
+      triLayerCalls: parseTriLayerCalls(root),
       customKeycodes,
       chunks: chunksOf(root, source, new Set(customKeycodes.keys()), modelled),
     };

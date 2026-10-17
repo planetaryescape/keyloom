@@ -374,7 +374,7 @@ Only BK can do these:
 
 **Done when:** a two-key combo takes 5 clicks, no Glove80 legend renders below 11 px, and deleting a referenced layer is refused with the keys listed.
 
-**Left out:** conditional layers.
+**Left out:** conditional layers (built after the car, D-385 to D-389).
 
 ## Rung 16: Motorbike: history, states, themes and phones
 
@@ -570,7 +570,7 @@ Only BK can do these:
 
 ## After the car (not planned yet)
 
-- Conditional layers (tri-layer) in the editor.
+- ~~Conditional layers (tri-layer) in the editor~~: built, D-385 to D-389.
 - The features [16](16-key-editor.md#what-keyloom-doesnt-take-and-why) defers (D-105).
 - Pulling a layout from Oryx's GraphQL endpoint (D-041, S4).
 - Key-frequency statistics (Q5).

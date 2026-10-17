@@ -244,6 +244,13 @@ export function generateKanataSource(input: KanataGenerateInput): KanataSource {
   if (e.aliases.size > 0) {
     blocks.push(`(defalias\n${[...e.aliases.values()].map((a) => `  ;; ${a.comment}\n  ${a.name} ${a.text}`).join("\n")}\n)`);
   }
+  // kanata keeps one active layer, so "when two are held" has no form (D-388). Said here as well as by the validator's warning, so
+  // a person reading the config doesn't look for it.
+  if (layout.conditionalLayers.length > 0) {
+    const named = (id: string) => safeName(id);
+    blocks.push(`;; keyloom: these conditional layers are not written, because kanata has one active layer at a time:\n${layout.conditionalLayers
+      .map((c) => `;;   ${c.ifLayerIds.map(named).join(" + ")} -> ${named(c.thenLayerId)}`).join("\n")}`);
+  }
   blocks.push(...deflayers);
   if (chords.length > 0) blocks.push(`(defchordsv2\n${chords.join("\n")}\n)`);
 

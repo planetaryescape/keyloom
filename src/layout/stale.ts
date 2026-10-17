@@ -53,6 +53,8 @@ function touchesOf(op: ChangeOp, base: Layout): Touch[] {
     case "removeTapDance": return [itemTouch("tap dance", op.tapDanceId, (d) => d.tapDances.find((t) => t.id === op.tapDanceId))];
     case "upsertCombo": return [itemTouch("combo", op.combo.id, (d) => d.combos.find((c) => c.id === op.combo.id))];
     case "removeCombo": return [itemTouch("combo", op.comboId, (d) => d.combos.find((c) => c.id === op.comboId))];
+    case "upsertConditionalLayer": return [itemTouch("conditional layer", op.conditionalLayer.id, (d) => d.conditionalLayers.find((c) => c.id === op.conditionalLayer.id))];
+    case "removeConditionalLayer": return [itemTouch("conditional layer", op.conditionalLayerId, (d) => d.conditionalLayers.find((c) => c.id === op.conditionalLayerId))];
     case "upsertHoldTapProfile":
       return [itemTouch("hold-tap profile", op.profile.id, (d) => d.holdTapProfiles.find((p) => p.id === op.profile.id))];
     case "setFirmwareSetting": {

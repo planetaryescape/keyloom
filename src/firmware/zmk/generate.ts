@@ -8,7 +8,7 @@ import { missingLayerNumbers, withLayerNumbers } from "../../layout/layer-refs.t
 import { BUILTIN_PROFILES } from "./builtins.ts";
 import { settingLine } from "./conf.ts";
 import { type EmitContext, labelOf } from "./emit-binding.ts";
-import { comboNodeName, renderBuiltinOverride, renderCombo, renderMacro, renderProfile, renderTapDance } from "./emit-behaviors.ts";
+import { comboNodeName, renderBuiltinOverride, renderCombo, renderConditionalLayer, renderMacro, renderProfile, renderTapDance } from "./emit-behaviors.ts";
 import { renderLayers } from "./emit-keymap.ts";
 import { handsFreeConf } from "./handsfree.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
@@ -46,7 +46,7 @@ const indent = (lines: readonly string[], by: number): string[] => lines.map((l)
 /** Blank lines between blocks, and none at the ends. */
 const blocks = (parts: ReadonlyArray<readonly string[]>): string[] => parts.filter((p) => p.length > 0).flatMap((p, i) => (i === 0 ? [...p] : ["", ...p]));
 
-const SECTIONS = ["include", "define", "cpp", "behavior", "macro", "root", "combo", "top"] as const;
+const SECTIONS = ["include", "define", "cpp", "behavior", "macro", "root", "combo", "conditional", "top"] as const;
 
 function sectionOf(p: Passthrough): (typeof SECTIONS)[number] {
   const section = SECTIONS.find((s) => p.anchor.startsWith(`${s}:`));
@@ -139,6 +139,16 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     }
   });
   const combos = container("combos", ['compatible = "zmk,combos";'], [...comboNodes, ...sources("combo")]);
+  const conditionalNames = new Set<string>();
+  for (const c of layout.conditionalLayers) {
+    const name = c.id.replaceAll("-", "_");
+    if (conditionalNames.has(name)) throw new GenerateError(`two conditional layers would both be written as ${name}`);
+    conditionalNames.add(name);
+  }
+  const conditionals = container("conditional_layers", ['compatible = "zmk,conditional-layers";'], [
+    ...layout.conditionalLayers.map((c) => renderConditionalLayer(c, ctx)),
+    ...sources("conditional"),
+  ]);
   const keymap = [
     "keymap {",
     '    compatible = "zmk,keymap";',
@@ -147,7 +157,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     "};",
   ];
 
-  const root = ["/ {", ...indent(blocks([behaviors, macros, ...sources("root"), combos, keymap]), 4), "};"];
+  const root = ["/ {", ...indent(blocks([behaviors, macros, ...sources("root"), combos, conditionals, keymap]), 4), "};"];
   const overrides = layout.holdTapProfiles.filter((p) => BUILTIN_PROFILES.has(p.id)).map(renderBuiltinOverride);
 
   const keymapText = blocks([

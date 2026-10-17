@@ -1,12 +1,13 @@
 import { Plus } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import type { Slot } from "../../layout/change.ts";
+import type { ChangeOp, Slot } from "../../layout/change.ts";
 import { countKind, layerReferences, niceLayerName } from "../../layout/layer-ops.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { GeometryKey } from "../../boards/schema.ts";
 import { boardBounds } from "./geometry.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
 import { DeleteLayerDialog } from "../layers/DeleteLayerDialog.tsx";
+import { goingWithLayer, stripLinks } from "../layers/conditional-ops.ts";
 import { LayerMenu } from "../layers/LayerMenu.tsx";
 import "../layers/layers.css";
 
@@ -21,6 +22,8 @@ export interface LayerActions {
   style: (layerId: string, label: string | null, color: number | null) => void;
   convert: (layerId: string, from: "transparent" | "none", to: "transparent" | "none") => void;
   remove: (layerId: string, drops: readonly string[]) => Promise<ChangeOutcome>;
+  /** Changes the conditional layers; the outcome comes back so the menu can show a refusal where the person made the choice. */
+  condition: (ops: ChangeOp[], summary: string) => Promise<ChangeOutcome>;
   nameFunction: (fn: string) => string;
   openKey: (slot: Slot) => void;
   notify: (message: string) => void;
@@ -82,6 +85,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const menuButton = useRef<HTMLSpanElement>(null);
+  const [openWhen, setOpenWhen] = useState(0);
   const selectedIndex = Math.max(0, layers.findIndex((layer) => layer.id === selectedId));
   const selected = layers[selectedIndex];
 
@@ -136,9 +140,10 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
             );
           }
           const draggable = actions !== undefined && index > 0 && actions.blockedReason === null;
+          const links = stripLinks(layout, layer.id);
           return (
+            <div key={layer.id} className="layer-tab-cell">
             <button
-              key={layer.id}
               ref={(element) => {
                 tabs.current[index] = element;
               }}
@@ -192,6 +197,25 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
                 </>
               ) : null}
             </button>
+            {links.map((link) =>
+              actions === undefined ? (
+                <span key={link.id} className="layer-when-link">{link.text}</span>
+              ) : (
+                <button
+                  key={link.id}
+                  type="button"
+                  className="layer-when-link"
+                  aria-label={link.label}
+                  onClick={() => {
+                    onSelect(layer.id);
+                    window.requestAnimationFrame(() => setOpenWhen((n) => n + 1));
+                  }}
+                >
+                  {link.text}
+                </button>
+              ),
+            )}
+            </div>
           );
         })}
       </div>
@@ -203,6 +227,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
           {selected === undefined ? null : (
             <span ref={menuButton} className="layer-menu-slot">
             <LayerMenu
+              layout={layout}
               layers={layers}
               index={selectedIndex}
               transparentCount={countKind(selected, "transparent")}
@@ -214,6 +239,8 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               onStyle={(label, color) => actions.style(selected.id, label, color)}
               onConvert={(from, to) => actions.convert(selected.id, from, to)}
               onDelete={() => setDeleting(selected.id)}
+              onCondition={actions.condition}
+              openWhen={openWhen}
             />
             </span>
           )}
@@ -223,6 +250,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
         <DeleteLayerDialog
           layerName={niceLayerName(layers.find((layer) => layer.id === deleting)?.name ?? "this layer")}
           references={layerReferences(layout, deleting)}
+          goesWith={goingWithLayer(layout, deleting)}
           onDelete={(drops) => actions.remove(deleting, drops)}
           nameFunction={actions.nameFunction}
           onOpenKey={actions.openKey}

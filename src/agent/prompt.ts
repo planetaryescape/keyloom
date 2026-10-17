@@ -38,11 +38,13 @@ export function boardContext(board: Board): string {
 export function firmwareCapabilities(firmware: Layout["firmware"]): string {
   const common = [
     "Bindings: key (with optional modifiers), modifier, holdTap (tap half plus a modifier or layer hold, with a hold-tap profile), layer (momentary, toggle, to, oneShot), macro, tapDance (a key with up to four slots), transparent, none.",
+    "Conditional layers (tri-layer): a layout can say \"when layers A and B are both on, also turn on layer C\" with one `upsertConditionalLayer` op (an `id`, `ifLayerIds` of exactly two layer ids, and `thenLayerId`), removed with `removeConditionalLayer`. C needs no key of its own, and a layer that only a condition turns on counts as reachable.",
     "Macros are steps: tap, press, release (a key code and/or modifiers), waitMs, and text (typed as written; US-layout letters, digits and punctuation, with Shift added where a character needs it). Tap dances are entries in the layout with a tap slot and optionally hold, doubleTap and tapThenHold slots (each a key, modifier, layer or macro action) and an optional termMs; a key uses one with a tapDance binding. Combos fire an output binding when several positions are pressed together.",
   ];
   const qmk = [
     "QMK hold-tap feel: profiles can differ in TAPPING_TERM and QUICK_TAP_TERM (milliseconds) and in PERMISSIVE_HOLD and HOLD_ON_OTHER_KEY_PRESS (true or false), because QMK sets those per key. CHORDAL_HOLD, FLOW_TAP_TERM and RETRO_TAPPING are layout-wide: change them with setFirmwareSetting, not in a profile. Two keys with the same tap and hold must share their values.",
     "QMK: the tap half of a hold-tap must be a basic keycode with no modifiers. One right-hand modifier makes a whole mod-tap right-handed, so mixed left and right modifiers on one hold-tap are an error.",
+    "QMK: a conditional layer is written as `layer_state_set_user` with `update_tri_layer_state`. If the layout keeps Oryx or hand-written code that already defines `layer_state_set_user`, the validator refuses to add one beside it (conditional_layer_blocked).",
     "QMK: at most 32 layers, 8 when LAYER_STATE_8BIT is set. A tap dance becomes an Oryx-style state machine; one that keyloom could not read stays a native binding, and then keyloom cannot add tap dances beside it.",
   ];
   const zmk = [
@@ -50,6 +52,7 @@ export function firmwareCapabilities(firmware: Layout["firmware"]): string {
     "ZMK: hold-tap behaviours have flavors and per-key timing set through hold-tap profiles. A profile's options are the behaviour's properties: flavor (hold-preferred, balanced, tap-preferred, tap-unless-interrupted), tapping-term-ms, quick-tap-ms, require-prior-idle-ms (milliseconds), hold-trigger-key-positions (a list of key positions) and a true or false flag such as hold-trigger-on-release. The built-in profiles mt and lt can be tuned like any other.",
   ];
   const kanata = [
+    "kanata: no conditional layers. kanata keeps one active layer at a time, so \"when two layers are held\" can't be written. keyloom keeps the condition in the layout, leaves it out of the config and warns (conditional_layer_unsupported); say so instead of promising it will work. Do not propose one for the MacBook unless BK asks.",
     "kanata (the MacBook's built-in keyboard): this is a software remapper, not firmware. Apply writes a config file and reloads it in under a second, with no build or flash. Hold-tap profiles take a variant (tap-hold, tap-hold-press, tap-hold-release, tap-hold-press-timeout, tap-hold-tap-keys, tap-hold-opposite-hand, tap-hold-opposite-hand-release), hold-ms, tap-repress-ms and optionally require-prior-idle-ms. The opposite-hand variants make a home-row modifier hold only when the other hand's key follows, which stops same-hand rolls becoming modifiers.",
     "kanata: a tap dance counts taps, so a hold or tap-then-hold slot can't be written. A macro can hold only modifiers across its steps. The fn/globe key stays as it is. Keep Escape and a Control key reachable: the validator refuses a layout without them, because this is the one keyboard that can't be swapped for another.",
   ];

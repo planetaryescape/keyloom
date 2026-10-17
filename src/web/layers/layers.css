@@ -10,7 +10,7 @@
 .layer-tabs-wrap .layer-tabs {
   display: flex;
   min-width: 0;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--space-1);
   overflow-x: auto;
   padding: var(--space-1);
@@ -156,6 +156,8 @@
 /* Two classes, so it outranks .menu-list's absolute position whichever stylesheet loads last. */
 .menu-list.layer-menu-list {
   position: fixed;
+  /* The strip's menu opens above its button with an inline bottom; .menu-list's own top would otherwise squeeze it to nothing. */
+  top: auto;
   right: auto;
   min-width: 248px;
   max-width: calc(100vw - 16px);
@@ -382,4 +384,99 @@
 .layer-tabs-wrap:hover .layer-tab-actions,
 .layer-tabs-wrap:focus-within .layer-tab-actions {
   opacity: 1;
+}
+
+/* A tab and, under it, the quiet link to the condition that turns its layer on ("LOW + RAI"). Always shown, muted like the tab keys. */
+.layer-tab-cell {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.layer-tab-cell .layer-tab {
+  flex: 1 1 auto;
+}
+
+.layer-when-link {
+  min-height: 24px;
+  padding: 2px var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+span.layer-when-link {
+  text-decoration: none;
+  cursor: default;
+}
+
+.layer-when-link:hover {
+  color: var(--ink);
+}
+
+/* The menu's conditions view: "Also on when [A] and [B] are held", one row per condition. */
+.layer-when {
+  display: flex;
+  width: min(300px, calc(100vw - 24px));
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.layer-when p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.layer-when-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.layer-when-row legend {
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.layer-when-pick {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.layer-when-pick select {
+  min-width: 0;
+  min-height: 32px;
+  max-width: 120px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-page);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.layer-when-end {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }

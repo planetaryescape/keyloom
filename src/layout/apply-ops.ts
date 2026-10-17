@@ -130,6 +130,8 @@ function applyOp(doc: Layout, op: ChangeOp): void {
     case "removeTapDance": return remove(doc.tapDances, op.tapDanceId, "tap dance");
     case "upsertCombo": return upsert(doc.combos, op.combo);
     case "removeCombo": return remove(doc.combos, op.comboId, "combo");
+    case "upsertConditionalLayer": return upsert(doc.conditionalLayers, op.conditionalLayer);
+    case "removeConditionalLayer": return remove(doc.conditionalLayers, op.conditionalLayerId, "conditional layer");
     case "upsertHoldTapProfile": return upsert(doc.holdTapProfiles, op.profile);
     case "setFirmwareSetting": {
       const at = doc.settings.findIndex((s) => s.firmware === op.setting.firmware && s.key === op.setting.key);

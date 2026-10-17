@@ -2,7 +2,7 @@
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { ImportReport, NativeItem } from "../../layout/import-report.ts";
 import {
-  type Binding, type Combo, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough,
+  type Binding, type Combo, type ConditionalLayer, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough,
 } from "../../layout/schema.ts";
 import { type KeptBehavior, type MapContext, mapBinding } from "./bindings.ts";
 import { BUILTIN_NAMES, BUILTIN_OPTIONS, BUILTIN_PROFILES, type HoldKind } from "./builtins.ts";
@@ -11,6 +11,7 @@ import { parseConf } from "./conf.ts";
 import { type DtItem, type DtNode, parseDts } from "./dts.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
 import { importCombo } from "./import-combos.ts";
+import { CONDITIONAL_COMPATIBLE, importConditionalLayer } from "./import-conditional.ts";
 import { annotateZmkLayerRefs } from "./layer-refs.ts";
 import { importHoldTap, importMacro, isHoldTap, isMacro } from "./import-behaviors.ts";
 import { ZmkImportError } from "./import-error.ts";
@@ -24,7 +25,7 @@ export type ZmkImportResult = { layout: Layout; report: ImportReport; suggestedN
 
 // Where each kind of verbatim block goes in the generated file; the importer sorts into the same order so
 // import, generate, import is stable (06).
-const SECTION_ORDER = ["include", "define", "cpp", "behavior", "macro", "root", "combo", "top", "conf"] as const;
+const SECTION_ORDER = ["include", "define", "cpp", "behavior", "macro", "root", "combo", "conditional", "top", "conf"] as const;
 type Section = (typeof SECTION_ORDER)[number];
 
 type Kept = { section: Section; file: string; anchor: string; source: string };
@@ -70,6 +71,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   const holdKinds = new Map<string, HoldKind>(BUILTIN_PROFILES);
   const macros: Macro[] = [];
   const keptBehaviors = new Map<string, KeptBehavior>();
+  const conditionalContainers: DtNode[] = [];
   for (const root of roots) {
     for (const container of root.children) {
       if (container === keymapNodes[0]) continue;
@@ -93,6 +95,8 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
             warnings.push(`macro ${n.label ?? n.name} kept as written: ${r}`);
           } else macros.push(r);
         }
+      } else if (isConditionalContainer(container)) {
+        conditionalContainers.push(container);
       } else if (container.name !== "combos" && stringOf(container, "compatible") !== "zmk,combos") {
         keep("root", `root:${container.name}`, container.source);
       }
@@ -178,6 +182,24 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
     }
   }
 
+  // --- conditional layers ---------------------------------------------------------------------
+  const conditionalLayers: ConditionalLayer[] = [];
+  const conditionIds = new Set<string>();
+  for (const container of conditionalContainers) {
+    for (const n of container.children) {
+      const r = importConditionalLayer(n, layerIds, defines, conditionIds);
+      if (typeof r === "string") {
+        keep("conditional", `conditional:${n.name}`, n.source);
+        warnings.push(`conditional layer ${n.name} kept as written: ${r}`);
+      } else {
+        conditionIds.add(r.conditionalLayer.id);
+        conditionalLayers.push(r.conditionalLayer);
+        // The condition is written back by layer index, so a `#define LOWER 1` it used must still be known as a layer define (D-360).
+        for (const text of r.written) keymapCalls.push({ name: "mo", params: [text] });
+      }
+    }
+  }
+
   // --- settings ------------------------------------------------------------------------------
   const conf = files.conf === undefined ? { settings: [], other: [] } : parseConf(files.conf);
   for (const o of conf.other) keep("conf", `line:${o.line}`, o.text, CONF_FILE);
@@ -205,6 +227,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
     macros,
     tapDances: [],
     combos: numbered.combos,
+    conditionalLayers,
     holdTapProfiles,
     settings: conf.settings,
     passthrough,
@@ -229,6 +252,10 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
     },
   };
 }
+
+/** A `zmk,conditional-layers` node whose own properties are only its compatible, so that writing it back loses nothing. */
+const isConditionalContainer = (n: DtNode): boolean =>
+  stringOf(n, "compatible") === CONDITIONAL_COMPATIBLE && n.props.every((p) => p.name === "compatible");
 
 function sortItem(item: DtItem, defines: Map<string, string>, kept: Kept[], roots: DtNode[], topLevel: DtNode[]): void {
   switch (item.kind) {

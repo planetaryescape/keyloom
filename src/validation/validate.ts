@@ -5,6 +5,7 @@ import { applyOps } from "../layout/apply-ops.ts";
 import { type ChangeOp, ChangeOpSchema, type Slot } from "../layout/change.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { type Binding, type Layout, LayoutSchema } from "../layout/schema.ts";
+import { conditionalLayerWarnings } from "./conditional-layer-rules.ts";
 import { type DecisionFact, contradictsDecision, touchedDecisions } from "./decision-rules.ts";
 import { homerowSameHandMods, retunedSlots } from "./hold-tap-rules.ts";
 import type { Issue, ValidationResult } from "./result.ts";
@@ -52,7 +53,7 @@ export type EvaluationContext = { pinned?: readonly PinnedPriority[]; decisions?
  * here read against the layout alone. The board review turns each into an item (D-340).
  */
 export const standingIssues = (board: BoardDefinition, doc: Layout): Issue[] => [
-  ...documentRules(board, doc), ...doubledLetterTapdance(doc), ...tapDanceWarnings(doc), ...macroSecrets(doc), ...homerowSameHandMods(board, doc),
+  ...documentRules(board, doc), ...doubledLetterTapdance(doc), ...tapDanceWarnings(doc), ...macroSecrets(doc), ...homerowSameHandMods(board, doc), ...conditionalLayerWarnings(doc),
 ];
 
 export const validate = (board: BoardDefinition, before: Layout, ops: readonly ChangeOp[], context: EvaluationContext = {}): ValidationResult =>
@@ -104,6 +105,10 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   // The same for a tap dance that does less than it looks like: only one this change adds or alters is news.
   const knownSame = new Set([...tapDanceWarnings(before), ...macroSecrets(before)].map(issueKey));
   warnings.push(...[...tapDanceWarnings(after), ...macroSecrets(after)].filter((i) => !knownSame.has(issueKey(i))));
+
+  // A condition kanata can't write is news when this change adds it, not on every edit after.
+  const knownConditions = new Set(conditionalLayerWarnings(before).map(issueKey));
+  warnings.push(...conditionalLayerWarnings(after).filter((i) => !knownConditions.has(issueKey(i))));
 
   const changed = changedSlots(before, after);
   const beforeHomes = functionHomes(before, reachableLayers(before));

@@ -135,16 +135,31 @@ export function layerGraph(doc: Layout): LayerEdge[] {
   return edges;
 }
 
-/** The layers the base layer can get to, base included. */
+/**
+ * The layers the base layer can get to, base included. A layer a condition turns on counts as reached once both layers it waits
+ * for are (D-386): it is reached by holding those two, which is a way to it as much as a key is. This reads "reachable" as "can
+ * be on", so it does not ask whether the two can be held at once; the generators and the emulator tests cover that.
+ */
 export function reachableLayers(doc: Layout, edges: LayerEdge[] = layerGraph(doc)): Set<string> {
   const base = baseId(doc);
+  const known = new Set(doc.layers.map((l) => l.id));
   const seen = new Set<string>(base ? [base] : []);
   const queue = [...seen];
-  for (let id = queue.pop(); id !== undefined; id = queue.pop()) {
-    for (const e of edges) {
-      if (e.from === id && !seen.has(e.to)) {
-        seen.add(e.to);
-        queue.push(e.to);
+  for (let grew = true; grew; ) {
+    for (let id = queue.pop(); id !== undefined; id = queue.pop()) {
+      for (const e of edges) {
+        if (e.from === id && !seen.has(e.to)) {
+          seen.add(e.to);
+          queue.push(e.to);
+        }
+      }
+    }
+    grew = false;
+    for (const c of doc.conditionalLayers) {
+      if (known.has(c.thenLayerId) && !seen.has(c.thenLayerId) && c.ifLayerIds.every((id) => seen.has(id))) {
+        seen.add(c.thenLayerId);
+        queue.push(c.thenLayerId);
+        grew = true;
       }
     }
   }

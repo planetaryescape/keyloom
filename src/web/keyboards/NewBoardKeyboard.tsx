@@ -39,7 +39,7 @@ export function NewBoardKeyboard({ board, mode, homeRow, mapped, placed, onPickR
   const blank = useMemo<Layout>(() => ({
     schemaVersion: 1, boardId: "new", firmware: "zmk",
     layers: [{ id: "base", name: "Base", bindings: board.keys.map(() => ({ kind: "none" as const })) }],
-    macros: [], tapDances: [], combos: [], holdTapProfiles: [], settings: [], passthrough: [],
+    macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [],
   }), [board.keys]);
   const descriptions = useMemo(
     () => board.keys.map((_, i) => describeKey(mode === "put" && mapped !== null ? mapped.after : blank, 0, i)),

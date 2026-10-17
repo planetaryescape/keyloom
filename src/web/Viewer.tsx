@@ -57,6 +57,7 @@ import type { ComboLine } from "./keyboard/ComboLines.tsx";
 import { Keyboard, type KeyboardHandle } from "./keyboard/Keyboard.tsx";
 import { useColourway } from "./keyboard/colourway.ts";
 import { LayerTabs, type LayerActions } from "./keyboard/LayerTabs.tsx";
+import { deleteLayerOps } from "./layers/conditional-ops.ts";
 import { SelectionBar } from "./keyboard/SelectionBar.tsx";
 import { layerLight, reachedLayer, reachKey } from "./light/layer-light.ts";
 import { extendSelection } from "./keyboard/selection.ts";
@@ -707,10 +708,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           },
           remove: async (id, drops) => {
             const name = layerNameOf(id);
-            const outcome = await perform([...dropOps(drops, `Deleted layer ${name}`), { op: "removeLayer", layerId: id }], `Deleted layer ${name}`, { quiet: true });
+            const outcome = await perform(deleteLayerOps(layout, id, dropOps(drops, `Deleted layer ${name}`)), `Deleted layer ${name}`, { quiet: true });
             if (outcome.ok && editing?.layerId === id) closeEditor(false);
             return outcome;
           },
+          condition: (ops, summary) => perform(ops, summary, { quiet: true }),
           openKey: (slot) => {
             setLayerId(slot.layerId);
             openEditor(slot.position, slot.layerId);

@@ -34,6 +34,7 @@ export function otherChanges(diff: Diff, layerName: (id: string) => string = (id
   named("Macro", diff.macros);
   named("Tap dance", diff.tapDances);
   named("Combo", diff.combos);
+  named("Conditional layer", diff.conditionalLayers);
   named("Timing", diff.holdTapProfiles);
   if (diff.lighting.length > 0) out.push(`Lighting changed on ${diff.lighting.map(layerName).join(", ")}`);
   if (diff.passthrough) out.push("Firmware code passed through as-is changed");

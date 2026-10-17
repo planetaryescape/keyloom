@@ -90,7 +90,7 @@ export function blankDocument(boardId: string): Layout {
   return {
     schemaVersion: 1, boardId: def.id, firmware: def.firmware,
     layers: [{ id: "base", name: "Base", bindings: Array.from({ length: def.keyCount }, () => ({ kind: "none" as const })) }],
-    macros: [], tapDances: [], combos: [], holdTapProfiles: [], settings: [], passthrough: [],
+    macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [],
   };
 }
 

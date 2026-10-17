@@ -1,6 +1,7 @@
 // Deterministic answers about a layout that the tools return, so the model never has to find
 // "where is Option" by reading grids (03#tools). Pure: it reads a document and a board definition.
 import type { BoardDefinition } from "../boards/schema.ts";
+import { conditionsThatTurnOn } from "../layout/conditional-layers.ts";
 import { bindingFunctions, tapDanceSlots } from "../layout/functions.ts";
 import { isKeyCode } from "../layout/keycodes.ts";
 import { type GridContext, bindingLabel } from "../layout/render-grid.ts";
@@ -75,6 +76,7 @@ export function layerAccess(doc: Layout, board: BoardDefinition, layerId: string
   for (const combo of doc.combos) {
     if (combo.output.kind === "layer" && combo.output.layerId === layerId) out.push(`${combo.output.action} by combo ${combo.id}`);
   }
+  for (const c of conditionsThatTurnOn(doc, layerId)) out.push(`on while ${c.ifLayerIds.map((id) => doc.layers.find((l) => l.id === id)?.name ?? id).join(" and ")} are both on (conditional layer ${c.id})`);
   return out.length ? out : ["not reachable from any key"];
 }
 

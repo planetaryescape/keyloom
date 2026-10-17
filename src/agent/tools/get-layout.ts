@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { capabilityLine } from "../../boards/capabilities.ts";
 import { keyName, keyPlace } from "../../boards/key-names.ts";
+import { conditionalLayerName } from "../../layout/conditional-layers.ts";
 import { type GridContext, bindingLabel, renderLayerGrid } from "../../layout/render-grid.ts";
 import type { Layer } from "../../layout/schema.ts";
 import type { AgentPorts, LayoutSnapshot } from "../ports.ts";
@@ -36,6 +37,12 @@ const cell = (layer: Layer, position: number, ctx: GridContext) => {
   const b = layer.bindings[position];
   return b ? bindingLabel(b, ctx) : "?";
 };
+
+/** Each condition by id and by the layers' names, so the agent can change or remove it (D-389). */
+function conditionalLayersText(document: LayoutSnapshot["document"]): string {
+  if (document.conditionalLayers.length === 0) return "Conditional layers: none.";
+  return ["Conditional layers (id: when both layers are on, also turn on):", ...document.conditionalLayers.map((c) => `- ${c.id}: ${conditionalLayerName(document, c)} (layer ids ${c.ifLayerIds.join(" + ")} gives ${c.thenLayerId})`)].join("\n");
+}
 
 /** Each hold-tap profile with its options and the keys that use it, because tuning a key's feel means editing its profile (D-017). */
 function profilesText(document: LayoutSnapshot["document"], board: LayoutSnapshot["board"]): string {
@@ -86,6 +93,7 @@ export const getLayoutTool = (ports: AgentPorts) =>
         ...(other ? [`READ-ONLY: this is another of BK's layouts, not the one you are working on (${here.layoutName}). Positions below are positions on ${snapshot.board.definition.name}; do not use them in ops for ${here.layoutName}. Use map_keys to translate.`] : []),
         capabilityLine(snapshot.board.definition),
         `Macros: ${macros}.`,
+        conditionalLayersText(snapshot.document),
         profilesText(snapshot.document, snapshot.board),
         "Legend: ⌥ Option/Alt, ⌘ Command/GUI, ⌃ Ctrl, ⇧ Shift; an r prefix means the right-hand modifier; a/b means tap a, hold b; ▽ transparent; MO/TO/TG layer keys.",
         ...sections,

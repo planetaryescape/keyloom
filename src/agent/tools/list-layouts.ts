@@ -13,7 +13,7 @@ export function layoutSummary(s: LayoutSnapshot, current: boolean): string {
     `  Board: ${d.vendor} ${d.name} (${d.id}), ${d.firmware.toUpperCase()}, ${d.keyCount} keys.`,
     `  Layers (${s.document.layers.length}): ${layers}.`,
     `  ${capabilityLine(d)}${coloured.length ? ` Has LED colours on: ${coloured.join(", ")}.` : ""}`,
-    `  ${s.document.macros.length} macros, ${s.document.tapDances.length} tap dances, ${s.document.combos.length} combos, ${s.document.holdTapProfiles.length} hold-tap profiles.`,
+    `  ${s.document.macros.length} macros, ${s.document.tapDances.length} tap dances, ${s.document.combos.length} combos, ${s.document.conditionalLayers.length} conditional layers, ${s.document.holdTapProfiles.length} hold-tap profiles.`,
   ].join("\n");
 }
 

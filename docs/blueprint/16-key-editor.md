@@ -1,6 +1,6 @@
 # 16: Key editor: everything about a key is built on the key
 
-Status: built in v0.11.0 to v0.19.0 (rungs 9, 11, 14, 15, 16 and 18), as of v0.36.1. That covers changing any key, the key panel, tap dance slots, macros, combos from a selection, layer management, moving and copying keys, history, the settings page and per-key and per-layer lights. Not built: conditional layers and the features in "What keyloom doesn't take, and why" (D-105). The hardware checks in the rungs' "done when" lines are mostly unrecorded; see [13](13-roadmap.md). Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
+Status: built in v0.11.0 to v0.19.0 (rungs 9, 11, 14, 15, 16 and 18), as of v0.36.1. That covers changing any key, the key panel, tap dance slots, macros, combos from a selection, layer management, moving and copying keys, history, the settings page and per-key and per-layer lights. Conditional layers were added afterwards (D-385 to D-389). Not built: the features in "What keyloom doesn't take, and why" (D-105). The hardware checks in the rungs' "done when" lines are mostly unrecorded; see [13](13-roadmap.md). Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
 
 This chapter adds what keyloom's web editor lacks compared with keymap-editor, Oryx and Vial. BK asked us to "go through every feature of nickcoutsos' configurator and every feature of oryx" and "do the same for vial", "so that we can build those features into keyloom". It replaces the binding editor in [09](09-web-editor.md#interactions) with a key panel. It also adds tap dance, macros made on the key, combos made from a selection, layer management and moving keys. How a change reaches the keyboard is in [17](17-keyboard-sync.md). How it all looks is in [18](18-visual-design.md).
 
@@ -231,6 +231,6 @@ What each tool does, and the keyloom rung that brings it ([13](13-roadmap.md)). 
 | Live writes with no flash | — | — | Yes | — | Rung 17 (after S15 and S14) |
 | Settings page with prose | Settings dialog | Yes | QMK settings tabs | — | Rung 18 |
 | Per-key and per-layer RGB | — | Yes | VialRGB | — | Rung 18 |
-| Conditional layers | Yes | — | — | Passthrough | After rung 18 |
+| Conditional layers | Yes | — | — | Layer menu: "Also on when … and … are held" (D-389) | After rung 18 |
 | Choice of AI provider | — | — | — | Anthropic API only | Rung 10 ([19](19-model-providers.md)) |
 | Agent proposals and decision memory | — | — | — | Yes | Kept |

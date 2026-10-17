@@ -51,6 +51,13 @@ describe("which key reaches a layer", () => {
     expect(words).toEqual({ before: "Hold", key: "Space", after: " on the left thumb" });
     expect(reachWords(layout, 0, {}, () => "")).toEqual({ before: "Your first layer", key: null, after: "" });
   });
+
+  test("a layer only a condition turns on says which two layers do it, instead of saying nothing reaches it (D-385)", () => {
+    const withIsland = { ...layout, layers: [...layout.layers, { id: "adj", name: "Adjust", bindings: layout.layers[1]!.bindings }], conditionalLayers: [{ id: "c", ifLayerIds: ["base", "sym"], thenLayerId: "adj" }] };
+    const words = reachWords(withIsland, layout.layers.length, {}, () => "");
+    expect(words).toEqual({ before: `On while ${layout.layers[0]!.name} and ${layout.layers[1]!.name} are held`, key: null, after: "" });
+    expect(reachWords({ ...withIsland, conditionalLayers: [] }, layout.layers.length, {}, () => "").before).toBe("No key on the first layer reaches it");
+  });
 });
 
 describe("front print words (D-267, P1 review)", () => {

@@ -128,3 +128,7 @@ The fork's `keyboards/zsa/moonlander/<rev>/keyboard.json` gives 72 keys with `x`
 - Tap-hold options on `firmware25`: `TAPPING_TERM`, per-key terms, `PERMISSIVE_HOLD`, `CHORDAL_HOLD` (opposite-hand holds for home row mods), `FLOW_TAP_TERM`, `QUICK_TAP_TERM`, `HOLD_ON_OTHER_KEY_PRESS`, `RETRO_TAPPING`. No Speculative Hold.
 - Combos (`COMBO_ENABLE`), macros, layer actions (momentary, toggle, to, one-shot layer).
 - Up to 32 layers, matching Oryx's documented limit (zsa.io/oryx, checked 2026-09-28). keyloom enforces that limit, not QMK's own.
+
+## Conditional layers
+
+A `layer_state_set_user` that is only `update_tri_layer_state` calls, and the Tri Layer feature (`TRI_LAYER_ENABLE` with `TL_LOWR` or `TL_UPPR` keys), are read into `Layout.conditionalLayers`. Generation writes one `layer_state_set_user` with a call per condition, using the layers' current numbers. A `layer_state_set_user` that does anything else stays kept code, and then keyloom adds no condition beside it. See D-387.

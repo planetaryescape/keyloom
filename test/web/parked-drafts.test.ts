@@ -7,7 +7,7 @@ import { draftsForChat, draftsOn, park, slotKey, stillApplying, unpark, type Par
 const layout = (b30: Binding): Layout => ({
   schemaVersion: 1, boardId: "zsa/moonlander", firmware: "qmk",
   layers: [{ id: "base", name: "Base", bindings: Array.from({ length: 72 }, (_, i) => (i === 30 ? b30 : { kind: "none" as const })) }],
-  macros: [], tapDances: [], combos: [], holdTapProfiles: [], settings: [], passthrough: [],
+  macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [],
 });
 const S: Binding = { kind: "key", code: "S" };
 const entry = (position: number, binding: Binding | null): Parked => ({
