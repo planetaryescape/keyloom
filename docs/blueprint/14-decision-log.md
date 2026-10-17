@@ -964,6 +964,7 @@ BK stated the product in his own words: "I can now configure all my keyboards fr
 
 ### D-262: The theme is the room, and the board's colourway follows it. (BK, Claude)
 - BK chose "the case colour follows the theme": black caps and case in the dark room, white in the light one. The Moonlander's red thumb caps stay red in both. A setting to pin the colourway to the board BK owns is deferred.
+- The pin is built (D-395): following the theme stays the default.
 
 ### D-263: Light carries meaning: a layer's colour, amber for a change not on the keyboard, green for one that is. (Claude)
 - A layer's light is its dominant LED colour when it has LEDs (BK's Oryx colours), else its chosen colour, else the colour its place picks; the first layer with neither is unlit (`src/web/light/layer-light.ts`). It is the underglow, the strip's miniature and the dot on every key that reaches the layer.
@@ -1532,3 +1533,11 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - "Make me a Colemak config" calls `create_config` (a copy of this config, or the board's blank start), and the prompt quotes no CLI command anywhere. The dev demo's first reply acts on the obvious default instead of interviewing. It never says "put" or "keyloom remap" to him. `map_keys` copies the same way: weak matches and keys with no counterpart take the default and are listed afterwards, not asked about.
 - Proof: `test/agent/ask-user.test.ts` scripts the first turn with the fakes and asserts `put_config` is called with no `ask_user` and no question; `test/app/put-macbook.test.ts` puts the Glove80 fixture on the MacBook.
 
+### D-395: A board's drawn colourway can be pinned to the one on the desk, per board; following the theme stays the default. (Colourway pin, Claude; asked by the coordinator; extends D-262, answers Q26)
+- **The setting.** "Your keyboard's colour: Follow the theme / Black / White" heads Settings, under "On screen", on a board whose definition lists colourways. It applies at once and isn't part of Apply's staged change, since nothing goes to the keyboard. It is kept per board id in this browser (`keyloom.colourway.<board id>`, beside the theme in `shell/storage.ts`), because it is a matter of display like the theme. A pinned id that the board no longer lists falls back to following the theme.
+- **The makers' colourways, in `board.json` `display.colourways`.** Each has a name, the maker's own name, and separate case and cap tones. ZSA's buy page offers the Moonlander in "Dark Matter" (black case, black caps) and "Moonlit" (white case, white caps), read from its configurator, 2026-10-17. MoErgo's store sells the Glove80 in "Grey" and "White" (`/products.json`, 2026-10-17), not black, and its product photo of the grey board shows a dark grey case with white caps. So the Glove80's options are Grey (dark case, white caps) and White. The red thumb caps stay red.
+- **Drawing.** With a pin, the case and caps keep their colours in both themes; the stage, the underglow and the chrome still follow the theme. `Keyboard` marks only a part whose tone differs from the room (`data-case-room`, `data-caps-room`, `keyboard/colourway.ts`), so a part that matches the room keeps the theme's own tokens. Marks on and around the caps (rings, combo lines and labels, halos) follow the case they sit on.
+- **Shading out of the room.** A part outside its room has its own shading in `keyboard/colourway.css`, not the other theme's tokens copied over:
+  - a white board in a dark room is a shade under the light room's white so it doesn't glare, and casts a deeper shadow onto the stage;
+  - a black board in a light room is lifted a touch, its edges and cap tops catch the room's light, and its shadow is softer and takes the room's tint.
+- **Checks.** `test/web/contrast.test.ts` composes every case and cap tone in both rooms as the page does, and holds each to the board's contrast pairs and to Inspect's tints.

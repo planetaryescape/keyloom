@@ -204,3 +204,55 @@ describe("non-text contrast", () => {
     }
   });
 });
+
+// A pinned colourway (D-395): colourway.css redraws a case or the caps out of their room. Every board pair must hold for every pin in
+// both rooms, with the room's own tokens under whatever the pin replaces, as the page composes them.
+const colourwayCss = await Bun.file(new URL("../../src/web/keyboard/colourway.css", import.meta.url)).text();
+function block(selector: string): Map<string, string> {
+  const start = colourwayCss.indexOf(selector);
+  if (start < 0) throw new Error(`colourway.css has no ${selector}`);
+  const body = colourwayCss.slice(colourwayCss.indexOf("{", start) + 1, colourwayCss.indexOf("}", start));
+  return new Map([...body.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/g)].map((m) => [m[1] as string, m[2] as string]));
+}
+const pinned = {
+  case: { light: block('.keyboard[data-case-room="light"]'), dark: block('.keyboard[data-case-room="dark"]') },
+  caps: { light: block('.keyboard[data-caps-room="light"]'), dark: block('.keyboard[data-caps-room="dark"]') },
+};
+// What a pin can't change: chrome outside the board, and the laptop's keys (a MacBook has no colourways).
+// Combo labels inside the board are drawn on --surface with --ink, so those pairs stay in; the status inks on a card are chrome.
+const BOARD_PAIRS = PAIRS.filter(([fg, bg]) => fg === "color-combo" || (!fg.startsWith("color-") && !fg.startsWith("mac-") && bg !== "room-spot" && !(fg.endsWith("-ink") && bg === "surface")));
+
+describe("a pinned colourway keeps the board readable", () => {
+  for (const room of ["light", "dark"] as const) {
+    for (const caseTone of ["light", "dark"] as const) {
+      for (const capsTone of ["light", "dark"] as const) {
+        test(`${caseTone} case, ${capsTone} caps, in the ${room} room`, () => {
+          const values = new Map(themes[room]);
+          if (caseTone !== room) for (const [k, v] of pinned.case[caseTone]) values.set(k, v);
+          if (capsTone !== room) for (const [k, v] of pinned.caps[capsTone]) values.set(k, v);
+          const failures: string[] = [];
+          for (const [fg, bg, minimum] of BOARD_PAIRS) {
+            const got = ratio(values.get(fg) as string, values.get(bg) as string);
+            if (got < minimum) failures.push(`${fg} on ${bg}: ${got.toFixed(2)}:1, needs ${minimum}:1`);
+          }
+          for (const tint of ["cap-hold", "cap-layer", "cap-macro"]) {
+            for (const face of ["top-lo", "top-hi"]) {
+              const got = ratio(values.get("legend") as string, blend(values.get(tint) as string, values.get(face) as string, 0.55));
+              if (got < TEXT) failures.push(`legend on ${tint} over ${face}: ${got.toFixed(2)}:1`);
+            }
+          }
+          expect(failures).toEqual([]);
+        });
+      }
+    }
+  }
+
+  test("a pin's case or caps declare every board token the theme does, so nothing falls through to the room's", () => {
+    const capNames = ["skirt-hi", "skirt-lo", "top-hi", "top-lo", "legend", "front", "ghost", "pending-ink", "red-skirt-hi", "red-skirt-lo", "red-top-hi", "red-top-lo", "red-legend", "red-front", "keycap-red", "cap-key", "cap-key-ink", "cap-modifier", "cap-hold", "cap-layer", "cap-macro", "cap-dance", "cap-native"];
+    const caseNames = ["room", "ink", "ink-2", "ink-3", "surface", "pending", "ok", "bad", "finding", "case-hi", "case-lo", "leg", "knob", "knurl", "hole", "ball-hi", "ball-lo", "screen", "color-combo", "layer-1", "layer-6"];
+    for (const tone of ["light", "dark"] as const) {
+      expect(capNames.filter((n) => !pinned.caps[tone].has(n))).toEqual([]);
+      expect(caseNames.filter((n) => !pinned.case[tone].has(n))).toEqual([]);
+    }
+  });
+});

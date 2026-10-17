@@ -134,9 +134,26 @@ export const BoardDefinitionSchema = z.strictObject({
           }),
         )
         .optional(),
+      // The colourways the maker sells (D-395), so BK can pin the drawn board to the one on his desk. Case and caps are separate tones
+      // because they need not match: a grey Glove80 has white caps. Absent means the board follows the theme only (D-262).
+      colourways: z
+        .array(
+          z.strictObject({
+            id: z.string().regex(/^[a-z0-9-]+$/),
+            // What the setting says: "Black", "Grey", "White".
+            name: z.string().min(1),
+            // The maker's own name for it, where it differs ("Dark Matter").
+            maker: z.string().min(1).optional(),
+            case: z.enum(["dark", "light"]),
+            caps: z.enum(["dark", "light"]),
+          }),
+        )
+        .min(2)
+        .optional(),
     })
     .optional(),
 });
+export type Colourway = NonNullable<NonNullable<BoardDefinition["display"]>["colourways"]>[number];
 export type BoardDefinition = z.infer<typeof BoardDefinitionSchema>;
 
 /** A board whose "firmware" is a software remapper's config file: nothing to build in Docker or flash (21). */

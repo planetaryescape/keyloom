@@ -1,0 +1,182 @@
+/*
+ * A pinned colourway (D-395): the board keeps the colours of the one on BK's desk while the room around it follows the theme.
+ * Keyboard.tsx marks a part only when its tone differs from the room's (colourway.ts), so a part that matches the room keeps the
+ * theme's own tokens. A part out of its room is not just the other theme's tokens: a white board in a dark room is lit less and
+ * casts a deeper shadow onto the stage, and a black board in a light room catches the light along its edges.
+ *
+ * The case block also carries the marks drawn on and around the caps (rings, combo lines, halos and labels), because they sit on
+ * the case and must read against it. The caps block carries what is printed and drawn on the caps. contrast.test.ts checks every
+ * pinned combination with the same pairs as the themes.
+ */
+
+/* A white case in a dark room: a shade under the light room's white so it doesn't glare, with a deep shadow on the dark stage. */
+.keyboard[data-case-room="light"] {
+  --room: #e4e5e8;
+  --ink: #141519;
+  --ink-2: #464a52;
+  --ink-3: #5f636c;
+  --surface: #ffffff;
+  --surface-2: #f3f3f5;
+  --surface-3: #e8e9ec;
+  --line: rgb(16 18 24 / 0.09);
+  --line-2: rgb(16 18 24 / 0.16);
+  --primary: #141519;
+  --primary-ink: #ffffff;
+  --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
+  --pending: #a86500;
+  --ok: #16a05a;
+  --ok-ink: #13723f;
+  --bad: #c0362c;
+  --bad-ink: #a3170f;
+  --finding: #d23a52;
+  --finding-ink: #b0263d;
+  --rec: #e0324a;
+  --color-combo: #464a52;
+  --case-hi: #ededeb;
+  --case-lo: #d8d8d5;
+  --case-rim: rgb(255 255 255 / 0.55);
+  --case-shadow: rgb(0 0 0 / 0.78);
+  --case-seam: rgb(40 44 60 / 0.42);
+  --leg: #8e9095;
+  --leg-rim: rgb(40 44 60 / 0.35);
+  --knob: #6f7277;
+  --knurl: #45474c;
+  --hole: #2a2c31;
+  --ball-hi: #ffffff;
+  --ball-lo: #6f727a;
+  --ball-socket: #2a2c31;
+  --ball-socket-rim: rgb(40 44 60 / 0.35);
+  --screen: #17181b;
+  --screen-rim: rgb(0 0 0 / 0.5);
+  --well: rgb(40 44 60 / 0.12);
+  --layer-1: #8a93a3;
+  --layer-2: #2f7bff;
+  --layer-3: #ff3b30;
+  --layer-4: #21b26a;
+  --layer-5: #8b5cff;
+  --layer-6: #ff9f1a;
+}
+
+/* A black case in a light room: the dark room's case, a touch lifted, its edges catching the room's light, and a softer shadow. */
+.keyboard[data-case-room="dark"] {
+  --room: #0e0f12;
+  --ink: #eef0f3;
+  --ink-2: #b3b7bf;
+  --ink-3: #9298a2;
+  --surface: #191a1e;
+  --surface-2: #222429;
+  --surface-3: #2b2d33;
+  --line: rgb(255 255 255 / 0.08);
+  --line-2: rgb(255 255 255 / 0.14);
+  --primary: #f3f4f6;
+  --primary-ink: #111214;
+  --card-shadow: 0 30px 70px rgb(30 34 48 / 0.3), 0 3px 10px rgb(30 34 48 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --shadow-pop: 0 30px 70px rgb(30 34 48 / 0.3), 0 3px 10px rgb(30 34 48 / 0.18);
+  --pending: #ffb340;
+  --ok: #3ddc84;
+  --ok-ink: #6fdc9b;
+  --bad: #ff6b5e;
+  --bad-ink: #ff8a80;
+  --finding: #ff6b7d;
+  --finding-ink: #ff9aa6;
+  --rec: #ff4d5e;
+  --color-combo: #b3b7bf;
+  --case-hi: #2a2c30;
+  --case-lo: #1a1b1e;
+  --case-rim: rgb(255 255 255 / 0.18);
+  --case-shadow: rgb(30 34 48 / 0.32);
+  --case-seam: rgb(0 0 0 / 0.7);
+  --leg: #3b3d42;
+  --leg-rim: rgb(255 255 255 / 0.14);
+  --knob: #a8acb2;
+  --knurl: #5f636a;
+  --hole: #050506;
+  --ball-hi: #e4e6ea;
+  --ball-lo: #2c2e34;
+  --ball-socket: #050506;
+  --ball-socket-rim: rgb(255 255 255 / 0.18);
+  --screen: #08090a;
+  --screen-rim: rgb(255 255 255 / 0.08);
+  --well: rgb(0 0 0 / 0.42);
+  --layer-1: #9aa3b2;
+  --layer-2: #3d86ff;
+  --layer-3: #ff4136;
+  --layer-4: #2bd67b;
+  --layer-5: #9466ff;
+  --layer-6: #ffa52e;
+}
+
+/* White caps in a dark room: lit from above, their skirts falling into the room's shade, and a deeper drop. */
+.keyboard[data-caps-room="light"] {
+  --skirt-hi: #e3e3e1;
+  --skirt-lo: #c6c7c9;
+  --top-hi: #f7f7f5;
+  --top-lo: #ececea;
+  --top-rim: rgb(255 255 255 / 0.75);
+  --legend: #1a1b1e;
+  --front: #3f4249;
+  --ghost: #50535a;
+  --pending-ink: #7a4500;
+  --cap-drop: rgb(0 0 0 / 0.5);
+  --cap-shadow-edge: rgb(0 0 0 / 0.42);
+  --cap-highlight: rgb(255 255 255 / 0.75);
+  --red-skirt-hi: #b83026;
+  --red-skirt-lo: #9a231c;
+  --red-top-hi: #cf4037;
+  --red-top-lo: #c23a30;
+  --red-legend: #ffffff;
+  --red-front: #ffe9e6;
+  --keycap-red: #c63a31;
+  --cap-key: #f5f5f4;
+  --cap-key-ink: #1a1b1e;
+  --cap-modifier: #dde1e8;
+  --cap-modifier-ink: #1f2530;
+  --cap-hold: #f3dcb0;
+  --cap-hold-ink: #4a2e00;
+  --cap-layer: #d3defb;
+  --cap-layer-ink: #14286b;
+  --cap-macro: #ecd6f7;
+  --cap-macro-ink: #4e1869;
+  --cap-dance: #f8d6e1;
+  --cap-dance-ink: #6a1230;
+  --cap-native: #b6e4da;
+  --cap-native-ink: #06453c;
+}
+
+/* Black caps in a light room: the dark room's caps with a brighter rim along the top face and a lighter, room-coloured drop. */
+.keyboard[data-caps-room="dark"] {
+  --skirt-hi: #2a2b30;
+  --skirt-lo: #161719;
+  --top-hi: #3b3d43;
+  --top-lo: #2d2f34;
+  --top-rim: rgb(255 255 255 / 0.18);
+  --legend: #eef0f2;
+  --front: #aeb2ba;
+  --ghost: #8f949c;
+  --pending-ink: #ffb340;
+  --cap-drop: rgb(30 34 48 / 0.5);
+  --cap-shadow-edge: rgb(20 22 30 / 0.5);
+  --cap-highlight: rgb(255 255 255 / 0.16);
+  --red-skirt-hi: #b12c25;
+  --red-skirt-lo: #7c1915;
+  --red-top-hi: #cc382e;
+  --red-top-lo: #c5352c;
+  --red-legend: #ffffff;
+  --red-front: #ffe3e0;
+  --keycap-red: #de4a3f;
+  --cap-key: #2b2d32;
+  --cap-key-ink: #eef0f2;
+  --cap-modifier: #3b4252;
+  --cap-modifier-ink: #e6eaf2;
+  --cap-hold: #5a4719;
+  --cap-hold-ink: #fbe3a8;
+  --cap-layer: #2f4280;
+  --cap-layer-ink: #dbe5ff;
+  --cap-macro: #613679;
+  --cap-macro-ink: #f6dcff;
+  --cap-dance: #712a45;
+  --cap-dance-ink: #ffdbe7;
+  --cap-native: #1d625d;
+  --cap-native-ink: #c9f6ee;
+}

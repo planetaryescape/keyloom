@@ -75,7 +75,7 @@ export function Toolbar({ tabs, revision, busy, blockedReason, onUndo, historyOp
           <Library size={14} aria-hidden="true" />
           <span>Library</span>
         </button>
-        <button type="button" className="toggle-button toggle-icon" aria-pressed={settingsOpen} aria-label="Settings" onClick={onSettings} title="Caps Word, combo and tapping term, and the colour of each layer">
+        <button type="button" className="toggle-button toggle-icon" aria-pressed={settingsOpen} aria-label="Settings" onClick={onSettings} title="Caps Word, combo and tapping term, the colour of each layer, and your keyboard's colour">
           <SlidersHorizontal size={14} aria-hidden="true" />
           <span>Settings</span>
         </button>

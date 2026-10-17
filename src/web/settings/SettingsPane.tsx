@@ -8,6 +8,7 @@ import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import { useOpsCheck } from "../editor/useCheck.ts";
 import { Validation } from "../editor/Validation.tsx";
+import { ColourwaySetting } from "./ColourwaySetting.tsx";
 import { LightingSection } from "./LightingSection.tsx";
 import { SettingRow } from "./SettingRow.tsx";
 import { type LightingDraft, lightingOps, lightingWords } from "./lighting-ops.ts";
@@ -32,6 +33,10 @@ interface Props {
   /** Resolves once the new layout is on screen. */
   onApplied: (summary: string) => Promise<void>;
   onStale: () => void;
+  /** The drawn board's pinned colourway (D-395), applied at once and kept per board in this browser. */
+  colourway: string | null;
+  onColourway: (id: string | null) => void;
+  boardName: string;
 }
 
 const GROUPS = ["Typing feel", "Keys", "Power", "Pairing"] as const;
@@ -64,6 +69,8 @@ export function SettingsPane(props: Props) {
   const matches = (spec: OptionSpec) => needle === "" || `${spec.label} ${spec.words} ${spec.group} ${advanced ? spec.key : ""}`.toLowerCase().includes(needle);
   const shown = specs.filter(matches);
   const others = otherSettings(layout, board).filter((s) => needle === "" || s.key.toLowerCase().includes(needle));
+  const colourways = board.display?.colourways;
+  const showColourway = colourways !== undefined && (needle === "" || "your keyboard's colour colourway color black white grey theme case".includes(needle));
   const showLighting = board.lighting !== undefined && (needle === "" || "layer colours lighting led rgb".includes(needle) || "colour".includes(needle));
 
   function stage(spec: OptionSpec, value: number | boolean) {
@@ -117,6 +124,9 @@ export function SettingsPane(props: Props) {
         <input id={search} type="search" placeholder="Filter, such as caps or combo" value={filter} onChange={(event) => setFilter(event.target.value)} />
       </div>
       <div className="settings-body">
+        {colourways === undefined || !showColourway ? null : (
+          <ColourwaySetting boardName={props.boardName} colourways={colourways} value={props.colourway} onChange={props.onColourway} />
+        )}
         {GROUPS.map((group) => {
           const rows = shown.filter((spec) => spec.group === group);
           if (rows.length === 0) return null;
@@ -148,7 +158,7 @@ export function SettingsPane(props: Props) {
         {showLighting ? (
           <LightingSection layout={layout} draft={lighting} onChange={onLighting} currentLayerId={props.currentLayerId} onShowLayer={props.onShowLayer} />
         ) : null}
-        {shown.length === 0 && !showLighting && others.length === 0 ? <p className="muted settings-empty">Nothing matches &ldquo;{filter}&rdquo;.</p> : null}
+        {shown.length === 0 && !showLighting && !showColourway && others.length === 0 ? <p className="muted settings-empty">Nothing matches &ldquo;{filter}&rdquo;.</p> : null}
         <OtherSettings layout={layout} settings={others} />
       </div>
       {/* Apply appears only once something changed, and says the change in words (23#shared-patterns). */}
