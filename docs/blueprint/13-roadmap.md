@@ -538,7 +538,7 @@ Only BK can do these:
 
 **Promise:** "keyloom lives in my Dock, my shortcuts never fight the browser, and the menu bar tells me when my keyboard is behind."
 
-**Build:** [26](26-desktop-app.md) (D-320 to D-322).
+**Build:** [26](26-desktop-app.md) (D-320 to D-329).
 
 **Design:** the menu-bar extra and its menu, the notifications, and the window chrome in [23](23-design-concept.md)'s language.
 

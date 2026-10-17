@@ -1,6 +1,6 @@
 # 26: keyloom as a desktop app
 
-Status: proposal, 2026-10-16. Source baseline: origin/main after v0.25.0. Research: [../research/desktop-shell.md](../research/desktop-shell.md) (branch `spike/desktop-shell`, prototype `desktop/tauri/`).
+Status: built, 2026-10-17 (rung 24, PR from `rung24/desktop-app`); signed and installed on BK's Mac, not yet notarised (needs BK's credentials). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 
@@ -34,4 +34,13 @@ keyloom becomes an app in the Dock, with its own window and keyboard, and a quie
 
 ## Decisions
 
-D-320 to D-322 are in [14](14-decision-log.md).
+D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md).
+
+## As built
+
+- **One server per data directory (D-323).** `keyloom serve` writes `serve.json` (mode 0600) in the data directory and refuses to start beside a live one; `--reuse` prints the live one's URL and exits 0, which is how the app attaches to the browser server instead of starting a second sync engine. A server that predates this change writes no record, so the app starts its own until that server is restarted on a new binary.
+- **The server words the menu bar (D-325).** Each `/api/events` frame carries `menuBar`: a summary, one line per board in the header's words, the config Sync now targets, the title beside the icon and the notices since the last frame on that stream.
+- **Fonts are bundled (D-326)** into the web bundle, for the app and for a browser tab alike.
+- **Signing.** Tauri signs the shell and the sidecar with hardened runtime and `Entitlements.plist` (the three bun entitlements, applied to both binaries). The CI job is in `release.yml`, steps and secrets in `desktop/tauri/README.md`.
+- **Install.** A Homebrew cask is prepared at `packaging/homebrew/keyloom.rb` for `planetaryescape/homebrew-tap`. The updater is compiled in only with a key (D-328).
+- **Measured on BK's Mac (Apple Silicon):** 70 MB `.app` (72,088 KB on disk), server listening 0.6 s after launch.

@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout,
+  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -19,6 +19,7 @@ import { registerRemapCommands } from "./commands/remap.ts";
 import { registerReviewCommand } from "./commands/review.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
+import { announceServer, liveServer } from "../server/running-server.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
 import { importTable } from "./report.ts";
 import pkg from "../../package.json" with { type: "json" };
@@ -197,14 +198,16 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   program
     .command("serve")
     .description("start the local web app and open it in the browser")
-    .option("--port <port>", "port on 127.0.0.1", String(DEFAULT_PORT))
+    .option("--port <port>", "port on 127.0.0.1; 0 picks a free one", String(DEFAULT_PORT))
     .option("--no-open", "don't open the browser")
+    .option("--exit-on-stdin-close", "stop when standard input closes, so a parent that dies can't leave this server running (the desktop app uses it)")
+    .option("--reuse", "if keyloom is already serving this data directory, print its URL and exit 0 instead of failing (the desktop app uses it)")
     .option("--board-dev <board>", "contributors: show a board's keys with their position numbers instead of your layouts; takes a board ID under ./boards or a board folder")
     .option("--provider <provider>", `model provider for new chats: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
-    .action(async (opts: { port: string; open: boolean; boardDev?: string; provider?: string }) => {
+    .action(async (opts: { port: string; open: boolean; exitOnStdinClose?: boolean; reuse?: boolean; boardDev?: string; provider?: string }) => {
       const provider = opts.provider === undefined ? undefined : parseProvider(opts.provider);
       const port = Number(opts.port);
-      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new UsageError(`--port must be 1-65535, got "${opts.port}"`);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) throw new UsageError(`--port must be 0-65535, got "${opts.port}"`);
       const start = (app: App | undefined) => {
         try {
           return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, ...(provider ? { provider } : {}), ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
@@ -216,12 +219,22 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       // Serve until interrupted; withApp closes the database after the server stops.
       const untilInterrupted = async (app: App | undefined) => {
         const running = start(app);
+        // Announced before the URL is printed, so whoever reads the URL can already find the record. --board-dev has no database or sync engine to protect.
+        const forget = app === undefined ? () => {} : announceServer(app.dataDir, running.url);
         io.err(`keyloom is running at ${running.url}\nPress Ctrl-C to stop.\n`);
         await new Promise<void>((resolve) => {
           const stop = () => resolve();
           process.once("SIGINT", stop);
           process.once("SIGTERM", stop);
+          if (opts.exitOnStdinClose) {
+            // A parent that dies closes the pipe, whatever killed it (D-321). Resuming is what makes the stream report the end.
+            process.stdin.once("end", stop);
+            process.stdin.once("close", stop);
+            process.stdin.resume();
+          }
         });
+        forget();
+        process.stdin.pause();
         running.stop();
         if (running.drain) {
           const slow = setTimeout(() => io.err("Finishing a keyboard sync that is writing; don't unplug the keyboard.\n"), 1000);
@@ -229,6 +242,18 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
           clearTimeout(slow);
         }
       };
+      if (opts.boardDev === undefined) {
+        // Before the database opens: a second server would also run the migrations and a second sync engine (D-323).
+        const dir = dataDirOf(globals().dataDir);
+        const other = await liveServer(dir);
+        if (other !== undefined) {
+          if (opts.reuse) {
+            io.err(`keyloom is already running at ${other.url}\n`);
+            return;
+          }
+          throw new UsageError(`keyloom is already serving ${dir} at ${other.url} (process ${other.pid}); open that, or stop it first`);
+        }
+      }
       if (opts.boardDev !== undefined) {
         // Fails now, with the fix, rather than on the first request.
         await boardDevView(opts.boardDev);

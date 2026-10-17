@@ -6,6 +6,7 @@ import {
 import type { DetectedKeyboard } from "../api/detected-keyboards.ts";
 import { type ReviewEvent, ReviewEventSchema } from "../api/review.ts";
 import { checkToken } from "./guard.ts";
+import { menuBar } from "./menu-bar.ts";
 import { SyncError, type SyncBackend } from "./sync-backend.ts";
 
 const MAX_BODY_BYTES = 10_000;
@@ -40,7 +41,9 @@ async function readJson(request: Request): Promise<unknown | Response> {
   }
 }
 
-const frame = (boards: BoardSync[], newKeyboards: DetectedKeyboard[]): string => `event: sync\ndata: ${JSON.stringify(SyncEventSchema.parse({ type: "sync", boards, newKeyboards }))}\n\n`;
+// `before` is the previous frame on this stream, so the menu-bar notices are what changed on this connection; the first frame has none.
+const frame = (boards: BoardSync[], newKeyboards: DetectedKeyboard[], before?: BoardSync[]): string =>
+  `event: sync\ndata: ${JSON.stringify(SyncEventSchema.parse({ type: "sync", boards, newKeyboards, menuBar: menuBar(boards, before) }))}\n\n`;
 
 const reviewFrame = (event: ReviewEvent): string => `event: review\ndata: ${JSON.stringify(ReviewEventSchema.parse(event))}\n\n`;
 
@@ -50,6 +53,7 @@ function events(request: Request, backend: SyncBackend): Response {
   let unsubscribeReviews = () => {};
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let closed = false;
+  let previous: BoardSync[] | undefined;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (text: string) => {
@@ -72,12 +76,18 @@ function events(request: Request, backend: SyncBackend): Response {
         }
       };
       // Subscribed before the snapshot is read, so a change in between is not lost; the browser takes the later frame.
-      unsubscribe = backend.subscribe((boards, newKeyboards) => send(frame(boards, newKeyboards)));
+      unsubscribe = backend.subscribe((boards, newKeyboards) => {
+        send(frame(boards, newKeyboards, previous));
+        previous = boards;
+      });
       // A review frame carries no snapshot: the page asks for the review when it hears one, and an event missed is caught by that read.
       unsubscribeReviews = backend.subscribeReviews?.((event) => send(reviewFrame(event))) ?? (() => {});
       heartbeat = setInterval(() => send(": keepalive\n\n"), EVENTS_HEARTBEAT_MS);
       request.signal.addEventListener("abort", end, { once: true });
-      void backend.status().then((boards) => send(frame(boards, backend.newKeyboards())), () => send(": status unavailable\n\n"));
+      void backend.status().then((boards) => {
+        send(frame(boards, backend.newKeyboards(), previous));
+        previous = boards;
+      }, () => send(": status unavailable\n\n"));
     },
     cancel() {
       closed = true;

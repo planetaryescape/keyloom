@@ -493,5 +493,19 @@ export const PauseRequestSchema = z.object({ boardId: z.string().min(1), paused:
 export const DisableRemappingRequestSchema = z.object({ boardId: z.string().min(1) });
 
 // `newKeyboards`: keyboards on USB keyloom has no board for, from the engine's own reads (D-336); absent from older senders.
-export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema), newKeyboards: z.array(DetectedKeyboardSchema).optional() });
+// `menuBar`: what the desktop app's menu-bar extra shows, worded by the server so the app carries no product text (D-325). Absent on older senders.
+export const MenuBarSchema = z.object({
+  /** The board that most needs looking at, as the header words it. */
+  summary: z.string(),
+  /** Short text beside the menu-bar icon, or null when every keyboard is fine. */
+  title: z.string().nullable(),
+  /** One line per board, in the order `keyloom sync status` lists them. */
+  lines: z.array(z.object({ boardId: z.string(), text: z.string() })),
+  /** The config Sync now would put on its keyboard, or null when nothing is waiting. */
+  syncLayoutId: z.string().nullable(),
+  /** Changes since the previous frame on this stream that deserve a native notification. */
+  notices: z.array(z.object({ title: z.string(), body: z.string() })),
+});
+export type MenuBar = z.infer<typeof MenuBarSchema>;
+export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema), newKeyboards: z.array(DetectedKeyboardSchema).optional(), menuBar: MenuBarSchema.optional() });
 export type SyncEvent = z.infer<typeof SyncEventSchema>;
