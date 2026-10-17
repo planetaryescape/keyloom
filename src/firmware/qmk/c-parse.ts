@@ -101,3 +101,51 @@ export function functionName(node: Node): string | undefined {
 export function findFunction(root: Node, name: string): Node | undefined {
   return root.namedChildren.find((c) => c.type === "function_definition" && functionName(c) === name);
 }
+
+/** A constant integer expression as an enum value may write it: a number, an earlier constant, parentheses, `+` and `-`. */
+function constantValue(node: Node, known: ReadonlyMap<string, number>): number | undefined {
+  switch (node.type) {
+    case "number_literal": {
+      const v = Number(node.text.replace(/[uUlL]+$/, ""));
+      return Number.isInteger(v) ? v : undefined;
+    }
+    case "identifier":
+      return known.get(node.text);
+    case "parenthesized_expression": {
+      const inner = node.namedChildren[0];
+      return inner ? constantValue(inner, known) : undefined;
+    }
+    case "binary_expression": {
+      const op = node.childForFieldName("operator")?.text;
+      const l = node.childForFieldName("left");
+      const r = node.childForFieldName("right");
+      const a = l ? constantValue(l, known) : undefined;
+      const b = r ? constantValue(r, known) : undefined;
+      if (a === undefined || b === undefined) return undefined;
+      return op === "+" ? a + b : op === "-" ? a - b : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Every enum member keyloom can give a number, in file order: `enum layers { BASE, NAV = 2, _SYM }` is BASE 0, NAV 2, _SYM 3. A member
+ * whose value is an expression keyloom doesn't evaluate (`SAFE_RANGE`) has none, and neither do the implicit members after it until the next explicit value.
+ */
+export function enumConstants(root: Node): Map<string, number> {
+  const known = new Map<string, number>();
+  for (const spec of root.descendantsOfType("enum_specifier")) {
+    const body = spec?.childForFieldName("body");
+    let next: number | undefined = 0;
+    for (const member of body?.namedChildren ?? []) {
+      if (member.type !== "enumerator") continue;
+      const name = member.childForFieldName("name")?.text;
+      const valueNode = member.childForFieldName("value");
+      const value: number | undefined = valueNode ? constantValue(valueNode, known) : next;
+      if (name && value !== undefined) known.set(name, value);
+      next = value === undefined ? undefined : value + 1;
+    }
+  }
+  return known;
+}

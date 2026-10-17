@@ -52,6 +52,9 @@ const PROFILE_NAMES: Array<[string, string]> = [
   [PROFILE_LAYER_TAP, "Layer-tap"],
 ];
 
+/** An enum member as the layer's name: `_BASE` is written that way to avoid a clash in C, so the leading underscores are dropped. */
+const displayName = (member: string): string => member.replace(/^_+/, "") || member;
+
 export async function importOryxSource(path: string, board: BoardDefinition): Promise<ImportResult> {
   return importQmkSource(await readOryxSource(path), board);
 }
@@ -76,6 +79,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     isHomeRow: (p: number) => homeRow.has(p),
     macroIds,
     customKeycodes: new Set(parsed.customKeycodes.keys()),
+    layerNames: new Map(parsed.layerNames.map((name, i) => [name, i])),
   };
   const danceRead = importTapDances(parsed.chunks, { layerIds, macros, macroNames: macroNames(macros), keyCtx: ctx });
   warnings.push(...danceRead.warnings);
@@ -86,7 +90,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
   const profilesUsed = new Set<string>();
   const layers = parsed.layers.map((args, li) => ({
     id: layerIds[li] as string,
-    name: `Layer ${li}`,
+    name: parsed.layerNames[li] === undefined ? `Layer ${li}` : displayName(parsed.layerNames[li] as string),
     bindings: args.map((expr, position) => {
       const mapped = mapKey(expr, position, tapDanceCtx);
       counts[mapped.binding.kind]++;

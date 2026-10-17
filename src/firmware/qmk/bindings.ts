@@ -18,6 +18,8 @@ export type MapContext = {
   macroIds: ReadonlyMap<string, string>;
   /** Keymap-level `#define NAME body` custom keycodes. */
   customKeycodes: ReadonlySet<string>;
+  /** Layer enum member (`NAV`) to its index, for a keymap that names its layers (`MO(NAV)`). */
+  layerNames?: ReadonlyMap<string, number>;
   /** `DANCE_n` name to the id of the TapDance it was imported as. */
   tapDanceIds?: ReadonlyMap<string, string>;
 };
@@ -131,6 +133,7 @@ function modsOf(e: Expr | undefined): Mod[] | undefined {
 }
 
 function layerOf(e: Expr | undefined, ctx: MapContext): string | undefined {
+  if (e?.kind === "id") return ctx.layerIds[ctx.layerNames?.get(e.name) ?? -1];
   return e?.kind === "num" && Number.isInteger(e.value) ? ctx.layerIds[e.value] : undefined;
 }
 
