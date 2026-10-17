@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { processAlive } from "../firmware/toolchain/lock.ts";
 import { deepEqual } from "../layout/equal.ts";
+import { sameBuild } from "../layout/conditional-backfill.ts";
 import { withoutLayerNumbers } from "../layout/layer-refs.ts";
 import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash } from "../persistence/builds.ts";
 import { getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
@@ -260,6 +261,21 @@ export class SyncEngine {
 
   // --- facts and views ----------------------------------------------------------------------
 
+  /**
+   * Every step from the older revision to the newer one is a recorded-numbers revision or a conditional-layers backfill (D-390), so the
+   * two generate the same firmware even though their documents differ. The line is the head's own, so an edit in between is not skipped.
+   */
+  private sameAlongTheLine(layoutId: string, a: string, b: string): boolean {
+    for (const [older, newer] of [[a, b], [b, a]] as const) {
+      const line = revisionLine(this.app.db, layoutId, newer);
+      const at = line.indexOf(older);
+      if (at <= 0) continue;
+      const docs = line.slice(0, at + 1).map((id) => findRevision(this.app.db, layoutId, id)?.layout);
+      if (docs.every((d) => d !== undefined) && docs.slice(0, -1).every((later, i) => sameBuild(docs[i + 1] as NonNullable<typeof later>, later as NonNullable<typeof later>))) return true;
+    }
+    return false;
+  }
+
   private documentsEqual(layoutId: string, a: string, b: string): boolean {
     if (a === b) return true;
     const key = `${a}|${b}`;
@@ -267,7 +283,7 @@ export class SyncEngine {
     if (cached !== undefined) return cached;
     const left = findRevision(this.app.db, layoutId, a);
     const right = findRevision(this.app.db, layoutId, b);
-    const same = left !== undefined && right !== undefined && deepEqual(withoutLayerNumbers(left.layout), withoutLayerNumbers(right.layout));
+    const same = left !== undefined && right !== undefined && (deepEqual(withoutLayerNumbers(left.layout), withoutLayerNumbers(right.layout)) || this.sameAlongTheLine(layoutId, a, b));
     // The recorded layer numbers (D-378) don't change what is generated for a layout whose keys and kept code are the same, so a
     // head that differs only in them is what the keyboard already runs. Revisions never change, so a verdict never goes stale.
     this.sameDocument.set(key, same);
