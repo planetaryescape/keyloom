@@ -54,6 +54,8 @@ export type ModelRequest = {
   /** API requests the loop may make before it stops, even if the model still wants tools. */
   maxIterations: number;
   onText?: (delta: string) => void;
+  /** Completed public messages only; never opaque thinking. Whole-message fallback is intentional. */
+  onPublicMessage?: (message: { id: string; kind: "working_note" | "answer"; text: string }) => void;
   signal?: AbortSignal;
 };
 

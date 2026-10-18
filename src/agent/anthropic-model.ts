@@ -101,6 +101,7 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
       let iterations = 0;
       let stopReason: string | null = null;
       let pause: { message: { content: unknown[] }; call: { id: string; name: string; input: unknown } } | undefined;
+      let publicMessages = 0;
       const pausing = new Set(request.tools.filter((t) => t.pauses === true).map((t) => t.name));
       for await (const stream of runner) {
         if (request.onText) stream.on("text", (delta) => request.onText?.(delta));
@@ -117,8 +118,10 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         usage = addUsage(usage, usageOf(message.usage));
         if (cost !== undefined) costUsd = (costUsd ?? 0) + cost;
         stopReason = message.stop_reason;
+        const publicText = message.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
+        if (publicText) request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind: message.stop_reason === "end_turn" && !message.content.some((b) => b.type === "tool_use") ? "answer" : "working_note", text: publicText });
         // A question for the person ends the turn here, before the runner runs any tool or asks the model again (D-382).
-        const call = message.content.find((b) => b.type === "tool_use" && pausing.has(b.name));
+        const call = message.content.find((b) => b.type === "tool_use" && pausing.has(b.name) && request.tools.find((tool) => tool.name === b.name)?.inputSchema.safeParse(b.input).success);
         if (call !== undefined && call.type === "tool_use") {
           pause = { message, call: { id: call.id, name: call.name, input: call.input } };
           break;
