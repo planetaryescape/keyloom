@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M58K1N0JFQMDYHRAR89HCB0A",
+    "layoutId": "lay_01M58JW5ZAHHJQ6FS8NYKYTEYV",
+    "title": "Public 0.43.0 consecutive questions: ask about two synthetic\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792363516946
+  },
+  "messages": [
+    {
+      "id": "msg_01M58K1N0JFQMDYHRAR89HCB0B",
+      "role": "user",
+      "text": "Public 0.43.0 consecutive questions: ask about two synthetic routes, one at a time. No config changes.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792363516947
+    },
+    {
+      "id": "msg_01M58K1NAXQ527QJ5TVBQYC6JQ",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792363517277,
+      "question": {
+        "question": "Keep the first public route?",
+        "options": [
+          {
+            "label": "Keep first"
+          },
+          {
+            "label": "Replace first"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "codex_c4d7de75-fa53-4ba4-9934-11fa47abdd2d_item_0",
+        "answer": null
+      }
+    }
+  ],
+  "proposals": [],
+  "preparationReceipts": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M58K1N0JFQMDYHRAR89HCB0B",
+      "questionToolUseId": "codex_c4d7de75-fa53-4ba4-9934-11fa47abdd2d_item_0",
+      "status": "waiting_user",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 1,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    }
+  ]
+}

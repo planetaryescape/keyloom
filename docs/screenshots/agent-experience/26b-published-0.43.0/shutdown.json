@@ -1,0 +1,10 @@
+{
+  "server1Pid": 60388,
+  "server1Exit": -9,
+  "intentionalCrash": true,
+  "server2Pid": 64144,
+  "server2Exit": 0,
+  "server2Signal": "owned group SIGINT",
+  "browserClosed": true,
+  "server2UnexpectedErrorMarker": false
+}

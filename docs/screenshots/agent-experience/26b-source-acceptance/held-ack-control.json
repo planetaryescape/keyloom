@@ -1,0 +1,33 @@
+{
+  "accepted": {
+    "cancelRequested": false,
+    "committedPreparations": 0,
+    "conversationId": "conv_01M58HT7M4HDA6MCAWSJZ5NVBT",
+    "id": "run_01M58HT7M5BZ6V22PAPNMXWKH9",
+    "preparations": [],
+    "presentation": {
+      "detailsTruncated": false,
+      "effectsMayHaveOccurred": false,
+      "messages": [],
+      "operations": [],
+      "status": "running",
+      "userMessageId": "msg_01M58HT7M5BZ6V22PAPNMXWKH8",
+      "version": 1,
+      "warning": null
+    },
+    "requestId": "7b4cb564-b77e-4478-85ec-248aaf0131b6",
+    "seq": 2,
+    "status": "running",
+    "userMessageId": "msg_01M58HT7M5BZ6V22PAPNMXWKH8",
+    "version": 1
+  },
+  "cancel": [
+    {
+      "cancelRequested": true,
+      "id": "run_01M58HT7M5BZ6V22PAPNMXWKH9",
+      "path": "/api/agent/v1/runs/7b4cb564-b77e-4478-85ec-248aaf0131b6/cancel",
+      "runStatus": "running",
+      "status": 200
+    }
+  ]
+}

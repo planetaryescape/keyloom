@@ -1707,4 +1707,25 @@ Entries attributed to BK are product requirements. Entries attributed to the ass
 - Save each preparation's original result in the same SQLite transaction as all of its domain writes, including proposal alternatives and memory. A crash after that commit but before tool observation exposes a separate receipt fact. Receipt ordinals are not observer operation IDs; unfinished observations stay unknown.
 - A request cancellation must survive acceptance ordering. Stop is explicit; closing a subscriber is not Stop, and neither action rolls back committed preparation.
 - No current chat tool starts a device job. Move that part of 26b's proposed demonstration to 28b rather than adding a device capability solely for a cancellation test. Existing sync/build/flash authorities remain unchanged.
-- These are candidate implementation choices, not a claim that 26b, app-wide control or the full agent has shipped. Review and installed-release journeys still decide completion.
+- Implementation status: 26b shipped in v0.43.0 and passed the [bounded public-client journeys](../screenshots/agent-experience/26b-published-0.43.0/README.md). This does not ship app-wide control or the full agent. The live desktop update is held for BK's subsequent corrections below.
+
+### D-412: Working details precede the final answer and fold in place. (BK, correcting the live transcript)
+- BK: "also it shows the working under the final response". The live implementation renders final Markdown before its working section. Reverse that order without merging working notes into the canonical answer.
+- Working stays before the final answer during execution, completion, reload and manual expansion. Fold routine completed work in place; preserve an explicit open choice, focus, questions and unapplied proposals. The answer and its result cards follow the working, rather than serving as a preface to process notes.
+- This supersedes the answer-before-working composition in the approved 26a example, not its keyboard-first visual system. The correction is implemented with rendered-order regressions; compiled-client screenshots and release verification are pending.
+
+### D-413: Configure Keyloom display colours separately from keyboard LED lighting. (BK, following a Glove80 refusal)
+- BK asked for a different colour on each layer. The agent refused using the Glove80's physical LED limitation. BK then requested that the app distinguish these concepts generally and make them separately configurable where possible.
+- Keep D-180's display-only `Layer.color`/`shortLabel` separate from D-190's physical `Layer.lighting`. Expose the distinction through app controls and agent capability/tool context, not just a special-case prompt sentence. Changing either preserves the other.
+- A board without supported LED output still has on-screen layer styling. A bare layer-colour request is not evidence that BK wants physical LEDs; offer the supported display change with its scope stated, or clarify genuine ambiguity. Explicit hardware-lighting requests retain the board's limits and validator checks.
+- The correction exposes display styling in each layer's actions and physical LED lighting in Settings, gated by the board's existing LED support. Tool reads and capability descriptions distinguish both operations. Colour-only proposals preserve short labels; changes to either setting preserve the other. No Glove80 LED capability was added.
+- Display-only revisions still enter the existing auto-sync pipeline: an isolated fake-sync probe observed a build/flash. The display form warns that saving may trigger auto-sync. No real keyboard write is authorized or performed. Source UI/tool/validator checks passed; compiled-client and release verification are pending. Live-provider tool choice remains unverified.
+
+### D-414: The model picker stays reachable inside the viewport. (BK, reporting an off-screen picker)
+- BK tried to change the model and could see only the picker's footer at the top of the window. Its fields were off-screen. Do not interpret this as a request to choose a model or change credentials on his behalf.
+- Keep the picker within the visible viewport, with internal scrolling when its content is taller than the available space. Model options, Cancel and Save remain reachable by pointer and keyboard at short desktop and phone heights and after resizing.
+- Preserve the existing visual system and focus return on close. A component render or CSS assertion alone does not verify this fix; check the actual control bounds and interaction in the browser. Runtime diagnosis and correction are pending.
+
+### D-415: New conversation works from a carried thread without deleting history. (BK, reporting a disabled action)
+- BK could open the chat menu but New conversation was disabled after using another keyboard. Check the real carried/current conversation state rather than inferring that a missing current conversation ID means there is nothing to reset.
+- Starting fresh removes the old thread from the current view, retains saved history, and focuses the composer. The first message creates a new conversation; opening the empty composer alone does not create an empty database record. Keep genuine busy-state safeguards and app-owned run lifetime intact. Runtime diagnosis and correction are pending.

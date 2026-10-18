@@ -1,0 +1,43 @@
+- region "Ask keyloom" [ref=e11]
+  - paragraph
+    - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+  - status
+  - log "Conversation" [ref=e58] focusable [tabindex]
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "Public 0.43.0 early Stop: prepare one synthetic copy and wait. No keyboard changes."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - status
+      - StaticText "Stopped"
+    - paragraph
+      - StaticText "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work."
+    - StaticText "Stopped. Configs or proposals prepared before Stop may remain."
+  - form
+    - textbox "Message to keyloom" [ref=e59]
+    - button "More" [expanded=false, ref=e61]
+    - button "Close (Esc)" [ref=e60]
+      - StaticText "esc"
+- paragraph
+  - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "Public 0.43.0 early Stop: prepare one synthetic copy and wait. No keyboard changes."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- status
+  - StaticText "Stopped"
+- paragraph
+  - StaticText "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work."
+- StaticText "Stopped. Configs or proposals prepared before Stop may remain."
+- textbox "Message to keyloom" [ref=e59]
+- button "More" [expanded=false, ref=e61]
+- button "Close (Esc)" [ref=e60]
+  - StaticText "esc"
+- StaticText "Stopped"

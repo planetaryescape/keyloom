@@ -1,0 +1,6 @@
+{
+  "serverPid": 27398,
+  "harnessPid": 27378,
+  "port": 56815,
+  "intentionalSignal": "SIGKILL to this owned server only"
+}

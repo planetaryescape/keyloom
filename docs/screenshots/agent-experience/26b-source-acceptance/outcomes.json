@@ -1,0 +1,17 @@
+{
+  "overall": "RED",
+  "blocker": "pre-acceptance Stop returned 404, then released unchanged POST prepared a copy without another send",
+  "firstCancelHttp": 404,
+  "heldAckCancelHttp": 200,
+  "normalCloseReopenReloadRun": "running",
+  "normalExplicitStop": "cancelled",
+  "crashRecovery": "interrupted",
+  "finalSyntheticConfigCount": 4,
+  "consecutiveQuestionsDistinctCanonicalIds": true,
+  "ownedBrowserClosed": true,
+  "intentionalCrashHarnessExit": 1,
+  "refusedRestartHarnessExit": 1,
+  "directFinalServerExit": 0,
+  "codexHomeEmpty": true,
+  "recordNullSink": true
+}

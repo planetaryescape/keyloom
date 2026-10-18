@@ -1,0 +1,27 @@
+{
+  "binary": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-focus-0421-install-e8hjxff3/keyloom-26b-candidate-19c6ce52",
+  "binarySha256": "30801e2cf2a0b2cfed5a252798e431069da3022b1b6fb71b94ddc8542057e2cc",
+  "version": "0.42.1",
+  "sourceBase": "e2e2eab5be53542727f342d33193e3bbd65a7e8d",
+  "workerSource": "19c6ce5232673a0a6b2b74ffbf4c489437854758",
+  "workerTree": "b7b3704515a0f6d776e514e7af36ae01b31ba7eb",
+  "scratch": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-compiled-acceptance-01",
+  "browser": "keyloom-agent-26b-acceptance",
+  "server1Pid": 47704,
+  "server1Exit": -9,
+  "server2Pid": 49403,
+  "port": 4510,
+  "codexHomeEmpty": true,
+  "recordNullSink": true,
+  "fakeExecCount": 6,
+  "autosync": {
+    "schema_version": 1,
+    "board_id": "zsa/moonlander",
+    "auto_sync": "off",
+    "choice": false,
+    "paused": false,
+    "proven": false,
+    "proven_at": null
+  },
+  "phoneFollowUpServerPid": 51555
+}

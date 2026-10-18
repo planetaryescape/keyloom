@@ -1,0 +1,72 @@
+{
+  "accepted": {
+    "cancelRequested": true,
+    "committedPreparations": 0,
+    "conversationId": "conv_01M58JBCTV6006J08431XRPR8X",
+    "id": "run_01M58JBCTWHEFTCQRZM8M5STVT",
+    "preparations": [],
+    "presentation": {
+      "detailsTruncated": false,
+      "effectsMayHaveOccurred": false,
+      "messages": [],
+      "operations": [],
+      "status": "cancelled",
+      "userMessageId": "msg_01M58JBCTV6006J08431XRPR8Y",
+      "version": 1,
+      "warning": "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work."
+    },
+    "requestId": "fe081c97-2e5a-465e-a34c-70e9d298b36e",
+    "seq": 1,
+    "status": "cancelled",
+    "userMessageId": "msg_01M58JBCTV6006J08431XRPR8Y",
+    "version": 1
+  },
+  "body": {
+    "input": {
+      "message": "Compiled 26b early Stop: prepare a synthetic copy and wait. No keyboard changes."
+    },
+    "layoutRef": "lay_01M58J963714Y9VBVZWVRS3RWZ",
+    "requestId": "fe081c97-2e5a-465e-a34c-70e9d298b36e",
+    "version": 1
+  },
+  "records": [
+    {
+      "http": 202,
+      "method": "POST",
+      "path": "/api/agent/v1/requests/fe081c97-2e5a-465e-a34c-70e9d298b36e/cancel",
+      "response": {
+        "cancelRequested": true,
+        "requestId": "fe081c97-2e5a-465e-a34c-70e9d298b36e",
+        "status": "pending_acceptance",
+        "version": 1
+      }
+    },
+    {
+      "http": 202,
+      "method": "POST",
+      "path": "/api/agent/v1/runs",
+      "response": {
+        "cancelRequested": true,
+        "committedPreparations": 0,
+        "conversationId": "conv_01M58JBCTV6006J08431XRPR8X",
+        "id": "run_01M58JBCTWHEFTCQRZM8M5STVT",
+        "preparations": [],
+        "presentation": {
+          "detailsTruncated": false,
+          "effectsMayHaveOccurred": false,
+          "messages": [],
+          "operations": [],
+          "status": "cancelled",
+          "userMessageId": "msg_01M58JBCTV6006J08431XRPR8Y",
+          "version": 1,
+          "warning": "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work."
+        },
+        "requestId": "fe081c97-2e5a-465e-a34c-70e9d298b36e",
+        "seq": 1,
+        "status": "cancelled",
+        "userMessageId": "msg_01M58JBCTV6006J08431XRPR8Y",
+        "version": 1
+      }
+    }
+  ]
+}

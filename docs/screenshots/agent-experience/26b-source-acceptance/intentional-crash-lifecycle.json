@@ -1,0 +1,79 @@
+{
+  "binary": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-source-entry-01",
+  "binarySha256": "37cf5564edc8f95f9814cc619b30e5c1365e11264bb9eac615f3097a7fbab1a9",
+  "scratch": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-source-acceptance-01",
+  "layoutId": "lay_01M58HQ1XWV3FM500NR848VQ7N",
+  "conversationId": "conv_01M58HQ3MNFRXMMA4WERSNX2AS",
+  "checks": [
+    {
+      "name": "config list: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "config list: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "Server scratch contains only Moonlander configs",
+      "pass": true
+    },
+    {
+      "name": "autosync off: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "autosync off: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "autosync status: command completed within bound",
+      "pass": true
+    }
+  ],
+  "commands": [
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-source-acceptance-01/data",
+        "--format",
+        "json",
+        "config",
+        "list",
+        "--archived"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-source-acceptance-01/data",
+        "--format",
+        "json",
+        "autosync",
+        "off",
+        "zsa/moonlander"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-source-acceptance-01/data",
+        "--format",
+        "json",
+        "autosync",
+        "status",
+        "zsa/moonlander"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    }
+  ],
+  "passed": true,
+  "browser": "unverified: inspect the actual served app manually; CLI checks do not certify browser behavior or a release"
+}

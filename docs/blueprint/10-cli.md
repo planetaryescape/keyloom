@@ -32,6 +32,12 @@ keyloom
   chat <layout> [--conversation C] [--select L:12,13,14] <message>
                                            one agent turn; streams the reply; prints any proposals
   conversations list <layout>
+  conversations show <conversation>         stored public messages and working details
+  agent show <run-or-request>               inspect saved work without executing it
+  agent start <layout> <message> --request-id <id> [--conversation C] [--provider P]
+  agent answer <run> <question-tool-id> <text> --request-id <id>
+  agent cancel <run-or-request>             request Stop; committed preparation remains
+  agent cancel <request-id> --request       save Stop even before the request is accepted
 
   decisions list <layout> [--status S] [--kind choice|priority]
   decisions show <dec>
@@ -70,6 +76,24 @@ keyloom
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
+
+## Inspect saved agent work before continuing it
+
+```sh
+keyloom --data-dir <scratch> --format json agent show <run-or-request-id>
+keyloom --data-dir <scratch> conversations show <conversation-id>
+```
+
+These reads do not launch a model or repeat a tool. The run snapshot includes its status, sequence, cancellation request and committed preparation references. An interrupted run is not automatically retried.
+
+Use a fresh request identity for intentional new work. `start` and `answer` wait for work owned by that CLI process; repeating the same identity with exactly the same scope/input returns its original run instead of executing again. Changed input with an existing identity refuses. A configured model provider is required to start new work.
+
+```sh
+keyloom --data-dir <scratch> agent start <config> 'Explain this layout' --request-id <unique-request-id>
+keyloom --data-dir <scratch> agent answer <run> <question-tool-id> Left --request-id <unique-answer-id>
+```
+
+Stop is explicit and does not roll back saved configs, proposals or memory. `agent cancel <run-or-request>` requests cancellation of accepted work; `--request` can also persist cancellation before acceptance. Its `pending_acceptance` result is an intent, not an invented run. A live foreign owner observes the request; only its recorded terminal result confirms it stopped. The [26b contract](../research/spikes/26b-contract.md) specifies the wire shapes and fail-closed pending-Stop limit. Legacy `chat` remains available with its existing stream-owned execution.
 
 ## The typing lab records your typing and tunes the board to it
 

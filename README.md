@@ -110,6 +110,7 @@ Everything the web app does has a CLI command. Output is a table in a terminal a
 | `keyloom import` | Import a layout |
 | `keyloom layout`, `boards`, `config`, `version` | List layouts and boards, manage configs, and move between versions |
 | `keyloom chat` | Talk to the agent from the terminal |
+| `keyloom agent show` | Inspect saved agent work without executing it again |
 | `keyloom change` | Check, propose and apply changes |
 | `keyloom undo` | Take back the last revision |
 | `keyloom build`, `flash`, `sync` | Build firmware, flash it, and show where each keyboard stands |

@@ -1,0 +1,13 @@
+{
+  "body": {
+    "input": {
+      "message": "Public 0.43.0 early Stop: prepare one synthetic copy and wait. No keyboard changes."
+    },
+    "layoutRef": "lay_01M58JW5ZAHHJQ6FS8NYKYTEYV",
+    "requestId": "35f0fe7f-7053-43ef-a391-8dc45e434bb1",
+    "version": 1
+  },
+  "held": true,
+  "records": [],
+  "stop": "<button type=\"button\" class=\"bar-link composer-stop\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-square\" aria-hidden=\"true\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"></rect></svg>Stop</button>"
+}

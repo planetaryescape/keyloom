@@ -1,0 +1,49 @@
+{
+  "uncaughtBrowserErrors": [],
+  "requestCount": 326,
+  "statusCounts": {
+    "200": 310,
+    "404": 1,
+    "202": 10,
+    "None": 4,
+    "401": 1
+  },
+  "non200Examples": [
+    {
+      "method": "GET",
+      "path": "/favicon.ico",
+      "status": 404
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/v1/requests/35f0fe7f-7053-43ef-a391-8dc45e434bb1/cancel",
+      "status": 202
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/v1/runs",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/runs/run_01M58JZGJVFATK0G73F4XZJMJA",
+      "status": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "status": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "status": 401
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/v1/requests/e4be8243-20ce-4cf7-b528-95298b45d5c0/cancel",
+      "status": 202
+    }
+  ],
+  "notes": "202 acceptance/pending-cancel is intentional; missing statuses across intentional crash/reload are not certified as success."
+}

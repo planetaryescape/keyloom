@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "id": "run_01M58JCB2GA8ZWG2ED46JKHH86",
+  "requestId": "d7001dde-6ffe-4e89-8eaf-c7bae360565b",
+  "conversationId": "conv_01M58JCB2GA8ZWG2ED46JKHH84",
+  "userMessageId": "msg_01M58JCB2GA8ZWG2ED46JKHH85",
+  "status": "interrupted",
+  "seq": 7,
+  "cancelRequested": false,
+  "committedPreparations": 1,
+  "preparations": [
+    {
+      "operationId": "effect_1",
+      "tool": "create_config",
+      "references": [
+        {
+          "kind": "config",
+          "id": "lay_01M58JCBMNMATT2M6P6KF7Q3K7"
+        }
+      ]
+    }
+  ],
+  "presentation": {
+    "version": 1,
+    "userMessageId": "msg_01M58JCB2GA8ZWG2ED46JKHH85",
+    "status": "unobserved",
+    "operations": [
+      {
+        "id": "op_1",
+        "tool": "create_config",
+        "label": "Create config",
+        "status": "succeeded",
+        "durationMs": 2,
+        "validationCodes": [],
+        "references": [
+          {
+            "kind": "config",
+            "id": "lay_01M58JCBMNMATT2M6P6KF7Q3K7"
+          }
+        ],
+        "accepted": 0,
+        "declined": 0
+      }
+    ],
+    "messages": [
+      {
+        "id": "public_1",
+        "kind": "working_note",
+        "text": "Preparing a synthetic compiled crash receipt copy."
+      }
+    ],
+    "effectsMayHaveOccurred": true,
+    "warning": "Execution was interrupted. Saved preparation remains; nothing was automatically rerun. Stop is not rollback.",
+    "detailsTruncated": false
+  }
+}

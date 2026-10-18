@@ -1,0 +1,66 @@
+- region "Ask keyloom" [ref=e11]
+  - paragraph
+    - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+  - status
+  - log "Conversation" [ref=e58] focusable [tabindex]
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "26b consecutive questions: ask about two synthetic routes, one question at a time. No configuration changes."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - button "1 completed step" [expanded=false, ref=e63]
+    - region "Question, answered" [ref=e59]
+      - paragraph
+        - StaticText "Keep the first synthetic route?"
+      - StaticText "Keep first"
+    - paragraph
+      - StaticText "keyloom"
+    - button "1 completed step" [expanded=false, ref=e64]
+    - region "Question, answered" [ref=e60]
+      - paragraph
+        - StaticText "Use the second synthetic route?"
+      - StaticText "Use second"
+    - paragraph
+      - StaticText "keyloom"
+    - paragraph
+      - StaticText "Both route choices are saved."
+  - form
+    - textbox "Message to keyloom" [ref=e61]
+    - button "More" [expanded=false, ref=e65]
+    - button "Close (Esc)" [ref=e62]
+      - StaticText "esc"
+- paragraph
+  - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "26b consecutive questions: ask about two synthetic routes, one question at a time. No configuration changes."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- button "1 completed step" [expanded=false, ref=e63]
+- region "Question, answered" [ref=e59]
+  - paragraph
+    - StaticText "Keep the first synthetic route?"
+  - StaticText "Keep first"
+- paragraph
+  - StaticText "keyloom"
+- button "1 completed step" [expanded=false, ref=e64]
+- region "Question, answered" [ref=e60]
+  - paragraph
+    - StaticText "Use the second synthetic route?"
+  - StaticText "Use second"
+- paragraph
+  - StaticText "keyloom"
+- paragraph
+  - StaticText "Both route choices are saved."
+- textbox "Message to keyloom" [ref=e61]
+- button "More" [expanded=false, ref=e65]
+- button "Close (Esc)" [ref=e62]
+  - StaticText "esc"
+- StaticText "Keep first"
+- StaticText "Use second"

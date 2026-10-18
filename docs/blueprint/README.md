@@ -37,7 +37,7 @@ keyloom is built; the [latest release](https://github.com/planetaryescape/keyloo
 | 26 | [Desktop app](26-desktop-app.md) | Tauri shell around the server, menu-bar sync status, shipping and signing |
 | 27 | [Board review](27-board-review.md) | What keyloom finds in a revision without being asked: checks at once, the agent after, triggers, hiding and the fixed tick |
 | 28 | [The agent works beside the keyboard](28-agent-experience.md) | Implemented 26a message/activity/folding experience; proposed domain questions, rich artifacts and later interaction gates |
-| 29 | [The agent operates the app](29-agent-app-control.md) | Implemented bounded observation contract; proposed app-wide capabilities, confirmation, durable execution and coverage gates |
+| 29 | [The agent operates the app](29-agent-app-control.md) | Released observation and durable-run contracts; proposed app-wide capabilities, confirmation and coverage gates |
 | 30 | [Talk to any keyboard](30-agent-keyboard-context.md) | Proposed collection awareness, request focus, cross-keyboard writes, transfers, batch outcomes and physical-device identity limits |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 

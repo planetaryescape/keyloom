@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "id": "run_01M58JC78RF78MGAJYSSZ80QV7",
+  "requestId": "b7599481-d63d-4c7f-9d27-27c33a2b4523",
+  "conversationId": "conv_01M58JC78RF78MGAJYSSZ80QV5",
+  "userMessageId": "msg_01M58JC78RF78MGAJYSSZ80QV6",
+  "status": "cancelled",
+  "seq": 9,
+  "cancelRequested": true,
+  "committedPreparations": 1,
+  "preparations": [
+    {
+      "operationId": "effect_1",
+      "tool": "create_config",
+      "references": [
+        {
+          "kind": "config",
+          "id": "lay_01M58JC7PXZ5CMHW341CDA8KB2"
+        }
+      ]
+    }
+  ],
+  "presentation": {
+    "version": 1,
+    "userMessageId": "msg_01M58JC78RF78MGAJYSSZ80QV6",
+    "status": "cancelled",
+    "operations": [
+      {
+        "id": "op_1",
+        "tool": "create_config",
+        "label": "Create config",
+        "status": "succeeded",
+        "durationMs": 2,
+        "validationCodes": [],
+        "references": [
+          {
+            "kind": "config",
+            "id": "lay_01M58JC7PXZ5CMHW341CDA8KB2"
+          }
+        ],
+        "accepted": 0,
+        "declined": 0
+      }
+    ],
+    "messages": [
+      {
+        "id": "public_1",
+        "kind": "working_note",
+        "text": "Preparing a single synthetic compiled saved-run copy."
+      }
+    ],
+    "effectsMayHaveOccurred": true,
+    "warning": "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request.",
+    "detailsTruncated": false
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "configs": [
+    {
+      "id": "lay_01M58HQQ8PTGS674MGQPWGS4E9",
+      "name": "26b pre-acceptance Stop probe",
+      "board_id": "zsa/moonlander",
+      "board_name": "Moonlander",
+      "head_revision_id": "rev_01M58HQQ8PTGS674MGQPWGS4EA",
+      "created_at": 1792362142998,
+      "updated_at": 1792362142998,
+      "on_keyboard": false,
+      "archived_at": null,
+      "copied_from": {
+        "layout_id": "lay_01M58HQ1XWV3FM500NR848VQ7N",
+        "layout_name": "26a synthetic Moonlander",
+        "revision_id": "rev_01M58HQ1XWV3FM500NR848VQ7P"
+      }
+    },
+    {
+      "id": "lay_01M58HQ1XWV3FM500NR848VQ7N",
+      "name": "26a synthetic Moonlander",
+      "board_id": "zsa/moonlander",
+      "board_name": "Moonlander",
+      "head_revision_id": "rev_01M58HQ1XWV3FM500NR848VQ7P",
+      "created_at": 1792362121148,
+      "updated_at": 1792362121148,
+      "on_keyboard": true,
+      "archived_at": null,
+      "copied_from": null
+    }
+  ]
+}

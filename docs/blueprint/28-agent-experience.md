@@ -60,14 +60,14 @@ After the proposal is ready:
 ┌──────────────────────────────────┐
 │ Moonlander / Daily -> Glove80     │
 │ keyloom                          │
+│ > Read 2 configs; checked mapping│  collapsed in place, before the answer
+│                                  │
 │ Navigation is ready to preview.  │
 │ Your current config is unchanged.│
 │                                  │
 │ [Navigation preview on the board]│
 │ 12 mapped · 1 needs a place       │  illustrative counts, not real data
 │ [Choose key]  [Review changes]    │
-│                                  │
-│ > Read 2 configs; checked mapping│  collapsed, reopenable working
 └──────────────────────────────────┘
 ```
 
@@ -109,6 +109,8 @@ While running, show the current activity plus a few recent completed rows. Older
 Use keyboard-specific labels: "Reading your Moonlander's navigation layer", "Checking that Symbols is still reachable", "Matching the thumb keys", "Preparing the MacBook preview". Unknown tools get an honest generic label and remain inspectable. Never manufacture a sequence of tasks to make an idle timer look productive.
 
 On successful task completion, fold ordinary activity into a one-line disclosure, such as "Read 2 configs · checked 12 mappings · 8 s". Derive it from events. Do not collapse an unanswered question, pending Apply, unsent device change or error. If the person expanded the section themselves or has focus inside it, leave it open. Preserve scroll position when folding (D-397, D-405).
+
+Keep that section before the final answer while running, folded and reopened. Finishing a reply must not move its working notes underneath the answer. BK corrected this ordering after seeing it in the live app (D-412); the follow-up implementation is not part of v0.43.0's proof.
 
 A model reply can finish while a hardware job continues. In that case the answer is readable, but "Sending to your Glove80" remains live until the sync engine verifies it or reports another state.
 

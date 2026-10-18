@@ -1,0 +1,27 @@
+{
+  "binary": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.43.0-published-install/bin/keyloom",
+  "version": "0.43.0",
+  "binarySha256": "836357f25df7d7a550f12a146f2cc8093d2040e61bc6323c9ffdea48521df6a7",
+  "source": "42cc77f4716faa207350c2b7a723599a0c188eda",
+  "tree": "ac44bd523bdb1dbef35d652745645e0ba6b00b37",
+  "srcTree": "19c6ce5232673a0a6b2b74ffbf4c489437854758",
+  "scratch": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-published-acceptance-01",
+  "browser": "keyloom-agent-26b-acceptance",
+  "port": 4510,
+  "server1Pid": 60388,
+  "server1Exit": -9,
+  "server2Pid": 64144,
+  "codexHomeEmpty": true,
+  "recordNullSink": true,
+  "finalConfigCount": 3,
+  "fakeExecCounter": 6,
+  "autosync": {
+    "schema_version": 1,
+    "board_id": "zsa/moonlander",
+    "auto_sync": "off",
+    "choice": false,
+    "paused": false,
+    "proven": false,
+    "proven_at": null
+  }
+}

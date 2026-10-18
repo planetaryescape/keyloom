@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M58JD9KBQZ89PA405HXH02C9",
+    "layoutId": "lay_01M58J963714Y9VBVZWVRS3RWZ",
+    "title": "Compiled 26b consecutive questions: ask about two synthetic\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792362849899
+  },
+  "messages": [
+    {
+      "id": "msg_01M58JD9KBQZ89PA405HXH02CA",
+      "role": "user",
+      "text": "Compiled 26b consecutive questions: ask about two synthetic routes, one at a time. Do not change configurations.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792362849899
+    },
+    {
+      "id": "msg_01M58JD9Z7ASEFZTBVJPJJ6G1Z",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792362850279,
+      "question": {
+        "question": "Keep the first compiled route?",
+        "options": [
+          {
+            "label": "Keep first"
+          },
+          {
+            "label": "Replace first"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "codex_c6305c46-4669-4ea0-9d81-aacef8721eed_item_0",
+        "answer": null
+      }
+    }
+  ],
+  "proposals": [],
+  "preparationReceipts": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M58JD9KBQZ89PA405HXH02CA",
+      "questionToolUseId": "codex_c6305c46-4669-4ea0-9d81-aacef8721eed_item_0",
+      "status": "waiting_user",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 1,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    }
+  ]
+}
