@@ -227,6 +227,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const workbenchRef = useRef<HTMLDivElement>(null);
   // How the board moves for the key card: its halves part when the card would cover a key, and it slides only if that can't fit (P2).
   const [boardLayout, setBoardLayout] = useState<BoardLayout>({ shift: 0, part: null, scale: 1 });
   // A key another key's card points at ("Also on Colemak"), lit on the board while pointed at.
@@ -611,7 +612,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // Opening the chat puts the cursor in its box, so Cmd-K then typing is one gesture.
   useEffect(() => {
     if (!chatOpen) return;
-    const frame = window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("#side-chat .composer textarea")?.focus({ preventScroll: true }));
+    const frame = window.requestAnimationFrame(() => {
+      // Desktop chat is in the command column; phones use #side-chat. Own both here.
+      const input = workbenchRef.current?.querySelector<HTMLTextAreaElement>(".chat textarea");
+      if (input?.checkVisibility()) input.focus({ preventScroll: true });
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [chatOpen]);
 
@@ -1661,7 +1666,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           release: chrome.release,
         }}
       />
-      <div className="workbench" data-newboard={newBoardDrawn !== null || undefined} data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown || (newBoardPanel && !narrow) || (proposalsShown && !narrow) || (reviewShown && !narrow) ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
+      <div ref={workbenchRef} className="workbench" data-newboard={newBoardDrawn !== null || undefined} data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown || (newBoardPanel && !narrow) || (proposalsShown && !narrow) || (reviewShown && !narrow) ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
         <section
           ref={stageRef}
           className="stage"
