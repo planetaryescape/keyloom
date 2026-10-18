@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.42.0](https://github.com/planetaryescape/keyloom/compare/v0.41.1...v0.42.0) (2026-10-18)
+
+
+### Features
+
+* show agent work and keep sidebars exclusive ([33d5f98](https://github.com/planetaryescape/keyloom/commit/33d5f9833db6b7ed7170f4a02c251b4f1aced470))
+
 ## [0.41.1](https://github.com/planetaryescape/keyloom/compare/v0.41.0...v0.41.1) (2026-10-18)
 
 
