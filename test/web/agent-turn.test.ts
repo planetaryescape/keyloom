@@ -72,6 +72,20 @@ describe("agent turn composition", () => {
     expect(html).not.toContain("agent-work-disclosure");
   });
 
+  test("the real transport presentation reaches the working component without a fixture prop", () => {
+    const html = render({ ...turn, presentation: {
+      version: 1, userMessageId: "request", status: "completed", messages: [{ id: "note", kind: "working_note", text: "I checked the spare thumb key." }],
+      operations: [{ id: "op1", tool: "propose_changes", label: "Prepare proposals", status: "declined", durationMs: 75, accepted: 0, declined: 1, validationCodes: ["layer_trap"], references: [] }],
+      warning: null, effectsMayHaveOccurred: true, detailsTruncated: false,
+    } });
+    expect(html).toContain("Prepare proposals");
+    expect(html).toContain("Not accepted");
+    expect(html).toContain("Validation: layer_trap");
+    expect(html).not.toContain("Working details unavailable");
+    expect(html).toContain("Your preview is ready.");
+    expect(html).toContain("Apply");
+  });
+
   test("stopped legacy replies warn that prepared effects may remain", () => {
     const html = render({ ...turn, phase: "stopped" });
     expect(html).toContain("Configs or proposals prepared before Stop may remain.");

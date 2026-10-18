@@ -1,7 +1,7 @@
 // Component input, not a wire protocol. The chat adapter owns validated, correlated
 // operation observations and explicit public-message boundaries.
 export type AgentWorkStatus = "running" | "waiting" | "completed" | "failed" | "stopped" | "disconnected";
-export type OperationStatus = "running" | "succeeded" | "failed" | "cancelled" | "unknown";
+export type OperationStatus = "running" | "succeeded" | "failed" | "declined" | "partial" | "cancelled" | "unknown";
 
 export interface AgentOperationView {
   id: string;
@@ -23,6 +23,8 @@ export type AgentWorkView =
       label: string | null;
       notes: readonly { id: string; text: string }[];
       operations: readonly AgentOperationView[];
+      warning?: string | null;
+      detailsTruncated?: boolean;
     };
 
 export type WorkDisclosureChoice = "automatic" | "open" | "closed";
@@ -39,6 +41,8 @@ export function operationStatusWords(status: OperationStatus): string {
     case "running": return "Working";
     case "succeeded": return "Completed";
     case "failed": return "Failed";
+    case "declined": return "Not accepted";
+    case "partial": return "Partly accepted";
     case "cancelled": return "Cancelled";
     case "unknown": return "Outcome not confirmed";
   }
@@ -65,7 +69,7 @@ export function projectWork(view: Extract<AgentWorkView, { kind: "observed" }>) 
     notes: view.notes.slice(-MAX_WORK_NOTES).map((note) => ({ ...note, text: note.text.slice(0, 1_200) })),
     omittedNotes: Math.max(0, view.notes.length - MAX_WORK_NOTES),
     // Missing earlier observations must not become an apparently clean success.
-    canFold: view.status === "completed" && omitted === 0 && view.notes.length <= MAX_WORK_NOTES
+    canFold: view.status === "completed" && !view.detailsTruncated && omitted === 0 && view.notes.length <= MAX_WORK_NOTES
       && view.operations.every((operation) => operation.status === "succeeded"),
   };
 }

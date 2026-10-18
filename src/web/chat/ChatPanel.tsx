@@ -46,6 +46,8 @@ interface Props {
   layoutRef: string;
   /** Human-facing config name when supplied by the shell; old callers retain the config reference. */
   configName?: string;
+  /** Keep a reachable Stop in the shell when this still-mounted conversation is hidden. */
+  onActivity?: (activity: { stop: () => void } | null) => void;
   layout: Layout;
   board: BoardDefinition;
   /** The head the page shows; a new one means a change was applied and the decisions may have changed. */
@@ -80,10 +82,14 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onTurns }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onTurns }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
+  useEffect(() => {
+    onActivity?.(streaming ? { stop: chat.stop } : null);
+    return () => onActivity?.(null);
+  }, [streaming, chat.stop, onActivity]);
   const [draft, setDraft] = useState("");
   const [motionPaused, setMotionPaused] = useState(false);
   // The command rows for what's typed. Enter runs the highlighted one; a short text highlights the first command, a longer one (a
@@ -210,6 +216,8 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
 
   // In the bar, a reply with options shows the first one on the board at once; the tabs switch between them (comp d).
   const newest = transcript.turns.at(-1);
+  const activeOperation = newest?.kind === "assistant" ? newest.presentation?.operations.findLast((operation) => operation.status === "running") : undefined;
+  const announcement = streaming ? activeOperation?.label ?? "keyloom is replying" : newest?.kind === "assistant" && newest.question?.answer === null ? "keyloom needs your answer" : "";
   const newestOpen = newest?.kind === "assistant" && newest.phase === "done" ? newest.proposals.filter((proposal) => proposal.status === "proposed") : [];
   const newestKey = newestOpen.map((proposal) => proposal.changeSetId).join(",");
   useEffect(() => {
@@ -403,7 +411,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
         </div>
       ) : (
         <>
-          <p className="sr-only" role="status">{streaming ? "keyloom is replying" : ""}</p>
+          <p className="sr-only" role="status">{announcement}</p>
           {folded ? null : <OutcomeQuestions questions={outcomes.questions} onAnswer={outcomes.answer} />}
           <div
             hidden={folded}

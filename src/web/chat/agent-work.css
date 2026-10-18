@@ -77,8 +77,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.agent-operation[data-state="failed"] > svg,
-.agent-operation[data-state="failed"] .agent-operation-state {
+.agent-operation:is([data-state="failed"], [data-state="declined"], [data-state="partial"]) > svg,
+.agent-operation:is([data-state="failed"], [data-state="declined"], [data-state="partial"]) .agent-operation-state {
   color: var(--bad-ink);
 }
 

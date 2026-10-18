@@ -1694,3 +1694,9 @@ Entries attributed to BK are product requirements. Entries attributed to the ass
 - Of several suggestions that fix the same check, the one with the fewest warnings, then the smallest change, stays. The others' change sets are rejected, not offered as alternatives, because the screen shows one fix per problem. The prompt asks for one fix per problem to begin with.
 - The request budget is 10, up from 8: the model often spends two or three requests on proposals before it submits.
 - A run that stops at its step or tool limit, or is cut off, after saving a fix is `done`: what it saved is attached by the same rule (title, summary, `fixes`, one per problem) and `ai.reason` says "Stopped at its step limit; showing what it found." It is `failed` only when nothing usable was saved, and then its proposals are withdrawn.
+
+### D-410: Opening a sidebar replaces the previous sidebar, never hides the new one behind it. (BK, reporting Hints → More → Settings)
+- BK: "sidebars shouldn't open on top of each other" and "show only one thing at a time". Reproduced on the synthetic editor: Settings was mounted but invisible while the board review remained visible.
+- One selected sidebar owns visibility for review, proposals, settings, history, library, combos, repeat, lab and chat. Closing it does not resurrect the previous sidebar; a late close from the previous one cannot dismiss its replacement.
+- This restores chapter 23's one-at-a-time rule and replaces D-310's visible key-over-conversation layering. Key drafts are parked through the existing draft path. Opening a key replaces chat; chat history and an active request may remain mounted, with an explicit reachable Stop outside the hidden pane.
+- Entering the new-keyboard sidebar also clears the previous sidebar selection. Navigating away is not an Apply, a keyboard flash, or consent to record typing.

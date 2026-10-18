@@ -48,6 +48,7 @@ Firmware names, positions and revision IDs stay behind Advanced view.
 
 - **Always there:** the top bar (boards, the sync line, Ask keyloom, undo, the menu), the stage with the board and its caption, and the layer strip.
 - **Opens on top, one at a time:** the key card (P2: between the parted halves; P1: the sheet), Ask keyloom (P3: the command bar; P1: the sheet), and a sheet from the right for History, Library, Combos or Settings. Opening one closes another. The board moves aside for a sheet and never sits under one.
+  - D-410 reasserts this for the board review, proposals and lab too: choosing Settings while Hints is open replaces Hints, not a second panel behind it. A hidden conversation can retain its request/history, but active work keeps a visible Stop control. Closing the new sidebar does not reveal the old one.
 - **Comes to you:** a board that connects (a card on the stage), a keyboard that falls behind (the sync line turns amber), a failure (the sync line turns red and opens to say what to do).
 - **Getting back:** Esc closes one thing at a time, down to the plain stage. The stage is home.
 

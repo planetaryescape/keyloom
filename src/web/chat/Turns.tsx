@@ -12,6 +12,7 @@ import { keyLabel, layerName, optionLabels } from "./proposal-facts.ts";
 import type { AssistantTurn, UserTurn } from "./transcript.ts";
 import { AgentWorking } from "./AgentWorking.tsx";
 import type { AgentWorkStatus, AgentWorkView } from "./work-view.ts";
+import { presentationView } from "./presentation-view.ts";
 
 export function UserMessage({ turn, layout, context }: { turn: UserTurn; layout: Layout; context?: string }) {
   const { selection } = turn;
@@ -84,7 +85,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
   const offers = turn.proposals.length;
   const status: AgentWorkStatus = turn.question?.answer === null ? "waiting" : turn.phase === "streaming" ? "running" : turn.phase === "failed" ? "failed" : turn.phase === "stopped" ? "stopped" : "completed";
   // Existing turns have no correlated lifecycle. Never infer completed calls from their old tool-name hint.
-  let work: AgentWorkView = working ?? { kind: "unavailable", status };
+  let work: AgentWorkView = working ?? (turn.presentation === undefined ? { kind: "unavailable", status } : presentationView(turn.presentation));
   if (turn.question?.answer === null) work = { ...work, status: "waiting" };
   else if (turn.phase === "stopped") work = { ...work, status: "stopped" };
   else if (turn.failure !== null && work.status !== "disconnected") work = { ...work, status: "failed" };

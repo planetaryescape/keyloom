@@ -42,6 +42,8 @@ function ObservedWorking({ view, motionPaused }: { view: Extract<AgentWorkView, 
   return (
     <div className="agent-working" data-motion-paused={motionPaused}>
       {view.status === "completed" && work.attention.length === 0 ? null : <WorkStatus status={view.status} label={view.label} />}
+      {view.warning ? <p className="agent-work-incomplete">{view.warning}</p> : null}
+      {!view.detailsTruncated ? null : <p className="agent-work-incomplete">Some working details were not retained. The final reply and saved proposals remain separate.</p>}
       {work.omitted === 0 && work.omittedNotes === 0 ? null : (
         <p className="agent-work-incomplete">Earlier working details are not shown ({work.omitted} steps, {work.omittedNotes} notes). Their outcomes are not confirmed here.</p>
       )}
