@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.1](https://github.com/planetaryescape/keyloom/compare/v0.41.0...v0.41.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* review drops a restated check by its layers and keeps one fix per problem ([#121](https://github.com/planetaryescape/keyloom/issues/121)) ([4b230c9](https://github.com/planetaryescape/keyloom/commit/4b230c9b57d777f27fa526cbb226d06b49976108))
+
 ## [0.41.0](https://github.com/planetaryescape/keyloom/compare/v0.40.1...v0.41.0) (2026-10-18)
 
 
