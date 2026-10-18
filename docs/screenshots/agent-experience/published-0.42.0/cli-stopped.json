@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M5897DKJND0H7X588VZDYH44",
+    "layoutId": "lay_01M589422YTYMZR3AWQR0TS832",
+    "title": "Published Stop acceptance: prepare one synthetic copy and\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792353220210
+  },
+  "messages": [
+    {
+      "id": "msg_01M5897DKJND0H7X588VZDYH45",
+      "role": "user",
+      "text": "Published Stop acceptance: prepare one synthetic copy and wait. Do not put anything on a keyboard.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792353220211
+    }
+  ],
+  "proposals": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M5897DKJND0H7X588VZDYH45",
+      "status": "cancelled",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "create_config",
+          "label": "Create config",
+          "status": "succeeded",
+          "durationMs": 2,
+          "validationCodes": [],
+          "references": [
+            {
+              "kind": "config",
+              "id": "lay_01M5897E42K5B010K7PWES6WMH"
+            }
+          ],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [
+        {
+          "id": "public_1",
+          "kind": "working_note",
+          "text": "I will prepare one synthetic copy without changing the keyboard."
+        },
+        {
+          "id": "public_2",
+          "kind": "working_note",
+          "text": "The copy is prepared; I am waiting for Stop."
+        }
+      ],
+      "effectsMayHaveOccurred": true,
+      "warning": "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request.",
+      "detailsTruncated": false
+    }
+  ]
+}

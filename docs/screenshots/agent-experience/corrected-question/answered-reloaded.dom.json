@@ -1,0 +1,17 @@
+{
+  "canaryInUI": false,
+  "finalAnswerVisible": true,
+  "height": 844,
+  "operations": [
+    {
+      "label": "Ask a question",
+      "status": "failed"
+    },
+    {
+      "label": "Ask a question",
+      "status": "succeeded"
+    }
+  ],
+  "scrollWidth": 390,
+  "width": 390
+}
