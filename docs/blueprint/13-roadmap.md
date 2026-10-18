@@ -596,7 +596,9 @@ Previously, one activity string represents a running turn. Now a request has dis
 
 ## Rung 26a: I see real work and can read the final answer
 
-Status: backend, browser projection and approved UI are integrated locally; final full-suite, compiled-browser and release gates are running. Not released. Stop stays visible on phones, including when another sidebar replaces chat (D-410).
+Status: implemented, 2026-10-18. Local and CI full suites passed; the compiled production app passed the [recorded acceptance journeys](../screenshots/agent-experience/integrated/README.md). This is 26a only, not the original rung's durable-execution promise. Stop stays visible on phones, including when another sidebar replaces chat (D-410). Published-release installation is a separate final delivery gate.
+
+**Observed:** completed activity and public message grouping survived reload; the actual composer produced the same saved grouping; desktop Stop and phone shell Stop preserved completed config preparation with non-rollback warnings. Reading history left exactly the original plus two deliberate synthetic copies, with the original unchanged. The actual Hints/Settings/History/Library/Ask controls replaced one another without overlap. This used fake Codex through real MCP and the bundled app, not paid providers, real layouts or hardware. Transient running read rows were too fast to capture; running-turn/Stop behavior was observed with a deliberately hanging preparation request.
 
 Previously, the agent shows one activity string and combines working notes with its final answer. Now the existing layout-scoped conversation shows correlated tool start/result/failure, semantic validation refusal, separate public working notes and final answer, and inspectable bounded completed activity.
 

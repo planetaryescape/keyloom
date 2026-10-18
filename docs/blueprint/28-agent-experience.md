@@ -1,10 +1,10 @@
 # 28: The agent works beside the keyboard
 
-Status: proposal, 2026-10-18. Source baseline: origin/main at `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`. BK requested the experience; component details and timing values below are blueprint proposals. Nothing in this chapter is marked built.
+Status: partly implemented, 2026-10-18. Rung 26a provides distinct messages, observed tool activity, separate public working notes/final answers, reopenable completed working and interruption warnings. [Compiled-app evidence](../screenshots/agent-experience/integrated/README.md) records the tested scope. Domain question/artifact extensions and cross-keyboard flows below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
 
 Reconciled with origin/main at `72370d0494497ae4bdd6036106fcec9d3f6c1aab`: inherit the no-accent-stripe/no-sparkle rule in [18](18-visual-design.md#patterns-keyloom-doesnt-use) and separate case/keycap controls (D-319).
 
-Execution update: BK approved the synthetic 26a running/waiting/completed/failure visual proposal (Q30, D-409), with Stop kept visible on phones. Production implementation has started; neither the runtime journey nor the later cross-board/key-picking designs are approved as built.
+BK approved the synthetic 26a running/waiting/completed/failure visual proposal (Q30, D-409). The compiled candidate passed completed-history, composer, folding/reopening, reload and Stop-after-preparation journeys in both themes and desktop/phone sizes. Stop remains reachable when another sidebar replaces chat (D-410). These checks use a deterministic provider and synthetic data, not a real model or keyboard. Later cross-board/key-picking designs are not covered by that approval.
 
 The agent must feel like part of a keyboard configurator. BK can point at keys, describe a frustration, operate the app, and carry something between keyboards without translating his request into firmware syntax. While Keyloom works, he can see what is happening. Afterward, the result takes the space and routine working detail folds away (D-396 to D-398).
 

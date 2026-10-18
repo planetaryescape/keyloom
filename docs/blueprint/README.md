@@ -2,7 +2,7 @@
 
 > An open-source, local-first configurator for QMK and ZMK keyboards. It's a bun web app on localhost plus a CLI. You describe a frustration with your layout, an agent proposes structured changes that keyloom validates and shows on the keyboard, and keyloom builds and flashes the firmware, remembering why each change was made.
 
-keyloom is built and at v0.36.1 (2026-10-17). This blueprint is the design it was built from and the record of why. It was written on 2026-10-15 from BK's design conversations of 2026-09-28 and 2026-10-11, before any code existed, and has been extended since. Where a chapter says "proposal" or "not built", check its status line and [13-roadmap.md](13-roadmap.md), which says what each rung shipped in and what was observed on hardware. Where text and code disagree, the code is current and the text is stale. Tell BK, then fix the text.
+keyloom is built; the [latest release](https://github.com/planetaryescape/keyloom/releases/latest) is its installable version. This blueprint is the design it was built from and the record of why. It was written on 2026-10-15 from BK's design conversations of 2026-09-28 and 2026-10-11, before any code existed, and has been extended since. Where a chapter says "proposal" or "not built", check its status line and [13-roadmap.md](13-roadmap.md), which says what each rung shipped in and what was observed on hardware. Where text and code disagree, the code is current and the text is stale. Tell BK, then fix the text.
 
 ## Reading order
 
@@ -21,7 +21,7 @@ keyloom is built and at v0.36.1 (2026-10-17). This blueprint is the design it wa
 | 10 | [CLI](10-cli.md) | Command tree, output contract, exit codes, agent skill |
 | 11 | [Observability and evals](11-observability-and-evals.md) | Logs, recovering from a bad flash, the agent eval set |
 | 12 | [Cost model](12-cost-model.md) | Model cost per turn and per session |
-| 13 | [Roadmap](13-roadmap.md) | Phase 0 and rungs 1 to 25, each with the release that built it and whether its done-when check was observed |
+| 13 | [Roadmap](13-roadmap.md) | Phase 0 and rungs 1 to 30, including the 26a/26b split, implementation evidence and remaining delivery gates |
 | 14 | [Decision log](14-decision-log.md) | Every decision, the options rejected, and how the design got here |
 | 15 | [Open questions](15-open-questions.md) | Spikes to run against BK's real boards, and product questions |
 | 16 | [Key editor](16-key-editor.md) | The Oryx-style key panel, tap dance, macros, combos and layers made on the board, and the parity matrix against keymap-editor, Oryx and Vial |
@@ -36,8 +36,8 @@ keyloom is built and at v0.36.1 (2026-10-17). This blueprint is the design it wa
 | 25 | [Configs and versions](25-configs-and-versions.md) | Several configs per board with one on the keyboard, and versions as milestones you can go back to |
 | 26 | [Desktop app](26-desktop-app.md) | Tauri shell around the server, menu-bar sync status, shipping and signing |
 | 27 | [Board review](27-board-review.md) | What keyloom finds in a revision without being asked: checks at once, the agent after, triggers, hiding and the fixed tick |
-| 28 | [The agent works beside the keyboard](28-agent-experience.md) | Proposed agent experience: distinct messages, shimmering activity, tool/results UI, domain questions, rich artifacts and completed-work collapse |
-| 29 | [The agent operates the app](29-agent-app-control.md) | Proposed app-wide capabilities, execution/confirmation policy, durable events, presentation data, CLI/API contracts and coverage gates |
+| 28 | [The agent works beside the keyboard](28-agent-experience.md) | Implemented 26a message/activity/folding experience; proposed domain questions, rich artifacts and later interaction gates |
+| 29 | [The agent operates the app](29-agent-app-control.md) | Implemented bounded observation contract; proposed app-wide capabilities, confirmation, durable execution and coverage gates |
 | 30 | [Talk to any keyboard](30-agent-keyboard-context.md) | Proposed collection awareness, request focus, cross-keyboard writes, transfers, batch outcomes and physical-device identity limits |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
@@ -83,9 +83,9 @@ Research behind these decisions:
 
 ## Rules for coding agents
 
-The 2026-10-18 agent extension is a proposal, not a shipped capability. BK asked for a keyboard specialist that operates the whole app and all his registered keyboards, with a purpose-built UI for its work (D-396 to D-407). Read chapters 28 to 30 together, the new rungs 26 to 30 (including 28b and 28c), and Q30 to Q36 before building it. The existing "keyboard under the light" concept is preserved; schemas, conversation continuity and confirmation policy are explicit blueprint assumptions. Use the follow-on prompt in [KICKOFF](KICKOFF.md), not its historical first-build instructions.
+The 2026-10-18 app-wide agent extension remains a proposal beyond 26a's implemented observation/presentation slice. BK asked for a keyboard specialist that operates the whole app and all his registered keyboards, with a purpose-built UI for its work (D-396 to D-407). Read chapters 28 to 30 together, the new rungs 26 to 30 (including 28b and 28c), and Q30 to Q36 before building further. The existing "keyboard under the light" concept is preserved; future run schemas, conversation continuity and confirmation policy remain explicit blueprint assumptions. Use the follow-on prompt in [KICKOFF](KICKOFF.md), not its historical first-build instructions.
 
-Execution update: S54 reproduced the current message/cancellation gaps, so D-408 splits rung 26 into 26a (honest progress/message presentation) and 26b (durable execution/reconnect). The former must ship with explicit interruption limits; completing it does not complete the latter. BK approved Q30's 26a visual proposal (D-409), and backend/UI implementation has started. No new rung is released yet.
+Execution update: S54 reproduced the message/cancellation gaps, so D-408 splits rung 26 into 26a (honest progress/message presentation) and 26b (durable execution/reconnect). BK approved Q30's 26a visuals (D-409). The implemented 26a candidate passed full suites and [compiled-app acceptance](../screenshots/agent-experience/integrated/README.md), including D-410's one-sidebar rule. Published-release installation remains the final delivery gate. None of this establishes 26b, new app capabilities or cross-board mutation support.
 
 1. **The CLI is the canonical surface.** Anything the web app does, a `keyloom` subcommand does. Check your work by driving the installed binary (D-030).
 2. **The validator decides.** No path applies a change set that hasn't passed `validate` against the current head (D-014).

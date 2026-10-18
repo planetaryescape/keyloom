@@ -1,8 +1,10 @@
 # 29: The agent operates the same app as the user
 
-Status: proposal, 2026-10-18. Source baseline: origin/main at `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`. Contracts below are proposed, not existing APIs. Product requirement: D-396 and D-400. Execution, progress and presentation proposals: D-399, D-403 to D-406.
+Status: app-wide control and durable execution remain proposals, 2026-10-18. Rung 26a implements only observation and bounded presentation over the existing layout-owned conversation. Its actual [wire/CLI contract](../research/spikes/26a-contract.md) and [compiled acceptance](../screenshots/agent-experience/integrated/README.md) are separate from the proposed run/capability APIs below. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`. Product requirement: D-396 and D-400; execution/presentation direction: D-399, D-403 to D-406.
 
 Reconciled with origin/main at `72370d0494497ae4bdd6036106fcec9d3f6c1aab`: the coverage inventory includes the separate case/keycap controls (D-319), and renderers inherit the current no-stripe/no-sparkle rule.
+
+Implemented 26a: `presentationVersion: 1` negotiates replacement snapshots on the existing chat stream; conversation detail and `conversations show` expose the saved snapshots. Old requests retain the old strict event union. Snapshots are not durable runs or atomic effect receipts: a stream interruption may stop execution, Stop is not rollback, and history reads never resend the request. The `app/agent-runs` module and run endpoints drawn below do not exist yet; rung 26b owns them.
 
 The agent must be able to complete app workflows, not just explain how BK could complete them. It needs a current view of Keyloom, a bounded set of capabilities over existing use cases, and results the UI can render. It must not become a second implementation of the app.
 
