@@ -1,0 +1,109 @@
+{
+  "binary": "/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-agent-review/dist/keyloom-darwin-arm64",
+  "binarySha256": "b7f71a182c5f0b9baa3984f77b63c33fd2e7dd04706e46009bd4285c8586dd62",
+  "scratch": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26a-candidate-qa-smoke-01",
+  "layoutId": "lay_01M5877J5WBFB6K8Q32BETSNN0",
+  "conversationId": "conv_01M5877P2KHSGJCXHT4YPYGERJ",
+  "checks": [
+    {
+      "name": "config list: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "config list: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "Server scratch contains only Moonlander configs",
+      "pass": true
+    },
+    {
+      "name": "autosync off: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "autosync off: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "autosync status: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "autosync status: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "Moonlander autosync is explicitly false",
+      "pass": true
+    },
+    {
+      "name": "serve --no-open: command completed within bound",
+      "pass": true
+    }
+  ],
+  "commands": [
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26a-candidate-qa-smoke-01/data",
+        "--format",
+        "json",
+        "config",
+        "list",
+        "--archived"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26a-candidate-qa-smoke-01/data",
+        "--format",
+        "json",
+        "autosync",
+        "off",
+        "zsa/moonlander"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26a-candidate-qa-smoke-01/data",
+        "--format",
+        "json",
+        "autosync",
+        "status",
+        "zsa/moonlander"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26a-candidate-qa-smoke-01/data",
+        "--format",
+        "json",
+        "serve",
+        "--no-open",
+        "--port",
+        "0",
+        "--provider",
+        "codex",
+        "--exit-on-stdin-close"
+      ],
+      "exitCode": null,
+      "timedOut": false,
+      "unknownCommand": false
+    }
+  ],
+  "passed": true,
+  "browser": "unverified: inspect the actual served app manually; CLI checks do not certify browser behavior or a release"
+}

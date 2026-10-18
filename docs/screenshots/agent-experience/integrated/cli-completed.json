@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M5877P2KHSGJCXHT4YPYGERJ",
+    "layoutId": "lay_01M5877J5WBFB6K8Q32BETSNN0",
+    "title": "Inspect the synthetic base layer only; do not propose or\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792351131731
+  },
+  "messages": [
+    {
+      "id": "msg_01M5877P2QV0GKBB9T1J165X07",
+      "role": "user",
+      "text": "Inspect the synthetic base layer only; do not propose or apply changes.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792351131735
+    },
+    {
+      "id": "msg_01M5877PV6V5B52NTNVV9ZBSV4",
+      "role": "assistant",
+      "text": "I will inspect the synthetic base layer without changing it.",
+      "toolCalls": [
+        "get_layout"
+      ],
+      "selection": null,
+      "createdAt": 1792351132519
+    },
+    {
+      "id": "msg_01M5877PV71GPTBWQJ9GB351X7",
+      "role": "assistant",
+      "text": "The synthetic Moonlander inspection is complete. No layout or device was changed.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792351132519
+    },
+    {
+      "id": "msg_01M587BXWB9V5TVXEXS27H3BZH",
+      "role": "user",
+      "text": "Inspect the synthetic base layer again for acceptance. No writes.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792351270795
+    },
+    {
+      "id": "msg_01M587BYN8BS79D37C9SRW4WJM",
+      "role": "assistant",
+      "text": "I will inspect the synthetic base layer without changing it.",
+      "toolCalls": [
+        "get_layout"
+      ],
+      "selection": null,
+      "createdAt": 1792351271592
+    },
+    {
+      "id": "msg_01M587BYN8BS79D37C9SRW4WJP",
+      "role": "assistant",
+      "text": "The synthetic Moonlander inspection is complete. No layout or device was changed.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792351271592
+    }
+  ],
+  "proposals": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M5877P2QV0GKBB9T1J165X07",
+      "status": "completed",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "get_layout",
+          "label": "Read layout",
+          "status": "succeeded",
+          "durationMs": 12,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [
+        {
+          "id": "public_1",
+          "kind": "working_note",
+          "text": "I will inspect the synthetic base layer without changing it.",
+          "messageId": "msg_01M5877PV6V5B52NTNVV9ZBSV4"
+        },
+        {
+          "id": "public_2",
+          "kind": "answer",
+          "text": "The synthetic Moonlander inspection is complete. No layout or device was changed.",
+          "messageId": "msg_01M5877PV71GPTBWQJ9GB351X7"
+        }
+      ],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    },
+    {
+      "version": 1,
+      "userMessageId": "msg_01M587BXWB9V5TVXEXS27H3BZH",
+      "status": "completed",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "get_layout",
+          "label": "Read layout",
+          "status": "succeeded",
+          "durationMs": 5,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [
+        {
+          "id": "public_1",
+          "kind": "working_note",
+          "text": "I will inspect the synthetic base layer without changing it.",
+          "messageId": "msg_01M587BYN8BS79D37C9SRW4WJM"
+        },
+        {
+          "id": "public_2",
+          "kind": "answer",
+          "text": "The synthetic Moonlander inspection is complete. No layout or device was changed.",
+          "messageId": "msg_01M587BYN8BS79D37C9SRW4WJP"
+        }
+      ],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    }
+  ]
+}

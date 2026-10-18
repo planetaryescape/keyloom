@@ -1,0 +1,119 @@
+{
+  "copiesBeforeReading": 3,
+  "copiesAfterReading": 3,
+  "configsIdenticalAfterCLIHistoryReads": true,
+  "allMoonlander": true,
+  "codexHomeEmpty": true,
+  "recordNullSink": true,
+  "autosync": {
+    "schema_version": 1,
+    "board_id": "zsa/moonlander",
+    "auto_sync": "off",
+    "choice": false,
+    "paused": false,
+    "proven": false,
+    "proven_at": null
+  },
+  "turns": [
+    {
+      "kind": "phone",
+      "conversation": "conv_01M587EJ5S6D7DGD2XJZNMCWBD",
+      "presentations": [
+        {
+          "status": "cancelled",
+          "operations": [
+            {
+              "id": "op_1",
+              "tool": "create_config",
+              "label": "Create config",
+              "status": "succeeded",
+              "durationMs": 1,
+              "validationCodes": [],
+              "references": [
+                {
+                  "kind": "config",
+                  "id": "lay_01M587EJXB1SMYY6XHNM1S63MD"
+                }
+              ],
+              "accepted": 0,
+              "declined": 0
+            }
+          ],
+          "effectsMayHaveOccurred": true,
+          "warning": "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request."
+        }
+      ]
+    },
+    {
+      "kind": "desktop",
+      "conversation": "conv_01M587DKCS8ZRQ1W8NC7E39VYJ",
+      "presentations": [
+        {
+          "status": "cancelled",
+          "operations": [
+            {
+              "id": "op_1",
+              "tool": "create_config",
+              "label": "Create config",
+              "status": "succeeded",
+              "durationMs": 2,
+              "validationCodes": [],
+              "references": [
+                {
+                  "kind": "config",
+                  "id": "lay_01M587DM61JJDMH5V9NM06W4A6"
+                }
+              ],
+              "accepted": 0,
+              "declined": 0
+            }
+          ],
+          "effectsMayHaveOccurred": true,
+          "warning": "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request."
+        }
+      ]
+    },
+    {
+      "kind": "completed",
+      "conversation": "conv_01M5877P2KHSGJCXHT4YPYGERJ",
+      "presentations": [
+        {
+          "status": "completed",
+          "operations": [
+            {
+              "id": "op_1",
+              "tool": "get_layout",
+              "label": "Read layout",
+              "status": "succeeded",
+              "durationMs": 12,
+              "validationCodes": [],
+              "references": [],
+              "accepted": 0,
+              "declined": 0
+            }
+          ],
+          "effectsMayHaveOccurred": false,
+          "warning": null
+        },
+        {
+          "status": "completed",
+          "operations": [
+            {
+              "id": "op_1",
+              "tool": "get_layout",
+              "label": "Read layout",
+              "status": "succeeded",
+              "durationMs": 5,
+              "validationCodes": [],
+              "references": [],
+              "accepted": 0,
+              "declined": 0
+            }
+          ],
+          "effectsMayHaveOccurred": false,
+          "warning": null
+        }
+      ]
+    }
+  ]
+}

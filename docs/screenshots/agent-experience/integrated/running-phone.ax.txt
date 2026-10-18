@@ -1,0 +1,74 @@
+- region "Ask keyloom" [ref=e11]
+  - paragraph
+    - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+  - button "Pause animation" [ref=e58]
+  - status
+    - StaticText "keyloom is replying"
+  - log "Conversation" [ref=e59] focusable [tabindex]
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "26a phone Stop acceptance: prepare a unique synthetic copy and wait. Do not put anything on a keyboard."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - status
+      - StaticText "Working…"
+    - button "1 completed step · working notes" [expanded=true, ref=e60]
+      - StaticText "1 completed step · working notes"
+    - generic
+      - paragraph
+        - StaticText "I will prepare a synthetic phone acceptance copy without changing the keyboard."
+      - list "Agent operations"
+        - listitem [level=1]
+          - paragraph
+            - StaticText "Create config"
+          - paragraph
+            - StaticText "1 prepared config"
+          - StaticText "Completed"
+          - StaticText "1 ms"
+  - form
+    - textbox "Message to keyloom" [ref=e61]
+    - button "Stop" [ref=e62]
+    - button "More" [expanded=false, ref=e64]
+    - button "Close (Esc)" [ref=e63]
+      - StaticText "esc"
+- paragraph
+  - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+- button "Pause animation" [ref=e58]
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "26a phone Stop acceptance: prepare a unique synthetic copy and wait. Do not put anything on a keyboard."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- status
+  - StaticText "Working…"
+- button "1 completed step · working notes" [expanded=true, ref=e60]
+  - StaticText "1 completed step · working notes"
+- generic
+  - paragraph
+    - StaticText "I will prepare a synthetic phone acceptance copy without changing the keyboard."
+  - list "Agent operations"
+    - listitem [level=1]
+      - paragraph
+        - StaticText "Create config"
+      - paragraph
+        - StaticText "1 prepared config"
+      - StaticText "Completed"
+      - StaticText "1 ms"
+- textbox "Message to keyloom" [ref=e61]
+- button "Stop" [ref=e62]
+- button "More" [expanded=false, ref=e64]
+- button "Close (Esc)" [ref=e63]
+  - StaticText "esc"
+- StaticText "Working…"
+- paragraph
+  - StaticText "Create config"
+- paragraph
+  - StaticText "1 prepared config"
+- StaticText "Completed"
+- StaticText "1 ms"

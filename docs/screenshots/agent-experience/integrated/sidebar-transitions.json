@@ -1,0 +1,57 @@
+[
+  {
+    "action": "review marker opens actual not-yet-reviewed board review",
+    "panes": {
+      ".br-panel": true,
+      ".chat": false,
+      ".history-panel": false,
+      ".library": false,
+      ".settings-pane": false
+    },
+    "visibleSidePanes": 0
+  },
+  {
+    "action": "More Settings replaces review",
+    "panes": {
+      ".br-panel": false,
+      ".chat": false,
+      ".history-panel": false,
+      ".library": false,
+      ".settings-pane": true
+    },
+    "visibleSidePanes": 1
+  },
+  {
+    "action": "History replaces settings",
+    "panes": {
+      ".br-panel": false,
+      ".chat": false,
+      ".history-panel": true,
+      ".library": false,
+      ".settings-pane": false
+    },
+    "visibleSidePanes": 1
+  },
+  {
+    "action": "Library replaces history",
+    "panes": {
+      ".br-panel": false,
+      ".chat": false,
+      ".history-panel": false,
+      ".library": true,
+      ".settings-pane": false
+    },
+    "visibleSidePanes": 1
+  },
+  {
+    "action": "Ask replaces library",
+    "panes": {
+      ".br-panel": false,
+      ".chat": true,
+      ".history-panel": false,
+      ".library": false,
+      ".settings-pane": false
+    },
+    "visibleSidePanes": 0
+  }
+]

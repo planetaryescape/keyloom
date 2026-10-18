@@ -1,0 +1,86 @@
+- region "Ask keyloom" [ref=e11]
+  - paragraph
+    - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+  - status
+  - log "Conversation" [ref=e58] focusable [tabindex]
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "Inspect the synthetic base layer only; do not propose or apply changes."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - paragraph
+      - StaticText "The synthetic Moonlander inspection is complete. No layout or device was changed."
+    - button "1 completed step · working notes" [expanded=false, ref=e62]
+      - StaticText "1 completed step · working notes"
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "Inspect the synthetic base layer again for acceptance. No writes."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - paragraph
+      - StaticText "The synthetic Moonlander inspection is complete. No layout or device was changed."
+    - button "1 completed step · working notes" [expanded=true, ref=e59]
+      - StaticText "1 completed step · working notes"
+    - generic
+      - paragraph
+        - StaticText "I will inspect the synthetic base layer without changing it."
+      - list "Agent operations"
+        - listitem [level=1]
+          - paragraph
+            - StaticText "Read layout"
+          - StaticText "Completed"
+          - StaticText "5 ms"
+  - form
+    - textbox "Message to keyloom" [ref=e60]
+    - button "More" [expanded=false, ref=e63]
+    - button "Close (Esc)" [ref=e61]
+      - StaticText "esc"
+- paragraph
+  - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "Inspect the synthetic base layer only; do not propose or apply changes."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- paragraph
+  - StaticText "The synthetic Moonlander inspection is complete. No layout or device was changed."
+- button "1 completed step · working notes" [expanded=false, ref=e62]
+  - StaticText "1 completed step · working notes"
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "Inspect the synthetic base layer again for acceptance. No writes."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- paragraph
+  - StaticText "The synthetic Moonlander inspection is complete. No layout or device was changed."
+- button "1 completed step · working notes" [expanded=true, ref=e59]
+  - StaticText "1 completed step · working notes"
+- generic
+  - paragraph
+    - StaticText "I will inspect the synthetic base layer without changing it."
+  - list "Agent operations"
+    - listitem [level=1]
+      - paragraph
+        - StaticText "Read layout"
+      - StaticText "Completed"
+      - StaticText "5 ms"
+- textbox "Message to keyloom" [ref=e60]
+- button "More" [expanded=false, ref=e63]
+- button "Close (Esc)" [ref=e61]
+  - StaticText "esc"
+- paragraph
+  - StaticText "Read layout"
+- StaticText "Completed"
+- StaticText "5 ms"
