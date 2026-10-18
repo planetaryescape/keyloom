@@ -1,0 +1,281 @@
+- region "Settings" [ref=e8]
+  - sectionheader
+    - heading "Settings" [level=2, ref=e59]
+    - paragraph
+      - StaticText "For the whole keyboard. One key's timing is tuned from that key's card."
+    - button "Close the settings" [ref=e60]
+  - LabelText
+    - StaticText "Filter the settings"
+  - searchbox "Filter the settings" [ref=e12]
+  - generic
+    - region "On screen" [ref=e61]
+      - heading "On screen" [level=3, ref=e65]
+      - generic
+        - StaticText "Your keyboard’s colours"
+        - StaticText "Case"
+        - radiogroup "Case"
+          - radio "Follow the theme" [checked=true, ref=e83]
+          - radio "Black" [checked=false, ref=e84]
+            - StaticText "Black"
+          - radio "White" [checked=false, ref=e85]
+            - StaticText "White"
+        - StaticText "Keycaps"
+        - radiogroup "Keycaps"
+          - radio "Follow the theme" [checked=true, ref=e86]
+          - radio "Black" [checked=false, ref=e87]
+            - StaticText "Black"
+          - radio "White" [checked=false, ref=e88]
+            - StaticText "White"
+        - paragraph
+          - StaticText "The Moonlander is drawn black in the dark theme and white in the light one. Only how keyloom draws it; nothing goes to the keyboard."
+    - region "Typing feel" [ref=e62]
+      - heading "Typing feel" [level=3, ref=e66]
+      - generic
+        - LabelText
+          - StaticText "Tapping term"
+        - StaticText "200 ms"
+        - slider "Tapping term" [ref=e69]: 200
+        - paragraph
+          - StaticText "How long you can hold a key before it counts as held, not tapped."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - switch "Permissive hold" [checked=true, ref=e70]
+        - button "Back to the default, Off" [ref=e71]
+          - StaticText "Back to the default, Off"
+        - paragraph
+          - StaticText "Pressing and releasing another key while a tap-hold key is down counts as a hold, even before the tapping term ends."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - switch "Hold on other key press" [checked=false, ref=e72]
+        - paragraph
+          - StaticText "Pressing any other key while a tap-hold key is down counts as a hold at once."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - switch "Chordal hold" [checked=true, ref=e73]
+        - button "Back to the default, Off" [ref=e74]
+          - StaticText "Back to the default, Off"
+        - paragraph
+          - StaticText "A tap-hold key only becomes a hold when the next key is on the opposite hand, so same-hand rolls stay taps."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - switch "Retro tapping" [checked=false, ref=e75]
+        - paragraph
+          - StaticText "Releasing a held tap-hold key with nothing else pressed sends its tap after all."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - LabelText
+          - StaticText "Combo term"
+        - StaticText "50 ms"
+        - slider "Combo term" [ref=e76]: 50
+        - paragraph
+          - StaticText "How close together the keys of a combo must go down."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - LabelText
+          - StaticText "One-shot timeout"
+        - StaticText "Never"
+        - slider "One-shot timeout" [ref=e77]: 0
+        - paragraph
+          - StaticText "How long a one-shot modifier or layer waits for the next key before letting go."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+    - region "Keys" [ref=e63]
+      - heading "Keys" [level=3, ref=e67]
+      - generic
+        - switch "Caps Word" [checked=false, ref=e78]
+        - paragraph
+          - StaticText "Capitalises the word you are typing and stops at the first space, so you can type SHOUTING_SNAKE_CASE without holding Shift or leaving Caps Lock on."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - LabelText
+          - StaticText "Caps Word timeout"
+        - StaticText "5000 ms"
+        - slider "Caps Word timeout" [disabled, ref=e79]: 5000
+        - paragraph
+          - StaticText "How long Caps Word waits with no typing before it switches itself off."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+        - paragraph
+          - StaticText "Turn on Caps Word first; this does nothing without it."
+      - generic
+        - switch "Auto Shift" [checked=false, ref=e80]
+        - paragraph
+          - StaticText "Holding a letter, number or symbol key types its shifted version, so you rarely reach for Shift."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+      - generic
+        - LabelText
+          - StaticText "Auto Shift timeout"
+        - StaticText "175 ms"
+        - slider "Auto Shift timeout" [disabled, ref=e81]: 175
+        - paragraph
+          - StaticText "How long a key is held before it types the shifted character."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+        - paragraph
+          - StaticText "Turn on Auto Shift first; this does nothing without it."
+      - generic
+        - switch "Mouse keys" [checked=true, ref=e82]
+        - paragraph
+          - StaticText "Lets keys move the pointer, click and scroll."
+        - group
+          - DisclosureTriangle "More" [expanded=false]
+            - StaticText "More"
+    - region "Layer colours" [ref=e64]
+      - heading "Layer colours" [level=3, ref=e68]
+      - paragraph
+        - StaticText "The keys light in the colour of the layer on top. A layer with no colour leaves the keys to the keyboard’s own light effect. One key can have its own colour from its panel."
+      - group
+        - DisclosureTriangle "Layer 0 No colour" [expanded=false]
+          - StaticText "Layer 0"
+          - StaticText "No colour"
+      - group
+        - DisclosureTriangle "Layer 1 Coloured" [expanded=false]
+          - StaticText "Layer 1"
+          - StaticText "Coloured"
+      - group
+        - DisclosureTriangle "Layer 2 Coloured, 6 keys on their own" [expanded=false]
+          - StaticText "Layer 2"
+          - StaticText "Coloured"
+          - StaticText ", 6 keys on their own"
+      - group
+        - DisclosureTriangle "Layer 3 No colour" [expanded=false]
+          - StaticText "Layer 3"
+          - StaticText "No colour"
+      - group
+        - DisclosureTriangle "Layer 4 Coloured" [expanded=false]
+          - StaticText "Layer 4"
+          - StaticText "Coloured"
+      - group
+        - DisclosureTriangle "Layer 5 Coloured, 12 keys on their own" [expanded=false]
+          - StaticText "Layer 5"
+          - StaticText "Coloured"
+          - StaticText ", 12 keys on their own"
+    - group
+      - DisclosureTriangle "Also in this layout, read only" [expanded=false]
+        - StaticText "Also in this layout, read only"
+- LabelText
+  - StaticText "Filter the settings"
+- searchbox "Filter the settings" [ref=e12]
+- heading "Settings" [level=2, ref=e59]
+- paragraph
+  - StaticText "For the whole keyboard. One key's timing is tuned from that key's card."
+- DisclosureTriangle "Also in this layout, read only" [expanded=false]
+  - StaticText "Also in this layout, read only"
+- StaticText "Your keyboard’s colours"
+- StaticText "Case"
+- radiogroup "Case"
+  - radio "Follow the theme" [checked=true, ref=e83]
+  - radio "Black" [checked=false, ref=e84]
+    - StaticText "Black"
+  - radio "White" [checked=false, ref=e85]
+    - StaticText "White"
+- StaticText "Keycaps"
+- radiogroup "Keycaps"
+  - radio "Follow the theme" [checked=true, ref=e86]
+  - radio "Black" [checked=false, ref=e87]
+    - StaticText "Black"
+  - radio "White" [checked=false, ref=e88]
+    - StaticText "White"
+- LabelText
+  - StaticText "Tapping term"
+- StaticText "200 ms"
+- switch "Permissive hold" [checked=true, ref=e70]
+- button "Back to the default, Off" [ref=e71]
+  - StaticText "Back to the default, Off"
+- switch "Hold on other key press" [checked=false, ref=e72]
+- switch "Chordal hold" [checked=true, ref=e73]
+- button "Back to the default, Off" [ref=e74]
+  - StaticText "Back to the default, Off"
+- switch "Retro tapping" [checked=false, ref=e75]
+- LabelText
+  - StaticText "Combo term"
+- StaticText "50 ms"
+- LabelText
+  - StaticText "One-shot timeout"
+- StaticText "Never"
+- switch "Caps Word" [checked=false, ref=e78]
+- LabelText
+  - StaticText "Caps Word timeout"
+- StaticText "5000 ms"
+- switch "Auto Shift" [checked=false, ref=e80]
+- LabelText
+  - StaticText "Auto Shift timeout"
+- StaticText "175 ms"
+- switch "Mouse keys" [checked=true, ref=e82]
+- DisclosureTriangle "Layer 0 No colour" [expanded=false]
+  - StaticText "Layer 0"
+  - StaticText "No colour"
+- DisclosureTriangle "Layer 1 Coloured" [expanded=false]
+  - StaticText "Layer 1"
+  - StaticText "Coloured"
+- DisclosureTriangle "Layer 2 Coloured, 6 keys on their own" [expanded=false]
+  - StaticText "Layer 2"
+  - StaticText "Coloured"
+  - StaticText ", 6 keys on their own"
+- DisclosureTriangle "Layer 3 No colour" [expanded=false]
+  - StaticText "Layer 3"
+  - StaticText "No colour"
+- DisclosureTriangle "Layer 4 Coloured" [expanded=false]
+  - StaticText "Layer 4"
+  - StaticText "Coloured"
+- DisclosureTriangle "Layer 5 Coloured, 12 keys on their own" [expanded=false]
+  - StaticText "Layer 5"
+  - StaticText "Coloured"
+  - StaticText ", 12 keys on their own"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- DisclosureTriangle "More" [expanded=false]
+  - StaticText "More"
+- StaticText "Layer 0"
+- StaticText "No colour"
+- StaticText "Layer 1"
+- StaticText "Coloured"
+- StaticText "Layer 2"
+- StaticText "Coloured"
+- StaticText ", 6 keys on their own"
+- StaticText "Layer 3"
+- StaticText "No colour"
+- StaticText "Layer 4"
+- StaticText "Coloured"
+- StaticText "Layer 5"
+- StaticText "Coloured"
+- StaticText ", 12 keys on their own"

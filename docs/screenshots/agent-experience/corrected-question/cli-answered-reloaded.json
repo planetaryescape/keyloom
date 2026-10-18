@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M588FG6EYMKZCPRPZPDKMBYT",
+    "layoutId": "lay_01M588EA0VD3KRE8XD14DTAKDP",
+    "title": "Acceptance check: ask whether I should keep or replace the\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792352436430
+  },
+  "messages": [
+    {
+      "id": "msg_01M588FG6NAR0T080SB4FYP4RY",
+      "role": "user",
+      "text": "Acceptance check: ask whether I should keep or replace the synthetic arrangement. Do not change any config or device.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792352436437
+    },
+    {
+      "id": "msg_01M588FGRGYGM7KG427FT8FCSQ",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792352437008
+    },
+    {
+      "id": "msg_01M588FGRGYGM7KG427FT8FCSS",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792352437008,
+      "question": {
+        "question": "Keep or replace?",
+        "options": [
+          {
+            "label": "Keep"
+          },
+          {
+            "label": "Replace"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "item_1",
+        "answer": "Keep"
+      }
+    },
+    {
+      "id": "msg_01M588G2KZ6KJ4CWRW52PVHZQD",
+      "role": "assistant",
+      "text": "Kept the original arrangement.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792352455295
+    }
+  ],
+  "proposals": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M588FG6NAR0T080SB4FYP4RY",
+      "questionToolUseId": "item_1",
+      "status": "completed",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "failed",
+          "durationMs": 1,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        },
+        {
+          "id": "op_2",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 0,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    },
+    {
+      "version": 1,
+      "userMessageId": "msg_01M588G27MSFSQ77KFHQFJGHQ1",
+      "status": "completed",
+      "operations": [],
+      "messages": [
+        {
+          "id": "public_1",
+          "kind": "answer",
+          "text": "Kept the original arrangement.",
+          "messageId": "msg_01M588G2KZ6KJ4CWRW52PVHZQD"
+        }
+      ],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+- region "Ask keyloom" [ref=e11]
+  - paragraph
+    - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+  - status
+  - log "Conversation" [ref=e58] focusable [tabindex]
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "Published question acceptance: ask whether to keep or replace the synthetic arrangement. Do not change any config or device."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - status
+      - StaticText "Reply complete · some steps need attention"
+    - list "Agent operations"
+      - listitem [level=1]
+        - paragraph
+          - StaticText "Ask a question"
+        - StaticText "Failed"
+        - StaticText "10 ms"
+    - button "1 completed step" [expanded=true, ref=e59]
+    - list "Agent operations"
+      - listitem [level=1]
+        - paragraph
+          - StaticText "Ask a question"
+        - StaticText "Completed"
+        - StaticText "7 ms"
+    - region "Question, answered" [ref=e60]
+      - paragraph
+        - StaticText "Keep or replace?"
+      - StaticText "Keep"
+    - paragraph
+      - StaticText "keyloom"
+    - paragraph
+      - StaticText "Kept the original arrangement."
+  - form
+    - textbox "Message to keyloom" [ref=e61]
+    - button "More" [expanded=false, ref=e63]
+    - button "Close (Esc)" [ref=e62]
+      - StaticText "esc"
+- paragraph
+  - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "Published question acceptance: ask whether to keep or replace the synthetic arrangement. Do not change any config or device."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- status
+  - StaticText "Reply complete · some steps need attention"
+- list "Agent operations"
+  - listitem [level=1]
+    - paragraph
+      - StaticText "Ask a question"
+    - StaticText "Failed"
+    - StaticText "10 ms"
+- button "1 completed step" [expanded=true, ref=e59]
+- list "Agent operations"
+  - listitem [level=1]
+    - paragraph
+      - StaticText "Ask a question"
+    - StaticText "Completed"
+    - StaticText "7 ms"
+- region "Question, answered" [ref=e60]
+  - paragraph
+    - StaticText "Keep or replace?"
+  - StaticText "Keep"
+- paragraph
+  - StaticText "keyloom"
+- paragraph
+  - StaticText "Kept the original arrangement."
+- textbox "Message to keyloom" [ref=e61]
+- button "More" [expanded=false, ref=e63]
+- button "Close (Esc)" [ref=e62]
+  - StaticText "esc"
+- StaticText "Reply complete · some steps need attention"
+- StaticText "Keep"
+- paragraph
+  - StaticText "Ask a question"
+- StaticText "Failed"
+- StaticText "10 ms"
+- paragraph
+  - StaticText "Ask a question"
+- StaticText "Completed"
+- StaticText "7 ms"

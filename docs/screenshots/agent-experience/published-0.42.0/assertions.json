@@ -1,0 +1,45 @@
+{
+  "stop": {
+    "status": "cancelled",
+    "shell": {
+      "chatVisible": false,
+      "stopRect": {
+        "bottom": 819,
+        "height": 44,
+        "left": 288.09375,
+        "right": 365,
+        "top": 775,
+        "width": 76.90625,
+        "x": 288.09375,
+        "y": 775
+      },
+      "stopVisible": true
+    },
+    "configCount": 2,
+    "originalHeadUnchanged": true,
+    "originalSelectionUnchanged": true,
+    "historyReadsDoNotCreateCopies": true
+  },
+  "question": {
+    "waitingStatus": "waiting_user",
+    "operations": [
+      "failed",
+      "succeeded"
+    ],
+    "bothResolvedPresentationsCompleted": true,
+    "questionCall": "item_1",
+    "publicProjectionCanaryAbsent": true,
+    "uiCanaryAbsent": true
+  },
+  "codexHomeEmpty": true,
+  "recordNullSink": true,
+  "autosync": {
+    "schema_version": 1,
+    "board_id": "zsa/moonlander",
+    "auto_sync": "off",
+    "choice": false,
+    "paused": false,
+    "proven": false,
+    "proven_at": null
+  }
+}

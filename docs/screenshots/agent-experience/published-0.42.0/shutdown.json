@@ -1,0 +1,10 @@
+{
+  "harnessExit": 0,
+  "serverChecksPassed": true,
+  "serverCheckCount": 9,
+  "serverStderrHadUnhandledOrErrorMarker": false,
+  "codexHomeEmpty": true,
+  "recordNullSink": true,
+  "ownedTaskBrowserClosed": true,
+  "ownedHarnessStopped": true
+}

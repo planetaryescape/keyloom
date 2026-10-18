@@ -1,0 +1,199 @@
+{
+  "binary": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-published-install/bin/keyloom",
+  "binarySha256": "e11d7d75ed772ef229181d6eed13f0b7b9d59b8cfcb50eb7ddc41334c018d56c",
+  "scratch": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01",
+  "layoutId": "lay_01M589422YTYMZR3AWQR0TS832",
+  "conversationId": "conv_01M58944D02J2T3JVGJG9EVHMK",
+  "checks": [
+    {
+      "name": "--version: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "import --board: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "import --board: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "autosync off: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "autosync off: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "autosync status: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "autosync status: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "Moonlander autosync is explicitly false",
+      "pass": true
+    },
+    {
+      "name": "chat lay_01M589422YTYMZR3AWQR0TS832: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "chat lay_01M589422YTYMZR3AWQR0TS832: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "CLI canonical final answer is separate from the working note",
+      "pass": true
+    },
+    {
+      "name": "conversations show: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "conversations show: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "conversations show: command completed within bound",
+      "pass": true
+    },
+    {
+      "name": "conversations show: JSON matches expected schema",
+      "pass": true
+    },
+    {
+      "name": "Installed history is stable across separate CLI reads",
+      "pass": true
+    },
+    {
+      "name": "Canonical answer and note are stored once",
+      "pass": true
+    },
+    {
+      "name": "Completed presentation belongs to the original user message",
+      "pass": true
+    },
+    {
+      "name": "One correlated successful read operation is persisted",
+      "pass": true
+    },
+    {
+      "name": "Public working note and final answer retain canonical message links",
+      "pass": true
+    },
+    {
+      "name": "Read-only completed history has no preparation warning",
+      "pass": true
+    }
+  ],
+  "commands": [
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01/data",
+        "--format",
+        "json",
+        "--version"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01/data",
+        "--format",
+        "json",
+        "import",
+        "--board",
+        "zsa/moonlander",
+        "/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-agent-blueprint/test/fixtures/oryx/synchronized",
+        "--name",
+        "26a synthetic Moonlander"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01/data",
+        "--format",
+        "json",
+        "autosync",
+        "off",
+        "zsa/moonlander"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01/data",
+        "--format",
+        "json",
+        "autosync",
+        "status",
+        "zsa/moonlander"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01/data",
+        "--format",
+        "json",
+        "chat",
+        "lay_01M589422YTYMZR3AWQR0TS832",
+        "--provider",
+        "codex",
+        "--message",
+        "Inspect the synthetic base layer only; do not propose or apply changes."
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01/data",
+        "--format",
+        "json",
+        "conversations",
+        "show",
+        "conv_01M58944D02J2T3JVGJG9EVHMK"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    },
+    {
+      "args": [
+        "--data-dir",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-0.42.0-release-smoke-01/data",
+        "--format",
+        "json",
+        "conversations",
+        "show",
+        "conv_01M58944D02J2T3JVGJG9EVHMK"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "unknownCommand": false
+    }
+  ],
+  "passed": true,
+  "browser": "unverified: inspect the actual served app manually; CLI checks do not certify browser behavior or a release"
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "action": "desktop review",
+    "bodyScrollWidth": 1440,
+    "panes": {
+      ".br-panel": true,
+      ".chat": false,
+      ".history-panel": false,
+      ".settings-pane": false
+    },
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "action": "desktop Settings replaces review",
+    "bodyScrollWidth": 1440,
+    "panes": {
+      ".br-panel": false,
+      ".chat": false,
+      ".history-panel": false,
+      ".settings-pane": true
+    },
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "action": "desktop History replaces Settings",
+    "bodyScrollWidth": 1440,
+    "panes": {
+      ".br-panel": false,
+      ".chat": false,
+      ".history-panel": true,
+      ".settings-pane": false
+    },
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "action": "desktop Ask replaces History",
+    "bodyScrollWidth": 1440,
+    "panes": {
+      ".br-panel": false,
+      ".chat": true,
+      ".history-panel": false,
+      ".settings-pane": false
+    },
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "action": "phone review",
+    "bodyScrollWidth": 390,
+    "panes": {
+      ".br-panel": true,
+      ".chat": false,
+      ".history-panel": false,
+      ".settings-pane": false
+    },
+    "scrollWidth": 390,
+    "width": 390
+  },
+  {
+    "action": "phone Settings replaces review",
+    "bodyScrollWidth": 390,
+    "panes": {
+      ".br-panel": false,
+      ".chat": false,
+      ".history-panel": false,
+      ".settings-pane": true
+    },
+    "scrollWidth": 390,
+    "width": 390
+  }
+]

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M5897K3J8ESS2TVHWH4G32SP",
+    "layoutId": "lay_01M589422YTYMZR3AWQR0TS832",
+    "title": "Published question acceptance: ask whether to keep or\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792353225842
+  },
+  "messages": [
+    {
+      "id": "msg_01M5897K3R2VJ7KZ0EPHM7KTAH",
+      "role": "user",
+      "text": "Published question acceptance: ask whether to keep or replace the synthetic arrangement. Do not change any config or device.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792353225848
+    },
+    {
+      "id": "msg_01M5897KH25SG9S8VBH22FG2G7",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792353226274
+    },
+    {
+      "id": "msg_01M5897KH25SG9S8VBH22FG2G9",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792353226274,
+      "question": {
+        "question": "Keep or replace?",
+        "options": [
+          {
+            "label": "Keep"
+          },
+          {
+            "label": "Replace"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "item_1",
+        "answer": null
+      }
+    }
+  ],
+  "proposals": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M5897K3R2VJ7KZ0EPHM7KTAH",
+      "questionToolUseId": "item_1",
+      "status": "waiting_user",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "failed",
+          "durationMs": 10,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        },
+        {
+          "id": "op_2",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 7,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+- region "Ask keyloom" [ref=e11]
+  - paragraph
+    - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+  - status
+  - log "Conversation" [ref=e58] focusable [tabindex]
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "Published Stop acceptance: prepare one synthetic copy and wait. Do not put anything on a keyboard."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - status
+      - StaticText "Stopped"
+    - paragraph
+      - StaticText "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request."
+    - button "1 completed step · working notes" [expanded=true, ref=e59]
+      - StaticText "1 completed step · working notes"
+    - generic
+      - paragraph
+        - StaticText "I will prepare one synthetic copy without changing the keyboard."
+      - paragraph
+        - StaticText "The copy is prepared; I am waiting for Stop."
+      - list "Agent operations"
+        - listitem [level=1]
+          - paragraph
+            - StaticText "Create config"
+          - paragraph
+            - StaticText "1 prepared config"
+          - StaticText "Completed"
+          - StaticText "2 ms"
+    - StaticText "Stopped. Configs or proposals prepared before Stop may remain."
+  - form
+    - textbox "Message to keyloom" [ref=e60]
+    - button "More" [expanded=false, ref=e62]
+    - button "Close (Esc)" [ref=e61]
+      - StaticText "esc"
+- paragraph
+  - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "Published Stop acceptance: prepare one synthetic copy and wait. Do not put anything on a keyboard."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- status
+  - StaticText "Stopped"
+- paragraph
+  - StaticText "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request."
+- button "1 completed step · working notes" [expanded=true, ref=e59]
+  - StaticText "1 completed step · working notes"
+- generic
+  - paragraph
+    - StaticText "I will prepare one synthetic copy without changing the keyboard."
+  - paragraph
+    - StaticText "The copy is prepared; I am waiting for Stop."
+  - list "Agent operations"
+    - listitem [level=1]
+      - paragraph
+        - StaticText "Create config"
+      - paragraph
+        - StaticText "1 prepared config"
+      - StaticText "Completed"
+      - StaticText "2 ms"
+- StaticText "Stopped. Configs or proposals prepared before Stop may remain."
+- textbox "Message to keyloom" [ref=e60]
+- button "More" [expanded=false, ref=e62]
+- button "Close (Esc)" [ref=e61]
+  - StaticText "esc"
+- StaticText "Stopped"
+- paragraph
+  - StaticText "Create config"
+- paragraph
+  - StaticText "1 prepared config"
+- StaticText "Completed"
+- StaticText "2 ms"
