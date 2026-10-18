@@ -1363,7 +1363,7 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - `source` is `agent`, not the comps' `ai`, so the word in the data is the word in the code.
 
 ### D-344: The agent's review is one run with the conversation's tools, hands its structure back through `submit_review`, and can only suggest what `propose_changes` saved. (Engine, Claude, from D-014)
-- No tool that needs BK (no priority or outcome recording), a budget of 8 requests and 14 tool calls, and one run per revision, cached. `force` runs it again on purpose.
+- No tool that needs BK (no priority or outcome recording), a budget of 10 requests and 14 tool calls, and one run per revision, cached. `force` runs it again on purpose.
 - A suggestion whose `proposalId` the run didn't save is dropped, so every suggestion shown has been through the validator against the head, outside any conversation, and sits in the config's open proposals (D-336). Nothing is applied.
 - Keys and layers the model names are checked against the layout, and an item that repeats a check is dropped.
 - Rejected: asking for JSON in the reply and parsing it. A tool's schema is checked by the same machinery as every other tool, and a reply that is not JSON needs a recovery path.
@@ -1612,7 +1612,7 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 
 This session extended an existing product. BK first described the missing agent UI, then insisted on a keyboard specialist, then on operating the whole app and moving things between his registered keyboards. The assistant's restatements established the direction; they did not settle the implementation details. BK requested a blueprint and directed us to his blueprint skill. Chapters [28](28-agent-experience.md), [29](29-agent-app-control.md) and [30](30-agent-keyboard-context.md) record the extension. Their baseline and reuse points are in [the source reading](../research/agent-native-baseline.md).
 
-Entries attributed to BK are product requirements. Entries attributed to the assistant are proposals, not new standing permissions. Q30 to Q36 identify their open product choices. None of this session authorizes implementation or a flash.
+Entries attributed to BK are product requirements. Entries attributed to the assistant are proposals, not new standing permissions. Q30 to Q36 identify their open product choices. The original blueprint request authorized neither implementation nor a flash. BK subsequently requested orchestration, approved the 26a visuals (D-409), and authorized shipping verified slices; no keyboard flash is authorized.
 
 ### D-396: The agent is a keyboard configuration specialist that can operate the whole app. (BK)
 - **BK:** "intentionally built as an agent taht helps with configuring a keyboard" and "know the entire app so that I can do everything via the agent".
@@ -1687,3 +1687,10 @@ Entries attributed to BK are product requirements. Entries attributed to the ass
 - The approval includes keeping Stop visible/reachable without scrolling on phones; the prototype's scrolling Stop position is not the production target.
 - Approved artifact: `docs/screenshots/agent-experience/comps/index.html` in the `design/agent-experience` worktree, SHA-256 `a75fc9a46a600c3c61eab038f67e623995a67772f05d649abf1661c72eba9c1d`. The source base is `c5efcb5`; the prototype is synthetic, not a runtime verification.
 - This approves 26a's visual direction. It does not approve later cross-board key-picking, arbitrary mutating actions, new storage protocols or a claim that durable reconnect already works.
+
+### D-349: One finding per problem: the model's restatement of a check is dropped by what it is about, and several suggestions for one problem become one. (Engine, Claude; asked by the coordinator after a live review)
+- An agent problem or hint whose layers include every layer of a check of the same kind is the check again, however many more keys or layers it names. Its insight stays as a suggestion that `fixes` the check, and the cause belongs in that suggestion's body.
+- A suggestion with no `fixes` gets the checks its change touches, so the screen can always put it under its problem.
+- Of several suggestions that fix the same check, the one with the fewest warnings, then the smallest change, stays. The others' change sets are rejected, not offered as alternatives, because the screen shows one fix per problem. The prompt asks for one fix per problem to begin with.
+- The request budget is 10, up from 8: the model often spends two or three requests on proposals before it submits.
+- A run that stops at its step or tool limit, or is cut off, after saving a fix is `done`: what it saved is attached by the same rule (title, summary, `fixes`, one per problem) and `ai.reason` says "Stopped at its step limit; showing what it found." It is `failed` only when nothing usable was saved, and then its proposals are withdrawn.
