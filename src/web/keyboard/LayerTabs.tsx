@@ -89,6 +89,17 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
   const selected = layers[selectedIndex];
   const lightOf = (layerId: string): string | null => lights?.[layers.findIndex((l) => l.id === layerId)] ?? null;
 
+  // The chosen layer's tab is always in sight where the strip scrolls (a phone, a narrow stage): whatever chose it, a tab, a key press
+  // that found its layer, a board switch or an arrival. Smooth, or at once when motion is reduced.
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = strip.current;
+    const tab = tabs.current[selectedIndex];
+    if (row === null || tab === null || tab === undefined || row.scrollWidth <= row.clientWidth) return;
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tab.scrollIntoView({ inline: "nearest", block: "nearest", behavior: reduced ? "instant" : "smooth" });
+  }, [selectedId, selectedIndex, layers.length]);
+
   // Arrow keys move between tabs and select as they go, as the tablist pattern asks.
   function onKeyDown(event: KeyboardEvent, index: number) {
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
@@ -119,7 +130,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
 
   return (
     <div className="layer-tabs-wrap">
-      <div className="layer-tabs" role="tablist" aria-label="Layers">
+      <div ref={strip} className="layer-tabs" role="tablist" aria-label="Layers">
         {layers.map((layer, index) => {
           const isSelected = layer.id === selectedId;
           const light = lights?.[index] ?? null;
