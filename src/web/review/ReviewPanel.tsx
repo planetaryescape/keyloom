@@ -189,6 +189,9 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
 
         {review.ai.status === "pending" || review.ai.status === "running" ? (
           <p className="br-quiet br-ai-coming"><LoaderCircle size={13} className="spin" aria-hidden="true" /> keyloom's own look is on its way; the checks above are already in.</p>
+        ) : review.ai.status === "done" && review.ai.reason !== null ? (
+          // A look that stopped early still shows what it found; say so, quietly, so a short list isn't read as all there is.
+          <p className="br-quiet">{review.ai.reason}</p>
         ) : review.ai.status === "unavailable" || review.ai.status === "failed" ? (
           // Plain words and the one thing to do; the engine's reason is for whoever wants it, behind Details.
           <div className="br-ai-missing">
