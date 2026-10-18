@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.0](https://github.com/planetaryescape/keyloom/compare/v0.40.1...v0.41.0) (2026-10-18)
+
+
+### Features
+
+* no accent stripes or sparkles, and the case and keycaps are coloured separately ([#118](https://github.com/planetaryescape/keyloom/issues/118)) ([72370d0](https://github.com/planetaryescape/keyloom/commit/72370d0494497ae4bdd6036106fcec9d3f6c1aab))
+
 ## [0.40.1](https://github.com/planetaryescape/keyloom/compare/v0.40.0...v0.40.1) (2026-10-18)
 
 
