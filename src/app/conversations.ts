@@ -101,8 +101,9 @@ export function conversationTitle(message: string): string {
   return `${(space > TITLE_LENGTH / 2 ? cut.slice(0, space) : text.slice(0, TITLE_LENGTH)).replace(/[,;:.–-]+$/, "")}…`;
 }
 
-// A second message into a conversation that is mid-turn would interleave tool results with it.
-const answering = new Set<string>();
+// Reserve the conversation before storing input, then identify the one message owning live work.
+// A null reservation still excludes a second request, but cannot make an older projection live.
+const answering = new Map<string, string | null>();
 
 
 const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => ({ ...q, allowOther: q.allowOther === true, toolUseId, answer });
@@ -177,7 +178,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   const conversation: ConversationRow =
     existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: conversationTitle(input.message ?? ""), provider: model.provider, model: model.model });
   if (answering.has(conversation.id)) throw new BusyError(`conversation ${conversation.id} is still answering the last message`);
-  answering.add(conversation.id);
+  answering.set(conversation.id, null);
 
   const started = Date.now();
   const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
@@ -197,6 +198,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
       if (open !== undefined) resolvedQuestions.push(...resolvePresentedQuestion(app, conversation.id, open.toolUseId));
       return message;
     });
+    answering.set(conversation.id, userMessage.id);
     input.onEvent?.({ type: "start", conversationId: conversation.id, messageId: userMessage.id });
     if (input.presentationVersion === 1) for (const resolved of resolvedQuestions) input.onEvent?.({ type: "presentation", presentation: resolved });
     const presentation = chatPresentation(app, conversation.id, userMessage.id, input.presentationVersion === 1 ? (value) => input.onEvent?.({ type: "presentation", presentation: value }) : undefined);
@@ -317,6 +319,6 @@ export function showConversation(app: App, id: string): ConversationView {
   return {
     conversation, messages, proposals: listConversationChangeSets(app.db, id).map(toCard),
     priorities: listConversationPriorities(app.db, id).map(toPriorityCard),
-    presentations: listPresentations(app.db, id).map((presentation) => presentation.status === "running" && !answering.has(id) ? unobservedPresentation(presentation) : presentation),
+    presentations: listPresentations(app.db, id).map((presentation) => presentation.status === "running" && answering.get(id) !== presentation.userMessageId ? unobservedPresentation(presentation) : presentation),
   };
 }

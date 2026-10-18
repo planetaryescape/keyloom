@@ -1,13 +1,14 @@
 # 26a backend/CLI candidate
 
-Status: backend implementation and targeted verification complete; queued whole-suite/typecheck and compiled-candidate checks pending. Product/UI approval, integration and deployment remain open. No production web UI, styles or transcript reducer changed. No reviewer agent, paid model, hardware operation or real data directory was used.
+Status: backend implementation and narrow ownership correction verified by targeted tests/typecheck; **whole-suite gate remains open after the earlier failed run**. Earlier compiled CLI smoke covers the pre-correction candidate only. Parent owns final integrated whole-suite/build/release checks. No production web UI, styles or transcript reducer changed. No reviewer agent, paid model, hardware operation or real data directory was used.
 
 ## Provenance
 
 - Fresh fetch at implementation start: `origin/main` unchanged at `c5efcb583c69df8841d154990fd3e63e92f9207b`.
 - Base = HEAD: `c5efcb583c69df8841d154990fd3e63e92f9207b`.
 - HEAD tree: `ff249fe5e51dce5887621267e36ead15bcb56f7a`.
-- Final implementation tree, HEAD plus all changed/new `src/` and `test/` files: `f6751391fb08a9c1507adb960cf4e25c53dd3edb`. Created with a temporary alternate index; no commit or real-index staging. Documentation is excluded to avoid a self-referential report hash.
+- Reviewed implementation tree: `f6751391fb08a9c1507adb960cf4e25c53dd3edb`.
+- Final implementation tree after ownership correction, HEAD plus all changed/new `src/` and `test/` files: `add805f202ca68ac9eb0a51bffdb0a82a1d8c6dc`. Created with a temporary alternate index; no commit or real-index staging. Documentation is excluded to avoid a self-referential report hash.
 - Branch/worktree: `spike/agent-lifecycle`, `/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-agent-s54`.
 - Original S54 experiment tree remains `b88e3b80a30812a623750b36529f7c5c59538c20`; its archived harness has unchanged SHA-256 `4ae6da11eba6562a45d489a913f937bf2cd169d0dc844cff6134d9f76afafdbe` at `S54-characterization.test.txt`. Copy it to `test/spikes/S54.test.ts` only in a separate ORIGINAL-base checkout to reproduce that historical evidence. It is not in the ordinary test suite now.
 
@@ -91,9 +92,59 @@ Failures corrected while iterating:
 
 The first `agent-work run -- bun test` / `agent-work run -- bun run typecheck` jobs (9174/9175) waited over two minutes without starting, then the shell timeout removed them. No full-suite success is inferred from those attempts. A single `pueue wait` confirmed those IDs no longer existed; no manual polling loop was used.
 
-Replacement background jobs have no shell timeout: **9179** runs `agent-work run -- bun test`; **9180** runs `agent-work run -- bun run typecheck`. The full-suite log shows actual test start after roughly two minutes of resource waiting. These jobs were queued before the final question/unobserved fixes, so their result cannot by itself certify the final implementation tree if they had already loaded those modules. A compiled CLI candidate build was also queued with `agent-work run -- bun build src/cli/main.ts --compile --outfile node_modules/keyloom-26a`; no real installed binary is overwritten. Final results/smoke evidence will be appended on completion. Do not treat pending checks as passed.
+Replacement background jobs had no shell timeout:
+
+- **9179**, `agent-work run -- bun test`: **exit 1**, 2,378 pass, 205 skip, 51 fail, 2 errors, 76,521 assertions; 2,634 tests across 266 files, 605.41 s. Actual test start followed roughly two minutes of resource waiting.
+- **9180**, `agent-work run -- bun run typecheck`: **passed**, after waiting behind the full suite. This check ran after source freeze.
+
+The full suite loaded app/provider modules before the later question fixes, then loaded tests containing newer expectations. The failure output demonstrates that mixed snapshot: repaired-question expectations received the old missing question, and answered-question expectations received the old `waiting_user` snapshot without `questionToolUseId`. The final isolated provider/app/route/CLI runs pass those cases. This failed full run is not proof of the final frozen tree.
+
+Other observed failures include five-second timeouts in doctor/flash/Codex/docs tests, a version-history expectation in `test/server/config-routes.test.ts`, flash fixture exit-code mismatches, and many `git init --quiet -b main` fixture failures with empty stderr in QMK/ZMK/checkout tests. The two unhandled errors followed timed-out fake-Codex child processes. The queue wrapper repeatedly reported approximately 50 MB protocol payloads. No common root cause for those unrelated failures has been established; do not call them harmless or mark the whole suite green. A clean frozen-tree integration run and triage remain required. No unrelated production fixes or test-timeout relaxation was attempted.
+
+Completed log evidence is retained locally at `/Users/bhekanik/.local/share/opencode/shell/d3809669b920a833aa4b31bb56a96af6cdff810a/sh_1503749680019rJv8bCFS31lRO.out`; failure lines 301-445 show the mixed-snapshot question/Codex cases. The parent should not depend on that machine-local file for the summary above.
+
+One bounded diagnostic rerun after completion, `bun test test/server/config-routes.test.ts test/app/doctor-dfu.test.ts test/firmware/toolchain/checkout.test.ts`, **passed 13 tests, 76 assertions, 3.52 s**. It did not reproduce the selected unrelated failures in isolation. This narrows the evidence but does not establish an environmental root cause, justify unrelated fixes or clear the full-suite gate. No full rerun or blanket timeout relaxation was attempted in this worker round.
+
+### Compiled CLI candidate
+
+**9183**, `agent-work run -- bun build src/cli/main.ts --compile --outfile node_modules/keyloom-26a`: **passed**, 1,687 modules bundled in 580 ms and compilation in 139 ms, after approximately six minutes waiting for a resource slot. The actual build was inside the three-minute build budget. No real installed binary was overwritten.
+
+Seeded a synthetic conversation using the existing fake Anthropic HTTP helper and fixture app, then invoked the compiled binary (not the TypeScript entry point) with the fixture's explicit scratch `--data-dir`:
+
+```sh
+node_modules/keyloom-26a conversations show <synthetic-conversation-id> --format json --data-dir <scratch-dir>
+node_modules/keyloom-26a conversations show <synthetic-conversation-id> --format table --data-dir <scratch-dir>
+node_modules/keyloom-26a conversations show <synthetic-conversation-id> --format ids --data-dir <scratch-dir>
+```
+
+All three **passed**. JSON assertions verified output schema version 1, completed presentation, succeeded `list_layouts`, final public answer and canonical message link; table included `List configs: succeeded`; IDs printed the exact conversation ID. Build artifacts and the synthetic fixture pointer are ignored under `node_modules/`. This is a compiled-candidate smoke, not a released/installed-channel or UI verification.
 
 ## Inline TypeScript and simplifier review
+
+### Ownership blocker follow-up
+
+The parent reproduced a concrete ownership error against the reviewed candidate: any active request in a conversation made all older orphan `running` snapshots appear live. The new `test/app/chat-presentation-owner.test.ts` reproduced it before the fix: **0 pass, 1 fail, 1 assertion, 186 ms**, expected `unobserved`, received `running`.
+
+One consolidated correction changes `answering` from a conversation set to `Map<conversationId, activeUserMessageId | null>`. A null entry reserves the existing conversation-level busy exclusion before input storage; after the user message commits, its exact ID becomes the live owner before callbacks fire. Inspection compares each snapshot's original user ID to that owner. Existing `finally` cleanup remains unchanged.
+
+The regression verifies an old orphan is `unobserved` while the new request is `running`, preserves busy rejection, checks that a separate Bun process sees both as `unobserved`, verifies old orphan/new completed status after completion, and proves the lock is released for another request. There is no new persistent owner, execution recovery, schema or stream change.
+
+After the fix:
+
+```sh
+bun test test/app/chat-presentation-owner.test.ts test/app/chat-presentation.test.ts test/agent/activity.test.ts test/server/chat-presentation.test.ts test/cli/chat.test.ts test/agent/ask-user.test.ts test/agent/codex.test.ts test/agent/turns.test.ts test/agent/providers.test.ts test/server/chat-routes.test.ts
+bun run typecheck
+```
+
+Results: **114 pass, 0 fail, 516 assertions across 10 files, 22.90 s**; typecheck **passed**. Whitespace validation with an alternate index passed. No whole-suite job or new build was launched; prior jobs 9179/9180/9183 had already finished with their previously reported coverage/results and cannot certify this changed tree.
+
+Inline TypeScript/simplifier review of this delta found no further issue: the map retains the `.has()` busy invariant, null cannot match a message ID, ownership is assigned only after successful storage, and the original `finally` clears it on every path. There are no new casts, widened types, dependencies or duplicated state containers. Full-candidate anti-slop still reports the same five convention-matching spreads below, none introduced by this correction. A narrow `--base` lint attempt using the prior tree SHA failed because that CLI requires a commit for its symmetric diff; it is not a source failure or a clean lint result.
+
+Delta from the reviewed candidate: `src/app/conversations.ts`, new `test/app/chat-presentation-owner.test.ts`, and this report only. API packet unchanged. Parent integrated full-suite and UI/build/release verification remain required; this worker performs no commit/push/merge/release.
+
+The parent confirms BK approved Q30 production UI and shipping verified slices. Approval is no longer a blocker; implementation/integration verification and parent-owned release gates remain. Earlier sections retain their original handoff context where they describe the previous candidate.
+
+### Original inline review
 
 No extra agents or second-opinion reviewers were started. The inherited model performed both requested skills inline over the owned diff.
 
@@ -104,7 +155,7 @@ No extra agents or second-opinion reviewers were started. The inherited model pe
 
 ## Dirty files and remaining gates
 
-Source/test changes (19):
+Source/test changes (20):
 
 ```text
 src/agent/anthropic-model.ts
@@ -124,6 +175,7 @@ src/server/chat-backend.ts
 src/server/chat-routes.ts
 test/agent/activity.test.ts
 test/app/chat-presentation.test.ts
+test/app/chat-presentation-owner.test.ts
 test/cli/chat.test.ts
 test/server/chat-presentation.test.ts
 ```
