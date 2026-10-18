@@ -43,7 +43,8 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
   useLayoutEffect(() => {
     const element = picker.current;
     if (!shownOpen || element === null) return;
-    const trigger = bar.current?.closest(".chat")?.querySelector<HTMLElement>(".bar-more, .provider-change")
+    const chat = bar.current?.closest(".chat");
+    const trigger = chat?.querySelector<HTMLElement>(".bar-more, .provider-change")
       ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     returnFocus.current = trigger;
     const position = () => {
@@ -61,7 +62,9 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
       const below = (anchor?.bottom ?? top + 12) + 8;
       const y = above >= top + 12 ? above : Math.min(below, top + height - bounds.height - 12);
       element.style.left = `${x}px`;
-      element.style.top = `${Math.max(top + 12, y)}px`;
+      // The anchor may still have its pre-resize position when the viewport has changed.
+      // Placement preference never overrides the final viewport bounds.
+      element.style.top = `${Math.max(top + 12, Math.min(y, top + height - bounds.height - 12))}px`;
     };
     position();
     element.querySelector<HTMLInputElement>("input:checked, input:not([disabled])")?.focus({ preventScroll: true });
@@ -86,6 +89,8 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("keydown", escape, true);
     observer.observe(element);
+    // The shell can finish resizing the chat after the window's resize frame.
+    if (chat) observer.observe(chat);
     window.addEventListener("resize", schedulePosition);
     window.addEventListener("scroll", schedulePosition, true);
     window.visualViewport?.addEventListener("resize", schedulePosition);
