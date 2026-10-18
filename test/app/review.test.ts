@@ -457,3 +457,40 @@ describe("a suggestion the model left without fixes", () => {
     expect(done.items.find((i) => i.code === "use-it")?.fixes).toEqual([EMPTY_KEYS_ID]);
   });
 });
+
+describe("a run that stops at its limit", () => {
+  test("after saving a valid proposal it is done, with that suggestion attached and the reason in words", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([proposeStep, ...Array.from({ length: 12 }, () => getLayoutStep)]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(m.requests).toHaveLength(10);
+    expect(done.ai).toMatchObject({ status: "done", reason: "Stopped at its step limit; showing what it found." });
+    const suggestion = done.items.find((i) => i.kind === "suggestion");
+    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Put F17 on the empty key", fixes: [EMPTY_KEYS_ID] });
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestion?.proposalId as string]);
+  });
+
+  test("it is failed, with nothing left open, when it saved nothing usable", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel(Array.from({ length: 12 }, () => getLayoutStep));
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.ai.status).toBe("failed");
+    expect(openProposalsOutsideChat(w.app, w.layoutId)).toEqual([]);
+  });
+
+  test("two proposals for one problem leave one, as in a run that finished", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const alt = (title: string, positions: number[]) => ({
+      title, ops: positions.map((position) => ({ op: "setBinding", at: { layerId: "layer-0", position }, binding: { kind: "key", code: "F17" } })),
+      explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
+    });
+    const both = { blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Big fix", [33, 36]), alt("Small fix", [33])] } }] };
+    const done = await runReviewAi(w.app, review.id, scriptedModel([both, ...Array.from({ length: 12 }, () => getLayoutStep)]).deps);
+    expect(done.ai.status).toBe("done");
+    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.title)).toEqual(["Small fix"]);
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.title)).toEqual(["Small fix"]);
+  });
+});

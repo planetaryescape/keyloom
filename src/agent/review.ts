@@ -35,7 +35,8 @@ const SubmitSchema = z.object({ items: z.array(FindingSchema).max(REVIEW_MAX_ITE
 
 export type ReviewAgentOutcome =
   | { status: "done"; items: ReviewItem[]; usage: Usage; costUsd?: number; iterations: number }
-  | { status: "failed"; reason: string; usage: Usage; costUsd?: number; iterations: number };
+  /** It stopped without submitting. What it saved before then can still be shown; `limit` says it was the step or tool budget. */
+  | { status: "failed"; reason: string; limit: boolean; usage: Usage; costUsd?: number; iterations: number };
 
 const STOP_REASONS: Record<string, string> = {
   refusal: "The model declined to review this layout.",
@@ -98,7 +99,7 @@ export async function runReviewAgent(input: { model: AgentModel; ports: AgentPor
   const spent = { usage: result.usage, iterations: result.iterations, ...(result.costUsd === undefined ? {} : { costUsd: result.costUsd }) };
 
   if (submitted === undefined) {
-    return { status: "failed", reason: STOP_REASONS[result.stopReason] ?? "The model finished without giving a review.", ...spent };
+    return { status: "failed", reason: STOP_REASONS[result.stopReason] ?? "The model finished without giving a review.", limit: result.stopReason === "tool_use", ...spent };
   }
   return { status: "done", items: toItems(submitted.items, snapshot.document, snapshot.board.definition.keyCount, checks, proposed), ...spent };
 }

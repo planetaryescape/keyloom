@@ -200,7 +200,15 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
         const single = onePerProblem(app, attached.items);
         finish("done", null, model.model, single.items, [...attached.withdrawn, ...single.withdrawn]);
       }
-      else finish("failed", outcome.reason, model.model, [], proposed);
+      else {
+        // Out of steps (or cut off) after saving a fix: that fix is still worth showing, so it is attached the same way and the review
+        // is done, with the reason in words. It is failed only when nothing usable was saved.
+        const attached = attachProposals(app, [], proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
+        const single = onePerProblem(app, attached.items);
+        const withdrawn = [...attached.withdrawn, ...single.withdrawn];
+        if (single.items.length === 0) finish("failed", outcome.reason, model.model, [], [...proposed]);
+        else finish("done", outcome.limit ? "Stopped at its step limit; showing what it found." : `${outcome.reason.replace(/\.$/, "")}; showing what it found.`, model.model, single.items, withdrawn);
+      }
     }
   } catch (err) {
     if (hooks.signal?.aborted) {

@@ -1610,3 +1610,4 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - A suggestion with no `fixes` gets the checks its change touches, so the screen can always put it under its problem.
 - Of several suggestions that fix the same check, the one with the fewest warnings, then the smallest change, stays. The others' change sets are rejected, not offered as alternatives, because the screen shows one fix per problem. The prompt asks for one fix per problem to begin with.
 - The request budget is 10, up from 8: the model often spends two or three requests on proposals before it submits.
+- A run that stops at its step or tool limit, or is cut off, after saving a fix is `done`: what it saved is attached by the same rule (title, summary, `fixes`, one per problem) and `ai.reason` says "Stopped at its step limit; showing what it found." It is `failed` only when nothing usable was saved, and then its proposals are withdrawn.
