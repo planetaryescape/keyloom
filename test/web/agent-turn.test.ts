@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ProposalCard } from "../../src/api/http.ts";
+import type { ChatOutcome, ChatPresentation, ConversationDetail, ProposalCard } from "../../src/api/http.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { evaluate } from "../../src/validation/validate.ts";
 import { AssistantMessage, UserMessage } from "../../src/web/chat/Turns.tsx";
 import { Composer } from "../../src/web/chat/Composer.tsx";
 import type { AssistantTurn } from "../../src/web/chat/transcript.ts";
+import { EMPTY, fromConversation, transcriptReducer } from "../../src/web/chat/transcript.ts";
 import type { AgentWorkView } from "../../src/web/chat/work-view.ts";
 import { loadFixture } from "../server/fixture.ts";
 
@@ -35,6 +36,58 @@ async function count(html: string, selector: string): Promise<number> {
 }
 
 describe("agent turn composition", () => {
+  const completed: ChatPresentation = {
+    version: 1, userMessageId: "request", status: "completed", effectsMayHaveOccurred: false, warning: null, detailsTruncated: false,
+    messages: [{ id: "note", kind: "working_note", text: "I checked the layer colours." }, { id: "answer", kind: "answer", text: "Your preview is ready.", messageId: "final" }],
+    operations: [{ id: "read", tool: "get_layout", label: "Read layout", status: "succeeded", durationMs: 25, accepted: 0, declined: 0, validationCodes: [], references: [] }],
+  };
+
+  async function expectWorkingBeforeAnswer(reply: AssistantTurn, folded: boolean) {
+    const html = render(reply);
+    const order: string[] = [];
+    await new HTMLRewriter()
+      .on(".msg-assistant > .agent-working", { element: () => { order.push("working"); } })
+      .on(".msg-assistant > div > .prose", { element: () => { order.push("answer"); } })
+      .transform(new Response(html)).text();
+    expect(order).toEqual(["working", "answer"]);
+    expect(await count(html, ".agent-work-details .agent-working-note")).toBe(1);
+    expect(await count(html, ".agent-work-details .prose")).toBe(0);
+    expect(await count(html, `.agent-work-toggle[aria-expanded="${!folded}"]`)).toBe(1);
+    expect(await count(html, ".agent-work-details[hidden]")).toBe(folded ? 1 : 0);
+    expect(await count(html, '.msg-assistant > div[aria-hidden="true"] > .prose')).toBe(reply.phase === "streaming" ? 1 : 0);
+  }
+
+  test("completed working folds before the answer when a real saved presentation is reloaded", async () => {
+    const detail: ConversationDetail = {
+      conversation: { id: "conversation", title: "Colours", createdAt: 1, layoutId: "layout", provider: "anthropic", model: "synthetic" },
+      messages: [
+        { id: "request", role: "user", text: "Colour my layers", toolCalls: [], selection: null, createdAt: 1 },
+        { id: "final", role: "assistant", text: "Your preview is ready.", toolCalls: [], selection: null, createdAt: 2 },
+      ], presentations: [completed], proposals: [], priorities: [],
+    };
+    const reply = fromConversation(detail).turns.find((item): item is AssistantTurn => item.kind === "assistant");
+    if (reply === undefined) throw new Error("missing reloaded reply");
+    expect(reply.text).toBe("Your preview is ready.");
+    await expectWorkingBeforeAnswer(reply, true);
+  });
+
+  test("streaming and completed projections keep working above the separately announced final answer", async () => {
+    let state = transcriptReducer(EMPTY, { type: "sent", userId: "request", assistantId: "reply", text: "Colour my layers", selection: null });
+    state = transcriptReducer(state, { type: "event", event: { type: "start", conversationId: "conversation", messageId: "request" } });
+    state = transcriptReducer(state, { type: "event", event: { type: "presentation", presentation: { ...completed, status: "running" } } });
+    const streaming = state.turns.find((item): item is AssistantTurn => item.kind === "assistant");
+    if (streaming === undefined) throw new Error("missing streaming reply");
+    await expectWorkingBeforeAnswer(streaming, false);
+    state = transcriptReducer(state, { type: "event", event: { type: "presentation", presentation: completed } });
+    const outcome: ChatOutcome = { conversationId: "conversation", messageIds: ["request", "final"], status: "complete", text: "Your preview is ready.", proposals: [], priorities: [], provider: "anthropic", model: "synthetic", effort: "medium", iterations: 1, usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 } };
+    state = transcriptReducer(state, { type: "event", event: { type: "done", outcome } });
+    const done = state.turns.find((item): item is AssistantTurn => item.kind === "assistant");
+    if (done === undefined) throw new Error("missing completed reply");
+    expect(done.id).toBe(streaming.id);
+    expect(done.text).toBe("Your preview is ready.");
+    await expectWorkingBeforeAnswer(done, true);
+  });
+
   test("the answer and working proposal remain outside the collapsed routine section", async () => {
     const html = render(turn, work);
     expect(html).toContain('aria-expanded="false"');
