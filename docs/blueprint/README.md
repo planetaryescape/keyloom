@@ -36,6 +36,9 @@ keyloom is built and at v0.36.1 (2026-10-17). This blueprint is the design it wa
 | 25 | [Configs and versions](25-configs-and-versions.md) | Several configs per board with one on the keyboard, and versions as milestones you can go back to |
 | 26 | [Desktop app](26-desktop-app.md) | Tauri shell around the server, menu-bar sync status, shipping and signing |
 | 27 | [Board review](27-board-review.md) | What keyloom finds in a revision without being asked: checks at once, the agent after, triggers, hiding and the fixed tick |
+| 28 | [The agent works beside the keyboard](28-agent-experience.md) | Proposed agent experience: distinct messages, shimmering activity, tool/results UI, domain questions, rich artifacts and completed-work collapse |
+| 29 | [The agent operates the app](29-agent-app-control.md) | Proposed app-wide capabilities, execution/confirmation policy, durable events, presentation data, CLI/API contracts and coverage gates |
+| 30 | [Talk to any keyboard](30-agent-keyboard-context.md) | Proposed collection awareness, request focus, cross-keyboard writes, transfers, batch outcomes and physical-device identity limits |
 | — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
 
 Research behind these decisions:
@@ -51,6 +54,8 @@ Research behind these decisions:
 - [../research/spikes/S21.md](../research/spikes/S21.md): what MoErgo's firmware can and can't do for per-key colours on the Glove80.
 - [../research/software-remappers.md](../research/software-remappers.md): Karabiner-Elements and kanata as targets for the MacBook keyboard, with BK's existing config and the spikes.
 - [../research/new-keyboard.md](../research/new-keyboard.md): identifying QMK and ZMK boards from USB, deriving board definitions, and flashing unknown boards.
+- [../research/agent-native-baseline.md](../research/agent-native-baseline.md): the current agent's tools, presentation, scope and app-use-case seams, read at `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3` for the 2026-10-18 extension.
+- [../research/agent-capability-inventory.md](../research/agent-capability-inventory.md): S56's source-level UI/API/app/CLI/agent workflow inventory at `c5efcb5`, including missing agent controls, existing parity differences and human-only steps. Runtime conformance remains open.
 - `docs/research/spikes/`: spike evidence, one file per spike. The index says which have results.
 
 ## Summary
@@ -77,6 +82,10 @@ Research behind these decisions:
 - **Providers:** the agent runs on an Anthropic key, an OpenRouter key or BK's Codex subscription. A Claude subscription isn't allowed for third-party apps (D-106 to D-111, [19](19-model-providers.md)).
 
 ## Rules for coding agents
+
+The 2026-10-18 agent extension is a proposal, not a shipped capability. BK asked for a keyboard specialist that operates the whole app and all his registered keyboards, with a purpose-built UI for its work (D-396 to D-407). Read chapters 28 to 30 together, the new rungs 26 to 30 (including 28b and 28c), and Q30 to Q36 before building it. The existing "keyboard under the light" concept is preserved; schemas, conversation continuity and confirmation policy are explicit blueprint assumptions. Use the follow-on prompt in [KICKOFF](KICKOFF.md), not its historical first-build instructions.
+
+Execution update: S54 reproduced the current message/cancellation gaps, so D-408 splits rung 26 into 26a (honest progress/message presentation) and 26b (durable execution/reconnect). The former must ship with explicit interruption limits; completing it does not complete the latter. BK approved Q30's 26a visual proposal (D-409), and backend/UI implementation has started. No new rung is released yet.
 
 1. **The CLI is the canonical surface.** Anything the web app does, a `keyloom` subcommand does. Check your work by driving the installed binary (D-030).
 2. **The validator decides.** No path applies a change set that hasn't passed `validate` against the current head (D-014).

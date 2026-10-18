@@ -812,6 +812,7 @@ After v0.10.1, BK asked us to "got through every feature of nickcoutsos' configu
 - **Why:** its lights are ZMK underglow, which is a strip with effects and no per-key colour, and the model has nothing to hold it. Its page shows the ZMK Kconfig options only, and the Layer colours section appears only for boards with `lighting`.
 
 ### D-220: The agent sees every layout, and BK can say "copy this from my other keyboard". Q4 is answered. (BK. Reverses Q4's "deferred")
+- **Proposed extension:** D-401 replaces the restriction to proposing against only the conversation's layout. It does not change validation or grant hardware permission. The extension is not built.
 - **BK:** "I think the agent shoudl be able to see the layouts of other keyboards. and it should be possible for me to say copy this thing from my other keyboard and apply it here and it should have the smarts to figure out the best way to do it even if the keyboards have differnt number of keys or differnt layouts".
 - **Context:** in his v0.19.0 Glove80 chat he asked for the key lights to be like his Moonlander's. The agent said it couldn't see the Moonlander, asked for an Oryx link or screenshots, and offered to "set per-key colours on each layer here", which the Glove80 can't show.
 - **What it adds:** `list_layouts`, `get_layout` with a `layout` argument, and `map_keys`. Other layouts are read-only; every proposal targets only the conversation's layout and validation is unchanged (D-014).
@@ -1271,6 +1272,7 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - **Why:** it keeps names attached to the revision. The cost is that an earlier stay of the same revision is not kept. Versions are written inside the transaction that finishes a verified sync, so one exists exactly when the other does, including after a crash recovery that confirms a flash.
 
 ### D-308: Delete needs the config's name and refuses the config on a keyboard and one a sync is using; it removes the config's revisions, change sets, decisions, conversations, builds, syncs and versions. (Claude, rung 23)
+- **Proposed exception:** D-402 gives new workspace conversations an independent lifecycle, so deleting their origin config cannot erase another target's work. Legacy layout-owned conversation deletion stays unchanged.
 - Build files on disk stay.
 
 ### D-309: Compare is a per-key diff of documents (revision against head) plus named changes for the rest; it is the same structure the restore changes. (Claude, rung 23)
@@ -1316,6 +1318,7 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - Switching config remounts the layout page, which dropped the toast raised just before it ("Archived X", "Made X", "Restored X"). That toast is left in sessionStorage and shown once by the page that opens; without storage it shows on the page that raised it.
 
 ### D-317: A key's draft outlives its card, ⌘K takes it along, and a board switch keeps the layer and the thread. (Journeys, Claude; asked by the coordinator)
+- **Proposed extension:** D-402 replaces the read-only carried-thread handoff with explicit per-request focus in a continuing conversation (Q31). Draft preservation and board-switch layer selection remain. The extension is not built.
 - An unapplied draft is kept by its key when the card closes, another key opens, the layer switches or ⌘K opens; nothing blocks on it any more. On the board it draws as it would be, with a dashed amber ring (a proposal's ring is solid), until it is applied or discarded from its card, which reopens on the draft. A draft whose key changes under it (an undo, the chat, another tab) is dropped, and a toast says so. Kept drafts live in the page (`src/web/editor/parked-drafts.ts`), not the database: a reload loses them.
 - ⌘K with a draft open keeps the draft and opens the chat; the chat says which drafts go with the message, and the request carries them (`drafts` on `POST /api/layouts/:ref/chat`). The agent reads them as a header line before BK's words ("Unapplied draft on Layer 0, R at position 18: would become P {…}"); the stored message shows only what he typed.
 - Switching board or config lands on the layer with the same name, if the next layout has one (case ignored), and keeps the chat open. A conversation belongs to one layout: it is stored with its `layout_id`, and its agent reads and proposes against that layout. So the thread travels as what was on screen: the page carries its turns to the next layout, which shows them read-only above its own, without their options (they'd apply to the other layout), under "Earlier, about synchronized on your Moonlander". The next message starts that layout's own conversation. The carried turns live in the page, not the database.
@@ -1604,3 +1607,83 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - **Migration.** D-395's single stored choice is read once into the two: its case, and the caps of the same name, else the caps that case is sold with. So a pinned grey Glove80 stays grey with white caps. The first change writes both keys, and the old one is not read again.
 - **Drawing.** Unchanged from D-395. Each part out of its room has its own shading, and marks follow the case. `test/web/contrast.test.ts` composes every case tone (black, charcoal, white) with every cap tone in both rooms, which covers every mix including a followed part. Each composition is held to the board's pairs, so legends read on black caps over a white case and on white caps over a black one.
 
+
+## The keyboard specialist becomes an app-wide agent (2026-10-18)
+
+This session extended an existing product. BK first described the missing agent UI, then insisted on a keyboard specialist, then on operating the whole app and moving things between his registered keyboards. The assistant's restatements established the direction; they did not settle the implementation details. BK requested a blueprint and directed us to his blueprint skill. Chapters [28](28-agent-experience.md), [29](29-agent-app-control.md) and [30](30-agent-keyboard-context.md) record the extension. Their baseline and reuse points are in [the source reading](../research/agent-native-baseline.md).
+
+Entries attributed to BK are product requirements. Entries attributed to the assistant are proposals, not new standing permissions. Q30 to Q36 identify their open product choices. None of this session authorizes implementation or a flash.
+
+### D-396: The agent is a keyboard configuration specialist that can operate the whole app. (BK)
+- **BK:** "intentionally built as an agent taht helps with configuring a keyboard" and "know the entire app so that I can do everything via the agent".
+- **Option rejected:** a general-purpose chatbot attached to the configurator, or an agent whose knowledge stops at editing bindings.
+- **Meaning:** existing app workflows must be reachable through the agent. Knowledge of layers, configs, firmware limits and the app's current state is part of its job, not an optional prompt enhancement.
+- Local-first operation, shared CLI use cases (D-030), validator authority (D-014), and the typing lab's privacy boundary remain.
+
+### D-397: A turn shows useful work while running and gives the final result the space afterward. (BK)
+- **BK:** "UI for tool calls and results to give the sense of progress", "giving the user feedback while it works", and "collapsing the working after it's done to focus on the final response".
+- **Option rejected:** an undifferentiated transcript of prose and technical tool output.
+- The working section is expandable after completion. Questions, approvals, failures and unfinished hardware work must remain visible until resolved; folding them would hide what BK must do next.
+
+### D-398: Messages, questions and results have purpose-built presentations. (BK; renderer details proposed by the assistant)
+- **BK:** "differentiation between agent and user messages, ask user tools, nice UIs to present different kinds of inforamtion to the user, shimmering text when thinking".
+- Reuse the existing question and proposal cards. Extend them with key, layer, config and keyboard selection and typed result views, rather than replacing working cards with Markdown lookalikes.
+- The blueprint proposes the component vocabulary and motion in [28](28-agent-experience.md); Q30 and Q33 keep the unsettled parts explicit.
+
+### D-399: Progress is a durable, provider-neutral record of actual operations. (Assistant proposal)
+- The existing name-only tool event cannot represent completion, failure or simultaneous calls. Add correlated lifecycle events and a presentation projection separate from provider replay blocks.
+- Show operational status and concise rationale, not private chain-of-thought. A shimmer means a request is active, not that a specific hidden thought was observed.
+- The event contract, replay, interruption and legacy behavior are in [29](29-agent-app-control.md). S54 gates the first rung.
+
+### D-400: Every app action has a typed capability over the same use case the UI and CLI call. (BK's coverage requirement; mechanism proposed by the assistant)
+- An explicit coverage inventory must name each app action, its agent entry point, result renderer, permission rule and completion check. A new UI feature is incomplete if its agent route is missing.
+- Do not give the model a generic shell, arbitrary SQL, filesystem access or unrestricted HTTP execution to simulate coverage.
+- OS consent, credential entry and browser-required file gestures stay human interactions inside the workflow. They are not a reason to send BK off to work through unrelated menus.
+
+### D-401: A request may prepare changes for another registered keyboard or several named targets. (BK; extends D-220)
+- **BK:** "all my keyboards that are registered with the app" and "import somehting from another keyboard or send something to another keyboard".
+- **Replaces D-220's:** proposals can target only the layout the conversation began on. Existing proposals remain tied to their original config and revision; they are never retargeted.
+- Source reads, deterministic correspondence, per-target validation, previews and explicit Apply still apply. A transfer reads its source and writes its named destination, never both by accident.
+- Multiple destinations are a requested capability, not permission to overwrite every keyboard or flash unattended.
+
+### D-402: Every request captures its focus and every operation carries its own target. (Assistant proposal; Q31)
+- **Replaces D-317's:** the carried thread is read-only and the next message necessarily belongs to a different conversation.
+- For new workspace conversations only, this also replaces D-308's deletion of a conversation with its origin config: removing one config must not erase another keyboard's work. Legacy config-owned conversations keep their existing lifecycle unless explicitly migrated.
+- The blueprint assumes the thread can continue as BK changes boards. The UI's current board is the default for the next request, not for a request already running. Source and target chips keep cross-board work legible.
+- Selections, questions, drafts, artifacts and confirmations retain their board, config and revision context. Switching the stage cannot silently rebind them.
+
+### D-403: The agent prepares the action; Keyloom executes a specific, user-approved plan. (Assistant proposal; Q32)
+- D-014's validator and BK's Apply are preserved. The agent may prepare an Apply, restore, config switch or sync within the conversation; the application, not the model, accepts confirmation and runs it.
+- A confirmation names the exact targets, revision, effects and auto-sync consequences. Changed scope or head invalidates it. A preference answer is never an approval receipt.
+- Navigation, reads and existing safe draft creation need no ritual confirmation. Irreversible deletion and device effects keep their current safeguards. Typed "apply that" may confirm only one unambiguous, unchanged pending plan.
+
+### D-404: Rich output uses a finite renderer set, not model-supplied executable UI. (Assistant proposal)
+- Validated artifact data selects an app-owned component: proposal, comparison, transfer, collection, finding, question, confirmation or device outcome.
+- Model and tool strings are untrusted text. Opaque provider blocks, credentials, raw typing traces and typed passages never become presentation data.
+- A missing renderer has a readable safe fallback. It must not remove a warning or turn an unavailable action into an enabled button.
+
+### D-405: Outcomes say what changed, where it changed, and what has not reached hardware. (Assistant proposal)
+- Distinguish proposed, saved in Keyloom, sending, verified on device, offline, blocked and failed. A completed model reply does not prove a completed flash.
+- Stop, retry and disconnect preserve already completed effects. Multi-target work reports each outcome and has no claim of atomic hardware rollback. Q34 records the batch policy.
+- Replace blanket "Nothing was changed" wording with a statement derived from recorded effects.
+
+### D-406: Ship the agent experience in usable rungs with design and task-completion gates. (Assistant proposal)
+- Extend [13](13-roadmap.md), retaining historical rung numbers and statuses. Each new rung has an end-to-end demo and at most two new unknowns.
+- The existing concept and screenshot gate remain. A working tool loop and passing unit tests do not prove that BK understands progress, scope or the outcome.
+
+### D-407: The collection distinguishes keyboards BK registered from definitions Keyloom supports. (BK's collection requirement; identity mechanism proposed by the assistant)
+- A supported Corne definition does not mean BK owns a Corne. Offline registered keyboards remain in the collection.
+- Names resolve to stable references before work begins; a duplicate name is a choice, not a guess. A config is not a physical device, and selecting a board is not selecting the config it runs.
+- Today's persistence groups configs and sync by board definition ID. S57 and Q35 gate any claim that two physical keyboards of the same model can be controlled independently. Do not pretend a new display alias solves device identity.
+
+### D-408: Deliver rung 26 as honest visible work, then durable execution and reconnect. (Assistant, executing BK's orchestration request; informed by S54)
+- The source-backed experiment at `c5efcb5` reproduced merged live working notes/final answers and a cancellation gap: a config remains after its model-history receipt is lost. Name uniqueness prevents a duplicate with the same name; it is not idempotent recovery.
+- Keep the original rung 26 promise and completion gate. Insert 26a for useful observation/message presentation with explicit socket-owned interruption limitations, then 26b for durable run identity, effect receipts and reconnect.
+- 26a must not claim that a closed stream can resume or that Stop rolls back preparation. Reconnect reads stored state; it never automatically resends a mutating request. Full rung 26 is not built until 26b's journey also passes.
+- S54's source/experiment summary is in [the baseline research](../research/agent-native-baseline.md#s54-reproduced-the-message-and-cancellation-gaps).
+
+### D-409: The first agent-experience visual proposal is approved for implementation. (BK, Q30)
+- BK selected "Approve and implement" after the synthetic running, waiting, completed/folded, failed/partial-effects and stopped moments were opened in Dia. Preserve the keyboard-first visual world, message hierarchy, restrained shimmer and separate final/proposal content.
+- The approval includes keeping Stop visible/reachable without scrolling on phones; the prototype's scrolling Stop position is not the production target.
+- Approved artifact: `docs/screenshots/agent-experience/comps/index.html` in the `design/agent-experience` worktree, SHA-256 `a75fc9a46a600c3c61eab038f67e623995a67772f05d649abf1661c72eba9c1d`. The source base is `c5efcb5`; the prototype is synthetic, not a runtime verification.
+- This approves 26a's visual direction. It does not approve later cross-board key-picking, arbitrary mutating actions, new storage protocols or a claim that durable reconnect already works.

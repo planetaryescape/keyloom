@@ -1,5 +1,7 @@
 # 03: Agent
 
+Proposed extension, 2026-10-18: [28](28-agent-experience.md), [29](29-agent-app-control.md) and [30](30-agent-keyboard-context.md) broaden the agent into an app-wide keyboard specialist and specify its presentation/runtime. D-401 proposes replacing the one-conversation-layout write limit; D-403 preserves validated proposals and user approval. The extension is not built. The historical provider and post-Apply wording below must not override the current provider chapter or actual auto-sync state.
+
 The agent turns BK's frustrations and goals into proposals (D-004, D-005, D-010). It reads the layout, the board, BK's stated priorities and the remembered decisions. It asks what it needs to know, and it proposes one to three structured change sets (D-020). It never applies a change and never writes firmware source (D-014). Applying is BK's action, in the editor or with `keyloom change apply`.
 
 ## Model and SDK
