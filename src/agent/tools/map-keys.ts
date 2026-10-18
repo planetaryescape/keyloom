@@ -1,6 +1,6 @@
 import { keyName } from "../../boards/key-names.ts";
 import { z } from "zod";
-import { boardCapabilities } from "../../boards/capabilities.ts";
+import { boardCapabilities, lightingRefusal } from "../../boards/capabilities.ts";
 import type { KeyMapping, UnmatchedWhy } from "../../boards/correspondence.ts";
 import { holdKeyCandidates } from "../../boards/placement.ts";
 import { bindingLabel } from "../../layout/render-grid.ts";
@@ -100,8 +100,7 @@ export const mapKeysTool = (ports: AgentPorts) =>
       if (carry === "lighting") {
         const lit = fromLayer === undefined ? null : [findLayer(source.document, fromLayer).id];
         if (!boardCapabilities(to.board.definition).lighting.supported) {
-          const reason = boardCapabilities(to.board.definition).lighting.because;
-          return [...header, "", `${to.board.definition.name} can't show per-key colours because ${reason}. Nothing to propose: tell BK this plainly, and do not offer to set colours on it.`].join("\n");
+          return [...header, "", `${lightingRefusal(to.board.definition)} Nothing to propose for physical LEDs: tell BK this plainly, and do not offer to set hardware LED colours on it. On-screen layer styling remains available through setLayerStyle.`].join("\n");
         }
         const plan = planLightingCopy(source, to, layers, strategy, lit, minConfidence);
         if (plan.layers.length === 0) return [...header, "", `${source.layoutName} has no LED colours${lit ? " on that layer" : ""}, so there is nothing to copy.`].join("\n");

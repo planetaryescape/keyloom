@@ -67,7 +67,7 @@ export const getLayoutTool = (ports: AgentPorts) =>
   defineTool({
     name: "get_layout",
     description:
-      "Read a layout's current head revision: for each requested layer, a text grid shaped like the keyboard, a position-to-key table, and the layer's JSON. Call it before proposing anything, and again after BK applies a change. Pass `layout` to look at another of BK's keyboards (see list_layouts), for example to copy something from it; that view is read-only.",
+      "Read a layout's current head revision: for each requested layer, a text grid shaped like the keyboard, a position-to-key table, and the layer's JSON. Includes on-screen layer styling (setLayerStyle) separately from hardware LED capabilities (setLayerLighting). Call it before proposing anything, and again after BK applies a change. Pass `layout` to look at another of BK's keyboards (see list_layouts), for example to copy something from it; that view is read-only.",
     inputSchema: InputSchema,
     run: ({ layout, layers }) => {
       const here = ports.snapshot();
@@ -91,6 +91,7 @@ export const getLayoutTool = (ports: AgentPorts) =>
       return [
         `Layout ${snapshot.layoutName} (${snapshot.layoutId}), head revision ${snapshot.revisionId}, board ${snapshot.board.definition.id}.`,
         ...(other ? [`READ-ONLY: this is another of BK's layouts, not the one you are working on (${here.layoutName}). Positions below are positions on ${snapshot.board.definition.name}; do not use them in ops for ${here.layoutName}. Use map_keys to translate.`] : []),
+        "On-screen layer styling: every board supports setLayerStyle for keyloom's layer colours, not keyboard LEDs. color is a palette index from 1 to 6 (null restores the default). The op also sets shortLabel: preserve the layer's current shortLabel, or use null when absent, if only changing colour. Hardware LED colours use setLayerLighting and are subject to the board capabilities below.",
         capabilityLine(snapshot.board.definition),
         `Macros: ${macros}.`,
         conditionalLayersText(snapshot.document),

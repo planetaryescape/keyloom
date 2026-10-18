@@ -45,8 +45,8 @@ describe("the agent sees every layout", () => {
     expect(text).toContain("2 layouts");
     expect(text).toContain('"my-glove80" (THIS conversation\'s layout');
     expect(text).toContain('"my-moonlander" (another of BK\'s layouts: read-only)');
-    expect(text).toMatch(/Moonlander[\s\S]*Can do: per-key colours, combos/);
-    expect(text).toMatch(/Glove80[\s\S]*Cannot do: per-key colours \(its lights are ZMK underglow/);
+    expect(text).toMatch(/Moonlander[\s\S]*Can do: per-key hardware LED colours, combos/);
+    expect(text).toMatch(/Glove80[\s\S]*Cannot do: per-key hardware LED colours \(its lights are ZMK underglow/);
     expect(text).toContain("Layers (");
   });
 
@@ -81,19 +81,22 @@ describe("board capabilities", () => {
   test("copying colours onto a board that cannot show them ends in a plain reason, with no ops", async () => {
     const { glove, tools } = await twoBoards();
     const text = await tools(glove.layoutId).run("map_keys", { from: "my-moonlander", carry: "lighting" });
-    expect(text).toContain("Glove80 can't show per-key colours because its lights are ZMK underglow");
-    expect(text).toContain("do not offer to set colours on it");
+    expect(text).toContain("Glove80 can't show per-key hardware LED colours because its lights are ZMK underglow");
+    expect(text).toContain("do not offer to set hardware LED colours on it");
+    expect(text).toContain("On-screen layer styling remains available through setLayerStyle");
     expect(text).not.toContain("setLayerLighting");
   });
 
   test("the validator refuses colours on a board that cannot show them, with the board's own reason", async () => {
     const { app, glove } = await twoBoards();
     const view = getLayout(app, glove.layoutId);
-    const op: ChangeOp = { op: "setLayerLighting", layerId: view.document.layers[0]?.id as string, lighting: { layer: [10, 255, 255] } };
+    const base = view.document.layers[0];
+    if (base === undefined) throw new Error("fixture has no base layer");
+    const op: ChangeOp = { op: "setLayerLighting", layerId: base.id, lighting: { layer: [10, 255, 255] } };
     const checked = createAgentPorts(app, glove.layoutId, "c").check([op]);
     expect(checked.ok).toBe(false);
     const issue = checked.errors.find((e) => e.code === "lighting_unsupported");
-    expect(issue?.plain).toContain("can't show per-key colours because its lights are ZMK underglow");
+    expect(issue?.plain).toContain("can't show per-key hardware LED colours because its lights are ZMK underglow");
   });
 
   test("a board that can show colours receives them layer by layer, on the matching layers", async () => {

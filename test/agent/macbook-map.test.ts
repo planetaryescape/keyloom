@@ -63,10 +63,11 @@ describe("the Moonlander onto the MacBook", () => {
     expect(after.layers[0]!.bindings.some((b) => b.kind === "holdTap")).toBe(true);
   });
 
-  test("the MacBook says plainly it can't show per-key colours", async () => {
+  test("the MacBook refuses physical LED colours without refusing on-screen styling", async () => {
     const { run } = await world();
     const text = await run("map_keys", { from: "my-moonlander", carry: "lighting" });
-    expect(text).toContain("can't show per-key colours because");
+    expect(text).toContain("can't show per-key hardware LED colours because");
+    expect(text).toContain("On-screen layer styling remains available through setLayerStyle");
     expect(text).not.toContain("setLayerLighting");
   });
 });
