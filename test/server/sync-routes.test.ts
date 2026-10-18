@@ -45,7 +45,8 @@ function frames(res: Response) {
   let pending = "";
   void (async () => {
     for (;;) {
-      const { value, done } = await reader.read();
+      // A request aborted by the test ends the read with an error, which is the stream closing.
+      const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }));
       if (done) return;
       pending += decoder.decode(value);
       for (let end = pending.indexOf("\n\n"); end >= 0; end = pending.indexOf("\n\n")) {
@@ -110,14 +111,31 @@ describe("GET /api/events", () => {
   });
 
   test("a closed stream stops listening", async () => {
-    const { w, engine, call } = await serve();
-    const stream = frames(await call("/api/events"));
+    const clock = skewedClock();
+    const { w, engine, call } = await serve({ engine: { quietMs: 10_000, tickMs: 600_000, now: clock.now } });
+    // Counts the engine's listeners, so the test waits for the server to drop this stream's rather than sleeping and hoping it has.
+    let listening = 0;
+    const subscribe = engine.subscribe.bind(engine);
+    engine.subscribe = (listener) => {
+      listening++;
+      const off = subscribe(listener);
+      return () => {
+        listening--;
+        off();
+      };
+    };
+    // Aborting the request closes the connection. Cancelling the reader only stops the client reading: Bun keeps the socket open
+    // until the server stops, so a test that cancelled the reader would pass whether or not the server had dropped its listener.
+    const closing = new AbortController();
+    const stream = frames(await call("/api/events", { signal: closing.signal }));
     await waitFor(() => stream.got.length >= 1, "the first frame");
-    await stream.cancel();
-    await Bun.sleep(30);
+    expect(listening).toBe(1);
+    closing.abort();
+    await waitFor(() => listening <= 0, "the server to drop the stream's listener");
     const before = stream.got.length;
     w.apply();
-    await Bun.sleep(150);
+    await engine.tick();
+    expect(engine.views()[0]?.state.kind).toBe("behind");
     expect(stream.got.length).toBe(before);
     expect(engine.views()).toHaveLength(1);
   });

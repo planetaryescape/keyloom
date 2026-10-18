@@ -2,7 +2,7 @@
 // does around QMK (checkout, keymap folder, artifact, failure messages) without a 100 s compile.
 // The real Docker build is the gated test in docker.test.ts.
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BoardDefinition } from "../../../src/boards/schema.ts";
 import { BuildFailure, buildQmk } from "../../../src/firmware/qmk/build.ts";
@@ -11,6 +11,7 @@ import { describeLocated, locateCompileError } from "../../../src/firmware/qmk/l
 import { importOryxSource } from "../../../src/firmware/qmk/import.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { FAKE_DOCKER, dfuImage, fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
+import { waitFor } from "../../helpers/fake-sync.ts";
 import { fakeElf } from "../../helpers/fake-elf.ts";
 import { gitEnv, originRepo } from "../../helpers/git-fixture.ts";
 import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
@@ -124,7 +125,9 @@ describe("buildQmk (fake docker)", () => {
   test("cancelling stops the build and removes the container", async () => {
     const s = await setup();
     const c = new AbortController();
-    setTimeout(() => c.abort(), 500);
+    // Cancelled once the build's container is running (the fake docker logs its run line before it hangs), not after a fixed time:
+    // a loaded runner can spend longer than that on the steps before it, and then there is no container to remove.
+    void waitFor(() => existsSync(s.dockerLog) && readFileSync(s.dockerLog, "utf8").includes(" --name keyloom-test "), "the build's container to start").then(() => c.abort());
     await expect(s.build("hang", {}, { signal: c.signal })).rejects.toThrow("The build was cancelled.");
     expect(await Bun.file(s.dockerLog).text()).toContain("rm -f keyloom-test");
   });
