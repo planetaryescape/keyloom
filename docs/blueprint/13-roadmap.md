@@ -596,7 +596,7 @@ Previously, one activity string represents a running turn. Now a request has dis
 
 ## Rung 26a: I see real work and can read the final answer
 
-Status: backend and UI implementation started after BK approved Q30's visual proposal (D-409). Not built or released. Stop stays visible on phones.
+Status: backend, browser projection and approved UI are integrated locally; final full-suite, compiled-browser and release gates are running. Not released. Stop stays visible on phones, including when another sidebar replaces chat (D-410).
 
 Previously, the agent shows one activity string and combines working notes with its final answer. Now the existing layout-scoped conversation shows correlated tool start/result/failure, semantic validation refusal, separate public working notes and final answer, and inspectable bounded completed activity.
 

@@ -180,7 +180,7 @@ async function main(): Promise<void> {
       if (stderr) errors = (errors + chunk.toString()).slice(-65_536);
       else output = (output + chunk.toString()).slice(0, 2_097_152);
       if (serving && !ready) {
-        const url = /keyloom is running at (http:\/\/127\.0\.0\.1:\d+\/?)/.exec(errors)?.[1];
+        const url = /keyloom is running at (http:\/\/127\.0\.0\.1:\d+\/\?t=[A-Za-z0-9_-]+)/.exec(errors)?.[1];
         if (url) {
           ready = true;
           clearTimeout(timer);
