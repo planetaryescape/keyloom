@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.42.1](https://github.com/planetaryescape/keyloom/compare/v0.42.0...v0.42.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* focus the chat composer when it opens ([b5b90c4](https://github.com/planetaryescape/keyloom/commit/b5b90c4ca6b600d51b604e40667b6b72ac279ada))
+
 ## [0.42.0](https://github.com/planetaryescape/keyloom/compare/v0.41.1...v0.42.0) (2026-10-18)
 
 
