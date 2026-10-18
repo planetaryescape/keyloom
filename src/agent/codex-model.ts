@@ -174,6 +174,11 @@ async function runCodex(input: {
   let publicMessages = 0;
   let pendingPublicText = "";
   let questionSeen = false;
+  // Both consumers inspect completed items; a later handler's paused flag cannot validate an earlier failed call.
+  const isSuccessfulPausingCall = (call: McpToolCall): boolean => {
+    const tool = request.tools.find((candidate) => candidate.name === call.tool);
+    return input.pausing.has(call.tool) && !call.error && call.status !== "failed" && tool?.inputSchema.safeParse(call.arguments ?? {}).success === true;
+  };
   const publish = (kind: "working_note" | "answer") => {
     if (!pendingPublicText) return;
     request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind, text: pendingPublicText });
@@ -207,7 +212,7 @@ async function runCodex(input: {
           } else if (item.kind === "mcp_tool_call") {
             publish("working_note");
             steps.push({ call: item.call });
-            if (input.isPaused() && input.pausing.has(item.call.tool)) {
+            if (input.isPaused() && isSuccessfulPausingCall(item.call)) {
               questionSeen = true;
               kill("limit");
             }
@@ -240,12 +245,7 @@ async function runCodex(input: {
     if (child.exitCode === null && child.signalCode === null) kill("abort");
   }
 
-  const at = steps.findIndex((step) => {
-    if (!("call" in step)) return false;
-    const { call } = step;
-    const tool = request.tools.find((candidate) => candidate.name === call.tool);
-    return input.pausing.has(call.tool) && !call.error && call.status !== "failed" && tool?.inputSchema.safeParse(call.arguments ?? {}).success === true;
-  });
+  const at = steps.findIndex((step) => "call" in step && isSuccessfulPausingCall(step.call));
   const pendingStep = steps[at];
   if (input.isPaused() && pendingStep && "call" in pendingStep) {
     // Everything after the question is dropped: the person's answer may change what comes next.

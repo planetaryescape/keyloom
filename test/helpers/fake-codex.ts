@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 export type FakeStep =
   | { say: string }
-  | { call: string; input: unknown; /** Report the call as failed by Codex rather than by the tool. */ codexError?: string }
+  | { call: string; input: unknown; /** Report the call as failed by Codex rather than by the tool. */ codexError?: string; /** Report this completion after the next call executes, simulating buffered JSONL. */ deferCompletion?: boolean }
   | { raw: Record<string, unknown> }
   | { fail: string }
   | { hang: true }
@@ -56,6 +56,7 @@ record.tools = (await rpc("tools/list", {})).tools;
 out({ type: "thread.started", thread_id: "t1" });
 out({ type: "turn.started" });
 let n = 0;
+const deferred = [];
 for (const step of scenario.steps) {
   if ("say" in step) out({ type: "item.completed", item: { id: "item_" + n++, type: "agent_message", text: step.say } });
   else if ("call" in step) {
@@ -65,13 +66,17 @@ for (const step of scenario.steps) {
     const res = await rpc("tools/call", { name: step.call, arguments: step.input });
     const text = (res?.content ?? []).map((c) => c.text ?? "").join("");
     record.results.push({ tool: step.call, text, isError: Boolean(res?.isError) });
-    if (step.codexError) out({ type: "item.completed", item: { ...base, status: "failed", error: { message: step.codexError } } });
-    else out({ type: "item.completed", item: { ...base, status: res?.isError ? "failed" : "completed", result: { content: res?.content ?? [], structured_content: null } } });
+    const event = step.codexError
+      ? { type: "item.completed", item: { ...base, status: "failed", error: { message: step.codexError } } }
+      : { type: "item.completed", item: { ...base, status: res?.isError ? "failed" : "completed", result: { content: res?.content ?? [], structured_content: null } } };
+    if (step.deferCompletion) deferred.push(event);
+    else { for (const pending of deferred.splice(0)) out(pending); out(event); }
   } else if ("raw" in step) out(step.raw);
   else if ("fail" in step) { save(); out({ type: "turn.failed", error: { message: step.fail } }); process.exit(1); }
   else if ("hang" in step) { save(); await new Promise(() => {}); }
   else if ("exit" in step) { save(); if (step.stderr) process.stderr.write(step.stderr); process.exit(step.exit); }
 }
+for (const pending of deferred) out(pending);
 save();
 out({ type: "turn.completed", usage: scenario.usage ?? { input_tokens: 1000, cached_input_tokens: 400, cache_write_input_tokens: 0, output_tokens: 50, reasoning_output_tokens: 20 } });
 `;
