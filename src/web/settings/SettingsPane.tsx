@@ -8,6 +8,7 @@ import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import { useOpsCheck } from "../editor/useCheck.ts";
 import { Validation } from "../editor/Validation.tsx";
+import type { Pinned } from "../keyboard/colourway.ts";
 import { ColourwaySetting } from "./ColourwaySetting.tsx";
 import { LightingSection } from "./LightingSection.tsx";
 import { SettingRow } from "./SettingRow.tsx";
@@ -34,8 +35,8 @@ interface Props {
   onApplied: (summary: string) => Promise<void>;
   onStale: () => void;
   /** The drawn board's pinned colourway (D-395), applied at once and kept per board in this browser. */
-  colourway: string | null;
-  onColourway: (id: string | null) => void;
+  colourway: Pinned;
+  onColourway: (part: "case" | "caps", id: string | null) => void;
   boardName: string;
 }
 
@@ -70,7 +71,7 @@ export function SettingsPane(props: Props) {
   const shown = specs.filter(matches);
   const others = otherSettings(layout, board).filter((s) => needle === "" || s.key.toLowerCase().includes(needle));
   const colourways = board.display?.colourways;
-  const showColourway = colourways !== undefined && (needle === "" || "your keyboard's colour colourway color black white grey theme case".includes(needle));
+  const showColourway = colourways !== undefined && (needle === "" || "your keyboard's colour colourway color black white grey theme case keycaps caps".includes(needle));
   const showLighting = board.lighting !== undefined && (needle === "" || "layer colours lighting led rgb".includes(needle) || "colour".includes(needle));
 
   function stage(spec: OptionSpec, value: number | boolean) {
