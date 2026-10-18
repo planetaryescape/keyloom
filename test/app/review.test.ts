@@ -1,7 +1,7 @@
 // The board review's use cases (D-340): the checks stored once per revision, the agent's part with its guards, and what carries from
 // one revision to the next.
 import { describe, expect, test } from "bun:test";
-import { getLayout, openProposalsOutsideChat } from "../../src/app/index.ts";
+import { applyOps, getLayout, openProposalsOutsideChat } from "../../src/app/index.ts";
 import { createReview, dismissReviewItem, restoreReviewItem, runReviewAi, showReview } from "../../src/app/review.ts";
 import { defaultAgentModel } from "../../src/app/chat-model.ts";
 import { writeAgentConfig } from "../../src/app/agent-config.ts";
@@ -9,6 +9,7 @@ import { chooseProvider } from "../../src/app/chat-model.ts";
 import { fakeCodex } from "../helpers/fake-codex.ts";
 import { NO_CODEX } from "../helpers/no-credentials.ts";
 import { findChangeSet } from "../../src/persistence/change-sets.ts";
+import { draft } from "../helpers/ops.ts";
 import { EMPTY_KEYS_ID, finished, fillKey, noModel, proposeStep, reviewWorld, savedId, scriptedModel, submit, touch } from "../helpers/review-world.ts";
 
 const getLayoutStep = { blocks: [{ tool: "get_layout", input: { layers: ["layer-0"] } }] };
@@ -223,9 +224,9 @@ describe("the agent's part", () => {
 
     const w2 = await reviewWorld();
     const r2 = createReview(w2.app, w2.layoutId, "manual").review;
-    const endless = scriptedModel(Array.from({ length: 10 }, () => getLayoutStep));
+    const endless = scriptedModel(Array.from({ length: 12 }, () => getLayoutStep));
     const stopped = await runReviewAi(w2.app, r2.id, endless.deps);
-    expect(endless.requests).toHaveLength(8);
+    expect(endless.requests).toHaveLength(10);
     expect(stopped.ai).toMatchObject({ status: "failed", reason: "The model used all its steps without finishing the review." });
   });
 
@@ -368,5 +369,128 @@ describe("why there is no model", () => {
     const { review } = createReview(w.app, w.layoutId, "manual");
     const done = await runReviewAi(w.app, review.id, { model: () => defaultAgentModel(w.dir, {}, { KEYLOOM_CODEX_BIN: NO_CODEX }) });
     expect(done.ai.reason).toContain("No model provider is set up");
+  });
+});
+
+describe("one finding per problem", () => {
+  const layerWorld = async () => {
+    const w = await reviewWorld();
+    // A layer nothing reaches: the checks' layer_unreachable problem.
+    applyOps(w.app, w.layoutId, { baseRevisionId: getLayout(w.app, w.layoutId).revision.id, summary: "add a layer", ops: [{ op: "addLayer", layer: { id: "spare", name: "Spare" }, afterLayerId: "layer-0" }] });
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    return { w, review, check: review.items.find((i) => i.code === "layer_unreachable") };
+  };
+
+  test("an agent problem that names more than a check's layer is still that check, and is dropped", async () => {
+    const { w, review, check } = await layerWorld();
+    expect(check?.layers).toEqual(["spare"]);
+    const m = scriptedModel([
+      submit([
+        { kind: "problem", code: "spare-key-wrong", title: "A key opens the wrong layer", body: "It points at an old layer number.", keys: [{ layerId: "layer-0", position: 5 }], layers: ["spare", "layer-1"] },
+        { kind: "hint", code: "other", title: "Unrelated", body: "A hint about another layer.", layers: ["layer-1"] },
+      ]),
+      finished,
+    ]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.items.filter((i) => i.source === "agent").map((i) => i.code)).toEqual(["other"]);
+  });
+
+  test("of two suggestions for one problem the one with fewer warnings, then the smaller change, stays; the other's change set is withdrawn", async () => {
+    const { w, review, check } = await layerWorld();
+    const alt = (title: string, positions: number[]) => ({
+      title, ops: positions.map((position) => ({ op: "setBinding", at: { layerId: "layer-0", position }, binding: { kind: "key", code: "F17" } })),
+      explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
+    });
+    const both = { blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Big fix", [33, 36]), alt("Small fix", [33])] } }] };
+    const m = scriptedModel([both, (seen) => {
+      const ids = [...seen.toolResults.join("\n").matchAll(/"([^"]+)": saved as (cs_\w+)/g)].map((x) => [x[1], x[2]]);
+      const id = (t: string) => ids.find((x) => x[0] === t)?.[1] as string;
+      return submit([
+        { kind: "suggestion", code: "big", title: "Big fix", body: "Big.", proposalId: id("Big fix"), fixes: [check?.id as string] },
+        { kind: "suggestion", code: "small", title: "Small fix", body: "Small.", proposalId: id("Small fix"), fixes: [check?.id as string] },
+        { kind: "suggestion", code: "elsewhere", title: "Fixes nothing in particular", body: "Kept.", proposalId: id("Big fix") },
+      ]);
+    }, finished]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.code)).toEqual(["small", "elsewhere"]);
+    const open = openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.title);
+    // Big fix is still shown by the suggestion that fixes nothing in particular, so only a proposal no item shows is withdrawn.
+    expect(open.sort()).toEqual(["Big fix", "Small fix"]);
+  });
+
+  test("the prompt asks for one fix per problem", async () => {
+    const { w, review } = await layerWorld();
+    const m = scriptedModel([submit([]), finished]);
+    await runReviewAi(w.app, review.id, m.deps);
+    expect(JSON.stringify((m.requests[0]?.body as { system: string }).system)).toContain("One fix per problem");
+  });
+});
+
+describe("a withdrawn duplicate", () => {
+  test("its change set is rejected when no kept item shows it", async () => {
+    const w = await reviewWorld();
+    applyOps(w.app, w.layoutId, { baseRevisionId: getLayout(w.app, w.layoutId).revision.id, summary: "add a layer", ops: [{ op: "addLayer", layer: { id: "spare", name: "Spare" }, afterLayerId: "layer-0" }] });
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const check = review.items.find((i) => i.code === "layer_unreachable")?.id as string;
+    const alt = (title: string, positions: number[]) => ({
+      title, ops: positions.map((position) => ({ op: "setBinding", at: { layerId: "layer-0", position }, binding: { kind: "key", code: "F17" } })),
+      explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
+    });
+    const m = scriptedModel([{ blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Big fix", [33, 36]), alt("Small fix", [33])] } }] }, (seen) => {
+      const ids = [...seen.toolResults.join("\n").matchAll(/"([^"]+)": saved as (cs_\w+)/g)].map((x) => [x[1], x[2]]);
+      return submit([
+        { kind: "suggestion", code: "big", title: "Big", body: "Big.", proposalId: ids.find((x) => x[0] === "Big fix")?.[1] as string, fixes: [check] },
+        { kind: "suggestion", code: "small", title: "Small", body: "Small.", proposalId: ids.find((x) => x[0] === "Small fix")?.[1] as string, fixes: [check] },
+      ]);
+    }, finished]);
+    await runReviewAi(w.app, review.id, m.deps);
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.title)).toEqual(["Small fix"]);
+  });
+});
+
+describe("a suggestion the model left without fixes", () => {
+  test("still fixes the checks its change touches", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([proposeStep, (seen) => submit([{ kind: "suggestion", code: "use-it", title: "Use it", body: "Use it.", proposalId: savedId(seen.toolResults) }]), finished]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.items.find((i) => i.code === "use-it")?.fixes).toEqual([EMPTY_KEYS_ID]);
+  });
+});
+
+describe("a run that stops at its limit", () => {
+  test("after saving a valid proposal it is done, with that suggestion attached and the reason in words", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel([proposeStep, ...Array.from({ length: 12 }, () => getLayoutStep)]);
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(m.requests).toHaveLength(10);
+    expect(done.ai).toMatchObject({ status: "done", reason: "Stopped at its step limit; showing what it found." });
+    const suggestion = done.items.find((i) => i.kind === "suggestion");
+    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Put F17 on the empty key", fixes: [EMPTY_KEYS_ID] });
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestion?.proposalId as string]);
+  });
+
+  test("it is failed, with nothing left open, when it saved nothing usable", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const m = scriptedModel(Array.from({ length: 12 }, () => getLayoutStep));
+    const done = await runReviewAi(w.app, review.id, m.deps);
+    expect(done.ai.status).toBe("failed");
+    expect(openProposalsOutsideChat(w.app, w.layoutId)).toEqual([]);
+  });
+
+  test("two proposals for one problem leave one, as in a run that finished", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const alt = (title: string, positions: number[]) => ({
+      title, ops: positions.map((position) => ({ op: "setBinding", at: { layerId: "layer-0", position }, binding: { kind: "key", code: "F17" } })),
+      explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
+    });
+    const both = { blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Big fix", [33, 36]), alt("Small fix", [33])] } }] };
+    const done = await runReviewAi(w.app, review.id, scriptedModel([both, ...Array.from({ length: 12 }, () => getLayoutStep)]).deps);
+    expect(done.ai.status).toBe("done");
+    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.title)).toEqual(["Small fix"]);
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.title)).toEqual(["Small fix"]);
   });
 });

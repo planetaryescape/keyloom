@@ -1360,7 +1360,7 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - `source` is `agent`, not the comps' `ai`, so the word in the data is the word in the code.
 
 ### D-344: The agent's review is one run with the conversation's tools, hands its structure back through `submit_review`, and can only suggest what `propose_changes` saved. (Engine, Claude, from D-014)
-- No tool that needs BK (no priority or outcome recording), a budget of 8 requests and 14 tool calls, and one run per revision, cached. `force` runs it again on purpose.
+- No tool that needs BK (no priority or outcome recording), a budget of 10 requests and 14 tool calls, and one run per revision, cached. `force` runs it again on purpose.
 - A suggestion whose `proposalId` the run didn't save is dropped, so every suggestion shown has been through the validator against the head, outside any conversation, and sits in the config's open proposals (D-336). Nothing is applied.
 - Keys and layers the model names are checked against the layout, and an item that repeats a check is dropped.
 - Rejected: asking for JSON in the reply and parsing it. A tool's schema is checked by the same machinery as every other tool, and a reply that is not JSON needs a recovery path.
@@ -1604,3 +1604,10 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - **Migration.** D-395's single stored choice is read once into the two: its case, and the caps of the same name, else the caps that case is sold with. So a pinned grey Glove80 stays grey with white caps. The first change writes both keys, and the old one is not read again.
 - **Drawing.** Unchanged from D-395. Each part out of its room has its own shading, and marks follow the case. `test/web/contrast.test.ts` composes every case tone (black, charcoal, white) with every cap tone in both rooms, which covers every mix including a followed part. Each composition is held to the board's pairs, so legends read on black caps over a white case and on white caps over a black one.
 
+
+### D-349: One finding per problem: the model's restatement of a check is dropped by what it is about, and several suggestions for one problem become one. (Engine, Claude; asked by the coordinator after a live review)
+- An agent problem or hint whose layers include every layer of a check of the same kind is the check again, however many more keys or layers it names. Its insight stays as a suggestion that `fixes` the check, and the cause belongs in that suggestion's body.
+- A suggestion with no `fixes` gets the checks its change touches, so the screen can always put it under its problem.
+- Of several suggestions that fix the same check, the one with the fewest warnings, then the smallest change, stays. The others' change sets are rejected, not offered as alternatives, because the screen shows one fix per problem. The prompt asks for one fix per problem to begin with.
+- The request budget is 10, up from 8: the model often spends two or three requests on proposals before it submits.
+- A run that stops at its step or tool limit, or is cut off, after saving a fix is `done`: what it saved is attached by the same rule (title, summary, `fixes`, one per problem) and `ai.reason` says "Stopped at its step limit; showing what it found." It is `failed` only when nothing usable was saved, and then its proposals are withdrawn.

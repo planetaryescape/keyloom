@@ -196,10 +196,19 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       if (getLayout(app, row.layoutId).revision.id !== row.revisionId) {
         finish("failed", "Your layout changed while keyloom was looking; it will look at the new version.", model.model, [], proposed);
       } else if (outcome.status === "done") {
-        const { items, withdrawn } = attachProposals(app, outcome.items, proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
-        finish("done", null, model.model, items, withdrawn);
+        const attached = attachProposals(app, outcome.items, proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
+        const single = onePerProblem(app, attached.items);
+        finish("done", null, model.model, single.items, [...attached.withdrawn, ...single.withdrawn]);
       }
-      else finish("failed", outcome.reason, model.model, [], proposed);
+      else {
+        // Out of steps (or cut off) after saving a fix: that fix is still worth showing, so it is attached the same way and the review
+        // is done, with the reason in words. It is failed only when nothing usable was saved.
+        const attached = attachProposals(app, [], proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
+        const single = onePerProblem(app, attached.items);
+        const withdrawn = [...attached.withdrawn, ...single.withdrawn];
+        if (single.items.length === 0) finish("failed", outcome.reason, model.model, [], [...proposed]);
+        else finish("done", outcome.limit ? "Stopped at its step limit; showing what it found." : `${outcome.reason.replace(/\.$/, "")}; showing what it found.`, model.model, single.items, withdrawn);
+      }
     }
   } catch (err) {
     if (hooks.signal?.aborted) {
@@ -221,15 +230,26 @@ const MAX_AGENT_ITEMS = 6;
  * becomes a suggestion with the change set's own title and explanation, tied to the checks it touches; one past the cap is withdrawn.
  */
 function attachProposals(app: App, items: ReviewItem[], proposed: readonly string[], checks: readonly ReviewItemRow[]): { items: ReviewItem[]; withdrawn: string[] } {
-  const referenced = new Set(items.map((i) => i.proposalId));
-  const out = [...items];
+  const changedBy = (id: string) => {
+    const cs = findChangeSet(app.db, id);
+    return cs?.status === "proposed" ? { cs, changed: ValidationResultSchema.parse(cs.validation).diff.changed } : undefined;
+  };
+  // The checks a change touches: those about keys it changes, or, for a check about a layer alone, a key on that layer.
+  const touched = (changed: readonly { layerId: string; position: number }[]) =>
+    checks.filter((c) => c.kind !== "suggestion" && (c.keys.length > 0 ? c.keys.some((k) => changed.some((s) => s.layerId === k.layerId && s.position === k.position)) : c.layers.some((l) => changed.some((s) => s.layerId === l)))).map((c) => c.id);
+  // A suggestion the model left without `fixes` still fixes what its change touches, or the screen can't put it under its problem.
+  const out = items.map((i) => {
+    const found = i.kind === "suggestion" && i.fixes.length === 0 && i.proposalId !== null ? changedBy(i.proposalId) : undefined;
+    return found ? { ...i, fixes: touched(found.changed) } : i;
+  });
+  const referenced = new Set(out.map((i) => i.proposalId));
   const withdrawn: string[] = [];
-  const taken = new Set([...checks.map((c) => c.id), ...items.map((i) => i.id)]);
+  const taken = new Set([...checks.map((c) => c.id), ...out.map((i) => i.id)]);
   for (const id of new Set(proposed)) {
     if (referenced.has(id)) continue;
-    const cs = findChangeSet(app.db, id);
-    if (cs?.status !== "proposed") continue;
-    const changed = ValidationResultSchema.parse(cs.validation).diff.changed;
+    const found = changedBy(id);
+    if (found === undefined) continue;
+    const { cs, changed } = found;
     const keys = changed.map((s) => ({ layerId: s.layerId, position: s.position }));
     const layers = [...new Set(changed.map((s) => s.layerId))];
     const suggestionId = itemId({ source: "agent", code: "proposed-change", layers, keys });
@@ -238,13 +258,35 @@ function attachProposals(app: App, items: ReviewItem[], proposed: readonly strin
       continue;
     }
     taken.add(suggestionId);
-    const touches = (c: ReviewItemRow) => (c.keys.length > 0 ? c.keys.some((k) => changed.some((s) => s.layerId === k.layerId && s.position === k.position)) : c.layers.some((l) => layers.includes(l)));
     out.push({
       id: suggestionId, source: "agent", kind: "suggestion", severity: "info", code: "proposed-change", title: (cs.title ?? cs.explanation).slice(0, 100), body: cs.explanation.slice(0, 400),
-      keys, layers, proposalId: id, fixes: checks.filter((c) => c.kind !== "suggestion" && touches(c)).map((c) => c.id), dismissedAt: null,
+      keys, layers, proposalId: id, fixes: touched(changed), dismissedAt: null,
     });
   }
   return { items: out, withdrawn };
+}
+
+/**
+ * Several suggestions for one problem are a choice BK did not ask to make. The best one stays (fewest warnings, then the smallest
+ * change, then the model's order) and the others' change sets are withdrawn. A suggestion that fixes nothing in particular stays.
+ */
+function onePerProblem(app: App, items: ReviewItem[]): { items: ReviewItem[]; withdrawn: string[] } {
+  const cost = (i: ReviewItem) => {
+    const cs = i.proposalId === null ? undefined : findChangeSet(app.db, i.proposalId);
+    const v = cs ? ValidationResultSchema.parse(cs.validation) : undefined;
+    return [v?.warnings.length ?? 0, v?.diff.changed.length ?? 0];
+  };
+  const ranked = items.filter((i) => i.kind === "suggestion" && i.fixes.length > 0)
+    .map((i, order) => ({ i, c: cost(i), order })).sort((a, b) => a.c[0]! - b.c[0]! || a.c[1]! - b.c[1]! || a.order - b.order);
+  const claimed = new Set<string>();
+  const dropped = new Set<ReviewItem>();
+  for (const { i } of ranked) {
+    if (i.fixes.every((f) => claimed.has(f))) dropped.add(i);
+    else i.fixes.forEach((f) => claimed.add(f));
+  }
+  const kept = items.filter((i) => !dropped.has(i));
+  const stillShown = new Set(kept.map((i) => i.proposalId));
+  return { items: kept, withdrawn: [...dropped].flatMap((i) => (i.proposalId === null || stillShown.has(i.proposalId) ? [] : [i.proposalId])) };
 }
 
 /** The previous review's agent findings that this review's agent did not repeat. Only when both agents finished: a missing look is not a fix. */
