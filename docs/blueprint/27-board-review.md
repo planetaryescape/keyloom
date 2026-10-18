@@ -46,7 +46,7 @@ type ReviewItem = {
 One run per revision, with the conversation's own tools (`get_layout`, `find_function`, `analyse_change`, `get_typing_findings`, `propose_changes`) and no tool that needs BK, plus `submit_review`, which is how it hands the structure back.
 
 - A suggestion is a real change set saved by `propose_changes` outside any conversation, validated against the head (D-014). It shows in the config's open proposals (D-336). A suggestion whose `proposalId` the run didn't save is dropped. Nothing is ever applied.
-- The budget is 8 requests and 14 tool calls. A model past its tool calls is told to submit. The run takes the review first (`claimAi`), so the server and `keyloom review --run` never both pay for one.
+- The budget is 10 requests and 14 tool calls. A model past its tool calls is told to submit. The run takes the review first (`claimAi`), so the server and `keyloom review --run` never both pay for one.
 - A run that finds the layout has moved on fails with that reason and withdraws its proposals; the new revision gets its own review.
 - No provider is `unavailable`, not a failure. A refused, cut-off or erroring run is `failed` with the provider's own words. A later `POST …/review/run` retries either; `force: true` runs a finished one again.
 

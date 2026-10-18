@@ -17,7 +17,7 @@ import { getTypingFindingsTool } from "./tools/get-typing-findings.ts";
 import { proposeChangesTool } from "./tools/propose-changes.ts";
 
 /** Requests to the model, and tool calls across them: the review's budget, since one run is all a revision gets. */
-export const REVIEW_MAX_ITERATIONS = 8;
+export const REVIEW_MAX_ITERATIONS = 10;
 export const REVIEW_MAX_TOOL_CALLS = 14;
 export const REVIEW_MAX_ITEMS = 6;
 
@@ -105,10 +105,15 @@ export async function runReviewAgent(input: { model: AgentModel; ports: AgentPor
 
 const slotSet = (keys: readonly { layerId: string; position: number }[]) => keys.map((k) => `${k.layerId}/${k.position}`).sort().join(",");
 
-/** A finding about nothing in particular (no layer, no key) restates nothing, so it is never matched. */
+/**
+ * A finding the checks already made, by what it is about and not by its code or wording: the same kind and keys, and at least all of
+ * a check's layers (naming the Magic key as well as the Magic layer is still the Magic layer being unreachable). A finding about
+ * nothing in particular restates nothing. The model's insight about a check survives only as a suggestion that fixes it.
+ */
 function restates(checks: readonly ReviewItem[], kind: ReviewItem["kind"], layers: readonly string[], keys: readonly { layerId: string; position: number }[]): boolean {
-  if (layers.length === 0 && keys.length === 0) return false;
-  return checks.some((c) => c.kind === kind && [...c.layers].sort().join(",") === [...layers].sort().join(",") && slotSet(c.keys) === slotSet(keys));
+  if (kind === "suggestion" || (layers.length === 0 && keys.length === 0)) return false;
+  return checks.some((c) =>
+    c.kind === kind && ((c.layers.length > 0 && c.layers.every((l) => layers.includes(l))) || ([...c.layers].sort().join(",") === [...layers].sort().join(",") && slotSet(c.keys) === slotSet(keys))));
 }
 
 /**
