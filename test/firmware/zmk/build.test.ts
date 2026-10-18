@@ -2,7 +2,7 @@
 // does around the Nix build (checkout, image, config files, artifact, failure messages) without a real
 // compile. The real Docker build is the gated test in docker.test.ts.
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BuildFailure, buildZmk } from "../../../src/firmware/zmk/build.ts";
 import { generateZmkSource } from "../../../src/firmware/zmk/generate.ts";
@@ -11,6 +11,7 @@ import { imageTag } from "../../../src/firmware/zmk/image.ts";
 import { describeLocation, locateCompileError, locateConfError } from "../../../src/firmware/zmk/locate-error.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
+import { waitFor } from "../../helpers/fake-sync.ts";
 import { gitEnv } from "../../helpers/git-fixture.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import { FAKE_DOCKER_ZMK, TEMPLATE_FIXTURE, boardWithTemplate, combinedUf2, glove80, templateRepo } from "../../helpers/zmk.ts";
@@ -147,7 +148,9 @@ describe("buildZmk (fake docker)", () => {
   test("cancelling stops the build and removes the container", async () => {
     const s = await setup();
     const c = new AbortController();
-    setTimeout(() => c.abort(), 500);
+    // Cancelled once the build's container is running (the fake docker logs its run line before it hangs), not after a fixed time:
+    // a loaded runner can spend longer than that on the steps before it, and then there is no container to remove.
+    void waitFor(() => existsSync(s.dockerLog) && readFileSync(s.dockerLog, "utf8").includes(" --name keyloom-test "), "the build's container to start").then(() => c.abort());
     await expect(s.build("hang", {}, { signal: c.signal })).rejects.toThrow("The build was cancelled.");
     expect(await Bun.file(s.dockerLog).text()).toContain("rm -f keyloom-test");
   });
