@@ -1,13 +1,17 @@
 // What the chat panel shows, as a pure reducer over the stream's frames. Keeping it free of React
 // and fetch lets the streaming rules (partial text, a dropped connection, superseded siblings) be
 // tested directly.
-import type { ChatEvent, ChatOutcome, ChatSelection, ConversationDetail, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
+import type { ChatMessage, ChatOutcome, ChatPresentation, ChatSelection, ConversationDetail, ObservedChatEvent, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
 import { toolActivity } from "./activity.ts";
 
 export type UserTurn = { kind: "user"; id: string; text: string; selection: ChatSelection | null };
 export type AssistantTurn = {
   kind: "assistant";
   id: string;
+  /** Original server request owner; distinct from this turn's stable local React key. */
+  userMessageId?: string;
+  /** A replacement snapshot, not a log. Operation/public IDs are local to this request. */
+  presentation?: ChatPresentation;
   text: string;
   /** The tool the agent is running right now, in words; cleared once text or a proposal follows. */
   activity: string | null;
@@ -30,7 +34,7 @@ export const EMPTY: Transcript = { conversationId: null, pinned: null, turns: []
 
 export type Action =
   | { type: "sent"; userId: string; assistantId: string; text: string; selection: ChatSelection | null }
-  | { type: "event"; event: ChatEvent }
+  | { type: "event"; event: ObservedChatEvent }
   | { type: "answering"; toolUseId: string; text: string; assistantId: string }
   | { type: "answerRejected"; toolUseId: string }
   | { type: "failed"; code: string; message: string }
@@ -61,14 +65,80 @@ function withPriority(priorities: readonly PriorityCard[], card: PriorityCard): 
   return priorities.some((p) => p.id === card.id) ? [...priorities] : [...priorities, card];
 }
 
-function onEvent(state: Transcript, event: ChatEvent): Transcript {
+/** Only explicitly classified answers enter the main reply; working notes stay in details. */
+export function presentationAnswerText(presentation: ChatPresentation, messages: readonly ChatMessage[] = []): string {
+  const canonical = new Map(messages.filter((message) => message.role === "assistant").map((message) => [message.id, message.text]));
+  return presentation.messages.filter((message) => message.kind === "answer").map((message) =>
+    message.messageId === undefined ? message.text : (canonical.get(message.messageId) ?? message.text),
+  ).join("\n\n");
+}
+
+/** Losing the socket is not evidence of rollback, cancellation, or continued execution. */
+export function interruptPresentation(presentation: ChatPresentation): ChatPresentation {
+  if (presentation.status !== "running") return presentation;
+  return {
+    ...presentation,
+    status: "unobserved",
+    operations: presentation.operations.map((operation) => operation.status === "running" ? { ...operation, status: "unknown" } : operation),
+    warning: "Live progress was interrupted. Work may still be running or may have stopped. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reading history does not resend this request.",
+  };
+}
+
+function presentedTurn(turn: AssistantTurn, presentation: ChatPresentation, messages: readonly ChatMessage[] = []): AssistantTurn {
+  const question = turn.question;
+  const answers = presentation.messages.filter((message) => message.kind === "answer");
+  const previousAnswers = turn.presentation?.messages.filter((message) => message.kind === "answer") ?? [];
+  // An identical replacement must not clip a full answer already recovered from done/history.
+  const keepFullAnswer = turn.presentation?.status === "completed" && turn.phase === "done" && presentation.status === "completed"
+    && answers.length === previousAnswers.length && answers.every((answer, index) => {
+      const previous = previousAnswers[index];
+      return previous?.id === answer.id && previous.text === answer.text && previous.messageId === answer.messageId;
+    });
+  return {
+    ...turn, userMessageId: presentation.userMessageId, presentation,
+    text: keepFullAnswer ? turn.text : presentationAnswerText(presentation, messages), activity: null,
+    // A terminal observation precedes done/error. Keep the current socket busy until that
+    // transport frame arrives, so a second request cannot steal its outcome or question card.
+    phase: turn.phase === "streaming" ? "streaming" : presentation.status === "failed" ? "failed" : presentation.status === "cancelled" ? "stopped" : presentation.status === "unobserved" ? turn.phase : "done",
+    ending: presentation.status === "waiting_user" ? "awaiting_answer" : presentation.status === "completed" ? "complete" : null,
+    question: question?.answer === null && presentation.status === "completed" && presentation.questionToolUseId === question.toolUseId ? { ...question, answer: "Answered" } : question,
+  };
+}
+
+function interruptedTurn(turn: AssistantTurn, phase: "failed" | "stopped"): AssistantTurn {
+  return {
+    ...turn, activity: null, phase,
+    ...(turn.presentation === undefined ? {} : { presentation: interruptPresentation(turn.presentation) }),
+  };
+}
+
+function completedText(turn: AssistantTurn, outcome: ChatOutcome): string {
+  if (turn.presentation === undefined) return turn.text === "" ? outcome.text : turn.text;
+  // The outcome contains the uncapped last assistant message, not the concatenated legacy
+  // deltas. Use it only when the observed grouping identifies that message as the final answer.
+  return outcome.status === "complete" && turn.presentation.status === "completed" && turn.presentation.messages.some((message) => message.kind === "answer") ? outcome.text : turn.text;
+}
+
+function onEvent(state: Transcript, event: ObservedChatEvent): Transcript {
   switch (event.type) {
     case "start":
-      return { ...state, conversationId: event.conversationId };
+      return updateLast({ ...state, conversationId: event.conversationId }, (turn) => ({ ...turn, userMessageId: event.messageId }));
+    case "presentation": {
+      const index = state.turns.findIndex((turn) => turn.kind === "assistant" && turn.userMessageId === event.presentation.userMessageId);
+      const turn = state.turns[index];
+      if (turn?.kind !== "assistant") {
+        // Never assign an older waiting snapshot to the current reply, even if its owner is not
+        // in this local transcript (for example, history from a legacy server).
+        const before = state.turns.findLastIndex((candidate) => candidate.kind === "assistant");
+        return { ...state, turns: state.turns.toSpliced(before < 0 ? state.turns.length : before, 0, presentedTurn({ ...streamingAssistant(`${event.presentation.userMessageId}:reply`), phase: "done" }, event.presentation)) };
+      }
+      const presentation = (turn.phase === "failed" || turn.phase === "stopped") ? interruptPresentation(event.presentation) : event.presentation;
+      return { ...state, turns: state.turns.with(index, presentedTurn(turn, presentation)) };
+    }
     case "text":
-      return updateLast(state, (turn) => ({ ...turn, text: turn.text + event.delta, activity: null }));
+      return updateLast(state, (turn) => turn.presentation === undefined ? { ...turn, text: turn.text + event.delta, activity: null } : turn);
     case "tool":
-      return updateLast(state, (turn) => ({ ...turn, activity: toolActivity(event.name) }));
+      return updateLast(state, (turn) => turn.presentation === undefined ? { ...turn, activity: toolActivity(event.name) } : turn);
     case "proposal":
       return updateLast(state, (turn) => ({ ...turn, activity: null, proposals: withProposal(turn.proposals, event.proposal) }));
     case "priority":
@@ -76,8 +146,7 @@ function onEvent(state: Transcript, event: ChatEvent): Transcript {
     case "done":
       return updateLast({ ...state, conversationId: event.outcome.conversationId, pinned: { provider: event.outcome.provider, model: event.outcome.model } }, (turn) => ({
         ...turn,
-        // The streamed text is what the person watched; the outcome's is the fallback if none streamed.
-        text: turn.text === "" ? event.outcome.text : turn.text,
+        text: completedText(turn, event.outcome),
         proposals: event.outcome.proposals.reduce(withProposal, turn.proposals),
         priorities: event.outcome.priorities.reduce(withPriority, turn.priorities),
         question: event.outcome.question ?? turn.question,
@@ -86,7 +155,7 @@ function onEvent(state: Transcript, event: ChatEvent): Transcript {
         ending: event.outcome.status,
       }));
     case "error":
-      return updateLast(state, (turn) => ({ ...turn, activity: null, phase: "failed", failure: { code: event.code, message: event.message } }));
+      return updateLast(state, (turn) => ({ ...interruptedTurn(turn, "failed"), failure: { code: event.code, message: event.message } }));
   }
 }
 
@@ -118,14 +187,19 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
         turns: state.turns.slice(0, -1).map((turn) => (turn.kind === "assistant" && turn.question?.toolUseId === action.toolUseId ? { ...turn, question: { ...turn.question, answer: null } } : turn)),
       };
     case "failed":
-      return updateLast(state, (turn) => ({ ...turn, activity: null, phase: "failed", failure: { code: action.code, message: action.message } }));
+      return updateLast(state, (turn) => ({ ...interruptedTurn(turn, "failed"), failure: { code: action.code, message: action.message } }));
     case "stopped":
-      return updateLast(state, (turn) => (turn.phase === "streaming" ? { ...turn, activity: null, phase: "stopped" } : turn));
+      return updateLast(state, (turn) => (turn.phase === "streaming" ? interruptedTurn(turn, "stopped") : turn));
     case "rolledBack":
       // A refusal before the stream opened: the message never reached the agent, so it leaves no trace.
       return { ...state, turns: state.turns.slice(0, Math.max(0, state.turns.length - 2)) };
     case "retry": {
       const last = state.turns.at(-1);
+      const user = lastUser(state);
+      // An explicit retry is a new request, not recovery of the observed one. Retain its facts.
+      if (last?.kind === "assistant" && last.presentation !== undefined && user !== undefined) {
+        return { ...state, turns: [...state.turns, { ...user, id: `${action.assistantId}:user` }, streamingAssistant(action.assistantId)] };
+      }
       const kept = last?.kind === "assistant" ? state.turns.slice(0, -1) : state.turns;
       return { ...state, turns: [...kept, streamingAssistant(action.assistantId)] };
     }
@@ -156,8 +230,9 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
   }
 }
 
-/** A stored conversation. Proposals aren't linked to a message, so they hang off the last reply. */
+/** Legacy history keeps its original ordering; observed requests group their public messages. */
 export function fromConversation(detail: ConversationDetail): Transcript {
+  if (detail.presentations?.length) return fromObservedConversation(detail);
   // An assistant turn that only called tools has no words to show; as a turn it would be an empty "keyloom" label.
   const spoken = detail.messages.filter((message) => message.role === "user" || message.text.trim() !== "" || message.question !== undefined);
   const turns: Turn[] = spoken.map((message) =>
@@ -179,6 +254,95 @@ export function fromConversation(detail: ConversationDetail): Transcript {
     const index = after >= 0 ? after : turns.findLastIndex((turn) => turn.kind === "assistant");
     const turn = turns[index];
     if (turn?.kind === "assistant") turns[index] = { ...turn, priorities: withPriority(turn.priorities, card) };
+  }
+  return { conversationId: detail.conversation.id, pinned: { provider: detail.conversation.provider, model: detail.conversation.model }, turns };
+}
+
+// Generated IDs share a monotonic ULID across prefixes (persistence/ids.ts). This lets hidden
+// answer requests and turns with no canonical assistant text retain their real chronology.
+const generatedOrder = (id: string): string | undefined => /^(?:msg|cs|dec)_[0-9A-HJKMNP-TV-Z]{26}$/.test(id) ? id.slice(id.indexOf("_") + 1) : undefined;
+
+function fromObservedConversation(detail: ConversationDetail): Transcript {
+  const presentations = new Map((detail.presentations ?? []).map((presentation) => [presentation.userMessageId, presentation]));
+  const requests = [...new Set([...detail.messages.filter((message) => message.role === "user").map((message) => message.id), ...presentations.keys()])];
+  const orderedRequests = requests.every((id) => generatedOrder(id) !== undefined) ? requests.toSorted() : [];
+  const ownerAt = (id: string): string | undefined => {
+    const order = generatedOrder(id);
+    return order === undefined ? undefined : orderedRequests.findLast((request) => (generatedOrder(request) ?? "") <= order);
+  };
+  const linked = new Map<string, string>();
+  const questions = new Map<string, string>();
+  for (const presentation of presentations.values()) {
+    for (const message of presentation.messages) if (message.messageId !== undefined) linked.set(message.messageId, presentation.userMessageId);
+    if (presentation.questionToolUseId !== undefined) questions.set(presentation.questionToolUseId, presentation.userMessageId);
+  }
+  const owned = new Map<string, ChatMessage[]>();
+  const messageOwners = new Map<string, string>();
+  let precedingRequest: string | undefined;
+  for (const message of detail.messages) {
+    if (message.role === "user") {
+      precedingRequest = message.id;
+      continue;
+    }
+    const owner = linked.get(message.id) ?? (message.question === undefined ? undefined : questions.get(message.question.toolUseId)) ?? ownerAt(message.id) ?? precedingRequest;
+    if (owner !== undefined && presentations.has(owner)) {
+      messageOwners.set(message.id, owner);
+      const messages = owned.get(owner) ?? [];
+      messages.push(message);
+      owned.set(owner, messages);
+    }
+  }
+
+  const entries: { order: string; turn: Turn }[] = [];
+  const emitted = new Set<string>();
+  const emit = (owner: string) => {
+    const saved = presentations.get(owner);
+    if (saved === undefined || emitted.has(owner)) return;
+    // Loading a read-only history does not subscribe this browser to the running socket.
+    const presentation = interruptPresentation(saved);
+    emitted.add(owner);
+    const messages = owned.get(owner) ?? [];
+    const question = messages.find((message) => message.question !== undefined)?.question ?? null;
+    entries.push({ order: owner, turn: presentedTurn({ ...streamingAssistant(messages[0]?.id ?? `${owner}:reply`), phase: "done", question }, presentation, messages) });
+  };
+  for (const message of detail.messages) {
+    if (message.role === "user") {
+      entries.push({ order: message.id, turn: { kind: "user", id: message.id, text: message.text, selection: message.selection } });
+      emit(message.id);
+    } else {
+      const owner = messageOwners.get(message.id);
+      if (owner !== undefined) emit(owner);
+      else if (message.text.trim() !== "" || message.question !== undefined) entries.push({ order: message.id, turn: { ...streamingAssistant(message.id), text: message.text, question: message.question ?? null, phase: "done", ending: message.question?.answer === null ? "awaiting_answer" : "complete" } });
+    }
+  }
+  for (const owner of presentations.keys()) emit(owner);
+  // Do not lexically reorder synthetic or legacy-only fixtures. Real IDs give a reliable anchor
+  // even when an answer's tool-result user message is intentionally absent from detail.messages.
+  if (entries.every((entry) => generatedOrder(entry.order) !== undefined)) entries.sort((a, b) => a.order.localeCompare(b.order));
+  const turns = entries.map((entry) => entry.turn);
+
+  const lastAssistant = () => turns.findLastIndex((turn) => turn.kind === "assistant");
+  const byOwner = (owner: string | undefined) => owner === undefined ? -1 : turns.findIndex((turn) => turn.kind === "assistant" && turn.userMessageId === owner);
+  const byReference = (kind: "proposal" | "priority", id: string) => turns.findIndex((turn) => turn.kind === "assistant" && turn.presentation?.operations.some((operation) => operation.references.some((reference) => reference.kind === kind && reference.id === id)));
+  const ensureAssistant = () => {
+    if (lastAssistant() < 0) turns.push({ ...streamingAssistant(`${detail.conversation.id}:cards`), phase: "done", ending: "complete" });
+    return lastAssistant();
+  };
+  for (const proposal of detail.proposals) {
+    const referenced = byReference("proposal", proposal.changeSetId);
+    const owner = byOwner(ownerAt(proposal.changeSetId));
+    const index = referenced >= 0 ? referenced : owner >= 0 ? owner : ensureAssistant();
+    const turn = turns[index];
+    if (turn?.kind === "assistant") turns[index] = { ...turn, proposals: withProposal(turn.proposals, proposal) };
+  }
+  for (const priority of detail.priorities) {
+    const owner = turns.findIndex((turn) => turn.kind === "assistant" && turn.userMessageId !== undefined && priority.sourceMessageIds.includes(turn.userMessageId));
+    const referenced = byReference("priority", priority.id);
+    const from = turns.findIndex((turn) => turn.kind === "user" && priority.sourceMessageIds.includes(turn.id));
+    const after = from < 0 ? -1 : turns.findIndex((turn, index) => index > from && turn.kind === "assistant");
+    const index = owner >= 0 ? owner : referenced >= 0 ? referenced : after >= 0 ? after : ensureAssistant();
+    const turn = turns[index];
+    if (turn?.kind === "assistant") turns[index] = { ...turn, priorities: withPriority(turn.priorities, priority) };
   }
   return { conversationId: detail.conversation.id, pinned: { provider: detail.conversation.provider, model: detail.conversation.model }, turns };
 }

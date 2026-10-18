@@ -2,11 +2,21 @@
 // separated by a blank line) from chunks of text. EventSource cannot POST, so the panel reads a
 // fetch body and feeds it here; the chunks can split a frame anywhere, including mid-character
 // (the caller's TextDecoder handles that) and between the two newlines of a separator.
-import { ChatEventSchema, type ChatEvent } from "../../api/http.ts";
+import type { ZodType } from "zod";
+import { ChatEventSchema, ObservedChatEventSchema, type ChatEvent, type ObservedChatEvent } from "../../api/http.ts";
 
 export class SseError extends Error {}
 
 export function createSseParser(onEvent: (event: ChatEvent) => void): { push: (chunk: string) => void; end: () => void } {
+  return parserFor(ChatEventSchema, onEvent);
+}
+
+/** The negotiated stream also accepts every legacy frame, for older-server fallback. */
+export function createObservedSseParser(onEvent: (event: ObservedChatEvent) => void): { push: (chunk: string) => void; end: () => void } {
+  return parserFor(ObservedChatEventSchema, onEvent);
+}
+
+function parserFor<Event>(schema: ZodType<Event>, onEvent: (event: Event) => void) {
   let pending = "";
 
   function frame(raw: string): void {
@@ -23,17 +33,16 @@ export function createSseParser(onEvent: (event: ChatEvent) => void): { push: (c
     } catch {
       throw new SseError("keyloom sent a chat frame this page can't read.");
     }
-    const parsed = ChatEventSchema.safeParse(json);
+    const parsed = schema.safeParse(json);
     if (!parsed.success) {
-      console.error("keyloom: unreadable chat frame", parsed.error);
-      throw new SseError("keyloom sent a chat frame this page can't read.");
+      throw new SseError("keyloom sent a chat frame this page can't read. Reload the page or update keyloom.");
     }
     onEvent(parsed.data);
   }
 
   return {
-    push(chunk) {
-      pending += chunk.replaceAll("\r\n", "\n");
+    push(chunk: string) {
+      pending = (pending + chunk).replaceAll("\r\n", "\n");
       for (let end = pending.indexOf("\n\n"); end >= 0; end = pending.indexOf("\n\n")) {
         const raw = pending.slice(0, end);
         pending = pending.slice(end + 2);

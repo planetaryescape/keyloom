@@ -5,6 +5,7 @@ import {
   ConversationDetailSchema,
   ConversationListResponseSchema,
   type ChatEvent,
+  type ObservedChatEvent,
   type ChatProviderChoice,
   type ChatProviderStatus,
   type ChatRequest,
@@ -13,7 +14,7 @@ import {
 } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
 import { failure, request } from "../api-write.ts";
-import { createSseParser, SseError } from "./sse.ts";
+import { createObservedSseParser, createSseParser, SseError } from "./sse.ts";
 
 export function fetchProviderStatus(token: string, signal: AbortSignal): Promise<ChatProviderStatus> {
   return request("GET", "/api/chat/provider", token, ChatProviderStatusSchema, signal);
@@ -44,6 +45,28 @@ export async function streamChat(
   signal: AbortSignal,
   onEvent: (event: ChatEvent) => void,
 ): Promise<void> {
+  return stream(token, ref, body, signal, onEvent, createSseParser);
+}
+
+/** Opt in without retrying the POST. An older server can still send only legacy events. */
+export async function streamObservedChat(
+  token: string,
+  ref: string,
+  body: ChatRequest,
+  signal: AbortSignal,
+  onEvent: (event: ObservedChatEvent) => void,
+): Promise<void> {
+  return stream(token, ref, { ...body, presentationVersion: 1 }, signal, onEvent, createObservedSseParser);
+}
+
+async function stream<Event extends { type: string }>(
+  token: string,
+  ref: string,
+  body: ChatRequest,
+  signal: AbortSignal,
+  onEvent: (event: Event) => void,
+  createParser: (onEvent: (event: Event) => void) => { push: (chunk: string) => void; end: () => void },
+): Promise<void> {
   let response: Response;
   try {
     response = await fetch(`/api/layouts/${encodeURIComponent(ref)}/chat`, {
@@ -60,7 +83,7 @@ export async function streamChat(
   if (response.body === null) throw new ApiError(response.status, "keyloom sent no reply.");
 
   let finished = false;
-  const parser = createSseParser((event) => {
+  const parser = createParser((event) => {
     if (event.type === "done" || event.type === "error") finished = true;
     onEvent(event);
   });
@@ -75,9 +98,12 @@ export async function streamChat(
     parser.push(decoder.decode());
     parser.end();
   } catch (error) {
+    await reader.cancel().catch(() => {});
     if (signal.aborted) throw error;
     if (error instanceof SseError) throw new ApiError(response.status, error.message);
     throw new ApiError(0, "The connection to keyloom dropped before the reply finished.");
+  } finally {
+    reader.releaseLock();
   }
   if (!finished) throw new ApiError(0, "The connection to keyloom dropped before the reply finished.");
 }
