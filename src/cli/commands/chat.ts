@@ -7,6 +7,7 @@ import {
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
 import { opLine } from "../change-report.ts";
+import { answerAgentRun, cancelAgentRequest, cancelAgentRun, inspectAgentRun, startAgentRun, waitForAgentRun, type AgentRunSnapshot } from "../../app/agent-runs.ts";
 
 /** Seams for tests: a scripted model, and lines to read instead of stdin. */
 export type ChatDeps = { model?: AgentModel; lines?: AsyncIterable<string> };
@@ -70,6 +71,28 @@ export function parseProvider(text: string): ProviderId {
 }
 
 export function registerChatCommands(program: Command, ctx: CliContext, deps: ChatDeps = {}): void {
+  const agent = program.command("agent").description("saved agent work; inspection never replays it");
+  const showRun = (run: AgentRunSnapshot) => print(ctx.io, ctx.format(), { json: run, ids: [run.id], table: `${run.id}: ${run.status}\nConversation ${run.conversationId}\n${run.committedPreparations} saved preparation(s)${run.cancelRequested ? "\nStop requested; preparation remains." : ""}${run.presentation?.warning ? `\n${run.presentation.warning}` : ""}` });
+  agent.command("show").argument("<id>", "run or request identity").action(async (id: string) => showRun(await ctx.withApp((app) => inspectAgentRun(app, id))));
+  agent.command("cancel").argument("<id>").option("--request", "persist Stop for this request identity even before acceptance").action(async (id: string, opts: { request?: boolean }) => {
+    const result = await ctx.withApp((app) => opts.request ? cancelAgentRequest(app, id) : cancelAgentRun(app, id));
+    if (result.status === "pending_acceptance") print(ctx.io, ctx.format(), { json: result, ids: [], table: `Stop saved for request ${result.requestId}; no run has been accepted yet.` });
+    else showRun(result);
+  });
+  agent.command("start").argument("<layout>").argument("<message>").requiredOption("--request-id <id>", "unique request identity; repeat only with identical input").option("--conversation <id>").option("--provider <provider>")
+    .action(async (layoutRef: string, message: string, opts: { requestId: string; conversation?: string; provider?: string }) => {
+      await ctx.withApp(async (app) => {
+        const run = await startAgentRun(app, { version: 1, requestId: opts.requestId, layoutRef, input: { message, ...(opts.conversation ? { conversationId: opts.conversation } : {}) } }, { ...(deps.model ? { model: deps.model } : {}), ...(opts.provider ? { provider: parseProvider(opts.provider) } : {}) });
+        showRun(await waitForAgentRun(app, run.id));
+      });
+    });
+  agent.command("answer").argument("<run>").argument("<question>").argument("<text>").requiredOption("--request-id <id>", "unique answer identity")
+    .action(async (id: string, toolUseId: string, text: string, opts: { requestId: string }) => {
+      await ctx.withApp(async (app) => {
+        const run = await answerAgentRun(app, id, opts.requestId, { toolUseId, text }, deps.model ? { model: deps.model } : {});
+        showRun(await waitForAgentRun(app, run.id));
+      });
+    });
   program
     .command("chat")
     .description("talk to the agent about a layout; streams its reply and prints any proposals. Needs ANTHROPIC_API_KEY, OPENROUTER_API_KEY or a `codex login`")

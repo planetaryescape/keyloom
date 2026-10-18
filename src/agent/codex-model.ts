@@ -166,6 +166,9 @@ async function runCodex(input: {
   child.stdin.end(transcriptPrompt(request.messages));
 
   const steps: Array<{ text: string } | { call: McpToolCall }> = [];
+  // Codex item IDs restart at item_0 for each exec. Namespace only newly emitted canonical
+  // history, not MCP's inner protocol or the already-stored history sent in the prompt.
+  const executionId = crypto.randomUUID();
   let usage = emptyUsage();
   let completed = false;
   let failure: string | null = null;
@@ -211,7 +214,7 @@ async function runCodex(input: {
             spoke = true;
           } else if (item.kind === "mcp_tool_call") {
             publish("working_note");
-            steps.push({ call: item.call });
+            steps.push({ call: { ...item.call, id: `codex_${executionId}_${item.call.id}` } });
             if (input.isPaused() && isSuccessfulPausingCall(item.call)) {
               questionSeen = true;
               kill("limit");

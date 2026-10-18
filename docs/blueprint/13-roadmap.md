@@ -576,7 +576,7 @@ No new accounts or credentials are required by this plan. Use the provider setup
 
 ## Rung 26: I can see what the agent is doing
 
-Status: not built; proposed on 2026-10-18. Execution now splits this promise into 26a and 26b below (D-408), following S54's observed message/cancellation gaps. Completing 26a alone does not complete this rung.
+Status: 26a is released; 26b is implemented but under review, 2026-10-18. The original rung remains incomplete until the durable journey and installed-release gates pass. D-408 splits the work after S54's observed message/cancellation gaps.
 
 Previously, one activity string represents a running turn. Now a request has distinct user/agent hierarchy, real correlated tool progress, a quiet thinking shimmer, and a final answer with routine work folded away.
 
@@ -620,7 +620,7 @@ Previously, the agent shows one activity string and combines working notes with 
 
 ## Rung 26b: I reload the same work without executing it again
 
-Status: planned; depends on released 26a and its installed-client journey.
+Status: implemented candidate; not released. The [contract and verification record](../research/spikes/26b-contract.md) cover app-owned preparation and question continuations. The source-browser early-Stop failure is corrected with persisted request cancellation; compiled acceptance and final release gates remain. Released 26a and its installed-client journey passed. See D-411 for the narrower storage and job scope.
 
 Previously, completed activity is inspectable but a stream interruption may still lose in-flight execution/history. Now execution belongs to a persisted run instead of a subscriber, and a reconnect reads the same work without resending its effects.
 
@@ -632,7 +632,7 @@ Previously, completed activity is inspectable but a stream interruption may stil
 
 **New unknowns:** atomic receipt integration across existing writes; subscriber/process recovery and safe job reconciliation.
 
-**Demo:** disconnect after a synthetic config commits, reconnect by run ID, repeat the request ID and answer ID, and restart the server during another request. Observe one domain effect and its original result, no duplicate execution. Exercise cancellation while a fake device job is in a non-interruptible phase without touching hardware.
+**Demo:** disconnect after a synthetic config commits, reconnect by run ID, repeat the request ID and answer ID, and restart the server during another request. Observe one domain effect and its original result, no duplicate execution. Stop before acceptance and after preparation; neither path may forget the cancellation intent. Non-interruptible fake device-job cancellation belongs to rung 28b, when a real agent route can start that job (D-411).
 
 **Done when:** duplicate/out-of-order events project deterministically; a reconnect never repeats a POST effect; local mutations and receipts cannot diverge at a commit boundary; pending questions/approvals survive restart with exact scope; linked jobs retain their real state; release/installed-client and design gates pass. Only now may the original rung 26 be marked complete.
 

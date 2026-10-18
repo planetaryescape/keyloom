@@ -371,7 +371,10 @@ export const ChatMessageSchema = z.object({
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
+export const PreparationSummarySchema = z.object({ operationId: z.string().max(128), tool: z.enum(["put_config", "create_config", "propose_changes", "record_priority", "update_decision_outcome"]), references: z.array(z.object({ kind: z.enum(["config", "proposal", "priority", "decision"]), id: z.string().max(80) })).max(2) });
+
 export const ConversationDetailSchema = z.object({
+  preparationReceipts: z.array(z.object({ userMessageId: z.string(), preparations: z.array(PreparationSummarySchema).max(64) })).optional(),
   presentations: z.array(ChatPresentationSchema).optional(),
   // The provider and model it started on and stays on (D-111); model is null for one from before it was recorded.
   conversation: ConversationSummarySchema.extend({ layoutId: z.string().min(1), provider: ChatProviderIdSchema, model: z.string().nullable() }),

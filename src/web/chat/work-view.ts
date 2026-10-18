@@ -28,7 +28,8 @@ export type AgentWorkView =
     };
 
 export type WorkDisclosureChoice = "automatic" | "open" | "closed";
-export const MAX_WORK_ROWS = 100;
+// A bounded run can carry 64 observations plus 64 separately identified receipt facts.
+export const MAX_WORK_ROWS = 128;
 export const MAX_WORK_NOTES = 20;
 
 export function operationStatus(status: OperationStatus, workStatus: AgentWorkStatus): OperationStatus {

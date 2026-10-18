@@ -3,7 +3,7 @@ import type { ChatRequest, ChatSelection, ConversationSummary } from "../../api/
 
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
-import { fetchConversation, fetchConversations, forgetPriority, streamObservedChat } from "./api-chat.ts";
+import { cancelSavedRequest, cancelSavedRun, fetchConversation, fetchConversations, forgetPriority, latestSavedRun, observeSavedRun, startSavedChat, streamObservedChat } from "./api-chat.ts";
 import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action } from "./transcript.ts";
 
 /** A refusal before the reply started, or a history/provider request problem. */
@@ -34,12 +34,35 @@ export function useChat(token: string, layoutRef: string) {
   const [history, setHistory] = useState<History>({ status: "idle" });
   const controller = useRef<AbortController | null>(null);
   const counter = useRef(0);
+  const savedRun = useRef<string | null>(null);
+  const pendingAcceptance = useRef<{ id: string; stopped: boolean; controller: AbortController } | null>(null);
+  const storageKey = `keyloom.agent.current.${layoutRef}`;
   // Read when a message goes out; the reducer's copy is a render behind inside an event handler.
   const conversationId = useRef<string | null>(null);
   conversationId.current = transcript.conversationId;
   const streaming = isStreaming(transcript);
 
   useEffect(() => () => controller.current?.abort(), []);
+
+  const observe = useCallback(async (id: string, mine: AbortController) => {
+    await observeSavedRun(token, id, mine.signal, (snapshot, detail) => {
+      if (controller.current !== mine) return;
+      savedRun.current = snapshot.id;
+      conversationId.current = snapshot.conversationId;
+      dispatch({ type: "saved", snapshot, detail });
+    });
+  }, [token]);
+
+  useEffect(() => {
+    const id = localStorage.getItem(storageKey);
+    if (!id) return;
+    const mine = new AbortController();
+    controller.current = mine;
+    void observe(id, mine).catch((error: unknown) => {
+      if (!mine.signal.aborted) setProblem(classify(error));
+    }).finally(() => { if (controller.current === mine) controller.current = null; });
+    return () => mine.abort();
+  }, [storageKey, observe]);
 
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
 
@@ -51,6 +74,26 @@ export function useChat(token: string, layoutRef: string) {
       controller.current = mine;
       let started = false;
       try {
+        const body = { ...(answer === undefined ? { message: text } : { answer: { toolUseId: answer.toolUseId, text } }), ...(conversationId.current === null ? {} : { conversationId: conversationId.current }), ...(selection === null ? {} : { selection }), ...(drafts.length === 0 ? {} : { drafts }) };
+        const requestId = crypto.randomUUID();
+        // Save only an opaque identity, never text, tokens or tool data. An ambiguous POST can be
+        // recovered with GET by this identity after reload, not with another mutating request.
+        localStorage.setItem(storageKey, requestId);
+        savedRun.current = requestId;
+        const pending = { id: requestId, stopped: false, controller: mine };
+        pendingAcceptance.current = pending;
+        const accepted = await startSavedChat(token, layoutRef, requestId, body, mine.signal);
+        if (pendingAcceptance.current === pending) pendingAcceptance.current = null;
+        if (accepted !== null) {
+          started = true;
+          savedRun.current = accepted.id;
+          localStorage.setItem(storageKey, accepted.id);
+          await observe(accepted.id, mine);
+          return;
+        }
+        localStorage.removeItem(storageKey);
+        savedRun.current = null;
+        if (pending.stopped) { dispatch({ type: "stopped" }); return; }
         await streamObservedChat(
           token,
           layoutRef,
@@ -66,7 +109,8 @@ export function useChat(token: string, layoutRef: string) {
         if (controller.current !== mine) return; // replaced by a new conversation; nothing to report
         // Only an explicit HTTP refusal proves execution never started. Lost observation is not
         // permission to restore/resend a request that the server may already have accepted.
-        const refused = !started && error instanceof ApiError && error.status >= 400;
+        const refused = !started && error instanceof ApiError && ((error.status >= 400 && error.status < 500) || error.code === "missing_api_key");
+        if (refused) localStorage.removeItem(storageKey);
         if (refused && begin.type === "retry") {
           // The user turn before it is already on screen and stored, so a refused retry fails in place.
           dispatch(isAbort(error) ? { type: "stopped" } : { type: "failed", code: "retry", message: classify(error).message });
@@ -88,10 +132,11 @@ export function useChat(token: string, layoutRef: string) {
           dispatch({ type: "failed", code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message: started ? message : `${message} The request may have been accepted. Read conversation history before sending it again.` });
         }
       } finally {
+        if (pendingAcceptance.current?.controller === mine) pendingAcceptance.current = null;
         if (controller.current === mine) controller.current = null;
       }
     },
-    [token, layoutRef],
+    [token, layoutRef, storageKey, observe],
   );
 
   const send = useCallback(
@@ -116,16 +161,30 @@ export function useChat(token: string, layoutRef: string) {
 
   const stop = useCallback(() => {
     if (controller.current === null) return;
+    if (pendingAcceptance.current !== null) {
+      const pending = pendingAcceptance.current;
+      pending.stopped = true;
+      void cancelSavedRequest(token, pending.id).catch((error: unknown) => setProblem(classify(error)));
+      return;
+    }
+    if (savedRun.current !== null) {
+      void cancelSavedRun(token, savedRun.current).catch((error: unknown) => setProblem(classify(error)));
+      return;
+    }
     controller.current.abort();
     dispatch({ type: "stopped" });
-  }, []);
+  }, [token]);
 
   const newConversation = useCallback(() => {
     controller.current?.abort();
     controller.current = null;
+    savedRun.current = null;
+    pendingAcceptance.current = null;
+    localStorage.removeItem(storageKey);
+    conversationId.current = null;
     setProblem(null);
     dispatch({ type: "reset" });
-  }, []);
+  }, [storageKey]);
 
   const loadHistory = useCallback(async () => {
     setHistory({ status: "loading" });
@@ -145,12 +204,22 @@ export function useChat(token: string, layoutRef: string) {
         controller.current = null;
         setProblem(null);
         dispatch({ type: "loaded", detail });
+        conversationId.current = id;
+        const mine = new AbortController();
+        controller.current = mine;
+        const saved = await latestSavedRun(token, id, mine.signal);
+        if (saved !== null) {
+          savedRun.current = saved.id;
+          localStorage.setItem(storageKey, saved.id);
+          void observe(saved.id, mine).catch((error: unknown) => { if (!mine.signal.aborted) setProblem(classify(error)); })
+            .finally(() => { if (controller.current === mine) controller.current = null; });
+        } else { savedRun.current = null; controller.current = null; localStorage.removeItem(storageKey); }
         return null;
       } catch (error) {
         return error instanceof Error ? error.message : "Couldn't open that conversation.";
       }
     },
-    [token],
+    [token, storageKey, observe],
   );
 
   const markApplied = useCallback((changeSetId: string) => dispatch({ type: "applied", changeSetId }), []);

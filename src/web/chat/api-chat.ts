@@ -15,6 +15,54 @@ import {
 import { ApiError } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 import { createObservedSseParser, createSseParser, SseError } from "./sse.ts";
+import { AgentRunSnapshotSchema, AgentRequestCancellationSchema, type AgentRequestCancellation, type AgentRunSnapshot } from "../../api/agent-runs.ts";
+
+export async function startSavedChat(token: string, ref: string, requestId: string, input: ChatRequest, signal: AbortSignal): Promise<AgentRunSnapshot | null> {
+  try {
+    return await request("POST", "/api/agent/v1/runs", token, AgentRunSnapshotSchema, signal, { version: 1, requestId, layoutRef: ref, input });
+  } catch (error) {
+    // Only a definite unsupported route permits the old mutating transport. Never retry a timeout.
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export function fetchSavedRun(token: string, id: string, signal: AbortSignal): Promise<AgentRunSnapshot> {
+  return request("GET", `/api/agent/v1/runs/${encodeURIComponent(id)}`, token, AgentRunSnapshotSchema, signal);
+}
+
+export async function latestSavedRun(token: string, conversationId: string, signal: AbortSignal): Promise<AgentRunSnapshot | null> {
+  try { return await request("GET", `/api/agent/v1/conversations/${encodeURIComponent(conversationId)}/run`, token, AgentRunSnapshotSchema.nullable(), signal); }
+  catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
+}
+
+export function cancelSavedRun(token: string, id: string): Promise<AgentRunSnapshot> {
+  return request("POST", `/api/agent/v1/runs/${encodeURIComponent(id)}/cancel`, token, AgentRunSnapshotSchema, undefined, { version: 1 });
+}
+
+export function cancelSavedRequest(token: string, requestId: string): Promise<AgentRequestCancellation> {
+  return request("POST", `/api/agent/v1/requests/${encodeURIComponent(requestId)}/cancel`, token, AgentRequestCancellationSchema, undefined, { version: 1 });
+}
+
+/** Coalesced snapshot catch-up is read-only. A failed observation never repeats acceptance. */
+export async function observeSavedRun(token: string, id: string, signal: AbortSignal, emit: (snapshot: AgentRunSnapshot, detail: ConversationDetail) => void): Promise<void> {
+  let seq = 0;
+  for (;;) {
+    signal.throwIfAborted();
+    const snapshot = await fetchSavedRun(token, id, signal);
+    if (snapshot.seq > seq) {
+      const detail = await fetchConversation(token, snapshot.conversationId, signal);
+      emit(snapshot, detail);
+      seq = snapshot.seq;
+    }
+    if (snapshot.status !== "running") return;
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); reject(signal.reason); };
+      const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 250);
+      signal.addEventListener("abort", abort, { once: true });
+    });
+  }
+}
 
 export function fetchProviderStatus(token: string, signal: AbortSignal): Promise<ChatProviderStatus> {
   return request("GET", "/api/chat/provider", token, ChatProviderStatusSchema, signal);
