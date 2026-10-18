@@ -1,0 +1,6 @@
+{
+  "agent": {
+    "provider": "codex",
+    "model": "qa-corrections-model-1440"
+  }
+}

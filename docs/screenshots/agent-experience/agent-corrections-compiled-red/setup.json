@@ -1,0 +1,112 @@
+{
+  "binary": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-focus-0421-install-e8hjxff3/keyloom-corrections-candidate",
+  "sha256": "214390edc85e2a99c2107c2daca2105a9d34a11a6f69ef778c44404ab46f614e",
+  "sourceIdentitySuppliedByParent": "4ecc7df730ae0a54da200c722ce47307169d9f66",
+  "moonlander": "lay_01M58MGY4B81JBJPV1E8111KQQ",
+  "moonlanderConversation": "conv_01M58MH04KZYRFFCS42FJGXTH7",
+  "glove80": "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8",
+  "displayOps": [
+    {
+      "op": "setLayerStyle",
+      "layerId": "layer-base",
+      "color": 1,
+      "shortLabel": "SYN"
+    },
+    {
+      "op": "setLayerStyle",
+      "layerId": "layer-nav",
+      "color": 2,
+      "shortLabel": null
+    },
+    {
+      "op": "setLayerStyle",
+      "layerId": "layer-magic",
+      "color": 3,
+      "shortLabel": null
+    }
+  ],
+  "headBefore": "rev_01M58MHDXGRJGW42BGT81MYWQD",
+  "nonemptyShortLabelAvailable": true,
+  "commands": [
+    {
+      "args": [
+        "import",
+        "--board",
+        "moergo/glove80",
+        "/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-agent-smoke/test/fixtures/zmk/layout-editor-style/Sample.keymap",
+        "--name",
+        "Synthetic corrections Glove80"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "args": [
+        "autosync",
+        "off",
+        "zsa/moonlander"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "args": [
+        "autosync",
+        "status",
+        "zsa/moonlander"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "args": [
+        "autosync",
+        "off",
+        "moergo/glove80"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "args": [
+        "autosync",
+        "status",
+        "moergo/glove80"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "args": [
+        "layout",
+        "show",
+        "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "args": [
+        "change",
+        "check",
+        "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8",
+        "--ops",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-agent-corrections-compiled/display-ops.json"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "args": [
+        "change",
+        "check",
+        "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8",
+        "--ops",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-agent-corrections-compiled/led-ops.json"
+      ],
+      "exit": 4,
+      "expected": 4
+    }
+  ],
+  "status": "fixture prepared; browser acceptance unverified"
+}

@@ -1,0 +1,22 @@
+{
+  "anchor": {
+    "bottom": 552,
+    "height": 28,
+    "left": 1181.5,
+    "right": 1209.5,
+    "top": 524,
+    "width": 28,
+    "x": 1181.5,
+    "y": 524
+  },
+  "inner": {
+    "height": 577,
+    "width": 1280
+  },
+  "pickerStyle": "width: 340px; max-height: 553px; left: 928px; top: 446.203px;",
+  "visual": {
+    "height": 577,
+    "offsetTop": 0,
+    "width": 1280
+  }
+}
