@@ -70,6 +70,8 @@ interface Props {
   onOpenRelease: () => void;
   /** The thread on screen before a board or config switch (D-317), shown read-only above this layout's own. */
   carried?: CarriedThread | null;
+  /** Explicit New discards the read-only thread carried from another board, not its saved history. */
+  onClearCarried?: () => void;
   /** Told of every change to the thread, so a switch can carry it (D-317). */
   onTurns?: (turns: readonly Turn[]) => void;
   /** Key changes kept on the board and not applied (D-317); sent with each message so the agent knows them. */
@@ -82,7 +84,7 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onTurns }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onClearCarried, onTurns }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
@@ -276,9 +278,10 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   };
 
   const newConversation = () => {
+    if (streaming) return;
     chat.newConversation();
+    onClearCarried?.();
     setView("chat");
-    setDraft("");
     input.current?.focus();
   };
   // New, Conversations, Decisions and the model, folded into one ⋯ (P3 review): the bar's chrome stays quiet.
@@ -287,7 +290,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
       <Menu trigger={<Ellipsis size={16} aria-hidden="true" />} label="More" align="end" triggerClassName="bar-more">
         {(close) => (
           <>
-            <button type="button" role="menuitem" className="menu-item" disabled={empty && !streaming} onClick={() => { close(); newConversation(); }}>
+            <button type="button" role="menuitem" className="menu-item" disabled={streaming} onClick={() => { close(); newConversation(); }}>
               <SquarePen size={14} aria-hidden="true" />
               <span className="menu-item-label">New conversation</span>
             </button>
@@ -338,13 +341,8 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
         <button
           type="button"
           className="button chat-new"
-          disabled={empty && !streaming}
-          onClick={() => {
-            chat.newConversation();
-            setView("chat");
-            setDraft("");
-            input.current?.focus();
-          }}
+          disabled={streaming}
+          onClick={newConversation}
         >
           <SquarePen size={14} aria-hidden="true" />
           New
