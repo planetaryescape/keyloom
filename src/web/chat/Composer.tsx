@@ -1,4 +1,4 @@
-import { LoaderCircle, SendHorizontal, Square, X } from "lucide-react";
+import { SendHorizontal, Square, X } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 export interface SelectedKeys {
@@ -53,6 +53,7 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
   return (
     <form
       className="composer"
+      data-streaming={streaming}
       onSubmit={(event) => {
         event.preventDefault();
         if (canSend) onSend();
@@ -81,8 +82,7 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
         </div>
       )}
       <div className="composer-row">
-        {/* No sparkle at rest: it reads as generic AI decoration (BK, 2026-10-16). While a reply streams, a spinner says so. */}
-        {quiet === undefined || !streaming ? null : <LoaderCircle size={14} className="composer-mark" data-busy="true" aria-hidden="true" />}
+        {streaming ? <span className="composer-running-label">Working…</span> : null}
         <textarea
           ref={(element) => {
             fit(element);
@@ -98,20 +98,12 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
         />
         {quiet !== undefined ? (
           <>
-            {streaming ? (
-              <button type="button" className="bar-link composer-stop" onClick={onStop}>
-                <Square size={12} aria-hidden="true" />
-                Stop
-              </button>
-            ) : null}
+            {streaming ? <ChatStopButton onStop={onStop} quiet /> : null}
             {quiet.menu}
             <button type="button" className="bar-esc" onClick={quiet.onEscape} aria-label="Close (Esc)">esc</button>
           </>
         ) : streaming ? (
-          <button type="button" className="button" onClick={onStop}>
-            <Square size={14} aria-hidden="true" />
-            Stop
-          </button>
+          <ChatStopButton onStop={onStop} />
         ) : (
           <button type="submit" className="button button-primary" disabled={!canSend} aria-describedby={blockedReason === null ? undefined : "composer-why"}>
             <SendHorizontal size={14} aria-hidden="true" />
@@ -126,4 +118,8 @@ export function Composer({ value, onChange, onSend, onStop, streaming, selection
       )}
     </form>
   );
+}
+
+export function ChatStopButton({ onStop, quiet = false }: { onStop: () => void; quiet?: boolean }) {
+  return <button type="button" className={`${quiet ? "bar-link" : "button"} composer-stop`} onClick={onStop}><Square size={14} aria-hidden="true" />Stop</button>;
 }

@@ -17,6 +17,8 @@ import { applyChangeSet } from "./api-write.ts";
 import { LabPanel, LabStage } from "./lab/LabScreens.tsx";
 import { matchCommands, type Command } from "./chat/commands.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
+import { ChatStopButton } from "./chat/Composer.tsx";
+import { sidebarAfterUpdate, type Sidebar } from "./shell/sidebars.ts";
 import { useNewKeyboard } from "./keyboards/useNewKeyboard.ts";
 import { NewKeyboardCard } from "./keyboards/NewKeyboardCard.tsx";
 import { NewBoardPanel, type PutSource } from "./keyboards/NewBoardPanel.tsx";
@@ -185,7 +187,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [undoing, setUndoing] = useState(false);
   // The chat drawer. Open, a click on a key adds it to the "Asking about" chips; closed, it opens the key's panel (D-099).
   // The chat stays open across a switch, with the thread that was on screen carried above this layout's own (D-317).
-  const [chatOpen, setChatOpen] = useState(() => chrome.arrival?.chatOpen === true);
+  const [sidebar, setSidebar] = useState<Sidebar | null>(() => chrome.arrival?.proposals === true ? "proposals" : chrome.arrival?.chatOpen === true ? "chat" : null);
+  const chatOpen = sidebar === "chat";
+  const setChatOpen = sidebarSetter("chat");
+  const [chatActivity, setChatActivity] = useState<{ stop: () => void } | null>(null);
   const [carriedThread] = useState<CarriedThread | null>(() => chrome.arrival?.thread ?? null);
   const turnsNow = useRef<readonly Turn[]>([]);
   // Where the open conversation reads (D-310): the bar at the stage's foot, or the panel beside the board.
@@ -196,7 +201,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [pinnedProposal, setPinnedProposal] = useState<ProposalCard | null>(null);
   // The editor's last applied change, and whether the panel that repeats it on the chips' keys is open.
   const [lastChange, setLastChange] = useState<LastChange | null>(null);
-  const [repeating, setRepeating] = useState(false);
+  const repeating = sidebar === "repeat";
+  const setRepeating = sidebarSetter("repeat");
   // The keys of the decision being pointed at in the decisions list.
   const [decisionFocus, setDecisionFocus] = useState<Slot[] | null>(null);
   const [advanced, setAdvanced] = useState(() => readStored(ADVANCED_KEY) === "1");
@@ -205,7 +211,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [inspect, setInspect] = useState(() => readStored(INSPECT_KEY) === "1");
   // Combos drawn as lines, the combos list, and the combo being made or edited (16#combos-are-made-from-a-selection).
   const [showCombos, setShowCombos] = useState(() => readStored(SHOW_COMBOS_KEY) === "1");
-  const [combosOpen, setCombosOpen] = useState(false);
+  const combosOpen = sidebar === "combos";
+  const setCombosOpen = sidebarSetter("combos");
   const [comboDraft, setComboDraft] = useState<ComboDraft | null>(null);
   const [comboPicking, setComboPicking] = useState(false);
   const [hoverCombo, setHoverCombo] = useState<string | null>(null);
@@ -230,14 +237,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [editing, comboDraft]);
   const panel = useRef<KeyPanelHandle>(null);
   // History is a panel of its own; it stays chosen while a key or the chat is looked at, and comes back when they close.
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyOpen = sidebar === "history";
+  const setHistoryOpen = sidebarSetter("history");
   // The library pane works the same way, and the keys on the board it points at (a hovered row's users). It shares the column with History, so one closes the other.
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryOpen = sidebar === "library";
+  const setLibraryOpen = sidebarSetter("library");
   const [libraryKeys, setLibraryKeys] = useState<readonly number[] | null>(null);
   // The settings page shares the column with History and the library. Its staged layer colours are drawn on the board before they are applied (D-190).
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpen = sidebar === "settings";
+  const setSettingsOpen = sidebarSetter("settings");
   // The typing lab (D-314): over the stage while choosing and listening, beside the board for the read-out.
-  const [labOpen, setLabOpen] = useState(false);
+  const labOpen = sidebar === "lab";
+  const setLabOpen = sidebarSetter("lab");
   const lab = useLab(token, layoutRef, labOpen);
   const [labHeat, setLabHeat] = useState<"speed" | "errors">("speed");
   const [labLit, setLabLit] = useState<ReadonlySet<number>>(new Set());
@@ -304,7 +315,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, note: sync.boards.some((b) => b.layoutId === l.id) ? "on it now" : null }));
   }, [chrome.layouts, chrome.boardChoices, sync.boards, newBoard.step]);
   // This config's proposals that no conversation shows, such as a put's (D-336); opened by itself when the put brought the page here.
-  const [proposalsOpen, setProposalsOpen] = useState(() => chrome.arrival?.proposals === true);
+  const proposalsOpen = sidebar === "proposals";
+  const setProposalsOpen = sidebarSetter("proposals");
   const [waiting, setWaiting] = useState<ProposalCard[] | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -313,7 +325,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [token, layoutRef, revision.id]);
   // The board review (D-340): read without being asked, its marker by the config name, its marks on the caps and the strip.
   const boardReview = useReview(token, summary.id, revision.id, sync.lastReview);
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const reviewOpen = sidebar === "review";
+  const setReviewOpen = sidebarSetter("review");
   const reviewShown = reviewOpen && !newBoardPanel && !labPanelShown;
   const reviewSuggestionIds = useMemo(
     () => new Set((boardReview.review?.items ?? []).flatMap((i) => (i.proposalId === null ? [] : [i.proposalId]))),
@@ -588,7 +601,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [draft.binding]);
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
-  const mode: PanelMode = chatOpen && !keyOverChat ? "chat" : editing !== null ? "key" : comboDraft !== null || combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
+  const mode: PanelMode = chatOpen && !keyOverChat ? "chat" : editing !== null ? "key" : combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
   const libraryHighlight = useMemo(() => {
     const keys = new Set(mode === "library" && libraryKeys !== null ? libraryKeys : []);
     if (pointAt !== null && pointAt.layerId === layer?.id) keys.add(pointAt.position);
@@ -659,6 +672,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     if (editing === null || !draft.dirty) return false;
     toasts.show({ kind: "info", message: "Apply or reset the key you are editing first" });
     return true;
+  }
+
+  // All sidebars share one slot. Their data stays mounted where needed; their visibility cannot stack.
+  function sidebarSetter(target: Sidebar) {
+    return (open: boolean) => {
+      if (open) {
+        if (editing !== null) closeEditor(false);
+        setComboPicking(false);
+        if (newBoardPanel) newBoard.close();
+      }
+      setSidebar((current) => sidebarAfterUpdate(current, target, open));
+    };
   }
 
   const dropOps = (functions: readonly string[], reason: string): ChangeOp[] => functions.map((fn) => ({ op: "dropFunction", function: fn, reason }));
@@ -764,7 +789,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setLibraryOpen(false);
     setSettingsOpen(false);
     setCombosOpen(false);
-    setHistoryOpen((open) => !open);
+    setHistoryOpen(!historyOpen);
   }
 
   function toggleLab() {
@@ -808,7 +833,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setSettingsOpen(false);
     setCombosOpen(false);
     setLibraryKeys(null);
-    setLibraryOpen((open) => !open);
+    setLibraryOpen(!libraryOpen);
   }
 
   // Every combo, as a list: from the menu, for the ones on other layers.
@@ -1027,6 +1052,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   function openEditor(position: number, onLayer?: string) {
     if (layer === undefined) return;
+    setSidebar(null);
+    if (newBoardPanel) newBoard.close();
     setSelected(position);
     setBlocked(false);
     // A key opens over the combo being made; the combo is not kept.
@@ -1090,8 +1117,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   function openKeyFromChip(position: number) {
     const chipLayer = chatSelection?.layerId ?? layer?.id;
     if (chipLayer === undefined) return;
-    // From the conversation panel the key takes the panel and the conversation waits (D-310); from the bar, the bar closes.
-    if (!chatPanel) setChatOpen(false);
+    // The key replaces the conversation; its request/history stay mounted, not layered underneath (D-410).
+    setChatOpen(false);
     setLayerId(chipLayer);
     openEditor(position, chipLayer);
   }
@@ -1450,6 +1477,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onPresentation={setChatPresentation}
                 token={token}
                 layoutRef={layoutRef}
+                configName={summary.name}
+                onActivity={setChatActivity}
                 layout={layout}
                 board={board}
                 revisionId={revision.id}
@@ -1617,7 +1646,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             onToggle: () => {
               setHistoryOpen(false);
               setLibraryOpen(false);
-              setSettingsOpen((open) => !open);
+              setSettingsOpen(!settingsOpen);
             },
           },
           advanced: {
@@ -1661,7 +1690,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             }
             marker={<ReviewMarker review={boardReview} open={reviewShown} onToggle={() => {
               setProposalsOpen(false);
-              setReviewOpen((v) => !v);
+              setReviewOpen(!reviewOpen);
             }} />}
             layerId={layer.id}
             layerName={layer.name}
@@ -1754,7 +1783,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             previewing={preview !== null}
           />
           )}
-          <NewKeyboardCard flow={newBoard} />
+          <NewKeyboardCard flow={{ ...newBoard, confirmCandidate: () => {
+            if (editing !== null) closeEditor(false);
+            setSidebar(null);
+            newBoard.confirmCandidate();
+          } }} />
           {/* A phone shows one half of the new board too, with its own Left and Right, since the caption that holds them steps aside. */}
           {newBoardDrawn !== null && shownHalf !== null ? (
             <div className="nb-half"><HalfSwitcher value={half} onChange={setHalf} hands={newBoardDrawn.hands} /></div>
@@ -2035,6 +2068,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         )}
       </div>
       <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      {chatActivity === null || (chatOpen && !keyOverChat) ? null : (
+        <div className="chat-background-work" aria-label="Active agent request">
+          <button type="button" className="button" onClick={openChat}>Show agent work</button>
+          <ChatStopButton onStop={chatActivity.stop} />
+        </div>
+      )}
       {configDialog?.kind === "new" ? (
         <NewConfigDialog
           token={token}

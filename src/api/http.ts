@@ -206,6 +206,7 @@ export const QuestionCardSchema = z.object({
 export type QuestionCard = z.infer<typeof QuestionCardSchema>;
 
 export const ChatRequestSchema = z.object({
+  presentationVersion: z.literal(1, { error: "Unsupported presentation version. Upgrade keyloom or omit presentationVersion for legacy chat." }).optional(),
   // Omitted to start a conversation; its id comes back in the `start` event.
   conversationId: z.string().min(1).optional(),
   message: z.string().min(1).max(8000).optional(),
@@ -319,6 +320,27 @@ export const ChatEventSchema = z.discriminatedUnion("type", [
 ]);
 export type ChatEvent = z.infer<typeof ChatEventSchema>;
 
+export const ChatPresentationSchema = z.object({
+  version: z.literal(1), userMessageId: z.string().min(1),
+  questionToolUseId: z.string().min(1).max(128).optional(),
+  status: z.enum(["running", "waiting_user", "completed", "incomplete", "failed", "cancelled", "unobserved"]),
+  operations: z.array(z.object({
+    id: z.string().min(1), tool: z.string().max(64), label: z.string().max(80),
+    status: z.enum(["running", "succeeded", "failed", "declined", "partial", "unknown"]),
+    durationMs: z.number().int().nonnegative(), validationCodes: z.array(z.string().max(64)).max(8),
+    references: z.array(z.object({ kind: z.enum(["config", "proposal", "priority", "decision"]), id: z.string().max(80) })).max(8),
+    accepted: z.number().int().nonnegative(), declined: z.number().int().nonnegative(),
+  })).max(64),
+  messages: z.array(z.object({ id: z.string().min(1), kind: z.enum(["working_note", "answer"]), text: z.string(), messageId: z.string().min(1).optional() })).max(64),
+  effectsMayHaveOccurred: z.boolean(), warning: z.string().nullable(), detailsTruncated: z.boolean(),
+});
+export type ChatPresentation = z.infer<typeof ChatPresentationSchema>;
+export const ObservedChatEventSchema = z.discriminatedUnion("type", [
+  ...ChatEventSchema.options,
+  z.object({ type: z.literal("presentation"), presentation: ChatPresentationSchema }),
+]);
+export type ObservedChatEvent = z.infer<typeof ObservedChatEventSchema>;
+
 export const ConversationSummarySchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -350,6 +372,7 @@ export const ChatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 export const ConversationDetailSchema = z.object({
+  presentations: z.array(ChatPresentationSchema).optional(),
   // The provider and model it started on and stays on (D-111); model is null for one from before it was recorded.
   conversation: ConversationSummarySchema.extend({ layoutId: z.string().min(1), provider: ChatProviderIdSchema, model: z.string().nullable() }),
   messages: z.array(ChatMessageSchema),

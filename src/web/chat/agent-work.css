@@ -1,0 +1,163 @@
+/* Agent work sits beside the keyboard in the existing room; colour is not an AI identity. */
+.agent-working {
+  min-width: 0;
+  margin-block: var(--space-3);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.agent-work-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.agent-work-status > svg,
+.agent-operation > svg {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.agent-work-status[data-active="true"] .agent-work-label {
+  color: var(--ink-2);
+  background: linear-gradient(100deg, var(--ink-2) 30%, var(--ink) 48%, var(--ink-2) 65%);
+  background-size: 240% 100%;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: agent-work-shimmer 1.8s linear infinite;
+}
+
+.agent-work-label,
+.agent-operation-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-operations {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-operation {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+}
+
+.agent-operation > svg {
+  margin-top: var(--space-1);
+}
+
+.agent-operation-label {
+  color: var(--ink-2);
+  font-weight: var(--weight-medium);
+}
+
+.agent-operation-target,
+.agent-operation-result,
+.agent-operation-state,
+.agent-history-unavailable,
+.agent-work-incomplete {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.agent-operation-state {
+  display: grid;
+  justify-items: end;
+  max-width: 16ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-operation:is([data-state="failed"], [data-state="declined"], [data-state="partial"]) > svg,
+.agent-operation:is([data-state="failed"], [data-state="declined"], [data-state="partial"]) .agent-operation-state {
+  color: var(--bad-ink);
+}
+
+.agent-work-toggle,
+.agent-motion-toggle {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-work-toggle:hover,
+.agent-motion-toggle:hover {
+  color: var(--ink);
+}
+
+.agent-work-toggle > svg {
+  flex: none;
+  transition: rotate 180ms var(--ease-out);
+}
+
+.agent-work-toggle[aria-expanded="true"] > svg {
+  rotate: 90deg;
+}
+
+.agent-work-details {
+  padding-inline-start: var(--space-5);
+}
+
+.agent-work-details[hidden] {
+  display: none;
+}
+
+.agent-working-note {
+  margin: 0 0 var(--space-2);
+  white-space: pre-wrap;
+}
+
+/* Stronger than the historical command-bar prose/list reset, without changing proposal styles. */
+.chat[data-variant] .chat-log .msg-assistant .agent-working :is(p, li) {
+  margin: 0;
+}
+
+.chat[data-variant] .chat-log .msg-assistant .agent-working ul {
+  margin: 0;
+  padding: 0;
+}
+
+.chat[data-variant] .chat-log .msg-assistant .agent-working .agent-working-note {
+  margin-bottom: var(--space-2);
+}
+
+@keyframes agent-work-shimmer {
+  to { background-position: -240% 0; }
+}
+
+.agent-working[data-motion-paused="true"] .agent-work-label {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-working .agent-work-status .agent-work-label {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
+
+  .agent-work-toggle > svg {
+    transition: none;
+  }
+}

@@ -7,6 +7,7 @@ import type { AgentPorts, ProposalResult, RecordedPriority } from "./ports.ts";
 import { type ToolCallTrace, TurnRecorder, type ValidationFailureTrace } from "./recorder.ts";
 import { type AskedQuestion, AskUserSchema } from "./tools/ask-user.ts";
 import { createTools } from "./tools/index.ts";
+import { toolObserver, type AgentObservation } from "./observation.ts";
 
 export const DEFAULT_MAX_ITERATIONS = 12;
 
@@ -21,6 +22,7 @@ export const DEFAULT_MAX_ITERATIONS = 12;
 export type TurnStatus = "awaiting_answer" | "complete" | "refused" | "truncated" | "context_full" | "iteration_limit";
 
 export type AgentCallbacks = {
+  onObservation?: (event: AgentObservation) => void;
   onText?: (delta: string) => void;
   onToolCall?: (name: string) => void;
   onProposal?: (proposal: ProposalResult) => void;
@@ -120,8 +122,9 @@ export async function runAgentTurn(input: {
   const recorder = new TurnRecorder();
   const proposals: ProposalResult[] = [];
   const priorities: RecordedPriority[] = [];
-  const tools = instrument(
-    createTools(ports, recorder, {
+  const observer = toolObserver(ports, (event) => callbacks.onObservation?.(event), input.signal);
+  const tools = observer.wrap(instrument(
+    createTools(observer.ports, recorder, {
       onProposal: (p) => {
         proposals.push(p);
         callbacks.onProposal?.(p);
@@ -133,19 +136,21 @@ export async function runAgentTurn(input: {
     }),
     recorder,
     callbacks.onToolCall,
-  );
+  ));
 
   const snapshot = ports.snapshot();
+  input.signal?.throwIfAborted();
   const result = await model.run({
     system: assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices(), ports.layouts().filter((l) => l.layoutId !== snapshot.layoutId)),
     messages: mergeConsecutiveUsers(input.history),
     tools,
     maxIterations: input.maxIterations ?? DEFAULT_MAX_ITERATIONS,
     ...(callbacks.onText ? { onText: callbacks.onText } : {}),
+    onPublicMessage: (message) => callbacks.onObservation?.({ type: "public_message", ...message }),
     ...(input.signal ? { signal: input.signal } : {}),
   });
 
-  const status = classify(result.stopReason);
+  const status = observer.limited() ? "iteration_limit" : classify(result.stopReason);
   const asked = result.pending === undefined ? undefined : AskUserSchema.safeParse(result.pending.input);
   const messages = resumable(result.messages, status);
   return {

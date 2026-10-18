@@ -5,6 +5,7 @@ import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
 import { STYLE_FIXTURE, TEMPLATE_FIXTURE, fakeBootloaders, zmkEnv } from "../helpers/zmk.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 type Result = { code: number; out: string; err: string };
 /** `onErr` sees stderr as it is printed, so a test can act when the command asks for something instead of after a fixed delay. */
@@ -108,5 +109,5 @@ describe("keyloom doctor with a Glove80 board", () => {
       expect(checkout).toMatchObject({ ok: true });
       expect(checkout?.detail).toContain("pinned at 34888be8c");
     });
-  });
+  }, SLOW_RUNNER_MS);
 });

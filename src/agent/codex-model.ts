@@ -51,7 +51,7 @@ export function synthesise(steps: Array<{ text: string } | { call: McpToolCall }
     messages.push({ role: "assistant", content: [...pendingText, { type: "tool_use", id: call.id, name: call.tool, input: call.arguments ?? {} }] });
     // The call a paused turn waits on has no result yet; the answer becomes it (D-382).
     if (call.id === pending) break;
-    messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: call.id, content: resultText(call), ...(call.error ? { is_error: true } : {}) }] });
+    messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: call.id, content: resultText(call), ...(call.error || call.status === "failed" ? { is_error: true } : {}) }] });
     pendingText = [];
   }
   if (pendingText.length > 0 && pending === undefined) messages.push({ role: "assistant", content: pendingText });
@@ -73,6 +73,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
     classifyError: (err) => (err instanceof CodexError ? { kind: err.kind, message: err.message } : null),
 
     async run(request) {
+      request.signal?.throwIfAborted();
       // Counting here, not in Codex: it has no iteration cap of its own, so the cap is enforced where the tools run.
       let toolCalls = 0;
       let limitHit = false;
@@ -81,6 +82,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       const tools: ModelTool[] = request.tools.map((tool) => ({
         ...tool,
         run: async (raw) => {
+          if (paused) throw new Error("keyloom is waiting for an answer; this tool was not run");
           if (++toolCalls > request.maxIterations) {
             limitHit = true;
             abortRun?.();
@@ -169,6 +171,19 @@ async function runCodex(input: {
   let failure: string | null = null;
   let lastError: string | null = null;
   let spoke = false;
+  let publicMessages = 0;
+  let pendingPublicText = "";
+  let questionSeen = false;
+  // Both consumers inspect completed items; a later handler's paused flag cannot validate an earlier failed call.
+  const isSuccessfulPausingCall = (call: McpToolCall): boolean => {
+    const tool = request.tools.find((candidate) => candidate.name === call.tool);
+    return input.pausing.has(call.tool) && !call.error && call.status !== "failed" && tool?.inputSchema.safeParse(call.arguments ?? {}).success === true;
+  };
+  const publish = (kind: "working_note" | "answer") => {
+    if (!pendingPublicText) return;
+    request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind, text: pendingPublicText });
+    pendingPublicText = "";
+  };
 
   try {
     // Codex's JSONL has no stability promise, so a run can be recorded to see what changed (KEYLOOM_CODEX_TRACE=file).
@@ -187,14 +202,20 @@ async function runCodex(input: {
           continue;
         }
         if (event.kind === "item.completed") {
+          if (questionSeen) continue;
           if (item.kind === "agent_message") {
             steps.push({ text: item.text });
+            pendingPublicText += item.text;
             // Codex sends whole messages; a blank line keeps two of them from running together on screen.
             request.onText?.(`${spoke ? "\n\n" : ""}${item.text}`);
             spoke = true;
           } else if (item.kind === "mcp_tool_call") {
+            publish("working_note");
             steps.push({ call: item.call });
-            if (input.pausing.has(item.call.tool)) kill("limit");
+            if (input.isPaused() && isSuccessfulPausingCall(item.call)) {
+              questionSeen = true;
+              kill("limit");
+            }
           } else if (item.kind === "error") {
             lastError = item.message;
           }
@@ -218,22 +239,25 @@ async function runCodex(input: {
       throw codexErrorFor(lastError ?? (stderr.trim() || `Codex exited with code ${code}`));
     }
   } finally {
+    if (!completed || input.isLimitHit()) publish("working_note");
     clearTimeout(timer);
     request.signal?.removeEventListener("abort", onAbort);
     if (child.exitCode === null && child.signalCode === null) kill("abort");
   }
 
-  const at = steps.findIndex((s) => "call" in s && input.pausing.has(s.call.tool));
-  if (input.isPaused() && at >= 0) {
+  const at = steps.findIndex((step) => "call" in step && isSuccessfulPausingCall(step.call));
+  const pendingStep = steps[at];
+  if (input.isPaused() && pendingStep && "call" in pendingStep) {
     // Everything after the question is dropped: the person's answer may change what comes next.
     const kept = steps.slice(0, at + 1);
-    const call = (kept.at(-1) as { call: McpToolCall }).call;
+    const { call } = pendingStep;
     return {
       messages: synthesise(kept, call.id), stopReason: AWAITING_ANSWER, iterations: kept.filter((s) => "call" in s).length + 1, usage,
       pending: { id: call.id, name: call.tool, input: call.arguments ?? {} },
     };
   }
   const limited = input.isLimitHit();
+  publish(limited ? "working_note" : "answer");
   // A cut-off turn keeps only what finished: a tool call without its result would be unreplayable.
   const completedSteps = limited ? steps.filter((s, i) => "call" in s || steps.slice(i).some((later) => "call" in later)) : steps;
   const messages = synthesise(completedSteps);

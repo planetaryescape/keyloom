@@ -27,6 +27,7 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
           ...(request.conversationId ? { conversationId: request.conversationId } : {}),
           ...(request.selection ? { selection: { layer: request.selection.layerId, positions: request.selection.positions } } : {}),
           ...(request.drafts && request.drafts.length > 0 ? { drafts: request.drafts } : {}),
+          ...(request.presentationVersion === 1 ? { presentationVersion: 1 } : {}),
           ...(opts.model ? { model: opts.model } : {}),
           // The serve flag picks the provider for new conversations; an older one stays where it started (D-111).
           ...(opts.provider && !request.conversationId ? { provider: opts.provider } : {}),
@@ -66,6 +67,7 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
           messages: v.messages,
           proposals: v.proposals,
           priorities: v.priorities,
+          presentations: v.presentations,
         };
       } catch (err) {
         if (err instanceof NotFoundError) return null;

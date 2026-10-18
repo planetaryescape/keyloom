@@ -3,10 +3,10 @@ import type { ChatRequest, ChatSelection, ConversationSummary } from "../../api/
 
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
-import { fetchConversation, fetchConversations, forgetPriority, streamChat } from "./api-chat.ts";
+import { fetchConversation, fetchConversations, forgetPriority, streamObservedChat } from "./api-chat.ts";
 import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action } from "./transcript.ts";
 
-/** A refusal before the reply started: the message never reached the agent. */
+/** A refusal before the reply started, or a history/provider request problem. */
 export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other"; message: string };
 
 export type History =
@@ -51,26 +51,30 @@ export function useChat(token: string, layoutRef: string) {
       controller.current = mine;
       let started = false;
       try {
-        await streamChat(
+        await streamObservedChat(
           token,
           layoutRef,
           { ...(answer === undefined ? { message: text } : { answer: { toolUseId: answer.toolUseId, text } }), ...(conversationId.current === null ? {} : { conversationId: conversationId.current }), ...(selection === null ? {} : { selection }), ...(drafts.length === 0 ? {} : { drafts }) },
           mine.signal,
           (event) => {
+            if (controller.current !== mine || mine.signal.aborted) return;
             if (event.type === "start") started = true;
             dispatch({ type: "event", event });
           },
         );
       } catch (error) {
         if (controller.current !== mine) return; // replaced by a new conversation; nothing to report
-        if (!started && begin.type === "retry") {
+        // Only an explicit HTTP refusal proves execution never started. Lost observation is not
+        // permission to restore/resend a request that the server may already have accepted.
+        const refused = !started && error instanceof ApiError && error.status >= 400;
+        if (refused && begin.type === "retry") {
           // The user turn before it is already on screen and stored, so a refused retry fails in place.
           dispatch(isAbort(error) ? { type: "stopped" } : { type: "failed", code: "retry", message: classify(error).message });
-        } else if (!started && answer !== undefined) {
+        } else if (refused && answer !== undefined) {
           // The question is still open on the server, so it opens again here for another try.
           dispatch({ type: "answerRejected", toolUseId: answer.toolUseId });
           if (!isAbort(error)) setProblem(classify(error));
-        } else if (!started) {
+        } else if (refused) {
           // The reply never opened, so the turn leaves no trace; the message goes back to the composer.
           dispatch({ type: "rolledBack" });
           if (!isAbort(error)) {
@@ -80,7 +84,8 @@ export function useChat(token: string, layoutRef: string) {
         } else if (isAbort(error)) {
           dispatch({ type: "stopped" });
         } else {
-          dispatch({ type: "failed", code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message: error instanceof Error ? error.message : "The reply stopped." });
+          const message = error instanceof Error ? error.message : "The reply stopped.";
+          dispatch({ type: "failed", code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message: started ? message : `${message} The request may have been accepted. Read conversation history before sending it again.` });
         }
       } finally {
         if (controller.current === mine) controller.current = null;
@@ -109,7 +114,11 @@ export function useChat(token: string, layoutRef: string) {
     return run(user.text, user.selection, { type: "retry", assistantId: nextId("reply") });
   }, [transcript, streaming, run]);
 
-  const stop = useCallback(() => controller.current?.abort(), []);
+  const stop = useCallback(() => {
+    if (controller.current === null) return;
+    controller.current.abort();
+    dispatch({ type: "stopped" });
+  }, []);
 
   const newConversation = useCallback(() => {
     controller.current?.abort();

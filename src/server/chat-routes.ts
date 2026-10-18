@@ -1,6 +1,6 @@
 // The chat panel's routes (rung 3). startServer calls `handleChatRoute` for every /api request
 // after its Host check and before its own routing, and serves the Response when one comes back.
-import { ChatProviderChoiceSchema, ChatProviderStatusSchema, ChatRequestSchema, ConversationDetailSchema, ConversationListResponseSchema, type ApiErrorBody, type ChatEvent } from "../api/http.ts";
+import { ChatProviderChoiceSchema, ChatProviderStatusSchema, ChatRequestSchema, ConversationDetailSchema, ConversationListResponseSchema, type ApiErrorBody, type ObservedChatEvent } from "../api/http.ts";
 import { type ChatBackend, ChatError } from "./chat-backend.ts";
 import { checkToken } from "./guard.ts";
 
@@ -48,7 +48,7 @@ function match(method: string, pathname: string): Match | "wrong-method" | null 
 const errorResponse = (status: number, code: string, message: string): Response =>
   Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-const frame = (event: ChatEvent): string => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+const frame = (event: ObservedChatEvent): string => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 
 function failure(err: unknown): { status: number; code: string; message: string } {
   if (err instanceof ChatError) return { status: err.status, code: err.code, message: err.message };
@@ -131,7 +131,8 @@ async function send(request: Request, ref: string, backend: ChatBackend): Promis
   let failed: unknown;
   let opening!: () => void;
   const firstOutcome = new Promise<void>((resolve) => void (opening = resolve));
-  const write = (event: ChatEvent) => {
+  const write = (event: ObservedChatEvent) => {
+    if (event.type === "presentation" && parsed.data.presentationVersion !== 1) return;
     if (closed) return;
     try {
       controller.enqueue(encoder.encode(frame(event)));

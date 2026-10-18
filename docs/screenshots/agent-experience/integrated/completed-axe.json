@@ -1,0 +1,113 @@
+{
+  "success": true,
+  "data": {
+    "axeVersion": "4.12.1",
+    "counts": {
+      "inapplicable": 65,
+      "incomplete": 1,
+      "passes": 23,
+      "violations": 0
+    },
+    "incomplete": [
+      {
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/color-contrast?application=axeAPI",
+        "id": "color-contrast",
+        "impact": "serious",
+        "nodeCount": 9,
+        "nodes": [
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<p>Inspect the synthetic base layer again for acceptance. No writes.</p>",
+            "target": [
+              ".msg-user.msg:nth-child(3) > .msg-bubble > p"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<p class=\"msg-context\">Moonlander \u00b7 26a synthetic Moonlander</p>",
+            "target": [
+              ".msg-user.msg:nth-child(3) > .msg-context"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<p class=\"msg-who\">keyloom</p>",
+            "target": [
+              ".msg-assistant.msg[data-phase=\"done\"]:nth-child(4) > .msg-who"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<p>The synthetic Moonlander inspection is complete. No layout or device was changed.</p>",
+            "target": [
+              ".msg-assistant.msg[data-phase=\"done\"]:nth-child(4) > div:nth-child(2) > .prose > p"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<button type=\"button\" class=\"agent-work-toggle\" aria-expanded=\"true\" aria-controls=\"_r_p_\">",
+            "target": [
+              "button[aria-controls=\"_r_p_\"]"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<p class=\"agent-working-note\">I will inspect the synthetic base layer without changing it.</p>",
+            "target": [
+              "#_r_p_ > .agent-working-note"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<p class=\"agent-operation-label\">Read layout</p>",
+            "target": [
+              "#_r_p_ > ul > .agent-operation[data-state=\"succeeded\"] > .agent-operation-body > .agent-operation-label"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<p class=\"agent-operation-state\">Completed<span>5 ms</span></p>",
+            "target": [
+              "#_r_p_ > ul > .agent-operation[data-state=\"succeeded\"] > .agent-operation-state"
+            ]
+          },
+          {
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element",
+            "html": "<span>5 ms</span>",
+            "target": [
+              "#_r_p_ > ul > .agent-operation[data-state=\"succeeded\"] > .agent-operation-state > span"
+            ]
+          }
+        ],
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ]
+      }
+    ],
+    "lifecycle": {
+      "effectiveLaunch": {
+        "browserLaunched": true,
+        "engine": "chrome",
+        "launchHash": 12798390076057945372
+      },
+      "launched": false,
+      "relaunchedBrowser": false,
+      "restartedBackground": false,
+      "restoreStatus": "not_configured",
+      "reused": true,
+      "saveStatus": "not_attempted"
+    },
+    "violations": []
+  },
+  "error": null
+}

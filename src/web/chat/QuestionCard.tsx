@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import type { QuestionCard as Question } from "../../api/http.ts";
 import { optionForKey } from "./question-keys.ts";
 
@@ -14,16 +14,11 @@ interface Props {
 // the number keys pick while the card has focus. Once answered it is a quiet, read-only line.
 export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
   const id = useId();
-  const card = useRef<HTMLElement>(null);
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
   const open = question.answer === null;
 
-  // Focus follows the question so the number keys work at once. The chat panel scrolls the log to the card's top, which matters in the
-  // phone's short sheet: a question cut off at the top would look like a reply that never finished.
-  useEffect(() => {
-    if (open && !disabled) card.current?.focus({ preventScroll: true });
-  }, [open, disabled]);
+  // The log reveals the question, but arriving work must not take focus from someone typing elsewhere.
 
   if (!open) {
     return (
@@ -40,7 +35,6 @@ export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
 
   return (
     <section
-      ref={card}
       className="ask-card"
       aria-labelledby={`${id}-q`}
       tabIndex={0}

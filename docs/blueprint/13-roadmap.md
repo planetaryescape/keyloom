@@ -568,6 +568,194 @@ Only BK can do these:
 
 **Left out:** reviews of configs nothing touched while their keyboard was away, which run only when asked (D-343).
 
+## Agent-native extension (planned 2026-10-18)
+
+These are follow-on rungs for an existing product (D-406), not evidence that they shipped. Each rung must be usable without the next. Keep the existing release channel and design gate. Read [28](28-agent-experience.md), [29](29-agent-app-control.md) and [30](30-agent-keyboard-context.md) as one experience.
+
+No new accounts or credentials are required by this plan. Use the provider setup already available. S54 to S57 and Q30 to Q36 are in [15](15-open-questions.md). The first build session starts with S54 and the rung 26 comps, not all seven open product questions at once. A rung that exceeds one useful session is split with another letter; do not call a multi-session subsystem a completed rung.
+
+## Rung 26: I can see what the agent is doing
+
+Status: not built; proposed on 2026-10-18. Execution now splits this promise into 26a and 26b below (D-408), following S54's observed message/cancellation gaps. Completing 26a alone does not complete this rung.
+
+Previously, one activity string represents a running turn. Now a request has distinct user/agent hierarchy, real correlated tool progress, a quiet thinking shimmer, and a final answer with routine work folded away.
+
+**Promise:** "I know it's working, I can see what it is checking, and when it's done I can read the answer without all the noise."
+
+**Build:** lifecycle instrumentation, persisted run/event projection, replay and legacy fallback from [29](29-agent-app-control.md); turn composition from [28](28-agent-experience.md). Existing read/proposal tools only. Define event-size and retention bounds with S54/Q36 before persistence ships.
+
+**Design:** approve running, completed, stopped and failed comps in both themes (Q30). Keep the board as hero and reuse the side column. Pending questions and unapplied proposals stay visible.
+
+**New unknowns:** provider-neutral lifecycle/message boundaries; interrupted-stream replay (S54).
+
+**Demo:** ask for a mirrored hold on selected keys using scripted tools, inspect tool results, disconnect/reconnect, stop a second run, then finish another and reopen its folded work. Also run with a configured live provider only if authorized; never call a simulation a live-provider proof.
+
+**Done when:** the served app and installed CLI show the same ordered operations and final outcome; reconnect neither duplicates the turn nor reruns an effect; reduced motion stops shimmer; keyboard focus and scroll survive folding; chapter 28's design gate passes.
+
+**Left out:** new mutating tools, cross-target write routing and new question kinds.
+
+## Rung 26a: I see real work and can read the final answer
+
+Status: implemented, 2026-10-18. Local and CI full suites passed; the compiled production app passed the [recorded acceptance journeys](../screenshots/agent-experience/integrated/README.md). This is 26a only, not the original rung's durable-execution promise. Stop stays visible on phones, including when another sidebar replaces chat (D-410). Published-release installation is a separate final delivery gate.
+
+**Observed:** completed activity and public message grouping survived reload; the actual composer produced the same saved grouping; desktop Stop and phone shell Stop preserved completed config preparation with non-rollback warnings. Reading history left exactly the original plus two deliberate synthetic copies, with the original unchanged. The actual Hints/Settings/History/Library/Ask controls replaced one another without overlap. This used fake Codex through real MCP and the bundled app, not paid providers, real layouts or hardware. Transient running read rows were too fast to capture; running-turn/Stop behavior was observed with a deliberately hanging preparation request.
+
+Previously, the agent shows one activity string and combines working notes with its final answer. Now the existing layout-scoped conversation shows correlated tool start/result/failure, semantic validation refusal, separate public working notes and final answer, and inspectable bounded completed activity.
+
+**Promise:** "I can see what it checked, tell a failed check from a successful one, and read the answer without all the working in the way."
+
+**Build:** the smallest compatible observation/message-boundary path over existing tools, model replay and questions/proposals. Persist sanitized completed or partial presentation linked to the original turn, not a full new run engine. Expose the same history inspection through CLI. Negotiate new stream events explicitly so old strict parsers keep working. Keep raw tool returns, credentials, recordings and opaque thinking out.
+
+**Design:** approve the running, waiting, completed/collapsed and stopped/failure comps in the current visual world (Q30). Preserve questions and pending proposals as primary actions, and never imply a verified device outcome from a finished reply.
+
+**New unknowns:** provider-neutral public boundaries and semantic result classification; bounded completed-presentation persistence and compatibility. S54 has characterized the existing seams and failures; production behavior still needs tests.
+
+**Demo:** with a scripted provider and scratch layout, inspect keys, reject an invalid proposal, show a valid one, finish and reopen the collapsed working, then reload the saved conversation and inspect it through CLI. Stop a config-preparation request and show the warning that an effect may already have completed. No automatic resend occurs.
+
+**Done when:** live/reloaded public message grouping agrees for new turns; repeated/parallel calls keep distinct identities; invalid validation is not green; old clients receive their supported event shape; completed details and CLI inspection agree; a stopped/lost stream never says preparation was rolled back; ordinary checks, installed-client smoke and the design gate pass after release.
+
+**Left out:** continuing running work after a socket closes, request deduplication/effect recovery, new app actions and cross-board targeting. Connection loss still may end execution. Say so visibly; do not call this durable reconnect.
+
+## Rung 26b: I reload the same work without executing it again
+
+Status: planned; depends on released 26a and its installed-client journey.
+
+Previously, completed activity is inspectable but a stream interruption may still lose in-flight execution/history. Now execution belongs to a persisted run instead of a subscriber, and a reconnect reads the same work without resending its effects.
+
+**Promise:** "I can close and reopen the agent, see what it already did, and continue without creating or applying the same thing twice."
+
+**Build:** run identity and client request deduplication, sequence/catch-up, atomic local effect receipts, existing-job reconciliation, explicit Stop and restart-as-interrupted recovery from [29](29-agent-app-control.md). Audit all preparation writes: proposals, memory and config creation, not only one tool. Preserve 26a presentation compatibility while extending the execution owner.
+
+**Design:** keep a quiet running/waiting indicator when the column closes. Reopening returns to the same request, context and pending decision. Unknown effects remain visible rather than receiving a guessed checkmark.
+
+**New unknowns:** atomic receipt integration across existing writes; subscriber/process recovery and safe job reconciliation.
+
+**Demo:** disconnect after a synthetic config commits, reconnect by run ID, repeat the request ID and answer ID, and restart the server during another request. Observe one domain effect and its original result, no duplicate execution. Exercise cancellation while a fake device job is in a non-interruptible phase without touching hardware.
+
+**Done when:** duplicate/out-of-order events project deterministically; a reconnect never repeats a POST effect; local mutations and receipts cannot diverge at a commit boundary; pending questions/approvals survive restart with exact scope; linked jobs retain their real state; release/installed-client and design gates pass. Only now may the original rung 26 be marked complete.
+
+**Left out:** workspace conversation migration, new agent capabilities and independent physical identity for identical-model keyboards.
+
+## Rung 27: I answer on the keyboard and inspect real results
+
+Status: not built; depends on rung 26.
+
+Previously, questions have a few buttons and free text. Now a key/layer/config/keyboard choice uses the corresponding app control, and tool results use typed cards and existing previews.
+
+**Promise:** "When it asks where something goes, I click the key; when it finds something, it shows it to me."
+
+**Build:** question and artifact unions, native renderers, message/run ownership and pause/resume from [28](28-agent-experience.md) and [29](29-agent-app-control.md). Preserve the current validated proposal path. Settle Q33's initial kinds.
+
+**Design:** prototype the key-pick mode, the phone sheet handoff, a comparison and a transfer report. Reuse layer chips, board rendering and existing Apply rather than parallel widgets.
+
+**New unknowns:** stale scoped question answers (S55's question half); keyboard-accessible stage/sheet selection.
+
+**Demo:** ask where a layer key should go, choose on the target board, reload before answering another question, and inspect a mapped result with an unsupported item. Complete the same question through the installed CLI.
+
+**Done when:** question IDs and target context survive pause/reload; no model process waits; answered cards remain readable; a stale dependent plan cannot apply; artifacts reveal the correct board/layer; keyboard-only and phone journeys pass the design gate.
+
+**Left out:** arbitrary forms, app-wide mutation and batch execution.
+
+## Rung 28: I manage configs, versions and settings through the agent
+
+Status: not built; depends on rung 27 and Q32's confirmation policy.
+
+Previously, many tasks require another app surface. Now the agent can navigate, create/rename/archive configs, compare/restore versions and manage the existing editable app settings with the same results and safeguards as direct manipulation.
+
+**Promise:** "I can ask it to make a config, compare last week's version, or change a setting without hunting through menus."
+
+**Build:** first capability inventory (S56), typed local UI intents, preparation/confirmation receipts and idempotent effects from [29](29-agent-app-control.md). Reads and safe preparation run directly; consequential config changes use the approved plan. Deletion retains its existing typed-name confirmation.
+
+**Design:** show each action's actual target and result, with one primary action. A local theme setting is not styled like a firmware Apply. The conversation remains readable when a settings/history sheet opens.
+
+**New unknowns:** shared capability-policy enforcement; atomic mutation/effect receipts.
+
+**Demo:** create a separate config, rename it, compare a version, prepare a restore, edit the target via CLI before confirmation and observe refusal. Retry a completed creation after reconnect and see only one config.
+
+**Done when:** the inventory's config/version/settings rows pass through UI, agent and CLI; the same use cases and validation are exercised; stale confirmation writes nothing; effects survive reconnect honestly; the design gate passes.
+
+**Left out:** starting device writes, recording sessions and cross-board destination writes.
+
+## Rung 28b: I control builds, sync and the typing lab without leaving the agent
+
+Status: not built; depends on rung 28.
+
+Previously, the conversation prepares edits but cannot carry the workflow through device/lab controls. Now it can prepare a build or device action, pause sync, guide remapper setup, start/stop an explicitly approved recording and present diagnostics or emulation results.
+
+**Promise:** "I can ask what is blocking my keyboard, approve the next step, and watch its real progress here."
+
+**Build:** firmware/sync/remapper/lab/review/diagnostic inventory rows and linked jobs from [29](29-agent-app-control.md). Keep existing first-flash, exit-chord, recording and deletion safeguards. Preserve auto-sync disclosures on active-config Apply.
+
+**Design:** prototype approved Apply -> sending -> verified, offline/needs-hand, explicit recording and stop-during-write states. Reuse the sync line's sentences and lab's per-finger findings.
+
+**New unknowns:** conversation-to-existing-job recovery; safe cancellation across build/write phases.
+
+**Demo:** on scratch data and fake devices, approve a sync, observe all phases, request Stop during writing, and see the honest outcome. Start/stop a synthetic lab session with explicit consent and open aggregate findings. Hardware validation is a separate authorized demo, never an implicit part of a smoke test.
+
+**Done when:** UI, CLI and agent observe the same job IDs and states; a finished model reply never marks a device verified; no raw recording reaches the model; disconnection does not lose effects; all supported covered actions pass the design gate. Record unobserved real-hardware checks separately.
+
+**Left out:** bypassing OS permissions, unattended first flashes and new cross-board execution.
+
+## Rung 28c: Every existing app workflow has a complete agent route
+
+Status: not built; depends on rung 28b.
+
+Previously, the highest-frequency capabilities are covered. Now the coverage inventory closes the remaining app workflows, including keyboard registration, import/export, all existing review/memory controls and remaining settings or config actions.
+
+**Promise:** "Anything I can do in Keyloom has a way through the agent, including the awkward setup steps."
+
+**Build:** finish S56's action-by-action inventory, file/OS handoffs and the coverage conformance gate. Every row names the real use case and completion evidence, not "supported" inferred from a prompt.
+
+**Design:** prototype import/file selection, keyboard add, an unsupported capability and permission-required continuation. Show what the person must do locally and resume in the same task.
+
+**New unknowns:** browser file-gesture handoff; complete inventory drift detection.
+
+**Demo:** import a synthetic config through the agent, inspect the preservation report, export it, add a fixture-backed board, then use the agent for review/priority maintenance. Exercise provider setup without placing a secret in chat. Compare every inventory row against the direct app and CLI.
+
+**Done when:** no existing app workflow remains an unimplemented agent placeholder; justified OS-only steps have working controls and continuation; adding an unregistered app action fails the explicit coverage test; the installed binary and served-app journeys pass. No broad shell tool fills a gap.
+
+**Left out:** new keyboard firmware support, developer-source editing and physical duplicate-model identity.
+
+## Rung 29: I can send a change to a keyboard I am not looking at
+
+Status: not built; depends on the scoped runtime and confirmation work from rungs 26 to 28; it may precede 28c if its existing capability prerequisites are covered.
+
+Previously, cross-board reads and put-config exist but ordinary proposals target the origin conversation's layout. Now any explicit registered destination can receive a checked proposal, shown in the originating conversation.
+
+**Promise:** "I can tell my Moonlander to send this to my MacBook, see what that means there, and keep talking."
+
+**Build:** [30](30-agent-keyboard-context.md): collection read model, per-request focus, target-specific ports, transfer artifacts over existing mapper results and explicit destination proposals. Resolve Q31 before conversation-continuity migration; run S55's cross-board half.
+
+**Design:** approve source/destination chips, a proposal for a board offstage and the switch-board/return journey. A proposal never changes owner when the stage changes.
+
+**New unknowns:** conversation/context migration; cross-target stale/source-revision semantics.
+
+**Demo:** read a Moonlander layer into a Glove80 proposal, then send a selected macro to a MacBook config. Switch boards during mapping and while a question is open. Change the destination head by CLI before Apply and observe the stale refusal.
+
+**Done when:** source hashes/revisions are unchanged; destinations are explicit in UI/CLI/artifacts; unsupported content is named; old conversations reopen correctly; new focus does not retarget old work; the installed binary and design gate prove both transfer directions.
+
+**Left out:** several targets in one plan and independent hardware control of duplicate-model keyboards (Q35/S57).
+
+## Rung 30: One request prepares changes for several keyboards
+
+Status: not built; depends on rung 29 and Q34's partial-result policy.
+
+Previously, one destination is handled at a time. Now a request expands to exact targets, shows each preview and lets BK approve a ready subset with clear individual outcomes.
+
+**Promise:** "I can send this macro to my keyboards and see which are done, which need a key, and which are offline."
+
+**Build:** immutable target groups, per-target plans/receipts, full preflight and failed-subset retry from [30](30-agent-keyboard-context.md). Reuse global sync serialization, not parallel flash machinery.
+
+**Design:** approve the target/result matrix, ready-subset confirmation and final partial-success result. Successful working can fold; offline, pending or failed targets remain visible.
+
+**New unknowns:** partial-failure retry semantics; explicit subset approval across several heads.
+
+**Demo:** prepare the same macro on a Moonlander, Glove80 and MacBook fixture, leave one offline and force a failure on another, approve only the displayed subset, then retry failures. Register another fixture board after preview and confirm it is not silently added.
+
+**Done when:** each target validates against its own head, successful effects occur once, retry does not repeat them, hardware work follows existing serialization, and the final result never says every keyboard is updated when one is not. UI/CLI and the design gate agree on every target outcome.
+
+**Left out:** atomic hardware rollback, silent target expansion and unapproved first flashes. Independent identical-model device support waits for S57 and a separately specified migration rung.
+
 ## After the car (not planned yet)
 
 - ~~Conditional layers (tri-layer) in the editor~~: built, D-385 to D-389.

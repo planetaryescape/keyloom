@@ -22,10 +22,11 @@ const render = (turn: AssistantTurn, switchTo: { id: string; name: string }[] = 
   );
 
 describe("a reply that stopped says why, in comp d2's words (P3)", () => {
-  test("out of credits offers the other ready providers and says nothing changed", () => {
+  test("out of credits offers the other ready providers without claiming effects were rolled back", () => {
     const html = render(failed("model_no_credits", "OpenRouter says the account is out of credits."), [{ id: "codex", name: "Codex" }]);
     expect(html).toContain("Out of credits");
-    expect(html).toContain("Nothing was changed.");
+    expect(html).not.toContain("Nothing was changed.");
+    expect(html).toContain("prepared before the reply stopped may remain");
     expect(html).toContain("Switch to Codex");
     expect(html).toContain("Try again");
   });

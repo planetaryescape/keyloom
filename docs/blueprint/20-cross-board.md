@@ -1,5 +1,7 @@
 # 20: Copying from my other keyboard
 
+Proposed extension, 2026-10-18: [30](30-agent-keyboard-context.md) adds explicit destination targeting, transfers visible in the originating conversation and multi-keyboard outcomes (D-401, D-402, D-405). It reuses the correspondence and capability rules here. The existing one-layout write scope below describes the baseline implementation, not the new target experience.
+
 Status: built in rung 19, 2026-10-15. Source baseline: origin/main at `898dec6` (v0.19.0). Results: S21 in [15](15-open-questions.md).
 
 BK, on seeing the agent fail: "I think the agent shoudl be able to see the layouts of other keyboards. and it should be possible for me to say copy this thing from my other keyboard and apply it here and it should have the smarts to figure out the best way to do it even if the keyboards have differnt number of keys or differnt layouts" (D-220).

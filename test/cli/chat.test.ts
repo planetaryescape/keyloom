@@ -7,6 +7,8 @@ import { type ScriptStep, fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
 import { withoutCredentials } from "../helpers/no-credentials.ts";
 import { draft } from "../helpers/ops.ts";
+import { sendMessage } from "../../src/app/index.ts";
+import { insertConversation, insertMessage } from "../../src/persistence/conversations.ts";
 
 async function cli(args: string[], deps: Parameters<typeof runCli>[2] = {}) {
   let out = "";
@@ -121,6 +123,23 @@ describe("keyloom chat", () => {
     await cli(["chat", "bk", "--message", "Option is on S", "--format", "json", "--data-dir", dir], { model: anthropicModel(fakeAnthropic(script).client) });
     const r = await cli(["conversations", "list", "bk", "--format", "json", "--data-dir", dir]);
     expect(JSON.parse(r.out).conversations).toMatchObject([{ title: "Option is on S" }]);
+  });
+
+  test("conversations show inspects the same saved work in JSON/table/ids without a model", async () => {
+    const { app, dir, layoutId } = await optionOptionApp();
+    const out = await sendMessage(app, layoutId, { message: "Inspect", model: anthropicModel(fakeAnthropic([{ blocks: [{ tool: "list_layouts", input: {} }] }, { blocks: [{ text: "Done." }] }]).client) });
+    const args = ["conversations", "show", out.conversationId, "--data-dir", dir];
+    const json = await cli([...args, "--format", "json"]);
+    expect(json.code).toBe(0);
+    expect(JSON.parse(json.out)).toMatchObject({ schema_version: 1, presentations: [{ status: "completed", operations: [{ label: "List configs", status: "succeeded" }] }] });
+    expect((await cli([...args, "--format", "table"])).out).toContain("List configs: succeeded");
+    expect((await cli([...args, "--format", "ids"])).out.trim()).toBe(out.conversationId);
+    const old = insertConversation(app.db, { layoutId, title: "Legacy" });
+    insertMessage(app.db, { conversationId: old.id, role: "assistant", content: [{ type: "text", text: "Old answer" }] });
+    const legacy = await cli(["conversations", "show", old.id, "--data-dir", dir, "--format", "table"]);
+    expect(legacy.out).toContain("Working details unavailable for this older conversation.");
+    expect((await cli(["conversations", "show", "conv_missing", "--data-dir", dir])).code).toBe(3);
+    app.db.close();
   });
 
   test("--select parses layer and positions, and rejects nonsense", () => {

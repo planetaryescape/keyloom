@@ -1,0 +1,26 @@
+{
+  "bodyScrollWidth": 390,
+  "height": 844,
+  "operations": [
+    {
+      "label": "Create config",
+      "state": "succeeded"
+    }
+  ],
+  "reducedMotion": true,
+  "scrollWidth": 390,
+  "stops": [
+    {
+      "bottom": 832,
+      "height": 44,
+      "left": 224.5,
+      "right": 300.5,
+      "top": 788,
+      "width": 76,
+      "x": 224.5,
+      "y": 788
+    }
+  ],
+  "streaming": "true",
+  "width": 390
+}

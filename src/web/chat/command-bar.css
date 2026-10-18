@@ -1160,3 +1160,137 @@
   color: var(--pending-ink);
   font-size: var(--text-xs);
 }
+
+/* Approved agent hierarchy: the request is inset and trailing; the answer stays on the page. */
+.chat .chat-log .msg.msg-user {
+  width: calc(100% - var(--space-6));
+  align-self: flex-end;
+  margin-inline-start: var(--space-6);
+}
+
+.chat .chat-log .msg.msg-user .msg-who {
+  text-align: right;
+}
+
+.chat .chat-log .msg.msg-user .msg-bubble {
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--space-1) var(--radius-lg);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.chat .chat-log .msg.msg-assistant > .msg-who {
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+.msg-context {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.chat-context {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-context > p {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.chat-context .agent-motion-toggle {
+  flex: none;
+  max-width: 14ch;
+}
+
+.composer-running-label {
+  display: none;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.chat .composer-stop {
+  min-height: 44px;
+  min-width: 76px;
+  flex: none;
+  justify-content: center;
+  color: var(--ink);
+}
+
+.chat .composer[data-streaming="true"] textarea {
+  max-height: 80px;
+}
+
+.composer[data-streaming="true"] .composer-selection {
+  max-height: 88px;
+  overflow-y: auto;
+}
+
+.chat-stop-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+/* The footer, never the log, owns Stop. A long draft/command list must not push it off-screen. */
+.chat[data-streaming="true"] .bar-commands {
+  max-height: 160px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .chat-context {
+    padding-block: var(--space-1);
+  }
+
+  /* The 112px peek has room only for the sheet grabber and the working footer. */
+  .side[data-size="peek"] .chat[data-streaming="true"] > :not(.composer):not(.chat-stop-footer) {
+    display: none;
+  }
+
+  .side[data-size="peek"] .chat[data-streaming="true"] .composer {
+    padding-block: 0;
+  }
+
+  .side[data-size="peek"] .chat[data-streaming="true"] .composer :is(textarea, .composer-selection, .composer-hint, .composer-why) {
+    display: none;
+  }
+
+  .side[data-size="peek"] .chat[data-streaming="true"] .composer-running-label {
+    display: inline;
+    margin-inline-end: auto;
+  }
+}
+.chat-background-work {
+  position: fixed;
+  z-index: 45;
+  inset-inline-end: var(--space-4);
+  inset-block-end: max(var(--space-4), env(safe-area-inset-bottom));
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  max-width: calc(100vw - 2 * var(--space-4));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}

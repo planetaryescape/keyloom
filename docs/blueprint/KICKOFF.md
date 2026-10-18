@@ -14,3 +14,24 @@ You're building keyloom, an open-source, local-first keyboard configurator for Q
 Ask me about the product questions in `15-open-questions.md` when they come up. Don't guess.
 
 ---
+
+## Follow-on prompt for the agent-native extension
+
+The first-build prompt above is historical. For the 2026-10-18 extension, use:
+
+---
+
+Extend Keyloom into a keyboard-specialist agent that can operate the app and work across my registered keyboards. The blueprint is in `28-agent-experience.md`, `29-agent-app-control.md` and `30-agent-keyboard-context.md`. This is a feature of the existing product, not a new chatbot or a new visual identity.
+
+1. Fetch current `origin/main` and name the SHA. Read `AGENTS.md`, the blueprint README, chapters 03, 20, 23 and 25, then chapters 28 to 30. Read D-396 to D-407, Q30 to Q36, and the source baseline research. Check changes since its pinned SHA before relying on code observations.
+2. Start with rung 26 in `13-roadmap.md`. Run S54 first and record evidence. Do not rebuild shipped rungs 1 to 25 or jump straight to batch hardware writes. Resolve only the questions that gate the chosen rung.
+3. Show the running, waiting, completed/collapsed and failure comps in the existing concept. Get my approval before building the new UI. User and agent messages, real tool progress and the final result must have different hierarchy.
+4. Reuse the provider seam, ports, tools, proposal/question cards, mapping, validator and sync engine. Add correlated lifecycle and typed result data, not arbitrary model-authored UI or a shell tool. Every new app action has UI, CLI and agent coverage over the same use case.
+5. Run the rung's exact demo through the served app and installed binary with a scratch data directory and fake devices. Observe the screenshot/accessibility gate. Never start a server against my real auto-sync data or flash a keyboard unless I authorize it in that session.
+6. Record what actually shipped, evidence and what remains blocked. Keep proposal/built statuses honest. Do not commit, push or publish unless I ask.
+
+S54 and the Q30 visual gate are complete (D-408/D-409). Rung 26a is implemented and passed the full suites plus [compiled-app acceptance](../screenshots/agent-experience/integrated/README.md), including the one-sidebar rule (D-410). Verify its published installation before starting dependent 26b; do not rerun the initial concept exercise or mistake bounded snapshots for durable execution. Q31 and Q32 gate later conversation and mutation changes. Never claim durable reconnect before 26b's journey passes.
+
+Historical planning handover, 2026-10-18, before BK requested implementation: chapters 28 to 30, the delivery slices, D-396 to D-407 and Q30 to Q36 were documentation only. [The baseline research](../research/agent-native-baseline.md) preserves that source reading and reconciliation with `72370d0494497ae4bdd6036106fcec9d3f6c1aab`. The execution update above supersedes that planning-only status; it does not authorize hardware access in a later session.
+
+---

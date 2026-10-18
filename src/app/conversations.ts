@@ -23,6 +23,8 @@ import type { App } from "./context.ts";
 import { BusyError, ModelError, NotFoundError, UsageError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
 import { selectLayers } from "./render.ts";
+import { chatPresentation, unobservedPresentation, resolvePresentedQuestion, type Presentation } from "./chat-presentation.ts";
+import { listPresentations } from "../persistence/chat-presentations.ts";
 
 export type { ProposalCard } from "./proposal-card.ts";
 
@@ -39,6 +41,7 @@ export type PriorityCard = {
 };
 
 export type ChatEvent =
+  | { type: "presentation"; presentation: Presentation }
   | { type: "start"; conversationId: string; messageId: string }
   | { type: "text"; delta: string }
   | { type: "tool"; name: string }
@@ -69,6 +72,7 @@ export type ChatOutcome = {
 };
 
 export type SendMessageInput = {
+  presentationVersion?: 1;
   /** BK's words. Exactly one of this and `answer`. */
   message?: string;
   /** The answer to the question the conversation is waiting on; it becomes that tool call's result (D-382). */
@@ -97,8 +101,9 @@ export function conversationTitle(message: string): string {
   return `${(space > TITLE_LENGTH / 2 ? cut.slice(0, space) : text.slice(0, TITLE_LENGTH)).replace(/[,;:.–-]+$/, "")}…`;
 }
 
-// A second message into a conversation that is mid-turn would interleave tool results with it.
-const answering = new Set<string>();
+// Reserve the conversation before storing input, then identify the one message owning live work.
+// A null reservation still excludes a second request, but cannot make an older projection live.
+const answering = new Map<string, string | null>();
 
 
 const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => ({ ...q, allowOther: q.allowOther === true, toolUseId, answer });
@@ -173,7 +178,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
   const conversation: ConversationRow =
     existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: conversationTitle(input.message ?? ""), provider: model.provider, model: model.model });
   if (answering.has(conversation.id)) throw new BusyError(`conversation ${conversation.id} is still answering the last message`);
-  answering.add(conversation.id);
+  answering.set(conversation.id, null);
 
   const started = Date.now();
   const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
@@ -185,10 +190,18 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
       ? [{ type: "tool_result", tool_use_id: input.answer.toolUseId, content: input.answer.text }]
       : open === undefined ? [] : [{ type: "tool_result", tool_use_id: open.toolUseId, content: "BK did not pick an option; he wrote his own message instead." }];
     const text = input.message === undefined ? undefined : userMessageText(input.message, selection, view.document, view.board, checkedDrafts(view, input.drafts));
-    const userMessage = insertMessage(app.db, {
-      conversationId: conversation.id, role: "user", content: [...results, ...(text === undefined ? [] : [{ type: "text" as const, text }])], ...(selection ? { selection } : {}),
+    const resolvedQuestions: Presentation[] = [];
+    const userMessage = transact(app.db, () => {
+      const message = insertMessage(app.db, {
+        conversationId: conversation.id, role: "user", content: [...results, ...(text === undefined ? [] : [{ type: "text" as const, text }])], ...(selection ? { selection } : {}),
+      });
+      if (open !== undefined) resolvedQuestions.push(...resolvePresentedQuestion(app, conversation.id, open.toolUseId));
+      return message;
     });
+    answering.set(conversation.id, userMessage.id);
     input.onEvent?.({ type: "start", conversationId: conversation.id, messageId: userMessage.id });
+    if (input.presentationVersion === 1) for (const resolved of resolvedQuestions) input.onEvent?.({ type: "presentation", presentation: resolved });
+    const presentation = chatPresentation(app, conversation.id, userMessage.id, input.presentationVersion === 1 ? (value) => input.onEvent?.({ type: "presentation", presentation: value }) : undefined);
 
     const history: ModelMessage[] = listMessages(app.db, conversation.id).map((m) => ({ role: m.role, content: m.content.map(neutralBlock) }));
     let outcome: TurnOutcome;
@@ -200,6 +213,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
         ...(input.maxIterations === undefined ? {} : { maxIterations: input.maxIterations }),
         ...(input.signal ? { signal: input.signal } : {}),
         callbacks: {
+          onObservation: (event) => presentation.observe(event),
           onText: (delta) => input.onEvent?.({ type: "text", delta }),
           onToolCall: (name) => input.onEvent?.({ type: "tool", name }),
           onProposal: (p) => {
@@ -214,6 +228,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
         },
       });
     } catch (err) {
+      presentation.finish(input.signal?.aborted ? "cancelled" : "failed");
       const known = model.classifyError(err);
       logTurn(app, { ...logBase, messageIds: [userMessage.id] }, started, {
         status: "error", error: known?.kind ?? (err instanceof Error ? err.name : "unknown"),
@@ -223,6 +238,7 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
     }
 
     const stored = transact(app.db, () => outcome.messages.map((m) => insertMessage(app.db, { conversationId: conversation.id, role: m.role, content: m.content })));
+    presentation.finish(outcome.status === "awaiting_answer" ? "waiting_user" : outcome.status === "complete" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId);
     const messageIds = [userMessage.id, ...stored.map((m) => m.id)];
     const ids = new Set(outcome.proposals.flatMap((p) => (p.changeSetId ? [p.changeSetId] : [])));
     const proposals = listConversationChangeSets(app.db, conversation.id).filter((c) => ids.has(c.id)).map(toCard);
@@ -279,7 +295,7 @@ export type DisplayMessage = {
   question?: QuestionCard;
 };
 
-export type ConversationView = { conversation: ConversationRow; messages: DisplayMessage[]; proposals: ProposalCard[]; priorities: PriorityCard[] };
+export type ConversationView = { conversation: ConversationRow; messages: DisplayMessage[]; proposals: ProposalCard[]; priorities: PriorityCard[]; presentations: Presentation[] };
 
 /** The conversation as the chat panel shows it: tool results are plumbing, so a message that is only results is left out. */
 export function showConversation(app: App, id: string): ConversationView {
@@ -303,5 +319,6 @@ export function showConversation(app: App, id: string): ConversationView {
   return {
     conversation, messages, proposals: listConversationChangeSets(app.db, id).map(toCard),
     priorities: listConversationPriorities(app.db, id).map(toPriorityCard),
+    presentations: listPresentations(app.db, id).map((presentation) => presentation.status === "running" && answering.get(id) !== presentation.userMessageId ? unobservedPresentation(presentation) : presentation),
   };
 }

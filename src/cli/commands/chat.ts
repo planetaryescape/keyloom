@@ -2,7 +2,7 @@
 import type { Command } from "commander";
 import { createInterface } from "node:readline";
 import {
-  type AgentModel, type ChatOutcome, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage,
+  type AgentModel, type ChatOutcome, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage, showConversation,
 } from "../../app/index.ts";
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
@@ -150,6 +150,23 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
     });
 
   const conversations = program.command("conversations").description("agent conversations about a layout");
+  conversations.command("show")
+    .description("read a conversation and its saved working details; never reruns the agent")
+    .argument("<id>", "conversation ID")
+    .action(async (id: string) => {
+      const view = await ctx.withApp((app) => showConversation(app, id));
+      const working = view.presentations.flatMap((p) => [
+        `Work ${p.userMessageId}: ${p.status}`,
+        ...p.operations.map((o) => `  ${o.label}: ${o.status} (${o.durationMs} ms)${o.validationCodes.length ? ` [${o.validationCodes.join(", ")}]` : ""}`),
+        ...(p.warning ? [`  ${p.warning}`] : []),
+        ...(p.detailsTruncated ? ["  Some working details were truncated."] : []),
+      ]);
+      print(ctx.io, ctx.format(), {
+        json: view,
+        ids: [view.conversation.id],
+        table: [view.conversation.title, ...view.messages.filter((m) => m.text).map((m) => `${m.role}: ${m.text}`), ...(working.length ? working : ["Working details unavailable for this older conversation."])].join("\n"),
+      });
+    });
   conversations
     .command("list")
     .description("conversations for a layout, newest first")

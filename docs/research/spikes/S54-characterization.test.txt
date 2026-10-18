@@ -1,0 +1,163 @@
+// S54 evidence only: exercise production adapters and wrappers, not a proposed event contract.
+import { describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { anthropicModel } from "../../src/agent/anthropic-model.ts";
+import { codexModel } from "../../src/agent/codex-model.ts";
+import type { AgentModel, ModelMessage } from "../../src/agent/model.ts";
+import { runAgentTurn } from "../../src/agent/run-turn.ts";
+import { createAgentPorts } from "../../src/app/agent-ports.ts";
+import { listConfigs, sendMessage, showConversation } from "../../src/app/index.ts";
+import { listMessages } from "../../src/persistence/conversations.ts";
+import { EMPTY, fromConversation, transcriptReducer } from "../../src/web/chat/transcript.ts";
+import { handleChatRoute } from "../../src/server/chat-routes.ts";
+import type { ChatBackend } from "../../src/server/chat-backend.ts";
+import { fakeAnthropic, type ScriptStep } from "../helpers/fake-anthropic.ts";
+import { fakeCodex } from "../helpers/fake-codex.ts";
+import { optionOptionApp } from "../helpers/option-option.ts";
+import { tempDir } from "../helpers/tmp.ts";
+import { draft } from "../helpers/ops.ts";
+
+type Provider = "anthropic" | "openrouter" | "codex";
+type Step = { say: string } | { call: string; input: unknown };
+const providers: Provider[] = ["anthropic", "openrouter", "codex"];
+const question = { question: "Keep it or replace it?", options: [{ label: "Keep" }, { label: "Replace" }] };
+const invalid = {
+  alternatives: [{ title: "Invalid key", ops: [{ op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "key", code: "OPTION" } }], explanation: "Synthetic probe", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft() }],
+};
+
+function scripted(provider: Provider, steps: Step[]): AgentModel {
+  if (provider === "codex") {
+    const fake = fakeCodex({ steps });
+    const home = tempDir("s54-codex-home-");
+    writeFileSync(join(home, "auth.json"), "{}");
+    return codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: home, KEYLOOM_CODEX_BIN: fake.bin }, timeoutMs: 5_000 });
+  }
+  const script: ScriptStep[] = [];
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]!;
+    const next = steps[i + 1];
+    // A text-only Anthropic reply ends its loop; a working note belongs beside the next call.
+    if ("say" in step && next && "call" in next) {
+      script.push({ blocks: [{ text: step.say }, { tool: next.call, input: next.input }] });
+      i++;
+    } else script.push({ blocks: "say" in step ? [{ text: step.say }] : [{ tool: step.call, input: step.input }] });
+  }
+  const fake = fakeAnthropic(script, provider === "openrouter" ? { apiKey: null, authToken: "synthetic", baseURL: "https://openrouter.ai/api" } : {});
+  return anthropicModel(fake.client, { provider });
+}
+
+const text = (messages: ModelMessage[]) => messages.flatMap((m) => m.content.flatMap((b) => b.type === "text" ? [b.text] : []));
+
+for (const provider of providers) describe(`S54 ${provider}`, () => {
+  test("wrapped starts, thrown input, and validator-declined normal return are distinct", async () => {
+    const { app, layoutId } = await optionOptionApp();
+    const starts: string[] = [];
+    const deltas: string[] = [];
+    const out = await runAgentTurn({
+      model: scripted(provider, [
+        { say: "Checking the layout." },
+        { call: "get_layout", input: { layers: ["layer-0"] } },
+        { call: "find_function", input: { function: 7 } },
+        { call: "propose_changes", input: invalid },
+        { say: "The requested key was declined." },
+      ]),
+      ports: createAgentPorts(app, layoutId, null),
+      history: [{ role: "user", content: [{ type: "text", text: "Synthetic lifecycle probe" }] }],
+      callbacks: { onToolCall: (name) => starts.push(name), onText: (delta) => deltas.push(delta) },
+    });
+    expect(starts).toEqual(["get_layout", "find_function", "propose_changes"]);
+    expect(out.toolCalls.map(({ name, ok }) => ({ name, ok }))).toEqual([
+      { name: "get_layout", ok: true }, { name: "find_function", ok: false }, { name: "propose_changes", ok: true },
+    ]);
+    expect(out.validationFailures).toHaveLength(1);
+    expect(out.validationFailures[0]?.codes).toContain("firmware_unsupported");
+    const results = out.messages.flatMap((m) => m.content.filter((b) => b.type === "tool_result"));
+    expect(results[1]?.content).toContain("invalid input for find_function");
+    expect(results[2]?.content).toContain("INVALID");
+    expect(results[2]?.is_error).not.toBe(true);
+    expect(out.proposals).toEqual([]);
+    expect(text(out.messages)).toEqual(["Checking the layout.", "The requested key was declined."]);
+    expect(deltas.join("")).toBe(`Checking the layout.${provider === "codex" ? "\n\n" : ""}The requested key was declined.`);
+    console.log(JSON.stringify({ probe: "S54-results", provider, starts, ok: out.toolCalls.map((c) => c.ok), invalidInputReplayErrorFlag: results[1]?.is_error ?? false, validatorReplayErrorFlag: results[2]?.is_error ?? false, publicTextCallbacks: deltas.length, toolResultUtf8Bytes: results.map((r) => Buffer.byteLength(r.content)) }));
+    app.db.close();
+  });
+
+  test("ask_user ends execution, reload retains it, answer resumes exactly once", async () => {
+    const { app, layoutId } = await optionOptionApp();
+    const starts: string[] = [];
+    const first = await sendMessage(app, layoutId, {
+      message: "Synthetic question", model: scripted(provider, [{ call: "ask_user", input: question }]),
+      onEvent: (e) => { if (e.type === "tool") starts.push(e.name); },
+    });
+    expect(first.status).toBe("awaiting_answer");
+    expect(starts).toEqual(provider === "codex" ? ["ask_user"] : []);
+    expect(showConversation(app, first.conversationId).messages.at(-1)?.question?.answer).toBeNull();
+    expect(listMessages(app.db, first.conversationId).flatMap((m) => m.content).some((b) => b.type === "tool_result")).toBe(false);
+    const answer = { toolUseId: first.question!.toolUseId, text: "Keep" };
+    const second = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer, model: scripted(provider, [{ say: "Kept." }]) });
+    expect(second.text).toBe("Kept.");
+    await expect(sendMessage(app, layoutId, { conversationId: first.conversationId, answer, model: scripted(provider, []) })).rejects.toThrow(/not open/);
+    console.log(JSON.stringify({ probe: "S54-pause", provider, toolStarts: starts, questionStoredOpen: true, duplicateAnswerRefused: true }));
+    app.db.close();
+  });
+
+  test("live onText loses boundaries that the stored transcript retains", async () => {
+    const { app, layoutId } = await optionOptionApp();
+    let live = transcriptReducer(EMPTY, { type: "sent", userId: "user", assistantId: "assistant", text: "Inspect", selection: null });
+    const out = await sendMessage(app, layoutId, {
+      message: "Inspect", model: scripted(provider, [{ say: "Checking." }, { call: "list_layouts", input: {} }, { say: "Finished." }]),
+      onEvent: (event) => { live = transcriptReducer(live, { type: "event", event }); },
+    });
+    const liveText = live.turns.flatMap((t) => t.kind === "assistant" ? [t.text] : []);
+    const loadedText = fromConversation(showConversation(app, out.conversationId)).turns.flatMap((t) => t.kind === "assistant" ? [t.text] : []);
+    expect(liveText).toEqual([`Checking.${provider === "codex" ? "\n\n" : ""}Finished.`]);
+    expect(loadedText).toEqual(["Checking.", "Finished."]);
+    expect(out.text).toBe("Finished.");
+    console.log(JSON.stringify({ probe: "S54-boundaries", provider, liveText, loadedText, terminalText: out.text }));
+    app.db.close();
+  });
+
+  test("cancel after a config commits leaves the effect but loses its model receipt; retry executes again", async () => {
+    const { app, layoutId } = await optionOptionApp();
+    const controller = new AbortController();
+    const base = scripted(provider, [{ call: "create_config", input: { name: "S54 copy", from: "this" } }, { say: "Created." }]);
+    let attempts = 0;
+    const intercepted: AgentModel = { ...base, run: (request) => base.run({ ...request, tools: request.tools.map((tool) => tool.name !== "create_config" ? tool : {
+      ...tool, run: async (raw) => { attempts++; const result = await tool.run(raw); controller.abort(); return result; },
+    }) }) };
+    let conversationId = "";
+    await expect(sendMessage(app, layoutId, { message: "Create a copy", model: intercepted, signal: controller.signal, onEvent: (e) => { if (e.type === "start") conversationId = e.conversationId; } })).rejects.toThrow(/abort/i);
+    expect(listConfigs(app).filter((c) => c.name === "S54 copy")).toHaveLength(1);
+    expect(listMessages(app.db, conversationId).map((m) => m.role)).toEqual(["user"]);
+    const retryBase = scripted(provider, [{ call: "create_config", input: { name: "S54 copy", from: "this" } }, { say: "Name already exists." }]);
+    const retry: AgentModel = { ...retryBase, run: (request) => retryBase.run({ ...request, tools: request.tools.map((tool) => tool.name !== "create_config" ? tool : { ...tool, run: (raw) => { attempts++; return tool.run(raw); } }) }) };
+    await sendMessage(app, layoutId, { conversationId, message: "Create a copy", model: retry });
+    expect(attempts).toBe(2);
+    expect(listConfigs(app).filter((c) => c.name === "S54 copy")).toHaveLength(1);
+    console.log(JSON.stringify({ probe: "S54-cancel", provider, attempts, configs: 1, historyImmediatelyAfterAbort: ["user"], duplicatePreventedBy: "config name uniqueness, not a run receipt" }));
+    app.db.close();
+  });
+});
+
+test("S54 cancelling the response body aborts backend execution", async () => {
+  let observedSignal: AbortSignal | undefined;
+  let didAbort!: () => void;
+  const aborted = new Promise<void>((resolve) => { didAbort = resolve; });
+  const backend: ChatBackend = {
+    async send(_ref, _input, emit, signal) {
+      observedSignal = signal;
+      signal?.addEventListener("abort", didAbort, { once: true });
+      emit({ type: "start", conversationId: "synthetic", messageId: "synthetic" });
+      await aborted;
+      throw new DOMException("aborted", "AbortError");
+    },
+    provider: async () => ({ active: null, lockedBy: null, providers: [] }),
+    chooseProvider: async () => ({ active: null, lockedBy: null, providers: [] }),
+    list: async () => [], get: async () => null, retirePriority: async () => false,
+  };
+  const response = await handleChatRoute(new Request("http://localhost/api/layouts/synthetic/chat", { method: "POST", headers: { "x-keyloom-token": "synthetic" }, body: JSON.stringify({ message: "Inspect" }) }), "/api/layouts/synthetic/chat", backend, "synthetic");
+  await response!.body!.cancel();
+  await aborted;
+  expect(observedSignal?.aborted).toBe(true);
+});

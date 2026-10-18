@@ -240,7 +240,7 @@ describe("doctor", () => {
     // Docker, zapp and the checkout follow the database checks.
     expect(r.checks.map((c: { name: string }) => c.name)).toContain("docker");
     expect(r.checks.map((c: { name: string }) => c.name)).toContain("zapp");
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a database from a newer keyloom fails the migration check with exit 1", async () => {
     const dir = tempDir();
@@ -252,5 +252,5 @@ describe("doctor", () => {
     const r = await cli(["doctor", "--data-dir", dir, "--format", "table"]);
     expect(r.code).toBe(1);
     expect(r.out).toContain("FAIL  migrations");
-  });
+  }, SLOW_RUNNER_MS);
 });
