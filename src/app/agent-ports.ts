@@ -5,6 +5,7 @@ import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import type { DecisionRow } from "../persistence/decisions.ts";
 import { newId } from "../persistence/ids.ts";
+import { effectReceipt } from "../persistence/agent-runs.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import type { SelectionScope } from "../validation/selection-rules.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
@@ -30,7 +31,7 @@ export const toChoiceFact = (d: DecisionRow): ChoiceFact => ({
  * `selection` is what he had selected when he sent the message, so a proposal that strays from it is warned about (07).
  * A null `conversationId` is a board review (D-340): its proposals belong to no conversation, so they show in the config's open proposals.
  */
-export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope): AgentPorts {
+export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope, runId?: string): AgentPorts {
   const scope = selection ? { selection } : {};
   const snapshotOf = (ref: string): LayoutSnapshot => {
     const view = getLayout(app, ref);
@@ -47,7 +48,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
     const upgraded = upgradeStoredOryx(s.document, s.board.definition);
     return upgraded === null ? s : { ...s, document: upgraded.layout };
   };
-  return {
+  const ports: AgentPorts = {
     snapshot: () => snapshotOf(layoutId),
     layouts: () => listLayouts(app).map((row) => viewOf(row.id)),
     // getLayout reports a name that no layout has as "no layout"; the agent reads that and goes back to list_layouts.
@@ -101,5 +102,16 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         }
       });
     },
+  };
+  if (runId === undefined) return ports;
+  let invocation = 0;
+  const receipt = <T>(name: string, input: unknown, perform: () => T): T => effectReceipt(app.db, runId, `effect_${++invocation}`, { layoutId, conversationId, name, input }, perform);
+  return {
+    ...ports,
+    put: (input) => receipt("put_config", input, () => ports.put(input)),
+    newConfig: (input) => receipt("create_config", input, () => ports.newConfig(input)),
+    propose: (input) => receipt("propose_changes", input, () => ports.propose(input)),
+    recordPriority: (input) => receipt("record_priority", input, () => ports.recordPriority(input)),
+    recordOutcome: (input) => receipt("update_decision_outcome", input, () => ports.recordOutcome(input)),
   };
 }

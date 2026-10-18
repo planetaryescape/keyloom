@@ -3,6 +3,7 @@
 // tested directly.
 import type { ChatMessage, ChatOutcome, ChatPresentation, ChatSelection, ConversationDetail, ObservedChatEvent, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
 import { toolActivity } from "./activity.ts";
+import type { AgentRunSnapshot } from "../../api/agent-runs.ts";
 
 export type UserTurn = { kind: "user"; id: string; text: string; selection: ChatSelection | null };
 export type AssistantTurn = {
@@ -12,6 +13,8 @@ export type AssistantTurn = {
   userMessageId?: string;
   /** A replacement snapshot, not a log. Operation/public IDs are local to this request. */
   presentation?: ChatPresentation;
+  /** Committed facts, separately identified from observer operations (effect_N is not op_N). */
+  preparations?: AgentRunSnapshot["preparations"];
   text: string;
   /** The tool the agent is running right now, in words; cleared once text or a proposal follows. */
   activity: string | null;
@@ -28,7 +31,7 @@ export type AssistantTurn = {
 export type Turn = UserTurn | AssistantTurn;
 /** The provider and model a conversation started on and stays on (D-111). Null before the first reply, and for one from before it was recorded. */
 export type Pinned = { provider: ChatOutcome["provider"]; model: string | null };
-export type Transcript = { conversationId: string | null; pinned: Pinned | null; turns: Turn[] };
+export type Transcript = { conversationId: string | null; pinned: Pinned | null; turns: Turn[]; runSequences?: Record<string, number> };
 
 export const EMPTY: Transcript = { conversationId: null, pinned: null, turns: [] };
 
@@ -42,6 +45,7 @@ export type Action =
   | { type: "rolledBack" }
   | { type: "retry"; assistantId: string }
   | { type: "loaded"; detail: ConversationDetail }
+  | { type: "saved"; snapshot: AgentRunSnapshot; detail: ConversationDetail }
   | { type: "applied"; changeSetId: string }
   | { type: "priorityRemoved"; id: string }
   | { type: "reset" };
@@ -161,6 +165,14 @@ function onEvent(state: Transcript, event: ObservedChatEvent): Transcript {
 
 export function transcriptReducer(state: Transcript, action: Action): Transcript {
   switch (action.type) {
+    case "saved": {
+      const { snapshot, detail } = action;
+      if (snapshot.conversationId !== detail.conversation.id || snapshot.seq <= (state.runSequences?.[snapshot.id] ?? 0)) return state;
+      const loaded = fromConversation(detail);
+      const turns = loaded.turns.map((turn) => turn.kind === "assistant" && turn.userMessageId === snapshot.userMessageId && snapshot.presentation !== null
+        ? { ...presentedTurn({ ...turn, phase: snapshot.status === "running" ? "streaming" : "done" }, snapshot.presentation, detail.messages), preparations: snapshot.preparations } : turn);
+      return { ...loaded, turns, runSequences: { ...state.runSequences, [snapshot.id]: snapshot.seq } };
+    }
     case "sent":
       return {
         ...state,
@@ -264,6 +276,7 @@ const generatedOrder = (id: string): string | undefined => /^(?:msg|cs|dec)_[0-9
 
 function fromObservedConversation(detail: ConversationDetail): Transcript {
   const presentations = new Map((detail.presentations ?? []).map((presentation) => [presentation.userMessageId, presentation]));
+  const preparations = new Map((detail.preparationReceipts ?? []).map((receipt) => [receipt.userMessageId, receipt.preparations]));
   const requests = [...new Set([...detail.messages.filter((message) => message.role === "user").map((message) => message.id), ...presentations.keys()])];
   const orderedRequests = requests.every((id) => generatedOrder(id) !== undefined) ? requests.toSorted() : [];
   const ownerAt = (id: string): string | undefined => {
@@ -303,7 +316,7 @@ function fromObservedConversation(detail: ConversationDetail): Transcript {
     emitted.add(owner);
     const messages = owned.get(owner) ?? [];
     const question = messages.find((message) => message.question !== undefined)?.question ?? null;
-    entries.push({ order: owner, turn: presentedTurn({ ...streamingAssistant(messages[0]?.id ?? `${owner}:reply`), phase: "done", question }, presentation, messages) });
+    entries.push({ order: owner, turn: { ...presentedTurn({ ...streamingAssistant(messages[0]?.id ?? `${owner}:reply`), phase: "done", question }, presentation, messages), preparations: preparations.get(owner) ?? [] } });
   };
   for (const message of detail.messages) {
     if (message.role === "user") {

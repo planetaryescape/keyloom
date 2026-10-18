@@ -4,6 +4,7 @@ import {
   type AgentModel, type App, BusyError, ModelError, NotFoundError, type ProviderId, UsageError, chooseNextProvider, providerStatus, listConversationSummaries, retirePriority, sendMessage, showConversation,
 } from "../app/index.ts";
 import { type ChatBackend, ChatError } from "../server/chat-backend.ts";
+import { answerAgentRun, cancelAgentRequest, cancelAgentRun, drainAgentRuns, inspectAgentRun, latestAgentRun, reconcileAgentRuns, startAgentRun } from "../app/agent-runs.ts";
 
 const MODEL_STATUS: Record<string, 402 | 429 | 502 | 503> = { missing_key: 503, rate_limit: 429, connection: 502, overloaded: 503, no_credits: 402 };
 
@@ -19,6 +20,15 @@ export function toChatError(err: unknown): unknown {
 /** `model` is for tests; in use it is omitted and the app picks the provider on each message (19). */
 export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: ProviderId } = {}): ChatBackend {
   return {
+    runs: {
+      async start(request) { try { return await startAgentRun(app, request, opts); } catch (err) { throw toChatError(err); } },
+      async get(id) { try { return inspectAgentRun(app, id); } catch (err) { throw toChatError(err); } },
+      async latest(id) { return latestAgentRun(app, id); },
+      async answer(id, requestId, answer) { try { return await answerAgentRun(app, id, requestId, answer, opts); } catch (err) { throw toChatError(err); } },
+      async cancel(id) { try { return cancelAgentRun(app, id); } catch (err) { throw toChatError(err); } },
+      async cancelRequest(id) { try { return cancelAgentRequest(app, id); } catch (err) { throw toChatError(err); } },
+      async drain() { await drainAgentRuns(app); },
+    },
     async send(ref, request, emit, signal) {
       try {
         await sendMessage(app, ref, {
@@ -58,6 +68,7 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
     },
     async get(id) {
       try {
+        reconcileAgentRuns(app);
         const v = showConversation(app, id);
         return {
           conversation: {
@@ -68,6 +79,7 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
           proposals: v.proposals,
           priorities: v.priorities,
           presentations: v.presentations,
+          preparationReceipts: v.preparationReceipts,
         };
       } catch (err) {
         if (err instanceof NotFoundError) return null;

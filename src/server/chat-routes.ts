@@ -3,6 +3,8 @@
 import { ChatProviderChoiceSchema, ChatProviderStatusSchema, ChatRequestSchema, ConversationDetailSchema, ConversationListResponseSchema, type ApiErrorBody, type ObservedChatEvent } from "../api/http.ts";
 import { type ChatBackend, ChatError } from "./chat-backend.ts";
 import { checkToken } from "./guard.ts";
+import { agentRunRoute } from "./agent-run-routes.ts";
+import { z } from "zod";
 
 const LAYOUTS = "/api/layouts/";
 const CONVERSATIONS = "/api/conversations/";
@@ -59,6 +61,16 @@ function failure(err: unknown): { status: number; code: string; message: string 
 
 /** Null when the request is not a chat route, so startServer carries on with its own. */
 export async function handleChatRoute(request: Request, pathname: string, backend: ChatBackend, token: string): Promise<Response | null> {
+  if (pathname.startsWith("/api/agent/")) {
+    const denied = checkToken(request, token);
+    if (denied) return denied;
+    try { return await agentRunRoute(request, pathname, backend); }
+    catch (err) {
+      if (err instanceof z.ZodError) return errorResponse(400, "usage", "Unsupported agent version or invalid request. Reload keyloom before writing.");
+      const f = failure(err);
+      return errorResponse(f.status, f.code, f.message);
+    }
+  }
   const found = match(request.method, pathname);
   if (found === null) return null;
   const denied = checkToken(request, token);

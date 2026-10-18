@@ -15,6 +15,7 @@ import { appDecisionsBackend } from "./decisions-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
 import { appReviewBackend } from "./review-backend.ts";
 import { appSyncBackend } from "./sync-backend.ts";
+import { drainAgentRuns, reconcileAgentRuns } from "../app/agent-runs.ts";
 
 export const DEFAULT_PORT = 4477;
 
@@ -76,6 +77,7 @@ export type ServeOptions = {
 };
 
 export function serve(app: App, opts: ServeOptions): RunningServer {
+  reconcileAgentRuns(app);
   // The engine that keeps each keyboard on its layout's head lives in this process, beside the server that shows it (D-160).
   const engine = createSyncEngine(app, { ...(opts.handsFree ? { handsFree: opts.handsFree } : {}), ...(opts.syncDeps ? { deps: opts.syncDeps } : {}), ...(opts.flash ?? {}) });
   // The review follows the sync engine's boards for its connect trigger, so it subscribes before the engine's first reading.
@@ -93,7 +95,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
     stop: () => {
       running.stop();
       // A build is stopped; a flash is let finish, so the keyboard isn't left half written.
-      drained ??= started.then(() => Promise.all([engine.stop(), reviews.stop()])).then(() => undefined);
+      drained ??= Promise.all([drainAgentRuns(app), started.then(() => Promise.all([engine.stop(), reviews.stop()]))]).then(() => undefined);
     },
     drain: async () => {
       await drained;

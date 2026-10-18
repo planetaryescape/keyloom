@@ -6,6 +6,7 @@ import { optionOptionApp } from "../helpers/option-option.ts";
 import { tempDir } from "../helpers/tmp.ts";
 import type { AgentModel } from "../../src/agent/model.ts";
 import { listMessages } from "../../src/persistence/conversations.ts";
+import { neutralBlock } from "../../src/agent/blocks.ts";
 
 test("a buffered failed question completion cannot claim the later valid question's pause", async () => {
   const fake = fakeCodex({ steps: [
@@ -19,7 +20,7 @@ test("a buffered failed question completion cannot claim the later valid questio
       model: codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-order-"), KEYLOOM_CODEX_BIN: fake.bin } }),
     });
     expect(result.status).toBe("awaiting_answer");
-    expect(result.question).toMatchObject({ question: "Keep or replace?", toolUseId: "item_1" });
+    expect(result.question).toMatchObject({ question: "Keep or replace?", toolUseId: expect.stringMatching(/^codex_.+_item_1$/) });
     const presentation = showConversation(app, result.conversationId).presentations[0];
     expect(presentation?.status).toBe("waiting_user");
     expect(presentation?.operations.map((operation) => operation.status)).toEqual(["failed", "succeeded"]);
@@ -49,10 +50,11 @@ test("a buffered Codex-reported failure with valid arguments cannot replace the 
   try {
     const result = await sendMessage(app, layoutId, { message: "Ask first", model });
     expect(result.status).toBe("awaiting_answer");
-    expect(result.question).toMatchObject({ question: question.question, toolUseId: "item_1" });
-    const stored = listMessages(app.db, result.conversationId).flatMap((message) => message.content);
-    expect(stored.find((block) => block.type === "tool_result" && block.tool_use_id === "item_0")?.is_error).toBe(true);
-    expect(stored.some((block) => block.type === "tool_result" && block.tool_use_id === "item_1")).toBe(false);
+    expect(result.question).toMatchObject({ question: question.question, toolUseId: expect.stringMatching(/^codex_.+_item_1$/) });
+    const stored = listMessages(app.db, result.conversationId).flatMap((message) => message.content.map(neutralBlock));
+    const failed = stored.find((block) => block.type === "tool_result" && block.tool_use_id.endsWith("_item_0"));
+    expect(failed?.type === "tool_result" && failed.is_error).toBe(true);
+    expect(stored.some((block) => block.type === "tool_result" && block.tool_use_id === result.question?.toolUseId)).toBe(false);
     const presentation = showConversation(app, result.conversationId).presentations[0];
     expect(presentation?.status).toBe("waiting_user");
     expect(JSON.stringify(presentation)).not.toContain("PRIVATE_FAILURE");

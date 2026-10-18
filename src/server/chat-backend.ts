@@ -1,8 +1,18 @@
 import type { ObservedChatEvent, ChatProviderChoice, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary } from "../api/http.ts";
+import type { AgentRunRequest, AgentRunSnapshot, AgentRequestCancellation } from "../api/agent-runs.ts";
 
 // The server's chat interface (rung 3). Like EditorBackend, the CLI injects the app-backed
 // implementation, so the server knows nothing about the model, the SDK or the database.
 export interface ChatBackend {
+  runs?: {
+    start(request: AgentRunRequest): Promise<AgentRunSnapshot>;
+    get(id: string): Promise<AgentRunSnapshot>;
+    latest(conversationId: string): Promise<AgentRunSnapshot | null>;
+    answer(id: string, requestId: string, answer: { toolUseId: string; text: string }): Promise<AgentRunSnapshot>;
+    cancel(id: string): Promise<AgentRunSnapshot>;
+    cancelRequest?(requestId: string): Promise<AgentRequestCancellation>;
+    drain(): Promise<void>;
+  };
   /**
    * Runs one agent turn, calling `emit` as it goes. The first event is `start`, once the message is
    * validated and stored; a failure before that rejects with a ChatError, and one after it rejects
