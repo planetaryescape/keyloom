@@ -118,6 +118,7 @@ export const CompareResponseSchema = z.object({
     macros: NamedChangeSchema,
     tapDances: NamedChangeSchema,
     combos: NamedChangeSchema,
+    conditionalLayers: NamedChangeSchema,
     holdTapProfiles: NamedChangeSchema,
     settings: z.array(z.object({ firmware: z.string(), key: z.string(), before: z.union([z.string(), z.number(), z.boolean()]).nullable(), after: z.union([z.string(), z.number(), z.boolean()]).nullable() })),
     passthrough: z.boolean(),

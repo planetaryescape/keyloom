@@ -156,6 +156,8 @@
 /* Two classes, so it outranks .menu-list's absolute position whichever stylesheet loads last. */
 .menu-list.layer-menu-list {
   position: fixed;
+  /* The strip's menu opens above its button with an inline bottom; .menu-list's own top would otherwise squeeze it to nothing. */
+  top: auto;
   right: auto;
   min-width: 248px;
   max-width: calc(100vw - 16px);
@@ -380,6 +382,237 @@
 }
 
 .layer-tabs-wrap:hover .layer-tab-actions,
-.layer-tabs-wrap:focus-within .layer-tab-actions {
+.layer-tabs-wrap:focus-within .layer-tab-actions,
+.layer-tab-actions:has([aria-expanded="true"]) {
   opacity: 1;
+}
+
+/* A layer two others turn on: their two lights, small and overlapping, beside its name (D-389). The sentence is the tab's name to a
+   screen reader and the caption's line once the layer is chosen, so nothing here is truncated text. */
+.layer-pair {
+  position: relative;
+  display: inline-flex;
+  width: 13px;
+  height: 7px;
+  flex: none;
+}
+
+.layer-pair i {
+  position: absolute;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  /* A ring in the tab's own colour parts the two where they overlap. */
+  box-shadow: 0 0 0 1.5px var(--pair-ring, var(--room));
+}
+
+.layer-pair i:first-child {
+  left: 0;
+}
+
+.layer-pair i:last-child {
+  left: 6px;
+}
+
+.layer-pair i[data-unlit="true"] {
+  border: 1.4px solid currentColor;
+  background: var(--pair-ring, var(--room));
+}
+
+.layer-tabs .layer-tab[aria-selected="true"] {
+  --pair-ring: var(--surface);
+}
+
+/* The menu's conditions view: the condition as a sentence, its layers as chips, and the other layers to pick from as chips too. */
+.layer-when {
+  display: flex;
+  width: min(340px, calc(100vw - 24px));
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.layer-when p {
+  margin: 0;
+}
+
+.layer-when-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: calc(-1 * var(--space-1));
+}
+
+.layer-when-head h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.layer-when-lead {
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.layer-when-condition + .layer-when-condition {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.layer-when-sentence {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--ink);
+  line-height: 2.1;
+}
+
+.layer-when-sentence b {
+  font-weight: var(--weight-semibold);
+}
+
+.layer-when-chip,
+.layer-when-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.layer-when-chip .layer-dot,
+.layer-when-option .layer-dot {
+  margin: 0;
+}
+
+.layer-when-chip {
+  height: 28px;
+  margin: 0 2px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08);
+  color: var(--ink);
+  font-weight: var(--weight-medium);
+  vertical-align: middle;
+}
+
+.layer-when-chip[aria-expanded="true"] {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.layer-when-chip[data-empty] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ink-3);
+  color: var(--ink-3);
+}
+
+.layer-when-chip[data-empty][aria-expanded="true"] {
+  box-shadow: inset 0 0 0 1px var(--ink-3), 0 0 0 2px var(--ink);
+}
+
+.layer-when-choose p {
+  margin-bottom: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+/* The choices wrap rather than scroll, so none is hidden off the side. */
+.layer-when-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.layer-when-option {
+  height: 32px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.layer-when-option[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--room);
+}
+
+.layer-when-chip:focus-visible,
+.layer-when-option:focus-visible,
+.layer-when-quiet:focus-visible,
+.layer-when-add:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.layer-when-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.layer-when-quiet {
+  display: inline-flex;
+  min-height: 30px;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.layer-when-add {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.layer-when-condition ~ .layer-when-add {
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.layer-when-quiet:hover:not(:disabled),
+.layer-when-add:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.layer-when button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.layer-when-note {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+@media (pointer: coarse) {
+  .layer-when-chip,
+  .layer-when-option,
+  .layer-when-quiet,
+  .layer-when-add {
+    min-height: 40px;
+  }
 }

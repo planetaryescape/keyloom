@@ -79,7 +79,7 @@ function scaffold(source: Layout, board: Board, ids: ReadonlyMap<string, string>
       id: ids.get(l.id) as string, name: l.name,
       bindings: Array.from({ length: def.keyCount }, (): Binding => (i === 0 ? { kind: "none" } : { kind: "transparent" })),
     })),
-    macros: [], tapDances: [], combos: [], holdTapProfiles: [], settings: [], passthrough: [],
+    macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [],
   };
 }
 
@@ -193,6 +193,12 @@ export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: Read
     notCarried.push({ layerName: from_.layerName, source: from_.source, sourceName: from_.sourceName, why: "the layer it enters has no key that leads back to the base layer on the new board" });
     return false;
   });
+  // Conditions name layers, which come across by id, so they need no key mapping. Carried even to a board that can't write them: the
+  // validator then warns, where leaving them out would drop them without a word (D-388).
+  const conditionOps: ChangeOp[] = from.document.conditionalLayers.map((c) => ({
+    op: "upsertConditionalLayer",
+    conditionalLayer: { id: c.id, ifLayerIds: c.ifLayerIds.map((id) => ids.get(id) as string), thenLayerId: ids.get(c.thenLayerId) as string },
+  }));
   // Placement: a layer key with no counterpart is offered a key of the same hand, thumbs first, nearest the middle first. A free key
   // comes before one that holds a nearest-place guess, and a key carried with confidence is never offered (D-249: offered, not forced).
   const base = from.document.layers[0] as Layer;
@@ -266,7 +272,7 @@ export function planLayoutPut(from: LayoutSnapshot, target: Board, choices: Read
   // left out and said so, never proposed unreachable. The key a layer is held from keeps its own tap.
   const pool = [...(target.definition.holdKeyPreference ?? []), ...(target.definition.holdKeyFallback ?? [])];
   const sourceLayerOf = (targetId: string) => [...ids].find(([, t]) => t === targetId)?.[0];
-  const assemble = (sets: ChangeOp[]): ChangeOp[] => [...structure, ...dedupe([...transfer.prerequisiteOps(), ...comboPlan.ops.filter((o) => o.op !== "upsertCombo")]), ...sets, ...comboOps];
+  const assemble = (sets: ChangeOp[]): ChangeOp[] => [...structure, ...dedupe([...transfer.prerequisiteOps(), ...comboPlan.ops.filter((o) => o.op !== "upsertCombo")]), ...sets, ...comboOps, ...conditionOps];
   const unreachable = (sets: ChangeOp[]): string[] =>
     [...new Set((() => { const r = evaluate(target.definition, blank, assemble(sets)).result; return [...r.errors, ...r.warnings]; })().filter((i) => i.code === "layer_unreachable" && i.layerId !== undefined).map((i) => i.layerId as string))];
   const reach = (sets: ChangeOp[], used: ReadonlySet<number>): { sets: ChangeOp[]; entries: string[]; stuck: string[] } => {

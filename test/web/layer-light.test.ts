@@ -3,6 +3,7 @@ import { layerLight, reachedLayer, reachKey } from "../../src/web/light/layer-li
 import { reachWords } from "../../src/web/light/reach-words.ts";
 import { frontMode, frontWords } from "../../src/web/keyboard/front-words.ts";
 import type { Binding, Layer } from "../../src/layout/schema.ts";
+import { niceLayerName } from "../../src/layout/layer-ops.ts";
 
 const layer = (id: string, bindings: Binding[], extra: Partial<Layer> = {}): Layer => ({ id, name: id, bindings, ...extra });
 const k = (code: string): Binding => ({ kind: "key", code });
@@ -50,6 +51,16 @@ describe("which key reaches a layer", () => {
     const words = reachWords(layout, 1, { "2": "left-thumb" }, (p) => ["Sym", "⇥", "Space"][p] ?? "");
     expect(words).toEqual({ before: "Hold", key: "Space", after: " on the left thumb" });
     expect(reachWords(layout, 0, {}, () => "")).toEqual({ before: "Your first layer", key: null, after: "" });
+  });
+
+  test("a layer only a condition turns on says which two layers do it, instead of saying nothing reaches it (D-385)", () => {
+    const withIsland = { ...layout, layers: [...layout.layers, { id: "adj", name: "Adjust", bindings: layout.layers[1]!.bindings }], conditionalLayers: [{ id: "c", ifLayerIds: ["base", "sym"], thenLayerId: "adj" }] };
+    const words = reachWords(withIsland, layout.layers.length, {}, () => "");
+    expect(words).toEqual({ before: `On while ${niceLayerName(layout.layers[0]!.name)} and ${niceLayerName(layout.layers[1]!.name)} are held`, key: null, after: "" });
+    expect(reachWords({ ...withIsland, conditionalLayers: [] }, layout.layers.length, {}, () => "").before).toBe("No key on the first layer reaches it");
+    // A keymap's own layer name reads as the strip shows it.
+    const keymapNames = { ...withIsland, layers: withIsland.layers.map((l, i) => (i === 1 ? { ...l, name: "one_shot" } : l)) };
+    expect(reachWords(keymapNames, layout.layers.length, {}, () => "").before).toMatch(/ and One shot are held$/);
   });
 });
 

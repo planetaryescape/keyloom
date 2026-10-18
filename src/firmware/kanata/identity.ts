@@ -9,6 +9,6 @@ export function identityLayout(board: BoardDefinition): Layout {
   return {
     schemaVersion: 1, boardId: board.id, firmware: "kanata",
     layers: [{ id: "base", name: "Base", bindings }],
-    macros: [], tapDances: [], combos: [], holdTapProfiles: [], settings: [], passthrough: [],
+    macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [],
   };
 }

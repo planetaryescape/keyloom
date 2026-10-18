@@ -1,5 +1,6 @@
 // What differs between two documents of one config (25, D-301): the per-key changes the board can draw, and the rest of the
 // document as names. It is what "compare with now" shows and what going back would undo, so it reads documents, not change sets.
+import { conditionalLayerName } from "./conditional-layers.ts";
 import { deepEqual } from "./equal.ts";
 import type { Binding, Layout } from "./schema.ts";
 
@@ -20,6 +21,8 @@ export type LayoutDiff = {
   macros: NamedChange;
   tapDances: NamedChange;
   combos: NamedChange;
+  /** Conditions named by their layers, such as "Lower + Raise gives Adjust". */
+  conditionalLayers: NamedChange;
   holdTapProfiles: NamedChange;
   settings: Array<{ firmware: string; key: string; before: string | number | boolean | null; after: string | number | boolean | null }>;
   /** Firmware source kept as written differs. */
@@ -40,6 +43,18 @@ function namedChange<T extends Named>(from: readonly T[], to: readonly T[]): Nam
       const b = before.get(x.id);
       return b !== undefined && !deepEqual(b, x);
     }).map((x) => x.name),
+  };
+}
+
+/** A condition has no name of its own; its layers' names say it. Added and removed go by id; changed means the same id now does something else. */
+function conditionalChange(from: Layout, to: Layout): NamedChange {
+  const named = (doc: Layout) => doc.conditionalLayers.map((c) => ({ ...c, name: conditionalLayerName(doc, c) }));
+  const change = namedChange(named(from), named(to));
+  const was = new Map(from.conditionalLayers.map((c) => [c.id, c]));
+  return {
+    added: change.added,
+    removed: change.removed,
+    changed: to.conditionalLayers.filter((c) => was.has(c.id) && !deepEqual(was.get(c.id), c)).map((c) => conditionalLayerName(to, c)),
   };
 }
 
@@ -85,6 +100,7 @@ export function diffLayouts(from: Layout, to: Layout): LayoutDiff {
     macros: namedChange(from.macros, to.macros),
     tapDances: namedChange(from.tapDances, to.tapDances),
     combos: namedChange(from.combos, to.combos),
+    conditionalLayers: conditionalChange(from, to),
     holdTapProfiles: namedChange(from.holdTapProfiles, to.holdTapProfiles),
     settings,
     passthrough: !deepEqual(from.passthrough, to.passthrough),

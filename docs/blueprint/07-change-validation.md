@@ -33,9 +33,11 @@ Errors make the change set invalid. The codes are stable strings that the agent 
 | `schema` | Ops and resulting document parse with the zod schemas | Nothing malformed reaches firmware generation |
 | `stale_base` | Ops touch a slot that changed since the change set's base revision | The proposal was made against a layout that no longer exists ([02](02-layout-model.md#applying-undoing-and-stale-bases)) |
 | `binding_count` | Every layer has exactly `board.keys.length` bindings | Generated firmware would not compile |
-| `unknown_ref` | Every `layerId`, `macroId`, `profileId` and combo position exists | Dangling references |
+| `unknown_ref` | Every `layerId` (including a conditional layer's three), `macroId`, `profileId` and combo position exists | Dangling references |
 | `function_lost` | Every function reachable before is reachable after, unless a `dropFunction` op names it | Principle 5: nothing gets lost silently (D-020) |
 | `layer_unreachable` | Every layer can be reached from the base layer through layer actions, layer-taps or combos | A layer nobody can reach is a lost function |
+| `conditional_layer_invalid` | A conditional layer names three different layers, and the layer it turns on is not one of the two it waits for | It could never fire (D-386) |
+| `conditional_layer_blocked` | On QMK, no conditional layer sits beside kept code that defines `layer_state_set_user` | The generated function would be a second definition (D-386) |
 | `layer_trap` | A layer entered with `toggle` or `to` has a binding that leads back | Otherwise the keyboard gets stuck on it |
 | `firmware_unsupported` | Every binding kind and option exists in the board's firmware ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)). That includes hold-tap profile options: on QMK only `TAPPING_TERM`, `QUICK_TAP_TERM`, `PERMISSIVE_HOLD` and `HOLD_ON_OTHER_KEY_PRESS` can differ per profile, and keys with the same tap and hold must agree; on ZMK the flavor, millisecond and trigger-position values must be valid (D-057) | D-024. The firmware decides what's expressible |
 | `qmk_modtap_basic` | On QMK, a hold-tap's tap side is a basic keycode with no mods | QMK limits `MT()` to basic keycodes (qmk/qmk_firmware `7a1bbf3` `docs/mod_tap.md:65`) |
@@ -55,7 +57,7 @@ Anything else that touches a layer number stays a refusal: arithmetic on one, a 
 
 ## Reachability
 
-`src/validation/reachability.ts` builds a graph. Each node is a layer. Each edge is a way to get there: a momentary, toggle, `to` or one-shot binding, a hold-tap whose hold is a layer, or a combo whose output is one of those. Edges start from the layers that contain them. A layer is reachable if the graph reaches it from the base layer.
+`src/validation/reachability.ts` builds a graph. Each node is a layer. Each edge is a way to get there: a momentary, toggle, `to` or one-shot binding, a hold-tap whose hold is a layer, or a combo whose output is one of those. Edges start from the layers that contain them. A conditional layer (D-385) adds its third layer once both of its first two are reached. A layer is reachable if the graph reaches it from the base layer.
 
 The reachable functions are the functions ([02](02-layout-model.md#functions-and-reachability)) of every binding on a reachable layer, plus the tap and hold halves of hold-taps, plus combo outputs. A `transparent` slot contributes the binding underneath it on the layer it falls through to.
 
@@ -69,6 +71,7 @@ Warnings appear in the preview beside the trade-offs. They don't block apply.
 |---|---|---|
 | `doubled_letter_tapdance` | A modelled tap dance, or a native Oryx one, whose tap is a letter that doubles in common English words (`l s e o t f p r m c n d g b z`) | "class" would break. This is why double-tap S was rejected for Option–Option (D-019) |
 | `homerow_same_hand_mods` | A hold-tap on a home-row letter that holds a modifier has no opposite-hand constraint: QMK `CHORDAL_HOLD` off, or ZMK `hold-trigger-key-positions` empty or naming the key's own hand beyond the thumbs. One warning per profile, only for what the change adds (D-058) | Rolling same-hand letters triggers the modifier by accident (D-017) |
+| `conditional_layer_unsupported` | A conditional layer in a kanata layout | kanata has one active layer at a time, so "A and B held" can't be written; the condition stays in the layout and is left out of the config (D-388) |
 | `moved_pinned` | The change moves a slot or function covered by a `pinned` priority | BK said to keep it there (D-021). It's a reminder, not a block (D-023) |
 | `contradicts_decision` | The change alters, retunes or removes the layer of keys an active `choice` decision placed, unless BK marked it `tried_unhelpful`. The `DecisionReminder` carries the stored goal, choice, reason and status | It surfaces the old reason (D-022, D-053) |
 | `outside_selection` | The message carried a selection, and the change edits a key that isn't in it (another position, or the same position on another layer) | BK pointed at the keys he meant. Editing others is sometimes necessary, but he should see it (D-062) |

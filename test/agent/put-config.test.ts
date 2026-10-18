@@ -6,7 +6,7 @@ import type { ModelTool } from "../../src/agent/model.ts";
 import { assembleSystemPrompt } from "../../src/agent/prompt.ts";
 import { createTools } from "../../src/agent/tools/index.ts";
 import { createAgentPorts } from "../../src/app/agent-ports.ts";
-import { getLayout, importLayout, listChanges, listConfigs, openApp, sendMessage } from "../../src/app/index.ts";
+import { applyOps, getLayout, importLayout, listChanges, listConfigs, openApp, sendMessage } from "../../src/app/index.ts";
 import { getBoardConfig } from "../../src/persistence/configs.ts";
 import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { STYLE_FIXTURE } from "../helpers/zmk.ts";
@@ -51,6 +51,21 @@ describe("put_config", () => {
     expect(listChanges(app, moon.layoutId)).toEqual([]);
     // It is not a proposal to this conversation's layout, so no card is raised in the chat.
     expect(t.proposals).toEqual([]);
+  });
+
+  test("carries a conditional layer to the other board by layer id (D-388)", async () => {
+    const { app, glove, moon, tools } = await world();
+    const view = getLayout(app, glove.layoutId);
+    applyOps(app, glove.layoutId, {
+      baseRevisionId: view.revision.id, summary: "Base and Nav together give Magic",
+      ops: [{ op: "upsertConditionalLayer", conditionalLayer: { id: "cond-magic", ifLayerIds: ["layer-base", "layer-nav"], thenLayerId: "layer-magic" } }],
+    });
+    await tools(moon.layoutId).run("put_config", { from: "my-glove80", board: "foostan/corne" });
+    const made = listConfigs(app).find((c) => c.name === "my-glove80 on Corne");
+    const ops = listChanges(app, made!.id).flatMap((c) => c.ops);
+    const carried = ops.find((o) => o.op === "upsertConditionalLayer");
+    // The first layer of a put is "base"; the others keep their ids.
+    expect(carried).toEqual({ op: "upsertConditionalLayer", conditionalLayer: { id: "cond-magic", ifLayerIds: ["base", "layer-nav"], thenLayerId: "layer-magic" } });
   });
 
   test("errors the agent can read: an unknown layout or board, the same board, a taken name", async () => {

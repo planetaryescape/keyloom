@@ -2,7 +2,7 @@
 // validator all speak this one vocabulary; src/layout/apply-ops.ts applies it.
 import { z } from "zod";
 import {
-  BindingSchema, ComboSchema, FirmwareSettingSchema, FirmwareSchema, HoldTapProfileSchema, LayerLightingSchema, LayerSchema, MacroSchema, TapDanceSchema,
+  BindingSchema, ComboSchema, ConditionalLayerSchema, FirmwareSettingSchema, FirmwareSchema, HoldTapProfileSchema, LayerLightingSchema, LayerSchema, MacroSchema, TapDanceSchema,
 } from "./schema.ts";
 
 export const SlotSchema = z.object({
@@ -47,6 +47,9 @@ export const ChangeOpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("removeTapDance"), tapDanceId: z.string().min(1) }),
   z.object({ op: z.literal("upsertCombo"), combo: ComboSchema }),
   z.object({ op: z.literal("removeCombo"), comboId: z.string().min(1) }),
+  // "When two layers are both on, also turn a third on" (D-385). Layers are named by id, so moving layers needs no edit here.
+  z.object({ op: z.literal("upsertConditionalLayer"), conditionalLayer: ConditionalLayerSchema }),
+  z.object({ op: z.literal("removeConditionalLayer"), conditionalLayerId: z.string().min(1) }),
   z.object({ op: z.literal("upsertHoldTapProfile"), profile: HoldTapProfileSchema }),
   z.object({ op: z.literal("setFirmwareSetting"), setting: FirmwareSettingSchema }),
   // Back to the firmware's own default: the option is no longer written (D-191).

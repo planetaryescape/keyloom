@@ -9,6 +9,7 @@ import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
+import { conditionalLayerRules } from "./conditional-layer-rules.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
 import { kanataProfileOptions, kanataSupport, remapperLockout } from "./kanata-rules.ts";
 import { tapDanceRules } from "./tap-dance-rules.ts";
@@ -43,6 +44,7 @@ export function duplicateIds(doc: Layout): Issue[] {
   check("macro", doc.macros.map((m) => m.id));
   check("tap dance", doc.tapDances.map((t) => t.id));
   check("combo", doc.combos.map((c) => c.id));
+  check("conditional layer", doc.conditionalLayers.map((c) => c.id));
   check("hold-tap profile", doc.holdTapProfiles.map((p) => p.id));
   check("firmware setting", doc.settings.map((s) => `${s.firmware}:${s.key}`));
   return out;
@@ -215,6 +217,7 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...firmwareSupport(board, doc),
   ...qmkHoldTap(doc),
   ...tapDanceRules(doc),
+  ...conditionalLayerRules(doc),
   ...holdTapOptions(board, doc),
   ...lightingSupport(board, doc),
   ...layerLimit(doc),

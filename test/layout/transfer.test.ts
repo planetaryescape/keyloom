@@ -5,7 +5,7 @@ import type { Binding, HoldTapProfile, Layout } from "../../src/layout/schema.ts
 const doc = (firmware: "qmk" | "zmk", over: Partial<Layout> = {}): Layout => ({
   schemaVersion: 1, boardId: "x/y", firmware,
   layers: [{ id: "base", name: "Base", bindings: Array.from({ length: 6 }, (): Binding => ({ kind: "key", code: "A" })) }, { id: "nav", name: "Nav", bindings: [] }],
-  macros: [], tapDances: [], combos: [], holdTapProfiles: [], settings: [], passthrough: [], ...over,
+  macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [], ...over,
 });
 // Positions 0-2 are the left hand, 3-5 the right; 2 and 3 are thumbs.
 const handAt = (p: number) => (p < 0 ? null : p < 3 ? "left" as const : "right" as const);

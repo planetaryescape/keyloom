@@ -1,12 +1,13 @@
 // Hold-tap profiles, macros and combos -> devicetree nodes (06). Each function returns lines with no
 // indentation; the caller indents them to where they sit.
-import type { Combo, HoldTapProfile, Macro, SlotAction, TapDance } from "../../layout/schema.ts";
+import type { Combo, ConditionalLayer, HoldTapProfile, Macro, SlotAction, TapDance } from "../../layout/schema.ts";
 import { textKeys } from "../../layout/text-keys.ts";
 import type { OptionValue } from "./props.ts";
 import { BUILTIN_OPTIONS, BUILTIN_PROFILES, ZMK_MACRO_DEFAULT_WAIT_MS } from "./builtins.ts";
 import { type EmitContext, bindingToDts, labelOf } from "./emit-binding.ts";
 import { GenerateError } from "./generate-error.ts";
 import { keyExprText } from "./key-expr.ts";
+import { nodeNameOf } from "./slug.ts";
 
 const quote = (s: string): string => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ")}"`;
 
@@ -136,6 +137,19 @@ export function renderCombo(c: Combo, ctx: EmitContext): string[] {
     `    bindings = <${output}>;`,
     "};",
   ];
+}
+
+/** One `zmk,conditional-layers` child: `then-layer` is on while every `if-layers` layer is (D-387). Layers are written by their current index. */
+export function renderConditionalLayer(c: ConditionalLayer, ctx: EmitContext): string[] {
+  const index = (id: string): number => {
+    const i = ctx.layerIndex.get(id);
+    if (i === undefined) throw new GenerateError(`conditional layer "${c.id}" names layer "${id}", which doesn't exist`);
+    return i;
+  };
+  const ifs = c.ifLayerIds.map(index);
+  const then = index(c.thenLayerId);
+  if (new Set([...ifs, then]).size !== 3) throw new GenerateError(`conditional layer "${c.id}" must name three different layers`);
+  return [`${nodeNameOf(c.id)} {`, `    if-layers = <${ifs.join(" ")}>;`, `    then-layer = <${then}>;`, "};"];
 }
 
 /** The behaviour and parameter a tap dance slot is invoked with, such as `&kp` and `LC(A)`. */

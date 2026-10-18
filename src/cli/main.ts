@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs,
+  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -219,7 +219,11 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       // Serve until interrupted; withApp closes the database after the server stops.
       const untilInterrupted = async (app: App | undefined) => {
         // Before the server takes a request, so no edit sees a layout whose kept code is not yet read (D-361).
-        if (app !== undefined) await backfillLayerRefs(app, (m) => io.err(`${m}\n`));
+        if (app !== undefined) {
+          await backfillLayerRefs(app, (m) => io.err(`${m}\n`));
+          // After the numbers are read, which it relies on (D-391).
+          await backfillConditionalLayers(app, (m) => io.err(`${m}\n`));
+        }
         const running = start(app);
         // Announced before the URL is printed, so whoever reads the URL can already find the record. --board-dev has no database or sync engine to protect.
         const forget = app === undefined ? () => {} : announceServer(app.dataDir, running.url);

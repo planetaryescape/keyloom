@@ -22,6 +22,8 @@ export function opLine(op: ChangeOp): string {
     case "removeTapDance": return `remove tap dance ${op.tapDanceId}`;
     case "upsertCombo": return `set combo ${op.combo.id}`;
     case "removeCombo": return `remove combo ${op.comboId}`;
+    case "upsertConditionalLayer": return `set conditional layer ${op.conditionalLayer.id}`;
+    case "removeConditionalLayer": return `remove conditional layer ${op.conditionalLayerId}`;
     case "upsertHoldTapProfile": return `set hold-tap profile ${op.profile.id}`;
     case "setFirmwareSetting": return `set ${op.setting.firmware} setting ${op.setting.key} to ${String(op.setting.value)}`;
     case "removeFirmwareSetting": return `reset ${op.firmware} setting ${op.key} to the firmware default`;

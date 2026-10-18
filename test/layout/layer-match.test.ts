@@ -4,7 +4,7 @@ import type { Binding, Layer, Layout } from "../../src/layout/schema.ts";
 
 const key = (code: string): Binding => ({ kind: "key", code });
 const layer = (id: string, name: string, codes: string[]): Layer => ({ id, name, bindings: codes.map(key) });
-const doc = (...layers: Layer[]): Layout => ({ schemaVersion: 1, boardId: "x/y", firmware: "qmk", layers, macros: [], tapDances: [], combos: [], holdTapProfiles: [], settings: [], passthrough: [] });
+const doc = (...layers: Layer[]): Layout => ({ schemaVersion: 1, boardId: "x/y", firmware: "qmk", layers, macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [] });
 
 describe("matchLayers", () => {
   test("the base layer is the base layer whatever it is called", () => {

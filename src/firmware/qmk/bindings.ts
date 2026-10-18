@@ -22,6 +22,8 @@ export type MapContext = {
   layerNames?: ReadonlyMap<string, number>;
   /** `DANCE_n` name to the id of the TapDance it was imported as. */
   tapDanceIds?: ReadonlyMap<string, string>;
+  /** The Tri Layer feature's `TL_LOWR` and `TL_UPPR` to the layer each holds; read as a momentary layer key once the condition is modelled (D-387). */
+  triLayerKeys?: ReadonlyMap<string, string>;
 };
 
 export type Mapped = {
@@ -152,6 +154,8 @@ export function mapKey(expr: Expr, position: number, ctx: MapContext): Mapped {
     if (n === "KC_MEH") return { binding: { kind: "modifier", mods: MEH } };
     const macroId = ctx.macroIds.get(n);
     if (macroId) return { binding: { kind: "macro", macroId } };
+    const triLayer = ctx.triLayerKeys?.get(n);
+    if (triLayer !== undefined) return { binding: { kind: "layer", action: "momentary", layerId: triLayer } };
     if (ctx.customKeycodes.has(n)) return native(expr, "custom keycode handled in process_record_user");
     const peeled = peel(expr);
     if (peeled) {

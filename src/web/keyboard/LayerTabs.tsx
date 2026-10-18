@@ -1,12 +1,13 @@
 import { Plus } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import type { Slot } from "../../layout/change.ts";
+import type { ChangeOp, Slot } from "../../layout/change.ts";
 import { countKind, layerReferences, niceLayerName } from "../../layout/layer-ops.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { GeometryKey } from "../../boards/schema.ts";
 import { boardBounds } from "./geometry.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
 import { DeleteLayerDialog } from "../layers/DeleteLayerDialog.tsx";
+import { alsoOnWords, goingWithLayer, turnedOnBy } from "../layers/conditional-ops.ts";
 import { LayerMenu } from "../layers/LayerMenu.tsx";
 import "../layers/layers.css";
 
@@ -21,6 +22,8 @@ export interface LayerActions {
   style: (layerId: string, label: string | null, color: number | null) => void;
   convert: (layerId: string, from: "transparent" | "none", to: "transparent" | "none") => void;
   remove: (layerId: string, drops: readonly string[]) => Promise<ChangeOutcome>;
+  /** Changes the conditional layers; the outcome comes back so the menu can show a refusal where the person made the choice. */
+  condition: (ops: ChangeOp[], summary: string) => Promise<ChangeOutcome>;
   nameFunction: (fn: string) => string;
   openKey: (slot: Slot) => void;
   notify: (message: string) => void;
@@ -84,6 +87,18 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
   const menuButton = useRef<HTMLSpanElement>(null);
   const selectedIndex = Math.max(0, layers.findIndex((layer) => layer.id === selectedId));
   const selected = layers[selectedIndex];
+  const lightOf = (layerId: string): string | null => lights?.[layers.findIndex((l) => l.id === layerId)] ?? null;
+
+  // The chosen layer's tab is always in sight where the strip scrolls (a phone, a narrow stage): whatever chose it, a tab, a key press
+  // that found its layer, a board switch or an arrival. Smooth, or at once when motion is reduced.
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = strip.current;
+    const tab = tabs.current[selectedIndex];
+    if (row === null || tab === null || tab === undefined || row.scrollWidth <= row.clientWidth) return;
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tab.scrollIntoView({ inline: "nearest", block: "nearest", behavior: reduced ? "instant" : "smooth" });
+  }, [selectedId, selectedIndex, layers.length]);
 
   // Arrow keys move between tabs and select as they go, as the tablist pattern asks.
   function onKeyDown(event: KeyboardEvent, index: number) {
@@ -115,7 +130,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
 
   return (
     <div className="layer-tabs-wrap">
-      <div className="layer-tabs" role="tablist" aria-label="Layers">
+      <div ref={strip} className="layer-tabs" role="tablist" aria-label="Layers">
         {layers.map((layer, index) => {
           const isSelected = layer.id === selectedId;
           const light = lights?.[index] ?? null;
@@ -136,6 +151,10 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
             );
           }
           const draggable = actions !== undefined && index > 0 && actions.blockedReason === null;
+          // A layer two others turn on shows their two lights beside its name; the sentence is its name to a screen reader, and the
+          // caption says it in full once the layer is chosen (D-389).
+          const pair = turnedOnBy(layout, layer.id)[0];
+          const also = alsoOnWords(layout, layer.id);
           return (
             <button
               key={layer.id}
@@ -152,6 +171,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               data-review={reviewed?.has(layer.id) ? "problem" : undefined}
               // The full name, since a narrow strip ends it in an ellipsis (D-338).
               title={isSelected && actions !== undefined ? `${niceLayerName(layer.name)}. Click again to rename. Right-click for the layer's actions.` : niceLayerName(layer.name)}
+              aria-label={also === null ? undefined : `${niceLayerName(layer.name)}, ${also}`}
               draggable={draggable}
               onClick={() => (isSelected && actions !== undefined && actions.blockedReason === null ? onRenaming(layer.id) : onSelect(layer.id))}
               onContextMenu={(event) => {
@@ -183,6 +203,14 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               <span className="layer-tab-name">
                 {dot}
                 <span className="layer-tab-text">{niceLayerName(layer.name)}</span>
+                {pair === undefined ? null : (
+                  <span className="layer-pair" aria-hidden="true">
+                    {pair.layerIds.map((id) => {
+                      const l = lightOf(id);
+                      return <i key={id} data-unlit={l === null} style={l === null ? undefined : { background: l }} />;
+                    })}
+                  </span>
+                )}
                 {index < 9 ? <span className="layer-tab-key" aria-hidden="true">{index + 1}</span> : null}
               </span>
               {marked?.has(layer.id) && !isSelected ? (
@@ -203,6 +231,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
           {selected === undefined ? null : (
             <span ref={menuButton} className="layer-menu-slot">
             <LayerMenu
+              layout={layout}
               layers={layers}
               index={selectedIndex}
               transparentCount={countKind(selected, "transparent")}
@@ -214,6 +243,8 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               onStyle={(label, color) => actions.style(selected.id, label, color)}
               onConvert={(from, to) => actions.convert(selected.id, from, to)}
               onDelete={() => setDeleting(selected.id)}
+              onCondition={actions.condition}
+              lightOf={lightOf}
             />
             </span>
           )}
@@ -223,6 +254,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
         <DeleteLayerDialog
           layerName={niceLayerName(layers.find((layer) => layer.id === deleting)?.name ?? "this layer")}
           references={layerReferences(layout, deleting)}
+          goesWith={goingWithLayer(layout, deleting)}
           onDelete={(drops) => actions.remove(deleting, drops)}
           nameFunction={actions.nameFunction}
           onOpenKey={actions.openKey}

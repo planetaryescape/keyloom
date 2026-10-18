@@ -119,6 +119,15 @@ export const LayerSchema = z.object({
 });
 export type Layer = z.infer<typeof LayerSchema>;
 
+// "When layers A and B are both on, also turn on C" (tri-layer; D-385). Layers are named by id, so a reorder renumbers the firmware's
+// layer numbers for free. A plain length-2 array rather than z.tuple, for the same JSON-schema reason as HsvSchema.
+export const ConditionalLayerSchema = z.object({
+  id: z.string().min(1),
+  ifLayerIds: z.array(z.string().min(1)).length(2),
+  thenLayerId: z.string().min(1),
+});
+export type ConditionalLayer = z.infer<typeof ConditionalLayerSchema>;
+
 export const MacroStepSchema = z.union([
   z.object({ op: z.enum(["tap", "press", "release"]), code: KeyCodeNameSchema.optional(), mods: mods.optional() }),
   z.object({ op: z.literal("waitMs"), ms: z.number().int().nonnegative() }),
@@ -179,6 +188,8 @@ export const LayoutSchema = z.object({
   // Documents stored before rung 14 have no tapDances; reading one gives [] and the next save writes it.
   tapDances: z.array(TapDanceSchema).default([]),
   combos: z.array(ComboSchema),
+  // Documents stored before conditional layers have none; reading one gives [] and the next save writes it (D-150's rule, D-385).
+  conditionalLayers: z.array(ConditionalLayerSchema).default([]),
   holdTapProfiles: z.array(HoldTapProfileSchema),
   settings: z.array(FirmwareSettingSchema),
   passthrough: z.array(PassthroughSchema),

@@ -26,6 +26,7 @@ type Layout = {
   macros: Macro[];
   tapDances: TapDance[];           // 16#tap-dance-is-a-key-with-a-double-tap-slot; [] in documents stored before rung 14
   combos: Combo[];
+  conditionalLayers: ConditionalLayer[]; // "when A and B are both on, also turn on C" (D-385); [] in documents stored before it
   holdTapProfiles: HoldTapProfile[];
   settings: FirmwareSetting[];     // global tap-hold and other firmware options (D-017)
   passthrough: Passthrough[];      // source keyloom can't model, kept verbatim (D-024)
@@ -69,6 +70,12 @@ type Combo = {
   layerIds: string[] | "all";
   output: Binding;                 // not a holdTap; see 07
   timeoutMs?: number;
+};
+
+type ConditionalLayer = {
+  id: string;
+  ifLayerIds: string[];            // exactly two layer ids
+  thenLayerId: string;             // not one of the two
 };
 
 type HoldTapProfile = {

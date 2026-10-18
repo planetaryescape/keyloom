@@ -7,6 +7,8 @@ import type { ChangeOutcome } from "../editor/useChange.ts";
 interface Props {
   layerName: string;
   references: readonly LayerReference[];
+  /** Conditional layers that name this layer; they are removed in the same change. */
+  goesWith: readonly string[];
   /** `drops` are functions the person agreed to lose with the layer. */
   onDelete: (drops: readonly string[]) => Promise<ChangeOutcome>;
   /** A function in words ("Esc", "Hold Nav"), for the list of what would be lost. */
@@ -17,7 +19,7 @@ interface Props {
 
 // Deleting is the one layer action that can strand keys, so it lists what points at the layer first
 // and asks the validator, which refuses while any of those keys would reach nothing (16#layers, D-090).
-export function DeleteLayerDialog({ layerName, references, onDelete, nameFunction, onOpenKey, onClose }: Props) {
+export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [outcome, setOutcome] = useState<Extract<ChangeOutcome, { ok: false }> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -74,6 +76,11 @@ export function DeleteLayerDialog({ layerName, references, onDelete, nameFunctio
         </>
       ) : (
         <p className="layer-dialog-lead">Nothing switches to {layerName}. The keys on it go with it, and Undo brings it back.</p>
+      )}
+      {goesWith.length === 0 ? null : (
+        <p className="layer-dialog-lead">
+          {goesWith.length === 1 ? "The condition" : "The conditions"} {goesWith.map((text) => `'${text}'`).join(", ")} {goesWith.length === 1 ? "goes" : "go"} with it.
+        </p>
       )}
       {dropping.length === 0 ? null : (
         <div className="layer-dialog-lead" data-tone="warning" role="alert">

@@ -57,6 +57,7 @@ import type { ComboLine } from "./keyboard/ComboLines.tsx";
 import { Keyboard, type KeyboardHandle } from "./keyboard/Keyboard.tsx";
 import { useColourway } from "./keyboard/colourway.ts";
 import { LayerTabs, type LayerActions } from "./keyboard/LayerTabs.tsx";
+import { deleteLayerOps } from "./layers/conditional-ops.ts";
 import { SelectionBar } from "./keyboard/SelectionBar.tsx";
 import { layerLight, reachedLayer, reachKey } from "./light/layer-light.ts";
 import { extendSelection } from "./keyboard/selection.ts";
@@ -707,10 +708,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           },
           remove: async (id, drops) => {
             const name = layerNameOf(id);
-            const outcome = await perform([...dropOps(drops, `Deleted layer ${name}`), { op: "removeLayer", layerId: id }], `Deleted layer ${name}`, { quiet: true });
+            const outcome = await perform(deleteLayerOps(layout, id, dropOps(drops, `Deleted layer ${name}`)), `Deleted layer ${name}`, { quiet: true });
             if (outcome.ok && editing?.layerId === id) closeEditor(false);
             return outcome;
           },
+          condition: (ops, summary) => perform(ops, summary, { quiet: true }),
           openKey: (slot) => {
             setLayerId(slot.layerId);
             openEditor(slot.position, slot.layerId);
@@ -1775,6 +1777,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
             <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
             <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>
+            {/* The strip and the view controls share one row, so the strip is centred where it fits and moves aside where it doesn't. */}
+            <div className="stage-floor-row">
             <LayerTabs
               layout={layout}
               selectedId={layer.id}
@@ -1794,6 +1798,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               history={{ on: historyOpen, onToggle: toggleHistory }}
               library={{ on: libraryOpen, onToggle: toggleLibrary }}
             />
+            </div>
           </div>
           <div className="stage-notes">
             {/* On a wide screen the bar itself says what is previewed; the banner is for the narrow sheet. */}

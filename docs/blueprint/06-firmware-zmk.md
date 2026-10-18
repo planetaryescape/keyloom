@@ -104,3 +104,7 @@ Generated from this document into the agent's firmware context ([03](03-agent.md
 - Opposite-hand-only holds for home row mods use `hold-trigger-key-positions` with the other hand's positions. The board definition says which positions belong to which hand.
 - Macros (`zmk,behavior-macro`) with waits. Combos with `timeout-ms` and per-layer scope.
 - Layer actions: momentary, toggle, to, one-shot (sticky layer).
+
+## Conditional layers
+
+A `zmk,conditional-layers` container is read into `Layout.conditionalLayers` and written back after the combos, children named from the condition ids and layers by current index. A child keyloom can't model (three or more `if-layers`, another property) is kept as written inside the generated container. See D-387.

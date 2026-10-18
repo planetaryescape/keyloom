@@ -2,6 +2,7 @@
 // thumb". The key is its own part, so the caption can print it as a keycap. Pure, so the caption and its tests agree.
 import type { Layout } from "../../layout/schema.ts";
 import { reachKey } from "./layer-light.ts";
+import { niceLayerName } from "../../layout/layer-ops.ts";
 
 /** "Hold", the key's legend, "on the left thumb": the key is drawn as a keycap between the words. */
 export type ReachWords = { before: string; key: string | null; after: string };
@@ -18,7 +19,7 @@ function fingerWords(finger: string | undefined): string | null {
  * map by position, so the line can say which hand.
  */
 export function reachWords(
-  layout: Pick<Layout, "layers" | "tapDances">,
+  layout: Pick<Layout, "layers" | "tapDances"> & Partial<Pick<Layout, "conditionalLayers">>,
   index: number,
   fingers: Readonly<Record<string, string>>,
   legendOf: (position: number) => string,
@@ -29,7 +30,17 @@ export function reachWords(
   if (layer === undefined) return words("");
   const thumbs = new Set(Object.entries(fingers).flatMap(([p, f]) => (f.endsWith("thumb") ? [Number(p)] : [])));
   const position = reachKey(layout, layer.id, thumbs);
-  if (position === null) return words("No key on the first layer reaches it");
+  if (position === null) {
+    // A layer only a condition turns on has no key of its own (D-385): say which two layers do it.
+    const condition = layout.conditionalLayers?.find((c) => c.thenLayerId === layer.id);
+    const names = condition?.ifLayerIds.map((id) => {
+      const name = layout.layers.find((l) => l.id === id)?.name;
+      // As the strip and the menu say it ("One shot", not the keymap's "one_shot").
+      return name === undefined ? undefined : niceLayerName(name);
+    });
+    if (names !== undefined && names.every((n) => n !== undefined)) return words(`On while ${names.join(" and ")} are held`);
+    return words("No key on the first layer reaches it");
+  }
   const binding = layout.layers[0]?.bindings[position];
   const where = fingerWords(fingers[String(position)]);
   const label = legendOf(position) || "a blank key";

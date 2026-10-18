@@ -11,6 +11,7 @@ import { PASSTHROUGH_DEFINES, parseDefines, settingsFrom, tapHoldOptions } from 
 import { CUSTOM_KEYCODES_ANCHOR, type ParsedKeymap, parseKeymapC } from "./keymap-c.ts";
 import { macroNames } from "./emit-macros.ts";
 import { annotateQmkLayerRefs } from "./layer-refs.ts";
+import { readTriLayers } from "./import-tri-layer.ts";
 import { importTapDances } from "./import-tap-dance.ts";
 import { readLighting } from "./import-lighting.ts";
 import { macroFor, parseMacroCase } from "./send-string.ts";
@@ -99,7 +100,10 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
   const { macros, consumedCases } = importMacros(parsed);
   const macroIds = new Map(macros.map((m) => [m.name, m.id]));
   const homeRow = new Set(board.rows.home ?? []);
+  const tri = readTriLayers(parsed, layerIds, files);
+  warnings.push(...tri.warnings);
   const ctx = {
+    triLayerKeys: tri.keys,
     layerIds,
     isHomeRow: (p: number) => homeRow.has(p),
     macroIds,
@@ -139,7 +143,10 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     if (lighting !== undefined) Object.assign(layer, { lighting });
   });
 
-  const { settings, profileOptions, passthrough: configPassthrough } = importConfig(files, warnings);
+  const imported = importConfig(files, warnings);
+  // The Tri Layer feature's layer numbers are now the condition's, written from the layers' ids; as settings they would stay pinned.
+  const settings = imported.settings.filter((s) => !tri.consumedDefines.has(s.key));
+  const { profileOptions, passthrough: configPassthrough } = imported;
   const holdTapProfiles: HoldTapProfile[] = PROFILE_NAMES.filter(([id]) => profilesUsed.has(id)).map(([id, name]) => ({
     id, name, firmware: "qmk", options: { ...profileOptions },
   }));
@@ -149,7 +156,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
 
   // Which numbers in the kept code are layer numbers is read once everything kept is known (D-360); until then none is marked.
   const kept: Passthrough[] = [
-    ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor) && !(lightingRead?.consumed.has(c.anchor) ?? false)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: false })),
+    ...parsed.chunks.filter((c) => !danceRead.consumed.has(c.anchor) && !(lightingRead?.consumed.has(c.anchor) ?? false) && !tri.consumedChunks.has(c.anchor)).map((c) => ({ firmware: "qmk" as const, file: "keymap.c", anchor: c.anchor, source: c.source, refersToLayerIndices: false })),
     ...keycodes,
     ...parsed.cases
       .filter((c) => !consumedCases.has(c.label))
@@ -173,6 +180,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     macros,
     tapDances: danceRead.tapDances,
     combos: numbered.combos,
+    conditionalLayers: tri.conditionalLayers,
     holdTapProfiles,
     settings,
     passthrough,

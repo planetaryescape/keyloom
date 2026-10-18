@@ -90,3 +90,7 @@ The opposite-hand variants are written with `(timeout hold)` and `(same-hand tap
 ## Built in rung 20
 
 The board, the key names, the generator, apply with verify and "Disable remapping", the setup doctor, the validator rule and the Karabiner import are built and tested against a fake kanata server and the real `kanata --check` (v1.12.0). A sync to the keyboard BK types on has since applied and verified (see the status line), but none of the spikes have a recorded result: S30 and S31 (the install and coexistence) are runbooks in [../research/spikes/S30.md](../research/spikes/S30.md) and [S31.md](../research/spikes/S31.md), and S32 and S36 (key capture) in [S32.md](../research/spikes/S32.md) and [S36.md](../research/spikes/S36.md).
+
+## Conditional layers
+
+kanata can't write "when two layers are both held", so a conditional layer in a MacBook layout is left out of the config with a comment and a `conditional_layer_unsupported` warning (D-388).

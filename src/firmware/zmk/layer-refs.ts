@@ -56,7 +56,7 @@ class Collector {
   }
 }
 
-const READABLE_SECTIONS = ["define", "behavior", "macro", "root", "combo", "top"];
+const READABLE_SECTIONS = ["define", "behavior", "macro", "root", "combo", "conditional", "top"];
 const sectionOf = (p: Passthrough): string => p.anchor.slice(0, Math.max(0, p.anchor.indexOf(":")));
 
 /** Whether the importer reads this kept block for layer numbers (includes, `#if` blocks and the .conf are not read). */

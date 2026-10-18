@@ -34,7 +34,7 @@ describe("what else differs from a version", () => {
   const diff = {
     keys: [], layersAdded: [{ id: "l9", name: "Steno" }], layersRemoved: [], layersRenamed: [{ id: "l1", from: "Layer 1", to: "Navigation" }], layersReordered: false,
     lighting: ["l1"], macros: { added: [], removed: [], changed: [] }, tapDances: { added: ["Tap dance 0"], removed: [], changed: [] },
-    combos: { added: [], removed: ["jk"], changed: [] }, holdTapProfiles: { added: [], removed: [], changed: ["Home-row mods"] },
+    combos: { added: [], removed: ["jk"], changed: [] }, conditionalLayers: { added: ["Lower + Raise gives Adjust"], removed: [], changed: [] }, holdTapProfiles: { added: [], removed: [], changed: ["Home-row mods"] },
     settings: [{ firmware: "qmk", key: "TAPPING_TERM", before: 200, after: 230 }, { firmware: "qmk", key: "CHORDAL_HOLD", before: null, after: true }],
     passthrough: false, same: false,
   };
@@ -46,6 +46,7 @@ describe("what else differs from a version", () => {
       "Layer 1 renamed to Navigation",
       "Tap dance 0 added since",
       "Combo jk removed since",
+      "Conditional layer Lower + Raise gives Adjust added since",
       "Timing Home-row mods changed",
       "Lighting changed on Navigation",
     ]);
