@@ -450,7 +450,7 @@ Only BK can do these:
 
 ## Rung 20: Car: my MacBook keyboard behaves like my other keyboards
 
-**Status:** Built in v0.21.0. Done when: not observed. kanata runs keyloom's config on BK's Mac and one automatic sync applied and verified (`syn_01M53B4CQBCACRJDCTGJJG799H`, 2026-10-16, 5.1 s), which is not the under-a-second target. The exit chord, Disable remapping and untouched external boards are unrecorded, and S30, S31, S32 and S36 have not run.
+**Status:** Built in v0.21.0. Done when: mostly observed. kanata runs keyloom's config on BK's Mac and one automatic sync applied and verified (`syn_01M53B4CQBCACRJDCTGJJG799H`, 2026-10-16, 5.1 s), which is not the under-a-second target. The exit chord stopped kanata on 2026-10-16 (`keyloom remap confirm-exit-chord` recorded it). BK typed on the remapped MacBook keyboard on 2026-10-18 and said "I tried the macbook keyboard and it works". Disable remapping and untouched external boards are unrecorded; S31 is moot since Karabiner-Elements is being removed (D-231's coexistence case no longer applies on BK's Mac).
 
 **Previously:** keyloom configures QMK and ZMK boards. **Now:** the MacBook's built-in keyboard is a keyloom board through kanata, and changes apply instantly.
 
