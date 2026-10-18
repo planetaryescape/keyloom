@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.0](https://github.com/planetaryescape/keyloom/compare/v0.42.1...v0.43.0) (2026-10-18)
+
+
+### Features
+
+* preserve agent work across reconnects ([7a98f81](https://github.com/planetaryescape/keyloom/commit/7a98f8189d08e6566c95cd0d152c2e3dd012f490))
+
 ## [0.42.1](https://github.com/planetaryescape/keyloom/compare/v0.42.0...v0.42.1) (2026-10-18)
 
 
