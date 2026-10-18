@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.1](https://github.com/planetaryescape/keyloom/compare/v0.40.0...v0.40.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* menus open above the stage again, so their items can be clicked ([#115](https://github.com/planetaryescape/keyloom/issues/115)) ([b9d88dd](https://github.com/planetaryescape/keyloom/commit/b9d88dd834e37b293f3892ff0e4f55da550f8fbf))
+
 ## [0.40.0](https://github.com/planetaryescape/keyloom/compare/v0.39.0...v0.40.0) (2026-10-18)
 
 
