@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Copy, Ellipsis, Eraser, GitMerge, PaintBucket, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Ellipsis, Eraser, GitMerge, PaintBucket, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { LAYER_COLOR_COUNT, SHORT_LABEL_MAX, cleanShortLabel, layerColorOf, layerShortLabel } from "../../layout/layer-ops.ts";
 import { conditionsThatTurnOn, removeConditionalLayerChange } from "../../layout/conditional-layers.ts";
@@ -6,7 +6,7 @@ import type { ChangeOp } from "../../layout/change.ts";
 import type { ConditionalLayer, Layer, Layout } from "../../layout/schema.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
-import { conditionSummary, newConditionChange, pickerChoices, setPickerChange } from "./conditional-ops.ts";
+import { conditionSummary, draftChange, draftChoices, noNewCondition, pickerChoices, setPickerChange } from "./conditional-ops.ts";
 
 export interface LayerMenuProps {
   layout: Layout;
@@ -23,14 +23,14 @@ export interface LayerMenuProps {
   onDelete: () => void;
   /** Applies a change to the conditions; the outcome says whether the validator refused it. */
   onCondition: (ops: ChangeOp[], summary: string) => Promise<ChangeOutcome>;
-  /** Raised by the strip's link on this layer's tab: opens the menu on the conditions. */
-  openWhen: number;
+  /** A layer's light (a CSS colour) or null, for the dots on its chips, as the strip draws them. */
+  lightOf: (layerId: string) => string | null;
 }
 
 // The active tab's actions. The popover is position: fixed because the tab strip scrolls sideways and
 // would clip an absolute one (the ARIA menu button pattern, like shell/Menu.tsx).
 export function LayerMenu(props: LayerMenuProps) {
-  const { layout, layers, index, transparentCount, noneCount, disabledReason, onRename, onDuplicate, onMove, onStyle, onConvert, onDelete, onCondition, openWhen } = props;
+  const { layout, layers, index, transparentCount, noneCount, disabledReason, onRename, onDuplicate, onMove, onStyle, onConvert, onDelete, onCondition, lightOf } = props;
   const layer = layers[index];
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"list" | "look" | "when">("list");
@@ -56,18 +56,8 @@ export function LayerMenu(props: LayerMenuProps) {
 
   useEffect(() => {
     if (!open) return;
-    (view === "list" ? root.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)') : root.current?.querySelector<HTMLElement>(view === "look" ? "input" : "select, button:not(:disabled)"))?.focus();
+    (view === "list" ? root.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)') : root.current?.querySelector<HTMLElement>(view === "look" ? "input" : ".layer-when-chip:not(:disabled), .layer-when-add:not(:disabled)"))?.focus();
   }, [open, view]);
-
-  // The strip's link asks for the conditions; the first render keeps the value it starts with, so it opens nothing.
-  const asked = useRef(openWhen);
-  useEffect(() => {
-    if (asked.current === openWhen) return;
-    asked.current = openWhen;
-    place();
-    setView("when");
-    setOpen(true);
-  }, [openWhen]);
 
   if (layer === undefined) return null;
 
@@ -75,7 +65,7 @@ export function LayerMenu(props: LayerMenuProps) {
     if (button.current === null) return;
     const box = button.current.getBoundingClientRect();
     // Opens above the button, since the layer strip is at the foot of the stage; under it when there's no room above. Kept inside the window.
-    const left = Math.max(8, Math.min(box.left, window.innerWidth - 308));
+    const left = Math.max(8, Math.min(box.left, window.innerWidth - 356));
     setAt(box.top > 360 ? { bottom: window.innerHeight - box.top + 4, left } : { top: box.bottom + 4, left });
   }
 
@@ -129,7 +119,7 @@ export function LayerMenu(props: LayerMenuProps) {
         <Ellipsis size={16} aria-hidden="true" />
       </button>
       {open ? (
-        <div id={id} className="menu-list layer-menu-list" role={view === "list" ? "menu" : "dialog"} aria-label={view === "list" ? "Layer actions" : view === "look" ? "Label and colour" : "Also on when"} style={at}>
+        <div id={id} className="menu-list layer-menu-list" role={view === "list" ? "menu" : "dialog"} aria-label={view === "list" ? "Layer actions" : view === "look" ? "Label and colour" : "Also on while two layers are held"} style={at}>
           {disabledReason !== null ? <p className="menu-heading">{disabledReason}</p> : null}
           {view === "list" ? (
             <>
@@ -144,7 +134,7 @@ export function LayerMenu(props: LayerMenuProps) {
               </button>
               <button type="button" role="menuitem" className="menu-item" disabled={disabledReason !== null} onClick={() => setView("when")}>
                 <GitMerge size={14} aria-hidden="true" />
-                <span className="menu-item-label">Also on when ... are held</span>
+                <span className="menu-item-label">Also on while two are held</span>
                 <span className="layer-menu-hint">{conditions.length === 0 ? "None" : conditions.length}</span>
               </button>
               <p className="menu-heading">Every key on this layer</p>
@@ -154,7 +144,7 @@ export function LayerMenu(props: LayerMenuProps) {
               {item("Delete layer", <Trash2 size={14} aria-hidden="true" />, onDelete, disabledReason !== null || index === 0, index === 0 ? "The base layer can't be deleted" : undefined)}
             </>
           ) : view === "when" ? (
-            <WhenForm layout={layout} layer={layer} conditions={conditions} onCondition={onCondition} onBack={() => setView("list")} />
+            <WhenForm layout={layout} layer={layer} conditions={conditions} onCondition={onCondition} lightOf={lightOf} onBack={() => setView("list")} />
           ) : (
             <LookForm layer={layer} colorIndex={layerColorOf(layers, index)} onBack={() => setView("list")} onSave={(label, color) => { close(true); onStyle(label, color); }} />
           )}
@@ -197,62 +187,168 @@ function LookForm({ layer, colorIndex, onBack, onSave }: { layer: Layer; colorIn
   );
 }
 
-// The conditions that turn this layer on: "Also on when [A] and [B] are held". Each edit is one change the validator judges, and a
-// refusal is shown here, in place, since the picker that caused it is what the person is looking at.
-function WhenForm({ layout, layer, conditions, onCondition, onBack }: { layout: Layout; layer: Layer; conditions: ConditionalLayer[]; onCondition: LayerMenuProps["onCondition"]; onBack: () => void }) {
+// The conditions that turn this layer on, as a sentence with the layers as chips: "Adjust is also on while [Lower] and [Raise] are
+// held" (D-389). A chip opens the other layers below the sentence, as chips drawn the way the strip draws them. Each edit is one change
+// the validator judges, and a refusal shows here, where the choice was made. A new condition is a draft until both layers are chosen,
+// so nothing is applied that BK didn't pick.
+type Opened = { key: string; slot: 0 | 1 };
+
+function WhenForm({ layout, layer, conditions, onCondition, lightOf, onBack }: { layout: Layout; layer: Layer; conditions: ConditionalLayer[]; onCondition: LayerMenuProps["onCondition"]; lightOf: LayerMenuProps["lightOf"]; onBack: () => void }) {
   const [refused, setRefused] = useState<Extract<ChangeOutcome, { ok: false }> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<[string | null, string | null] | null>(null);
+  const [opened, setOpened] = useState<Opened | null>(null);
+  const chooserId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  // Focus follows the choice: into the layers when a chip opens them, back to that chip when they close, so a keyboard keeps its
+  // place while the view re-renders under it. The view's first focus is the menu's (on opening the view).
+  const last = useRef<Opened | null>(null);
+  useEffect(() => {
+    const root = box.current;
+    const was = last.current;
+    last.current = opened;
+    if (root === null || (opened === null && was === null)) return;
+    const target =
+      opened !== null
+        ? root.querySelector<HTMLElement>(`#${CSS.escape(chooserId)} [aria-checked="true"]`) ?? root.querySelector<HTMLElement>(`#${CSS.escape(chooserId)} .layer-when-option`)
+        : root.querySelector<HTMLElement>(`[data-chip="${was?.key}:${was?.slot}"]`) ?? root.querySelector<HTMLElement>(".layer-when-chip, .layer-when-add");
+    target?.focus();
+  }, [opened, chooserId]);
   const name = niceLayerName(layer.name);
-  const add = newConditionChange(layout, layer.id);
+  const nameOf = (id: string | null) => (id === null ? null : niceLayerName(layout.layers.find((l) => l.id === id)?.name ?? id));
+  const cannotAdd = noNewCondition(layout, layer.id);
 
-  async function run(ops: ChangeOp[], summary: string) {
+  async function run(ops: ChangeOp[], summary: string): Promise<boolean> {
     setBusy(true);
     const outcome = await onCondition(ops, summary);
     setBusy(false);
     setRefused(outcome.ok ? null : outcome);
+    return outcome.ok;
+  }
+
+  const dot = (id: string) => {
+    const light = lightOf(id);
+    return <span className="layer-dot" data-unlit={light === null} aria-hidden="true" style={light === null ? undefined : { background: light, boxShadow: `0 0 6px ${light}` }} />;
+  };
+
+  const chip = (key: string, slot: 0 | 1, layerId: string | null) => {
+    const isOpen = opened?.key === key && opened.slot === slot;
+    return (
+      <button
+        type="button"
+        className="layer-when-chip"
+        data-chip={`${key}:${slot}`}
+        data-empty={layerId === null || undefined}
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? chooserId : undefined}
+        aria-label={layerId === null ? `Choose the ${slot === 0 ? "first" : "second"} layer` : `${nameOf(layerId)}, the ${slot === 0 ? "first" : "second"} layer. Change it`}
+        disabled={busy}
+        onClick={() => setOpened(isOpen ? null : { key, slot })}
+      >
+        {layerId === null ? null : dot(layerId)}
+        {nameOf(layerId) ?? "which layer?"}
+      </button>
+    );
+  };
+
+  const chooser = (other: string | null, choices: Array<{ id: string; name: string }>, current: string | null, onPick: (id: string) => void) => (
+    <div className="layer-when-choose" id={chooserId}>
+      <p>{other === null ? "Hold this layer and another:" : `Hold ${nameOf(other)} and…`}</p>
+      <div className="layer-when-options" role="radiogroup" aria-label="Which layer">
+        {choices.map((choice) => (
+          <button key={choice.id} type="button" role="radio" className="layer-when-option" aria-checked={choice.id === current} disabled={busy} onClick={() => onPick(choice.id)}>
+            {dot(choice.id)}
+            {choice.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  function pickDraft(slot: 0 | 1, id: string) {
+    if (draft === null) return;
+    const next: [string | null, string | null] = slot === 0 ? [id, draft[1]] : [draft[0], id];
+    if (next[0] === null || next[1] === null) {
+      setDraft(next);
+      setOpened({ key: "draft", slot: next[0] === null ? 0 : 1 });
+      return;
+    }
+    const change = draftChange(layout, layer.id, [next[0], next[1]]);
+    if ("reason" in change) {
+      setDraft(next);
+      setRefused({ ok: false, message: change.reason, problems: [], lost: [], stale: false });
+      return;
+    }
+    void run(change.ops, conditionSummary(layout, change.condition, "Added")).then((ok) => {
+      if (!ok) return;
+      setDraft(null);
+      setOpened(null);
+    });
   }
 
   return (
-    <div className="layer-when">
-      <p className="layer-when-lead">{name} is also on when two other layers are both held.</p>
-      {conditions.length === 0 ? <p className="layer-when-none muted">No condition yet.</p> : null}
-      {conditions.map((condition) => (
-        <fieldset key={condition.id} className="layer-when-row" disabled={busy}>
-          <legend>Also on when</legend>
-          {([0, 1] as const).map((slot) => (
-            <span key={slot} className="layer-when-pick">
-              {slot === 1 ? <span aria-hidden="true">and</span> : null}
-              <select
-                aria-label={slot === 0 ? `First layer held, for ${name}` : `Second layer held, for ${name}`}
-                value={condition.ifLayerIds[slot]}
-                onChange={(event) => {
-                  const change = setPickerChange(condition, slot, event.target.value);
-                  if (change !== null) void run(change.ops, conditionSummary(layout, change.next, "Changed"));
-                }}
-              >
-                {pickerChoices(layout, condition, slot).map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
-              </select>
-            </span>
-          ))}
-          <span className="layer-when-end">
-            <span>are held</span>
-            <button type="button" className="button" onClick={() => void run(removeConditionalLayerChange(condition.id), conditionSummary(layout, condition, "Removed"))}>Remove</button>
-          </span>
-        </fieldset>
-      ))}
+    <div className="layer-when" ref={box}>
+      <div className="layer-when-head">
+        <button type="button" className="icon-button" aria-label="Back to the layer's actions" onClick={onBack}><ArrowLeft size={15} aria-hidden="true" /></button>
+        <h3>Also on while two layers are held</h3>
+      </div>
+      {conditions.length === 0 && draft === null ? (
+        <p className="layer-when-lead">{name} is on only while a key holds it. It can also come on by itself whenever two other layers are held together, the way an Adjust layer comes on under Lower and Raise.</p>
+      ) : null}
+      {conditions.map((condition) => {
+        const [a, b] = condition.ifLayerIds as [string, string];
+        const open = opened?.key === condition.id ? opened.slot : null;
+        return (
+          <div key={condition.id} className="layer-when-condition">
+            <p className="layer-when-sentence"><b>{name}</b> is also on while {chip(condition.id, 0, a)} and {chip(condition.id, 1, b)} are held.</p>
+            {open === null ? null : chooser(open === 0 ? b : a, pickerChoices(layout, condition, open), open === 0 ? a : b, (id) => {
+              const change = setPickerChange(condition, open, id);
+              if (change === null) return setOpened(null);
+              void run(change.ops, conditionSummary(layout, change.next, "Changed")).then((ok) => ok && setOpened(null));
+            })}
+            <div className="layer-when-row">
+              <span>Both held, from any keys that hold them.</span>
+              <button type="button" className="layer-when-quiet" disabled={busy} onClick={() => void run(removeConditionalLayerChange(condition.id), conditionSummary(layout, condition, "Removed"))}>
+                <X size={13} aria-hidden="true" />Remove
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {draft === null ? null : (
+        <div className="layer-when-condition">
+          <p className="layer-when-sentence"><b>{name}</b> is also on while {chip("draft", 0, draft[0])} and {chip("draft", 1, draft[1])} are held.</p>
+          {opened?.key !== "draft" ? null : chooser(opened.slot === 0 ? draft[1] : draft[0], draftChoices(layout, layer.id, opened.slot === 0 ? draft[1] : draft[0]), draft[opened.slot], (id) => pickDraft(opened.slot, id))}
+          <div className="layer-when-row">
+            <span>Nothing changes until both are chosen.</span>
+            <button type="button" className="layer-when-quiet" disabled={busy} onClick={() => { setDraft(null); setOpened(null); setRefused(null); }}>Cancel</button>
+          </div>
+        </div>
+      )}
       {refused === null ? null : (
         <div className="layer-refused" role="alert">
           <strong>{refused.message}</strong>
           {refused.problems.length === 0 ? null : <ul>{refused.problems.slice(0, 4).map((problem) => <li key={problem}>{problem}</li>)}</ul>}
         </div>
       )}
-      <div className="layer-look-foot">
-        <button type="button" className="button" onClick={onBack}>Back</button>
-        <button type="button" className="button" disabled={busy || "reason" in add} onClick={() => !("reason" in add) && void run(add.ops, conditionSummary(layout, (add.ops[0] as { conditionalLayer: ConditionalLayer }).conditionalLayer, "Added"))}>
-          <Plus size={14} aria-hidden="true" /> Add a condition
-        </button>
-      </div>
-      {"reason" in add ? <p className="layer-when-none muted">{add.reason}.</p> : null}
+      {draft !== null ? null : (
+        <>
+          <button
+            type="button"
+            className="layer-when-add"
+            disabled={busy || cannotAdd !== null}
+            onClick={() => {
+              setRefused(null);
+              setDraft([null, null]);
+              setOpened({ key: "draft", slot: 0 });
+            }}
+          >
+            <Plus size={14} aria-hidden="true" />
+            {conditions.length === 0 ? "Turn it on while two layers are held" : "Another pair that turns it on"}
+          </button>
+          {cannotAdd === null ? null : <p className="layer-when-note">{cannotAdd}.</p>}
+        </>
+      )}
     </div>
   );
 }

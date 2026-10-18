@@ -1234,6 +1234,63 @@ a.menu-item {
   display: none;
 }
 
+/* The strip and the view controls. On a narrow stage the row is not a box and they sit as before (the controls above the strip, or
+   hidden on a phone). On a wide one they share a grid row (D-389): the strip is centred while it fits between equal sides, the
+   controls' side never narrower than the controls, so a strip too wide to centre moves left instead of running under them. */
+.stage-floor-row {
+  display: contents;
+}
+
+.stage-floor-row > * {
+  pointer-events: auto;
+}
+
+@media (min-width: 901px) {
+  .stage-floor-row {
+    display: grid;
+    width: 100%;
+    align-items: end;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(max-content, 1fr);
+    pointer-events: none;
+  }
+
+  .stage-floor-row > .layer-tabs-wrap {
+    max-width: none;
+    grid-column: 2;
+  }
+
+  .stage-floor-row > .view-controls {
+    position: static;
+    margin-right: var(--space-4);
+    margin-left: var(--space-4);
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  /* When even the icons leave the strip too little room for its layers, the controls go above it at the right, as on a narrower
+     stage, and the strip has the row (ViewControls measures). */
+  .stage-floor-row:has(> .view-controls[data-stack="true"]) {
+    position: relative;
+  }
+
+  .stage-floor-row:has(> .view-controls[data-stack="true"]) > .layer-tabs-wrap {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  /* Out of the grid's columns too, or its column would be its containing block and squeeze it. */
+  .stage-floor-row > .view-controls[data-stack="true"] {
+    position: absolute;
+    bottom: auto;
+    height: max-content;
+    align-self: start;
+    grid-column: auto;
+    top: calc(-1 * var(--space-7));
+    right: var(--space-3);
+    margin: 0;
+  }
+}
+
 /* The one hint, a quiet sentence above the strip. */
 .stage-hint {
   margin: 0;

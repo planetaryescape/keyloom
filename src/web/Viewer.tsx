@@ -1777,6 +1777,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
             <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
             <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>
+            {/* The strip and the view controls share one row, so the strip is centred where it fits and moves aside where it doesn't. */}
+            <div className="stage-floor-row">
             <LayerTabs
               layout={layout}
               selectedId={layer.id}
@@ -1796,6 +1798,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               history={{ on: historyOpen, onToggle: toggleHistory }}
               library={{ on: libraryOpen, onToggle: toggleLibrary }}
             />
+            </div>
           </div>
           <div className="stage-notes">
             {/* On a wide screen the bar itself says what is previewed; the banner is for the narrow sheet. */}

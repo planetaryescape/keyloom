@@ -7,7 +7,7 @@ import type { GeometryKey } from "../../boards/schema.ts";
 import { boardBounds } from "./geometry.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
 import { DeleteLayerDialog } from "../layers/DeleteLayerDialog.tsx";
-import { goingWithLayer, stripLinks } from "../layers/conditional-ops.ts";
+import { alsoOnWords, goingWithLayer, turnedOnBy } from "../layers/conditional-ops.ts";
 import { LayerMenu } from "../layers/LayerMenu.tsx";
 import "../layers/layers.css";
 
@@ -85,9 +85,9 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const menuButton = useRef<HTMLSpanElement>(null);
-  const [openWhen, setOpenWhen] = useState(0);
   const selectedIndex = Math.max(0, layers.findIndex((layer) => layer.id === selectedId));
   const selected = layers[selectedIndex];
+  const lightOf = (layerId: string): string | null => lights?.[layers.findIndex((l) => l.id === layerId)] ?? null;
 
   // Arrow keys move between tabs and select as they go, as the tablist pattern asks.
   function onKeyDown(event: KeyboardEvent, index: number) {
@@ -140,10 +140,13 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
             );
           }
           const draggable = actions !== undefined && index > 0 && actions.blockedReason === null;
-          const links = stripLinks(layout, layer.id);
+          // A layer two others turn on shows their two lights beside its name; the sentence is its name to a screen reader, and the
+          // caption says it in full once the layer is chosen (D-389).
+          const pair = turnedOnBy(layout, layer.id)[0];
+          const also = alsoOnWords(layout, layer.id);
           return (
-            <div key={layer.id} className="layer-tab-cell">
             <button
+              key={layer.id}
               ref={(element) => {
                 tabs.current[index] = element;
               }}
@@ -157,6 +160,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               data-review={reviewed?.has(layer.id) ? "problem" : undefined}
               // The full name, since a narrow strip ends it in an ellipsis (D-338).
               title={isSelected && actions !== undefined ? `${niceLayerName(layer.name)}. Click again to rename. Right-click for the layer's actions.` : niceLayerName(layer.name)}
+              aria-label={also === null ? undefined : `${niceLayerName(layer.name)}, ${also}`}
               draggable={draggable}
               onClick={() => (isSelected && actions !== undefined && actions.blockedReason === null ? onRenaming(layer.id) : onSelect(layer.id))}
               onContextMenu={(event) => {
@@ -188,6 +192,14 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               <span className="layer-tab-name">
                 {dot}
                 <span className="layer-tab-text">{niceLayerName(layer.name)}</span>
+                {pair === undefined ? null : (
+                  <span className="layer-pair" aria-hidden="true">
+                    {pair.layerIds.map((id) => {
+                      const l = lightOf(id);
+                      return <i key={id} data-unlit={l === null} style={l === null ? undefined : { background: l }} />;
+                    })}
+                  </span>
+                )}
                 {index < 9 ? <span className="layer-tab-key" aria-hidden="true">{index + 1}</span> : null}
               </span>
               {marked?.has(layer.id) && !isSelected ? (
@@ -197,25 +209,6 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
                 </>
               ) : null}
             </button>
-            {links.map((link) =>
-              actions === undefined ? (
-                <span key={link.id} className="layer-when-link">{link.text}</span>
-              ) : (
-                <button
-                  key={link.id}
-                  type="button"
-                  className="layer-when-link"
-                  aria-label={link.label}
-                  onClick={() => {
-                    onSelect(layer.id);
-                    window.requestAnimationFrame(() => setOpenWhen((n) => n + 1));
-                  }}
-                >
-                  {link.text}
-                </button>
-              ),
-            )}
-            </div>
           );
         })}
       </div>
@@ -240,7 +233,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               onConvert={(from, to) => actions.convert(selected.id, from, to)}
               onDelete={() => setDeleting(selected.id)}
               onCondition={actions.condition}
-              openWhen={openWhen}
+              lightOf={lightOf}
             />
             </span>
           )}

@@ -1,30 +1,31 @@
 import { describe, expect, test } from "bun:test";
 import { applyOps } from "../../src/layout/apply-ops.ts";
 import { validate } from "../../src/validation/validate.ts";
-import { deleteLayerOps, goingWithLayer, newConditionChange, pickerChoices, setPickerChange, stripLinks } from "../../src/web/layers/conditional-ops.ts";
+import { alsoOnWords, deleteLayerOps, draftChange, draftChoices, goingWithLayer, noNewCondition, pickerChoices, setPickerChange, turnedOnBy } from "../../src/web/layers/conditional-ops.ts";
 import { tiny, tinyBoard } from "../helpers/tiny.ts";
 
 const cond = { id: "cond-nav", ifLayerIds: ["base", "num"], thenLayerId: "nav" };
 const withCond = () => tiny({ conditionalLayers: [cond] });
 
 describe("adding a condition from a layer's menu", () => {
-  test("defaults to the first two other layers and the validator accepts it", () => {
+  test("is a draft until both layers are picked, then one upsert the validator accepts", () => {
     const layout = tiny();
-    const made = newConditionChange(layout, "nav");
+    expect(draftChoices(layout, "nav", null).map((c) => c.id)).toEqual(["base", "num"]);
+    expect(draftChoices(layout, "nav", "base").map((c) => c.id)).toEqual(["num"]);
+    const made = draftChange(layout, "nav", ["base", "num"]);
     expect("ops" in made && made.ops).toEqual([{ op: "upsertConditionalLayer", conditionalLayer: { id: "cond-nav", ifLayerIds: ["base", "num"], thenLayerId: "nav" } }]);
     if ("ops" in made) expect(validate(tinyBoard, layout, made.ops).errors.filter((e) => e.code !== "unreachable_layer")).toEqual([]);
   });
 
-  test("never picks the layer itself, and says so when every pair is already used", () => {
-    expect(newConditionChange(withCond(), "nav")).toEqual({ reason: "Every pair of other layers already turns this one on" });
-    const four = tiny({ layers: [...tiny().layers, { id: "fn", name: "Fn", bindings: tiny().layers[0]!.bindings }], conditionalLayers: [cond] });
-    const second = newConditionChange(four, "nav");
-    expect("ops" in second && second.ops[0]).toEqual({ op: "upsertConditionalLayer", conditionalLayer: { id: "cond-nav-2", ifLayerIds: ["base", "fn"], thenLayerId: "nav" } });
+  test("refuses a pair that already turns the layer on, and says when no pair is left", () => {
+    expect(draftChange(withCond(), "nav", ["num", "base"])).toEqual({ reason: "Those two already turn it on" });
+    expect(noNewCondition(withCond(), "nav")).toBe("Every pair of other layers already turns it on");
+    expect(noNewCondition(tiny(), "nav")).toBeNull();
   });
 
   test("says why when fewer than two other layers exist", () => {
     const two = tiny({ layers: tiny().layers.slice(0, 2), combos: [] });
-    expect(newConditionChange(two, "num")).toEqual({ reason: "Needs two other layers" });
+    expect(noNewCondition(two, "num")).toBe("It needs two other layers to wait for");
   });
 });
 
@@ -58,12 +59,11 @@ describe("deleting a layer a condition names", () => {
   });
 });
 
-describe("the strip link", () => {
-  test("sits on the layer the condition turns on, in short labels", () => {
-    const links = stripLinks(withCond(), "nav");
-    expect(links).toHaveLength(1);
-    expect(links[0]?.text).toMatch(/ \+ /);
-    expect(links[0]?.label).toBe("Also on when Base and Numbers are held. Open the condition.");
-    expect(stripLinks(withCond(), "num")).toEqual([]);
+describe("the strip and the tab's name", () => {
+  test("the layer a condition turns on knows its two layers, and says so in a sentence", () => {
+    expect(turnedOnBy(withCond(), "nav")).toEqual([{ id: "cond-nav", layerIds: ["base", "num"], names: ["Base", "Numbers"] }]);
+    expect(alsoOnWords(withCond(), "nav")).toBe("also on while Base and Numbers are held");
+    expect(turnedOnBy(withCond(), "num")).toEqual([]);
+    expect(alsoOnWords(withCond(), "num")).toBeNull();
   });
 });
