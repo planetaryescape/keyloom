@@ -124,6 +124,19 @@ keyloom v0.10.1 is accurate and accessible, but it reads like a tool for checkin
 
 `test/web/contrast.test.ts` grows to cover non-text contrast too: cap borders against the stage at 3:1, kind fills against each other, and focus rings. Kind colours that fail the test fail CI.
 
+## Patterns keyloom doesn't use
+
+BK called both of these an AI smell on 2026-10-18. `test/web/no-ai-patterns.test.ts` fails the build if either comes back.
+
+- **No accent stripe.** A card or row never gets a coloured bar down its left edge, whether a `border-left` or an inset shadow, curved or straight. Severity and state read in the concept's own language instead:
+  - a small dot or glyph by the title, in the marker's colours (rose a problem, amber not on the keyboard yet, grey a hint, green done);
+  - the word itself in that colour;
+  - the section heading the card sits under;
+  - the marks on the caps, which already carry it.
+
+  A tinted card background or a glow is not a stand-in for the stripe. A full outline still means "this is on the board now" (a pinned suggestion's amber ring), and a thin rail that ties a timeline together is not a stripe (History's folded revisions).
+- **No sparkle for AI.** keyloom's own findings and suggestions say "keyloom" in plain text. No `Sparkles` or wand icon marks something as made by a model.
+
 ## Words
 
 - **Each validator rule has a sentence for people,** such as "F16 won't be on your keyboard any more". It's written beside the rule in `src/validation/`. The raw text stays in logs and the CLI's JSON (D-101).

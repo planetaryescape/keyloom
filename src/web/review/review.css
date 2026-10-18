@@ -134,27 +134,29 @@
   background: var(--surface-2);
 }
 
-.br-item[data-kind="problem"] {
-  box-shadow: inset 3px 0 0 var(--finding);
+/* Kind reads from a small dot before the title, in the marker's colours: rose a problem, amber a suggestion, grey a hint; a fixed item
+   has its green tick. No accent stripe and no tinted card (18#no-accent-stripes). */
+.br-kind {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--space-2);
+  border-radius: 50%;
+  background: var(--ink-3);
+  vertical-align: 1px;
 }
 
-.br-item[data-kind="suggestion"] {
-  box-shadow: inset 3px 0 0 var(--pending);
+.br-kind[data-kind="problem"] {
+  background: var(--finding);
 }
 
+.br-kind[data-kind="suggestion"] {
+  background: var(--pending);
+}
+
+/* A suggestion shown on the board is outlined in the amber the caps wear while it is there. */
 .br-item[data-pinned] {
   box-shadow: 0 0 0 1.5px var(--pending);
-}
-
-.br-item[data-kind="fixed"] {
-  box-shadow: inset 3px 0 0 var(--ok);
-  animation: br-fixed 0.6s var(--ease-out);
-}
-
-@keyframes br-fixed {
-  from {
-    background: color-mix(in oklab, var(--ok) 18%, var(--surface-2));
-  }
 }
 
 .br-item[data-stale] {

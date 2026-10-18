@@ -134,27 +134,44 @@ export const BoardDefinitionSchema = z.strictObject({
           }),
         )
         .optional(),
-      // The colourways the maker sells (D-395), so BK can pin the drawn board to the one on his desk. Case and caps are separate tones
-      // because they need not match: a grey Glove80 has white caps. Absent means the board follows the theme only (D-262).
+      // The case and keycap colours the maker sells, each pinned on its own in Settings so the drawn board can match the one on the
+      // desk (D-395, split by D-319). Absent means the board follows the theme only (D-262).
       colourways: z
-        .array(
-          z.strictObject({
-            id: z.string().regex(/^[a-z0-9-]+$/),
-            // What the setting says: "Black", "Grey", "White".
-            name: z.string().min(1),
-            // The maker's own name for it, where it differs ("Dark Matter").
-            maker: z.string().min(1).optional(),
-            // grey is a charcoal case, lighter than black, that matches neither room (MoErgo's grey Glove80).
-            case: z.enum(["dark", "grey", "light"]),
-            caps: z.enum(["dark", "light"]),
-          }),
-        )
-        .min(2)
+        .strictObject({
+          cases: z
+            .array(
+              z.strictObject({
+                id: z.string().regex(/^[a-z0-9-]+$/),
+                // What the setting says: "Black", "Grey", "White".
+                name: z.string().min(1),
+                // The maker's own name for it, where it differs ("Dark Matter").
+                maker: z.string().min(1).optional(),
+                // grey is a charcoal case, lighter than black, that matches neither room (MoErgo's grey Glove80).
+                tone: z.enum(["dark", "grey", "light"]),
+                // The caps this case is sold with, by id: what an older single colourway choice of this case meant for the caps.
+                stockCaps: z.string().min(1),
+              }),
+            )
+            .min(2),
+          caps: z
+            .array(
+              z.strictObject({
+                id: z.string().regex(/^[a-z0-9-]+$/),
+                name: z.string().min(1),
+                maker: z.string().min(1).optional(),
+                tone: z.enum(["dark", "light"]),
+              }),
+            )
+            .min(2),
+        })
+        .refine((c) => c.cases.every((k) => c.caps.some((cap) => cap.id === k.stockCaps)), { message: "a case's stockCaps names caps the board doesn't list" })
         .optional(),
     })
     .optional(),
 });
-export type Colourway = NonNullable<NonNullable<BoardDefinition["display"]>["colourways"]>[number];
+export type Colourways = NonNullable<NonNullable<BoardDefinition["display"]>["colourways"]>;
+export type CaseColour = Colourways["cases"][number];
+export type CapColour = Colourways["caps"][number];
 export type BoardDefinition = z.infer<typeof BoardDefinitionSchema>;
 
 /** A board whose "firmware" is a software remapper's config file: nothing to build in Docker or flash (21). */

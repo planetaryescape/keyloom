@@ -123,8 +123,10 @@
   opacity: 0.45;
 }
 
+/* Where a dragged layer will land: the tab outlined, dashed, as a place to drop. */
 .layer-tab[data-drop="true"] {
-  box-shadow: inset 3px 0 0 var(--ink);
+  outline: 1.5px dashed var(--ink-3);
+  outline-offset: -2px;
 }
 
 .layer-tab[draggable="true"] {

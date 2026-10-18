@@ -55,7 +55,7 @@ import type { LastChange } from "./editor/repeat-plan.ts";
 import { advancedLegend } from "./keyboard/advanced-legend.ts";
 import type { ComboLine } from "./keyboard/ComboLines.tsx";
 import { Keyboard, type KeyboardHandle } from "./keyboard/Keyboard.tsx";
-import { useColourway } from "./keyboard/colourway.ts";
+import { tonesOf, useColourway } from "./keyboard/colourway.ts";
 import { LayerTabs, type LayerActions } from "./keyboard/LayerTabs.tsx";
 import { deleteLayerOps } from "./layers/conditional-ops.ts";
 import { SelectionBar } from "./keyboard/SelectionBar.tsx";
@@ -1704,7 +1704,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ) : (
           <Keyboard
             handle={keyboard}
-            colourway={colourway}
+            colourway={tonesOf(colourway, board.display?.colourways)}
             keys={keys}
             keycaps={board.display?.keycaps}
             hands={board.hands}
@@ -1865,7 +1865,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 currentLayerId={layer.id}
                 onShowLayer={chooseLayer}
                 offer={detail.upgrade?.colours === true ? offer : null}
-                colourway={colourway?.id ?? null}
+                colourway={colourway}
                 onColourway={setColourway}
                 boardName={boardDisplayName(board.name)}
                 onClose={() => setSettingsOpen(false)}

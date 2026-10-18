@@ -194,10 +194,16 @@
     "oryx-source"
   ],
   "display": {
-    "colourways": [
-      { "id": "black", "name": "Black", "maker": "Dark Matter", "case": "dark", "caps": "dark" },
-      { "id": "white", "name": "White", "maker": "Moonlit", "case": "light", "caps": "light" }
-    ],
+    "colourways": {
+      "cases": [
+        { "id": "black", "name": "Black", "maker": "Dark Matter", "tone": "dark", "stockCaps": "black" },
+        { "id": "white", "name": "White", "maker": "Moonlit", "tone": "light", "stockCaps": "white" }
+      ],
+      "caps": [
+        { "id": "black", "name": "Black", "tone": "dark" },
+        { "id": "white", "name": "White", "tone": "light" }
+      ]
+    },
     "rotate": [
       { "positions": [59, 66, 67, 68], "r": 51, "rx": 6.7450, "ry": 6.3207 },
       { "positions": [60, 69, 70, 71], "r": -51, "rx": 10.2550, "ry": 6.3207 }

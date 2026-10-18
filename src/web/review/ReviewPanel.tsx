@@ -1,4 +1,4 @@
-import { Check, CircleCheck, FileText, Layers, LoaderCircle, Sparkles, X } from "lucide-react";
+import { Check, CircleCheck, FileText, Layers, LoaderCircle, X } from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
@@ -107,9 +107,9 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
     const c = card(item);
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
-        <h4><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
+        <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
         <p><ReviewText text={bodyOf(item, rows)} layout={layout} rows={rows} /></p>
-        <div className="br-meta"><span className="br-src"><Sparkles size={11} aria-hidden="true" />keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>checked against your layout</span>}</div>
+        <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>checked against your layout</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
             <button type="button" className="sheet-action" aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
@@ -136,10 +136,10 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
   const finding = (item: ReviewItem) => (
     <Fragment key={item.id}>
       <article className="br-item" data-kind={item.kind} data-stale={stale}>
-        <h4><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
+        <h4><i className="br-kind" data-kind={item.kind} aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
         <p><ReviewText text={bodyOf(item, rows)} layout={layout} rows={rows} /></p>
         <div className="br-meta">
-          {item.source === "check" ? <span className="br-src">Check</span> : <span className="br-src"><Sparkles size={11} aria-hidden="true" />keyloom</span>}
+          {item.source === "check" ? <span className="br-src">Check</span> : <span className="br-src">keyloom</span>}
           {item.layers.length > 0 ? <span>marked on the strip</span> : item.keys.length > 0 ? <span>{item.keys.length === 1 ? "its key is marked on the board" : "its keys are marked on the board"}</span> : null}
         </div>
         <div className="br-actions">

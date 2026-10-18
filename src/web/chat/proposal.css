@@ -162,18 +162,15 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3);
-  border-left: 3px solid;
   border-radius: var(--radius-sm);
 }
 
 .proposal-confirm {
-  border-color: var(--color-warning);
   background: var(--color-warning-bg);
 }
 
 .proposal-problem {
   flex-direction: row;
-  border-color: var(--color-error);
   background: var(--color-error-bg);
 }
 
@@ -206,7 +203,6 @@
 
 .proposal-next {
   align-items: flex-start;
-  border-color: var(--color-success);
   background: var(--color-success-bg);
 }
 
