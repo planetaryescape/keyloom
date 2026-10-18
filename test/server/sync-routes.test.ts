@@ -4,7 +4,7 @@ import { afterAll, afterEach, describe, expect, test, setDefaultTimeout } from "
 import { SyncEventSchema, SyncNowResponseSchema, SyncStatusResponseSchema, type BoardSync } from "../../src/api/http.ts";
 import { appSyncBackend } from "../../src/cli/sync-backend.ts";
 import { handleSyncRoute } from "../../src/server/sync-routes.ts";
-import { BOARD, type SyncWorld, gate, syncWorld, waitFor } from "../helpers/fake-sync.ts";
+import { BOARD, type SyncWorld, gate, skewedClock, syncWorld, waitFor } from "../helpers/fake-sync.ts";
 
 // waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
 setDefaultTimeout(20_000);
@@ -84,7 +84,11 @@ describe("GET /api/events", () => {
   });
 
   test("opens with the current state, then carries syncing steps to in sync as an Apply is synced", async () => {
-    const { w, call } = await serve();
+    // The engine runs on a clock the test moves and looks only when told: "behind" lasts as long as the quiet time, which a loaded
+    // runner can let pass between two of the engine's own timer ticks, so the frame for it was sometimes never sent.
+    const clock = skewedClock();
+    const QUIET = 10_000;
+    const { w, engine, call } = await serve({ engine: { quietMs: QUIET, tickMs: 600_000, now: clock.now } });
     const res = await call("/api/events");
     expect(res.headers.get("content-type")).toBe("text/event-stream");
     const stream = frames(res);
@@ -92,7 +96,10 @@ describe("GET /api/events", () => {
     expect(stream.got[0]?.[0]?.state.kind).toBe("in_sync");
     w.world.flashGate = gate();
     w.apply();
+    await engine.tick();
     await waitFor(() => stream.got.some((b) => b[0]?.state.kind === "behind"), "behind");
+    clock.advance(QUIET);
+    await engine.tick();
     await waitFor(() => stream.got.some((b) => b[0]?.state.kind === "syncing"), "syncing");
     w.world.flashGate.open();
     await waitFor(() => stream.got.at(-1)?.[0]?.state.kind === "in_sync", "in sync again");
