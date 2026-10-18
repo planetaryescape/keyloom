@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "id": "run_01M58HT7M5BZ6V22PAPNMXWKH9",
+  "requestId": "7b4cb564-b77e-4478-85ec-248aaf0131b6",
+  "conversationId": "conv_01M58HT7M4HDA6MCAWSJZ5NVBT",
+  "userMessageId": "msg_01M58HT7M5BZ6V22PAPNMXWKH8",
+  "status": "cancelled",
+  "seq": 5,
+  "cancelRequested": true,
+  "committedPreparations": 0,
+  "preparations": [],
+  "presentation": {
+    "version": 1,
+    "userMessageId": "msg_01M58HT7M5BZ6V22PAPNMXWKH8",
+    "status": "cancelled",
+    "operations": [],
+    "messages": [],
+    "effectsMayHaveOccurred": false,
+    "warning": "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request.",
+    "detailsTruncated": false
+  }
+}

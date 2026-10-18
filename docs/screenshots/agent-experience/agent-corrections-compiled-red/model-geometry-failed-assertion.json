@@ -1,0 +1,53 @@
+{
+  "actions": [
+    {
+      "bottom": 822,
+      "disabled": false,
+      "height": 32,
+      "left": 990.078125,
+      "right": 1058.4375,
+      "text": "Cancel",
+      "top": 790,
+      "width": 68.359375,
+      "x": 990.078125,
+      "y": 790
+    },
+    {
+      "bottom": 822,
+      "disabled": false,
+      "height": 32,
+      "left": 1066.4375,
+      "right": 1251,
+      "text": "Use for new conversations",
+      "top": 790,
+      "width": 184.5625,
+      "x": 1066.4375,
+      "y": 790
+    }
+  ],
+  "active": "INPUT",
+  "fieldsetDisabled": false,
+  "height": 577,
+  "model": {
+    "bottom": 778,
+    "height": 32,
+    "left": 945,
+    "right": 1251,
+    "top": 746,
+    "width": 306,
+    "x": 945,
+    "y": 746
+  },
+  "picker": {
+    "bottom": 839,
+    "height": 392.796875,
+    "left": 928,
+    "right": 1268,
+    "top": 446.203125,
+    "width": 340,
+    "x": 928,
+    "y": 446.203125
+  },
+  "scrollWidth": 1280,
+  "width": 1280
+}

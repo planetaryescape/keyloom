@@ -1,0 +1,45 @@
+{
+  "records": [
+    {
+      "http": 202,
+      "path": "/api/agent/v1/requests/e4be8243-20ce-4cf7-b528-95298b45d5c0/cancel",
+      "response": {
+        "cancelRequested": true,
+        "requestId": "e4be8243-20ce-4cf7-b528-95298b45d5c0",
+        "status": "pending_acceptance",
+        "version": 1
+      }
+    },
+    {
+      "http": 202,
+      "path": "/api/agent/v1/runs",
+      "response": {
+        "cancelRequested": true,
+        "committedPreparations": 0,
+        "conversationId": "conv_01M58K2SXFRB0XFRFMQN29J61Y",
+        "id": "run_01M58K2SXFRB0XFRFMQN29J620",
+        "preparations": [],
+        "presentation": {
+          "detailsTruncated": false,
+          "effectsMayHaveOccurred": false,
+          "messages": [],
+          "operations": [],
+          "status": "cancelled",
+          "userMessageId": "msg_01M58K2SXFRB0XFRFMQN29J61Z",
+          "version": 1,
+          "warning": "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work."
+        },
+        "requestId": "e4be8243-20ce-4cf7-b528-95298b45d5c0",
+        "seq": 1,
+        "status": "cancelled",
+        "userMessageId": "msg_01M58K2SXFRB0XFRFMQN29J61Z",
+        "version": 1
+      }
+    }
+  ],
+  "fakeExecCountBefore": 6,
+  "fakeExecCountAfter": 6,
+  "oneNativePointerClick": true,
+  "oneAcceptancePost": true,
+  "noStopAfterAcceptance": true
+}

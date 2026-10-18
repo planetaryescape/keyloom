@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "id": "run_01M58JBCTWHEFTCQRZM8M5STVT",
+  "requestId": "fe081c97-2e5a-465e-a34c-70e9d298b36e",
+  "conversationId": "conv_01M58JBCTV6006J08431XRPR8X",
+  "userMessageId": "msg_01M58JBCTV6006J08431XRPR8Y",
+  "status": "cancelled",
+  "seq": 1,
+  "cancelRequested": true,
+  "committedPreparations": 0,
+  "preparations": [],
+  "presentation": {
+    "version": 1,
+    "userMessageId": "msg_01M58JBCTV6006J08431XRPR8Y",
+    "status": "cancelled",
+    "operations": [],
+    "messages": [],
+    "effectsMayHaveOccurred": false,
+    "warning": "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work.",
+    "detailsTruncated": false
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "accepted": {
+    "cancelRequested": false,
+    "committedPreparations": 0,
+    "conversationId": "conv_01M58JZB94WXXP5M5TPB1QC2RF",
+    "id": "run_01M58JZB94WXXP5M5TPB1QC2RH",
+    "preparations": [],
+    "presentation": {
+      "detailsTruncated": false,
+      "effectsMayHaveOccurred": false,
+      "messages": [],
+      "operations": [],
+      "status": "running",
+      "userMessageId": "msg_01M58JZB94WXXP5M5TPB1QC2RG",
+      "version": 1,
+      "warning": null
+    },
+    "requestId": "ecb16153-45d9-434f-808d-00d06663ff8f",
+    "seq": 2,
+    "status": "running",
+    "userMessageId": "msg_01M58JZB94WXXP5M5TPB1QC2RG",
+    "version": 1
+  },
+  "repeat": {
+    "http": 202,
+    "snapshot": {
+      "cancelRequested": false,
+      "committedPreparations": 1,
+      "conversationId": "conv_01M58JZB94WXXP5M5TPB1QC2RF",
+      "id": "run_01M58JZB94WXXP5M5TPB1QC2RH",
+      "preparations": [
+        {
+          "operationId": "effect_1",
+          "references": [
+            {
+              "id": "lay_01M58JZBRX6QP1ZE33A296R7QE",
+              "kind": "config"
+            }
+          ],
+          "tool": "create_config"
+        }
+      ],
+      "presentation": {
+        "detailsTruncated": false,
+        "effectsMayHaveOccurred": true,
+        "messages": [
+          {
+            "id": "public_1",
+            "kind": "working_note",
+            "text": "Preparing one public-release synthetic saved-run copy."
+          }
+        ],
+        "operations": [
+          {
+            "accepted": 0,
+            "declined": 0,
+            "durationMs": 4,
+            "id": "op_1",
+            "label": "Create config",
+            "references": [
+              {
+                "id": "lay_01M58JZBRX6QP1ZE33A296R7QE",
+                "kind": "config"
+              }
+            ],
+            "status": "succeeded",
+            "tool": "create_config",
+            "validationCodes": []
+          }
+        ],
+        "status": "running",
+        "userMessageId": "msg_01M58JZB94WXXP5M5TPB1QC2RG",
+        "version": 1,
+        "warning": null
+      },
+      "requestId": "ecb16153-45d9-434f-808d-00d06663ff8f",
+      "seq": 6,
+      "status": "running",
+      "userMessageId": "msg_01M58JZB94WXXP5M5TPB1QC2RG",
+      "version": 1
+    }
+  }
+}

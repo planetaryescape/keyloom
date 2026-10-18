@@ -1,0 +1,62 @@
+{
+  "accepted": {
+    "cancelRequested": true,
+    "committedPreparations": 0,
+    "conversationId": "conv_01M58JZ91AW428J7QACC6D9M3H",
+    "id": "run_01M58JZ91BSABH0VFBXBMBCY69",
+    "preparations": [],
+    "presentation": {
+      "detailsTruncated": false,
+      "effectsMayHaveOccurred": false,
+      "messages": [],
+      "operations": [],
+      "status": "cancelled",
+      "userMessageId": "msg_01M58JZ91BSABH0VFBXBMBCY68",
+      "version": 1,
+      "warning": "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work."
+    },
+    "requestId": "35f0fe7f-7053-43ef-a391-8dc45e434bb1",
+    "seq": 1,
+    "status": "cancelled",
+    "userMessageId": "msg_01M58JZ91BSABH0VFBXBMBCY68",
+    "version": 1
+  },
+  "records": [
+    {
+      "http": 202,
+      "path": "/api/agent/v1/requests/35f0fe7f-7053-43ef-a391-8dc45e434bb1/cancel",
+      "response": {
+        "cancelRequested": true,
+        "requestId": "35f0fe7f-7053-43ef-a391-8dc45e434bb1",
+        "status": "pending_acceptance",
+        "version": 1
+      }
+    },
+    {
+      "http": 202,
+      "path": "/api/agent/v1/runs",
+      "response": {
+        "cancelRequested": true,
+        "committedPreparations": 0,
+        "conversationId": "conv_01M58JZ91AW428J7QACC6D9M3H",
+        "id": "run_01M58JZ91BSABH0VFBXBMBCY69",
+        "preparations": [],
+        "presentation": {
+          "detailsTruncated": false,
+          "effectsMayHaveOccurred": false,
+          "messages": [],
+          "operations": [],
+          "status": "cancelled",
+          "userMessageId": "msg_01M58JZ91BSABH0VFBXBMBCY68",
+          "version": 1,
+          "warning": "Stopped before execution. No agent preparation ran for this request. Stop does not roll back earlier work."
+        },
+        "requestId": "35f0fe7f-7053-43ef-a391-8dc45e434bb1",
+        "seq": 1,
+        "status": "cancelled",
+        "userMessageId": "msg_01M58JZ91BSABH0VFBXBMBCY68",
+        "version": 1
+      }
+    }
+  ]
+}

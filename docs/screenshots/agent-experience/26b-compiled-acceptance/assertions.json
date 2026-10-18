@@ -1,0 +1,38 @@
+{
+  "overall": "GREEN for bounded compiled journeys",
+  "earlyStopPendingIntentHttp": 202,
+  "acceptancePostsInEarlyProbe": 1,
+  "earlyAcceptedStatus": "cancelled",
+  "earlyPreparations": 0,
+  "fakeExecsAtEarlyProbe": 0,
+  "configsAtEarlyProbe": 1,
+  "secondStopNeeded": false,
+  "heldAckCancelled": true,
+  "repeatReturnsSameRun": true,
+  "closeReopenReloadPreservedRunning": true,
+  "explicitStopRetainedReceipt": true,
+  "crashStatus": "interrupted",
+  "crashReferenceVisibleBothWidths": true,
+  "fakeExecsBeforeAndAfterCrashRecovery": 3,
+  "finalFakeExecs": 6,
+  "finalConfigCount": 3,
+  "questionIdsDistinct": true,
+  "answersAfterReload": [
+    "Keep first",
+    "Use second"
+  ],
+  "codexHomeEmpty": true,
+  "recordNullSink": true,
+  "phoneEarlyStopPendingIntentHttp": 202,
+  "phoneEarlyAcceptedStatus": "cancelled",
+  "phoneEarlyAcceptancePosts": 1,
+  "phoneFakeExecCountBeforeAfter": [
+    6,
+    6
+  ],
+  "phoneConfigCountBeforeAfter": [
+    3,
+    3
+  ],
+  "phoneSecondStopNeeded": false
+}

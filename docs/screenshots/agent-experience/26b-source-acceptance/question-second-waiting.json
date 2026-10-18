@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M58HWZVH7HCPJGP12PMHV041",
+    "layoutId": "lay_01M58HQ1XWV3FM500NR848VQ7N",
+    "title": "26b consecutive questions: ask about two synthetic routes\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792362315634
+  },
+  "messages": [
+    {
+      "id": "msg_01M58HWZVJHZJBC1PDAKAXVTAM",
+      "role": "user",
+      "text": "26b consecutive questions: ask about two synthetic routes, one question at a time. No configuration changes.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792362315634
+    },
+    {
+      "id": "msg_01M58HX0684RQK0Y4F090JK8CB",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792362315977,
+      "question": {
+        "question": "Keep the first synthetic route?",
+        "options": [
+          {
+            "label": "Keep first"
+          },
+          {
+            "label": "Replace first"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "codex_0414b1ca-4e3e-49d3-91d2-745928e8b2d8_item_0",
+        "answer": "Keep first"
+      }
+    },
+    {
+      "id": "msg_01M58HX1E2PHW9W1H3V3S31HND",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792362317250,
+      "question": {
+        "question": "Use the second synthetic route?",
+        "options": [
+          {
+            "label": "Use second"
+          },
+          {
+            "label": "Skip second"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "codex_7afe3531-2a91-460c-8c5e-0c3d0b7c1f4e_item_0",
+        "answer": null
+      }
+    }
+  ],
+  "proposals": [],
+  "preparationReceipts": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M58HWZVJHZJBC1PDAKAXVTAM",
+      "questionToolUseId": "codex_0414b1ca-4e3e-49d3-91d2-745928e8b2d8_item_0",
+      "status": "completed",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 1,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    },
+    {
+      "version": 1,
+      "userMessageId": "msg_01M58HX13KYMA457HHCX4QJJ0F",
+      "questionToolUseId": "codex_7afe3531-2a91-460c-8c5e-0c3d0b7c1f4e_item_0",
+      "status": "waiting_user",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 7,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    }
+  ]
+}

@@ -119,7 +119,7 @@ export function LayerMenu(props: LayerMenuProps) {
         <Ellipsis size={16} aria-hidden="true" />
       </button>
       {open ? (
-        <div id={id} className="menu-list layer-menu-list" role={view === "list" ? "menu" : "dialog"} aria-label={view === "list" ? "Layer actions" : view === "look" ? "Label and colour" : "Also on while two layers are held"} style={at}>
+        <div id={id} className="menu-list layer-menu-list" role={view === "list" ? "menu" : "dialog"} aria-label={view === "list" ? "Layer actions" : view === "look" ? "On-screen label and colour" : "Also on while two layers are held"} style={at}>
           {disabledReason !== null ? <p className="menu-heading">{disabledReason}</p> : null}
           {view === "list" ? (
             <>
@@ -129,7 +129,7 @@ export function LayerMenu(props: LayerMenuProps) {
               {item("Move right", <ArrowRight size={14} aria-hidden="true" />, () => onMove(index + 1), disabledReason !== null || index === 0 || index === last)}
               <button type="button" role="menuitem" className="menu-item" disabled={disabledReason !== null} onClick={() => setView("look")}>
                 <PaintBucket size={14} aria-hidden="true" />
-                <span className="menu-item-label">Label and colour</span>
+                <span className="menu-item-label">On-screen label and colour</span>
                 <span className="layer-menu-hint">{layerShortLabel(layer)}</span>
               </button>
               <button type="button" role="menuitem" className="menu-item" disabled={disabledReason !== null} onClick={() => setView("when")}>
@@ -168,10 +168,12 @@ function LookForm({ layer, colorIndex, onBack, onSave }: { layer: Layer; colorIn
         onSave(cleanShortLabel(label), color);
       }}
     >
+      <p className="muted">For keyloom&rsquo;s display, not keyboard LEDs. LED lighting is separate in Settings.</p>
+      <p className="muted">Saved with this config. Saving may trigger auto-sync to your keyboard.</p>
       <label htmlFor={labelId}>Short label <span className="muted">Up to {SHORT_LABEL_MAX} characters</span></label>
       <input id={labelId} value={label} maxLength={SHORT_LABEL_MAX} placeholder={layerShortLabel({ name: layer.name })} onChange={(event) => setLabel(event.target.value)} />
       <fieldset className="layer-swatches">
-        <legend>Colour</legend>
+        <legend>On-screen colour</legend>
         {Array.from({ length: LAYER_COLOR_COUNT }, (_, n) => n + 1).map((n) => (
           <label key={n} className="layer-swatch" style={{ "--swatch": `var(--layer-${n})` } as CSSProperties}>
             <input type="radio" name="layer-color" checked={shown === n} onChange={() => setColor(n)} aria-label={`Colour ${n}`} />

@@ -1,0 +1,77 @@
+{
+  "protocol": {
+    "accepted": {
+      "cancelRequested": false,
+      "committedPreparations": 0,
+      "conversationId": "conv_01M58JC50M89MVETPA9426XV9K",
+      "id": "run_01M58JC50NP9NP4DFMZ3NPJNX9",
+      "preparations": [],
+      "presentation": {
+        "detailsTruncated": false,
+        "effectsMayHaveOccurred": false,
+        "messages": [],
+        "operations": [],
+        "status": "running",
+        "userMessageId": "msg_01M58JC50M89MVETPA9426XV9M",
+        "version": 1,
+        "warning": null
+      },
+      "requestId": "46b061da-f2c0-4935-acca-1f1443f99b2a",
+      "seq": 2,
+      "status": "running",
+      "userMessageId": "msg_01M58JC50M89MVETPA9426XV9M",
+      "version": 1
+    },
+    "cancel": [
+      {
+        "http": 200,
+        "path": "/api/agent/v1/requests/46b061da-f2c0-4935-acca-1f1443f99b2a/cancel",
+        "response": {
+          "cancelRequested": true,
+          "committedPreparations": 0,
+          "conversationId": "conv_01M58JC50M89MVETPA9426XV9K",
+          "id": "run_01M58JC50NP9NP4DFMZ3NPJNX9",
+          "preparations": [],
+          "presentation": {
+            "detailsTruncated": false,
+            "effectsMayHaveOccurred": false,
+            "messages": [],
+            "operations": [],
+            "status": "running",
+            "userMessageId": "msg_01M58JC50M89MVETPA9426XV9M",
+            "version": 1,
+            "warning": null
+          },
+          "requestId": "46b061da-f2c0-4935-acca-1f1443f99b2a",
+          "seq": 3,
+          "status": "running",
+          "userMessageId": "msg_01M58JC50M89MVETPA9426XV9M",
+          "version": 1
+        }
+      }
+    ]
+  },
+  "terminal": {
+    "schema_version": 1,
+    "version": 1,
+    "id": "run_01M58JC50NP9NP4DFMZ3NPJNX9",
+    "requestId": "46b061da-f2c0-4935-acca-1f1443f99b2a",
+    "conversationId": "conv_01M58JC50M89MVETPA9426XV9K",
+    "userMessageId": "msg_01M58JC50M89MVETPA9426XV9M",
+    "status": "cancelled",
+    "seq": 5,
+    "cancelRequested": true,
+    "committedPreparations": 0,
+    "preparations": [],
+    "presentation": {
+      "version": 1,
+      "userMessageId": "msg_01M58JC50M89MVETPA9426XV9M",
+      "status": "cancelled",
+      "operations": [],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request.",
+      "detailsTruncated": false
+    }
+  }
+}

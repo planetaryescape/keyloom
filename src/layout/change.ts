@@ -38,9 +38,9 @@ export const ChangeOpSchema = z.discriminatedUnion("op", [
     layerId: z.string().min(1),
     shortLabel: LayerSchema.shape.shortLabel.unwrap().nullable(),
     color: LayerSchema.shape.color.unwrap().nullable(),
-  }),
+  }).describe("On-screen layer colour and label in keyloom, supported on every board; not hardware LEDs. color is a palette index 1 to 6, or null for the default. Both fields are replaced: preserve current shortLabel when only changing colour, or null if absent. Physical LED colours use setLayerLighting."),
   // Replaces the layer's whole lighting (D-190); null removes it, so the layer sets no LED colours.
-  z.object({ op: z.literal("setLayerLighting"), layerId: z.string().min(1), lighting: LayerLightingSchema.nullable() }),
+  z.object({ op: z.literal("setLayerLighting"), layerId: z.string().min(1), lighting: LayerLightingSchema.nullable().describe("Physical keyboard LED colours, subject to board lighting support. Not the on-screen layer colour; use setLayerStyle for that.") }),
   z.object({ op: z.literal("upsertMacro"), macro: MacroSchema }),
   z.object({ op: z.literal("removeMacro"), macroId: z.string().min(1) }),
   z.object({ op: z.literal("upsertTapDance"), tapDance: TapDanceSchema }),

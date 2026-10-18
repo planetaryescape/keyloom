@@ -1,0 +1,32 @@
+{
+  "prepare": [
+    "/opt/homebrew/Cellar/bun/1.3.14/bin/bun",
+    "/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-agent-closeout/scripts/spikes/agent-release-smoke.ts",
+    "--binary",
+    "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-focus-0421-install-e8hjxff3/keyloom-26b-candidate-19c6ce52",
+    "--scratch",
+    "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-compiled-acceptance-01",
+    "--prepare-only"
+  ],
+  "server": [
+    "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-focus-0421-install-e8hjxff3/keyloom-26b-candidate-19c6ce52",
+    "--data-dir",
+    "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-26b-compiled-acceptance-01/data",
+    "serve",
+    "--no-open",
+    "--port",
+    "4510",
+    "--provider",
+    "codex"
+  ],
+  "inspectionCommands": [
+    "agent show <run-or-request-id>",
+    "conversations list <layout>",
+    "conversations show <id>",
+    "config list --archived",
+    "autosync status zsa/moonlander",
+    "--version"
+  ],
+  "browserSession": "keyloom-agent-26b-acceptance",
+  "transportInstrumentation": "hold unchanged acceptance POST before fetch, or unchanged acknowledgement after fetch; pass all other requests through; no request headers retained"
+}

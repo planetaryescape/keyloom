@@ -1,0 +1,96 @@
+- region "Ask keyloom" [ref=e11]
+  - paragraph
+    - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+  - status
+  - log "Conversation" [ref=e58] focusable [tabindex]
+    - paragraph
+      - StaticText "You"
+    - paragraph
+      - StaticText "Compiled 26b crash recovery: prepare one synthetic receipt copy and wait. No keyboard changes."
+    - paragraph
+      - StaticText "Moonlander · 26a synthetic Moonlander"
+    - paragraph
+      - StaticText "keyloom"
+    - status
+      - StaticText "Connection lost · outcome not confirmed"
+    - paragraph
+      - StaticText "Execution was interrupted. Saved preparation remains; nothing was automatically rerun. Stop is not rollback."
+    - button "2 completed steps · working notes" [expanded=true, ref=e59]
+      - StaticText "2 completed steps · working notes"
+    - generic
+      - paragraph
+        - StaticText "Preparing a synthetic compiled crash receipt copy."
+      - list "Agent operations"
+        - listitem [level=1]
+          - paragraph
+            - StaticText "Create config"
+          - paragraph
+            - StaticText "1 prepared config"
+          - StaticText "Completed"
+          - StaticText "2 ms"
+        - listitem [level=1]
+          - paragraph
+            - StaticText "Saved preparation receipt"
+          - paragraph
+            - StaticText "config: lay_01M58JCBMNMATT2M6P6KF7Q3K7"
+          - paragraph
+            - StaticText "Committed locally. Any unfinished operation remains unconfirmed."
+          - StaticText "Completed"
+  - form
+    - textbox "Message to keyloom" [ref=e60]
+    - button "More" [expanded=false, ref=e62]
+    - button "Close (Esc)" [ref=e61]
+      - StaticText "esc"
+- paragraph
+  - StaticText "Editing Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "You"
+- paragraph
+  - StaticText "Compiled 26b crash recovery: prepare one synthetic receipt copy and wait. No keyboard changes."
+- paragraph
+  - StaticText "Moonlander · 26a synthetic Moonlander"
+- paragraph
+  - StaticText "keyloom"
+- status
+  - StaticText "Connection lost · outcome not confirmed"
+- paragraph
+  - StaticText "Execution was interrupted. Saved preparation remains; nothing was automatically rerun. Stop is not rollback."
+- button "2 completed steps · working notes" [expanded=true, ref=e59]
+  - StaticText "2 completed steps · working notes"
+- generic
+  - paragraph
+    - StaticText "Preparing a synthetic compiled crash receipt copy."
+  - list "Agent operations"
+    - listitem [level=1]
+      - paragraph
+        - StaticText "Create config"
+      - paragraph
+        - StaticText "1 prepared config"
+      - StaticText "Completed"
+      - StaticText "2 ms"
+    - listitem [level=1]
+      - paragraph
+        - StaticText "Saved preparation receipt"
+      - paragraph
+        - StaticText "config: lay_01M58JCBMNMATT2M6P6KF7Q3K7"
+      - paragraph
+        - StaticText "Committed locally. Any unfinished operation remains unconfirmed."
+      - StaticText "Completed"
+- textbox "Message to keyloom" [ref=e60]
+- button "More" [expanded=false, ref=e62]
+- button "Close (Esc)" [ref=e61]
+  - StaticText "esc"
+- StaticText "Connection lost · outcome not confirmed"
+- paragraph
+  - StaticText "Create config"
+- paragraph
+  - StaticText "1 prepared config"
+- StaticText "Completed"
+- StaticText "2 ms"
+- paragraph
+  - StaticText "Saved preparation receipt"
+- paragraph
+  - StaticText "config: lay_01M58JCBMNMATT2M6P6KF7Q3K7"
+- paragraph
+  - StaticText "Committed locally. Any unfinished operation remains unconfirmed."
+- StaticText "Completed"

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "id": "run_01M58JZGJVFATK0G73F4XZJMJA",
+  "requestId": "04dce1ff-ecf4-46aa-b96c-40dc88815b22",
+  "conversationId": "conv_01M58JZGJVFATK0G73F4XZJMJ8",
+  "userMessageId": "msg_01M58JZGJVFATK0G73F4XZJMJ9",
+  "status": "running",
+  "seq": 6,
+  "cancelRequested": false,
+  "committedPreparations": 1,
+  "preparations": [
+    {
+      "operationId": "effect_1",
+      "tool": "create_config",
+      "references": [
+        {
+          "kind": "config",
+          "id": "lay_01M58JZGZYD24V60JTBYZP4SEN"
+        }
+      ]
+    }
+  ],
+  "presentation": {
+    "version": 1,
+    "userMessageId": "msg_01M58JZGJVFATK0G73F4XZJMJ9",
+    "status": "running",
+    "operations": [
+      {
+        "id": "op_1",
+        "tool": "create_config",
+        "label": "Create config",
+        "status": "succeeded",
+        "durationMs": 1,
+        "validationCodes": [],
+        "references": [
+          {
+            "kind": "config",
+            "id": "lay_01M58JZGZYD24V60JTBYZP4SEN"
+          }
+        ],
+        "accepted": 0,
+        "declined": 0
+      }
+    ],
+    "messages": [
+      {
+        "id": "public_1",
+        "kind": "working_note",
+        "text": "Preparing the public-release crash receipt copy."
+      }
+    ],
+    "effectsMayHaveOccurred": true,
+    "warning": null,
+    "detailsTruncated": false
+  }
+}

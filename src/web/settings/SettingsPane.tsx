@@ -72,7 +72,7 @@ export function SettingsPane(props: Props) {
   const others = otherSettings(layout, board).filter((s) => needle === "" || s.key.toLowerCase().includes(needle));
   const colourways = board.display?.colourways;
   const showColourway = colourways !== undefined && (needle === "" || "your keyboard's colour colourway color black white grey theme case keycaps caps".includes(needle));
-  const showLighting = board.lighting !== undefined && (needle === "" || "layer colours lighting led rgb".includes(needle) || "colour".includes(needle));
+  const showLighting = needle === "" || "layer colours colors lighting led rgb on-screen display".includes(needle) || "colour".includes(needle);
 
   function stage(spec: OptionSpec, value: number | boolean) {
     setProblem(null);
@@ -157,7 +157,7 @@ export function SettingsPane(props: Props) {
         })}
         {props.offer}
         {showLighting ? (
-          <LightingSection layout={layout} draft={lighting} onChange={onLighting} currentLayerId={props.currentLayerId} onShowLayer={props.onShowLayer} />
+          <LightingSection board={board} layout={layout} draft={lighting} onChange={onLighting} currentLayerId={props.currentLayerId} onShowLayer={props.onShowLayer} />
         ) : null}
         {shown.length === 0 && !showLighting && !showColourway && others.length === 0 ? <p className="muted settings-empty">Nothing matches &ldquo;{filter}&rdquo;.</p> : null}
         <OtherSettings layout={layout} settings={others} />

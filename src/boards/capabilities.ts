@@ -1,11 +1,14 @@
 // What a board can do that a layout may ask for, as facts the agent and the validator quote
-// (20#capabilities). The model holds all of these for both firmwares except per-key colours, which
+// (20#capabilities). The model holds all of these for both firmwares except per-key hardware LED colours, which
 // need a LED table in board.json, so the one thing that varies by board is lighting.
 import type { BoardDefinition } from "./schema.ts";
 
 export type Capability = { supported: boolean; /** Why not, in a sentence people can read; present when unsupported. */ because?: string };
 
 export type BoardCapabilities = {
+  /** keyloom's on-screen layer colours and labels, independent of physical LEDs. */
+  layerStyle: Capability;
+  /** Physical per-key LED output supported by this board's firmware adapter. */
   lighting: Capability;
   combos: Capability;
   tapDance: Capability;
@@ -18,6 +21,7 @@ const DEFAULT_LIGHTING_LIMIT = "keyloom does not write per-key lighting for this
 export function boardCapabilities(def: BoardDefinition): BoardCapabilities {
   const yes: Capability = { supported: true };
   return {
+    layerStyle: yes,
     lighting: def.lighting === undefined ? { supported: false, because: def.limits?.lighting ?? DEFAULT_LIGHTING_LIMIT } : yes,
     combos: yes,
     tapDance: yes,
@@ -26,14 +30,20 @@ export function boardCapabilities(def: BoardDefinition): BoardCapabilities {
   };
 }
 
-/** The sentence for a refused colour edit: the board's own words, no firmware vocabulary beyond what its limit says. */
-export const lightingRefusal = (def: BoardDefinition): string => `${def.name} can't show per-key colours because ${boardCapabilities(def).lighting.because ?? DEFAULT_LIGHTING_LIMIT}.`;
+/** The sentence for a refused physical LED edit; it does not limit keyloom's display styling. */
+export const lightingRefusal = (def: BoardDefinition): string => `${def.name} can't show per-key hardware LED colours because ${boardCapabilities(def).lighting.because ?? DEFAULT_LIGHTING_LIMIT}.`;
 
 /** One line for the agent: what the board supports, and the reason for what it doesn't. */
 export function capabilityLine(def: BoardDefinition): string {
-  const caps = boardCapabilities(def);
-  const names: Record<keyof BoardCapabilities, string> = { lighting: "per-key colours", combos: "combos", tapDance: "tap dance", macros: "macros", holdTap: "hold-taps" };
-  const on = (Object.keys(names) as (keyof BoardCapabilities)[]).filter((k) => caps[k].supported).map((k) => names[k]);
-  const off = (Object.keys(names) as (keyof BoardCapabilities)[]).filter((k) => !caps[k].supported).map((k) => `${names[k]} (${caps[k].because})`);
-  return `Can do: ${on.join(", ")}.${off.length ? ` Cannot do: ${off.join("; ")}.` : ""}`;
+  const { layerStyle, ...caps } = boardCapabilities(def);
+  const features = [
+    { name: "per-key hardware LED colours", ...caps.lighting },
+    { name: "combos", ...caps.combos },
+    { name: "tap dance", ...caps.tapDance },
+    { name: "macros", ...caps.macros },
+    { name: "hold-taps", ...caps.holdTap },
+  ];
+  const on = features.filter((feature) => feature.supported).map((feature) => feature.name);
+  const off = features.filter((feature) => !feature.supported).map((feature) => `${feature.name} (${feature.because})`);
+  return `${layerStyle.supported ? "On-screen: layer colours and short labels (setLayerStyle; not keyboard LEDs). " : ""}Can do: ${on.join(", ")}.${off.length ? ` Cannot do: ${off.join("; ")}.` : ""}`;
 }

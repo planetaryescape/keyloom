@@ -1,0 +1,15 @@
+{
+  "uncaughtBrowserErrors": [],
+  "requestCount": 16,
+  "statusCounts": {
+    "200": 15,
+    "404": 1
+  },
+  "failedHttp": [
+    {
+      "method": "GET",
+      "path": "/favicon.ico",
+      "status": 404
+    }
+  ]
+}

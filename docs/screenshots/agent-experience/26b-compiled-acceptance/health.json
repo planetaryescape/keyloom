@@ -1,0 +1,68 @@
+{
+  "uncaughtBrowserErrors": [],
+  "capturedRequestCount": 162,
+  "statusCounts": {
+    "200": 144,
+    "404": 1,
+    "202": 9,
+    "None": 7,
+    "401": 1
+  },
+  "non200Examples": [
+    {
+      "method": "GET",
+      "path": "/favicon.ico",
+      "status": 404,
+      "type": "Other"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/v1/requests/fe081c97-2e5a-465e-a34c-70e9d298b36e/cancel",
+      "status": 202,
+      "type": "Fetch"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/v1/runs",
+      "status": 202,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/runs/run_01M58JBCTWHEFTCQRZM8M5STVT",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chat/provider",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/layouts/lay_01M58J963714Y9VBVZWVRS3RWZ/outcome-questions",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/runs/run_01M58JCB2GA8ZWG2ED46JKHH86",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "status": 401,
+      "type": "Fetch"
+    }
+  ],
+  "notes": "HTTP 202 is intentional acceptance/pending-Stop; favicon 404 is separate. Missing status near the intentional server crash is not certified as success."
+}

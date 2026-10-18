@@ -1,0 +1,24 @@
+{
+  "overall": "RED",
+  "firstWidth1440x900SaveCancelEscapeFocusPassed": true,
+  "savedModel": "qa-corrections-model-1440",
+  "providerLocked": false,
+  "failingResize": {
+    "from": [
+      1440,
+      900
+    ],
+    "to": [
+      1280,
+      577
+    ]
+  },
+  "modelTop": 746,
+  "modelBottom": 778,
+  "actionTop": 790,
+  "actionBottom": 822,
+  "smallestInvariant": "Open model input and Cancel/Save must remain reachable after resize",
+  "remainingJourneysExecuted": false,
+  "onlyAuthorizedFixtureApplyBeforeServer": true,
+  "noUIApply": true
+}

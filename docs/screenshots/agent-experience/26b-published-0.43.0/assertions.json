@@ -1,0 +1,34 @@
+{
+  "overall": "GREEN for bounded public 0.43.0 durable-preparation/question journeys",
+  "earlyPhoneStopIntentHttp": 202,
+  "earlyAcceptedStatus": "cancelled",
+  "earlyPreparations": 0,
+  "earlyFakeExecs": 0,
+  "earlyConfigCount": 1,
+  "earlyAcceptancePosts": 1,
+  "stopAfterAcceptanceNeeded": false,
+  "initialPhonePointerEmittedRequest": false,
+  "phoneKeyboardActivationRecordedIntent": true,
+  "separateDesktopNativePointerProbePassed": true,
+  "acceptedIdentityRepeatSameRun": true,
+  "repeatAddedConfig": false,
+  "closeReopenReloadStatus": "running",
+  "explicitStopStatus": "cancelled",
+  "explicitStopReceiptCount": 1,
+  "crashRecoveredStatus": "interrupted",
+  "visibleReceiptBothWidths": true,
+  "crashCounterBeforeAfter": [
+    3,
+    3
+  ],
+  "finalConfigCount": 3,
+  "questionAnswersAfterReload": [
+    "Keep first",
+    "Use second"
+  ],
+  "questionIdsDistinct": true,
+  "finalFakeExecCounter": 6,
+  "unattributedEarlierFakeExecCount": 1,
+  "privateCodexHomeEmpty": true,
+  "recordNullSink": true
+}

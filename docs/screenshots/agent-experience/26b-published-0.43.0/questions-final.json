@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "conversation": {
+    "id": "conv_01M58K1N0JFQMDYHRAR89HCB0A",
+    "layoutId": "lay_01M58JW5ZAHHJQ6FS8NYKYTEYV",
+    "title": "Public 0.43.0 consecutive questions: ask about two synthetic\u2026",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "createdAt": 1792363516946
+  },
+  "messages": [
+    {
+      "id": "msg_01M58K1N0JFQMDYHRAR89HCB0B",
+      "role": "user",
+      "text": "Public 0.43.0 consecutive questions: ask about two synthetic routes, one at a time. No config changes.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792363516947
+    },
+    {
+      "id": "msg_01M58K1NAXQ527QJ5TVBQYC6JQ",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792363517277,
+      "question": {
+        "question": "Keep the first public route?",
+        "options": [
+          {
+            "label": "Keep first"
+          },
+          {
+            "label": "Replace first"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "codex_c4d7de75-fa53-4ba4-9934-11fa47abdd2d_item_0",
+        "answer": "Keep first"
+      }
+    },
+    {
+      "id": "msg_01M58K1PMRX8WBJYVB0A56VSV4",
+      "role": "assistant",
+      "text": "",
+      "toolCalls": [
+        "ask_user"
+      ],
+      "selection": null,
+      "createdAt": 1792363518616,
+      "question": {
+        "question": "Use the second public route?",
+        "options": [
+          {
+            "label": "Use second"
+          },
+          {
+            "label": "Skip second"
+          }
+        ],
+        "allowOther": false,
+        "toolUseId": "codex_a9cdb8ef-d428-4a7d-a5ea-cfdc1d044100_item_0",
+        "answer": "Use second"
+      }
+    },
+    {
+      "id": "msg_01M58K1RD65DKKHWZHG0PXSBFH",
+      "role": "assistant",
+      "text": "Both public route choices are saved.",
+      "toolCalls": [],
+      "selection": null,
+      "createdAt": 1792363520422
+    }
+  ],
+  "proposals": [],
+  "preparationReceipts": [],
+  "priorities": [],
+  "presentations": [
+    {
+      "version": 1,
+      "userMessageId": "msg_01M58K1N0JFQMDYHRAR89HCB0B",
+      "questionToolUseId": "codex_c4d7de75-fa53-4ba4-9934-11fa47abdd2d_item_0",
+      "status": "completed",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 1,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    },
+    {
+      "version": 1,
+      "userMessageId": "msg_01M58K1PB26MHESKP20XM56Z5P",
+      "questionToolUseId": "codex_a9cdb8ef-d428-4a7d-a5ea-cfdc1d044100_item_0",
+      "status": "completed",
+      "operations": [
+        {
+          "id": "op_1",
+          "tool": "ask_user",
+          "label": "Ask a question",
+          "status": "succeeded",
+          "durationMs": 0,
+          "validationCodes": [],
+          "references": [],
+          "accepted": 0,
+          "declined": 0
+        }
+      ],
+      "messages": [],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    },
+    {
+      "version": 1,
+      "userMessageId": "msg_01M58K1R1QV3K3P8GYCCB9K11B",
+      "status": "completed",
+      "operations": [],
+      "messages": [
+        {
+          "id": "public_1",
+          "kind": "answer",
+          "text": "Both public route choices are saved.",
+          "messageId": "msg_01M58K1RD65DKKHWZHG0PXSBFH"
+        }
+      ],
+      "effectsMayHaveOccurred": false,
+      "warning": null,
+      "detailsTruncated": false
+    }
+  ]
+}

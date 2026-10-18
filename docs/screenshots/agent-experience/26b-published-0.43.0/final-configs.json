@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "configs": [
+    {
+      "id": "lay_01M58JZGZYD24V60JTBYZP4SEN",
+      "name": "0.43.0 crash receipt copy",
+      "board_id": "zsa/moonlander",
+      "board_name": "Moonlander",
+      "head_revision_id": "rev_01M58JZGZYD24V60JTBYZP4SEP",
+      "created_at": 1792363447294,
+      "updated_at": 1792363447294,
+      "on_keyboard": false,
+      "archived_at": null,
+      "copied_from": {
+        "layout_id": "lay_01M58JW5ZAHHJQ6FS8NYKYTEYV",
+        "layout_name": "26a synthetic Moonlander",
+        "revision_id": "rev_01M58JW5ZAHHJQ6FS8NYKYTEYW"
+      }
+    },
+    {
+      "id": "lay_01M58JZBRX6QP1ZE33A296R7QE",
+      "name": "0.43.0 saved-run copy",
+      "board_id": "zsa/moonlander",
+      "board_name": "Moonlander",
+      "head_revision_id": "rev_01M58JZBRX6QP1ZE33A296R7QF",
+      "created_at": 1792363441949,
+      "updated_at": 1792363441949,
+      "on_keyboard": false,
+      "archived_at": null,
+      "copied_from": {
+        "layout_id": "lay_01M58JW5ZAHHJQ6FS8NYKYTEYV",
+        "layout_name": "26a synthetic Moonlander",
+        "revision_id": "rev_01M58JW5ZAHHJQ6FS8NYKYTEYW"
+      }
+    },
+    {
+      "id": "lay_01M58JW5ZAHHJQ6FS8NYKYTEYV",
+      "name": "26a synthetic Moonlander",
+      "board_id": "zsa/moonlander",
+      "board_name": "Moonlander",
+      "head_revision_id": "rev_01M58JW5ZAHHJQ6FS8NYKYTEYW",
+      "created_at": 1792363337706,
+      "updated_at": 1792363337706,
+      "on_keyboard": true,
+      "archived_at": null,
+      "copied_from": null
+    }
+  ]
+}

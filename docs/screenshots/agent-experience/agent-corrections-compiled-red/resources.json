@@ -1,0 +1,15 @@
+{
+  "binary": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-focus-0421-install-e8hjxff3/keyloom-corrections-candidate",
+  "sha256": "214390edc85e2a99c2107c2daca2105a9d34a11a6f69ef778c44404ab46f614e",
+  "source": "4ecc7df730ae0a54da200c722ce47307169d9f66",
+  "tree": "aaa8d174f4720c8c2e83d75c9b084b44f866e552",
+  "src": "636e1dc1de69f7881dc571c111a01618ebf4f005",
+  "scratch": "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-agent-corrections-compiled",
+  "budgetBytes": 1073741824,
+  "serverPid": 11184,
+  "port": 4510,
+  "browser": "keyloom-agent-26b-acceptance",
+  "providerLocked": false,
+  "codexHomeEmpty": true,
+  "recordNullSink": true
+}

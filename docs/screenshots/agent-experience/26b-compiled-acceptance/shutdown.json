@@ -1,0 +1,12 @@
+{
+  "server1Pid": 47704,
+  "server1Exit": -9,
+  "server1Reason": "intentional SIGKILL only to owned group",
+  "server2Pid": 49403,
+  "server2Exit": 0,
+  "server2Reason": "owned SIGINT, drained normally",
+  "browserClosed": true,
+  "noUnexpectedServerErrorMarker": true,
+  "phoneFollowUpServerPid": 51555,
+  "phoneFollowUpExit": 0
+}

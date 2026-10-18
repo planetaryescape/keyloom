@@ -1,6 +1,6 @@
 # Inspect the same saved agent work
 
-Use the versioned run routes or `keyloom agent` commands to inspect accepted work without asking the model to execute it again. This is a candidate contract, not a released-feature claim. Conversations remain layout-owned; Q31/Q32 and new capabilities are not part of this slice.
+Use the versioned run routes or `keyloom agent` commands to inspect accepted work without asking the model to execute it again. This contract shipped in v0.43.0. Conversations remain layout-owned; Q31/Q32 and new capabilities are not part of this slice.
 
 ## Accept and inspect
 
@@ -75,4 +75,4 @@ bunx tsc --noEmit
 bun run depcruise
 ```
 
-See [implementation evidence](26b-implementation.md) for the exact source and checks. Parent integration, compiled/published browser journeys and release remain separate gates.
+See [implementation evidence](26b-implementation.md) for the source checks and [public v0.43.0 acceptance](../../screenshots/agent-experience/26b-published-0.43.0/README.md) for the installed CLI and bundled-web journeys. That evidence does not certify native WebKit, paid-provider behaviour or hardware.

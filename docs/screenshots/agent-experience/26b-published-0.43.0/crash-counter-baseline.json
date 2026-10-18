@@ -1,0 +1,5 @@
+{
+  "fakeExecsBeforeCrash": 3,
+  "configCount": 3,
+  "note": "Exact pre-crash baseline observed, not inferred from scenario count."
+}

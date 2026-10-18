@@ -1,5 +1,6 @@
 import { Cpu } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { chooseProvider } from "./api-chat.ts";
 import type { Pinned } from "./transcript.ts";
@@ -28,12 +29,83 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const id = useId();
+  const bar = useRef<HTMLDivElement>(null);
+  const picker = useRef<HTMLFormElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const shownOpen = menuOpened === undefined ? open : menuOpened.open && open;
   // Opened from the bar's menu: start from what the next conversation would use, each time it opens.
   const outsideOpen = menuOpened?.open ?? false;
   useEffect(() => {
     if (outsideOpen) start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outsideOpen]);
+
+  useLayoutEffect(() => {
+    const element = picker.current;
+    if (!shownOpen || element === null) return;
+    const chat = bar.current?.closest(".chat");
+    const trigger = chat?.querySelector<HTMLElement>(".bar-more, .provider-change")
+      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    returnFocus.current = trigger;
+    const position = () => {
+      const viewport = window.visualViewport;
+      const left = viewport?.offsetLeft ?? 0;
+      const top = viewport?.offsetTop ?? 0;
+      const width = viewport?.width ?? window.innerWidth;
+      const height = viewport?.height ?? window.innerHeight;
+      element.style.width = `${Math.max(0, Math.min(340, width - 24))}px`;
+      element.style.maxHeight = `${Math.max(0, height - 24)}px`;
+      const anchor = trigger?.getBoundingClientRect() ?? bar.current?.getBoundingClientRect();
+      const bounds = element.getBoundingClientRect();
+      const x = Math.max(left + 12, Math.min(anchor?.left ?? left + 12, left + width - bounds.width - 12));
+      const above = (anchor?.top ?? top + 12) - bounds.height - 8;
+      const below = (anchor?.bottom ?? top + 12) + 8;
+      const y = above >= top + 12 ? above : Math.min(below, top + height - bounds.height - 12);
+      element.style.left = `${x}px`;
+      // The anchor may still have its pre-resize position when the viewport has changed.
+      // Placement preference never overrides the final viewport bounds.
+      element.style.top = `${Math.max(top + 12, Math.min(y, top + height - bounds.height - 12))}px`;
+    };
+    position();
+    element.querySelector<HTMLInputElement>("input:checked, input:not([disabled])")?.focus({ preventScroll: true });
+    let frame = 0;
+    const schedulePosition = () => {
+      if (frame !== 0) return;
+      frame = window.requestAnimationFrame(() => { frame = 0; position(); });
+    };
+    const observer = new ResizeObserver(schedulePosition);
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !element.contains(event.target)) {
+        setOpen(false);
+        menuOpened?.onClose();
+      }
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("keydown", escape, true);
+    observer.observe(element);
+    // The shell can finish resizing the chat after the window's resize frame.
+    if (chat) observer.observe(chat);
+    window.addEventListener("resize", schedulePosition);
+    window.addEventListener("scroll", schedulePosition, true);
+    window.visualViewport?.addEventListener("resize", schedulePosition);
+    window.visualViewport?.addEventListener("scroll", schedulePosition);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", escape, true);
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedulePosition);
+      window.removeEventListener("scroll", schedulePosition, true);
+      window.visualViewport?.removeEventListener("resize", schedulePosition);
+      window.visualViewport?.removeEventListener("scroll", schedulePosition);
+    };
+  }, [shownOpen]);
 
   if (status === null && pinned === null) return null;
   const shown = pinned ? { provider: pinned.provider, model: pinned.model } : (status?.active ?? null);
@@ -66,13 +138,13 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
   }
 
   const locked = status?.lockedBy ?? null;
-  const shownOpen = menuOpened === undefined ? open : menuOpened.open && open;
   const close = () => {
     setOpen(false);
     menuOpened?.onClose();
+    if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true });
   };
   return (
-    <div className="provider-bar" data-from-menu={menuOpened !== undefined}>
+    <div ref={bar} className="provider-bar" data-from-menu={menuOpened !== undefined}>
       {menuOpened !== undefined ? null : <p className="chat-provider">
         <Cpu size={12} aria-hidden="true" />
         {shown === null ? (
@@ -92,14 +164,21 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
       {saved === null || open || menuOpened !== undefined ? null : (
         <p className="provider-saved" role="status">{pinned === null ? saved : `${saved} This conversation stays on ${NAMES[pinned.provider]}.`}</p>
       )}
-      {!shownOpen || status === null ? null : (
+      {!shownOpen || status === null ? null : createPortal(
         <form
+          ref={picker}
+          role="dialog"
+          aria-label="Model for the next conversation"
           className="provider-picker"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
+          }}
           onSubmit={(event) => {
             event.preventDefault();
             void save();
           }}
         >
+          <div className="provider-picker-content">
           <fieldset disabled={saving || locked !== null}>
             <legend>Model for the next conversation</legend>
             {status.providers.map((candidate) => (
@@ -133,11 +212,12 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
             <p className="muted">{NAMES[chosen.id]} has no credential yet. You can choose it now; set it up before the next conversation: <code>{chosen.command}</code></p>
           )}
           {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
+          </div>
           <div className="provider-actions">
-            {menuOpened === undefined ? null : <button type="button" className="button" onClick={close}>Cancel</button>}
+            <button type="button" className="button" onClick={close}>Cancel</button>
             <button type="submit" className="button button-primary" disabled={saving || locked !== null}>Use for new conversations</button>
           </div>
-        </form>
+        </form>, document.body
       )}
     </div>
   );

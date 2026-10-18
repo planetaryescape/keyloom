@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "id": "run_01M58HSBYS8ZTA4M02F16EKT6G",
+  "requestId": "e70908ab-9e41-4cec-b89b-915f215e3cc8",
+  "conversationId": "conv_01M58HSBYS8ZTA4M02F16EKT6E",
+  "userMessageId": "msg_01M58HSBYS8ZTA4M02F16EKT6F",
+  "status": "running",
+  "seq": 6,
+  "cancelRequested": false,
+  "committedPreparations": 1,
+  "preparations": [
+    {
+      "operationId": "effect_1",
+      "tool": "create_config",
+      "references": [
+        {
+          "kind": "config",
+          "id": "lay_01M58HSC7EW0ZZJX2VA43N2MGM"
+        }
+      ]
+    }
+  ],
+  "presentation": {
+    "version": 1,
+    "userMessageId": "msg_01M58HSBYS8ZTA4M02F16EKT6F",
+    "status": "running",
+    "operations": [
+      {
+        "id": "op_1",
+        "tool": "create_config",
+        "label": "Create config",
+        "status": "succeeded",
+        "durationMs": 2,
+        "validationCodes": [],
+        "references": [
+          {
+            "kind": "config",
+            "id": "lay_01M58HSC7EW0ZZJX2VA43N2MGM"
+          }
+        ],
+        "accepted": 0,
+        "declined": 0
+      }
+    ],
+    "messages": [
+      {
+        "id": "public_1",
+        "kind": "working_note",
+        "text": "I will prepare one synthetic saved-run copy and wait."
+      }
+    ],
+    "effectsMayHaveOccurred": true,
+    "warning": null,
+    "detailsTruncated": false
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "authorization": "One pre-server SQLite-only CLI fixture Apply, SYN label only, preserve color; no other Apply authorized",
+  "commands": [
+    {
+      "args": [
+        "autosync",
+        "status",
+        "zsa/moonlander"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "autosync",
+        "status",
+        "moergo/glove80"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "layout",
+        "show",
+        "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "change",
+        "check",
+        "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8",
+        "--ops",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-agent-corrections-compiled/label-seed-ops.json"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "change",
+        "propose",
+        "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8",
+        "--ops",
+        "/private/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/opencode/keyloom-agent-corrections-compiled/label-seed-ops.json",
+        "--explain",
+        "Authorized synthetic SYN label fixture; display only"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "change",
+        "apply",
+        "cs_01M58MHDP62ZR9A724Y2PFXD75"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "layout",
+        "show",
+        "lay_01M58MH1TEPHSZEQ6RXNE2CPJ8"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "autosync",
+        "status",
+        "zsa/moonlander"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "autosync",
+        "status",
+        "moergo/glove80"
+      ],
+      "exit": 0
+    }
+  ],
+  "seedOps": [
+    {
+      "op": "setLayerStyle",
+      "layerId": "layer-base",
+      "shortLabel": "SYN",
+      "color": null
+    }
+  ],
+  "applied": {
+    "schema_version": 1,
+    "revision_id": "rev_01M58MHDXGRJGW42BGT81MYWQD",
+    "change_set_id": "cs_01M58MHDP62ZR9A724Y2PFXD75",
+    "decision_id": null,
+    "validation": {
+      "ok": true,
+      "errors": [],
+      "warnings": [
+        {
+          "layerId": "layer-magic",
+          "code": "layer_trap",
+          "message": "layer \"layer-magic\" is entered with toggle or to but has no key that leads back to the base layer (already so before this change)",
+          "plain": "Layer Magic has no key that gets back to Base, so you could get stuck on it. It was already like this before your change.",
+          "slots": [
+            {
+              "layerId": "layer-nav",
+              "position": 12
+            }
+          ]
+        }
+      ],
+      "diff": {
+        "changed": [],
+        "displaced": [],
+        "dropped": [],
+        "relearnCount": 0,
+        "retuned": [],
+        "reminders": []
+      }
+    }
+  },
+  "syncBuildFlashTableCounts": {
+    "builds": 0,
+    "flashes": 0,
+    "board_sync": 2,
+    "syncs": 0
+  },
+  "headAfter": "rev_01M58MHDXGRJGW42BGT81MYWQD",
+  "bothAutosyncOff": true
+}

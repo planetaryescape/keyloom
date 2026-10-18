@@ -191,7 +191,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const chatOpen = sidebar === "chat";
   const setChatOpen = sidebarSetter("chat");
   const [chatActivity, setChatActivity] = useState<{ stop: () => void } | null>(null);
-  const [carriedThread] = useState<CarriedThread | null>(() => chrome.arrival?.thread ?? null);
+  const [carriedThread, setCarriedThread] = useState<CarriedThread | null>(() => chrome.arrival?.thread ?? null);
   const turnsNow = useRef<readonly Turn[]>([]);
   // Where the open conversation reads (D-310): the bar at the stage's foot, or the panel beside the board.
   const [chatPresentation, setChatPresentation] = useState<"bar" | "panel">("bar");
@@ -1501,6 +1501,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 commands={chatCommands}
                 drafts={chatDrafts}
                 carried={carriedThread}
+                onClearCarried={() => setCarriedThread(null)}
                 onTurns={(turns) => {
                   turnsNow.current = turns;
                 }}

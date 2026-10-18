@@ -93,12 +93,12 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
     <div className="msg msg-assistant" data-phase={turn.phase}>
       <p className="msg-who">keyloom</p>
       <PriorityChips priorities={turn.priorities} layout={layout} onRemove={onRemovePriority} />
+      <AgentWorking view={work} motionPaused={motionPaused} />
       {/* Hidden from the live region until the reply is whole, so a screen reader hears it once, not token by token. */}
       <div aria-hidden={streaming || undefined}>
         {turn.text === "" ? null : <Markdown source={turn.text} />}
         {turn.phase === "done" && offers > 0 ? <p className="sr-only">keyloom offered {offers} {offers === 1 ? "option" : "options"}.</p> : null}
       </div>
-      <AgentWorking view={work} motionPaused={motionPaused} />
       {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
       {turn.phase === "stopped" ? <p className="msg-note">Stopped. Configs or proposals prepared before Stop may remain.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "id": "run_01M58HQPYE23GGRKAPN4VSZ598",
+  "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+  "conversationId": "conv_01M58HQPYD58027GKPP7T5K1P2",
+  "userMessageId": "msg_01M58HQPYD58027GKPP7T5K1P3",
+  "status": "cancelled",
+  "seq": 9,
+  "cancelRequested": true,
+  "committedPreparations": 1,
+  "preparations": [
+    {
+      "operationId": "effect_1",
+      "tool": "create_config",
+      "references": [
+        {
+          "kind": "config",
+          "id": "lay_01M58HQQ8PTGS674MGQPWGS4E9"
+        }
+      ]
+    }
+  ],
+  "presentation": {
+    "version": 1,
+    "userMessageId": "msg_01M58HQPYD58027GKPP7T5K1P3",
+    "status": "cancelled",
+    "operations": [
+      {
+        "id": "op_1",
+        "tool": "create_config",
+        "label": "Create config",
+        "status": "succeeded",
+        "durationMs": 3,
+        "validationCodes": [],
+        "references": [
+          {
+            "kind": "config",
+            "id": "lay_01M58HQQ8PTGS674MGQPWGS4E9"
+          }
+        ],
+        "accepted": 0,
+        "declined": 0
+      }
+    ],
+    "messages": [
+      {
+        "id": "public_1",
+        "kind": "working_note",
+        "text": "I will prepare the synthetic pre-acceptance Stop probe copy."
+      }
+    ],
+    "effectsMayHaveOccurred": true,
+    "warning": "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request.",
+    "detailsTruncated": false
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "acceptanceBody": {
+    "input": {
+      "message": "26b pre-acceptance Stop probe: prepare one synthetic copy and wait. No keyboard changes."
+    },
+    "layoutRef": "lay_01M58HQ1XWV3FM500NR848VQ7N",
+    "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+    "version": 1
+  },
+  "accepted": {
+    "cancelRequested": false,
+    "committedPreparations": 0,
+    "conversationId": "conv_01M58HQPYD58027GKPP7T5K1P2",
+    "id": "run_01M58HQPYE23GGRKAPN4VSZ598",
+    "preparations": [],
+    "presentation": {
+      "detailsTruncated": false,
+      "effectsMayHaveOccurred": false,
+      "messages": [],
+      "operations": [],
+      "status": "running",
+      "userMessageId": "msg_01M58HQPYD58027GKPP7T5K1P3",
+      "version": 1,
+      "warning": null
+    },
+    "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+    "seq": 2,
+    "status": "running",
+    "userMessageId": "msg_01M58HQPYD58027GKPP7T5K1P3",
+    "version": 1
+  },
+  "records": [
+    {
+      "method": "POST",
+      "path": "/api/agent/v1/runs/df5a9979-7cd4-439b-af85-a2306ee5e792/cancel",
+      "status": 404
+    },
+    {
+      "cancelRequested": false,
+      "id": "run_01M58HQPYE23GGRKAPN4VSZ598",
+      "method": "POST",
+      "path": "/api/agent/v1/runs",
+      "preparationCount": 0,
+      "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+      "runStatus": "running",
+      "status": 202
+    },
+    {
+      "cancelRequested": false,
+      "id": "run_01M58HQPYE23GGRKAPN4VSZ598",
+      "method": "GET",
+      "path": "/api/agent/v1/runs/run_01M58HQPYE23GGRKAPN4VSZ598",
+      "preparationCount": 0,
+      "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+      "runStatus": "running",
+      "status": 200
+    },
+    {
+      "cancelRequested": false,
+      "id": "run_01M58HQPYE23GGRKAPN4VSZ598",
+      "method": "GET",
+      "path": "/api/agent/v1/runs/run_01M58HQPYE23GGRKAPN4VSZ598",
+      "preparationCount": 0,
+      "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+      "runStatus": "running",
+      "status": 200
+    },
+    {
+      "cancelRequested": false,
+      "id": "run_01M58HQPYE23GGRKAPN4VSZ598",
+      "method": "GET",
+      "path": "/api/agent/v1/runs/run_01M58HQPYE23GGRKAPN4VSZ598",
+      "preparationCount": 1,
+      "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+      "runStatus": "running",
+      "status": 200
+    },
+    {
+      "cancelRequested": false,
+      "id": "run_01M58HQPYE23GGRKAPN4VSZ598",
+      "method": "GET",
+      "path": "/api/agent/v1/runs/run_01M58HQPYE23GGRKAPN4VSZ598",
+      "preparationCount": 1,
+      "requestId": "df5a9979-7cd4-439b-af85-a2306ee5e792",
+      "runStatus": "running",
+      "status": 200
+    }
+  ]
+}
