@@ -1,0 +1,1751 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keyloom · proposed agent moments</title>
+<style>
+/*
+ * Design tokens: "the keyboard under the light" (23-design-concept.md, D-260).
+ *
+ * The theme is the room the board sits in; the board's colourway follows it (black caps in the dark room, white in the light one, D-262).
+ * Chrome is ink and greys only. Colour belongs to the board's light: a layer's colour, its LEDs, amber for a change that isn't on the
+ * keyboard yet and green for one that is (D-263). Every text pair here is checked by test/web/contrast.test.ts.
+ *
+ * Dark is the default under prefers-color-scheme: dark; [data-theme] forces either theme. CSS can't share one declaration between a
+ * media query and an attribute, so the dark block is written twice and a test keeps the two identical.
+ *
+ * The --color-* and --cap-* names below the concept's own are the older names other stylesheets still use. They hold the new values,
+ * so every screen takes the new look at once; they go as each screen is rebuilt.
+ */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  /* the room */
+  --room: #e4e5e8;
+  --room-spot: #f8f8f9;
+  --room-floor: #d9dade;
+  /* text */
+  --ink: #141519;
+  --ink-2: #464a52;
+  --ink-3: #5f636c;
+  /* chrome surfaces */
+  --surface: #ffffff;
+  --surface-2: #f3f3f5;
+  --surface-3: #e8e9ec;
+  --line: rgb(16 18 24 / 0.09);
+  --line-2: rgb(16 18 24 / 0.16);
+  --primary: #141519;
+  --primary-ink: #ffffff;
+  --scrim: rgb(214 215 219 / 0.62);
+  --card-shadow: 0 30px 70px rgb(30 34 48 / 0.18), 0 3px 10px rgb(30 34 48 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  /* the light's meanings */
+  --pending: #a86500;
+  --pending-ink: #7a4500;
+  --ok: #16a05a;
+  --ok-ink: #13723f;
+  --bad: #c0362c;
+  --bad-ink: #a3170f;
+  /* the board: white colourway */
+  --case-hi: #fbfbfa;
+  --case-lo: #e9e9e7;
+  --case-rim: rgb(255 255 255 / 1);
+  --case-shadow: rgb(40 44 60 / 0.28);
+  --case-seam: rgb(40 44 60 / 0.42);
+  --leg: #8e9095;
+  --leg-rim: rgb(40 44 60 / 0.35);
+  --knob: #6f7277;
+  --knurl: #45474c;
+  --hole: #2a2c31;
+  /* A trackball (display.case "ball"): a lit sphere in a dark socket, so it reads as a ball on a pale case as on a dark one. */
+  --ball-hi: #ffffff;
+  --ball-lo: #6f727a;
+  --ball-socket: #2a2c31;
+  --ball-socket-rim: rgb(40 44 60 / 0.35);
+  --finding: #d23a52;
+  --finding-ink: #b0263d;
+  --rec: #e0324a;
+  --screen: #17181b;
+  --screen-rim: rgb(0 0 0 / 0.5);
+  --well: rgb(40 44 60 / 0.09);
+  --skirt-hi: #efefee;
+  --skirt-lo: #d3d4d6;
+  --top-hi: #ffffff;
+  --top-lo: #f5f5f4;
+  --top-rim: rgb(255 255 255 / 1);
+  --legend: #1a1b1e;
+  --front: #3f4249;
+  --ghost: #50535a;
+  --cap-drop: rgb(40 44 60 / 0.26);
+  --red-skirt-hi: #b83026;
+  --red-skirt-lo: #9a231c;
+  --red-top-hi: #cf4037;
+  --red-top-lo: #c23a30;
+  --red-legend: #ffffff;
+  --red-front: #ffe9e6;
+  --alu-hi: #e9eaec;
+  --alu-lo: #d4d6d9;
+  --mac-key: #1a1b1d;
+  --mac-well: #0c0c0d;
+  --grille-hole: rgb(40 44 60 / 0.45);
+  --mac-top: #26272a;
+  --mac-legend: #e4e5e7;
+  --bleed: 0.55;
+  --glow: 0.42;
+  --spot-dim: rgb(214 215 219 / 0.62);
+
+  /* Older names, holding the new values. */
+  --color-page: #e4e5e8;
+  --color-surface: #ffffff;
+  --color-panel: #f3f3f5;
+  --color-border: #d9dade;
+  --color-border-strong: #84878f;
+  --color-text: #141519;
+  --color-text-muted: #464a52;
+  --color-focus: #141519;
+  --color-error: #a3170f;
+  --color-error-bg: #fdecea;
+  --color-accent: #141519;
+  --color-accent-bg: #e8e9ec;
+  --color-warning: #7a4500;
+  --color-warning-bg: #fdf1d9;
+  --color-success: #13723f;
+  --color-success-bg: #e3f4ea;
+
+  /* Kind tints, drawn only under Inspect (D-264). Each ink keeps 4.5:1 on its tint. */
+  --cap-key: #f5f5f4;
+  --cap-key-ink: #1a1b1e;
+  --cap-modifier: #dde1e8;
+  --cap-modifier-ink: #1f2530;
+  --cap-hold: #f3dcb0;
+  --cap-hold-ink: #4a2e00;
+  --cap-layer: #d3defb;
+  --cap-layer-ink: #14286b;
+  --cap-macro: #ecd6f7;
+  --cap-macro-ink: #4e1869;
+  --cap-dance: #f8d6e1;
+  --cap-dance-ink: #6a1230;
+  --cap-native: #b6e4da;
+  --cap-native-ink: #06453c;
+  --color-combo: #464a52;
+  --keycap-red: #c63a31;
+
+  /* The six layer colours: a layer with no LED colour of its own is lit in one of these (D-263). */
+  --layer-1: #8a93a3;
+  --layer-2: #2f7bff;
+  --layer-3: #ff3b30;
+  --layer-4: #21b26a;
+  --layer-5: #8b5cff;
+  --layer-6: #ff9f1a;
+
+  /* How much of a key's LED colour its skirt takes; led-contrast.test.ts holds every hue to 4.5:1 for the front legend. */
+  --led-wash: 12%;
+
+  --cap-shadow-edge: rgb(18 24 38 / 0.28);
+  --cap-highlight: rgb(255 255 255 / 0.9);
+  --shadow-pop: 0 30px 70px rgb(30 34 48 / 0.18), 0 3px 10px rgb(30 34 48 / 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --room: #0e0f12;
+    --room-spot: #1d1f24;
+    --room-floor: #0a0b0d;
+    --ink: #eef0f3;
+    --ink-2: #b3b7bf;
+    --ink-3: #9298a2;
+    --surface: #191a1e;
+    --surface-2: #222429;
+    --surface-3: #2b2d33;
+    --line: rgb(255 255 255 / 0.08);
+    --line-2: rgb(255 255 255 / 0.14);
+    --primary: #f3f4f6;
+    --primary-ink: #111214;
+    --scrim: rgb(8 9 11 / 0.62);
+    --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.05);
+    --pending: #ffb340;
+    --pending-ink: #ffb340;
+    --ok: #3ddc84;
+    --ok-ink: #6fdc9b;
+    --bad: #ff6b5e;
+    --bad-ink: #ff8a80;
+    --case-hi: #24262a;
+    --case-lo: #16171a;
+    --case-rim: rgb(255 255 255 / 0.09);
+    --case-shadow: rgb(0 0 0 / 0.7);
+    --case-seam: rgb(0 0 0 / 0.8);
+    --leg: #3b3d42;
+    --leg-rim: rgb(255 255 255 / 0.1);
+    --knob: #a8acb2;
+    --knurl: #5f636a;
+    --hole: #050506;
+    --ball-hi: #e4e6ea;
+    --ball-lo: #2c2e34;
+    --ball-socket: #050506;
+    --ball-socket-rim: rgb(255 255 255 / 0.18);
+    --finding: #ff6b7d;
+    --finding-ink: #ff9aa6;
+    --rec: #ff4d5e;
+    --screen: #08090a;
+    --screen-rim: rgb(255 255 255 / 0.08);
+    --well: rgb(0 0 0 / 0.42);
+    --skirt-hi: #2a2b30;
+    --skirt-lo: #161719;
+    --top-hi: #393b41;
+    --top-lo: #2b2d32;
+    --top-rim: rgb(255 255 255 / 0.1);
+    --legend: #eef0f2;
+    --front: #aeb2ba;
+    --ghost: #8f949c;
+    --cap-drop: rgb(0 0 0 / 0.6);
+    --red-skirt-hi: #b12c25;
+    --red-skirt-lo: #7c1915;
+    --red-top-hi: #cc382e;
+    --red-top-lo: #c5352c;
+    --red-legend: #ffffff;
+    --red-front: #ffe3e0;
+    --alu-hi: #3a3c41;
+    --alu-lo: #2c2e32;
+    --mac-key: #18191b;
+    --mac-well: #0a0a0b;
+    --grille-hole: rgb(0 0 0 / 0.6);
+    --mac-top: #26272a;
+    --mac-legend: #e4e5e7;
+    --bleed: 0.62;
+    --glow: 0.45;
+    --spot-dim: rgb(6 7 9 / 0.58);
+
+    --color-page: #0e0f12;
+    --color-surface: #191a1e;
+    --color-panel: #141518;
+    --color-border: #2a2c31;
+    --color-border-strong: #646973;
+    --color-text: #eef0f3;
+    --color-text-muted: #b3b7bf;
+    --color-focus: #eef0f3;
+    --color-error: #ff8a80;
+    --color-error-bg: #2b1513;
+    --color-accent: #eef0f3;
+    --color-accent-bg: #2b2d33;
+    --color-warning: #ffb340;
+    --color-warning-bg: #33260e;
+    --color-success: #6fdc9b;
+    --color-success-bg: #122d1e;
+
+    --cap-key: #2b2d32;
+    --cap-key-ink: #eef0f2;
+    --cap-modifier: #3b4252;
+    --cap-modifier-ink: #e6eaf2;
+    --cap-hold: #5a4719;
+    --cap-hold-ink: #fbe3a8;
+    --cap-layer: #2f4280;
+    --cap-layer-ink: #dbe5ff;
+    --cap-macro: #613679;
+    --cap-macro-ink: #f6dcff;
+    --cap-dance: #712a45;
+    --cap-dance-ink: #ffdbe7;
+    --cap-native: #1d625d;
+    --cap-native-ink: #c9f6ee;
+    --color-combo: #b3b7bf;
+    --keycap-red: #de4a3f;
+
+    --layer-1: #9aa3b2;
+    --layer-2: #3d86ff;
+    --layer-3: #ff4136;
+    --layer-4: #2bd67b;
+    --layer-5: #9466ff;
+    --layer-6: #ffa52e;
+
+    --led-wash: 12%;
+
+    --cap-shadow-edge: rgb(0 0 0 / 0.5);
+    --cap-highlight: rgb(255 255 255 / 0.08);
+    --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --room: #0e0f12;
+  --room-spot: #1d1f24;
+  --room-floor: #0a0b0d;
+  --ink: #eef0f3;
+  --ink-2: #b3b7bf;
+  --ink-3: #9298a2;
+  --surface: #191a1e;
+  --surface-2: #222429;
+  --surface-3: #2b2d33;
+  --line: rgb(255 255 255 / 0.08);
+  --line-2: rgb(255 255 255 / 0.14);
+  --primary: #f3f4f6;
+  --primary-ink: #111214;
+  --scrim: rgb(8 9 11 / 0.62);
+  --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --pending: #ffb340;
+  --pending-ink: #ffb340;
+  --ok: #3ddc84;
+  --ok-ink: #6fdc9b;
+  --bad: #ff6b5e;
+  --bad-ink: #ff8a80;
+  --case-hi: #24262a;
+  --case-lo: #16171a;
+  --case-rim: rgb(255 255 255 / 0.09);
+  --case-shadow: rgb(0 0 0 / 0.7);
+  --case-seam: rgb(0 0 0 / 0.8);
+  --leg: #3b3d42;
+  --leg-rim: rgb(255 255 255 / 0.1);
+  --knob: #a8acb2;
+  --knurl: #5f636a;
+  --hole: #050506;
+  --ball-hi: #e4e6ea;
+  --ball-lo: #2c2e34;
+  --ball-socket: #050506;
+  --ball-socket-rim: rgb(255 255 255 / 0.18);
+  --finding: #ff6b7d;
+  --finding-ink: #ff9aa6;
+  --rec: #ff4d5e;
+  --screen: #08090a;
+  --screen-rim: rgb(255 255 255 / 0.08);
+  --well: rgb(0 0 0 / 0.42);
+  --skirt-hi: #2a2b30;
+  --skirt-lo: #161719;
+  --top-hi: #393b41;
+  --top-lo: #2b2d32;
+  --top-rim: rgb(255 255 255 / 0.1);
+  --legend: #eef0f2;
+  --front: #aeb2ba;
+  --ghost: #8f949c;
+  --cap-drop: rgb(0 0 0 / 0.6);
+  --red-skirt-hi: #b12c25;
+  --red-skirt-lo: #7c1915;
+  --red-top-hi: #cc382e;
+  --red-top-lo: #c5352c;
+  --red-legend: #ffffff;
+  --red-front: #ffe3e0;
+  --alu-hi: #3a3c41;
+  --alu-lo: #2c2e32;
+  --mac-key: #18191b;
+  --mac-well: #0a0a0b;
+  --grille-hole: rgb(0 0 0 / 0.6);
+  --mac-top: #26272a;
+  --mac-legend: #e4e5e7;
+  --bleed: 0.62;
+  --glow: 0.45;
+  --spot-dim: rgb(6 7 9 / 0.58);
+
+  --color-page: #0e0f12;
+  --color-surface: #191a1e;
+  --color-panel: #141518;
+  --color-border: #2a2c31;
+  --color-border-strong: #646973;
+  --color-text: #eef0f3;
+  --color-text-muted: #b3b7bf;
+  --color-focus: #eef0f3;
+  --color-error: #ff8a80;
+  --color-error-bg: #2b1513;
+  --color-accent: #eef0f3;
+  --color-accent-bg: #2b2d33;
+  --color-warning: #ffb340;
+  --color-warning-bg: #33260e;
+  --color-success: #6fdc9b;
+  --color-success-bg: #122d1e;
+
+  --cap-key: #2b2d32;
+  --cap-key-ink: #eef0f2;
+  --cap-modifier: #3b4252;
+  --cap-modifier-ink: #e6eaf2;
+  --cap-hold: #5a4719;
+  --cap-hold-ink: #fbe3a8;
+  --cap-layer: #2f4280;
+  --cap-layer-ink: #dbe5ff;
+  --cap-macro: #613679;
+  --cap-macro-ink: #f6dcff;
+  --cap-dance: #712a45;
+  --cap-dance-ink: #ffdbe7;
+  --cap-native: #1d625d;
+  --cap-native-ink: #c9f6ee;
+  --color-combo: #b3b7bf;
+  --keycap-red: #de4a3f;
+
+  --layer-1: #9aa3b2;
+  --layer-2: #3d86ff;
+  --layer-3: #ff4136;
+  --layer-4: #2bd67b;
+  --layer-5: #9466ff;
+  --layer-6: #ffa52e;
+
+  --led-wash: 12%;
+
+  --cap-shadow-edge: rgb(0 0 0 / 0.5);
+  --cap-highlight: rgb(255 255 255 / 0.08);
+  --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
+}
+
+/* Spacing is a 4px scale. Type is one family, Instrument Sans, whose width axis lets a long keycap legend get narrower instead of
+   smaller (D-261). Sizes run from the 44px layer title down to the 11px legend floor; keycap legends size in key units (keyboard/fit.ts). */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --text-display: 44px;
+  --weight-regular: 400;
+  --weight-medium: 550;
+  --weight-semibold: 600;
+
+  /* Controls 10, cards 20, chips round. Caps size in key units. */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Loaded from Google Fonts in index.html without blocking; the system font stands in until it arrives, or offline. */
+  --font-ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.2, 1.25, 0.35, 1);
+}
+
+/*
+ * The board under the light (23-design-concept.md). The board sits on the room's backdrop as one object: its contact shadow, its
+ * underglow in the layer's colour, its case, then the caps. Every size is a multiple of --u, one key unit in px, set on each cap.
+ */
+.keyboard {
+  position: relative;
+  isolation: isolate;
+}
+
+/* The soft shadow where the board meets the backdrop; inside the board's box, so it never makes the row scroll. */
+.keyboard-contact {
+  position: absolute;
+  z-index: -2;
+  inset: 34% 4% 0 4%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--case-shadow), transparent);
+  filter: blur(24px);
+  pointer-events: none;
+}
+
+/* The layer's light under the board, filling the board's row. Two of them cross-fade when the layer changes (D-263). */
+.keyboard-well {
+  position: relative;
+  isolation: isolate;
+}
+
+.keyboard-well > .keyboard {
+  z-index: 1;
+}
+
+.keyboard-glow {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: radial-gradient(42% 52% at 50% 56%, var(--glow-colour), transparent 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.keyboard-glow[data-on="true"] {
+  opacity: var(--glow);
+}
+
+/* The case, from case-shape.ts: bodies, modules, wells, or a laptop's deck. */
+.keyboard-case {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 10px 18px var(--case-shadow));
+  pointer-events: none;
+}
+
+.case-body {
+  fill: var(--case-lo);
+  stroke: var(--case-rim);
+  stroke-width: 0.018;
+}
+
+/* A fill gradient can't take a CSS variable in every browser, so the lit top is a second, faded layer drawn by the case's own shine. */
+.keyboard-case .case-body {
+  fill: color-mix(in oklab, var(--case-hi) 55%, var(--case-lo));
+}
+
+/* The case's status LEDs (display.statusLeds): dark until a layer with a light is on, then that light. */
+.case-led {
+  fill: var(--well);
+  transition: fill 0.35s ease var(--ripple, 0ms);
+}
+
+.case-led[data-lit="true"] {
+  fill: var(--led-colour);
+  filter: drop-shadow(0 0 0.06px var(--led-colour));
+}
+
+.case-well {
+  fill: var(--well);
+  stroke: var(--well);
+  stroke-width: 0.04;
+}
+
+.case-deck {
+  fill: color-mix(in oklab, var(--alu-hi) 55%, var(--alu-lo));
+  stroke: var(--case-rim);
+  stroke-width: 0.02;
+}
+
+.case-recess {
+  fill: var(--mac-well);
+}
+
+/* A case that hugs its keys (display.caseHug): overlapping shapes filled as one, so a rim would draw their insides. */
+.keyboard-case .case-plate {
+  fill: color-mix(in oklab, var(--case-hi) 55%, var(--case-lo));
+}
+
+/* A case drawn from the real object (display.case, D-277). The module is a separate hinged plate, so it catches a little more light
+   than the body it sits against; the seam between them is its rim. */
+.keyboard-case .case-module {
+  fill: color-mix(in oklab, var(--case-hi) 70%, var(--case-lo));
+  stroke: var(--case-seam);
+  stroke-width: 0.022;
+}
+
+.keyboard-case .case-body {
+  stroke-linejoin: round;
+}
+
+/* A display's cover (the Corne's OLED acrylic): dark glass in either room, with a faint sheen along its top. */
+.case-screen {
+  fill: var(--screen);
+  stroke: var(--screen-rim);
+  stroke-width: 0.014;
+}
+
+/* A laptop's speaker grille (filled with the holes pattern in Keyboard.tsx) and its fingerprint key. */
+.case-grille-hole {
+  fill: var(--grille-hole);
+}
+
+.case-sensor {
+  fill: var(--mac-key);
+}
+
+.case-leg {
+  fill: var(--leg);
+  stroke: var(--leg-rim);
+  stroke-width: 0.014;
+}
+
+.case-knob {
+  fill: var(--knob);
+  stroke: var(--leg-rim);
+  stroke-width: 0.012;
+}
+
+.case-knurl {
+  fill: none;
+  stroke: var(--knurl);
+  stroke-width: 0.018;
+}
+
+.case-hole {
+  fill: var(--hole);
+}
+
+/* A trackball: the path is the ball's outline. Its socket is a dark ring just outside it, and the sphere is lit from the top left by a
+   radial gradient (Keyboard.tsx) whose stops take the theme's colours. */
+.case-ball-socket {
+  fill: var(--ball-socket);
+  stroke: var(--ball-socket);
+  stroke-width: 0.14;
+}
+
+.case-ball-rim {
+  fill: none;
+  stroke: var(--ball-socket-rim);
+  stroke-width: 0.02;
+}
+
+.case-ball-hi {
+  stop-color: var(--ball-hi);
+}
+
+.case-ball-lo {
+  stop-color: var(--ball-lo);
+}
+
+/* ---------- the keycap: five layers ---------- */
+
+.cap {
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--legend);
+  font-family: var(--font-ui);
+  line-height: 1;
+  text-align: center;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 1. The LED's bleed: its colour blurred onto the plate around the cap, the way backlight spills past a keycap. */
+.cap-bleed {
+  position: absolute;
+  inset: calc(var(--u) * -0.03);
+  border-radius: calc(var(--u) * 0.16);
+  background: var(--led, transparent);
+  filter: blur(calc(var(--u) * 0.11));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease var(--ripple, 0ms), background-color 0.35s ease var(--ripple, 0ms);
+}
+
+.cap[data-led="true"] .cap-bleed {
+  opacity: var(--bleed);
+}
+
+/* 2. The skirt: the cap's body, darker toward the front edge, with a tight shadow and a soft one. */
+.cap-body {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: calc(var(--u) * 0.13);
+  background: linear-gradient(180deg, var(--skirt-hi), var(--skirt-lo));
+  box-shadow:
+    0 calc(var(--u) * 0.035) calc(var(--u) * 0.03) var(--cap-drop),
+    0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop),
+    inset 0 0 0 1px rgb(0 0 0 / 0.08);
+  transition: background 0.35s ease var(--ripple, 0ms), transform 0.18s var(--ease-out);
+}
+
+/* 3. A lit key's skirt carries a little of its LED, as a translucent cap would. */
+.cap[data-led="true"] .cap-body {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--led) calc(var(--led-wash) * 0.75), var(--skirt-hi)),
+    color-mix(in srgb, var(--led) var(--led-wash), var(--skirt-lo))
+  );
+}
+
+/* Each print fills the body; two overlap while a layer change cross-fades them. */
+.cap-print {
+  position: absolute;
+  inset: 0;
+}
+
+/* 4. The top face: a shallow dish, lit from above, inset more at the front so the front skirt shows. Drawn once, under both prints. */
+.cap-top,
+.cap-face {
+  position: absolute;
+  top: calc(var(--u) * 0.04);
+  right: calc(var(--u) * 0.075);
+  bottom: calc(var(--u) * 0.2);
+  left: calc(var(--u) * 0.075);
+  border-radius: calc(var(--u) * 0.1);
+}
+
+.cap-top {
+  background: radial-gradient(130% 100% at 50% 20%, var(--top-hi) 0%, var(--top-lo) 70%);
+  box-shadow:
+    inset 0 1px 0 var(--top-rim),
+    inset 0 calc(var(--u) * -0.03) calc(var(--u) * 0.05) rgb(0 0 0 / 0.1),
+    0 1px 0 rgb(0 0 0 / 0.12);
+}
+
+/* The face of a print only places its legends; the dish under it is .cap-top. */
+.cap-face {
+  display: grid;
+  place-items: center;
+}
+
+.cap-out {
+  z-index: 1;
+}
+
+/* 5. The legends: the tap printed on the top face, the hold printed on the front skirt (D-267). */
+.cap-tap {
+  max-width: 100%;
+  font-weight: 480;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  /* A legend wraps only at its own seams (Cap.tsx puts a break opportunity there), never mid-word (D-187). */
+}
+
+.cap-tap[data-stretch="condensed"] {
+  font-stretch: 75%;
+  font-weight: 500;
+}
+
+.cap-front {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--u) * 0.012);
+  left: 0;
+  display: flex;
+  height: calc(var(--u) * 0.185);
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 0.05);
+  overflow: hidden;
+  color: var(--front);
+  font-stretch: 75%;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+/* A steeply turned cap (the Glove80's thumb fan) turns its whole print back upright, so the front word stays under the tap legend. */
+.cap[data-upright="true"] .cap-print {
+  inset: calc(50% - var(--print-h, 100%) / 2) calc(50% - var(--print-w, 100%) / 2);
+  transform: rotate(var(--turn, 0deg));
+}
+
+/* A tap dance's double tap, when the front already carries a hold, and a tapped-then-held slot. */
+.cap-corner {
+  position: absolute;
+  top: calc(var(--u) * 0.04);
+  right: calc(var(--u) * 0.06);
+  color: var(--front);
+  font-size: max(11px, calc(var(--u) * 0.14));
+  font-stretch: 75%;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+.cap-corner-start {
+  right: auto;
+  left: calc(var(--u) * 0.06);
+}
+
+/* The layer a key reaches, as a dot of that layer's light; a hollow ring for a layer that has none. */
+.cap-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 6px var(--dot);
+}
+
+.cap-dot[data-unlit="true"] {
+  border: 1.2px solid var(--front);
+  background: transparent;
+  box-shadow: none;
+}
+
+/* U+2423, drawn so it matches the legend's weight in any font. */
+.spc {
+  display: inline-block;
+  width: 0.62em;
+  height: 0.26em;
+  margin-left: 0.06em;
+  border: 0.09em solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 0.06em 0.06em;
+  vertical-align: -0.02em;
+}
+
+/* The Moonlander's red thumb caps (board.json display.keycaps). */
+.cap[data-keycap="red"] .cap-body {
+  background: linear-gradient(180deg, var(--red-skirt-hi), var(--red-skirt-lo));
+}
+
+.cap[data-keycap="red"] .cap-top {
+  background: radial-gradient(130% 100% at 50% 20%, var(--red-top-hi), var(--red-top-lo) 72%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 1px 0 rgb(0 0 0 / 0.2);
+}
+
+.cap[data-keycap="red"] .cap-tap {
+  color: var(--red-legend);
+}
+
+.cap[data-keycap="red"] .cap-front,
+.cap[data-keycap="red"] .cap-corner {
+  color: var(--red-front);
+}
+
+/* A shaped cap (display.keyShapes): clipped to its outline, so its shadow comes from a filter on the whole cap and its light from a
+   clipped child inside the blurred bleed. Rings are drawn on .cap-outline, a line along the same outline. */
+.cap[data-shaped="true"] {
+  filter: drop-shadow(0 calc(var(--u) * 0.035) calc(var(--u) * 0.03) var(--cap-drop)) drop-shadow(0 calc(var(--u) * 0.1) calc(var(--u) * 0.16) var(--cap-drop));
+}
+
+.cap[data-shaped="true"] .cap-bleed {
+  background: none;
+}
+
+.cap-bleed-shape {
+  position: absolute;
+  inset: 0;
+  background: var(--led, transparent);
+}
+
+.cap-outline {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  transition: transform 0.18s var(--ease-out);
+}
+
+.cap-outline path {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2px;
+}
+
+button.cap[data-shaped="true"]:focus-visible .cap-outline path,
+button.cap[data-shaped="true"][data-current="true"] .cap-outline path,
+button.cap[data-shaped="true"][data-found="true"] .cap-outline path {
+  stroke: var(--ink);
+}
+
+button.cap[data-shaped="true"][aria-pressed="true"] .cap-outline path,
+button.cap[data-shaped="true"][data-highlight="true"] .cap-outline path,
+button.cap[data-shaped="true"][data-combo-hover="true"] .cap-outline path {
+  stroke: var(--ink-2);
+}
+
+.keyboard[data-inspect="true"] button.cap[data-shaped="true"][data-partner="true"] .cap-outline path {
+  stroke: var(--ink-3);
+  stroke-width: 1.5px;
+}
+
+button.cap[data-shaped="true"][data-pending="true"] .cap-outline path {
+  stroke: var(--pending);
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 0 calc(var(--u) * 0.2) var(--pending));
+}
+
+button.cap[data-shaped="true"][data-home="true"] .cap-outline path {
+  stroke: var(--pending);
+  stroke-dasharray: 4 3;
+  stroke-width: 1.5px;
+}
+
+button.cap[data-shaped="true"][data-drop="true"] .cap-outline path {
+  stroke: var(--ink);
+  stroke-width: 3px;
+}
+
+button.cap[data-shaped="true"]:hover .cap-outline {
+  transform: translateY(calc(var(--u) * -0.02));
+}
+
+button.cap[data-shaped="true"][data-current="true"] .cap-outline {
+  transform: translateY(calc(var(--u) * -0.05));
+}
+
+/* A laptop's keys: black scissor caps, flat, in both rooms. */
+.keyboard[data-surface="deck"] .cap-body {
+  border-radius: calc(var(--u) * 0.1);
+  background: var(--mac-key);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.5);
+}
+
+.keyboard[data-surface="deck"] .cap-top {
+  inset: calc(var(--u) * 0.02) calc(var(--u) * 0.02) calc(var(--u) * 0.045);
+  border-radius: calc(var(--u) * 0.09);
+  background: linear-gradient(180deg, var(--mac-top), var(--mac-key));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+.keyboard[data-surface="deck"] .cap-face {
+  inset: calc(var(--u) * 0.02) calc(var(--u) * 0.02) calc(var(--u) * 0.045);
+}
+
+.keyboard[data-surface="deck"] .cap-tap {
+  color: var(--mac-legend);
+  font-weight: 500;
+}
+
+.keyboard[data-surface="deck"] .cap-front {
+  bottom: calc(var(--u) * 0.06);
+  color: #a7abb2;
+}
+
+/* Blank keys stay quiet: no legend at rest. A transparent key's description carries what it passes through to, which Inspect shows faintly. */
+.cap[data-tone="transparent"] .cap-print,
+.cap[data-tone="none"] .cap-print {
+  opacity: 0;
+}
+
+.keyboard[data-inspect="true"] .cap[data-tone="transparent"] .cap-print {
+  opacity: 0.45;
+}
+
+.cap-kind-mark {
+  position: absolute;
+  top: calc(var(--u) * 0.05);
+  left: calc(var(--u) * 0.1);
+  display: none;
+  color: var(--front);
+  font-size: max(11px, calc(var(--u) * 0.14));
+}
+
+/* ---------- a layer change: the old print fades as the new one arrives, key by key (D-265) ---------- */
+
+.cap-out {
+  animation: cap-out 90ms ease var(--ripple, 0ms) both;
+}
+
+.cap-in {
+  animation: cap-in 170ms ease-out calc(var(--ripple, 0ms) + 60ms) both;
+}
+
+@keyframes cap-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes cap-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- Inspect: kinds, inherited legends and combos, on request (D-264) ---------- */
+
+.keyboard[data-inspect="true"] .cap-top::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--kind, transparent);
+  content: "";
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Three hues, one per question a person asks of a key: does it do more than one thing (amber: hold-taps and tap dances), does it change
+   layer (blue), does it run something keyloom keeps as written (violet: macros and firmware bindings). Plain keys and modifiers stay
+   untinted; their legend already says what they are (D-264). */
+.keyboard[data-inspect="true"] .cap[data-tone="holdTap"],
+.keyboard[data-inspect="true"] .cap[data-tone="tapDance"] { --kind: var(--cap-hold); }
+.keyboard[data-inspect="true"] .cap[data-tone="layer"] { --kind: var(--cap-layer); }
+.keyboard[data-inspect="true"] .cap[data-tone="macro"],
+.keyboard[data-inspect="true"] .cap[data-tone="native"] { --kind: var(--cap-macro); }
+
+.keyboard[data-inspect="true"] .cap-kind-mark {
+  display: block;
+}
+
+.keyboard[data-inspect="true"] .cap[data-tone="transparent"] .cap-top {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.keyboard[data-inspect="true"] .cap[data-tone="none"] .cap-top {
+  background: repeating-linear-gradient(135deg, transparent 0 5px, var(--line) 5px 6px), var(--top-lo);
+}
+
+/* ---------- states ---------- */
+
+button.cap {
+  cursor: pointer;
+}
+
+button.cap:hover .cap-body {
+  transform: translateY(calc(var(--u) * -0.02));
+}
+
+button.cap:active .cap-body {
+  transform: translateY(calc(var(--u) * 0.03)) scale(0.985);
+}
+
+button.cap:focus-visible {
+  z-index: 3;
+  outline: none;
+}
+
+button.cap:focus-visible .cap-body {
+  box-shadow: 0 0 0 2px var(--ink), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+/* The key whose panel is open: lifted, ringed in ink (the spotlight around it is the stage's). */
+button.cap[data-current="true"] {
+  z-index: 4;
+}
+
+button.cap[data-current="true"] .cap-body {
+  box-shadow: 0 0 0 2px var(--ink), 0 calc(var(--u) * 0.25) calc(var(--u) * 0.4) var(--cap-drop);
+  transform: translateY(calc(var(--u) * -0.05));
+}
+
+/* In the chat's "Asking about" chips: a ring and a tick. */
+button.cap[aria-pressed="true"] .cap-body {
+  box-shadow: 0 0 0 2px var(--ink-2), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+/* The chord partners of the inspected key, under Inspect only: at rest a ring on two other keys reads as a stray mark (P2 review). */
+.keyboard[data-inspect="true"] button.cap[data-partner="true"] .cap-body {
+  box-shadow: 0 0 0 1.5px var(--ink-3), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+/* A draft or a proposal: amber, the one colour that means "not on your keyboard yet" (D-263). */
+button.cap[data-pending="true"] .cap-body {
+  box-shadow:
+    0 0 0 1.5px var(--pending),
+    0 0 calc(var(--u) * 0.45) color-mix(in oklab, var(--pending) 55%, transparent),
+    0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+button.cap[data-pending="true"] .cap-front {
+  color: var(--pending-ink);
+}
+
+button.cap[data-current="true"][data-pending="true"] .cap-body {
+  box-shadow: 0 0 0 2px var(--ink), 0 0 calc(var(--u) * 0.45) color-mix(in oklab, var(--pending) 55%, transparent), 0 calc(var(--u) * 0.25) calc(var(--u) * 0.4) var(--cap-drop);
+}
+
+/* Where a moved function would go. */
+button.cap[data-home="true"] .cap-body {
+  box-shadow: 0 0 0 1.5px dashed var(--pending), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+  outline: 1.5px dashed var(--pending);
+  outline-offset: 2px;
+}
+
+/* A key pressed on the real keyboard, lit for a moment so it can be found. */
+button.cap[data-found="true"] .cap-body {
+  box-shadow: 0 0 0 2px var(--ink), 0 0 calc(var(--u) * 0.5) color-mix(in oklab, var(--ink) 35%, transparent);
+  animation: found 1.4s ease-out both;
+}
+
+@keyframes found {
+  70% {
+    box-shadow: 0 0 0 2px var(--ink), 0 0 calc(var(--u) * 0.5) color-mix(in oklab, var(--ink) 35%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent, 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+  }
+}
+
+/* The marks sit inside the cap's top corners, each its own element. */
+.cap-mark {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.cap-mark-selected {
+  top: -5px;
+  right: -5px;
+  background: var(--ink);
+  color: var(--room);
+}
+
+.cap-mark-draft {
+  top: calc(var(--u) * 0.08);
+  left: calc(var(--u) * 0.1);
+  width: 6px;
+  height: 6px;
+  background: var(--pending);
+  box-shadow: 0 0 8px var(--pending);
+}
+
+/* Applied but not on the keyboard yet: the draft's amber dot, without its ring, until the sync line says the keyboard has it. */
+button.cap[data-unsynced="true"]:not([data-pending="true"])::after {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--u) * 0.08);
+  left: calc(var(--u) * 0.1);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pending);
+  box-shadow: 0 0 8px var(--pending);
+  content: "";
+  pointer-events: none;
+}
+
+.cap-mark-remembered {
+  top: calc(var(--u) * 0.05);
+  right: calc(var(--u) * 0.08);
+  color: var(--front);
+}
+
+.stage[data-placing="true"] button.cap {
+  cursor: crosshair;
+}
+
+/* A key the library is pointing at, or the keys of a combo being pointed at. */
+button.cap[data-highlight="true"] .cap-body,
+button.cap[data-combo-hover="true"] .cap-body {
+  box-shadow: 0 0 0 2px var(--ink-2), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+/* A key a drag is over, and the key being dragged. */
+button.cap[data-drop="true"] .cap-body {
+  box-shadow: 0 0 0 3px var(--ink), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+button.cap[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cap-body,
+  .cap-bleed,
+  .keyboard-glow {
+    transition: none;
+  }
+
+  .cap-out {
+    display: none;
+  }
+
+  .cap-in,
+  button.cap[data-found="true"] .cap-body {
+    animation: none;
+  }
+
+  button.cap:hover .cap-body,
+  button.cap:active .cap-body {
+    transform: none;
+  }
+}
+
+/* A cap is hit as 44px on a phone: the invisible rim lies on the gap between caps. Fingers drag keys after a long press, so a cap
+   must not scroll the page instead (D-182). */
+@media (pointer: coarse) {
+  .keyboard .cap::after {
+    position: absolute;
+    content: "";
+    inset: -2px;
+  }
+
+  button.cap {
+    touch-action: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+/* ---------- proposal arrows ---------- */
+
+.move-arrows {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  overflow: visible;
+  color: var(--pending);
+  pointer-events: none;
+}
+
+.move-arrow-halo,
+.move-arrow {
+  fill: none;
+}
+
+.move-arrow-halo {
+  stroke: var(--room);
+  stroke-width: 6;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.move-arrow {
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* ---------- combo lines: thin ink lines with the output in a small pill (D-264) ---------- */
+
+.combo-lines {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  overflow: visible;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+.combo-halo,
+.combo-stroke,
+.combo-hit {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.combo-halo {
+  stroke: var(--room);
+  stroke-width: 4;
+  opacity: 0.7;
+}
+
+.combo-stroke {
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+/* Ties a label that had to move off its line's middle back to the line. */
+.combo-leader {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+/* A legend a label could not avoid: faded so the label is read on its own. */
+[data-combo-under] {
+  opacity: 0.2;
+}
+
+.combo-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.combo-dot {
+  fill: var(--ink-2);
+  stroke: var(--room);
+  stroke-width: 1.5;
+}
+
+.combo-label:focus-visible .combo-dot {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.combo-label {
+  cursor: pointer;
+  pointer-events: all;
+  outline: none;
+}
+
+.combo-label rect {
+  fill: var(--surface);
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+
+.combo-label text {
+  fill: var(--ink);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+}
+
+.combo-label:focus-visible rect {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.combo-line[data-state="hover"] .combo-stroke,
+.combo-line[data-state="editing"] .combo-stroke {
+  stroke-width: 2.5;
+  color: var(--ink);
+}
+
+.combo-line[data-state="editing"] .combo-stroke {
+  stroke-dasharray: 6 4;
+}
+
+.combo-line[data-state="hover"] .combo-label rect,
+.combo-line[data-state="editing"] .combo-label rect {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+/* ---------- dragging and selecting ---------- */
+
+.key-ghost {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  pointer-events: none;
+  transform: translate(12px, 12px);
+}
+
+/* The selection bar floats over the stage, above the strip. */
+.selection-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-height: var(--selection-bar-h, 48px);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+.selection-count {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.selection-count[data-empty="true"] {
+  color: var(--ink-3);
+  font-weight: var(--weight-regular);
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.selection-actions .button,
+.selection-actions .toggle-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.selection-bar[data-mode="quick"] {
+  box-shadow: 0 0 0 1.5px var(--pending), var(--card-shadow);
+}
+
+/* ---------- the halves part for the key card (P2) ----------
+   One hand slides by --part; the CSS translate property composes with each cap's own rotation. The card's spring carries it. */
+.keyboard [data-hand] {
+  transition: translate 0.46s var(--ease-spring);
+}
+
+.keyboard[data-part="right"] [data-hand="right"],
+.keyboard[data-part="left"] [data-hand="left"] {
+  translate: var(--part) 0;
+}
+
+/* The case is drawn in key units, so its parts move by the same distance in those units. */
+.keyboard[data-part="right"] .keyboard-case [data-hand="right"],
+.keyboard[data-part="left"] .keyboard-case [data-hand="left"] {
+  translate: calc(var(--part-units) * 1px) 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .keyboard [data-hand] {
+    transition: none;
+  }
+}
+
+/* While a proposal is previewed, the keys it doesn't touch step back (comp d). */
+.keyboard[data-previewing="true"] button.cap:not([data-pending="true"]):not([data-home="true"]) {
+  opacity: 0.45;
+  transition: opacity 0.25s ease;
+}
+
+/* ---------- the typing lab (D-314) ----------
+   Keys pressed just now light; a finding's keys carry a rose ring and dot, rose being the lab's own colour for "this went wrong"
+   (amber stays "not on your keyboard yet"); the per-finger heat rises from below each cap. */
+button.cap[data-lab-lit="true"] .cap-body {
+  box-shadow: 0 0 0 2px var(--ink-2), 0 0 calc(var(--u) * 0.4) color-mix(in oklab, var(--ink) 25%, transparent);
+  transform: translateY(calc(var(--u) * 0.02));
+}
+
+button.cap[data-lab-finding="true"] .cap-body {
+  box-shadow: 0 0 0 1.5px var(--finding), 0 0 calc(var(--u) * 0.35) color-mix(in oklab, var(--finding) 45%, transparent), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+button.cap[data-lab-finding="true"]::before {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--u) * 0.08);
+  left: calc(var(--u) * 0.1);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--finding);
+  box-shadow: 0 0 6px var(--finding);
+  content: "";
+  pointer-events: none;
+}
+
+button.cap[data-lab-heat="true"] .cap-top::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 90% at 50% 100%, color-mix(in oklab, var(--finding) calc(var(--heat) * 40%), transparent), transparent 75%);
+  content: "";
+  pointer-events: none;
+}
+
+/* ---------- compare with now (D-315) ----------
+   A key that differs from the version being compared carries the proposal's amber (it would change if BK went back) and, above it,
+   what it was then. */
+button.cap[data-then]::before {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  max-width: calc(var(--u) * 2.6);
+  overflow: hidden;
+  padding: 0 var(--space-1);
+  border-radius: 5px;
+  background: var(--pending);
+  color: var(--surface);
+  content: attr(data-then);
+  font-size: 9.5px;
+  font-weight: 650;
+  line-height: 1.6;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* ---------- a kept draft (D-317) ----------
+   A change kept from a closed card: the cap already shows it, ringed in dashed amber until it is applied or discarded. Dashed, where a
+   proposal's ring is solid, because nobody has decided on it yet. */
+button.cap[data-draft="true"] .cap-body {
+  outline: 1.5px dashed var(--pending);
+  outline-offset: 2px;
+}
+
+button.cap[data-draft="true"] .cap-front {
+  color: var(--pending-ink);
+}
+
+/* ---------- the board review (D-340) ----------
+   A key a problem is about wears the lab's rose ring; a key a hint is about only a faint dot, quieter than anything that asks for
+   action. */
+button.cap[data-review="problem"]:not([data-pending="true"]) .cap-body {
+  box-shadow: 0 0 0 1.5px var(--finding), 0 0 calc(var(--u) * 0.3) color-mix(in oklab, var(--finding) 40%, transparent), 0 calc(var(--u) * 0.1) calc(var(--u) * 0.2) var(--cap-drop);
+}
+
+button.cap[data-review="hint"]::before {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--u) * 0.09);
+  left: calc(var(--u) * 0.11);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  content: "";
+  pointer-events: none;
+}
+
+/*
+ * A pinned colourway (D-395): the board keeps the colours of the one on BK's desk while the room around it follows the theme.
+ * Keyboard.tsx marks a part only when its tone differs from the room's (colourway.ts), so a part that matches the room keeps the
+ * theme's own tokens. A part out of its room is not just the other theme's tokens: a white board in a dark room is lit less and
+ * casts a deeper shadow onto the stage, and a black board in a light room catches the light along its edges.
+ *
+ * The case block also carries the marks drawn on and around the caps (rings, combo lines, halos and labels), because they sit on
+ * the case and must read against it. The caps block carries what is printed and drawn on the caps. contrast.test.ts checks every
+ * pinned combination with the same pairs as the themes.
+ */
+
+/* A white case in a dark room: a shade under the light room's white so it doesn't glare, with a deep shadow on the dark stage. */
+.keyboard[data-case-room="light"] {
+  --room: #e4e5e8;
+  --ink: #141519;
+  --ink-2: #464a52;
+  --ink-3: #5f636c;
+  --surface: #ffffff;
+  --surface-2: #f3f3f5;
+  --surface-3: #e8e9ec;
+  --line: rgb(16 18 24 / 0.09);
+  --line-2: rgb(16 18 24 / 0.16);
+  --primary: #141519;
+  --primary-ink: #ffffff;
+  --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
+  --pending: #a86500;
+  --ok: #16a05a;
+  --ok-ink: #13723f;
+  --bad: #c0362c;
+  --bad-ink: #a3170f;
+  --finding: #d23a52;
+  --finding-ink: #b0263d;
+  --rec: #e0324a;
+  --color-combo: #464a52;
+  --case-hi: #ededeb;
+  --case-lo: #d8d8d5;
+  --case-rim: rgb(255 255 255 / 0.55);
+  --case-shadow: rgb(0 0 0 / 0.78);
+  --case-seam: rgb(40 44 60 / 0.42);
+  --leg: #8e9095;
+  --leg-rim: rgb(40 44 60 / 0.35);
+  --knob: #6f7277;
+  --knurl: #45474c;
+  --hole: #2a2c31;
+  --ball-hi: #ffffff;
+  --ball-lo: #6f727a;
+  --ball-socket: #2a2c31;
+  --ball-socket-rim: rgb(40 44 60 / 0.35);
+  --screen: #17181b;
+  --screen-rim: rgb(0 0 0 / 0.5);
+  --well: rgb(40 44 60 / 0.12);
+  --layer-1: #8a93a3;
+  --layer-2: #2f7bff;
+  --layer-3: #ff3b30;
+  --layer-4: #21b26a;
+  --layer-5: #8b5cff;
+  --layer-6: #ff9f1a;
+}
+
+/* A black case in a light room: the dark room's case, a touch lifted, its edges catching the room's light, and a softer shadow.
+   A grey case takes the same marks, since they read on it as on black, and its own charcoal below. */
+.keyboard[data-case-room="dark"],
+.keyboard[data-case-room="grey"] {
+  --room: #0e0f12;
+  --ink: #eef0f3;
+  --ink-2: #b3b7bf;
+  --ink-3: #9298a2;
+  --surface: #191a1e;
+  --surface-2: #222429;
+  --surface-3: #2b2d33;
+  --line: rgb(255 255 255 / 0.08);
+  --line-2: rgb(255 255 255 / 0.14);
+  --primary: #f3f4f6;
+  --primary-ink: #111214;
+  --card-shadow: 0 30px 70px rgb(30 34 48 / 0.3), 0 3px 10px rgb(30 34 48 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --shadow-pop: 0 30px 70px rgb(30 34 48 / 0.3), 0 3px 10px rgb(30 34 48 / 0.18);
+  --pending: #ffb340;
+  --ok: #3ddc84;
+  --ok-ink: #6fdc9b;
+  --bad: #ff6b5e;
+  --bad-ink: #ff8a80;
+  --finding: #ff6b7d;
+  --finding-ink: #ff9aa6;
+  --rec: #ff4d5e;
+  --color-combo: #b3b7bf;
+  --case-hi: #2a2c30;
+  --case-lo: #1a1b1e;
+  --case-rim: rgb(255 255 255 / 0.18);
+  --case-shadow: rgb(30 34 48 / 0.32);
+  --case-seam: rgb(0 0 0 / 0.7);
+  --leg: #3b3d42;
+  --leg-rim: rgb(255 255 255 / 0.14);
+  --knob: #a8acb2;
+  --knurl: #5f636a;
+  --hole: #050506;
+  --ball-hi: #e4e6ea;
+  --ball-lo: #2c2e34;
+  --ball-socket: #050506;
+  --ball-socket-rim: rgb(255 255 255 / 0.18);
+  --screen: #08090a;
+  --screen-rim: rgb(255 255 255 / 0.08);
+  --well: rgb(0 0 0 / 0.42);
+  --layer-1: #9aa3b2;
+  --layer-2: #3d86ff;
+  --layer-3: #ff4136;
+  --layer-4: #2bd67b;
+  --layer-5: #9466ff;
+  --layer-6: #ffa52e;
+}
+
+/* MoErgo's grey Glove80: charcoal, not black. Sampled from MoErgo's studio photo of the grey board (its lit palm rest #4b4a48 to
+   #534f4e) and BK's own photo (evidence/glove80-ref/22.png, a darker, cooler #22292f to #2a333a in room light); the two bracket a
+   neutral charcoal, lit on top and a step darker in its shade. */
+.keyboard[data-case-room="grey"] {
+  --case-hi: #47484b;
+  --case-lo: #313235;
+  --case-rim: rgb(255 255 255 / 0.16);
+  --case-seam: rgb(0 0 0 / 0.55);
+  --well: rgb(0 0 0 / 0.32);
+}
+
+/* The grey case in a dark room: the room's deep shadow on the stage, and a quieter rim. */
+.keyboard[data-case-room="grey"][data-room="dark"] {
+  --case-shadow: rgb(0 0 0 / 0.7);
+  --case-rim: rgb(255 255 255 / 0.11);
+  --card-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --shadow-pop: 0 30px 80px rgb(0 0 0 / 0.55), 0 4px 14px rgb(0 0 0 / 0.35);
+}
+
+/* White caps in a dark room: lit from above, their skirts falling into the room's shade, and a deeper drop. */
+.keyboard[data-caps-room="light"] {
+  --skirt-hi: #e3e3e1;
+  --skirt-lo: #c6c7c9;
+  --top-hi: #f7f7f5;
+  --top-lo: #ececea;
+  --top-rim: rgb(255 255 255 / 0.75);
+  --legend: #1a1b1e;
+  --front: #3f4249;
+  --ghost: #50535a;
+  --pending-ink: #7a4500;
+  --cap-drop: rgb(0 0 0 / 0.5);
+  --cap-shadow-edge: rgb(0 0 0 / 0.42);
+  --cap-highlight: rgb(255 255 255 / 0.75);
+  --red-skirt-hi: #b83026;
+  --red-skirt-lo: #9a231c;
+  --red-top-hi: #cf4037;
+  --red-top-lo: #c23a30;
+  --red-legend: #ffffff;
+  --red-front: #ffe9e6;
+  --keycap-red: #c63a31;
+  --cap-key: #f5f5f4;
+  --cap-key-ink: #1a1b1e;
+  --cap-modifier: #dde1e8;
+  --cap-modifier-ink: #1f2530;
+  --cap-hold: #f3dcb0;
+  --cap-hold-ink: #4a2e00;
+  --cap-layer: #d3defb;
+  --cap-layer-ink: #14286b;
+  --cap-macro: #ecd6f7;
+  --cap-macro-ink: #4e1869;
+  --cap-dance: #f8d6e1;
+  --cap-dance-ink: #6a1230;
+  --cap-native: #b6e4da;
+  --cap-native-ink: #06453c;
+}
+
+/* Black caps in a light room: the dark room's caps with a brighter rim along the top face and a lighter, room-coloured drop. */
+.keyboard[data-caps-room="dark"] {
+  --skirt-hi: #2a2b30;
+  --skirt-lo: #161719;
+  --top-hi: #3b3d43;
+  --top-lo: #2d2f34;
+  --top-rim: rgb(255 255 255 / 0.18);
+  --legend: #eef0f2;
+  --front: #aeb2ba;
+  --ghost: #8f949c;
+  --pending-ink: #ffb340;
+  --cap-drop: rgb(30 34 48 / 0.5);
+  --cap-shadow-edge: rgb(20 22 30 / 0.5);
+  --cap-highlight: rgb(255 255 255 / 0.16);
+  --red-skirt-hi: #b12c25;
+  --red-skirt-lo: #7c1915;
+  --red-top-hi: #cc382e;
+  --red-top-lo: #c5352c;
+  --red-legend: #ffffff;
+  --red-front: #ffe3e0;
+  --keycap-red: #de4a3f;
+  --cap-key: #2b2d32;
+  --cap-key-ink: #eef0f2;
+  --cap-modifier: #3b4252;
+  --cap-modifier-ink: #e6eaf2;
+  --cap-hold: #5a4719;
+  --cap-hold-ink: #fbe3a8;
+  --cap-layer: #2f4280;
+  --cap-layer-ink: #dbe5ff;
+  --cap-macro: #613679;
+  --cap-macro-ink: #f6dcff;
+  --cap-dance: #712a45;
+  --cap-dance-ink: #ffdbe7;
+  --cap-native: #1d625d;
+  --cap-native-ink: #c9f6ee;
+}
+
+@font-face{font-family:'Instrument Sans';font-style:normal;font-weight:400 700;font-display:swap;src:url(data:font/woff2;base64,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) format('woff2')}
+*{box-sizing:border-box}body{margin:0;font-family:var(--font-ui);font-size:14px;color:var(--ink);background:var(--room)}button,input,select{font:inherit}button{cursor:pointer;color:inherit}button:disabled{cursor:not-allowed;opacity:.6}button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ink);outline-offset:3px}button:hover:not(:disabled){filter:brightness(.95)}::selection{background:var(--ink);color:var(--surface)}*{scrollbar-color:var(--ink-3) var(--surface);scrollbar-width:thin}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}[hidden]{display:none!important}p,h1,h2,h3{margin:0}svg.icon{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}.muted{color:var(--ink-3)}.row{display:flex;align-items:center;gap:8px}.spacer{flex:1}.plain{background:none;border:0;padding:8px;border-radius:8px}.btn{min-height:44px;padding:8px 14px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface-2);display:inline-flex;align-items:center;justify-content:center;gap:8px}.primary{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}.link{background:none;border:0;text-decoration:underline;text-underline-offset:3px;padding:8px 0}.pending{color:var(--pending-ink)}.bad{color:var(--bad-ink)}
+.comp-controls{height:60px;padding:8px 24px;display:flex;align-items:center;gap:20px;background:var(--surface);border-bottom:1px solid var(--line)}.comp-title{font-size:13px;white-space:nowrap}.comp-title strong{font-weight:600}.state-control{display:flex;align-items:center;gap:8px;font-size:12px}.state-control select{height:36px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line-2);border-radius:8px;padding:0 30px 0 10px}.theme-switch{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px}.theme-switch button{border:0;background:var(--surface-2);padding:8px 10px;border-radius:8px}.theme-switch button[aria-pressed=true]{background:var(--primary);color:var(--primary-ink)}
+.app{height:calc(100dvh - 60px);min-height:660px;background:radial-gradient(ellipse at 43% 43%,var(--room-spot),var(--room) 70%);position:relative;overflow:hidden}.topbar{height:64px;padding:0 24px;display:flex;align-items:center;gap:24px}.brand{font-size:16px;font-weight:600}.board-picker{padding:9px 12px;background:var(--surface);border-radius:10px;font-size:13px;display:flex;gap:8px;align-items:center}.sync{font-size:13px;color:var(--ink-2);margin:auto}.dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);display:inline-block;flex:none}.sync .dot{background:var(--pending)}.top-actions{font-size:13px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 480px;height:calc(100% - 64px);gap:12px;padding-right:12px}.stage{position:relative;min-width:0;display:flex;flex-direction:column;padding:24px 32px 20px}.caption{position:relative;z-index:1}.config{font-size:13px;color:var(--ink-2);margin-bottom:4px}.config span{color:var(--ink-3);margin-right:8px}.caption h1{font-size:44px;font-weight:500;letter-spacing:-.035em;line-height:1.15}.caption>p{font-size:14px;color:var(--ink-2);margin-top:4px}.board-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative}.board-fit{position:relative;flex:none}.board-snapshot{transform-origin:top left}.board-snapshot .keyboard{margin:0!important}.board-snapshot .cap{cursor:default}.board-snapshot .comp-mark .cap-body{outline:2px solid var(--pending);outline-offset:2px}.board-snapshot .comp-mark:after{content:"";position:absolute;width:6px;height:6px;border-radius:50%;background:var(--pending);top:2px;right:2px}.board-snapshot .comp-mark .cap-front{color:var(--pending-ink)}.stage-note{font-size:13px;text-align:center;color:var(--ink-3);margin:12px 0 24px;min-height:18px}.layers{display:flex;justify-content:center;gap:8px}.layer{padding:10px 14px;border:0;border-radius:12px;background:none;color:var(--ink-2);font-size:13px}.layer.active{background:var(--surface);color:var(--ink)}.layer .dot{margin-right:6px;width:5px;height:5px}.stage-preview{position:absolute;bottom:154px;left:50%;transform:translateX(-50%);padding:10px 16px;background:var(--surface);border-radius:10px;font-size:13px;box-shadow:var(--shadow-pop);white-space:nowrap}.phone-stage-button{display:none}
+.agent{background:var(--surface);border-radius:20px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;min-height:0;margin-bottom:12px}.agent-head{padding:20px 24px 16px;border-bottom:1px solid var(--line)}.agent-head h2{font-size:16px;font-weight:600}.agent-head p{font-size:12px;color:var(--ink-3);margin-top:6px}.close-panel{margin:-8px -8px -8px auto}.conversation{overflow-y:auto;flex:1;min-height:0;padding:24px}.request{margin-left:48px;margin-bottom:26px}.request .role{text-align:right;font-size:12px;color:var(--ink-3);margin-bottom:8px}.bubble{background:var(--surface-2);border-radius:16px 16px 4px 16px;padding:12px 16px;line-height:1.55}.request-context{font-size:12px;color:var(--ink-3);text-align:right;margin-top:8px}.agent-role{font-size:13px;font-weight:600;margin-bottom:12px}.answer{font-size:15px;line-height:1.6;max-width:60ch}.answer strong{font-weight:600}.answer p+p{margin-top:8px}.status-line{display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px}.status-label{position:relative;color:var(--ink-2)}.shimmer{background:linear-gradient(100deg,var(--ink-2) 30%,var(--ink) 48%,var(--ink-2) 65%);background-size:240% 100%;background-clip:text;-webkit-background-clip:text;color:transparent;animation:sweep 1.8s linear infinite}.elapsed{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;margin-left:auto}.activity-list{margin:0;padding:0;list-style:none}.activity{padding:10px 0;display:grid;grid-template-columns:16px 1fr auto;gap:10px;align-items:start;font-size:13px}.activity .icon{margin-top:2px;width:14px;height:14px;color:var(--ink-3)}.activity-title{font-weight:500;line-height:1.4}.activity-target{font-size:12px;color:var(--ink-3);margin-top:3px}.activity-state{font-size:12px;color:var(--ink-3);padding-top:2px;font-variant-numeric:tabular-nums}.activity.failed .icon,.activity.failed .activity-state{color:var(--bad-ink)}.working{margin-top:16px}.working summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3);list-style:none}.working summary::-webkit-details-marker{display:none}.working summary .icon{width:14px;height:14px;transition:transform .18s}.working[open] summary .icon{transform:rotate(90deg)}.working .activity-list{padding:0 0 8px 22px}.working-note{font-size:12px;color:var(--ink-3);line-height:1.5}.tool-details{margin-top:12px;font-size:12px;color:var(--ink-3)}.tool-details summary{cursor:pointer;padding:8px 0}.tool-details p{line-height:1.6}.stop{margin-top:20px}.quiet-note{font-size:12px;color:var(--ink-3);line-height:1.5;margin-top:10px}.question{margin:16px 0 0;padding:20px;background:var(--surface-2);border-radius:12px}.question h3{font-size:16px;font-weight:600;line-height:1.4;margin-bottom:12px}.question fieldset{border:0;margin:0;padding:0}.question legend{font-size:12px;color:var(--ink-3);margin-bottom:8px}.choice{display:flex;align-items:flex-start;gap:10px;padding:12px 0;min-height:52px;cursor:pointer}.choice input{accent-color:var(--ink);margin-top:3px;width:16px;height:16px}.choice strong{font-weight:500;display:block}.choice small{display:block;font-size:12px;color:var(--ink-3);line-height:1.5;margin-top:3px}.question .btn{margin-top:12px;width:100%}.proposal{margin-top:20px;background:var(--surface-2);border-radius:12px;padding:16px;box-shadow:none;border:0}.proposal-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:8px}.proposal p{font-size:13px;line-height:1.5}.changes{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.key-change{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface);border-radius:8px;font-size:12px}.key-change kbd{font:600 13px var(--font-ui);border:1px solid var(--line-2);border-radius:4px;padding:3px 5px}.proposal-actions{margin-top:16px;display:flex;gap:8px;align-items:center}.proposal-actions .btn{flex:1}.proposal-status{font-size:12px;color:var(--pending-ink);margin-bottom:4px}.outcome{margin:16px 0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:13px;line-height:1.6}.outcome p+p{margin-top:6px}.composer{padding:12px 20px 16px;border-top:1px solid var(--line)}.composer label{display:block;font-size:12px;color:var(--ink-3);margin-bottom:6px}.composer input{border:0;background:none;color:var(--ink);width:100%;padding:8px 0;font-size:14px;caret-color:var(--ink)}.composer input::placeholder{color:var(--ink-3)}.composer p{font-size:11px;color:var(--ink-3);margin-top:2px}.footer-help{font-size:12px;color:var(--ink-3);margin-top:16px}.phone-handle{display:none}.notice{margin-top:12px;font-size:12px;line-height:1.5;color:var(--ink-2)}
+@keyframes sweep{to{background-position:-240% 0}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.shimmer{background:none;color:var(--ink-2)}}html[data-motion="paused"] .shimmer{animation:none;background:none;color:var(--ink-2)}
+@media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr) 420px}.topbar{gap:12px}.stage{padding:24px 20px}.top-actions{display:none}.sync{margin-left:auto;margin-right:0}.agent-head{padding:16px 20px}.conversation{padding:20px}}
+@media(max-width:600px){.comp-controls{height:96px;flex-wrap:wrap;padding:8px 16px;gap:6px 12px}.comp-title{width:100%;font-size:12px}.state-control{gap:6px}.state-control select{height:36px;max-width:154px}.theme-switch{gap:4px}.theme-switch button{padding:8px}.motion-toggle{display:none}.app{height:calc(100dvh - 96px);min-height:600px}.topbar{height:56px;padding:0 16px;gap:12px}.brand{font-size:14px}.board-picker{font-size:12px;padding:8px}.sync{font-size:0}.sync .dot{display:block}.layout{display:block;height:calc(100% - 56px);padding:0}.stage{height:100%;padding:12px 20px 16px}.config{font-size:12px}.caption h1{font-size:28px}.caption>p{font-size:12px}.board-area{align-items:flex-start;padding-top:30px}.stage-note,.layers,.stage-preview{display:none}.agent{position:absolute;left:0;right:0;top:208px;bottom:0;margin:0;border-radius:20px 20px 0 0;z-index:3;box-shadow:0 -8px 50px rgb(0 0 0 / .12)}.phone-handle{display:block;width:36px;height:4px;border-radius:9px;background:var(--line-2);margin:8px auto 0}.agent-head{padding:12px 20px}.agent-head h2{font-size:15px}.agent-head p{font-size:12px;margin-top:4px}.phone-stage-button{display:inline-flex;align-items:center;gap:6px;font-size:12px;margin-left:auto;padding:4px 0;min-height:30px}.close-panel{display:none}.conversation{padding:16px 20px}.request{margin-left:28px;margin-bottom:20px}.request .role{margin-bottom:4px}.bubble{padding:10px 12px;font-size:13px}.request-context{font-size:11px;margin-top:6px}.agent-role{margin-bottom:8px}.answer{font-size:14px}.composer{padding:8px 20px 12px}.composer label{display:none}.composer p{font-size:10px}.composer input{font-size:13px}.question{padding:16px}.proposal{padding:14px}.working summary{font-size:11px}.agent.peek{top:calc(100% - 180px)}.agent.peek .conversation,.agent.peek .composer{display:none}.agent.peek .agent-head{border:0}.agent.peek .phone-hint{display:block!important;padding:0 20px;font-size:13px;line-height:1.5}.app[data-state=waiting] .request{margin-bottom:16px}.app[data-state=waiting] .question{margin-top:12px}}
+.composer p,.request-context,.working summary{font-size:12px}
+.phone-half{display:none}@media(max-width:600px){.phone-half{display:block;color:var(--ink-3);font-size:12px;margin-top:6px}.board-fit{overflow:hidden}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol><symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol><symbol id="chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol><symbol id="stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol><symbol id="error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></symbol><symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol><symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol><symbol id="keyboard-icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 16h10"/></symbol>
+</defs></svg>
+<header class="comp-controls" aria-label="Prototype controls">
+ <p class="comp-title"><strong>Agent moments</strong> · Synthetic proposal, not a live run</p>
+ <label class="state-control">Moment <select id="moment"><option value="running">Running</option><option value="waiting">Needs your answer</option><option value="completed" selected>Completed · folded</option><option value="failure">Failed · partial effects</option><option value="stopped">Stopped</option></select></label>
+ <div class="theme-switch" role="group" aria-label="Color theme"><button data-theme-choice="light" aria-pressed="true">Light</button><button data-theme-choice="dark" aria-pressed="false">Dark</button></div>
+ <button id="motion" class="plain motion-toggle" aria-pressed="false">Pause shimmer</button>
+</header>
+<main class="app" data-state="completed">
+ <header class="topbar"><span class="brand">keyloom</span><span class="board-picker"><svg class="icon"><use href="#keyboard-icon"/></svg> Moonlander</span><span class="sync row"><i class="dot"></i> Preview only · not on your Moonlander</span><span class="top-actions muted">Ask keyloom&nbsp; ⌘K</span></header>
+ <div class="layout">
+ <section class="stage" aria-label="Moonlander keyboard preview">
+  <div class="caption"><p class="config"><span>Config</span> Daily</p><h1>Base</h1><p id="stage-caption">Previewing 2 holds · letters stay the same</p><span class="phone-half">Right half · K and L</span></div>
+  <div class="board-area"><div class="board-fit"><div class="board-snapshot" inert aria-hidden="true"><div class="keyboard" data-inspect="false" data-previewing="false" data-surface="slab" role="group" aria-label="Keyboard, Base. Arrow keys move between keys." style="width: 1127.06px; height: 542.446px; --part: 0px; --part-units: 0;"><span class="keyboard-contact" aria-hidden="true"></span><svg class="keyboard-case" aria-hidden="true" viewBox="-0.6659999999999999 -1.029 19.432000000000002 9.352515523268654" data-surface="slab"><path class="case-body" d="M-0.366,-0.309 Q-0.366,-0.729 0.054,-0.729 L6.918,-0.729 Q7.368,-0.729 7.368,-0.279 L7.368,3.064 Q7.368,3.104 7.384,3.114 L7.384,3.114 Q7.401,3.124 7.426,3.155 L7.718,3.515 Q7.755,3.562 7.709,3.6 L7.472,3.791 Q7.449,3.81 7.43,3.787 L7.113,3.395 Q7.094,3.372 7.071,3.391 L4.813,5.219 Q4.79,5.238 4.808,5.261 L5.168,5.705 Q5.187,5.729 5.164,5.748 L4.868,5.987 Q4.836,6.013 4.801,5.994 L4.527,5.847 Q4.439,5.8 4.339,5.8 L0.054,5.8 Q-0.366,5.8 -0.366,5.38 Z" data-hand="left"></path><path class="case-module" d="M7.705,3.601 Q7.752,3.564 7.762,3.623 L8.278,6.476 Q8.358,6.919 8.008,7.202 L7.371,7.717 Q7.022,8.001 6.69,7.697 L4.887,6.047 Q4.843,6.006 4.889,5.968 L5.169,5.742 Q5.192,5.723 5.173,5.7 L4.815,5.258 Q4.796,5.234 4.819,5.215 L7.069,3.394 Q7.093,3.375 7.111,3.398 L7.427,3.788 Q7.446,3.811 7.469,3.792 Z" data-hand="left"></path><path class="case-leg" d="M7.525,0.428 Q7.525,0.308 7.645,0.308 L7.777,0.308 Q7.897,0.308 7.897,0.428 L7.897,2.24 Q7.897,2.36 7.777,2.36 L7.645,2.36 Q7.525,2.36 7.525,2.24 Z M7.469,2.472 A0.248,0.248 0 1,0 7.965,2.472 A0.248,0.248 0 1,0 7.469,2.472 Z M7.368,-0.061 Q7.368,-0.121 7.428,-0.121 L7.849,-0.121 Q7.909,-0.121 7.909,-0.061 L7.909,0.315 Q7.909,0.375 7.849,0.375 L7.428,0.375 Q7.368,0.375 7.368,0.315 Z" data-hand="left"></path><path class="case-knob" d="M7.897,-0.024 Q7.897,-0.064 7.937,-0.064 L8.139,-0.064 Q8.179,-0.064 8.179,-0.024 L8.179,0.29 Q8.179,0.33 8.139,0.33 L7.937,0.33 Q7.897,0.33 7.897,0.29 Z" data-hand="left"></path><path class="case-knurl" d="M7.921,-0.034 L7.921,0.3 M7.968,-0.034 L7.968,0.3 M8.015,-0.034 L8.015,0.3 M8.062,-0.034 L8.062,0.3 M8.109,-0.034 L8.109,0.3 M8.156,-0.034 L8.156,0.3" data-hand="left"></path><path class="case-knob" d="M7.661,3.102 Q7.7,3.071 7.731,3.11 L7.866,3.277 Q7.898,3.315 7.859,3.347 L7.686,3.487 Q7.671,3.499 7.658,3.484 L7.485,3.27 Q7.473,3.255 7.488,3.242 Z" data-hand="left"></path><path class="case-hole" d="M0.811,-0.256 A0.041,0.041 0 1,0 0.892,-0.256 A0.041,0.041 0 1,0 0.811,-0.256 Z" data-hand="left"></path><path class="case-body" d="M18.466,5.38 Q18.466,5.8 18.046,5.8 L13.761,5.8 Q13.661,5.8 13.573,5.847 L13.299,5.994 Q13.264,6.013 13.232,5.987 L12.936,5.748 Q12.913,5.729 12.932,5.705 L13.292,5.261 Q13.31,5.238 13.287,5.219 L11.029,3.391 Q11.006,3.372 10.987,3.395 L10.67,3.787 Q10.651,3.81 10.628,3.791 L10.391,3.6 Q10.345,3.562 10.382,3.515 L10.674,3.155 Q10.699,3.124 10.716,3.114 L10.716,3.114 Q10.732,3.104 10.732,3.064 L10.732,-0.279 Q10.732,-0.729 11.182,-0.729 L18.046,-0.729 Q18.466,-0.729 18.466,-0.309 Z" data-hand="right"></path><path class="case-module" d="M10.631,3.792 Q10.654,3.811 10.673,3.788 L10.989,3.398 Q11.007,3.375 11.031,3.394 L13.281,5.215 Q13.304,5.234 13.285,5.258 L12.927,5.7 Q12.908,5.723 12.931,5.742 L13.211,5.968 Q13.257,6.006 13.213,6.047 L11.41,7.697 Q11.078,8.001 10.729,7.717 L10.092,7.202 Q9.742,6.919 9.822,6.476 L10.338,3.623 Q10.348,3.564 10.395,3.601 Z" data-hand="right"></path><path class="case-leg" d="M10.575,2.24 Q10.575,2.36 10.455,2.36 L10.323,2.36 Q10.203,2.36 10.203,2.24 L10.203,0.428 Q10.203,0.308 10.323,0.308 L10.455,0.308 Q10.575,0.308 10.575,0.428 Z M10.135,2.472 A0.248,0.248 0 1,0 10.631,2.472 A0.248,0.248 0 1,0 10.135,2.472 Z M10.732,0.315 Q10.732,0.375 10.672,0.375 L10.251,0.375 Q10.191,0.375 10.191,0.315 L10.191,-0.061 Q10.191,-0.121 10.251,-0.121 L10.672,-0.121 Q10.732,-0.121 10.732,-0.061 Z" data-hand="right"></path><path class="case-knob" d="M10.203,0.29 Q10.203,0.33 10.163,0.33 L9.961,0.33 Q9.921,0.33 9.921,0.29 L9.921,-0.024 Q9.921,-0.064 9.961,-0.064 L10.163,-0.064 Q10.203,-0.064 10.203,-0.024 Z" data-hand="right"></path><path class="case-knurl" d="M9.944,-0.034 L9.944,0.3 M9.991,-0.034 L9.991,0.3 M10.038,-0.034 L10.038,0.3 M10.085,-0.034 L10.085,0.3 M10.132,-0.034 L10.132,0.3 M10.179,-0.034 L10.179,0.3" data-hand="right"></path><path class="case-knob" d="M10.612,3.242 Q10.627,3.255 10.615,3.27 L10.442,3.484 Q10.429,3.499 10.414,3.487 L10.241,3.347 Q10.202,3.315 10.234,3.277 L10.369,3.11 Q10.4,3.071 10.439,3.102 Z" data-hand="right"></path><path class="case-hole" d="M17.208,-0.256 A0.041,0.041 0 1,0 17.289,-0.256 A0.041,0.041 0 1,0 17.208,-0.256 Z" data-hand="right"></path><circle data-hand="left" class="case-led" data-lit="false" cx="2.204" cy="-0.256" r="0.055" style="--led-colour: transparent; --ripple: 0ms;"></circle><circle data-hand="left" class="case-led" data-lit="false" cx="2.508" cy="-0.256" r="0.055" style="--led-colour: transparent; --ripple: 0ms;"></circle><circle data-hand="left" class="case-led" data-lit="false" cx="2.824" cy="-0.256" r="0.055" style="--led-colour: transparent; --ripple: 0ms;"></circle><circle data-hand="right" class="case-led" data-lit="false" cx="15.276" cy="-0.256" r="0.055" style="--led-colour: transparent; --ripple: 0ms;"></circle><circle data-hand="right" class="case-led" data-lit="false" cx="15.592" cy="-0.256" r="0.055" style="--led-colour: transparent; --ripple: 0ms;"></circle><circle data-hand="right" class="case-led" data-lit="false" cx="15.896" cy="-0.256" r="0.055" style="--led-colour: transparent; --ripple: 0ms;"></circle></svg><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 5" tabindex="0" aria-label="Key 1. Sends 5. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="0" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 41.238px; top: 84.042px; width: 52.78px; height: 52.78px; transform-origin: -2.61px -24.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">5</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 6" tabindex="-1" aria-label="Key 2. Sends 6. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="1" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 99.238px; top: 84.042px; width: 52.78px; height: 52.78px; transform-origin: -60.61px -24.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">6</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 1" tabindex="-1" aria-label="Key 3. Sends 1. left ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="2" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 157.238px; top: 69.542px; width: 52.78px; height: 52.78px; transform-origin: -118.61px -9.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">1</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Esc" tabindex="-1" aria-label="Key 4. Sends Esc. left middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="3" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 215.238px; top: 62.292px; width: 52.78px; height: 52.78px; transform-origin: -176.61px -2.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 11.6px;">Esc</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 2" tabindex="-1" aria-label="Key 5. Sends 2. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="4" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 273.238px; top: 69.542px; width: 52.78px; height: 52.78px; transform-origin: -234.61px -9.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">2</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 3" tabindex="-1" aria-label="Key 6. Sends 3. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="5" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 331.238px; top: 76.792px; width: 52.78px; height: 52.78px; transform-origin: -292.61px -17.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">3</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 4" tabindex="-1" aria-label="Key 7. Sends 4. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="6" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 389.238px; top: 76.792px; width: 52.78px; height: 52.78px; transform-origin: -350.61px -17.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">4</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 9" tabindex="-1" aria-label="Key 8. Sends 9. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="7" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 685.038px; top: 76.792px; width: 52.78px; height: 52.78px; transform-origin: -582.61px -17.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">9</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 0" tabindex="-1" aria-label="Key 9. Sends 0. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="8" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 743.038px; top: 76.792px; width: 52.78px; height: 52.78px; transform-origin: -640.61px -17.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">0</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 7" tabindex="-1" aria-label="Key 10. Sends 7. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="9" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 801.038px; top: 69.542px; width: 52.78px; height: 52.78px; transform-origin: -698.61px -9.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">7</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 6" tabindex="-1" aria-label="Key 11. Sends 6. right middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="10" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 859.038px; top: 62.292px; width: 52.78px; height: 52.78px; transform-origin: -756.61px -2.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">6</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends 8" tabindex="-1" aria-label="Key 12. Sends 8. right ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="11" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 917.038px; top: 69.542px; width: 52.78px; height: 52.78px; transform-origin: -814.61px -9.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">8</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Minus" tabindex="-1" aria-label="Key 13. Sends Minus. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="12" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 975.038px; top: 84.042px; width: 52.78px; height: 52.78px; transform-origin: -872.61px -24.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">-</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Backspace" tabindex="-1" aria-label="Key 14. Sends Backspace. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="13" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 1033.04px; top: 84.042px; width: 52.78px; height: 52.78px; transform-origin: -930.61px -24.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⌫</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends T" tabindex="-1" aria-label="Key 15. Sends T. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="14" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 41.238px; top: 142.042px; width: 52.78px; height: 52.78px; transform-origin: -2.61px -82.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">T</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Left bracket" tabindex="-1" aria-label="Key 16. Sends Left bracket. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="15" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 99.238px; top: 142.042px; width: 52.78px; height: 52.78px; transform-origin: -60.61px -82.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">[</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Q" tabindex="-1" aria-label="Key 17. Sends Q. left ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="16" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 157.238px; top: 127.542px; width: 52.78px; height: 52.78px; transform-origin: -118.61px -67.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">Q</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Tab" tabindex="-1" aria-label="Key 18. Sends Tab. left middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="17" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 215.238px; top: 120.292px; width: 52.78px; height: 52.78px; transform-origin: -176.61px -60.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⇥</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends W" tabindex="-1" aria-label="Key 19. Sends W. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="18" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 273.238px; top: 127.542px; width: 52.78px; height: 52.78px; transform-origin: -234.61px -67.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">W</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends E" tabindex="-1" aria-label="Key 20. Sends E. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="19" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 331.238px; top: 134.792px; width: 52.78px; height: 52.78px; transform-origin: -292.61px -75.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">E</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends R" tabindex="-1" aria-label="Key 21. Sends R. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="20" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 389.238px; top: 134.792px; width: 52.78px; height: 52.78px; transform-origin: -350.61px -75.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">R</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends O" tabindex="-1" aria-label="Key 22. Sends O. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="21" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 685.038px; top: 134.792px; width: 52.78px; height: 52.78px; transform-origin: -582.61px -75.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">O</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends P" tabindex="-1" aria-label="Key 23. Sends P. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="22" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 743.038px; top: 134.792px; width: 52.78px; height: 52.78px; transform-origin: -640.61px -75.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">P</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends U" tabindex="-1" aria-label="Key 24. Sends U. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="23" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 801.038px; top: 127.542px; width: 52.78px; height: 52.78px; transform-origin: -698.61px -67.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">U</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Y" tabindex="-1" aria-label="Key 25. Sends Y. right middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="24" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 859.038px; top: 120.292px; width: 52.78px; height: 52.78px; transform-origin: -756.61px -60.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">Y</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends I" tabindex="-1" aria-label="Key 26. Sends I. right ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="25" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 917.038px; top: 127.542px; width: 52.78px; height: 52.78px; transform-origin: -814.61px -67.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">I</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Right bracket" tabindex="-1" aria-label="Key 27. Sends Right bracket. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="26" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 975.038px; top: 142.042px; width: 52.78px; height: 52.78px; transform-origin: -872.61px -82.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">]</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Backslash" tabindex="-1" aria-label="Key 28. Sends Backslash. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="27" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 1033.04px; top: 142.042px; width: 52.78px; height: 52.78px; transform-origin: -930.61px -82.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">\</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends G" tabindex="-1" aria-label="Key 29. Sends G. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="28" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 41.238px; top: 200.042px; width: 52.78px; height: 52.78px; transform-origin: -2.61px -140.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">G</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Minus" tabindex="-1" aria-label="Key 30. Sends Minus. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="29" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 99.238px; top: 200.042px; width: 52.78px; height: 52.78px; transform-origin: -60.61px -140.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">-</span></span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for A, hold for Left Ctrl" tabindex="-1" aria-label="Key 31. Tap for A, hold for Left Ctrl. left ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="30" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 157.238px; top: 185.542px; width: 52.78px; height: 52.78px; transform-origin: -118.61px -125.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">A</span></span><span class="cap-front" style="font-size: 11px;">⌃ control</span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Caps Lock" tabindex="-1" aria-label="Key 32. Sends Caps Lock. left middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="31" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 215.238px; top: 178.292px; width: 52.78px; height: 52.78px; transform-origin: -176.61px -118.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⇪</span></span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for S, hold for Left Alt" tabindex="-1" aria-label="Key 33. Tap for S, hold for Left Alt. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="32" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 273.238px; top: 185.542px; width: 52.78px; height: 52.78px; transform-origin: -234.61px -125.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">S</span></span><span class="cap-front" style="font-size: 11px;">⌥ option</span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for D, hold for Left GUI" tabindex="-1" aria-label="Key 34. Tap for D, hold for Left GUI. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="33" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 331.238px; top: 192.792px; width: 52.78px; height: 52.78px; transform-origin: -292.61px -133.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">D</span></span><span class="cap-front" style="font-size: 11px;">⌘ command</span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for F, hold for Left Shift" tabindex="-1" aria-label="Key 35. Tap for F, hold for Left Shift. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="34" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 389.238px; top: 192.792px; width: 52.78px; height: 52.78px; transform-origin: -350.61px -133.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">F</span></span><span class="cap-front" style="font-size: 11px;">⇧ shift</span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for L, hold for Right Alt" tabindex="-1" aria-label="Key 36. Tap for L, hold for Right Alt. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="35" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 685.038px; top: 192.792px; width: 52.78px; height: 52.78px; transform-origin: -582.61px -133.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">L</span></span><span class="cap-front" style="font-size: 11px;">⌥ option</span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Semicolon" tabindex="-1" aria-label="Key 37. Sends Semicolon. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="36" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 743.038px; top: 192.792px; width: 52.78px; height: 52.78px; transform-origin: -640.61px -133.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">;</span></span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for J, hold for Right Shift" tabindex="-1" aria-label="Key 38. Tap for J, hold for Right Shift. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="37" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 801.038px; top: 185.542px; width: 52.78px; height: 52.78px; transform-origin: -698.61px -125.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">J</span></span><span class="cap-front" style="font-size: 11px;">⇧ shift</span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for H, hold for Right Ctrl" tabindex="-1" aria-label="Key 39. Tap for H, hold for Right Ctrl. right middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="38" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 859.038px; top: 178.292px; width: 52.78px; height: 52.78px; transform-origin: -756.61px -118.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">H</span></span><span class="cap-front" style="font-size: 11px;">⌃ control</span></span></span></button><button type="button" class="cap" data-tone="holdTap" data-led="false" data-shaped="false" data-upright="false" title="Tap for K, hold for Right GUI" tabindex="-1" aria-label="Key 40. Tap for K, hold for Right GUI. right ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="39" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 917.038px; top: 185.542px; width: 52.78px; height: 52.78px; transform-origin: -814.61px -125.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">K</span></span><span class="cap-front" style="font-size: 11px;">⌘ command</span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Quote" tabindex="-1" aria-label="Key 41. Sends Quote. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="40" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 975.038px; top: 200.042px; width: 52.78px; height: 52.78px; transform-origin: -872.61px -140.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">'</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Enter" tabindex="-1" aria-label="Key 42. Sends Enter. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="41" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 1033.04px; top: 200.042px; width: 52.78px; height: 52.78px; transform-origin: -930.61px -140.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⏎</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends V" tabindex="-1" aria-label="Key 43. Sends V. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="42" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 41.238px; top: 258.042px; width: 52.78px; height: 52.78px; transform-origin: -2.61px -198.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">V</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends B" tabindex="-1" aria-label="Key 44. Sends B. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="43" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 99.238px; top: 258.042px; width: 52.78px; height: 52.78px; transform-origin: -60.61px -198.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">B</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Z" tabindex="-1" aria-label="Key 45. Sends Z. left ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="44" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 157.238px; top: 243.542px; width: 52.78px; height: 52.78px; transform-origin: -118.61px -183.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">Z</span></span></span></span></button><button type="button" class="cap" data-tone="modifier" data-led="false" data-shaped="false" data-upright="false" title="Holds Left Shift while pressed" tabindex="-1" aria-label="Key 46. Holds Left Shift while pressed. left middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="45" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 215.238px; top: 236.292px; width: 52.78px; height: 52.78px; transform-origin: -176.61px -176.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⇧</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends X" tabindex="-1" aria-label="Key 47. Sends X. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="46" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 273.238px; top: 243.542px; width: 52.78px; height: 52.78px; transform-origin: -234.61px -183.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">X</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends C" tabindex="-1" aria-label="Key 48. Sends C. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="47" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 331.238px; top: 250.792px; width: 52.78px; height: 52.78px; transform-origin: -292.61px -191.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">C</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Dot" tabindex="-1" aria-label="Key 49. Sends Dot. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="48" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 743.038px; top: 250.792px; width: 52.78px; height: 52.78px; transform-origin: -640.61px -191.11px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">.</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends M" tabindex="-1" aria-label="Key 50. Sends M. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="49" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 801.038px; top: 243.542px; width: 52.78px; height: 52.78px; transform-origin: -698.61px -183.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">M</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends N" tabindex="-1" aria-label="Key 51. Sends N. right middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="50" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 859.038px; top: 236.292px; width: 52.78px; height: 52.78px; transform-origin: -756.61px -176.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">N</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Comma" tabindex="-1" aria-label="Key 52. Sends Comma. right ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="51" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 917.038px; top: 243.542px; width: 52.78px; height: 52.78px; transform-origin: -814.61px -183.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">,</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Slash" tabindex="-1" aria-label="Key 53. Sends Slash. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="52" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 975.038px; top: 258.042px; width: 52.78px; height: 52.78px; transform-origin: -872.61px -198.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 16.24px;">/</span></span></span></span></button><button type="button" class="cap" data-tone="modifier" data-led="false" data-shaped="false" data-upright="false" title="Holds Right Shift while pressed" tabindex="-1" aria-label="Key 54. Holds Right Shift while pressed. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="53" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 1033.04px; top: 258.042px; width: 52.78px; height: 52.78px; transform-origin: -930.61px -198.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⇧</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Backspace" tabindex="-1" aria-label="Key 55. Sends Backspace. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="54" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 41.238px; top: 316.042px; width: 52.78px; height: 52.78px; transform-origin: -2.61px -256.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⌫</span></span></span></span></button><button type="button" class="cap" data-tone="layer" data-led="false" data-shaped="false" data-upright="false" title="Hold to use Numbers while the key is down" tabindex="-1" aria-label="Key 56. Hold to use Numbers while the key is down. left pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="55" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 99.238px; top: 316.042px; width: 52.78px; height: 52.78px; transform-origin: -60.61px -256.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" data-stretch="condensed" style="font-size: 11px;">Numbers</span></span><span class="cap-front" style="font-size: 11px;"><i class="cap-dot" data-unlit="false" style="--dot: var(--layer-2);"></i>hold</span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Spacebar" tabindex="-1" aria-label="Key 57. Sends Spacebar. left ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="56" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 157.238px; top: 301.542px; width: 52.78px; height: 52.78px; transform-origin: -118.61px -241.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" data-stretch="condensed" style="font-size: 11px;">Space</span></span></span></span></button><button type="button" class="cap" data-tone="none" data-led="false" data-shaped="false" data-upright="false" title="Does nothing" tabindex="-1" aria-label="Key 58. Does nothing. left middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="57" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 215.238px; top: 294.292px; width: 52.78px; height: 52.78px; transform-origin: -176.61px -234.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"></span></span></span></button><button type="button" class="cap" data-tone="native" data-led="false" data-shaped="false" data-upright="false" title="QMK binding RGB_TOG, passed through as written" tabindex="-1" aria-label="Key 59. QMK binding RGB_TOG, passed through as written. left index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="58" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 273.238px; top: 301.542px; width: 52.78px; height: 52.78px; transform-origin: -234.61px -241.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" data-stretch="condensed" style="font-size: 11px;">On/off</span></span><span class="cap-front" style="font-size: 11px;">lights</span></span></span></button><button type="button" class="cap" data-tone="macro" data-led="false" data-keycap="red" data-shaped="true" data-upright="true" title="Runs macro Option twice" tabindex="-1" aria-label="Key 60. Runs macro Option twice. left thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="59" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 331.238px; top: 311.692px; width: 110.78px; height: 64.38px; transform: rotate(51deg); transform-origin: 98.6px 114.591px;"><span class="cap-bleed" aria-hidden="true"><span class="cap-bleed-shape" style="clip-path: path(&quot;M 0 35.067 Q 0 25.787 8.458 21.969 L 48.672 3.818 Q 57.13 0 65.588 3.818 L 105.802 21.969 Q 114.26 25.787 114.26 35.067 L 114.26 58.58 Q 114.26 67.86 104.98 67.86 L 9.28 67.86 Q 0 67.86 0 58.58 Z&quot;);"></span></span><span class="cap-body" style="--turn: -51deg; --print-w: 54.661096497015855px; --print-h: 34.8px; clip-path: path(&quot;M 0 32.004 Q 0 24.464 6.897 21.418 L 48.493 3.046 Q 55.39 0 62.287 3.046 L 103.883 21.418 Q 110.78 24.464 110.78 32.004 L 110.78 56.84 Q 110.78 64.38 103.24 64.38 L 7.54 64.38 Q 0 64.38 0 56.84 Z&quot;);"><span class="cap-top" aria-hidden="true" style="clip-path: path(&quot;M 0 24.975 Q 0 19.175 5.429 17.135 L 45.611 2.04 Q 51.04 0 56.469 2.04 L 96.651 17.135 Q 102.08 19.175 102.08 24.975 L 102.08 44.66 Q 102.08 50.46 96.28 50.46 L 5.8 50.46 Q 0 50.46 0 44.66 Z&quot;);"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" data-stretch="condensed" style="font-size: 11px;">Opti</span></span></span><span class="cap-kind-mark" aria-hidden="true">▸</span></span><svg class="cap-outline" aria-hidden="true" viewBox="0 0 110.78 64.38" width="110.78" height="64.38"><path d="M0,32.004 Q0,24.464 6.897,21.418 L48.493,3.046 Q55.39,0 62.287,3.046 L103.883,21.418 Q110.78,24.464 110.78,32.004 L110.78,56.84 Q110.78,64.38 103.24,64.38 L7.54,64.38 Q0,64.38 0,56.84 Z"></path></svg></button><button type="button" class="cap" data-tone="key" data-led="false" data-keycap="red" data-shaped="true" data-upright="true" title="Sends Right Alt" tabindex="-1" aria-label="Key 61. Sends Right Alt. right thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="60" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 685.038px; top: 311.692px; width: 110.78px; height: 64.38px; transform: rotate(-51deg); transform-origin: 12.18px 114.591px;"><span class="cap-bleed" aria-hidden="true"><span class="cap-bleed-shape" style="clip-path: path(&quot;M 0 35.067 Q 0 25.787 8.458 21.969 L 48.672 3.818 Q 57.13 0 65.588 3.818 L 105.802 21.969 Q 114.26 25.787 114.26 35.067 L 114.26 58.58 Q 114.26 67.86 104.98 67.86 L 9.28 67.86 Q 0 67.86 0 58.58 Z&quot;);"></span></span><span class="cap-body" style="--turn: 51deg; --print-w: 54.661096497015855px; --print-h: 34.8px; clip-path: path(&quot;M 0 32.004 Q 0 24.464 6.897 21.418 L 48.493 3.046 Q 55.39 0 62.287 3.046 L 103.883 21.418 Q 110.78 24.464 110.78 32.004 L 110.78 56.84 Q 110.78 64.38 103.24 64.38 L 7.54 64.38 Q 0 64.38 0 56.84 Z&quot;);"><span class="cap-top" aria-hidden="true" style="clip-path: path(&quot;M 0 24.975 Q 0 19.175 5.429 17.135 L 45.611 2.04 Q 51.04 0 56.469 2.04 L 96.651 17.135 Q 102.08 19.175 102.08 24.975 L 102.08 44.66 Q 102.08 50.46 96.28 50.46 L 5.8 50.46 Q 0 50.46 0 44.66 Z&quot;);"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⌥</span></span></span></span><svg class="cap-outline" aria-hidden="true" viewBox="0 0 110.78 64.38" width="110.78" height="64.38"><path d="M0,32.004 Q0,24.464 6.897,21.418 L48.493,3.046 Q55.39,0 62.287,3.046 L103.883,21.418 Q110.78,24.464 110.78,32.004 L110.78,56.84 Q110.78,64.38 103.24,64.38 L7.54,64.38 Q0,64.38 0,56.84 Z"></path></svg></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Enter" tabindex="-1" aria-label="Key 62. Sends Enter. right index finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="61" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 801.038px; top: 301.542px; width: 52.78px; height: 52.78px; transform-origin: -698.61px -241.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⏎</span></span></span></span></button><button type="button" class="cap" data-tone="layer" data-led="false" data-shaped="false" data-upright="false" title="Hold to use Nav while the key is down" tabindex="-1" aria-label="Key 63. Hold to use Nav while the key is down. right middle finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="62" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 859.038px; top: 294.292px; width: 52.78px; height: 52.78px; transform-origin: -756.61px -234.61px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 11.6px;">Nav</span></span><span class="cap-front" style="font-size: 11px;"><i class="cap-dot" data-unlit="false" style="--dot: var(--layer-3);"></i>hold</span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="false" title="Sends Esc" tabindex="-1" aria-label="Key 64. Sends Esc. right ring finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="63" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 917.038px; top: 301.542px; width: 52.78px; height: 52.78px; transform-origin: -814.61px -241.86px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 11.6px;">Esc</span></span></span></span></button><button type="button" class="cap" data-tone="none" data-led="false" data-shaped="false" data-upright="false" title="Does nothing" tabindex="-1" aria-label="Key 65. Does nothing. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="64" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 975.038px; top: 316.042px; width: 52.78px; height: 52.78px; transform-origin: -872.61px -256.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"></span></span></span></button><button type="button" class="cap" data-tone="none" data-led="false" data-shaped="false" data-upright="false" title="Does nothing" tabindex="-1" aria-label="Key 66. Does nothing. right pinky finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="65" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 1033.04px; top: 316.042px; width: 52.78px; height: 52.78px; transform-origin: -930.61px -256.36px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"></span></span></span></button><button type="button" class="cap" data-tone="transparent" data-led="false" data-shaped="false" data-upright="true" title="Transparent, with no layer beneath it, so it does nothing" tabindex="-1" aria-label="Key 67. Transparent, with no layer beneath it, so it does nothing. left thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="66" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 331.238px; top: 381.292px; width: 52.78px; height: 81.78px; transform: rotate(51deg); transform-origin: 98.6px 44.9906px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body" style="--turn: -51deg; --print-w: 40.893829132670476px; --print-h: 34.8px;"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="true" title="Sends Left Control" tabindex="-1" aria-label="Key 68. Sends Left Control. left thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="67" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 389.238px; top: 381.292px; width: 52.78px; height: 81.78px; transform: rotate(51deg); transform-origin: 40.6px 44.9906px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body" style="--turn: -51deg; --print-w: 40.893829132670476px; --print-h: 34.8px;"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⌃</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="true" title="Sends Left Alt" tabindex="-1" aria-label="Key 69. Sends Left Alt. left thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="68" data-hand="left" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 447.238px; top: 381.292px; width: 52.78px; height: 81.78px; transform: rotate(51deg); transform-origin: -17.4px 44.9906px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body" style="--turn: -51deg; --print-w: 40.893829132670476px; --print-h: 34.8px;"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⌥</span></span></span></span></button><button type="button" class="cap" data-tone="key" data-led="false" data-shaped="false" data-upright="true" title="Sends Right Control" tabindex="-1" aria-label="Key 70. Sends Right Control. right thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="69" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 627.038px; top: 381.292px; width: 52.78px; height: 81.78px; transform: rotate(-51deg); transform-origin: 70.18px 44.9906px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body" style="--turn: 51deg; --print-w: 40.893829132670476px; --print-h: 34.8px;"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"><span class="cap-tap" style="font-size: 20.3px;">⌃</span></span></span></span></button><button type="button" class="cap" data-tone="transparent" data-led="false" data-shaped="false" data-upright="true" title="Transparent, with no layer beneath it, so it does nothing" tabindex="-1" aria-label="Key 71. Transparent, with no layer beneath it, so it does nothing. right thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="70" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 685.038px; top: 381.292px; width: 52.78px; height: 81.78px; transform: rotate(-51deg); transform-origin: 12.18px 44.9906px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body" style="--turn: 51deg; --print-w: 40.893829132670476px; --print-h: 34.8px;"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"></span></span></span></button><button type="button" class="cap" data-tone="none" data-led="false" data-shaped="false" data-upright="true" title="Does nothing" tabindex="-1" aria-label="Key 72. Does nothing. right thumb finger" aria-pressed="false" data-current="false" data-partner="false" data-pending="false" data-home="false" data-draft="false" data-applied="false" data-unsynced="false" data-found="false" data-lab-lit="false" data-lab-finding="false" data-key-index="71" data-hand="right" data-combo-hover="false" data-highlight="false" data-dragging="false" data-drop="false" style="--u: 58px; --ripple: 0ms; position: absolute; left: 743.038px; top: 381.292px; width: 52.78px; height: 81.78px; transform: rotate(-51deg); transform-origin: -45.82px 44.9906px;"><span class="cap-bleed" aria-hidden="true"></span><span class="cap-body" style="--turn: 51deg; --print-w: 40.893829132670476px; --print-h: 34.8px;"><span class="cap-top" aria-hidden="true"></span><span class="cap-print"><span class="cap-face"></span></span></span></button></div></div></div></div>
+  <div class="stage-preview pending" id="stage-preview">2 proposed holds · not applied</div>
+  <p class="stage-note" id="stage-note">The proposal stays on the keys when working is folded.</p>
+  <nav class="layers" aria-label="Layers"><span class="layer active"><i class="dot"></i>Base</span><span class="layer">Symbols</span><span class="layer">Navigation</span><span class="layer">Mouse</span><span class="layer">Game</span></nav>
+ </section>
+ <aside class="agent" aria-label="Ask keyloom">
+  <div class="phone-handle" aria-hidden="true"></div>
+  <header class="agent-head"><div class="row"><h2>Ask keyloom</h2><button class="plain phone-stage-button" id="show-board"><svg class="icon"><use href="#keyboard-icon"/></svg>Show keyboard</button><button class="plain close-panel" id="close" aria-label="Close agent preview"><svg class="icon"><use href="#close"/></svg></button></div><p>Editing Moonlander · Daily · Base</p></header>
+  <p class="phone-hint" hidden>Still about Moonlander · Daily.<br><button class="link" id="return-question">Return to the conversation</button></p>
+  <div class="conversation" id="conversation">
+   <div class="request"><p class="role">You</p><p class="bubble">Put Option on K and Control on L when held. Keep their letters.</p><p class="request-context">Moonlander · Daily · Base · K, L</p></div>
+   <p class="agent-role">keyloom</p>
+   <div id="moment-content"></div>
+  </div>
+  <form class="composer" id="composer"><label for="reply">Next request · Moonlander / Daily</label><input id="reply" placeholder="Reply or ask about your keyboard" autocomplete="off"><p>Synthetic comp · nothing is saved, built or sent</p></form>
+ </aside>
+ </div>
+</main>
+<script>
+const icon = name => `<svg class="icon" aria-hidden="true"><use href="#${name}"/></svg>`;
+const row = (title,target,state,kind='check') => `<li class="activity ${kind==='error'?'failed':''}">${icon(kind)}<div><p class="activity-title">${title}</p><p class="activity-target">${target}</p></div><span class="activity-state">${state}</span></li>`;
+const readRow = row('Read the selected keys','Moonlander · Daily · Base · K, L','Read · 0.2 s');
+const checkRow = row('Check the proposed holds','2 bindings · letters preserved','Checked · 0.4 s');
+const saveRow = row('Save the proposal for preview','Moonlander · Daily · 2 holds','Saved · 0.1 s');
+const routine = `<ul class="activity-list">${readRow}${checkRow}${saveRow}</ul><details class="tool-details"><summary>Inspect operation summaries</summary><p>Read keys K and L in Daily / Base. Prepared Option and Control holds; preserved both tap letters. Validator accepted 2 binding changes. Saved a proposal, not an applied revision.</p><p>Illustrative labels and timings. No tool was executed by this page.</p></details>`;
+const folded = `<details class="working"><summary>${icon('chevron')}Read 2 keys · checked 2 holds · 4 s</summary>${routine}</details>`;
+const proposal = `<article class="proposal" aria-label="Proposed holds"><p class="proposal-status">Prepared · not applied</p><h3 class="proposal-title">Two holds, same letters</h3><p>Hold K for Option. Hold L for Control.</p><div class="changes"><span class="key-change"><kbd>K</kbd>${icon('arrow')}Option hold</span><span class="key-change"><kbd>L</kbd>${icon('arrow')}Control hold</span></div><p class="muted">Trade-off: L no longer holds Option.</p><div class="proposal-actions"><button class="btn" id="preview" aria-pressed="true">On the board</button><button class="btn primary" id="apply">Apply</button></div><p class="quiet-note">Apply would save Daily. This demo has sync paused; no device write. Nothing is verified on your Moonlander.</p><p id="apply-note" class="notice" hidden></p></article>`;
+const views = {
+ running: `<div class="status-line" role="status">${icon('clock')}<span class="status-label shimmer">Checking the two holds…</span><span class="elapsed">3 s</span></div><p class="working-note">I’m checking the new holds without changing K and L’s tap letters.</p><ul class="activity-list">${readRow}${row('Validate the proposed holds','Moonlander · Daily · Base','Working','clock')}</ul><details class="working"><summary>${icon('chevron')}Earlier step · 0.1 s</summary><ul class="activity-list">${row('Read the config context','Moonlander · Daily · Base','Read · 0.1 s')}</ul></details><button id="stop-run" class="btn stop">${icon('stop')}Stop</button><p class="quiet-note">Stops future agent work. A saved effect would remain visible.</p>`,
+ waiting: `<p class="muted row" role="status">${icon('clock')}Needs your answer</p><form class="question" id="question"><h3>Keep Option on S as well?</h3><fieldset><legend>Moonlander · Daily · Base</legend><label class="choice"><input type="radio" name="hold" value="keep" checked><span><strong>Keep it on S</strong><small>Recommended · adds the new hold without removing your left-hand Option.</small></span></label><label class="choice"><input type="radio" name="hold" value="move"><span><strong>Move it to K</strong><small>S would type normally, with no hold action.</small></span></label></fieldset><button class="btn primary" type="submit">Use this choice</button><p class="quiet-note">This answers a preference. It does not Apply.</p></form><details class="working"><summary>${icon('chevron')}Read 3 keys · waiting for your choice</summary><ul class="activity-list">${readRow}${row('Read the existing Option hold','Moonlander · Daily · Base · S','Read · 0.1 s')}</ul></details>`,
+ completed: `<div class="answer"><p><strong>The two holds are ready to preview.</strong> K and L still type their letters.</p><p>Your current config is unchanged.</p></div>${folded}${proposal}`,
+ failure: `<div class="answer"><p><strong class="bad">The preview was saved, but the final check failed.</strong></p><p>Daily changed while I was working. The saved preview needs a fresh check before Apply.</p></div><ul class="activity-list">${saveRow}${row('Recheck the current config','Moonlander · Daily · base revision changed','Failed · 0.1 s','error')}</ul><div class="outcome"><p><strong>Kept:</strong> one saved proposal in Daily.</p><p><strong>Not done:</strong> no applied revision, build or device write. Nothing verified on your Moonlander.</p></div><button id="retry" class="btn primary">Recheck the preview</button><p class="quiet-note">A retry must reuse the saved proposal, not create a duplicate.</p><details class="working"><summary>${icon('chevron')}Earlier completed work</summary><ul class="activity-list">${readRow}${checkRow}</ul></details>`,
+ stopped: `<div class="answer"><p><strong>Stopped before saving a proposal.</strong></p><p>I read K and L. No config or device was changed.</p></div><ul class="activity-list">${readRow}${row('Validate the proposed holds','Moonlander · Daily · Base','Cancelled','stop')}</ul><div class="outcome"><p><strong>Saved effects:</strong> none.</p><p>Sending another request starts new work; reopening this turn does not.</p></div><button class="btn" id="restart">Try this request again</button>`
+};
+const state = document.querySelector('#moment');
+const params = new URLSearchParams(location.search);
+function markBoard(show){document.querySelectorAll('.board-snapshot .cap').forEach(cap=>{const letter=cap.querySelector('.cap-tap')?.textContent.trim();const front=cap.querySelector('.cap-front');if(front){cap.dataset.originalFront??=front.textContent;front.textContent=cap.dataset.originalFront;}cap.classList.toggle('comp-mark',show && (letter==='K'||letter==='L'));if(letter==='K'||letter==='L'){if(front)front.textContent=show?(letter==='K'?'option':'control'):(letter==='L'?'option':'');}});}
+function render(value,announce=true){
+ state.value=value;document.querySelector('.app').dataset.state=value;document.querySelector('#moment-content').innerHTML=views[value];document.querySelector('#conversation').scrollTop=0;
+ const preview=value==='completed'||value==='failure';markBoard(preview);
+ document.querySelector('#stage-preview').hidden=!preview;document.querySelector('#stage-preview').textContent=value==='failure'?'Saved preview · needs a fresh check':'2 proposed holds · not applied';
+ document.querySelector('#stage-caption').textContent=preview?'Previewing 2 holds · letters stay the same':'K and L · the keys in your request';
+ document.querySelector('#stage-note').textContent=value==='completed'?'The proposal stays on the keys when working is folded.':value==='failure'?'Saved is not applied. Applied is not verified on device.':'The request keeps its Moonlander / Daily context.';
+ document.querySelector('#reply').disabled=value==='running';document.querySelector('#reply').placeholder=value==='running'?'Working · Stop before sending another request':'Reply or ask about your keyboard';
+ document.querySelector('#stop-run')?.addEventListener('click',()=>render('stopped'));
+ document.querySelector('#question')?.addEventListener('submit',event=>{event.preventDefault();const keep=new FormData(event.target).get('hold')==='keep';render('completed');document.querySelector('.answer').insertAdjacentHTML('beforeend',`<p class="quiet-note">Answered: ${keep?'keep Option on S':'move Option from S to K'}. Synthetic preference only.</p>`);if(!keep){document.querySelector('.proposal p:not([class])').textContent='Hold K for Option. Hold L for Control. Remove the hold from S.';document.querySelector('.proposal-title').textContent='Three hold changes, same letters';document.querySelector('.changes').insertAdjacentHTML('beforeend',`<span class="key-change"><kbd>S</kbd>${icon('arrow')}No hold</span>`);document.querySelector('#stage-preview').textContent='3 proposed holds · not applied';document.querySelector('#stage-caption').textContent='Previewing 3 hold changes · letters stay the same';document.querySelector('.working summary').innerHTML=`${icon('chevron')}Read 3 keys · checked 3 changes · 4 s`;document.querySelectorAll('.board-snapshot .cap').forEach(cap=>{if(cap.querySelector('.cap-tap')?.textContent.trim()==='S'){cap.classList.add('comp-mark');const front=cap.querySelector('.cap-front');if(front)front.textContent='';}});}});
+ document.querySelector('#retry')?.addEventListener('click',()=>render('completed'));
+ document.querySelector('#restart')?.addEventListener('click',()=>render('running'));
+ document.querySelector('#apply')?.addEventListener('click',()=>{const note=document.querySelector('#apply-note');note.hidden=false;note.textContent='Prototype only. Apply is not connected; no revision or device was changed.';});
+ document.querySelector('#preview')?.addEventListener('click',event=>{const show=event.currentTarget.getAttribute('aria-pressed')!=='true';event.currentTarget.setAttribute('aria-pressed',String(show));event.currentTarget.textContent=show?'On the board':'Preview on board';markBoard(show);document.querySelector('#stage-preview').hidden=!show;});
+ if(value==='waiting'&&innerWidth<=600)requestAnimationFrame(()=>document.querySelector('#question')?.scrollIntoView({block:'start'}));
+ const url=new URL(location);url.searchParams.set('state',value);history.replaceState(null,'',url);
+}
+function theme(value){document.documentElement.dataset.theme=value;document.querySelectorAll('[data-theme-choice]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeChoice===value)));const url=new URL(location);url.searchParams.set('theme',value);history.replaceState(null,'',url);}
+state.addEventListener('change',()=>render(state.value));document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',()=>theme(b.dataset.themeChoice)));
+document.querySelector('#motion').addEventListener('click',event=>{const paused=event.currentTarget.getAttribute('aria-pressed')!=='true';event.currentTarget.setAttribute('aria-pressed',String(paused));event.currentTarget.textContent=paused?'Resume shimmer':'Pause shimmer';document.documentElement.dataset.motion=paused?'paused':'auto';});
+function toggleBoard(){const panel=document.querySelector('.agent');panel.classList.toggle('peek');document.querySelector('#show-board').lastChild.textContent=panel.classList.contains('peek')?'Return to chat':'Show keyboard';}
+document.querySelector('#show-board').addEventListener('click',toggleBoard);document.querySelector('#return-question').addEventListener('click',toggleBoard);
+document.querySelector('#close').addEventListener('click',()=>{document.querySelector('.agent').hidden=true;document.querySelector('.layout').style.gridTemplateColumns='minmax(0,1fr)';document.querySelector('.top-actions').innerHTML='<button class="btn" id="reopen">Reopen same turn</button>';document.querySelector('#reopen').addEventListener('click',()=>{document.querySelector('.agent').hidden=false;document.querySelector('.layout').style.gridTemplateColumns='';fitBoard();});fitBoard();});
+document.querySelector('#composer').addEventListener('submit',event=>{event.preventDefault();document.querySelector('#reply').value='';document.querySelector('#reply').placeholder='Synthetic comp · use the Moment switch above';});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.querySelector('.agent.peek'))toggleBoard();});
+function fitBoard(){const area=document.querySelector('.board-area');const width=1127.046875;const height=542.4375;const half=innerWidth<=600;const scale=Math.min((area.clientWidth-12)/(half?width/2:width),(area.clientHeight-40)/height,1.15);document.querySelector('.board-snapshot').style.transform=`translateX(${half?-width*scale/2:0}px) scale(${scale})`;document.querySelector('.board-fit').style.width=`${width*scale/(half?2:1)}px`;document.querySelector('.board-fit').style.height=`${height*scale}px`;}
+new ResizeObserver(fitBoard).observe(document.querySelector('.board-area'));
+render(views[params.get('state')]?params.get('state'):'completed',false);theme(params.get('theme')==='dark'?'dark':'light');fitBoard();
+</script>
+</body></html>

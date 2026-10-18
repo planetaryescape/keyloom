@@ -1,4 +1,4 @@
-import { ArrowRightLeft, CircleAlert, LoaderCircle, RefreshCw } from "lucide-react";
+import { ArrowRightLeft, CircleAlert, RefreshCw } from "lucide-react";
 import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
@@ -10,8 +10,10 @@ import { ProposalCompare } from "./ProposalCompare.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
 import { keyLabel, layerName, optionLabels } from "./proposal-facts.ts";
 import type { AssistantTurn, UserTurn } from "./transcript.ts";
+import { AgentWorking } from "./AgentWorking.tsx";
+import type { AgentWorkStatus, AgentWorkView } from "./work-view.ts";
 
-export function UserMessage({ turn, layout }: { turn: UserTurn; layout: Layout }) {
+export function UserMessage({ turn, layout, context }: { turn: UserTurn; layout: Layout; context?: string }) {
   const { selection } = turn;
   return (
     <div className="msg msg-user">
@@ -25,6 +27,7 @@ export function UserMessage({ turn, layout }: { turn: UserTurn; layout: Layout }
           </p>
         )}
       </div>
+      {context === undefined ? null : <p className="msg-context">{context}</p>}
     </div>
   );
 }
@@ -70,12 +73,21 @@ interface Props {
   onSwitch?: (id: string) => void;
   /** The command bar: alternatives are tabs and one card shows at a time, the one on the board (comp d). */
   compact?: boolean;
+  /** UI-only projection of observed operations and explicit public working notes. */
+  working?: AgentWorkView;
+  motionPaused?: boolean;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
+  const status: AgentWorkStatus = turn.question?.answer === null ? "waiting" : turn.phase === "streaming" ? "running" : turn.phase === "failed" ? "failed" : turn.phase === "stopped" ? "stopped" : "completed";
+  // Existing turns have no correlated lifecycle. Never infer completed calls from their old tool-name hint.
+  let work: AgentWorkView = working ?? { kind: "unavailable", status };
+  if (turn.question?.answer === null) work = { ...work, status: "waiting" };
+  else if (turn.phase === "stopped") work = { ...work, status: "stopped" };
+  else if (turn.failure !== null && work.status !== "disconnected") work = { ...work, status: "failed" };
   return (
     <div className="msg msg-assistant" data-phase={turn.phase}>
       <p className="msg-who">keyloom</p>
@@ -85,14 +97,9 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
         {turn.text === "" ? null : <Markdown source={turn.text} />}
         {turn.phase === "done" && offers > 0 ? <p className="sr-only">keyloom offered {offers} {offers === 1 ? "option" : "options"}.</p> : null}
       </div>
-      {streaming ? (
-        <p className="msg-activity" aria-hidden="true">
-          <LoaderCircle size={14} className="spin" />
-          {turn.activity ?? (turn.text === "" ? "Thinking…" : "Writing…")}
-        </p>
-      ) : null}
+      <AgentWorking view={work} motionPaused={motionPaused} />
       {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
-      {turn.phase === "stopped" ? <p className="msg-note">Stopped. What came through is above.</p> : null}
+      {turn.phase === "stopped" ? <p className="msg-note">Stopped. Configs or proposals prepared before Stop may remain.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}
       {compact
         ? groupProposals(turn.proposals).map((group) => {
@@ -166,7 +173,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
           <div className="chat-problem-body">
             <strong>{FAILURE_TITLES[turn.failure.code] ?? "The reply stopped"}</strong>
             <p>
-              {turn.failure.message} Nothing was changed.
+              {turn.failure.message} Configs or proposals prepared before the reply stopped may remain. Check them before trying again.
             </p>
             <div className="chat-problem-actions">
               {ACCOUNT_FAILURES.has(turn.failure.code) && onSwitch !== undefined

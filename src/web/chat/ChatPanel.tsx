@@ -10,7 +10,8 @@ import { DecisionsView } from "../decisions/DecisionsView.tsx";
 import { OutcomeQuestions } from "../decisions/OutcomeQuestions.tsx";
 import { useDecisions, useOutcomeQuestions } from "../decisions/useDecisions.ts";
 import type { Command } from "./commands.ts";
-import { Composer, type SelectedKeys } from "./Composer.tsx";
+import { ChatStopButton, Composer, type SelectedKeys } from "./Composer.tsx";
+import { AgentMotionToggle } from "./AgentWorking.tsx";
 import { ConversationList } from "./ConversationList.tsx";
 import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
 import { ProviderPicker } from "./ProviderPicker.tsx";
@@ -43,6 +44,8 @@ interface Props {
   sheet?: boolean;
   token: string;
   layoutRef: string;
+  /** Human-facing config name when supplied by the shell; old callers retain the config reference. */
+  configName?: string;
   layout: Layout;
   board: BoardDefinition;
   /** The head the page shows; a new one means a change was applied and the decisions may have changed. */
@@ -77,11 +80,12 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onTurns }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onTurns }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   const [draft, setDraft] = useState("");
+  const [motionPaused, setMotionPaused] = useState(false);
   // The command rows for what's typed. Enter runs the highlighted one; a short text highlights the first command, a longer one (a
   // question that happens to say "test") highlights "Ask keyloom", so a real question is never swallowed by a command.
   const findCommands = commands?.find;
@@ -145,8 +149,12 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   useEffect(() => {
     const element = log.current;
     if (element === null || !stick.current) return;
+    const active = document.activeElement;
+    if (active !== null && active.closest(".agent-work-disclosure") !== null && element.contains(active)) return;
     const replies = element.querySelectorAll<HTMLElement>(".msg-assistant");
-    const firstCard = replies[replies.length - 1]?.querySelector<HTMLElement>(".proposal-group, .ask-card:not(.ask-card-done)");
+    const reply = replies[replies.length - 1];
+    const attention = reply?.querySelector<HTMLElement>(".ask-card:not(.ask-card-done), .chat-problem-inline") ?? undefined;
+    const firstCard = attention ?? reply?.querySelector<HTMLElement>(".proposal-group");
     if (firstCard) {
       const view = element.getBoundingClientRect();
       const at = (el: HTMLElement) => element.scrollTop + el.getBoundingClientRect().top - view.top - 8;
@@ -159,7 +167,8 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
         const start = asked === undefined ? cardTop : at(asked);
         element.scrollTop = Math.min(cardTop, Math.max(start, cardBottom - element.clientHeight));
       } else {
-        element.scrollTop = cardTop;
+        // The final answer leads a successful turn; a question or failure still takes priority.
+        element.scrollTop = attention !== undefined || reply === undefined ? cardTop : at(reply);
       }
       stick.current = false;
       return;
@@ -311,7 +320,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   }, [variant, presentation, onPresentation]);
 
   return (
-    <section className="chat" data-variant={variant} data-presentation={variant === "bar" ? presentation : undefined} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded && presentation === "bar"} aria-label="Ask keyloom">
+    <section className="chat" data-streaming={streaming} data-variant={variant} data-presentation={variant === "bar" ? presentation : undefined} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded && presentation === "bar"} aria-label="Ask keyloom">
       {variant === "bar" ? (
         // The model surfaces only from the menu or when it fails (P3 review); its picker opens above the bar.
         <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
@@ -345,6 +354,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
       </header>
 
       {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} /> : null}
+      {view !== "chat" ? null : <div className="chat-context"><p>Editing {board.name} · {configName ?? layoutRef}</p>{streaming ? <AgentMotionToggle paused={motionPaused} onChange={setMotionPaused} /> : null}</div>}
 
       {view === "decisions" ? (
         <DecisionsView
@@ -446,7 +456,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
               {carried === null ? null : <CarriedThreadView thread={carried} boardName={board.name.replace(/ keyboard \(ANSI\)$/, "")} />}
               {transcript.turns.map((turn) =>
                 turn.kind === "user" ? (
-                  <UserMessage key={turn.id} turn={turn} layout={layout} />
+                  <UserMessage key={turn.id} turn={turn} layout={layout} context={`${board.name} · ${configName ?? layoutRef}`} />
                 ) : (
                   <AssistantMessage
                     key={turn.id}
@@ -466,6 +476,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                     switchTo={readyOthers}
                     onSwitch={switchProvider}
                     compact={variant === "bar"}
+                    motionPaused={motionPaused}
                   />
                 ),
               )}
@@ -519,6 +530,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
           />
         </>
       )}
+      {view === "chat" || !streaming ? null : <div className="chat-stop-footer"><span>Working on {board.name}</span><ChatStopButton onStop={chat.stop} /></div>}
     </section>
   );
 }
