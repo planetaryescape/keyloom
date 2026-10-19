@@ -15,6 +15,7 @@ import { appDecisionsBackend } from "./decisions-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
 import { appReviewBackend } from "./review-backend.ts";
 import { appSyncBackend } from "./sync-backend.ts";
+import { createDataVersionWatcher } from "./data-version-watcher.ts";
 import { drainAgentRuns, reconcileAgentRuns } from "../app/agent-runs.ts";
 
 export const DEFAULT_PORT = 4477;
@@ -85,14 +86,16 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   const reviews = new ReviewEngine(app, { model: model ?? (() => defaultAgentModel(app.dataDir, opts.provider ? { provider: opts.provider } : {})) }, reviewOptions);
   reviews.start(engine);
   const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
+  const watcher = createDataVersionWatcher(app.db);
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
-    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
+    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
   });
   let drained: Promise<void> | undefined;
   return {
     ...running,
     stop: () => {
+      watcher.stop();
       running.stop();
       // A build is stopped; a flash is let finish, so the keyboard isn't left half written.
       drained ??= Promise.all([drainAgentRuns(app), started.then(() => Promise.all([engine.stop(), reviews.stop()]))]).then(() => undefined);

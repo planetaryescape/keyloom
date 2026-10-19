@@ -16,7 +16,9 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine): SyncBackend {
+import type { DataVersionWatcher } from "./data-version-watcher.ts";
+
+export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine, watcher?: DataVersionWatcher): SyncBackend {
   return {
     status: () => translate(() => engine.snapshot()),
     syncNow: (layoutId) =>
@@ -30,5 +32,6 @@ export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine): Sync
     subscribe: (listener) => engine.subscribe(listener),
     newKeyboards: () => engine.newKeyboards(),
     ...(reviews ? { subscribeReviews: (listener: Parameters<ReviewEngine["subscribe"]>[0]) => reviews.subscribe(listener) } : {}),
+    ...(watcher ? { subscribeLayoutUpdated: (listener) => watcher.subscribe(listener) } : {}),
   };
 }

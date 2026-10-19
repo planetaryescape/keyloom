@@ -88,6 +88,13 @@ export function App({ token }: { token: string }) {
     setView({ id: selectedId, detail });
   }, [token, selectedId]);
 
+  // When a CLI write (e.g. keyloom change apply) updates the layout, refresh the open editor.
+  useEffect(() => {
+    if (sync.lastLayoutUpdated && sync.lastLayoutUpdated.layoutId === selectedId) {
+      void refresh();
+    }
+  }, [sync.lastLayoutUpdated, selectedId, refresh]);
+
   const retry = () => {
     setView(null);
     setAttempt((count) => count + 1);

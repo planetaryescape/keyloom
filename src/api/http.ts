@@ -557,3 +557,10 @@ export const MenuBarSchema = z.object({
 export type MenuBar = z.infer<typeof MenuBarSchema>;
 export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema), newKeyboards: z.array(DetectedKeyboardSchema).optional(), menuBar: MenuBarSchema.optional() });
 export type SyncEvent = z.infer<typeof SyncEventSchema>;
+
+export const LayoutUpdatedEventSchema = z.object({
+  type: z.literal("layout.updated"),
+  layoutId: z.string().min(1),
+  revisionId: z.string().min(1).optional(),
+});
+export type LayoutUpdatedEvent = z.infer<typeof LayoutUpdatedEventSchema>;
