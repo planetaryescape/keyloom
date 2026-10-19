@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.1](https://github.com/planetaryescape/keyloom/compare/v0.43.0...v0.43.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* distinguish layer colours and restore chat controls ([#131](https://github.com/planetaryescape/keyloom/issues/131)) ([46a04ba](https://github.com/planetaryescape/keyloom/commit/46a04ba842491a2a243f90bf4f1fa520f70eb7e2))
+
 ## [0.43.0](https://github.com/planetaryescape/keyloom/compare/v0.42.1...v0.43.0) (2026-10-18)
 
 
