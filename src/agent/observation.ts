@@ -37,7 +37,12 @@ export function toolObserver(ports: AgentPorts, emit: (event: AgentObservation) 
       }
       return results;
     },
-    newConfig: (input) => { const result = ports.newConfig(input); reference("config", result.id); return result; },
+    newConfig: (input) => {
+      const result = ports.newConfig(input);
+      if (result instanceof Promise) return result.then((r) => { reference("config", r.id); return r; });
+      reference("config", result.id);
+      return result;
+    },
     put: (input) => {
       const result = ports.put(input);
       reference("config", result.config.id);

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { type App, closeApp, getLayout, importLayout, listChanges, openApp, proposeChange } from "../../src/app/index.ts";
 import { appEditorBackend } from "../../src/cli/editor-backend.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
+import { deepEqual } from "../../src/layout/equal.ts";
 import { EditorError } from "../../src/server/editor-backend.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
 import { setKey } from "../helpers/ops.ts";
@@ -68,6 +69,15 @@ describe("appEditorBackend", () => {
     expect([err.status, err.code]).toEqual([404, "not_found"]);
     expect(await backend.getBuild("bld_nope")).toBeNull();
     expect(await backend.getFlash("fl_nope")).toBeNull();
+  });
+
+  test("exportLayout returns the portable document, and an unknown layout is a 404", async () => {
+    const { app, backend, head } = await setup();
+    const document = await backend.exportLayout("synchronized");
+    expect(document).toMatchObject({ kind: "keyloom-layout", schema_version: 1, board_id: "zsa/moonlander", layout_name: "synchronized", revision_id: head });
+    expect(deepEqual(document.layout, getLayout(app, "synchronized").document)).toBe(true);
+    const err = await editorError(backend.exportLayout("nope"));
+    expect([err.status, err.code]).toEqual([404, "not_found"]);
   });
 });
 

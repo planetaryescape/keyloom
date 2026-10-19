@@ -2,7 +2,7 @@
 // server made (or the last one); with --run it makes the head's review now, agent part included, and waits for it.
 import type { Command } from "commander";
 import {
-  type BoardReview, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, ReviewEngine, UsageError, defaultAgentModel, listLayouts, reviewWords,
+  type BoardReview, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, ReviewEngine, UsageError, defaultAgentModel, dismissReviewItem, listLayouts, restoreReviewItem, reviewWords,
 } from "../../app/index.ts";
 import { parseProvider, type ChatDeps } from "./chat.ts";
 import { type Format, print } from "../output.ts";
@@ -60,10 +60,21 @@ export function reviewText(app: Parameters<typeof reviewWords>[0], v: ReviewView
   ].join("\n");
 }
 
+function resolveLayoutArg(app: Parameters<typeof listLayouts>[0], ref?: string): string {
+  if (ref !== undefined) return ref;
+  const layouts = listLayouts(app);
+  if (layouts.length !== 1) throw new UsageError(layouts.length === 0 ? "no layouts yet; import one first" : `name a config: ${layouts.map((l) => l.name).join(", ")}`);
+  return (layouts[0] as { id: string }).id;
+}
+
 export function registerReviewCommand(program: Command, ctx: CliContext, deps: ChatDeps = {}): void {
-  program
+  const review = program
     .command("review")
-    .description("what keyloom found in a config: problems, suggestions and hints. --run looks again now, with the agent (needs a model provider; the checks run without one)")
+    .description("what keyloom found in a config: problems, suggestions and hints. --run looks again now, with the agent");
+
+  review
+    .command("show", { isDefault: true })
+    .description("show the review for a config")
     .argument("[layout]", "config ID or name (optional when there is only one)")
     .option("--run", "make the review of the head now and wait for the agent's part")
     .option("--force", "with --run, run the agent again even when it already looked at this version")
@@ -74,17 +85,48 @@ export function registerReviewCommand(program: Command, ctx: CliContext, deps: C
       const provider: ProviderId | undefined = opts.provider === undefined ? undefined : parseProvider(opts.provider);
       const format: Format = opts.json ? "json" : ctx.format();
       await ctx.withApp(async (app) => {
-        let ref = layoutArg;
-        if (ref === undefined) {
-          const layouts = listLayouts(app);
-          if (layouts.length !== 1) throw new UsageError(layouts.length === 0 ? "no layouts yet; import one first" : `name a config: ${layouts.map((l) => l.name).join(", ")}`);
-          ref = (layouts[0] as { id: string }).id;
-        }
+        const ref = resolveLayoutArg(app, layoutArg);
         const engine = new ReviewEngine(app, { model: async () => deps.model ?? defaultAgentModel(app.dataDir, provider ? { provider } : {}) });
         if (opts.run) await engine.review(ref, "manual", { force: opts.force === true }).done;
         const view = engine.show(ref);
         const name = listLayouts(app).find((l) => l.id === view.layoutId)?.name ?? ref;
         print(ctx.io, format, { json: viewJson(view), table: reviewText(app, view, name), ids: view.review?.items.map((i) => i.id) ?? [] });
+      });
+    });
+
+  review
+    .command("dismiss")
+    .description("hide a review finding on a config")
+    .argument("<id>", "item ID to dismiss")
+    .option("--layout <layout>", "config ID or name (optional when there is only one)")
+    .action(async (itemId: string, opts: { layout?: string }) => {
+      await ctx.withApp(async (app) => {
+        const ref = resolveLayoutArg(app, opts.layout);
+        const view = dismissReviewItem(app, ref, itemId);
+        const name = listLayouts(app).find((l) => l.id === view.layoutId)?.name ?? ref;
+        print(ctx.io, ctx.format(), {
+          json: viewJson(view),
+          ids: [itemId],
+          table: `Dismissed review item ${itemId} on ${name}.`,
+        });
+      });
+    });
+
+  review
+    .command("restore")
+    .description("restore a hidden review finding on a config")
+    .argument("<id>", "item ID to restore")
+    .option("--layout <layout>", "config ID or name (optional when there is only one)")
+    .action(async (itemId: string, opts: { layout?: string }) => {
+      await ctx.withApp(async (app) => {
+        const ref = resolveLayoutArg(app, opts.layout);
+        const view = restoreReviewItem(app, ref, itemId);
+        const name = listLayouts(app).find((l) => l.id === view.layoutId)?.name ?? ref;
+        print(ctx.io, ctx.format(), {
+          json: viewJson(view),
+          ids: [itemId],
+          table: `Restored review item ${itemId} on ${name}.`,
+        });
       });
     });
 }

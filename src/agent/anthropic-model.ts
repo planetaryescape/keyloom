@@ -1,5 +1,7 @@
 // The Anthropic implementation of AgentModel (D-031): the SDK's beta Tool Runner over zod tools,
 // streaming, with adaptive thinking and an explicit effort. This is the only file that imports the SDK.
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { transformJSONSchema } from "@anthropic-ai/sdk/lib/transform-json-schema";
@@ -118,8 +120,13 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         usage = addUsage(usage, usageOf(message.usage));
         if (cost !== undefined) costUsd = (costUsd ?? 0) + cost;
         stopReason = message.stop_reason;
-        const publicText = message.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
-        if (publicText) request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind: message.stop_reason === "end_turn" && !message.content.some((b) => b.type === "tool_use") ? "answer" : "working_note", text: publicText });
+        if (message.stop_reason !== "refusal") {
+          const publicText = message.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
+          if (publicText) request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind: message.stop_reason === "end_turn" && !message.content.some((b) => b.type === "tool_use") ? "answer" : "working_note", text: publicText });
+        }
+        if (message.stop_reason === "refusal") {
+          break;
+        }
         // A question for the person ends the turn here, before the runner runs any tool or asks the model again (D-382).
         const call = message.content.find((b) => b.type === "tool_use" && pausing.has(b.name) && request.tools.find((tool) => tool.name === b.name)?.inputSchema.safeParse(b.input).success);
         if (call !== undefined && call.type === "tool_use") {
@@ -178,10 +185,28 @@ export function classifyModelError(err: unknown, provider: AnthropicFamily = "an
   return null;
 }
 
-/** The client for BK's Anthropic key. Reads ANTHROPIC_API_KEY only; the key is never stored (03#model-and-sdk). */
+/** The client for BK's Anthropic key. Reads ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or ~/.config/anthropic/credentials.json (03#model-and-sdk). */
 export function clientFromEnv(env: Record<string, string | undefined> = process.env): Anthropic | null {
-  const apiKey = env.ANTHROPIC_API_KEY?.trim();
-  return apiKey ? new Anthropic({ apiKey }) : null;
+  const direct = env.ANTHROPIC_API_KEY?.trim() || env.ANTHROPIC_AUTH_TOKEN?.trim();
+  if (direct) return new Anthropic({ apiKey: direct });
+  const home = env.HOME ?? process.env.HOME;
+  if (home) {
+    for (const sub of [".config/anthropic/credentials.json", ".anthropic/credentials.json"]) {
+      const p = join(home, sub);
+      if (existsSync(p)) {
+        try {
+          const creds = JSON.parse(readFileSync(p, "utf8"));
+          const key = creds.apiKey ?? creds.api_key ?? creds.token;
+          if (typeof key === "string" && key.trim()) {
+            return new Anthropic({ apiKey: key.trim() });
+          }
+        } catch {
+          // ignore unparseable credentials file
+        }
+      }
+    }
+  }
+  return null;
 }
 
 /** OpenRouter serves an Anthropic Messages endpoint at /api/v1/messages; the SDK appends /v1 to this base (D-107). */

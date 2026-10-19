@@ -13,7 +13,8 @@ import { checkChange, proposeChange } from "./changes.ts";
 import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
 import { ValidationFailedError } from "./errors.ts";
-import { newConfig } from "./configs.ts";
+import type { GeometryOptions } from "../boards/geometry.ts";
+import { newBlankConfig, newConfig, resolveBlankStart } from "./configs.ts";
 import { putConfig } from "./keyboard-put.ts";
 import { getLayout, listLayouts } from "./layouts.ts";
 import { typingFindings } from "./lab.ts";
@@ -31,7 +32,7 @@ export const toChoiceFact = (d: DecisionRow): ChoiceFact => ({
  * `selection` is what he had selected when he sent the message, so a proposal that strays from it is warned about (07).
  * A null `conversationId` is a board review (D-340): its proposals belong to no conversation, so they show in the config's open proposals.
  */
-export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope, runId?: string): AgentPorts {
+export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope, runId?: string, firmware?: GeometryOptions): AgentPorts {
   const scope = selection ? { selection } : {};
   const snapshotOf = (ref: string): LayoutSnapshot => {
     const view = getLayout(app, ref);
@@ -62,10 +63,13 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
       };
     },
     newConfig(input) {
-      const made = input.from === "this"
-        ? newConfig(app, { name: input.name, from: "config", config: layoutId })
-        : newConfig(app, { name: input.name, from: "blank", board: getLayout(app, layoutId).board.definition.id });
-      return { id: made.id, name: made.name, boardName: made.boardName };
+      if (input.from === "this") {
+        const made = newConfig(app, { name: input.name, from: "config", config: layoutId });
+        return { id: made.id, name: made.name, boardName: made.boardName };
+      }
+      return newBlankConfig(app, { name: input.name, board: getLayout(app, layoutId).board.definition.id }, firmware).then(({ config: made }) => ({
+        id: made.id, name: made.name, boardName: made.boardName,
+      }));
     },
     check: (ops) => checkChange(app, layoutId, { ops, ...scope }),
     priorities: () => layoutPriorities(app, layoutId).map(toPriorityFact),
@@ -109,7 +113,19 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
   return {
     ...ports,
     put: (input) => receipt("put_config", input, () => ports.put(input)),
-    newConfig: (input) => receipt("create_config", input, () => ports.newConfig(input)),
+    newConfig: (input) => {
+      if (input.from === "this") {
+        return receipt("create_config", input, () => ports.newConfig(input) as { id: string; name: string; boardName: string });
+      }
+      const opId = `effect_${++invocation}`;
+      const board = getLayout(app, layoutId).board.definition.id;
+      return resolveBlankStart(board, firmware).then(({ start }) =>
+        effectReceipt(app.db, runId, opId, { layoutId, conversationId, name: "create_config", input }, () => {
+          const made = newConfig(app, { name: input.name, from: "blank", board, ...(start ? { start } : {}) });
+          return { id: made.id, name: made.name, boardName: made.boardName };
+        }),
+      );
+    },
     propose: (input) => receipt("propose_changes", input, () => ports.propose(input)),
     recordPriority: (input) => receipt("record_priority", input, () => ports.recordPriority(input)),
     recordOutcome: (input) => receipt("update_decision_outcome", input, () => ports.recordOutcome(input)),

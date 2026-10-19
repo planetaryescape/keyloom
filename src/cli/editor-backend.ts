@@ -2,7 +2,7 @@
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
   type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
-  ValidationResultSchema, getBuild, getFlash, importUpload, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
+  ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
 } from "../app/index.ts";
 import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
 
@@ -66,6 +66,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
       const rows = listRevisions(app, ref);
       return rows.map((r, index) => ({ id: r.id, parentId: r.parentId, origin: r.origin, summary: r.summary, createdAt: r.createdAt, isHead: index === 0 }));
     }),
+    exportLayout: (ref, revisionId) => translate(() => layoutExportDocument(app, ref, revisionId)),
     boards: async () => listBoardDefinitions().map((b) => ({
       id: b.definition.id, name: b.definition.name, vendor: b.definition.vendor, firmware: b.definition.firmware, keyCount: b.definition.keyCount, importers: b.definition.importers,
       keys: b.geometry.keys, display: b.definition.display,

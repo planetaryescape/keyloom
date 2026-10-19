@@ -41,7 +41,7 @@ export function registerConfigCommands(program: Command, deps: SyncCommandDeps, 
     .command("new")
     .description("make a config: a copy of one (its head, a revision or a version), a blank one, or one from an exported file; it is not put on the keyboard")
     .argument("<name>", "the new config's name")
-    .argument("[file]", "with --from import: the Oryx zip or folder, QMK keymap folder, ZMK .keymap or Karabiner json to read")
+    .argument("[file]", "with --from import: the Oryx zip or folder, QMK keymap folder, ZMK .keymap, Karabiner json, or keyloom layout export to read")
     .option("--from <config>", "copy this config (ID or name), or `import` to read a file (needs --board and the file)")
     .option("--rev <revision>", "copy this revision of --from instead of its head")
     // Not --version: the program's own -V/--version flag would take it before this command saw it.
