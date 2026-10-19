@@ -289,6 +289,9 @@ export function typingFindings(app: App, layoutId: string): TypingFindings {
       sessionId: row.id, recordedAt: row.startedAt, seconds: stored.durationMs / 1000, presses: stored.presses, counts: stored.counts,
       findings: stored.findings.slice(0, 8).map((f) => ({ kind: f.kind, sentence: f.sentence })),
       fingers: stored.stats.fingers.map((f) => ({ finger: f.finger, keys: f.attempts, errors: f.errors, medianMsBetweenKeys: f.interKey.median })),
+      sameFinger: stored.stats.sameFinger.map((r) => ({ finger: r.finger, from: r.from, to: r.to, medianGapMs: r.interKey.median })),
+      rolls: stored.stats.rolls.map((r) => ({ fromFinger: r.fromFinger, toFinger: r.toFinger, from: r.from, to: r.to, rolls: r.rolls, n: r.n, medianOverlapMs: r.overlap.median })),
+      holds: stored.stats.holds.map((h) => ({ position: h.position, tapsMedianMs: h.taps.median, holdsMedianMs: h.holds.median, ...(h.termMs !== undefined ? { termMs: h.termMs } : {}), nearTerm: h.nearTerm })),
       suggestions: stored.suggestions.map((s) => ({
         title: s.candidate.title, changeSetId: byCandidate.get(s.candidate.id) ?? null, before: s.evidence.before, after: s.evidence.after,
         removed: s.evidence.removed, introduced: s.evidence.introduced,
@@ -305,7 +308,7 @@ export function typingFindings(app: App, layoutId: string): TypingFindings {
 
 /** Why a board can't be recorded, in words; null when it can (24-typing-lab.md, capturing what the hands do). */
 export function cannotRecord(board: BoardDefinition): string | null {
-  return board.firmware === "kanata" ? `The lab can't listen to the ${board.name}: it has no stream of physical key presses yet.` : null;
+  return board.firmware === "kanata" ? `The lab can't listen to the ${board.name}: its software remapper exposes no stream of physical key events.` : null;
 }
 
 const fingerWords = (finger: string) => finger.replaceAll("-", " ");
@@ -331,6 +334,9 @@ export function fingersLead(rows: readonly { finger: string; keys: number; error
 export type LabReadout = {
   presses: number; durationMs: number; passageId: string; counts: StoredAnalysis["counts"]; fingersLead: string;
   fingers: Array<{ finger: string; hand: "left" | "right"; keys: number; errors: number; typos: number; misfires: number; medianMs: number }>;
+  sameFinger?: Array<{ finger: string; from: number; to: number; medianGapMs: number }>;
+  rolls?: Array<{ fromFinger: string; toFinger: string; from: number; to: number; rolls: number; n: number; medianOverlapMs: number }>;
+  holds?: Array<{ position: number; tapsMedianMs: number; holdsMedianMs: number; termMs?: number; nearTerm: number }>;
   findings: Array<{ id: string; kind: string; sentence: string; positions: number[] }>;
   suggestions: Array<{
     title: string; before: number; after: number; removed: number; introduced: number;
@@ -352,7 +358,17 @@ export function labReadout(app: App, id: string): { session: TypingSessionSummar
   const fingers = stored.stats.fingers.map((f) => ({
     finger: f.finger, hand: f.hand, keys: f.attempts, errors: f.errors, typos: f.typos ?? 0, misfires: f.misfires ?? 0, medianMs: f.interKey.median,
   }));
+  const sameFinger = stored.stats.sameFinger.map((r) => ({ finger: r.finger, from: r.from, to: r.to, medianGapMs: r.interKey.median }));
+  const rolls = stored.stats.rolls.map((r) => ({ fromFinger: r.fromFinger, toFinger: r.toFinger, from: r.from, to: r.to, rolls: r.rolls, n: r.n, medianOverlapMs: r.overlap.median }));
+  const holds = stored.stats.holds.map((h) => ({ position: h.position, tapsMedianMs: h.taps.median, holdsMedianMs: h.holds.median, ...(h.termMs !== undefined ? { termMs: h.termMs } : {}), nearTerm: h.nearTerm }));
+
   const positionsOf = (f: StoredAnalysis["findings"][number]): number[] => {
+    if (Array.isArray(f.data.positions)) {
+      return f.data.positions.filter((p): p is number => typeof p === "number");
+    }
+    if (typeof f.data.from === "number" && typeof f.data.to === "number") {
+      return [f.data.from, f.data.to];
+    }
     if (typeof f.data.position === "number") {
       const next = stored.differences.find((d) => d.position === f.data.position && d.facts?.nextPosition !== undefined)?.facts?.nextPosition;
       return next === undefined ? [f.data.position] : [f.data.position, next];
@@ -368,7 +384,7 @@ export function labReadout(app: App, id: string): { session: TypingSessionSummar
     session,
     readout: {
       presses: stored.presses, durationMs: stored.durationMs, passageId: row.passageId, counts: stored.counts,
-      fingersLead: fingersLead(fingers), fingers,
+      fingersLead: fingersLead(fingers), fingers, sameFinger, rolls, holds,
       findings: stored.findings.slice(0, 6).map((f) => ({ id: f.id, kind: f.kind, sentence: f.sentence, positions: positionsOf(f) })),
       suggestions: stored.suggestions.map((s) => {
         const e = s.evidence.examples[0];

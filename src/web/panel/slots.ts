@@ -37,12 +37,13 @@ export type TapKind = "key" | "modifier" | "layer" | "macro" | "tapDance" | "tra
 /** The hold slot is filled once the draft is a hold-tap. */
 export const hasHold = (draft: Draft): boolean => draft.kind === "holdTap";
 
-/** What the tap slot holds. For a hold-tap that is always a key. */
-export const tapKind = (draft: Draft): TapKind => (draft.kind === "holdTap" ? "key" : draft.kind);
+/** What the tap slot holds. For a hold-tap that is a key or macro. */
+export const tapKind = (draft: Draft): TapKind =>
+  draft.kind === "holdTap" ? (draft.macroId !== null && draft.tap.code === null ? "macro" : "key") : draft.kind;
 
 /** The key the tap slot sends, with its modifiers; null when the slot holds something that is not a key. */
 export function tapKey(draft: Draft): { code: string | null; mods: Mod[] } | null {
-  if (draft.kind === "holdTap") return draft.tap;
+  if (draft.kind === "holdTap") return draft.macroId !== null && draft.tap.code === null ? null : draft.tap;
   if (draft.kind === "key") return draft.key;
   return null;
 }
@@ -67,10 +68,12 @@ export function toggleTapMod(draft: Draft, mod: Mod): Draft {
   return draft;
 }
 
-/** Fills the tap slot. Under a hold, only keys fit: a hold-tap taps a key. */
+/** Fills the tap slot. Under a hold, keys and macros fit. */
 export function pickTap(draft: Draft, pick: TapPick): Draft {
   if (draft.kind === "holdTap") {
-    return pick.t === "key" ? { ...draft, tap: { code: pick.code, mods: draft.tap.mods }, key: { code: pick.code, mods: draft.tap.mods } } : draft;
+    if (pick.t === "key") return { ...draft, macroId: null, tap: { code: pick.code, mods: draft.tap.mods }, key: { code: pick.code, mods: draft.tap.mods } };
+    if (pick.t === "macro") return { ...draft, macroId: pick.macroId, tap: { code: null, mods: [] }, key: { code: null, mods: [] } };
+    return draft;
   }
   switch (pick.t) {
     case "key": {
@@ -97,9 +100,11 @@ export function pickTap(draft: Draft, pick: TapPick): Draft {
   }
 }
 
-/** A hold fits a key, or a lone modifier key (which the hold-tap then taps). */
+/** A hold fits a key, a lone modifier key, or a macro (which the hold-tap then taps). */
 export const canAddHold = (draft: Draft): boolean =>
-  (draft.kind === "key" && draft.key.code !== null) || (draft.kind === "modifier" && draft.modifier.length === 1);
+  (draft.kind === "key" && draft.key.code !== null) ||
+  (draft.kind === "modifier" && draft.modifier.length === 1) ||
+  (draft.kind === "macro" && draft.macroId !== null);
 
 const MODIFIER_KEY_OF: Readonly<Record<Mod, string>> = {
   LCTL: "LEFT_CTRL",
@@ -115,6 +120,9 @@ const MODIFIER_KEY_OF: Readonly<Record<Mod, string>> = {
 /** Opens the hold slot: the tap stays as it is and the hold waits to be picked (16: adding a hold to A keeps A). */
 export function addHold(draft: Draft, profileId: string | null): Draft {
   if (!canAddHold(draft)) return draft;
+  if (draft.kind === "macro") {
+    return { ...switchKind(draft, "holdTap"), tap: { code: null, mods: [] }, holdType: "mods", holdMods: [], profileId };
+  }
   const tap = draft.kind === "modifier" ? { code: MODIFIER_KEY_OF[draft.modifier[0] as Mod], mods: [] } : { ...draft.key };
   return { ...switchKind({ ...draft, key: tap }, "holdTap"), tap, holdType: "mods", holdMods: [], profileId };
 }

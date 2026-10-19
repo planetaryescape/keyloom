@@ -71,6 +71,9 @@ export type TypingFindings = {
     counts: { misfireHold: number; misfireTap: number; typo: number; missed: number; double: number };
     findings: Array<{ kind: string; sentence: string }>;
     fingers: Array<{ finger: string; keys: number; errors: number; medianMsBetweenKeys: number }>;
+    sameFinger?: Array<{ finger: string; from: number; to: number; medianGapMs: number }>;
+    rolls?: Array<{ fromFinger: string; toFinger: string; from: number; to: number; rolls: number; n: number; medianOverlapMs: number }>;
+    holds?: Array<{ position: number; tapsMedianMs: number; holdsMedianMs: number; termMs?: number; nearTerm: number }>;
     suggestions: Array<{
       title: string;
       /** The proposal to show BK; null when it could not be stored (the layout changed since). */

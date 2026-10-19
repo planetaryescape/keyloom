@@ -103,9 +103,18 @@ describe("keyloom lab, end to end", () => {
     expect(analysed.code).toBe(0);
     const a = json(analysed);
     expect(a.counts).toMatchObject({ misfireHold: 6 });
+    expect(Array.isArray(a.same_finger)).toBe(true);
+    expect(Array.isArray(a.rolls)).toBe(true);
+    expect(Array.isArray(a.holds)).toBe(true);
     expect(a.findings[0].sentence).toContain("Option fired 6 times when you meant to type S");
     expect(a.suggestions.map((s: { title: string }) => s.title)).toContain("Raise the tapping term of Home-row mods from 200 to 280 ms");
     expect(a.emulator_runs).toBeGreaterThan(1);
+
+    const shown = await cli(w, ["lab", "show", id, "--format", "json"]);
+    expect(shown.code).toBe(0);
+    const shownJson = json(shown);
+    expect(shownJson.session_id).toBe(id);
+    expect(shownJson.typed_text).toBe("sdsdsdsdsdsd");
     // Every suggestion is an ordinary proposal on the head, with the evidence in words.
     const proposed = listChanges(w.app, w.layoutId, { status: "proposed" });
     expect(proposed.length).toBe(a.suggestions.length);

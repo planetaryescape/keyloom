@@ -399,7 +399,7 @@ export function KeyPanel(props: Props) {
 
   // The macro builder for the open slot, on the Macro tab only.
   function macroPaneFor(slotName: SlotName) {
-    if (picker?.slot !== slotName || picker.tab !== "macro" || (slotName === "tap" && keysOnly)) return {};
+    if (picker?.slot !== slotName || picker.tab !== "macro") return {};
     const held = slotName === "tap" ? (draft?.kind === "macro" ? draft.macroId : null) : slotName === "doubleTap" ? macroIdOf(draft?.doubleTap) : macroIdOf(draft?.tapThenHold);
     return {
       macroPane: (
@@ -548,7 +548,7 @@ export function KeyPanel(props: Props) {
     return null;
   })();
 
-  const holdRegion = draft.kind === "native" || draft.kind === "macro" ? null : hasHold(draft) ? (draft.holdType === "mods" ? draft.holdMods.length === 0 : draft.holdLayerId === null) ? { text: null, ghost: "hold…", name: "When held" } : { text: shownLegend.hold ?? holdText, name: "When held" } : canAddHold(draft) ? { text: null, ghost: "hold…", name: "When held" } : null;
+  const holdRegion = draft.kind === "native" ? null : hasHold(draft) ? (draft.holdType === "mods" ? draft.holdMods.length === 0 : draft.holdLayerId === null) ? { text: null, ghost: "hold…", name: "When held" } : { text: shownLegend.hold ?? holdText, name: "When held" } : canAddHold(draft) ? { text: null, ghost: "hold…", name: "When held" } : null;
   const extras = draft.kind !== "macro" && draft.kind !== "native" && (canAddExtraSlot(draft) || isDance(draft));
   const doubleRegion = !extras ? null : draft.doubleTap === null ? { text: null, ghost: "2×", name: "When double-tapped" } : { text: `2× ${shownLegend.double ?? ""}`.trim(), name: "When double-tapped" };
   const thenHoldRegion = !extras ? null : draft.tapThenHold === null ? { text: null, ghost: "tap+hold", name: "When tapped, then held" } : { text: "tap+hold ●", name: "When tapped, then held" };
@@ -845,6 +845,9 @@ function tapSlotText(draft: Draft, layout: Layout): string {
     case "key":
       return draft.key.code === null ? "Choose a key" : keyWords(draft.key.code, draft.key.mods);
     case "holdTap":
+      if (draft.macroId !== null && draft.tap.code === null) {
+        return layout.macros.find((m) => m.id === draft.macroId)?.name ?? "a macro";
+      }
       return draft.tap.code === null ? "Choose a key" : keyWords(draft.tap.code, draft.tap.mods);
     case "modifier":
       return draft.modifier.length === 0 ? "Choose a modifier" : modsWords(draft.modifier);
@@ -879,6 +882,7 @@ function selectedIdsFor(slot: SlotName, draft: Draft): string[] {
     case "key":
       return draft.key.code === null ? [] : [`key-${draft.key.code}`];
     case "holdTap":
+      if (draft.macroId !== null && draft.tap.code === null) return [`macro-${draft.macroId}`];
       return draft.tap.code === null ? [] : [`key-${draft.tap.code}`];
     case "modifier":
       return draft.modifier.map((mod) => `key-${MODIFIER_KEY[mod]}`);

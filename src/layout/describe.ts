@@ -103,7 +103,9 @@ function describeBinding(binding: Binding, layout: Layout): Omit<KeyDescription,
       return { ...base, headline: `Holds ${words} while pressed` };
     }
     case "holdTap": {
-      const tap = outputWords(binding.tap.code, binding.tap.mods);
+      const tap = binding.tap.macroId
+        ? (layout.macros.find((m) => m.id === binding.tap.macroId)?.name ?? binding.tap.macroId)
+        : outputWords(binding.tap.code, binding.tap.mods);
       const hold =
         "mods" in binding.hold ? modsWords(binding.hold.mods) : layerName(layout, binding.hold.layerId);
       const profile = layout.holdTapProfiles.find((candidate) => candidate.id === binding.profileId);

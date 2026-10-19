@@ -119,7 +119,7 @@ class Emitter {
     if (profile.firmware !== "kanata") throw new GenerateError(`${where}: hold-tap profile "${profile.id}" is for ${profile.firmware}; translate it for kanata first (translateHoldTapProfile)`);
     const read = readKanataProfile(profile);
     if (!read.ok) throw new GenerateError(`${where}: hold-tap profile "${profile.id}": ${read.problems.join("; ")}`);
-    const tap = chord(b.tap.code, b.tap.mods);
+    const tap = b.tap.macroId !== undefined ? this.macro(b.tap.macroId, where) : chord(b.tap.code, b.tap.mods);
     const hold = "mods" in b.hold ? modAction(b.hold.mods) : this.layerAction("momentary", b.hold.layerId, where);
     let tapKeys = "$all-keys";
     if (read.spec.variant === "tap-hold-tap-keys") {
@@ -133,7 +133,8 @@ class Emitter {
     }
     if (isOppositeHand(read.spec.variant)) this.usesHands = true;
     const text = tapHoldAction(read.spec, tap, hold, tapKeys);
-    return this.alias(text, `${b.tap.code} taps, ${"mods" in b.hold ? b.hold.mods.join("+") : `layer ${b.hold.layerId}`} holds (profile ${profile.id})`);
+    const tapName = b.tap.macroId !== undefined ? (this.layout.macros.find((m) => m.id === b.tap.macroId)?.name ?? b.tap.macroId) : b.tap.code;
+    return this.alias(text, `${tapName} taps, ${"mods" in b.hold ? b.hold.mods.join("+") : `layer ${b.hold.layerId}`} holds (profile ${profile.id})`);
   }
 
   binding(b: Binding, where: string, wayBack?: string, position?: number): string {

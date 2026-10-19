@@ -108,7 +108,7 @@ export function bindingLabel(b: Binding, ctx: GridContext): string {
     case "modifier":
       return modsText(b.mods);
     case "holdTap": {
-      const tap = tapText(b.tap.code, b.tap.mods);
+      const tap = b.tap.macroId ? (ctx.macros.find((m) => m.id === b.tap.macroId)?.name ?? "Macro") : tapText(b.tap.code, b.tap.mods);
       const hold = "mods" in b.hold ? modsText(b.hold.mods) : `L${layerRef(b.hold.layerId, ctx)}`;
       return `${tap}/${hold}`;
     }

@@ -122,8 +122,41 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
     .argument("<layout>", "the layout (config) to copy, by ID or name")
     .requiredOption("--on <board>", "the board to put it on, such as local/corne")
     .option("--name <name>", "the new config's name (default: <layout> on <board>)")
-    .action(async (layout: string, opts: { on: string; name?: string }) => {
-      const out = await withApp((app) => putConfig(app, { from: layout, board: opts.on, ...(opts.name === undefined ? {} : { name: opts.name }) }));
+    .option("--placements <pairs...>", "layer key placements, as source=target (e.g. 4=10 5=11)")
+    .option("--layers <layers...>", "source layers to carry (default: all non-test layers)")
+    .action(async (layout: string, opts: { on: string; name?: string; placements?: string[]; layers?: string[] }) => {
+      let placements: Record<string, number> | undefined;
+      if (opts.placements) {
+        placements = {};
+        for (const item of opts.placements) {
+          if (item.startsWith("{")) {
+            try {
+              Object.assign(placements, JSON.parse(item));
+              continue;
+            } catch {
+              // fall through
+            }
+          }
+          const pairs = item.split(/[,\s]+/);
+          for (const p of pairs) {
+            const [src, dst] = p.split(/[=:]/);
+            if (src !== undefined && dst !== undefined && src !== "") {
+              placements[src] = Number(dst);
+            }
+          }
+        }
+      }
+      let layers: string[] | undefined;
+      if (opts.layers) {
+        layers = opts.layers.flatMap((l) => l.split(/[,\s]+/)).filter(Boolean);
+      }
+      const out = await withApp((app) => putConfig(app, {
+        from: layout,
+        board: opts.on,
+        ...(opts.name === undefined ? {} : { name: opts.name }),
+        ...(placements === undefined ? {} : { placements }),
+        ...(layers === undefined ? {} : { layers }),
+      }));
       print(io, format(), {
         json: {
           config: configJson(out.config),

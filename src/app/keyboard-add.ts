@@ -112,7 +112,20 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
           if (!isMissing(err)) throw err;
         }
       }
-      const found = layoutSource(files, layout);
+      let found = layoutSource(files, layout);
+      if (!found) {
+        for (const communityDir of ["layouts/community", "layouts/default"]) {
+          const path = `${communityDir}/${layout}/info.json`;
+          try {
+            const communityInfo = JSON.parse(await fetchPinned({ source: { ...PINNED_SOURCES.qmk, ref: "pinned" } }, path, fetchText, opts.cacheDir)) as Json;
+            files.push({ path, info: communityInfo });
+            found = layoutSource(files, layout);
+            if (found) break;
+          } catch (err) {
+            if (!isMissing(err)) throw err;
+          }
+        }
+      }
       if (!found) throw new UsageError(`QMK's tree has no layout ${layout} for ${e.target} at ${PINNED_SOURCES.qmk.sha.slice(0, 9)}`);
       return { geometry: { keys: toGeometryKeys(found.keys), path: found.path }, layout };
     }

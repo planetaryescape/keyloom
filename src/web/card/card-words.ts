@@ -58,7 +58,8 @@ export function cardTitle(binding: Binding, layout: Pick<Layout, "layers" | "mac
     case "modifier": return modWords(binding.mods);
     case "holdTap": {
       const hold = "mods" in binding.hold ? modWords(binding.hold.mods) : layerName(layout, binding.hold.layerId);
-      return `${keyPhrase(binding.tap.code, binding.tap.mods)}, or hold for ${hold}`;
+      const tap = binding.tap.macroId ? (layout.macros.find((m) => m.id === binding.tap.macroId)?.name ?? binding.tap.macroId) : keyPhrase(binding.tap.code, binding.tap.mods);
+      return `${tap}, or hold for ${hold}`;
     }
     case "layer": {
       const name = layerName(layout, binding.layerId);

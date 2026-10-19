@@ -224,7 +224,7 @@ const zmk: FirmwareDriver = {
           } }),
         })
       : undefined;
-    return flashUf2Drives({
+    const result = await flashUf2Drives({
       artifactPath: a.artifactPath, steps: rev.flash.steps,
       // The Glove80's one file holds both halves; a west build's bundle holds one image per half.
       ...(rev.build.kind === "zmk-moergo-template" ? { driveFileName: "glove80.uf2" } : { driveFileName: "firmware.uf2" }), log: a.log, onState: a.onState,
@@ -232,8 +232,22 @@ const zmk: FirmwareDriver = {
       ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
       ...(a.signal ? { signal: a.signal } : {}),
     });
+    if (result.state === "failed" && a.lastGoodDir) {
+      a.log.line(`keyloom: flash failed; last-good image can be restored with restoreLastGoodUf2`);
+    }
+    return result;
   },
 };
+
+/** Restores a previously verified last-good UF2 image for a board half, if kept. */
+export async function restoreLastGoodUf2(lastGoodDir: string, boardId: string, half: string): Promise<Uint8Array | null> {
+  const dir = join(lastGoodDir, boardId.replace("/", "-"));
+  const file = Bun.file(join(dir, `${half}.uf2`));
+  if (await file.exists()) {
+    return new Uint8Array(await file.arrayBuffer());
+  }
+  return null;
+}
 
 // A software remapper has no build and no flash (21): `generate` writes the config files, and applying is the remapper use cases in remapper.ts.
 const kanata: FirmwareDriver = {

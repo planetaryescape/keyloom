@@ -2,7 +2,7 @@
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { ImportReport, NativeItem } from "../../layout/import-report.ts";
 import {
-  type Binding, type Combo, type ConditionalLayer, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough,
+  type Binding, type Combo, type ConditionalLayer, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough, type TapDance,
 } from "../../layout/schema.ts";
 import { type KeptBehavior, type MapContext, mapBinding } from "./bindings.ts";
 import { BUILTIN_NAMES, BUILTIN_OPTIONS, BUILTIN_PROFILES, type HoldKind } from "./builtins.ts";
@@ -13,7 +13,7 @@ import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
 import { importCombo } from "./import-combos.ts";
 import { CONDITIONAL_COMPATIBLE, importConditionalLayer } from "./import-conditional.ts";
 import { annotateZmkLayerRefs } from "./layer-refs.ts";
-import { importHoldTap, importMacro, isHoldTap, isMacro } from "./import-behaviors.ts";
+import { importHoldTap, importMacro, importTapDance, isHoldTap, isMacro, isTapDance } from "./import-behaviors.ts";
 import { ZmkImportError } from "./import-error.ts";
 import { type OptionValue, cellsOf, optionOf, stringOf } from "./props.ts";
 import { slug } from "./slug.ts";
@@ -70,6 +70,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   const profiles = new Map<string, HoldTapProfile>();
   const holdKinds = new Map<string, HoldKind>(BUILTIN_PROFILES);
   const macros: Macro[] = [];
+  const tapDances: TapDance[] = [];
   const keptBehaviors = new Map<string, KeptBehavior>();
   const conditionalContainers: DtNode[] = [];
   for (const root of roots) {
@@ -77,14 +78,28 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
       if (container === keymapNodes[0]) continue;
       if (container.name === "behaviors") {
         for (const n of container.children) {
-          const r = isHoldTap(n) ? importHoldTap(n, defines) : "keyloom doesn't model this kind of behaviour";
-          if (typeof r === "string") {
+          if (isHoldTap(n)) {
+            const r = importHoldTap(n, defines);
+            if (typeof r === "string") {
+              keep("behavior", `behavior:${n.label ?? n.name}`, n.source);
+              if (n.label) keptBehaviors.set(n.label, { compatible: stringOf(n, "compatible"), bindings: cellsOf(n, "bindings").map((c) => parseCalls(c).calls[0]?.name ?? "") });
+              warnings.push(`hold-tap ${n.label ?? n.name} kept as written: ${r}`);
+            } else {
+              profiles.set(r.profile.id, r.profile);
+              holdKinds.set(r.profile.id, r.hold);
+            }
+          } else if (isTapDance(n)) {
+            const r = importTapDance(n, defines);
+            if (typeof r === "string") {
+              keep("behavior", `behavior:${n.label ?? n.name}`, n.source);
+              if (n.label) keptBehaviors.set(n.label, { compatible: stringOf(n, "compatible"), bindings: cellsOf(n, "bindings").map((c) => parseCalls(c).calls[0]?.name ?? "") });
+              warnings.push(`tap dance ${n.label ?? n.name} kept as written: ${r}`);
+            } else {
+              tapDances.push(r);
+            }
+          } else {
             keep("behavior", `behavior:${n.label ?? n.name}`, n.source);
             if (n.label) keptBehaviors.set(n.label, { compatible: stringOf(n, "compatible"), bindings: cellsOf(n, "bindings").map((c) => parseCalls(c).calls[0]?.name ?? "") });
-            if (isHoldTap(n)) warnings.push(`hold-tap ${n.label ?? n.name} kept as written: ${r}`);
-          } else {
-            profiles.set(r.profile.id, r.profile);
-            holdKinds.set(r.profile.id, r.hold);
           }
         }
       } else if (container.name === "macros") {
@@ -124,7 +139,8 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   }
 
   const macroLabels = new Set(macros.map((m) => m.id));
-  const ctx: MapContext = { layerIds, defines, profiles: holdKinds, macros: macroLabels, kept: keptBehaviors };
+  const tapDanceLabels = new Set(tapDances.map((t) => t.id));
+  const ctx: MapContext = { layerIds, defines, profiles: holdKinds, macros: macroLabels, tapDances: tapDanceLabels, kept: keptBehaviors };
 
   // --- layers ---------------------------------------------------------------------------------
   const counts = emptyCounts();
@@ -225,7 +241,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
     firmware: "zmk",
     layers: numbered.layers,
     macros,
-    tapDances: [],
+    tapDances,
     combos: numbered.combos,
     conditionalLayers,
     holdTapProfiles,
@@ -242,7 +258,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
       keysPerLayer: board.keyCount,
       bindings: counts,
       macros: macros.map((m) => m.name),
-      tapDances: [],
+      tapDances: tapDances.map((t) => t.name),
       combos: combos.length,
       settings: conf.settings.length,
       profiles: holdTapProfiles.map((p) => p.id),

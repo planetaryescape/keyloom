@@ -62,6 +62,8 @@ export function describeUf2(info: Uf2Info): string {
 /** What a file must hold: a Glove80's two halves in one file, or a single image. */
 export type Uf2Shape = "halves" | "single";
 
+export const BOOTLOADER_FAMILY = 0xd663823c;
+
 /**
  * Why `bytes` can't be flashed, or undefined. For `halves` (a Glove80), both halves take the same file, so
  * it holds one image per half. They sit at the same addresses and are told apart by family ID (S8: seen in
@@ -70,6 +72,9 @@ export type Uf2Shape = "halves" | "single";
 export function uf2Problem(bytes: Uint8Array, shape: Uf2Shape = "halves"): string | undefined {
   const info = inspectUf2(bytes);
   if ("problem" in info) return info.problem;
+  if (info.images.some((i) => i.family === BOOTLOADER_FAMILY)) {
+    return "UF2 targets the bootloader family (0xd663823c); refusing to overwrite bootloader";
+  }
   if (shape === "single") {
     return info.images.length === 1 ? undefined : `it holds ${info.images.length} UF2 images, but one board's firmware is a single image`;
   }

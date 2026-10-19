@@ -9,11 +9,13 @@ export type Rewrapped = { binding: Binding } | { unchanged: true } | { skip: str
 /** The key a binding types when tapped, or null when it has none of its own (layer, macro, transparent, none, modifier, native). */
 export function ownTap(binding: Binding): TapAction | null {
   if (binding.kind === "key") return { code: binding.code, ...(binding.mods ? { mods: binding.mods } : {}) };
+  if (binding.kind === "macro") return { code: "", macroId: binding.macroId };
   if (binding.kind === "holdTap") return binding.tap;
   return null;
 }
 
-export const tapOnly = (tap: TapAction): Binding => ({ kind: "key", code: tap.code, ...(tap.mods ? { mods: tap.mods } : {}) });
+export const tapOnly = (tap: TapAction): Binding =>
+  tap.macroId ? { kind: "macro", macroId: tap.macroId } : { kind: "key", code: tap.code, ...(tap.mods ? { mods: tap.mods } : {}) };
 
 export const NO_TAP = "it has no key of its own to keep as the tap";
 

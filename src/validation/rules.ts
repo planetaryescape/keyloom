@@ -71,6 +71,7 @@ export function unknownRefs(board: BoardDefinition, doc: Layout): Issue[] {
     if (b.kind === "holdTap") {
       if ("layerId" in b.hold && !layers.has(b.hold.layerId)) missing.push({ noun: "layer", text: `layer "${b.hold.layerId}"` });
       if (!profiles.has(b.profileId)) missing.push({ noun: "hold-tap timing profile", text: `hold-tap profile "${b.profileId}"` });
+      if (b.tap.macroId && !macros.has(b.tap.macroId)) missing.push({ noun: "macro", text: `macro "${b.tap.macroId}"` });
     }
     for (const m of missing) {
       const who = slot ? keyOn(doc, slot) : "A combo";
@@ -133,7 +134,7 @@ export function firmwareSupport(board: BoardDefinition, doc: Layout): Issue[] {
   };
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
     if (b.kind === "key") unknownKey(b.code, where, slot);
-    if (b.kind === "holdTap") unknownKey(b.tap.code, where, slot);
+    if (b.kind === "holdTap" && !b.tap.macroId) unknownKey(b.tap.code, where, slot);
     if (b.kind === "native" && b.firmware !== doc.firmware) {
       out.push(issue("firmware_unsupported", `${where} is a ${b.firmware} native binding in a ${doc.firmware} layout`,
         `${slot ? keyOn(doc, slot) : "A key"} has custom behaviour written for a different kind of firmware, so this keyboard can't run it.`, slotOf(slot)));
@@ -164,6 +165,11 @@ export function qmkHoldTap(doc: Layout): Issue[] {
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
     if (b.kind !== "holdTap") continue;
+    if (b.tap.macroId) {
+      out.push(issue("qmk_modtap_basic", `${where}: QMK hold-taps can't tap a macro (${b.tap.macroId})`,
+        `${slot ? keyOn(doc, slot) : "A combo"}: this firmware can't tap a macro from a hold-tap. Use a tap dance instead.`, slotOf(slot)));
+      continue;
+    }
     if (b.tap.mods?.length) out.push(issue("qmk_modtap_basic", `${where}: QMK hold-taps can't tap a modified key (${b.tap.code} with ${b.tap.mods.join("+")})`,
       `${slot ? keyOn(doc, slot) : "A combo"}: this firmware can't tap a modified key like Shift+A from a hold-tap. Tap a plain key instead.`, slotOf(slot)));
     // An unknown code is firmware_unsupported already; saying it isn't basic as well would repeat it.
