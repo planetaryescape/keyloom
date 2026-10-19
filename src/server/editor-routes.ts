@@ -11,6 +11,7 @@ import {
   CheckResponseSchema,
   FlashSchema,
   ImportResponseSchema,
+  LayoutExportDocumentSchema,
   ParseBindingRequestSchema,
   ParseBindingResponseSchema,
   RevisionListResponseSchema,
@@ -45,6 +46,7 @@ const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["layouts/:/undo", { method: "POST", run: (b, ref, r) => undo(b, ref, r) }],
   ["layouts/:/upgrade", { method: "POST", run: (b, ref, r) => upgrade(b, ref, r) }],
   ["layouts/:/revisions", { method: "GET", run: async (b, ref) => Response.json(RevisionListResponseSchema.parse({ revisions: await b.revisions(ref) })) }],
+  ["layouts/:/export", { method: "GET", run: async (b, ref, r) => Response.json(LayoutExportDocumentSchema.parse(await b.exportLayout(ref, revisionQuery(r)))) }],
   ["boards", { method: "GET", run: async (b) => Response.json(BoardListResponseSchema.parse({ boards: await b.boards() })) }],
   ["import", { method: "POST", run: (b, _id, r) => importUpload(b, r) }],
   ["layouts/:/builds", { method: "POST", run: (b, ref, r) => startBuild(b, ref, r) }],
@@ -118,6 +120,12 @@ function decode(segment: string): string | null {
 function fail(status: number, code: string, message: string, validation?: ApiErrorBody["validation"]): Response {
   const body: ApiErrorBody = { error: { code, message }, ...(validation === undefined ? {} : { validation }) };
   return Response.json(body, { status });
+}
+
+// A revision named in a read's query; absent or empty means the head.
+function revisionQuery(request: Request): string | undefined {
+  const rev = new URL(request.url).searchParams.get("rev")?.trim();
+  return rev === undefined || rev === "" ? undefined : rev;
 }
 
 // Requiring application/json keeps every write a request a plain HTML form can't send, on top of

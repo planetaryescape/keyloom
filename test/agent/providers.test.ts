@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { anthropicModel, classifyModelError, openRouterClientFromEnv } from "../../src/agent/anthropic-model.ts";
+import { anthropicModel, classifyModelError, clientFromEnv, openRouterClientFromEnv } from "../../src/agent/anthropic-model.ts";
 import { NO_CODEX } from "../helpers/no-credentials.ts";
 import { chooseNextProvider, chooseProvider, defaultAgentModel, keyedProviders, providerStatus } from "../../src/app/chat-model.ts";
 import { ModelError, UsageError, sendMessage } from "../../src/app/index.ts";
@@ -55,6 +55,30 @@ describe("OpenRouter through the Anthropic adapter", () => {
     expect(openRouterClientFromEnv({})).toBeNull();
     expect(openRouterClientFromEnv({ ANTHROPIC_API_KEY: "a" })).toBeNull();
     expect(openRouterClientFromEnv({ OPENROUTER_API_KEY: " k " })?.baseURL).toBe("https://openrouter.ai/api");
+  });
+
+  test("clientFromEnv reads ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or credentials.json", () => {
+    expect(clientFromEnv({ ANTHROPIC_API_KEY: "key-1" })).not.toBeNull();
+    expect(clientFromEnv({ ANTHROPIC_AUTH_TOKEN: "token-1" })).not.toBeNull();
+
+    const home = tempDir("keyloom-ant-home-");
+    mkdirSync(join(home, ".config", "anthropic"), { recursive: true });
+    writeFileSync(join(home, ".config", "anthropic", "credentials.json"), JSON.stringify({ token: "ant-token" }));
+    expect(clientFromEnv({ HOME: home })).not.toBeNull();
+
+    expect(clientFromEnv({ HOME: tempDir("empty-home-") })).toBeNull();
+  });
+
+  test("refusal stop_reason does not emit onPublicMessage", async () => {
+    const fake = fakeAnthropic([{ blocks: [{ text: "I cannot do that" }], stop: "refusal" }]);
+    const publicMessages: string[] = [];
+    const model = anthropicModel(fake.client);
+    const res = await model.run({
+      ...request,
+      onPublicMessage: (msg) => publicMessages.push(msg.text),
+    });
+    expect(res.stopReason).toBe("refusal");
+    expect(publicMessages).toEqual([]);
   });
 });
 

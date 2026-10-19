@@ -31,3 +31,8 @@ export class RebootFailedError extends FlashFailedError {
     super(message, "", "");
   }
 }
+
+/** Toolchain is unavailable (Docker isn't running, or a pinned checkout is missing). Exits 6 (10#exit-codes). */
+export class ToolchainUnavailableError extends Error {
+  override name = "ToolchainUnavailableError";
+}

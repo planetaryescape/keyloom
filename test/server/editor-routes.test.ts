@@ -8,6 +8,7 @@ import {
   BuildSchema,
   CheckResponseSchema,
   FlashSchema,
+  LayoutExportDocumentSchema,
   ParseBindingResponseSchema,
   UndoResponseSchema,
 } from "../../src/api/http.ts";
@@ -99,6 +100,26 @@ describe("guards", () => {
     const big = JSON.stringify({ baseRevisionId: "x", ops: [], pad: "a".repeat(1_100_000) });
     const response = await call("POST", "/api/layouts/moonlander-daily/check", big);
     expect(response.status).toBe(413);
+  });
+});
+
+describe("export", () => {
+  test("serves the head's keyloom document, a named revision with ?rev=, and a 404 for an unknown one", async () => {
+    const { call } = start(quick());
+    const head = await call("GET", "/api/layouts/moonlander-daily/export");
+    expect(head.status).toBe(200);
+    const document = LayoutExportDocumentSchema.parse(await head.json());
+    expect(document).toMatchObject({ kind: "keyloom-layout", schema_version: 1, board_id: fixture.board.id, layout_name: "Daily driver", revision_id: fixture.revision.id });
+
+    const applied = await call("POST", "/api/layouts/moonlander-daily/apply", { baseRevisionId: fixture.revision.id, ops: OPS, summary: "Base, key 1: F17" });
+    expect(applied.status).toBe(200);
+    const { revisionId } = ApplyResponseSchema.parse(await applied.json());
+    const newHead = LayoutExportDocumentSchema.parse(await (await call("GET", "/api/layouts/moonlander-daily/export")).json());
+    expect(newHead.revision_id).toBe(revisionId);
+
+    const old = await call("GET", `/api/layouts/moonlander-daily/export?rev=${fixture.revision.id}`);
+    expect(LayoutExportDocumentSchema.parse(await old.json()).revision_id).toBe(fixture.revision.id);
+    expect((await call("GET", "/api/layouts/moonlander-daily/export?rev=rev_nope")).status).toBe(404);
   });
 });
 

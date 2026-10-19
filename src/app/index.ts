@@ -5,7 +5,12 @@ export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
 export { type ParsedBinding, parseBindingExpression } from "./binding-expression.ts";
-export { type ImportInput, type ImportOutcome, type LayoutView, getLayout, importLayout, listLayouts } from "./layouts.ts";
+export {
+  type ExportOutcome, type ImportInput, type ImportOutcome, type LayoutView, exportLayout, getLayout, importLayout, layoutExportDocument, listLayouts,
+} from "./layouts.ts";
+export {
+  type LayoutExportDocument, type LayoutExportProbe, LAYOUT_EXPORT_KIND, LAYOUT_EXPORT_SCHEMA_VERSION, LayoutExportDocumentSchema, buildLayoutExportDocument, probeLayoutExport,
+} from "../layout/export-document.ts";
 export { type UploadInput, importUpload } from "./import-upload.ts";
 export { listRevisions } from "./history.ts";
 export {
@@ -34,7 +39,8 @@ export {
   type AutoSyncReport, type BoardSyncView, type RunSyncOptions, type SyncDeps, type SyncEngine, type SyncOptions, type SyncOutcome, type SyncSetup, type SyncState,
   autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, runUseConfig, setAutoSync, syncStatus,
 } from "./sync.ts";
-export { BuildFailedError, EmulateFailedError, FlashFailedError, RebootFailedError } from "./firmware-errors.ts";
+export { BuildFailedError, EmulateFailedError, FlashFailedError, RebootFailedError, ToolchainUnavailableError } from "./firmware-errors.ts";
+export { type AgentConfig, CONFIG_FILE, readAgentConfig, writeAgentConfig } from "./agent-config.ts";
 export { type EmulateOptions, type EmulateOutcome, emulateLayout } from "./emulate.ts";
 export { SCRIPT_HELP } from "../firmware/emulate/script.ts";
 export type { ImportReport } from "../layout/import-report.ts";

@@ -138,6 +138,20 @@ export type NewBlankOutcome = {
   note: string;
 };
 
+export async function resolveBlankStart(board: string, opts: GeometryOptions = {}): Promise<{ start?: { layout: Layout; summary: string }; started: "default" | "empty"; note: string }> {
+  const def = showBoard(board).definition;
+  if (def.firmware === "kanata") {
+    return { started: "empty", note: `Started from the ${def.name} identity map` };
+  }
+  const found = await readDefaultKeymap(def, opts);
+  if (found.layout === null) {
+    const summary = `Started from the ${def.name} blank (no default keymap: ${found.reason})`;
+    return { start: { layout: blankDocument(board), summary }, started: "empty", note: summary };
+  }
+  const summary = `Started from the ${def.name} default keymap (${found.from})`;
+  return { start: { layout: found.layout, summary }, started: "default", note: summary };
+}
+
 /**
  * A blank config (D-370): the board's firmware default keymap where keyloom can read one from the pinned tree, otherwise the empty
  * starting point with the reason in its first revision's summary, so History says it too. A software remapper's blank is the identity map and
@@ -145,18 +159,8 @@ export type NewBlankOutcome = {
  */
 export async function newBlankConfig(app: App, input: { name: string; board: string }, opts: GeometryOptions = {}): Promise<NewBlankOutcome> {
   checkedName(input.name);
-  const def = showBoard(input.board).definition;
-  if (def.firmware === "kanata") {
-    const config = newConfig(app, { name: input.name, from: "blank", board: input.board });
-    return { config, started: "empty", note: `Started from the ${def.name} identity map` };
-  }
-  const found = await readDefaultKeymap(def, opts);
-  if (found.layout === null) {
-    const summary = `Started from the ${def.name} blank (no default keymap: ${found.reason})`;
-    return { config: newConfig(app, { name: input.name, from: "blank", board: input.board, start: { layout: blankDocument(input.board), summary } }), started: "empty", note: summary };
-  }
-  const summary = `Started from the ${def.name} default keymap (${found.from})`;
-  return { config: newConfig(app, { name: input.name, from: "blank", board: input.board, start: { layout: found.layout, summary } }), started: "default", note: summary };
+  const { start, started, note } = await resolveBlankStart(input.board, opts);
+  return { config: newConfig(app, { name: input.name, from: "blank", board: input.board, ...(start ? { start } : {}) }), started, note };
 }
 
 const requireFreeName = (app: App, name: string): string => {

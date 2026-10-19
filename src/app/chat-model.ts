@@ -27,7 +27,7 @@ const hasEnv = (env: Env, name: string) => Boolean(env[name]?.trim());
 
 /** The providers whose key is in the environment, in the order the default is picked. */
 export function keyedProviders(env: Env = process.env): ProviderId[] {
-  return PROVIDERS.filter((p) => (p === "anthropic" ? hasEnv(env, "ANTHROPIC_API_KEY") : p === "openrouter" ? hasEnv(env, "OPENROUTER_API_KEY") : false));
+  return PROVIDERS.filter((p) => (p === "anthropic" ? clientFromEnv(env) !== null : p === "openrouter" ? hasEnv(env, "OPENROUTER_API_KEY") : false));
 }
 
 function envProvider(env: Env): ProviderId | undefined {

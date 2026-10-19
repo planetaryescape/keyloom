@@ -60,4 +60,29 @@ describe("keyloom review", () => {
     const { dir } = await optionOptionApp();
     expect((await cli(["review", "bk", "--force", "--data-dir", dir])).code).toBe(2);
   });
+
+  test("dismiss and restore review items", async () => {
+    const { dir } = await optionOptionApp();
+    // Run checks first
+    await withoutCredentials(() => cli(["review", "bk", "--run", "--data-dir", dir]));
+    const json = JSON.parse((await cli(["review", "bk", "--json", "--data-dir", dir])).out);
+    const item = json.review.items[0];
+    expect(item).toBeDefined();
+
+    // Dismiss the item
+    const dis = await cli(["review", "dismiss", item.id, "--layout", "bk", "--format", "table", "--data-dir", dir]);
+    expect(dis.code).toBe(0);
+    expect(dis.out).toContain(`Dismissed review item ${item.id} on bk.`);
+
+    const afterDis = JSON.parse((await cli(["review", "bk", "--json", "--data-dir", dir])).out);
+    expect(afterDis.review.items.find((i: { id: string }) => i.id === item.id).dismissed_at).not.toBeNull();
+
+    // Restore the item
+    const res = await cli(["review", "restore", item.id, "--layout", "bk", "--format", "table", "--data-dir", dir]);
+    expect(res.code).toBe(0);
+    expect(res.out).toContain(`Restored review item ${item.id} on bk.`);
+
+    const afterRes = JSON.parse((await cli(["review", "bk", "--json", "--data-dir", dir])).out);
+    expect(afterRes.review.items.find((i: { id: string }) => i.id === item.id).dismissed_at).toBeNull();
+  });
 });

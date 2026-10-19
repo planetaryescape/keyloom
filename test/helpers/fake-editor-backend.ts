@@ -4,8 +4,9 @@
 import {
   KEYCODES,
 } from "../../src/layout/keycodes.ts";
-import type { ApplyRequest, ApplyResponse, BoardChoice, Build, ImportResponse, RevisionEntry, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
+import type { ApplyRequest, ApplyResponse, BoardChoice, Build, ImportResponse, LayoutExportDocument, RevisionEntry, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
 import type { Binding, Layout } from "../../src/layout/schema.ts";
+import { buildLayoutExportDocument } from "../../src/layout/export-document.ts";
 import type { ChangeOp, Slot } from "../../src/layout/change.ts";
 import { applyOps } from "../../src/layout/apply-ops.ts";
 import { EditorError, type EditorBackend } from "../../src/server/editor-backend.ts";
@@ -154,6 +155,12 @@ export class FakeEditor implements EditorBackend {
 
   async revisions(): Promise<RevisionEntry[]> {
     return [...this.history].reverse().map((r) => ({ id: r.id, parentId: r.parentId, origin: r.origin, summary: r.summary, createdAt: r.createdAt, isHead: r.id === this.head.id }));
+  }
+
+  async exportLayout(_ref: string, revisionId?: string): Promise<LayoutExportDocument> {
+    const revision = revisionId === undefined ? this.head : this.history.find((r) => r.id === revisionId);
+    if (revision === undefined) throw new EditorError(404, "not_found", "No such revision.");
+    return buildLayoutExportDocument({ name: "Daily driver", revisionId: revision.id, layout: structuredClone(revision.document) });
   }
 
   async boards(): Promise<BoardChoice[]> {

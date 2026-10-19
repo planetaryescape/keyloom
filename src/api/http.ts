@@ -43,6 +43,12 @@ export const LayoutDetailSchema = z.object({
 });
 export type LayoutDetail = z.infer<typeof LayoutDetailSchema>;
 
+// The portable keyloom layout document `keyloom layout export` writes and `keyloom config new --from import`
+// reads back (10, D-032). The response body is exactly the file, so the browser can save it as one.
+//   GET  /api/layouts/:ref/export[?rev=R]             -> LayoutExportDocument   (the head when rev is omitted)
+export { LayoutExportDocumentSchema } from "../layout/export-document.ts";
+export type { LayoutExportDocument } from "../layout/export-document.ts";
+
 // Editing, building and flashing (rung 2). Every route below takes and returns JSON, needs the
 // session token like the reads, and reports failure with ApiErrorBody.
 //   POST /api/layouts/:ref/check        CheckRequest  -> CheckResponse
