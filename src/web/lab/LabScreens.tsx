@@ -32,10 +32,9 @@ export function LabStage({ lab, boardName, phone, onClose, onType }: { lab: Lab;
 function StartCard({ lab, boardName, phone, onClose }: { lab: Lab; boardName: string; phone: boolean; onClose: () => void }) {
   const [choice, setChoice] = useState<string>("starter");
   const [own, setOwn] = useState("");
-  // The three the comps offer: the home row rolled, each finger on its own, and BK's own text. The starter stands in when a layout
-  // has no home-row mods to roll.
-  const offered = ["home-row-rolls", "finger-drill"].flatMap((id) => lab.passages.filter((p) => p.id === id));
-  const shown = offered.length > 0 ? offered : lab.passages.slice(0, 2);
+  // The built-in passages: the starter, home row rolls and holds, each finger on its own, and BK's own text.
+  const offered = ["starter", "home-row-rolls", "home-row-holds", "finger-drill"].flatMap((id) => lab.passages.filter((p) => p.id === id));
+  const shown = offered.length > 0 ? offered : lab.passages.slice(0, 4);
   useEffect(() => {
     if (shown[0] !== undefined && !shown.some((p) => p.id === choice) && choice !== "own") setChoice(shown[0].id);
   }, [shown, choice]);

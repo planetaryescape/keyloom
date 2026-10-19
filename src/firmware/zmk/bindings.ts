@@ -15,6 +15,8 @@ export type MapContext = {
   profiles: ReadonlyMap<string, HoldKind>;
   /** Labels of macros imported as Macros. */
   macros: ReadonlySet<string>;
+  /** Labels of tap dances imported as TapDances. */
+  tapDances?: ReadonlySet<string>;
   /** Behaviours kept as written, by label, so a binding that uses one can still get a readable key-cap. */
   kept?: ReadonlyMap<string, KeptBehavior>;
 };
@@ -139,6 +141,7 @@ export function mapBinding(call: BehaviorCall, ctx: MapContext): Mapped {
   }
 
   if (ctx.macros.has(name) && params.length === 0) return { binding: { kind: "macro", macroId: name } };
+  if (ctx.tapDances?.has(name) && params.length === 0) return { binding: { kind: "tapDance", tapDanceId: name } };
 
-  return native(call, ctx.profiles.has(name) || ctx.macros.has(name) ? "used with parameters keyloom doesn't read" : `&${name} isn't modelled`, ctx);
+  return native(call, ctx.profiles.has(name) || ctx.macros.has(name) || ctx.tapDances?.has(name) ? "used with parameters keyloom doesn't read" : `&${name} isn't modelled`, ctx);
 }

@@ -232,3 +232,45 @@ describe("key-caps for behaviours kept as written", () => {
     expect(labels).toEqual(["Enter/OSL2", "⌥SPC/OSL1", "OS⇧", "OSr⇧", "magic/L3"]);
   });
 });
+
+describe("tap dance import", () => {
+  test("imports a tap dance with tap and double-tap keys and tapping-term-ms", async () => {
+    const extra = `behaviors {
+      td_esc: td_esc_caps {
+        compatible = "zmk,behavior-tap-dance";
+        display-name = "Escape or Caps";
+        #binding-cells = <0>;
+        tapping-term-ms = <180>;
+        bindings = <&kp ESC>, <&kp CAPS>;
+      };
+    };`;
+    const bindings = ["&td_esc", ...Array(79).fill("&none")].join(" ");
+    const { layout, report } = await importZmk({ name: "x", keymap: small({ extra, bindings }) }, board);
+    expect(layout.tapDances).toHaveLength(1);
+    expect(layout.tapDances[0]).toEqual({
+      id: "td_esc",
+      name: "Escape or Caps",
+      tap: { kind: "key", code: "ESCAPE" },
+      doubleTap: { kind: "key", code: "CAPS_LOCK" },
+      termMs: 180,
+    });
+    expect(layout.layers[0]?.bindings[0]).toEqual({ kind: "tapDance", tapDanceId: "td_esc" });
+    expect(report.tapDances).toEqual(["Escape or Caps"]);
+    expect(layout.passthrough.filter((p) => p.anchor.startsWith("behavior:td_esc"))).toHaveLength(0);
+  });
+
+  test("a tap dance with unmodelled bindings is kept as written in passthrough", async () => {
+    const extra = `behaviors {
+      td_odd: td_odd_node {
+        compatible = "zmk,behavior-tap-dance";
+        #binding-cells = <0>;
+        bindings = <&bt BT_CLR>;
+      };
+    };`;
+    const bindings = ["&td_odd", ...Array(79).fill("&none")].join(" ");
+    const { layout } = await importZmk({ name: "x", keymap: small({ extra, bindings }) }, board);
+    expect(layout.tapDances).toHaveLength(0);
+    expect(layout.layers[0]?.bindings[0]).toMatchObject({ kind: "native", source: "&td_odd" });
+    expect(layout.passthrough[0]?.anchor).toBe("behavior:td_odd");
+  });
+});

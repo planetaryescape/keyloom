@@ -13,7 +13,8 @@ export type RepeatTransform =
   /** Any other edit: set each key to exactly the binding the edit produced. */
   | { kind: "copy"; binding: Binding };
 
-const sameTap = (a: TapAction, b: TapAction) => a.code === b.code && deepEqual(a.mods ?? [], b.mods ?? []);
+const sameTap = (a: TapAction, b: TapAction) =>
+  a.macroId && b.macroId ? a.macroId === b.macroId : a.code === b.code && deepEqual(a.mods ?? [], b.mods ?? []);
 
 /** Null when the edit changed nothing, so there is nothing to repeat. */
 export function repeatTransform(before: Binding, after: Binding): RepeatTransform | null {

@@ -142,4 +142,19 @@ describe("ZMK driver", () => {
     expect(r.state).toBe("succeeded");
     expect(got).toEqual([left, right]);
   }, 15_000);
+
+  test("restoreLastGoodUf2 reads a saved half image or returns null", async () => {
+    const dir = tempDir();
+    const { restoreLastGoodUf2 } = await import("../../src/app/firmware-drivers.ts");
+    expect(await restoreLastGoodUf2(dir, "foostan/corne", "left")).toBeNull();
+
+    const corneDir = join(dir, "foostan-corne");
+    mkdirSync(corneDir, { recursive: true });
+    const img = uf2Image(0xada52840, 2);
+    await Bun.write(join(corneDir, "left.uf2"), img);
+
+    const restored = await restoreLastGoodUf2(dir, "foostan/corne", "left");
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(img);
+  });
 });

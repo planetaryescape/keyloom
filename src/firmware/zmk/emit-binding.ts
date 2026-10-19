@@ -43,7 +43,10 @@ export function bindingToDts(b: Binding, ctx: EmitContext): string {
       const label = ctx.profileLabels.get(b.profileId);
       if (!label) throw new GenerateError(`it uses the hold-tap profile "${b.profileId}", which doesn't exist`);
       const hold = "mods" in b.hold ? key({ mods: b.hold.mods }) : layer(b.hold.layerId, ctx);
-      return `&${label} ${hold} ${key({ code: b.tap.code, ...(b.tap.mods ? { mods: b.tap.mods } : {}) })}`;
+      const tap = b.tap.macroId !== undefined
+        ? `&${ctx.macroLabels.get(b.tap.macroId) ?? b.tap.macroId}`
+        : key({ code: b.tap.code, ...(b.tap.mods ? { mods: b.tap.mods } : {}) });
+      return `&${label} ${hold} ${tap}`;
     }
     case "layer":
       return `&${LAYER_BEHAVIOR[b.action]} ${layer(b.layerId, ctx)}`;

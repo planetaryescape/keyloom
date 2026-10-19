@@ -17,8 +17,9 @@ export const KeyCodeNameSchema = z.string().min(1);
 const mods = z.array(ModSchema).min(1);
 
 export const TapActionSchema = z.object({
-  code: KeyCodeNameSchema,
+  code: KeyCodeNameSchema.default(""),
   mods: mods.optional(),
+  macroId: z.string().min(1).optional(),
 });
 export type TapAction = z.infer<typeof TapActionSchema>;
 
