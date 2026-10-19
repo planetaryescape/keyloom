@@ -1,6 +1,8 @@
-// `keyloom doctor` (10): the database, then the firmware toolchain.
+// `keyloom doctor` (10): the database, the model credential, then the firmware toolchain.
 import { existsSync } from "node:fs";
 import { Database } from "bun:sqlite";
+import { classifyModelError, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
+import { DEFAULT_MODELS } from "../agent/provider.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { BREW_FORMULA, type DfuTool } from "../firmware/qmk/dfu-flash.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
@@ -17,6 +19,7 @@ import { realZmkHandsFreeDeps } from "../firmware/zmk/handsfree-flash.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import { type RemapperOverrides, remapperDoctor } from "./remapper.ts";
 import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.ts";
+import { keyedProviders } from "./chat-model.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
 export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean };
@@ -46,6 +49,21 @@ export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
     });
     const layouts = db.query("SELECT COUNT(*) AS n FROM layouts").get() as { n: number };
     checks.push({ name: "layouts", ok: true, detail: String(layouts.n) });
+    try {
+      const builds = db.query("SELECT id, status FROM builds ORDER BY created_at DESC LIMIT 5").all() as Array<{ id: string; status: string }>;
+      if (builds.length > 0) {
+        const summary = builds.map((b) => `${b.id.slice(0, 8)}: ${b.status}`).join(", ");
+        const failed = builds.some((b) => b.status === "failed");
+        checks.push({
+          name: "recent builds",
+          ok: !failed,
+          warn: failed,
+          detail: summary,
+        });
+      }
+    } catch {
+      // table might not exist
+    }
   } catch (err) {
     checks.push({ name: "database", ok: false, detail: (err as Error).message });
   } finally {
@@ -55,6 +73,64 @@ export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
 }
 
 const gb = (bytes: number): string => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+
+/** The providers whose credential keyloom can check with an API read: the two it has a key for, not Codex's login. */
+type KeyedProvider = "anthropic" | "openrouter";
+
+/** What one provider's check found: `rejected` is the credential failing, `unchecked` is not being able to tell. */
+export type CredentialOutcome = { status: "ok" } | { status: "rejected" | "unchecked"; reason: string };
+
+/** The credential check's injected parts, in the style of RemapperOverrides, so a test never touches the network. */
+export type CredentialOverrides = {
+  /** Where the key is read from; the process's own environment by default. */
+  env?: Record<string, string | undefined>;
+  /** The read that resolves a credential. The real one is the SDK's `models.retrieve`: a read, never a generation. */
+  verify?: (provider: KeyedProvider, env: Record<string, string | undefined>) => Promise<CredentialOutcome>;
+};
+
+/** One round trip, and short enough that a hung network can't hang `doctor` (11#logs). */
+const CREDENTIAL_TIMEOUT_MS = 5_000;
+
+async function verifyCredential(provider: KeyedProvider, env: Record<string, string | undefined>): Promise<CredentialOutcome> {
+  const client = provider === "anthropic" ? clientFromEnv(env) : openRouterClientFromEnv(env);
+  if (!client) return { status: "unchecked", reason: `${provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENROUTER_API_KEY"} is not set` };
+  try {
+    await client.models.retrieve(DEFAULT_MODELS[provider], null, { timeout: CREDENTIAL_TIMEOUT_MS, maxRetries: 0 });
+    return { status: "ok" };
+  } catch (err) {
+    const failure = classifyModelError(err, provider);
+    // A rejected key is the answer this check exists for. Anything else (no network, a rate limit, a model the account
+    // can't see) can't tell a good credential from a bad one, and `doctor` must not fail on a flaky connection.
+    if (failure !== null && (failure.kind === "auth" || failure.kind === "permission")) return { status: "rejected", reason: failure.message };
+    return { status: "unchecked", reason: failure?.message ?? (err instanceof Error ? err.message : String(err)) };
+  }
+}
+
+/**
+ * The model credential (11#logs): one `models.retrieve` read for each provider whose key is set, so a turn isn't
+ * spent finding out the key is wrong. No key at all is a warning, not a failure: `doctor` must pass on a machine
+ * that chats through Codex or doesn't chat yet.
+ */
+export async function runCredentialChecks(over: CredentialOverrides = {}): Promise<DoctorCheck[]> {
+  const env = over.env ?? process.env;
+  const verify = over.verify ?? verifyCredential;
+  const keyed = keyedProviders(env).filter((p): p is KeyedProvider => p !== "codex");
+  if (keyed.length === 0) {
+    return [{
+      name: "model credential", ok: true, warn: true,
+      detail: "no API key is set; set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or sign in with `codex login`, for example: op run -- keyloom doctor",
+    }];
+  }
+  const checks: DoctorCheck[] = [];
+  for (const provider of keyed) {
+    const outcome = await verify(provider, env);
+    const name = `model credential (${provider})`;
+    if (outcome.status === "ok") checks.push({ name, ok: true, detail: `${DEFAULT_MODELS[provider]} resolves` });
+    else if (outcome.status === "rejected") checks.push({ name, ok: false, detail: outcome.reason });
+    else checks.push({ name, ok: true, warn: true, detail: `couldn't check: ${outcome.reason}` });
+  }
+  return checks;
+}
 
 /** Docker, its disk, Zapp and the pinned checkouts. A missing Zapp is a warning: building works without it. */
 export async function runToolchainChecks(): Promise<DoctorCheck[]> {

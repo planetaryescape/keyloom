@@ -21,7 +21,7 @@ export { type AddDeps, type AddInput, type AddOutcome, type KeyboardPreview, typ
 export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKeyboards, findCandidate, searchKeyboards } from "./keyboard-detect.ts";
 export { type PutInput, type PutOutcome, type PutPreview, type PutProposal, previewPut, putConfig } from "./keyboard-put.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
-export { type DoctorCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
+export { type CredentialOverrides, type DoctorCheck, runCredentialChecks, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
 export {
   type RemapperOverrides, applyToRemapper, confirmExitChord, disableRemapperFor, readRemapper, remapperDoctor, setupRemapper,
 } from "./remapper.ts";

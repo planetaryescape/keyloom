@@ -6,7 +6,7 @@ import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
-import type { Binding, LayerRef, Layout, Mod } from "../layout/schema.ts";
+import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
 import { conditionalLayerRules } from "./conditional-layer-rules.ts";
@@ -84,6 +84,34 @@ export function unknownRefs(board: BoardDefinition, doc: Layout): Issue[] {
     }
     if (combo.layerIds !== "all") {
       for (const id of combo.layerIds.filter((id) => !layers.has(id))) out.push(issue("unknown_ref", `combo "${combo.id}" is on layer "${id}", which does not exist`, "A combo is set up on a layer that isn't in this layout."));
+    }
+  }
+  return out;
+}
+
+/**
+ * `combo_conflict`: two combos can't both fire when their layers overlap and they use the same set of
+ * positions, because the firmware sees one chord of keys and runs one combo. Order doesn't matter
+ * (`[0, 1]` is `[1, 0]`), and `"all"` overlaps every layer. One error per pair, naming both combos. A combo
+ * has no slot of its own to report, so `slots` is left out and the message says as much.
+ */
+export function comboConflict(doc: Layout): Issue[] {
+  const idsOf = (c: Combo): readonly string[] => (c.layerIds === "all" ? [] : c.layerIds);
+  const out: Issue[] = [];
+  for (const [i, a] of doc.combos.entries()) {
+    for (const b of doc.combos.slice(i + 1)) {
+      const positions = [...new Set(a.positions)].sort((x, y) => x - y);
+      if (positions.join(",") !== [...new Set(b.positions)].sort((x, y) => x - y).join(",")) continue;
+      // "all" overlaps whatever the other names; two "all"s overlap everywhere.
+      const shared = a.layerIds === "all" && b.layerIds === "all" ? "every"
+        : a.layerIds === "all" ? idsOf(b)
+        : b.layerIds === "all" ? idsOf(a)
+        : idsOf(a).filter((id) => idsOf(b).includes(id));
+      if (shared !== "every" && shared.length === 0) continue;
+      const on = shared === "every" ? "on every layer" : `on layers ${[...new Set(shared)].map((id) => `"${id}"`).join(", ")}`;
+      out.push(issue("combo_conflict",
+        `combos "${a.id}" and "${b.id}" use the same positions (${positions.join(", ")}) and both fire ${on}, so only one of them could fire; a combo has no slot to name`,
+        `The combos "${a.name}" and "${b.name}" would use the same keys on the same layers, so only one of them could ever fire. Give one of them different keys, or a layer the other isn't on.`));
     }
   }
   return out;
@@ -214,6 +242,7 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...duplicateIds(doc),
   ...bindingCount(board, doc),
   ...unknownRefs(board, doc),
+  ...comboConflict(doc),
   ...firmwareSupport(board, doc),
   ...qmkHoldTap(doc),
   ...tapDanceRules(doc),

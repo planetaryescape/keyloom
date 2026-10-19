@@ -1,7 +1,11 @@
 // Binding -> the text of one ZMK binding, `&kp LC(A)` (06#generation-writes-glove80keymap-and-glove80conf).
 import type { Binding, Mod } from "../../layout/schema.ts";
+import { labelOf } from "../../layout/firmware-names.ts";
 import { GenerateError } from "./generate-error.ts";
 import { keyExprText } from "./key-expr.ts";
+
+// The rule lives in src/layout so the validator's identifier_clash warning and this writer agree (07#warnings).
+export { labelOf };
 
 export type EmitContext = {
   layerIndex: ReadonlyMap<string, number>;
@@ -15,9 +19,6 @@ export type EmitContext = {
 };
 
 const LAYER_BEHAVIOR = { momentary: "mo", toggle: "tog", to: "to", oneShot: "sl" } as const;
-
-/** A label or node name devicetree accepts: letters, digits and underscores. */
-export const labelOf = (id: string): string => id.replace(/[^A-Za-z0-9_]/g, "_");
 
 function layer(id: string, ctx: EmitContext): string {
   const i = ctx.layerIndex.get(id);

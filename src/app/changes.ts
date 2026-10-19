@@ -9,9 +9,10 @@ import { recordChoice, restoreChangeSet, subjectOf, supersedeTouched, suspendCha
 import { type StaleConflict, staleConflicts } from "../layout/stale.ts";
 import {
   type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, type StoredDraft, type Tradeoffs, findChangeSet, insertChangeSet, listChangeSets, markApplied,
-  markRejected,
+  markRejected, recordSupersededDecisionIds,
 } from "../persistence/change-sets.ts";
 import { type RevisionRow, findRevision, revisionChain } from "../persistence/layouts.ts";
+import { appendLog } from "../persistence/log.ts";
 import { appendRevision, liveChangeSets } from "../persistence/revisions.ts";
 import { transact } from "../persistence/transaction.ts";
 import { type ValidationResult, ValidationResultSchema } from "../validation/result.ts";
@@ -116,6 +117,26 @@ export function proposeChange(
 /** `decisionId` is the choice written for this change, or null when it carried no reason to remember. */
 export type ApplyOutcome = { revisionId: string; changeSetId: string; validation: ValidationResult; decisionId: string | null };
 
+/**
+ * One line per apply (11#logs): IDs and the validator's verdict as codes, never the ops, the summary or a key.
+ * The content lives in the database; the log is how a bad flash is traced back to what was applied. Called
+ * after the transaction commits, so an apply that rolls back leaves no line.
+ */
+function logApply(app: App, applied: { layoutId: string; source: ChangeSetSource; outcome: ApplyOutcome }): void {
+  const { validation } = applied.outcome;
+  appendLog(app.dataDir, {
+    event: "apply",
+    layoutId: applied.layoutId,
+    revisionId: applied.outcome.revisionId,
+    changeSetId: applied.outcome.changeSetId,
+    decisionId: applied.outcome.decisionId,
+    source: applied.source,
+    ok: validation.ok,
+    errorCodes: [...new Set(validation.errors.map((i) => i.code))],
+    warningCodes: [...new Set(validation.warnings.map((i) => i.code))],
+  });
+}
+
 /** Writes the decision for an applied change, or just retires what it overrode when there is nothing to remember. */
 function remember(
   app: App, view: LayoutView, cs: { id: string; conversationId: string | null }, draft: StoredDraft | null,
@@ -124,6 +145,7 @@ function remember(
   const touched = outcome.touched.map((t) => t.decisionId);
   if (draft === null) {
     supersedeTouched(app.db, touched, null);
+    if (touched.length > 0) recordSupersededDecisionIds(app.db, cs.id, touched);
     return null;
   }
   const { sourceMessageIds, ...words } = draft;
@@ -136,7 +158,7 @@ function remember(
 
 /** Applies a proposed change set to the head, re-validating it first. */
 export function applyChange(app: App, changeSetId: string): ApplyOutcome {
-  return transact(app.db, () => {
+  const applied = transact(app.db, () => {
     const cs = findChangeSet(app.db, changeSetId);
     if (!cs) throw new NotFoundError(`no change set "${changeSetId}"`);
     if (cs.status !== "proposed") throw new UsageError(`change set ${cs.id} is ${cs.status}, not proposed`);
@@ -148,8 +170,10 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
     });
     markApplied(app.db, cs, result);
     const decisionId = remember(app, view, cs, cs.decisionDraft, resolved);
-    return { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId };
+    return { layoutId: view.layout.id, source: cs.source, outcome: { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId } };
   });
+  logApply(app, applied);
+  return applied.outcome;
 }
 
 /**
@@ -169,7 +193,7 @@ export function applyOps(
   input: { baseRevisionId: string; ops: ChangeOp[]; summary: string; reason?: string | undefined },
 ): ApplyOutcome {
   requireText(input.summary, "the summary");
-  return transact(app.db, () => {
+  const applied = transact(app.db, () => {
     const view = getLayout(app, ref);
     const resolved = resolveAgainstHead(app, view, input.baseRevisionId, input.ops);
     const { result, after } = resolved;
@@ -182,8 +206,10 @@ export function applyOps(
       layoutId: view.layout.id, expectedHeadId: view.revision.id, layout: after, origin: "editor", summary: input.summary, changeSetId: cs.id,
     });
     const decisionId = remember(app, view, cs, draft ?? null, resolved);
-    return { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId };
+    return { layoutId: view.layout.id, source: "editor" as const, outcome: { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId } };
   });
+  logApply(app, applied);
+  return applied.outcome;
 }
 
 export function rejectChange(app: App, changeSetId: string): ChangeSetView {

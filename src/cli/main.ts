@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
-  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
+  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { registerConfigCommands } from "./commands/config.ts";
@@ -281,10 +281,11 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
 
   program
     .command("doctor")
-    .description("check the database, Docker, zapp and the pinned firmware checkouts")
+    .description("check the database, the model credential, Docker, zapp and the pinned firmware checkouts")
     .action(async () => {
       const checks = [
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),
+        ...(await runCredentialChecks()),
         ...(await runToolchainChecks()),
         ...(await runKeyboardChecks(handsFree)),
         ...(await runRemapperChecks(handsFree?.remapper)),

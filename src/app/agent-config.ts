@@ -10,6 +10,9 @@ import { UsageError } from "./errors.ts";
 export const CONFIG_FILE = "config.json";
 
 const AgentConfigSchema = z.object({
+  server: z.object({
+    port: z.number().int().min(1).max(65535).optional(),
+  }).strict().optional(),
   agent: z.object({
     provider: z.enum(PROVIDERS).optional(),
     model: z.string().min(1).optional(),

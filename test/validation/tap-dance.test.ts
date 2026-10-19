@@ -158,7 +158,7 @@ describe("firmware limits", () => {
     const l = withDances([escCaps]);
     const output = { id: "c2", name: "C2", positions: [1, 3], layerIds: "all" as const, output: td("esc-caps") };
     expect(codes(validate(tinyBoard, l, [{ op: "upsertCombo", combo: output }]).errors)).toEqual(["qmk_combo_tapdance"]);
-    const input = { id: "c3", name: "C3", positions: [0, 1], layerIds: "all" as const, output: key("X") };
+    const input = { id: "c3", name: "C3", positions: [0, 2], layerIds: "all" as const, output: key("X") };
     expect(validate(tinyBoard, l, [{ op: "upsertCombo", combo: input }]).ok).toBe(true);
   });
 

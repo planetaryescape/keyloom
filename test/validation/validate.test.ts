@@ -123,7 +123,7 @@ describe("validate: unknown_ref", () => {
   });
 
   test("combo positions and layers", () => {
-    const combo = { id: "c", name: "C", positions: [0, 1], layerIds: "all" as const, output: key("ESCAPE") };
+    const combo = { id: "c", name: "C", positions: [2, 3], layerIds: "all" as const, output: key("ESCAPE") };
     expect(errorsOf([{ op: "upsertCombo", combo }])).toEqual([]);
     expect(codes(errorsOf([{ op: "upsertCombo", combo: { ...combo, positions: [0, 4] } }]))).toEqual(["unknown_ref"]);
     expect(codes(errorsOf([{ op: "upsertCombo", combo: { ...combo, layerIds: ["ghost"] } }]))).toEqual(["unknown_ref"]);
@@ -143,7 +143,7 @@ describe("validate: firmware_unsupported", () => {
   test("macro steps and combo outputs are checked too", () => {
     const macro = { id: "m1", name: "M", steps: [{ op: "tap" as const, code: "NOPE" }] };
     expect(codes(errorsOf([{ op: "upsertMacro", macro }]))).toEqual(["firmware_unsupported"]);
-    const combo = { id: "c", name: "C", positions: [0, 1], layerIds: "all" as const, output: key("NOPE") };
+    const combo = { id: "c", name: "C", positions: [2, 3], layerIds: "all" as const, output: key("NOPE") };
     expect(codes(errorsOf([{ op: "upsertCombo", combo }]))).toEqual(["firmware_unsupported"]);
   });
 
@@ -367,7 +367,7 @@ describe("validate: native_edit", () => {
   });
 
   test("a combo can't output new native source", () => {
-    const combo = { id: "c", name: "C", positions: [0, 1], layerIds: "all" as const, output: native("RGB_TOG") };
+    const combo = { id: "c", name: "C", positions: [2, 3], layerIds: "all" as const, output: native("RGB_TOG") };
     expect(codes(errorsOf([{ op: "upsertCombo", combo }]))).toEqual(["native_edit"]);
   });
 });

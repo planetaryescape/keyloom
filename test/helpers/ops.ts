@@ -17,10 +17,20 @@ export function setKey(position: number, code: string, layerId = "layer-0"): Cha
   return [...dropFunctions(lost), { op: "setBinding", at: { layerId, position }, binding: { kind: "key", code } }];
 }
 
+const POSITIONS: Record<string, [number, number]> = {
+  fn: [2, 3],
+  extra: [0, 3],
+  symbols: [2, 3],
+  navigation: [1, 2],
+  "layer-6": [2, 3],
+  "layer-7": [1, 2],
+  "layer-8": [1, 3],
+};
+
 /** A new layer with a combo that reaches it, so adding it doesn't strand it (layer_unreachable). */
-export const addReachableLayer = (id: string, afterLayerId: string): ChangeOp[] => [
+export const addReachableLayer = (id: string, afterLayerId: string, positions?: [number, number]): ChangeOp[] => [
   { op: "addLayer", layer: { id, name: id }, afterLayerId },
-  { op: "upsertCombo", combo: { id: `go-${id}`, name: id, positions: [0, 1], layerIds: "all", output: { kind: "layer", action: "momentary", layerId: id } } },
+  { op: "upsertCombo", combo: { id: `go-${id}`, name: id, positions: positions ?? POSITIONS[id] ?? [2, 3], layerIds: "all", output: { kind: "layer", action: "momentary", layerId: id } } },
 ];
 
 /** The decision draft the agent attaches to a proposal (08): the words to remember if BK applies it. */

@@ -16,6 +16,7 @@ import {
   type DecisionRow, type DecisionStatus, type Subject, findDecision, insertChoice, listDecisions, listDecisionsOfChangeSet, listDecisionsSupersededBy,
   updateDecision,
 } from "../persistence/decisions.ts";
+import { findChangeSet } from "../persistence/change-sets.ts";
 import { successfulFlashes } from "../persistence/builds.ts";
 
 const ACTIVE: readonly DecisionStatus[] = ["hypothesis", "tried_helpful", "tried_unhelpful"];
@@ -72,21 +73,43 @@ export function supersedeTouched(db: Database, touched: readonly string[], by: s
 
 /** The undo of the revision that applied `changeSetId`: its decisions leave the memory, and what it superseded returns. */
 export function suspendChangeSet(db: Database, changeSetId: string, now = Date.now()): void {
-  for (const own of listDecisionsOfChangeSet(db, changeSetId)) {
-    for (const older of listDecisionsSupersededBy(db, own.id)) {
-      if (older.status === "superseded") updateDecision(db, older.id, { status: older.statusBefore ?? "hypothesis", statusBefore: null }, now);
+  const ownDecisions = listDecisionsOfChangeSet(db, changeSetId);
+  if (ownDecisions.length > 0) {
+    for (const own of ownDecisions) {
+      for (const older of listDecisionsSupersededBy(db, own.id)) {
+        if (older.status === "superseded") updateDecision(db, older.id, { status: older.statusBefore ?? "hypothesis", statusBefore: null }, now);
+      }
+      if (isActive(own)) updateDecision(db, own.id, { status: "retired", statusBefore: own.status }, now);
     }
-    if (isActive(own)) updateDecision(db, own.id, { status: "retired", statusBefore: own.status }, now);
+  } else {
+    const cs = findChangeSet(db, changeSetId);
+    const touchedIds = cs?.tradeoffs.supersededDecisionIds ?? [];
+    for (const id of touchedIds) {
+      const older = findDecision(db, id);
+      if (older && older.status === "superseded") {
+        updateDecision(db, older.id, { status: older.statusBefore ?? "hypothesis", statusBefore: null }, now);
+      }
+    }
   }
 }
 
 /** Putting a change back (an undo of an undo): the reverse of `suspendChangeSet`. */
 export function restoreChangeSet(db: Database, changeSetId: string, now = Date.now()): void {
-  for (const own of listDecisionsOfChangeSet(db, changeSetId)) {
-    // Retired by an undo, not by BK: only those carry a status to return to.
-    if (own.status !== "retired" || own.statusBefore === null) continue;
-    updateDecision(db, own.id, { status: own.statusBefore, statusBefore: null }, now);
-    for (const older of listDecisionsSupersededBy(db, own.id)) supersede(db, older, own.id, now);
+  const ownDecisions = listDecisionsOfChangeSet(db, changeSetId);
+  if (ownDecisions.length > 0) {
+    for (const own of ownDecisions) {
+      // Retired by an undo, not by BK: only those carry a status to return to.
+      if (own.status !== "retired" || own.statusBefore === null) continue;
+      updateDecision(db, own.id, { status: own.statusBefore, statusBefore: null }, now);
+      for (const older of listDecisionsSupersededBy(db, own.id)) supersede(db, older, own.id, now);
+    }
+  } else {
+    const cs = findChangeSet(db, changeSetId);
+    const touchedIds = cs?.tradeoffs.supersededDecisionIds ?? [];
+    for (const id of touchedIds) {
+      const older = findDecision(db, id);
+      if (older && isActive(older)) supersede(db, older, null, now);
+    }
   }
 }
 

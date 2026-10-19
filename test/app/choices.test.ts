@@ -153,6 +153,22 @@ describe("undo and redo carry the memory with the document", () => {
     expect(showDecision(app, first)).toMatchObject({ status: "superseded", supersededBy: second });
   });
 
+  test("undoing a reasonless change restores the decision it superseded", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const first = agentApply(app, layoutId, cmdShift).applied.decisionId as string;
+    recordOutcome(app, first, { status: "tried_helpful", note: "I use it daily" });
+    const head = getLayout(app, layoutId).revision.id;
+    applyOps(app, layoutId, { baseRevisionId: head, ops: capsWord, summary: "editor edit with no reason" });
+    expect(showDecision(app, first).status).toBe("superseded");
+    expect(showDecision(app, first).supersededBy).toBeNull();
+
+    undo(app, layoutId);
+    expect(showDecision(app, first)).toMatchObject({ status: "tried_helpful", supersededBy: null });
+
+    undo(app, layoutId); // Redo
+    expect(showDecision(app, first).status).toBe("superseded");
+  });
+
   test("undoing the first change retires its decision, and a decision BK retired himself stays retired through undo and redo", async () => {
     const { app, layoutId } = await commandShiftApp();
     const first = agentApply(app, layoutId, cmdShift).applied.decisionId as string;

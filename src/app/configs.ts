@@ -1,5 +1,5 @@
-// Use cases for configs (25, D-300): a config is a layout; this lists them, makes new ones, and renames, archives and deletes them.
-// Which config is on a keyboard is the sync engine's to act on (`useConfig` in sync.ts); here it is only read and protected.
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import type { GeometryOptions } from "../boards/geometry.ts";
 import type { ImportReport } from "../layout/import-report.ts";
 import { identityLayout } from "../firmware/kanata/identity.ts";
@@ -219,7 +219,7 @@ export function restoreConfig(app: App, ref: string): ConfigView {
  * because both would pull the data out from under a keyboard that is being kept on it.
  */
 export function deleteConfig(app: App, ref: string, confirmName: string): { id: string; name: string } {
-  return transact(app.db, () => {
+  const result = transact(app.db, () => {
     const row = requireConfig(app, ref);
     if (confirmName !== row.name) throw new UsageError(`type the config's name (${row.name}) to delete it`);
     if (getBoardConfig(app.db, row.boardId) === row.id) {
@@ -229,4 +229,8 @@ export function deleteConfig(app: App, ref: string, confirmName: string): { id: 
     deleteLayoutCascade(app.db, row.id);
     return { id: row.id, name: row.name };
   });
+  if (app.dataDir) {
+    rmSync(join(app.dataDir, "builds", result.id), { recursive: true, force: true });
+  }
+  return result;
 }

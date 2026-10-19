@@ -1,6 +1,7 @@
 // Hold-tap profiles, macros and combos -> devicetree nodes (06). Each function returns lines with no
 // indentation; the caller indents them to where they sit.
 import type { Combo, ConditionalLayer, HoldTapProfile, Macro, SlotAction, TapDance } from "../../layout/schema.ts";
+import { comboNodeName } from "../../layout/firmware-names.ts";
 import { textKeys } from "../../layout/text-keys.ts";
 import type { OptionValue } from "./props.ts";
 import { BUILTIN_OPTIONS, BUILTIN_PROFILES, ZMK_MACRO_DEFAULT_WAIT_MS } from "./builtins.ts";
@@ -112,8 +113,8 @@ export function renderMacro(m: Macro): string[] {
   ];
 }
 
-const NODE_NAME = /[^A-Za-z0-9_,.+-]/g;
-export const comboNodeName = (c: Combo): string => c.name.replace(NODE_NAME, "_");
+// The combo node name lives in src/layout/firmware-names.ts, so the validator's identifier_clash warning and this writer agree (07#warnings).
+export { comboNodeName };
 
 export function renderCombo(c: Combo, ctx: EmitContext): string[] {
   // Every layer is the absence of `layers`; `<(-1)>` does not compile on moergo-sc/zmk ce69e85 (S6 build, 2026-10-15).
