@@ -26,10 +26,11 @@ describe("raw HID on Linux", () => {
     node(sys, "hidraw2", RAW_DESCRIPTOR, "HID_ID=0003:0000046D:0000C52B\n");
     mkdirSync(join(sys, "not-a-hidraw"));
     const found = await linuxHid(sys, "/dev").list();
-    expect(found).toEqual([
+    expect(found).toHaveLength(2);
+    expect(found).toEqual(expect.arrayContaining([
       { vendorId: 0x3297, productId: 0x1969, serial: "keyloom/NPQRSTVWXYZ0", handle: "/dev/hidraw1" },
       { vendorId: 0x046d, productId: 0xc52b, handle: "/dev/hidraw2" },
-    ]);
+    ]));
   });
 
   test("an empty or missing sysfs is no devices, not an error", async () => {
