@@ -1,5 +1,6 @@
 import type { Turn } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
+import { TurnUsage } from "./TurnUsage.tsx";
 
 /** The conversation on screen when BK switched board or config (D-317), shown above this layout's own. */
 export type CarriedThread = { fromName: string; turns: readonly Turn[] };
@@ -24,6 +25,7 @@ export function CarriedThreadView({ thread, boardName }: { thread: CarriedThread
             {turn.proposals.length === 0 ? null : (
               <p className="carried-note">{turn.proposals.length === 1 ? "An option was" : `${turn.proposals.length} options were`} offered for {thread.fromName}; open that to apply them.</p>
             )}
+            {turn.phase === "streaming" ? null : <TurnUsage accounting={turn.accounting} />}
           </div>
         ),
       )}

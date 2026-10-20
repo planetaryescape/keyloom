@@ -1,7 +1,7 @@
 // What the chat panel shows, as a pure reducer over the stream's frames. Keeping it free of React
 // and fetch lets the streaming rules (partial text, a dropped connection, superseded siblings) be
 // tested directly.
-import type { ChatMessage, ChatOutcome, ChatPresentation, ChatSelection, ConversationDetail, ObservedChatEvent, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
+import type { ChatAccounting, ChatMessage, ChatOutcome, ChatPresentation, ChatSelection, ConversationDetail, ObservedChatEvent, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
 import { toolActivity } from "./activity.ts";
 import type { AgentRunSnapshot } from "../../api/agent-runs.ts";
 
@@ -15,6 +15,8 @@ export type AssistantTurn = {
   presentation?: ChatPresentation;
   /** Committed facts, separately identified from observer operations (effect_N is not op_N). */
   preparations?: AgentRunSnapshot["preparations"];
+  /** This request's recorded usage; never borrowed from the conversation or another reply. */
+  accounting?: ChatAccounting;
   text: string;
   /** The tool the agent is running right now, in words; cleared once text or a proposal follows. */
   activity: string | null;
@@ -100,6 +102,7 @@ function presentedTurn(turn: AssistantTurn, presentation: ChatPresentation, mess
     });
   return {
     ...turn, userMessageId: presentation.userMessageId, presentation,
+    ...(presentation.accounting === undefined ? {} : { accounting: presentation.accounting }),
     text: keepFullAnswer ? turn.text : presentationAnswerText(presentation, messages), activity: null,
     // A terminal observation precedes done/error. Keep the current socket busy until that
     // transport frame arrives, so a second request cannot steal its outcome or question card.
@@ -157,6 +160,10 @@ function onEvent(state: Transcript, event: ObservedChatEvent): Transcript {
         activity: null,
         phase: "done",
         ending: event.outcome.status,
+        accounting: {
+          provider: event.outcome.provider, model: event.outcome.model, usage: event.outcome.usage,
+          ...(event.outcome.costUsd === undefined ? {} : { costUsd: event.outcome.costUsd }),
+        },
       }));
     case "error":
       return updateLast(state, (turn) => ({ ...interruptedTurn(turn, "failed"), failure: { code: event.code, message: event.message } }));
@@ -209,7 +216,7 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
       const last = state.turns.at(-1);
       const user = lastUser(state);
       // An explicit retry is a new request, not recovery of the observed one. Retain its facts.
-      if (last?.kind === "assistant" && last.presentation !== undefined && user !== undefined) {
+      if (last?.kind === "assistant" && (last.presentation !== undefined || last.accounting !== undefined) && user !== undefined) {
         return { ...state, turns: [...state.turns, { ...user, id: `${action.assistantId}:user` }, streamingAssistant(action.assistantId)] };
       }
       const kept = last?.kind === "assistant" ? state.turns.slice(0, -1) : state.turns;

@@ -13,6 +13,7 @@ import type { AssistantTurn, UserTurn } from "./transcript.ts";
 import { AgentWorking } from "./AgentWorking.tsx";
 import type { AgentWorkStatus, AgentWorkView } from "./work-view.ts";
 import { presentationView } from "./presentation-view.ts";
+import { TurnUsage } from "./TurnUsage.tsx";
 
 export function UserMessage({ turn, layout, context }: { turn: UserTurn; layout: Layout; context?: string }) {
   const { selection } = turn;
@@ -193,6 +194,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
           </div>
         </div>
       )}
+      {streaming ? null : <TurnUsage accounting={turn.accounting} />}
     </div>
   );
 }

@@ -25,7 +25,7 @@ import { getLayout } from "./layouts.ts";
 import { selectLayers } from "./render.ts";
 import { chatPresentation, unobservedPresentation, resolvePresentedQuestion, type Presentation } from "./chat-presentation.ts";
 import { listPresentations } from "../persistence/chat-presentations.ts";
-import { conversationPreparations, conversationRun } from "../persistence/agent-runs.ts";
+import { conversationAccounting, conversationPreparations, conversationRun } from "../persistence/agent-runs.ts";
 
 export type { ProposalCard } from "./proposal-card.ts";
 
@@ -255,7 +255,10 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
 
     return transact(app.db, () => {
       const stored = outcome.messages.map((m) => insertMessage(app.db, { conversationId: conversation.id, role: m.role, content: m.content }));
-      presentation.finish(outcome.status === "awaiting_answer" ? "waiting_user" : outcome.status === "complete" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId);
+      presentation.finish(outcome.status === "awaiting_answer" ? "waiting_user" : outcome.status === "complete" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId, {
+        provider: model.provider, model: model.model, usage: outcome.usage,
+        ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
+      });
       const messageIds = [userMessage.id, ...stored.map((m) => m.id)];
       const ids = new Set(outcome.proposals.flatMap((p) => (p.changeSetId ? [p.changeSetId] : [])));
       const proposals = listConversationChangeSets(app.db, conversation.id).filter((c) => ids.has(c.id)).map(toCard);
@@ -337,10 +340,15 @@ export function showConversation(app: App, id: string): ConversationView {
     messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt, ...(question === undefined ? {} : { question }) });
   }
   const run = conversationRun(app.db, id);
+  const accounting = conversationAccounting(app.db, id);
   return {
     conversation, messages, proposals: listConversationChangeSets(app.db, id).map(toCard),
     preparationReceipts: conversationPreparations(app.db, id),
     priorities: listConversationPriorities(app.db, id).map(toPriorityCard),
-    presentations: listPresentations(app.db, id).map((presentation) => presentation.status === "running" && answering.get(id) !== presentation.userMessageId && !(run?.user_message_id === presentation.userMessageId && run.status === "running") ? unobservedPresentation(presentation) : presentation),
+    presentations: listPresentations(app.db, id).map((presentation) => {
+      const recorded = presentation.accounting ?? accounting.get(presentation.userMessageId);
+      const metered = recorded === undefined ? presentation : { ...presentation, accounting: recorded };
+      return metered.status === "running" && answering.get(id) !== metered.userMessageId && !(run?.user_message_id === metered.userMessageId && run.status === "running") ? unobservedPresentation(metered) : metered;
+    }),
   };
 }

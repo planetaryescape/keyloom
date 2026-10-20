@@ -2,9 +2,20 @@ import type { Database } from "bun:sqlite";
 import { z } from "zod";
 
 // Persistence owns its schema; the API has a structural wire counterpart, checked by contract tests.
+export const AccountingSchema = z.object({
+  provider: z.enum(["anthropic", "openrouter", "codex"]), model: z.string(),
+  usage: z.object({
+    inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative(),
+    cacheReadTokens: z.number().int().nonnegative(), cacheCreationTokens: z.number().int().nonnegative(),
+  }),
+  costUsd: z.number().nonnegative().optional(),
+});
+export type Accounting = z.infer<typeof AccountingSchema>;
+
 export const PresentationSchema = z.object({
   version: z.literal(1),
   userMessageId: z.string().min(1),
+  accounting: AccountingSchema.optional(),
   questionToolUseId: z.string().min(1).max(128).optional(),
   status: z.enum(["running", "waiting_user", "completed", "incomplete", "failed", "cancelled", "unobserved"]),
   operations: z.array(z.object({

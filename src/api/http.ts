@@ -292,6 +292,15 @@ export const ChatUsageSchema = z.object({
   cacheCreationTokens: z.number().int().nonnegative(),
 });
 
+// Recorded facts for one request, not a recomputation from today's model settings or prices.
+export const ChatAccountingSchema = z.object({
+  provider: ChatProviderIdSchema,
+  model: z.string(),
+  usage: ChatUsageSchema,
+  costUsd: z.number().nonnegative().optional(),
+});
+export type ChatAccounting = z.infer<typeof ChatAccountingSchema>;
+
 // `refused`: the model declined even after the server-side fallback. `truncated`, `context_full` and
 // `iteration_limit` mean the reply is incomplete; the panel should say so.
 export const ChatOutcomeSchema = z.object({
@@ -328,6 +337,8 @@ export type ChatEvent = z.infer<typeof ChatEventSchema>;
 
 export const ChatPresentationSchema = z.object({
   version: z.literal(1), userMessageId: z.string().min(1),
+  // Absent on older recordings and when execution did not return usage.
+  accounting: ChatAccountingSchema.optional(),
   questionToolUseId: z.string().min(1).max(128).optional(),
   status: z.enum(["running", "waiting_user", "completed", "incomplete", "failed", "cancelled", "unobserved"]),
   operations: z.array(z.object({

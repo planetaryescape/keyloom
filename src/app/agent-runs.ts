@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ProviderId } from "../agent/provider.ts";
 import type { Draft } from "../agent/prompt.ts";
 import type { Presentation } from "../persistence/chat-presentations.ts";
-import { canonical, conversationRun, effectSummaries, findRequestRun, findRun, requestCancellation, runningRuns, type EffectSummary, type RunRow } from "../persistence/agent-runs.ts";
+import { canonical, conversationRun, effectSummaries, findRequestRun, findRun, requestCancellation, runAccounting, runningRuns, type EffectSummary, type RunRow } from "../persistence/agent-runs.ts";
 import { listPresentations, savePresentation } from "../persistence/chat-presentations.ts";
 import { newId } from "../persistence/ids.ts";
 import { transact } from "../persistence/transaction.ts";
@@ -65,6 +65,8 @@ export function inspectAgentRun(app: App, id: string): AgentRunSnapshot {
     preparations: effectSummaries(app.db, row.id),
     presentation: listPresentations(app.db, row.conversation_id).find((p) => p.userMessageId === row.user_message_id) ?? null,
   };
+  const accounting = snapshot.presentation?.accounting ?? runAccounting(row.outcome_json);
+  if (snapshot.presentation !== null && accounting !== undefined) snapshot.presentation = { ...snapshot.presentation, accounting };
   if (Buffer.byteLength(JSON.stringify(snapshot)) > 64 * 1024 && snapshot.presentation !== null) {
     snapshot.presentation = { ...snapshot.presentation, operations: [], messages: [], detailsTruncated: true };
   }
