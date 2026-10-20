@@ -29,6 +29,59 @@ jobs:
             echo "No depcruise script yet, skipping."
           fi
 
+  # Diagnostics has no native device backend. Windows is a private child-contract check, not a release.
+  device-helper:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, rust: aarch64-apple-darwin, bun: bun-darwin-arm64, exe: "" }
+          - { os: macos-15-intel, rust: x86_64-apple-darwin, bun: bun-darwin-x64, exe: "" }
+          - { os: ubuntu-22.04, rust: x86_64-unknown-linux-musl, bun: bun-linux-x64, exe: "" }
+          - { os: windows-2022, rust: x86_64-pc-windows-msvc, bun: "", exe: ".exe" }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Static Linux helper toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Locked Rust checks and native diagnostics build
+        shell: bash
+        working-directory: native/device-helper
+        run: |
+          rustup show
+          rustup target add "${{ matrix.rust }}"
+          cargo fmt --check
+          cargo check --locked --target "${{ matrix.rust }}"
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}"
+          cargo build --locked --release --target "${{ matrix.rust }}"
+      - name: Ad-hoc helper signature before embedding
+        if: runner.os == 'macOS'
+        run: codesign --force --sign - native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
+      - name: Verify no Linux dynamic interpreter
+        if: runner.os == 'Linux'
+        run: |
+          file native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
+          if readelf -l native/device-helper/target/${{ matrix.rust }}/release/keyloom-device | grep -q INTERP; then exit 1; fi
+      - name: Native Bun child contract and lifetime
+        env:
+          KEYLOOM_TEST_HELPER: ${{ github.workspace }}/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device${{ matrix.exe }}
+        run: bun test test/firmware/toolchain/device-helper.test.ts test/firmware/toolchain/device-helper-native.test.ts
+      - name: Compile and install the paired CLI outside the repo
+        if: runner.os != 'Windows'
+        run: |
+          bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --helper native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
+          bun scripts/smoke-device-helper.ts dist/keyloom-${{ runner.os == 'macOS' && 'darwin' || 'linux' }}-${{ matrix.rust == 'aarch64-apple-darwin' && 'arm64' || 'x64' }}
+
   # The desktop shell (26-desktop-app.md): Rust checks only; the .app itself is built by the release workflow.
   desktop:
     runs-on: macos-15

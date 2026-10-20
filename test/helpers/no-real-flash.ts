@@ -12,6 +12,13 @@ import * as polled from "../../src/firmware/toolchain/polled-file.ts";
 import * as serial from "../../src/firmware/toolchain/serial.ts";
 import * as serialDefault from "../../src/firmware/toolchain/serial-default.ts";
 import * as volumes from "../../src/firmware/zmk/volumes.ts";
+import * as helperSpawn from "../../src/firmware/toolchain/device-helper/spawn.ts";
+
+// Even diagnostics must inject their intended synthetic child; no new helper backend can escape the preload.
+mock.module("../../src/firmware/toolchain/device-helper/spawn.ts", () => ({
+  ...helperSpawn,
+  launchHelper: () => { throw new Error("real device helper is blocked in tests; inject a synthetic launcher"); },
+}));
 
 const dir = mkdtempSync(join(tmpdir(), "keyloom-no-flash-"));
 mkdirSync(dir, { recursive: true });

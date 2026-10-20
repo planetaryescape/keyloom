@@ -1,0 +1,2 @@
+# Raw command transcripts preserve terminal/source-frame whitespace verbatim.
+*.txt whitespace=-blank-at-eol,-blank-at-eof

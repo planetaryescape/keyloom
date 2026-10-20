@@ -550,6 +550,125 @@ Only BK can do these:
 
 **Left out:** Windows and Linux builds.
 
+## Device-helper extension (planned 2026-10-20)
+
+Status: 24b diagnostics implemented in the candidate; deployment/native release gates pending. Native transport rungs 24c–24f remain proposed. Rungs 24b–24f extend the local runtime after rung 24 without renumbering shipped work. They are an independent delivery track, not blocked on rungs 27–30. Each rung ships through the normal release process only when BK authorizes publication; this blueprint itself authorizes neither release nor hardware access.
+
+**Build philosophy:** reuse the transport contracts and firmware fakes, ship one usable capability at a time, and keep the previous product working after every rung. At most two new unknowns per rung. If a gate reveals more, split the rung with a letter rather than claiming completion from unit tests.
+
+### Device-helper phase 0: characterize before replacing
+
+Read [31](31-device-helper.md), [32](32-device-helper-protocol.md), [33](33-device-helper-platforms.md) and the [reuse map](../research/rust-device-helper.md). Run S58 and the contract/build/packaging portion of S62. Build a throwaway native-helper prototype and fake backend; do not switch production transports. Set up compile/contract checks for macOS, Linux and Windows from the start. This is research, not a second product foundation rung. The [2026-10-20 report](../research/spikes/device-helper-24b.md) records source/synthetic S58 characterization and local macOS diagnostics S62 evidence; it does not close native transport or other-platform release gates.
+
+| Action | Owner | Needed by |
+|---|---|---|
+| Confirm initial architectures and minimum-OS policy, Q37 | BK; blueprint assumes macOS arm64/x64, Linux x64, Windows x64 | First target-specific release |
+| Confirm the paired extraction/distribution assumption, Q41; identify signing/CI access already available | BK for credentials/approval; agent can inspect existing tooling | 24b packaging gate; Windows half before 24f |
+| Name test machines/keyboards and authorize the exact capture/reset/flash actions, Q39 | BK; no permission carried from this planning chat | Physical acceptance of 24c–24f |
+| Confirm Windows transport/CLI scope versus full product parity, Q38 | BK; blueprint assumes the former | 24f scope freeze |
+
+Protocol and experience assumptions Q40/Q42 are documented for review; synthetic work may proceed on them. Any change to their safety invariants needs a decision-log entry. A missing hardware host blocks its platform's hardware claim, not the other platforms' work.
+
+## Rung 24b: I can diagnose the installed device helper
+
+Status: implemented in the candidate, 2026-10-20 (D-426). Local macOS arm64 installer/child/concurrency/corruption/mismatch checks passed; full suite, types and dependency rules passed. Native Intel/Linux/Windows CI, signed desktop and released-installation checks remain unobserved release gates. [Commands, raw evidence and limitations](../research/spikes/device-helper-24b.md).
+
+**Previously:** device failures are reported by in-process transports. **Now:** the installed CLI can verify the paired helper and explain installation/protocol failures before opening a keyboard.
+
+**Promise:** "I can check whether keyloom's device connection is installed correctly without touching my keyboard."
+
+**Build:** the private protocol supervisor, schema conformance corpus, fake-only test helper, trusted launcher/extraction manifest and doctor row (D-421, D-424). Existing transports remain the production defaults. Implement no real capture merely to demonstrate packaging.
+
+**Design:** doctor retains its compact table/JSON structure. It distinguishes missing/mismatched helper from no device attached and does not claim write permissions from a metadata check. No new web surface.
+
+**New unknowns:** paired installed packaging; bounded process/pipe lifecycle. Both are investigated in S62.
+
+**Demo:** install the candidate through the actual release installer into scratch paths; run `keyloom --version` and `keyloom --data-dir <scratch> doctor --device-helper-only` outside the repo. Normal doctor adds the same helper check while retaining its existing probes. Exercise a deliberately mismatched/corrupt helper in an isolated installation and show a clear refusal. Run the synthetic child through EOF and stalled-pipe shutdown.
+
+**Done when:** S58 and the macOS packaging/contract half of S62 have reports; installed doctor detects the valid and invalid pairs without opening a device; all target builds and shared-contract tests run; a cold extraction/concurrent launch works; the existing CLI/import/editor still works. Unavailable signing/minimum-OS evidence is explicitly blocked, not passed.
+
+**Left out:** production native device access, hardware reliability claims, native Linux/Windows support claims and a default-backend switch.
+
+## Rung 24c: My Moonlander recording survives transport failure honestly
+
+Status: not built; depends on 24b and the HID half of S59.
+
+**Previously:** macOS HID callbacks and lifetimes live in Bun. **Now:** an adopted Rust HID backend owns them, while existing QMK capture and sync policy remain in TS.
+
+**Promise:** "I can start and stop recording, and if the connection breaks keyloom tells me what was lost."
+
+**Build:** macOS HID discovery, exact selection/leases, normalized report I/O and the `HidTransport` adapter. Keep one-shot reboot writes under the existing app safeguards. Remove the adopted macOS HID FFI path only after comparison and acceptance (D-418, D-419, D-423).
+
+**Design:** existing lab running/stopping/interrupted states; reachable Stop, an explicit incomplete result, and a fresh-start action after reconnect. Show new failure copy in the current concept before implementing it; pass both themes/widths. No helper badge.
+
+**New unknowns:** native HID lifecycle/framing; real permission and firmware-stop behavior.
+
+**Demo:** with session-specific permission on a suitably flashed board, use installed `keyloom lab start <layout>` in scratch data, type a synthetic passage, stop and start again. Unplug during capture and kill the helper in separate runs. Confirm ordinary typing remains intact. Separately authorize and verify a one-shot reset before claiming that capability.
+
+**Done when:** S59's HID evidence and S62's installed macOS path pass; no silent loss/replay, native resources close or report bounded failure, and installed UI/CLI agree on complete versus interrupted capture. Full TS tests/types/dependency checks and native checks pass. Complete equivalent native evidence for each advertised macOS architecture; unsupported capabilities remain gated.
+
+**Left out:** serial migration, new firmware protocols and Linux/Windows device claims.
+
+## Rung 24d: My Glove80 uses the same owned device connection
+
+Status: not built; depends on 24c and the serial half of S59.
+
+**Previously:** macOS serial discovery uses FFI and capture/touch use stty/polling. **Now:** the helper owns CDC sessions and explicit touch operations.
+
+**Promise:** "I can record my Glove80 and stop cleanly, without a recording accidentally restarting it."
+
+**Build:** macOS CDC enumeration and identity, native serial configuration, serial adapter and awaited write/close throughout real/fake capture callers. Integrate per-endpoint busy handling with existing sync serialization; preserve TS firmware parsing and half selection (D-422).
+
+**Design:** reuse 24c's lab interruption pattern and the current sync detail. A busy recording explains why sync cannot restart that endpoint; it is not silently stopped to make room.
+
+**New unknowns:** DTR/baud sequencing, including 1201 relay; asynchronous serial error propagation through existing callers.
+
+**Demo:** installed CLI and web lab capture/stop/reopen on an authorized Glove80, failure mid-line and helper kill; prove capture close never reboots. With separate permission, exercise 1200 local and 1201 relay touches and verify the intended half. Do not flash merely to test the transport.
+
+**Done when:** serial S59 and installed/desktop S62 evidence pass; every write/close is awaited; fragmented lines preserve events; uncertain writes are not retried; selected-half identity and line-state behavior are observed. Unobserved relay behavior remains unsupported rather than reported as verified.
+
+**Left out:** flash-tool rewrites, UF2 handling and changes to ZMK firmware semantics.
+
+## Rung 24e: I can use the device helper on native Linux
+
+Status: not built; depends on 24b's contract/package work and applicable 24c/24d adapter work. It need not wait for unrelated macOS-only desktop credentials.
+
+**Previously:** Linux transport code exists but hardware evidence is limited. **Now:** a named Linux runtime/board matrix has an installed, verified HID/CDC backend.
+
+**Promise:** "On Linux I can connect and record my keyboard, and keyloom tells me exactly which permission is missing."
+
+**Build:** native hidraw/CDC adapters, correct report-ID normalization, USB ancestry, leases, scoped permission guidance and Linux release extraction/dependencies (D-420).
+
+**Design:** same lab/sync journey as macOS, with Linux-specific remedies behind doctor/Details. No instructions to run the entire app as root.
+
+**New unknowns:** native device behavior/permissions, including ModemManager; runtime dependencies and native installed lifetime.
+
+**Demo:** install on the declared runtime floor without development tooling; run doctor and authorized HID/serial capture, stop, unplug and restart. Test denied access and absent by-id links. Verify authorized touch capabilities separately.
+
+**Done when:** S60 and Linux S62 evidence pass, native CI plus installed CLI checks pass, and real hardware proves every advertised capability. Record OS/board/firmware/version evidence and measured regressions against the old transport. Synthetic sysfs tests alone do not close this rung.
+
+**Left out:** Linux desktop packaging, untested distro/architecture claims and generic flash parity beyond already verified capabilities.
+
+## Rung 24f: I can use the device helper on native Windows
+
+Status: not built; depends on 24b's contract, shared adapters, Q38 scope confirmation, S61 and Windows S62.
+
+**Previously:** no Windows transport or release target exists. **Now:** the native CLI can diagnose and use the helper for HID/CDC capture on a declared Windows matrix.
+
+**Promise:** "On Windows I can connect my keyboard and record a session without WSL or replacing its keyboard driver."
+
+**Build:** Windows HID collection/COM identity, bounded I/O and cancellation, Windows leases, the minimal native Bun CLI path, and checksum-verified per-user PowerShell installation. Gate unsupported general USB/build/flash/remap workflows explicitly (D-420, Q38).
+
+**Design:** reuse the same CLI and lab wording; distinguish missing driver, busy device and unsupported app capability. No administrator-first setup or blanket SmartScreen/antivirus bypass.
+
+**New unknowns:** native Windows HID/CDC behavior; installed Windows parent/helper portability. If the app-port audit adds a third, split this rung before implementation.
+
+**Demo:** install the release on native Windows with no source tree, import a synthetic/public layout into scratch data, run doctor, authorize a lab recording, stop with Ctrl-C, then repeat with COM renumbering and helper termination. Test paths with spaces/non-ASCII characters and a busy port. Reset tests require their own permission.
+
+**Done when:** S61/Windows S62 record native and physical evidence, every claimed device capability works, incomplete captures stay incomplete, and unavailable app workflows fail clearly. Windows-only compile success, WSL or a helper-only demo do not satisfy the installed CLI gate.
+
+**Left out:** full Windows product parity, Windows Tauri packaging, general bootloader/UF2 support, kanata and Windows ARM unless Q38/Q37 explicitly expand scope.
+
 ## Rung 25: Car: keyloom looks over my board without being asked
 
 **Previously:** warnings appeared only in a proposal's validation, and BK had to ask the agent what it thought of a layout. **Now:** every revision of every config gets a review: the checks at once, the agent's suggestions after, shown as a marker, marks on the keys and a review in the side column.

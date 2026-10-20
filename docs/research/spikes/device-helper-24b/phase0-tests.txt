@@ -1,0 +1,10 @@
+bun test v1.3.14 (0d9b296a)
+
+test/firmware/toolchain/device-phase0.test.ts:
+(pass) S58: old Linux writes omit the hidraw report-number byte required by the kernel contract [3.79ms]
+(pass) S58: old descriptor discovery admits a usage substring without checking report shape [1.73ms]
+
+ 2 pass
+ 0 fail
+ 3 expect() calls
+Ran 2 tests across 1 file. [102.00ms]

@@ -207,6 +207,7 @@ Numbers are not contiguous. Ranges were set aside for parallel workers and some 
 - **How:** `keyloom boards geometry` writes `geometry.json`, and `boards check` fails on drift ([04](04-boards-and-contributions.md#geometryjson-is-generated-from-the-firmware-tree)). Display-only rotation for the Moonlander's thumb cluster is the one hand-written exception, and it never affects positions.
 
 ### D-046: The core stays in TypeScript; Rust was reconsidered and rejected. (BK, 2026-10-15)
+- **Proposed partial amendment:** D-418 keeps the TypeScript core but evaluates a Rust device helper. It changes no production transport until D-419's adoption gate passes.
 - **BK asked:** "is it not better to write this software in rust? Ofcourse the UI can be a web app but I mean the brains"
 - **What Rust would have given:** consistency with mxr, spotuify and ms-todo (CLI contract, release chain, Homebrew); native tree-sitter instead of WASM, removing S10; a natural static binary.
 - **Why TypeScript stays:**
@@ -1742,3 +1743,55 @@ Entries attributed to BK are product requirements. Entries attributed to the ass
 ### D-417: Write structured logs synchronously with the small local rotation writer, not pino. (Audit reconciliation, 2026-10-20; replaces chapter 11's logger implementation promise)
 - `src/persistence/log.ts` already appends JSON lines synchronously and rotates at 10 MiB, keeping the current file and four backups. A short-lived CLI must not exit before an asynchronous transport flushes its final record.
 - Retain this implementation instead of adding pino solely to match stale prose. Logging remains best-effort and separate from transactional receipts: a log failure does not fail an apply or prove it did not happen. Build/flash summaries link to per-run logs; they do not promise a complete tool-version manifest.
+
+## Rust device-helper extension (planned 2026-10-20)
+
+Status: proposal only. BK requested this blueprint, including Linux and Windows. No implementation, hardware access or release is authorized by the planning request. [31](31-device-helper.md), [32](32-device-helper-protocol.md) and [33](33-device-helper-platforms.md) distinguish requirements from assumptions.
+
+### D-418: Keep the product in TypeScript; evaluate Rust for native device resources. (Assistant recommendation, recorded at BK's request)
+- **Partially amends D-046 if adopted:** the layout model, validator, firmware generation and decoding, agent, application workflows, persistence, CLI and editor stay in TypeScript. Rust owns native HID/serial handles and transport I/O, not what a layout means or when a keyboard should be flashed.
+- **Why:** shared executable validation and schemas still serve the product. Native callbacks, pointer representation and handle lifetimes are a different problem; the existing macOS transport already manages them manually.
+- **Options rejected:** a whole-core rewrite, moving tree-sitter solely to justify Rust, and claiming a performance win without measurement. Rust cannot prove the correctness of a keyboard protocol, firmware semantics or a sync outcome.
+
+### D-419: Reuse implementation knowledge, then require evidence before adopting the helper. (BK proposed; agreed)
+- **BK proposed:** "Evaluate a small Rust device helper for HID, serial connections, and event capture, behind a narrow protocol." And: "Introduce that helper only if its reliability benefits justify another executable and release surface."
+- **BK's reason:** "we've learnt a lot from implementing it so tht could enable us to move faster and avoid some footguns".
+- **Reversal:** the assistant first framed this as a cautious exploratory spike, then agreed that existing protocols, fixtures, interfaces and failure records make a focused replacement credible. This is not greenfield discovery, but neither are untested assumptions established facts.
+- **Gate:** characterize the old transport, exercise the same behavioural contracts through the replacement, test failures and installed packaging, and show which native ownership risks leave TypeScript. Retain the current backend on a platform until its own gate passes. No silent fallback or replay after an uncertain write.
+
+### D-420: The helper must have a path to native macOS, Linux and Windows support. (BK; rollout order assumed by the blueprint)
+- **BK:** "create a blueprint for building this . also include being able to support linux and windows".
+- **Blueprint assumes:** macOS HID first, macOS serial next, then Linux and Windows transport releases, with cross-platform contract and build checks from the start. Q37 settles architectures/minimum OS versions; Q38 separates Windows device support from a full product port.
+- **Why:** copying today's macOS/Linux implementation alone would miss Windows-specific identity, driver, cancellation and release constraints. A successful cross-compile is not a supported-device claim.
+
+### D-421: Use a private, versioned stdio child process rather than an in-process native binding. (Blueprint assumption; Q40)
+- The proposed `keyloom-device` executable is owned by each CLI/server process, starts lazily, listens on no network endpoint, and exits when its parent pipe closes. One process may own several sessions; each native handle has one owner.
+- **Options rejected for this proposal:** a background daemon or privileged service, which adds installation and authority; a native addon/FFI bridge, which keeps native failure in the application process; a general RPC framework, which adds surface for a small fixed command set.
+- **Not the reason:** old comments say compiled Bun cannot load native modules. Current Bun documentation describes embedded N-API addons; the historical limitation is not evidence that subprocesses are the only option. Isolation and lifetime are the reasons (research linked from chapter 31).
+
+### D-422: Device references and sessions expire; application policy remains in TypeScript. (Blueprint assumption; Q40)
+- Discovery yields helper-owned opaque references, not raw pointers, caller-supplied paths or persistent keyboard identity. Opening rechecks the endpoint; ambiguous matches fail. The existing physical-identity question Q35/S57 is not solved by a helper token.
+- The wire carries reports/bytes and transport outcomes. TypeScript keeps firmware commands, timing/sequence interpretation, consent, board matching, sync serialization and flash verification. The agent receives no raw transport tool.
+- Session writes and close become awaitable on both transports. The existing synchronous serial interface must be migrated through its callers, not covered with fire-and-forget promises.
+
+### D-423: A stopped or broken transport never silently becomes a complete recording or a retried write. (Blueprint assumption; Q40)
+- Bounded queues, per-session sequence numbers, terminal loss/failure states and bounded close are part of the contract, not optional diagnostics. Preserve device timestamps; receipt time is a separate host measurement.
+- A lost write response means the device effect may have happened. Reconnect may rediscover devices, but cannot repeat the write, touch a bootloader, or resume recording. A new recording needs an explicit start.
+- No raw typing bytes, serial chunks or HID reports enter logs, crash attachments or model context. Synthetic conformance traces are shareable; real recordings stay local under existing lab policy.
+
+### D-424: Release the host and helper as one verified versioned unit. (Blueprint assumption; Q41)
+- Prefer embedding the target helper in the existing compiled CLI, extracting exact bytes into a private version/hash directory and launching by an absolute verified path. The helper is a separate process, not a separately updated product. S62 must prove this works with signing, desktop packaging, native Windows execution and concurrent versions.
+- Keep a manifest with host version, helper hash, target and protocol version. Reject mismatches before opening any device. Never search PATH or the working directory for a helper.
+- Preserve older releases for rollback, not runtime failover after a device operation. Add only platform claims that have native installation and hardware evidence; list unavailable capabilities explicitly.
+
+### D-425: Keep the keyboard as the hero and show transport failures in the existing places. (Blueprint assumption; Q42)
+- Reuse [23](23-design-concept.md): no helper dashboard, backend badge, new sidebar or new visual identity. The helper itself has no human-facing design concept; it is a private byte transport.
+- Product wording stays in TypeScript, as it does for the desktop shell (D-325). The lab reports an interrupted/incomplete recording, sync retains the last verified hardware state, and doctor names installation or permission problems without opening a device.
+- Adoption is visible as less disruption, not more machinery to manage. New failure states still pass the existing screenshot and CLI journey gates.
+
+### D-426: Ship installed helper diagnostics before any native device backend. (2026-10-20 implementation scope approved by BK's orchestrated brief)
+- **Narrows D-421/D-424 for rung 24b, without adopting a transport:** implement only hello, ping and shutdown, advertise empty capabilities and compile no OS device libraries. Other device/session methods are unsupported. TypeScript transports remain production defaults; native capture, leases and their proposed queues wait for 24c–24f.
+- Add `doctor --device-helper-only` so the installed pair can be verified without database/provider/Docker/USB/remapper probes. Normal doctor retains its checks. Source/dev use warns that no asset is bundled; it never searches PATH or a source build directory.
+- Embed the final target executable and exact manifest through the existing Bun builder. Unix extraction verifies a private owned nonsymlink subtree and executable/hash; exclusive temporary creation plus atomic no-replace hard-link publication handles concurrent parents. A corrupt existing cache fails closed. No runtime helper override or updater is introduced.
+- Native release jobs build each helper before its Bun host, sign/notarise the visible Rust executable using existing credentials before hashing when configured, then fan in the three CLI assets into one checksum list. The Linux helper is static musl inside the unchanged GNU Bun host, avoiding a newer glibc requirement just for diagnostics. Native Windows starts Cargo and real Bun child-contract CI now; private Windows ACL/extraction and a public CLI port remain 24f.
+- **Evidence boundary:** local native macOS arm64 installed cold/concurrent/corrupt/mismatched-pair and bounded-child tests are recorded in [S58/S62](../research/spikes/device-helper-24b.md). Other native runners, Developer ID/notarised desktop and published release acceptance are not claimed by a local build. The inherited macOS 12.0 Tauri setting conflicts with pinned Bun's documented 13+ runtime requirement and is not a certified floor.

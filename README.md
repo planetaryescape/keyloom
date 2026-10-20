@@ -63,7 +63,15 @@ keyloom serve
 
 This opens the web app at `http://127.0.0.1:4477`. Use `--port` to change the port and `--no-open` to skip opening the browser.
 
-Building firmware needs Docker. Flashing a Moonlander needs [Zapp](https://github.com/zsa/zapp). `keyloom doctor` checks both.
+Building firmware needs Docker. Flashing a Moonlander needs [Zapp](https://github.com/zsa/zapp). `keyloom doctor` checks both, along with the bundled device helper.
+
+To check only the installed helper, without device discovery, credentials or Docker:
+
+```sh
+keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
+```
+
+This reports the paired release, protocol, target, SHA-256 and `capabilities: []`. The helper currently provides diagnostics only; keyboard connections still use the existing TypeScript transports. A corrupt or mismatched pair fails with an installation code, without opening a keyboard. See [build, cache and repair details](native/device-helper/README.md).
 
 To start from your existing layout, import it:
 
@@ -118,7 +126,7 @@ Everything the web app does has a CLI command. Output is a table in a terminal a
 | `keyloom keyboard` | Detect, add and put a config on a new keyboard |
 | `keyloom lab` | Record typing, analyse it, and turn suggestions into proposed changes |
 | `keyloom emulate` | Print what a layout would send for a sequence of key presses, using the real firmware logic |
-| `keyloom doctor` | Check the database, Docker, Zapp and firmware checkouts |
+| `keyloom doctor` | Check the database, installed device helper, Docker, Zapp and firmware checkouts |
 
 Run `keyloom --help` for the rest. Use `--data-dir <path>` to work in a scratch directory.
 

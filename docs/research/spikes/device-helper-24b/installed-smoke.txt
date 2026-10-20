@@ -1,0 +1,5 @@
+installed keyloom v0.45.0 to /var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-device-installed-uQGmxG/bin/keyloom
+add /var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-device-installed-uQGmxG/bin to your PATH to run keyloom
+{"coldConcurrentMs":485.29820799999993,"children":8,"manifest":{"available":true,"hostVersion":"0.45.0","helperVersion":"0.45.0","target":"aarch64-apple-darwin","protocol":1,"capabilities":[],"helperSha256":"1cb854ba54cff75d1ebdfb7c3cd9a62133c84760cc2e6437281fd69c77fff7f9"}}
+{"corruptRefused":{"ok":false,"checks":[{"ok":false,"deviceHelper":{"available":false,"hostVersion":"0.45.0","target":"aarch64-apple-darwin","protocol":1,"capabilities":[],"code":"integrity_error"}}]}}
+{"importAfterFailure":"passed","nodeModulesOrRustOnRuntimePath":false,"installedBinary":"keyloom-darwin-arm64","scratch":"/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-device-installed-uQGmxG"}

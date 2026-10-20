@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "request"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,19}$"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "response"
+            },
+            "id": {
+              "type": "string"
+            },
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "result": {}
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "ok",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "response"
+            },
+            "id": {
+              "type": "string"
+            },
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "unsupported",
+                    "invalid_request",
+                    "version_mismatch"
+                  ]
+                },
+                "effect": {
+                  "type": "string",
+                  "const": "none"
+                },
+                "retry": {
+                  "type": "string",
+                  "const": "never"
+                }
+              },
+              "required": [
+                "code",
+                "effect",
+                "retry"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "helloParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "number",
+          "const": 1
+        },
+        "hostVersion": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "protocol",
+        "hostVersion",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "helloResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "number",
+          "const": 1
+        },
+        "helperVersion": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "prefixItems": [],
+          "items": false,
+          "maxItems": 0
+        }
+      },
+      "required": [
+        "protocol",
+        "helperVersion",
+        "target",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "x-maxFrameBytes": 65536,
+  "x-maxRequestId": "18446744073709551615"
+}

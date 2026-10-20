@@ -32,6 +32,12 @@ keyloom becomes an app in the Dock, with its own window and keyboard, and a quie
 - **Auto-update** through Tauri's updater, with its own signing key.
 - **Needs from BK:** notarisation credentials (an app-specific password or an App Store Connect API key). His Developer ID certificate is already in his keychain.
 
+## Device-helper diagnostics packaging
+
+Rung 24b embeds a diagnostics-only Rust executable inside the same Bun sidecar (D-426). Doctor starts and reaps it; `serve` and the desktop shell start no helper in this rung. The shell still supervises only its owned server. Native device transports remain TypeScript.
+
+The release matrix signs the visible Rust executable before embedding, without Bun's JIT entitlements, and separately submits it for notarisation when existing credentials are configured. Tauri later signs the outer Bun sidecar/app; that outer signature cannot sign hidden Rust bytes. D-424/Q41 still require installed signed/notarised-chain evidence, not just a local unsigned CLI smoke. No Linux/Windows Tauri support is claimed. The inherited macOS 12.0 bundle setting is not certified: pinned Bun documents a macOS 13+ runtime requirement. See [platform gates](33-device-helper-platforms.md) and [local evidence](../research/spikes/device-helper-24b.md).
+
 ## Decisions
 
 D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md).

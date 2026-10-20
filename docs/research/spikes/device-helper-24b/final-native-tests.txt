@@ -1,0 +1,45 @@
+bun test v1.3.14 (0d9b296a)
+
+test/firmware/toolchain/device-helper.test.ts:
+(pass) canonical schema is the generated diagnostics envelope contract [1.40ms]
+(pass) shared adversarial corpus validates the TS wire boundary [1.39ms]
+(pass) production launch is blocked by the no-real-device preload [0.04ms]
+(pass) private Unix extraction > cold/warm extraction accepts spaces/non-ASCII and an existing 0755 general cache [3.16ms]
+(pass) private Unix extraction > corrupt embedded/cache bytes and mismatched release/target fail closed [1.22ms]
+(pass) private Unix extraction > symlinked helper/release/cache and permissive directories/files are refused [1.52ms]
+(pass) private Unix extraction > a symlink at the final executable is never followed [0.64ms]
+(skip) Windows production extraction is explicitly unavailable pending private ACL proof
+(pass) parallel independent handshakes accept fragmented/reordered metadata without prototype pollution [374.23ms]
+(pass) client refuses version and observes child exit [36.43ms]
+(pass) client refuses caps and observes child exit [35.75ms]
+(pass) client refuses stale and observes child exit [35.10ms]
+(pass) client refuses crash and observes child exit [30.37ms]
+(pass) client refuses oversize and observes child exit [35.11ms]
+(pass) client refuses stderr and observes child exit [37.20ms]
+(pass) client refuses late and observes child exit [36.37ms]
+(pass) client refuses wrongjson and observes child exit [35.13ms]
+(pass) client refuses utf8 and observes child exit [36.41ms]
+(pass) client refuses hang and observes child exit [2007.90ms]
+(pass) client refuses noexit and observes child exit [2009.11ms]
+
+test/firmware/toolchain/device-helper-native.test.ts:
+(pass) native diagnostics child contract > exact identity, parallel hello/ping/shutdown and observed exits [10.39ms]
+(pass) native diagnostics child contract > EOF exits cleanly; incomplete/malformed/oversized frames exit fatally without echoing input [9.63ms]
+(pass) native diagnostics child contract > joined and fragmented frames preserve request ordering; unsupported device method has no capability [5.31ms]
+(pass) native diagnostics child contract > no heartbeat and blocked stdout both exit within the helper liveness budget [10145.48ms]
+{"nativeParentDeathScratch":"/var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-test-lLjit4","parentPid":43875,"helperPid":43876,"helperExited":true}
+(pass) native diagnostics child contract > a killed Bun parent leaves no live helper after EOF/watchdog [65.57ms]
+
+test/firmware/toolchain/device-phase0.test.ts:
+(pass) S58: old Linux writes omit the hidraw report-number byte required by the kernel contract [1.15ms]
+(pass) S58: old descriptor discovery admits a usage substring without checking report shape [0.64ms]
+
+1 tests skipped:
+(skip) Windows production extraction is explicitly unavailable pending private ACL proof
+
+ 26 pass
+ 1 skip
+ 0 fail
+ 104 expect() calls
+Ran 27 tests across 3 files. [15.02s]
+exit=0

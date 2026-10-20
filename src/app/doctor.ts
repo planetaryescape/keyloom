@@ -1,5 +1,6 @@
 // `keyloom doctor` (10): the database, the model credential, then the firmware toolchain.
 import { existsSync } from "node:fs";
+import { deviceHelperDiagnostic, type HelperDiagnostic } from "../firmware/toolchain/device-helper/diagnostics.ts";
 import { Database } from "bun:sqlite";
 import { classifyModelError, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
 import { DEFAULT_MODELS } from "../agent/provider.ts";
@@ -22,7 +23,21 @@ import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.
 import { keyedProviders } from "./chat-model.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
-export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean };
+export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean; deviceHelper?: HelperDiagnostic };
+
+/** Pure diagnostics: no discovery, device open, provider request, Docker or remapper probe. */
+export async function runDeviceHelperCheck(): Promise<DoctorCheck> {
+  const deviceHelper = await deviceHelperDiagnostic();
+  const source = !deviceHelper.available && deviceHelper.code === "not_bundled";
+  return {
+    name: "device helper", ok: deviceHelper.available || source, ...(source ? { warn: true } : {}), deviceHelper,
+    detail: deviceHelper.available
+      ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [] (diagnostics only)`
+      : source
+        ? "not bundled in source/dev invocation; build with scripts/build-binaries.ts or install a release"
+        : `${deviceHelper.code}; reinstall this keyloom release; if the private helper cache was changed, remove that release from $XDG_CACHE_HOME/keyloom/device-helper and retry`,
+  };
+}
 
 export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
   const dir = resolveDataDir(opts.dataDir);

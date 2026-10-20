@@ -1,0 +1,33 @@
+installed keyloom v0.45.0 to /var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-device-installed-OfHsqB/bin/keyloom
+add /var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-device-installed-OfHsqB/bin to your PATH to run keyloom
+20 |   ok: z.boolean(), deviceHelper: z.object({ available: z.boolean(), hostVersion: z.string(), helperVersion: z.string().optional(), target: z.string(), protocol: z.literal(1), capabilities: z.tuple([]), helperSha256: z.string().optional(), code: z.string().optional() }),
+21 | })) });
+22 | async function run(cmd: string[], expected = 0) {
+23 |   const child = Bun.spawn(cmd, { cwd: scratch, env, stdout: "pipe", stderr: "pipe" });
+24 |   const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+25 |   if (code !== expected) throw new Error(`exit ${code}, expected ${expected}: ${cmd[0]} ${cmd[1]}: ${stderr} ${stdout}`);
+                                        ^
+error: exit 1, expected 0: /var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-device-installed-OfHsqB/bin/keyloom --data-dir:  {
+  "schema_version": 1,
+  "ok": false,
+  "checks": [
+    {
+      "name": "device helper",
+      "ok": false,
+      "deviceHelper": {
+        "hostVersion": "0.45.0",
+        "protocol": 1,
+        "target": "aarch64-apple-darwin",
+        "capabilities": [],
+        "available": false,
+        "code": "version_mismatch"
+      },
+      "detail": "version_mismatch; reinstall this keyloom release; if the private helper cache was changed, remove that release from $XDG_CACHE_HOME/keyloom/device-helper and retry"
+    }
+  ]
+}
+
+      at run (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/scripts/smoke-device-helper.ts:25:36)
+      at async doctor (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/scripts/smoke-device-helper.ts:29:46)
+
+Bun v1.3.14 (macOS arm64)

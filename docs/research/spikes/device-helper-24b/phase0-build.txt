@@ -1,0 +1,8 @@
+agent-work: task 9382; inspect with 'pueue status', cancel with 'agent-work cancel 9382'
+[2m18:01:48[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52462546 bytes.
+[2m18:01:49[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52462675 bytes.
+agent-work: checking memory before start
+agent-work: starting bun
+   [7ms]  bundle  2 modules
+ [101ms] compile  dist/phase0/proof
+[2m18:01:49[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52462675 bytes.

@@ -23,6 +23,10 @@ Status: local server and CLI built. The audit closeout implements the one-second
                                    USB: Moonlander (Zapp), Glove80 (boot drives)
 ```
 
+## Device-helper diagnostics and proposed transports
+
+Rung 24b implements an embedded Rust diagnostics child, owned only by `doctor`, under `src/firmware/toolchain/device-helper/` and `native/device-helper/` (D-426). It has no device backend and changes no production transport. The app, agent, validator and firmware decoders remain TypeScript. `serve`, import and editing do not start this child. Read [31](31-device-helper.md), [32](32-device-helper-protocol.md) and [33](33-device-helper-platforms.md) before changing native transports or packaging. Native transport adoption remains gated by S59–S62; local diagnostics evidence is [recorded separately](../research/spikes/device-helper-24b.md).
+
 ## Why one local process with a CLI beside it
 
 1. **Local, not hosted** (D-028). Firmware builds and USB flashing have to happen on BK's machine. A hosted app would need accounts, storage of other people's layouts and chats, and a processor contract for them. BK rejected that for an open-source tool he isn't running as a business (D-007).
@@ -80,9 +84,10 @@ Builds need Docker. That's a deliberate requirement (Q12). Both firmwares docume
 | `$XDG_DATA_HOME/keyloom/artifacts/` | Built `.bin` and `.uf2` files by build ID |
 | `$XDG_DATA_HOME/keyloom/logs/` | Build, flash and server logs |
 | `$XDG_CACHE_HOME/keyloom/build/` | Pinned firmware checkouts |
+| `$XDG_CACHE_HOME/keyloom/device-helper/<release>/<target>/<sha256>/` | Private verified helper executable; old versions coexist |
 
 On macOS the XDG defaults apply (`~/.config`, `~/.local/share`, `~/.cache`). That's the convention BK's CLIs use, and it keeps paths the same on Linux.
 
 ## Release
 
-release-please owns versions, tags and the changelog. Each release builds `bun build --compile` binaries for `darwin-arm64`, `darwin-x64` and `linux-x64`, and attaches them to the GitHub release. `install.sh` downloads the right one (D-034). There's no npm package in v1, because the `keyloom` name on npm belongs to an unrelated password generator (Q2).
+release-please owns versions, tags and the changelog. Each release builds `bun build --compile` binaries for `darwin-arm64`, `darwin-x64` and `linux-x64`, and attaches them to the GitHub release. `install.sh` downloads the right one (D-034). Each native release job builds its locked Rust helper first (static musl on Linux), signs the macOS helper before hashing when existing credentials are configured, and embeds it through `scripts/build-binaries.ts`. A fan-in job publishes checksums for all three CLI assets; the installer still downloads one binary. See [helper build reference](../../native/device-helper/README.md). There's no npm package in v1, because the `keyloom` name on npm belongs to an unrelated password generator (Q2).

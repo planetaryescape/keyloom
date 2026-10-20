@@ -1,0 +1,25 @@
+bun test v1.3.14 (0d9b296a)
+
+test/firmware/toolchain/device-helper.test.ts:
+2 | 
+3 | // Canonical diagnostics-v1 subset. The checked-in JSON schema is mechanically compared in tests.
+4 | export const requestSchema = z.strictObject({
+5 |   v: z.literal(1),
+6 |   type: z.literal("request"),
+7 |   id: z.string().regex(/^[1-9][0-9]{0,19}$/).refine((id) => BigInt(id) <= 18446744073709551615n),
+                                                                ^
+SyntaxError: Failed to parse String to BigInt
+      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/firmware/toolchain/device-helper/protocol.ts:7:61)
+      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/schemas.js:2584:23)
+      at runChecks (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/schemas.js:51:35)
+      at <anonymous> (file:///Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/doc.js:68:35)
+      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/schemas.js:1187:23)
+      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/parse.js:43:32)
+      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/test/firmware/toolchain/device-helper.test.ts:36:51)
+(fail) shared adversarial corpus validates the TS wire boundary [1.64ms]
+
+ 0 pass
+ 19 filtered out
+ 1 fail
+ 17 expect() calls
+Ran 1 test across 1 file. [36.00ms]
