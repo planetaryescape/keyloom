@@ -24,8 +24,8 @@ const MACRO_FIXED = new Set(["compatible", "#binding-cells", "label", "display-n
 const TAP_DANCE_FIXED = new Set(["compatible", "#binding-cells", "label", "display-name", "bindings", "tapping-term-ms"]);
 
 const hasCells = (n: DtNode, prop: string, value: number, defines: Defines): boolean => {
-  const c = cellsOf(n, prop);
-  return c.length === 1 && evalInt(c[0] as string, defines) === value;
+  const values = propOf(n, prop)?.values;
+  return values?.length === 1 && values[0]?.kind === "cells" && evalInt(values[0].text, defines) === value;
 };
 
 export type ImportedHoldTap = { profile: HoldTapProfile; hold: HoldKind };
@@ -100,6 +100,8 @@ function slotFromCall(c: { name: string; params: readonly string[] }, defines: D
 
 export function importTapDance(n: DtNode, defines: Defines): TapDance | string {
   if (!n.label) return "it has no label to refer to it by";
+  if (n.children.length > 0) return "it has child nodes, which keyloom doesn't model";
+  if (new Set(n.props.map((p) => p.name)).size !== n.props.length) return "it repeats a property";
   if (!hasCells(n, "#binding-cells", 0, defines)) return "it takes parameters";
   const extra = n.props.find((p) => !TAP_DANCE_FIXED.has(p.name));
   if (extra) return `it sets ${extra.name}, which keyloom doesn't model`;
@@ -108,15 +110,18 @@ export function importTapDance(n: DtNode, defines: Defines): TapDance | string {
   let termMs: number | undefined;
   const termProp = propOf(n, "tapping-term-ms");
   if (termProp) {
-    const c = cellsOf(n, "tapping-term-ms");
-    if (c.length === 1) {
-      const ms = evalInt(c[0] as string, defines);
-      if (ms === undefined || ms <= 0) return "a tapping term isn't a positive number";
-      termMs = ms;
-    }
+    const [value] = termProp.values;
+    if (termProp.values.length !== 1 || value?.kind !== "cells") return "a tapping term isn't a single positive number";
+    const ms = evalInt(value.text, defines);
+    if (ms === undefined || ms <= 0) return "a tapping term isn't a positive number";
+    termMs = ms;
   }
 
-  const calls = cellsOf(n, "bindings").flatMap((c) => parseCalls(c).calls);
+  const values = propOf(n, "bindings")!.values;
+  if (values.some((v) => v.kind !== "cells")) return "its bindings contain something other than behaviours";
+  const parsed = cellsOf(n, "bindings").map(parseCalls);
+  if (parsed.some((c) => c.leading.length > 0)) return "its bindings contain something other than behaviours";
+  const calls = parsed.flatMap((c) => c.calls);
   if (calls.length === 0) return "it has no bindings";
   if (calls.length > 2) return `it has ${calls.length} bindings; keyloom models tap dance with tap and optional double-tap`;
 
