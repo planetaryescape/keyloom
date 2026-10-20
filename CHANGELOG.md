@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.1](https://github.com/planetaryescape/keyloom/compare/v0.46.0...v0.46.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* register the helper signing keychain before codesign ([3142d77](https://github.com/planetaryescape/keyloom/commit/3142d77bebb80064944367a192efe73146c3e586))
+
 ## [0.46.0](https://github.com/planetaryescape/keyloom/compare/v0.45.0...v0.46.0) (2026-10-20)
 
 
