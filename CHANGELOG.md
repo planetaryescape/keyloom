@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.0](https://github.com/planetaryescape/keyloom/compare/v0.43.1...v0.44.0) (2026-10-20)
+
+
+### Features
+
+* close blueprint implementation and verification gaps ([d03dbfc](https://github.com/planetaryescape/keyloom/commit/d03dbfcdc7d31ef75b010f10bb1147599357cd5f))
+
 ## [0.43.1](https://github.com/planetaryescape/keyloom/compare/v0.43.0...v0.43.1) (2026-10-18)
 
 
