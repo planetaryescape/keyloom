@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.45.0](https://github.com/planetaryescape/keyloom/compare/v0.44.0...v0.45.0) (2026-10-20)
+
+
+### Features
+
+* implement interactive questions and typed artifacts for rung 27 ([70eb66e](https://github.com/planetaryescape/keyloom/commit/70eb66ec391017d76b1117fac233c5c39727a026))
+
 ## [0.44.0](https://github.com/planetaryescape/keyloom/compare/v0.43.1...v0.44.0) (2026-10-20)
 
 
