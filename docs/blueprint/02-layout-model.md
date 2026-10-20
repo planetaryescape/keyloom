@@ -235,4 +235,4 @@ flashes(
 
 ### Retention and deletion
 
-Everything is local and kept until BK deletes it. `keyloom layout delete <id>` removes a layout with its revisions, change sets, conversations, messages, decisions, builds and flashes, and deletes its build artifacts. There's no multi-tenant isolation: one database belongs to one OS user.
+Everything is local and kept until BK deletes it. `keyloom config delete <id> <name>` requires the config's name and refuses the active config or one a sync is using. It removes the config and its related database history (D-308); `layout delete` is not an implemented alias. Do not assume this command securely erases exported files, logs or every artifact on disk. There's no multi-tenant isolation: one database belongs to one OS user.

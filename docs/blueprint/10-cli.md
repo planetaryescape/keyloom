@@ -1,5 +1,7 @@
 # 10: CLI
 
+Status: CLI built. The audit candidate includes layout export, board geometry, provider selection and review-finding controls; candidate additions are not yet released. Use the installed version's `--help` to check availability.
+
 The CLI is the canonical surface (D-030, taken from spotuify). Everything the web app can do, a `keyloom` subcommand can do, and both call the same core modules ([01](01-architecture.md)). The CLI is how coding agents check their own work while building keyloom, and how BK or an agent scripts it. A feature that exists only in the web app is incomplete.
 
 ## Command tree
@@ -10,6 +12,7 @@ keyloom
   boards list                              boards keyloom has definitions for
   boards show <board>                      physical keys, hands, firmware, build and flash recipe
   boards check <dir>                       validate a board definition (for contributors, 04)
+  boards geometry <board-or-dir>           regenerate geometry.json from the pinned firmware tree
   keyboard detect [--search T]             the QMK and ZMK keyboards on USB: the board keyloom has, or ranked candidates with the reasons (22)
   keyboard add --candidate C [--home-row N] [--layout L] [--controller B]   derive a board from the firmware tree, check it, store it in the data directory
   keyboard put <layout> --on <board> [--name N]   map a layout onto that board as proposals on a new config; nothing is applied or flashed
@@ -17,9 +20,8 @@ keyloom
   import --board <board> <file> [--name N] import an existing layout; prints the new layout ID and an import report
   layout list
   layout show <layout> [--layer L] [--rev R]   grid per layer, or the IR with --format json
-  layout history <layout>                  revisions, newest first
   layout export <layout> [--rev R] --out <file.json>
-  layout delete <layout>
+  layout upgrade <layout>                 read recognised kept Oryx colours and tap dances into the model
 
   change check <layout> --ops <file|->     validate ops against head; prints the ValidationResult (07)
   change propose <layout> --ops <file|-> --explain <text> [--reason <text>]   save an editor-style change set; --reason is remembered when it is applied
@@ -27,7 +29,7 @@ keyloom
   change show <cs>                         ops, explanation, trade-offs, validation, reminders
   change apply <cs>                        prints the decision it wrote, if any
   change reject <cs>
-  undo <layout> [--rev R]                  undo the head revision (or R)
+  undo <layout> [--rev R]                  undo the head; --rev asserts the expected head, not a restore target
 
   chat <layout> [--conversation C] [--select L:12,13,14] <message>
                                            one agent turn; streams the reply; prints any proposals
@@ -38,6 +40,10 @@ keyloom
   agent answer <run> <question-tool-id> <text> --request-id <id>
   agent cancel <run-or-request>             request Stop; committed preparation remains
   agent cancel <request-id> --request       save Stop even before the request is accepted
+  provider status [--json]                 active provider/model and credential availability; no generation
+  provider use <provider> [--model M]       save the default for new conversations in config.json
+  review [layout] [--run] [--force] [--provider P]   show saved review; --run can call a model
+  review dismiss|restore <item> [--layout L]   hide or restore a finding
 
   decisions list <layout> [--status S] [--kind choice|priority]
   decisions show <dec>
@@ -72,10 +78,24 @@ keyloom
   version restore <config> <revision|version|name>   a new revision (the go-back path); not a sync
   version compare <config> <revision|version|name>   key-by-key diff against the head
   autosync on|off|pause|resume|status <board>   whether Apply puts the change on the board by itself
+  remap <subcommand>                        MacBook kanata setup and management; see remap --help (21)
   doctor                                   Docker, toolchain images, pinned checkouts, attached keyboard and its firmware, API key, database
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
+
+`layout history` and `layout delete` were planned names, not implemented aliases. Use `version list <config>` for history and `config delete <config> <name>` for guarded deletion. `boards check --offline` checks local files without fetching the pinned geometry.
+
+## Export a layout and import it as a new config
+
+```sh
+keyloom --data-dir <scratch> layout export <layout> --out <unused-file.json>
+keyloom --data-dir <scratch> config new <new-name> --from import <unused-file.json> --board <same-board>
+```
+
+Export writes a JSON envelope with `kind: "keyloom-layout"`, `schema_version: 1`, `board_id`, `layout_name`, `revision_id` and the complete `layout` IR. `--rev` chooses a stored revision; otherwise it reads the head. The parent folder must exist. Writing uses a temporary sibling and rename, replacing an existing target file only after the new document is complete, so choose a new filename when keeping an older export.
+
+`import --board <same-board> <file.json>` also reads this format. Unknown format versions, malformed documents and board mismatches refuse. Reimport starts a new config/history: the informational revision ID does not import conversations, decisions, old revisions or build artifacts. This is a keyloom document, not a QMK/VIA or vendor-editor export.
 
 ## Inspect saved agent work before continuing it
 
@@ -101,7 +121,7 @@ Stop is explicit and does not roll back saved configs, proposals or memory. `age
 
 ## Emulate prints what a layout types for a sequence of key presses
 
-`keyloom emulate g80 --keys "hold 39 300 then tap 30"` runs the layout's firmware on this machine and prints the HID reports the keyboard would send, with the time of each in ms from the first key, then the text a US text field would show, then the warnings: behaviours the emulator replaced because they need hardware ([06](06-firmware-zmk.md#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard) has the list). It needs Docker, like `build`, and no keyboard. ZMK boards work today; QMK boards say "emulating QMK boards isn't available yet" until its emulator lands (exit 2).
+`keyloom emulate g80 --keys "hold 39 300 then tap 30"` runs the layout's firmware on this machine and prints the HID reports the keyboard would send, with the time of each in ms from the first key, then the text a US text field would show, then warnings for hardware behaviours the emulator replaced. Both [QMK](05-firmware-qmk.md#emulate-runs-the-generated-keymap-on-qmks-own-core) and [ZMK](06-firmware-zmk.md#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard) emulation are built. They need Docker, like `build`, and no keyboard. The CLI does not offer kanata emulation (exit 2); the separate kanata simulator is used by tests.
 
 ```
    281 ms  LSFT
@@ -143,6 +163,10 @@ The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor doe
 
 `keyloom review [layout]` prints the newest review of the config in plain words: problems, suggestions, hints, what the last revision fixed, what was checked and how the agent's part went. `--run` makes the head's review now and waits for the agent (it needs a model provider; the checks run without one), `--force` runs the agent again on a revision it already looked at, `--provider` picks the model as for `chat`. JSON is `{ layout_id, head_revision_id, stale, review }`, where `review` is null before any, and otherwise `{ id, layout_id, revision_id, trigger, checked_at, checks, ai: { status, reason, model }, items: [{ id, source, kind, severity, code, title, body, keys, layers, proposal_id, fixes, dismissed_at }], fixed }`; `title` and `body` keep the `{key:…}` and `{layer:…}` markers. `--format ids` prints the item ids. [27](27-board-review.md) has the design.
 
+`review dismiss <item> --layout <config>` hides a finding; `review restore` shows it again. Neither runs a model. `--layout` may be omitted only when there is one saved config. `review show` is the explicit form of the default read, and `--json` forces JSON output.
+
+`provider status` (also bare `provider`) reports `{ active, locked_by, providers }`; `active` carries provider, model and effort or is null. `provider use <provider> [--model <model>]` saves a default without generating text. Existing conversations stay pinned; a flag or `KEYLOOM_PROVIDER` can override the saved choice. Both accept `--json`. This checks availability, not whether an API key is accepted; `doctor` performs the credential read.
+
 ## config and version keep several layouts per board and go back to old ones
 
 A config is a layout. Each board has one config on its keyboard (D-300); `keyloom sync <config>` refuses any other and names `keyloom config use`. All JSON carries `schema_version`.
@@ -151,7 +175,7 @@ A config is a layout. Each board has one config on its keyboard (D-300); `keyloo
 - `config use` prints what `sync` prints, and has `sync`'s exit codes. The keyboard must be attached and running keyloom firmware, or it is exit 2 and the choice is unchanged. `config new` takes `--from-version`, not `--version`, which is the program's own flag. `--blank` starts from the board's firmware default keymap where keyloom can read one, else the empty Base layer, and `config new` prints the note saying which and why (JSON: `note`). `--from import <file> --board B` reads a file with the importers `keyloom import` runs (D-370, D-371).
 - `version list` prints `{ layout_id, head_revision_id, pending: [revision], versions: [{ id, revision_id, name, put_on_at, ended_at, current, summary, created_at, revisions: [revision] }] }`. `pending` is revisions newer than the newest version. A version with `put_on_at: null` was named without being put on a keyboard.
 - `version compare` prints `{ layout_id, from, to, same, keys: [{ layer_id, layer_name, position, before, after, before_label, after_label }], layers_added, layers_removed, layers_renamed, layers_reordered, lighting, macros, tap_dances, combos, hold_tap_profiles, settings, passthrough }`. `before` is the revision's binding and `after` the head's.
-- `version restore` prints `{ revision_id, restored_revision_id }` and is refused like `undo --to` (exit 4 for a rule it would break, exit 2 for no change).
+- `version restore` prints `{ revision_id, restored_revision_id }` (exit 4 for a rule it would break, exit 2 for no change). It creates a new head revision; there is no CLI `undo --to` flag. A running server may auto-sync the restored head, so restore is not a hardware-safe read on real data.
 
 ## Global flags
 

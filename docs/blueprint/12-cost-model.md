@@ -1,5 +1,7 @@
 # 12: Cost model
 
+Status: turn usage and provider-reported cost are available in outcomes/logs. Chat-footer and saved-history display are pending the parallel audit candidate and its verification; this chapter does not claim them released.
+
 keyloom costs nothing to host, because there's no hosting (D-028). The only running cost is model usage, paid by whoever's key it runs on (D-031, Q3). Builds and flashes are local and free.
 
 ## Prices
@@ -23,4 +25,4 @@ A first turn costs about 16k uncached input and 3k output, around $0.06 + $0.06 
 
 - **Layout size.** If `get_layout` dominates, the tool can return only the requested layers and the agent can ask for more. The tool already takes `layers`.
 - **Effort.** `medium` is the starting point (D-031). A move to `high` is justified by eval results, not by assumption.
-- **Other users.** Each person pays for their own key. keyloom shows the token usage and estimated cost of each turn in the chat footer, so nobody is surprised.
+- **Other users.** Each person pays for their own provider. Per-turn footer and reloaded-history usage/cost display are pending the audit integration; the existing CLI JSON outcome and logs expose usage and provider-reported cost when available. Missing cost is not zero, particularly for Codex. Final UI wording must distinguish reported cost from a model-specific estimate.

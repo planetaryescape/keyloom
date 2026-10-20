@@ -4,11 +4,11 @@ Status: model, sync, CLI, API and agent built (rung 23 part 1); screens built on
 
 BK: "I would like this app to keep multiple versions of my layout and version history just like oryx does so if i change something an use it for a week and don't like it I can go bto a past version or maybe I want a steno config and a qwerty config and a colemac config and I don't want to use layers for that, then I can keep layout configs that are different".
 
-## What exists, and the gap
+## Starting point before rung 23
 
-- Every change is already a revision, and History can go back to any revision or flash it (D-102, D-170).
+- Every change was already a revision, and History could go back to it (D-170). The earlier "flash this revision" design is superseded by D-416, not an old-artifact action in today's History.
 - A board can already hold several layouts.
-- **The gap:** nothing says which layout is on the keyboard. The sync engine picks the most recently edited layout for a board (`src/app/sync-engine.ts`, "newest by updatedAt"), so editing a second config would put it on the keyboard. There's also no way to start a config from an existing one.
+- **The gap then:** the sync engine picked the most recently edited layout for a board, so editing a second config could put it on the keyboard. Rung 23 replaced that rule with the stored active config and added copying; this is historical motivation, not the current sync behavior.
 
 ## Configs
 
@@ -32,7 +32,7 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 - **History shows versions as milestones.** The revisions between two versions fold under the later one. From a version:
   - **Go back:** a new revision restoring it (D-170's mechanism).
   - **Compare with now:** the differences drawn on the board, like a proposal preview.
-  - **Put on keyboard:** a sync of that revision. With auto-sync on, keyloom asks whether to make it the head first, so auto-sync doesn't undo it.
+  - **Put on keyboard:** one confirmation covers restoring that document as a new head first, then syncing it (or selecting this config and syncing). It does not reflash the old build artifact, and Go back alone can also trigger a running server's auto-sync for an active config (D-416).
   - **New config from here.**
 
 ## How it fits the whole

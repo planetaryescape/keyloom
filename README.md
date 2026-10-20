@@ -83,7 +83,7 @@ keyloom import --board moergo/glove80 ~/Downloads/layout.keymap
 
 Other boards are added as a folder under `boards/`, with no code. The MacBook board needs [kanata](https://github.com/jtroo/kanata) and a one-time setup; `keyloom remap --help` lists the steps.
 
-For a keyboard that isn't in the table, `keyloom keyboard detect` reads USB and names QMK and ZMK boards from keyloom's index of both firmware trees. `keyloom keyboard add` builds a board definition from it. `keyloom keyboard put` then proposes your config on it, and applies nothing. Flash recipes for most QMK DFU boards aren't built yet, so those are flashed by hand.
+For a keyboard that isn't in the table, `keyloom keyboard detect` reads USB and names QMK and ZMK boards from keyloom's index of both firmware trees. `keyloom keyboard add` builds a board definition from it. `keyloom keyboard put` then proposes your config on it, and applies nothing. QMK `atmel-dfu`, `stm32-dfu` and `caterina` recipes use your installed DFU tools; unsupported bootloaders remain manual. Those recipes have been tested with fake tools, not physical keyboards.
 
 The typing lab, new-keyboard detection and its screens have so far been exercised on fake keyboards, not physical ones.
 
@@ -122,6 +122,8 @@ Everything the web app does has a CLI command. Output is a table in a terminal a
 
 Run `keyloom --help` for the rest. Use `--data-dir <path>` to work in a scratch directory.
 
+The audit candidate also supports `layout export <layout> --out <file.json>` and reimporting that keyloom document as a new config; see the [CLI reference](docs/blueprint/10-cli.md#export-a-layout-and-import-it-as-a-new-config). Candidate changes are not yet released. Agents can follow [skills/keyloom/SKILL.md](skills/keyloom/SKILL.md) for the checked-proposal loop and hardware safeguards.
+
 ## Privacy
 
 keyloom runs on your machine. There is no account and no hosted backend. Layouts, history, conversations and typing sessions live in a local SQLite database in `$XDG_DATA_HOME/keyloom`.
@@ -131,6 +133,7 @@ Network traffic happens only in these cases:
 - Chat sends your messages, the layouts and board descriptions the agent reads, and your recorded decisions to the provider you picked.
 - Typing lab recordings never go to a model. The agent sees aggregated findings and key names, never the passage, the typed text or the raw recording.
 - Building firmware fetches pinned firmware sources and Docker images.
+- Board geometry/default-keymap lookups can fetch pinned source files. `doctor` reads provider model metadata to check configured API keys, without generating text.
 
 ## Learn more
 

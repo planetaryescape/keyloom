@@ -33,7 +33,7 @@ BK pointed to `nickcoutsos/keymap-editor` as "a pretty good editor" to learn fro
 
 - **Left: the keyboard.** One layer at a time, with tabs. A key shows its tap label and, for a hold-tap, its hold as a small glyph. `native` bindings show their `label` with a firmware badge (D-024). `transparent` keys show the binding underneath, faded.
 - **Right: the chat.** Streaming replies, proposal cards and priority chips (D-021).
-- **Header:** board and layout pickers, the head revision, Build and Flash with progress from `/api/events`, and History (revisions, with undo and "flash this revision").
+- **Header:** board and layout pickers, the head revision, Build and Flash with progress from `/api/events`, and History (versions and revisions, with Go back; a version's Put on keyboard restores its document then syncs, not an old-artifact reflash; D-416).
 
 ## Rendering keys
 

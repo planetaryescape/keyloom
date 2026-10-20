@@ -1,5 +1,7 @@
 # 01: Architecture
 
+Status: local server and CLI built. The audit candidate includes the one-second SQLite watcher that publishes external CLI head changes over SSE; not yet released. This is source/test evidence, not hardware validation.
+
 ```
  ┌────────────── browser (localhost) ──────────────┐      ┌──────────── terminal ────────────┐
  │  React editor: keyboard canvas + chat panel     │      │  keyloom <command>  (CLI, D-030) │
@@ -24,8 +26,8 @@
 ## Why one local process with a CLI beside it
 
 1. **Local, not hosted** (D-028). Firmware builds and USB flashing have to happen on BK's machine. A hosted app would need accounts, storage of other people's layouts and chats, and a processor contract for them. BK rejected that for an open-source tool he isn't running as a business (D-007).
-2. **A web UI, not a desktop shell** (D-028). The editor is a canvas plus chat, which the browser does well. Tauri would add native packaging to every rung for one benefit, USB access, and Zapp and the UF2 boot drives already provide that.
-3. **No daemon.** `keyloom serve` runs only while BK is editing. CLI commands call the same `app/` use cases in their own process against the same SQLite file. Nothing needs to run in the background: builds and flashes are started by BK, and there's no sync. WAL mode plus transactional apply with a head check ([02](02-layout-model.md#applying-undoing-and-stale-bases)) makes the server and the CLI writing at once safe.
+2. **A web UI, with an optional desktop shell.** D-028 originally rejected native packaging; D-320 later added a Tauri shell around the same local server ([26](26-desktop-app.md)). Browser mode remains available.
+3. **No separate daemon.** CLI commands call the same `app/` use cases in their own process against the same SQLite file. While `serve` runs, its sync engine can automatically build and flash the active config after Apply when auto-sync is enabled ([17](17-keyboard-sync.md)); it stops/drains with the server. WAL mode plus transactional apply with a head check ([02](02-layout-model.md#applying-undoing-and-stale-bases)) protects concurrent server and CLI writes. Use scratch data for agent verification.
 4. **The CLI is canonical** (D-030). Every use case in `app/` is reachable from the CLI. The server is a thin HTTP adapter over the same functions.
 
 ## Modules
@@ -58,7 +60,7 @@ TypeScript, strict, ESM, on bun (D-029). One package. Folders are grouped by job
 - **API:** JSON over `/api/…`, one route per use case, with bodies validated by the same zod schemas.
 - **Configs and versions (rung 23):** the routes are listed at the top of `src/api/configs.ts`: `GET|POST /api/configs` (`POST` takes `from: "config" | "blank" | "import"` and answers with the config and a `note` saying where a blank one started), `POST /api/configs/:ref/{rename,archive,restore,delete,use}`, `GET /api/configs/:ref/versions`, `POST /api/configs/:ref/versions/{name,restore}` and `GET /api/configs/:ref/compare?to=`. `:ref` is a config's ID or name. `use` answers like `POST /api/sync` (202 with the boards), and a refusal is 400 with the choice unchanged.
 - **Streaming:** Server-Sent Events. `/api/conversations/:id/stream` relays agent text and tool progress. `/api/events` pushes `layout.updated`, `build.progress` and `flash.progress`.
-- **Seeing CLI writes:** the server polls `PRAGMA data_version` once a second. When it changes, the server emits `layout.updated` for affected layouts, so a CLI `change apply` shows up in an open editor.
+- **Seeing CLI writes:** `src/cli/data-version-watcher.ts` polls `PRAGMA data_version` once a second. On an external commit, it compares saved layout heads and emits `layout.updated` for new or changed heads; the watcher stops with the server. A CLI `change apply` therefore refreshes an open editor. This is a head-change notification, not a general event for every metadata write or deletion.
 - **Static assets:** the React app is an HTML import bundled by Bun. In the release binary it's embedded by `bun build --compile` (oven-sh/bun `a9c57bd` `docs/bundler/executables.mdx:557-640`).
 
 ## Firmware toolchains
@@ -73,7 +75,7 @@ Builds need Docker. That's a deliberate requirement (Q12). Both firmwares docume
 
 | Path | Holds |
 |---|---|
-| `$XDG_CONFIG_HOME/keyloom/config.json` | `agent.model`, `agent.effort`, `server.port`. Validated by zod; missing keys take defaults |
+| `<data dir>/config.json` | Saved `agent.provider`, `agent.model` and `agent.effort`, read with zod; missing values take defaults. API keys stay in the environment |
 | `$XDG_DATA_HOME/keyloom/keyloom.db` | The database ([02](02-layout-model.md#database)) |
 | `$XDG_DATA_HOME/keyloom/artifacts/` | Built `.bin` and `.uf2` files by build ID |
 | `$XDG_DATA_HOME/keyloom/logs/` | Build, flash and server logs |
