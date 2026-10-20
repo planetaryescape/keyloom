@@ -8,6 +8,7 @@ import { manifestSchema } from "../../../src/firmware/toolchain/device-helper/ex
 import { identitySchema } from "../../../src/firmware/toolchain/device-helper/protocol.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import pkg from "../../../package.json" with { type: "json" };
+import { z } from "zod";
 
 const binary = process.env.KEYLOOM_TEST_HELPER;
 function launch(args = ["--stdio"]) {
@@ -62,6 +63,59 @@ async function waitExit(child: ReturnType<typeof launch>, ms = 6500) {
   } finally { clearTimeout(timer); }
 }
 
+const livenessSchema = z.object({
+  diagnostic: z.enum(["watchdog_timeout", "stdin_timeout"]),
+  uptimeMs: z.number().int().nonnegative(), idleMs: z.number().int().nonnegative(),
+});
+
+// Start reading only AFTER the existing exit attempt: do not change pipe behavior before its deadline.
+async function reportLiveness(child: ReturnType<typeof launch>, phase: string): Promise<number> {
+  const reader = child.stderr.getReader();
+  let text = "";
+  let bytes = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([(async () => {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) return;
+        bytes += chunk.value.length;
+        if (bytes > 1024) throw new Error("liveness metadata exceeds test budget");
+        text += new TextDecoder().decode(chunk.value);
+      }
+    })(), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("liveness metadata did not close")), 500);
+    })]);
+    const records: z.infer<typeof livenessSchema>[] = [];
+    for (const line of text.split("\n")) {
+      try {
+        const parsed = livenessSchema.safeParse(JSON.parse(line));
+        if (parsed.success) records.push(parsed.data);
+      } catch { /* Other fatal codes are not clock observations; never echo unparsed stderr. */ }
+    }
+    console.info(JSON.stringify({ nativeLiveness: { phase, records } }));
+    return records.length;
+  } catch {
+    console.info(JSON.stringify({ nativeLiveness: { phase, unavailable: true } }));
+    return 0;
+  } finally {
+    clearTimeout(timer);
+    void reader.cancel().catch(() => {});
+  }
+}
+
+async function waitWithLivenessEvidence(child: ReturnType<typeof launch>, phase: string) {
+  let exited = false;
+  try {
+    const code = await waitExit(child);
+    exited = true;
+    return code;
+  } finally {
+    const count = await reportLiveness(child, phase);
+    if (exited) expect(count).toBeGreaterThan(0);
+  }
+}
+
 describe.skipIf(!binary)("native diagnostics child contract", () => {
   test("exact identity, parallel hello/ping/shutdown and observed exits", async () => {
     const info = await identity();
@@ -101,14 +155,14 @@ describe.skipIf(!binary)("native diagnostics child contract", () => {
 
   test("no heartbeat and blocked stdout both exit within the helper liveness budget", async () => {
     const quiet = launch();
-    expect(await waitExit(quiet)).toBe(1);
+    expect(await waitWithLivenessEvidence(quiet, "idle")).toBe(1);
     const info = await identity();
     const blocked = launch();
     blocked.stdin.write(`${JSON.stringify({ v: 1, type: "request", id: "1", method: "hello", params: { protocol: 1, hostVersion: info.helperVersion, target: info.target } })}\n`);
     const ping = Array.from({ length: 20000 }, (_, i) => JSON.stringify({ v: 1, type: "request", id: String(i + 2), method: "ping", params: {} })).join("\n");
     blocked.stdin.write(`${ping}\n`);
     // Deliberately do not read stdout or wait for a pipe flush.
-    expect(await waitExit(blocked)).toBe(1);
+    expect(await waitWithLivenessEvidence(blocked, "blocked-output")).toBe(1);
   }, 15000);
 
   test("a killed Bun parent leaves no live helper after EOF/watchdog", async () => {
