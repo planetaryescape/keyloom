@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.0](https://github.com/planetaryescape/keyloom/compare/v0.45.0...v0.46.0) (2026-10-20)
+
+
+### Features
+
+* verify installed device-helper diagnostics ([316f4be](https://github.com/planetaryescape/keyloom/commit/316f4bec7fc9e0e7283b7d85fba94fa03fbe48fd))
+
 ## [0.45.0](https://github.com/planetaryescape/keyloom/compare/v0.44.0...v0.45.0) (2026-10-20)
 
 
