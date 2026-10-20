@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
-  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
+  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { registerConfigCommands } from "./commands/config.ts";
@@ -298,9 +298,12 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
 
   program
     .command("doctor")
-    .description("check the database, the model credential, Docker, zapp and the pinned firmware checkouts")
-    .action(async () => {
-      const checks = [
+    .description("check the database, device helper, model credential and firmware toolchain")
+    .option("--device-helper-only", "check only the installed helper pair, without device discovery or network/toolchain probes")
+    .action(async (options: { deviceHelperOnly?: boolean }) => {
+      const helper = await runDeviceHelperCheck();
+      const checks = options.deviceHelperOnly ? [helper] : [
+        helper,
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),
         ...(await runCredentialChecks()),
         ...(await runToolchainChecks()),

@@ -1,0 +1,8 @@
+Source: native Intel f15f0cc, PR run 39475606609, job 118810630929.
+Values are process-only diagnostic observations, not request/typing bytes.
+{"diagnostic":"stdin_timeout","uptimeMs":6818,"idleMs":5021,"activityBeforeIdleMs":1797}
+{"diagnostic":"stdin_timeout","uptimeMs":6660,"idleMs":5017,"activityBeforeIdleMs":1643}
+{"diagnostic":"stdin_timeout","uptimeMs":6716,"idleMs":5005,"activityBeforeIdleMs":1711}
+{"diagnostic":"stdin_timeout","uptimeMs":6953,"idleMs":5002,"activityBeforeIdleMs":1951}
+{"diagnostic":"watchdog_timeout","uptimeMs":6667,"idleMs":5031,"activityBeforeIdleMs":1636}
+{"diagnostic":"stdin_timeout","uptimeMs":6721,"idleMs":5058,"activityBeforeIdleMs":1663}

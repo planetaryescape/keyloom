@@ -1,0 +1,702 @@
+agent-work: task 9406; inspect with 'pueue status', cancel with 'agent-work cancel 9406'
+[2m18:49:19[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648367 bytes.
+[2m18:49:20[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+agent-work: checking memory before start
+agent-work: starting docker
+Unable to find image 'ubuntu:22.04' locally
+22.04: Pulling from library/ubuntu
+cf1a5487baaf: Pulling fs layer
+[2m18:49:21[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+cf1a5487baaf: Download complete
+cf1a5487baaf: Pull complete
+Digest: sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956
+Status: Downloaded newer image for ubuntu:22.04
+[2m18:49:21[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
++ export DEBIAN_FRONTEND=noninteractive CARGO_HOME=/probe/cargo RUSTUP_HOME=/probe/rustup
++ DEBIAN_FRONTEND=noninteractive
++ CARGO_HOME=/probe/cargo
++ RUSTUP_HOME=/probe/rustup
++ export PATH=/probe/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++ PATH=/probe/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++ apt-get update -qq
+[2m18:49:22[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:23[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:24[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:25[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:25[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:26[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
++ apt-get install -y --no-install-recommends ca-certificates curl gcc musl-tools gdb file binutils strace
+Reading package lists...[2m18:49:27[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+
+Building dependency tree...
+Reading state information...
+The following additional packages will be installed:
+  binutils-common binutils-x86-64-linux-gnu cpp cpp-11 gcc-11 gcc-11-base
+  libasan6 libatomic1 libbabeltrace1 libbinutils libboost-regex1.74.0
+  libbrotli1 libcc1-0 libctf-nobfd0 libctf0 libcurl3-gnutls libcurl4
+  libdebuginfod-common libdebuginfod1 libdw1 libelf1 libexpat1 libgcc-11-dev
+  libglib2.0-0 libgomp1 libicu70 libipt2 libisl23 libitm1 libldap-2.5-0
+  liblsan0 libmagic-mgc libmagic1 libmpc3 libmpdec3 libmpfr6 libnghttp2-14
+  libpsl5 libpython3.10 libpython3.10-minimal libpython3.10-stdlib
+  libquadmath0 libreadline8 librtmp1 libsasl2-2 libsasl2-modules-db
+  libsource-highlight-common libsource-highlight4v5 libsqlite3-0 libssh-4
+  libtsan0 libubsan1 libunwind8 media-types musl musl-dev openssl
+  readline-common ucf
+Suggested packages:
+  binutils-doc cpp-doc gcc-11-locales gcc-multilib make manpages-dev autoconf
+  automake libtool flex bison gcc-doc gcc-11-multilib gcc-11-doc gdb-doc
+  gdbserver readline-doc
+Recommended packages:
+  libc6-dev | libc-dev libc6-dev libc-dbg libglib2.0-data shared-mime-info
+  xdg-user-dirs libldap-common publicsuffix libsasl2-modules linux-musl-dev
+The following NEW packages will be installed:
+  binutils binutils-common binutils-x86-64-linux-gnu ca-certificates cpp
+  cpp-11 curl file gcc gcc-11 gcc-11-base gdb libasan6 libatomic1
+  libbabeltrace1 libbinutils libboost-regex1.74.0 libbrotli1 libcc1-0
+  libctf-nobfd0 libctf0 libcurl3-gnutls libcurl4 libdebuginfod-common
+  libdebuginfod1 libdw1 libelf1 libexpat1 libgcc-11-dev libglib2.0-0 libgomp1
+  libicu70 libipt2 libisl23 libitm1 libldap-2.5-0 liblsan0 libmagic-mgc
+  libmagic1 libmpc3 libmpdec3 libmpfr6 libnghttp2-14 libpsl5 libpython3.10
+  libpython3.10-minimal libpython3.10-stdlib libquadmath0 libreadline8
+  librtmp1 libsasl2-2 libsasl2-modules-db libsource-highlight-common
+  libsource-highlight4v5 libsqlite3-0 libssh-4 libtsan0 libubsan1 libunwind8
+  media-types musl musl-dev musl-tools openssl readline-common strace ucf
+0 upgraded, 67 newly installed, 0 to remove and 3 not upgraded.
+Need to get 73.6 MB of archives.
+After this operation, 239 MB of additional disk space will be used.
+Get:1 http://security.ubuntu.com/ubuntu jammy-security/main amd64 ca-certificates all 20260816ubuntu0.22.04.1 [140 kB]
+Get:2 http://archive.ubuntu.com/ubuntu jammy/main amd64 ucf all 3.0043 [56.1 kB]
+Get:3 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libdebuginfod-common all 0.186-1ubuntu0.1 [7996 B]
+Get:4 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 openssl amd64 3.0.2-0ubuntu1.30 [1186 kB]
+Get:5 http://security.ubuntu.com/ubuntu jammy-security/main amd64 libcurl4 amd64 7.81.0-1ubuntu1.30 [293 kB]
+Get:6 http://security.ubuntu.com/ubuntu jammy-security/main amd64 curl amd64 7.81.0-1ubuntu1.30 [194 kB]
+Get:7 http://security.ubuntu.com/ubuntu jammy-security/main amd64 libcurl3-gnutls amd64 7.81.0-1ubuntu1.30 [287 kB]
+Get:8 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libelf1 amd64 0.186-1ubuntu0.1 [51.1 kB]
+Get:9 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libexpat1 amd64 2.4.7-1ubuntu0.9 [96.9 kB]
+Get:10 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libglib2.0-0 amd64 2.72.4-0ubuntu2.10 [1469 kB]
+Get:11 http://archive.ubuntu.com/ubuntu jammy/main amd64 libicu70 amd64 70.1-2 [10.6 MB]
+[2m18:49:28[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Get:12 http://archive.ubuntu.com/ubuntu jammy/main amd64 libmpdec3 amd64 2.5.1-2build2 [86.8 kB]
+Get:13 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libpython3.10-minimal amd64 3.10.12-1~22.04.18 [817 kB]
+Get:14 http://archive.ubuntu.com/ubuntu jammy/main amd64 media-types all 7.0.0 [25.5 kB]
+Get:15 http://archive.ubuntu.com/ubuntu jammy/main amd64 readline-common all 8.1.2-1 [53.5 kB]
+Get:16 http://archive.ubuntu.com/ubuntu jammy/main amd64 libreadline8 amd64 8.1.2-1 [153 kB]
+Get:17 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libsqlite3-0 amd64 3.37.2-2ubuntu0.8 [642 kB]
+Get:18 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libpython3.10-stdlib amd64 3.10.12-1~22.04.18 [1850 kB]
+Get:19 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libmagic-mgc amd64 1:5.41-3ubuntu0.1 [257 kB]
+Get:20 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libmagic1 amd64 1:5.41-3ubuntu0.1 [87.2 kB]
+Get:21 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 file amd64 1:5.41-3ubuntu0.1 [21.5 kB]
+Get:22 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libnghttp2-14 amd64 1.43.0-1ubuntu0.4 [76.9 kB]
+Get:23 http://archive.ubuntu.com/ubuntu jammy/main amd64 libpsl5 amd64 0.21.0-1.2build2 [58.4 kB]
+Get:24 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libunwind8 amd64 1.3.2-2build2.1 [54.5 kB]
+Get:25 http://archive.ubuntu.com/ubuntu jammy/main amd64 strace amd64 5.16-0ubuntu3 [567 kB]
+Get:26 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 binutils-common amd64 2.38-4ubuntu2.12 [223 kB]
+Get:27 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libbinutils amd64 2.38-4ubuntu2.12 [663 kB]
+Get:28 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libctf-nobfd0 amd64 2.38-4ubuntu2.12 [108 kB]
+Get:29 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libctf0 amd64 2.38-4ubuntu2.12 [103 kB]
+Get:30 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 binutils-x86-64-linux-gnu amd64 2.38-4ubuntu2.12 [2324 kB]
+Get:31 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 binutils amd64 2.38-4ubuntu2.12 [3184 B]
+Get:32 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gcc-11-base amd64 11.4.0-1ubuntu1~22.04.3 [216 kB]
+Get:33 http://archive.ubuntu.com/ubuntu jammy/main amd64 libisl23 amd64 0.24-2build1 [727 kB]
+Get:34 http://archive.ubuntu.com/ubuntu jammy/main amd64 libmpfr6 amd64 4.1.0-3build3 [1425 kB]
+Get:35 http://archive.ubuntu.com/ubuntu jammy/main amd64 libmpc3 amd64 1.2.1-2build1 [46.9 kB]
+Get:36 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 cpp-11 amd64 11.4.0-1ubuntu1~22.04.3 [10.0 MB]
+Get:37 http://archive.ubuntu.com/ubuntu jammy/main amd64 cpp amd64 4:11.2.0-1ubuntu1 [27.7 kB]
+Get:38 http://archive.ubuntu.com/ubuntu jammy/main amd64 libbrotli1 amd64 1.0.9-2build6 [315 kB]
+Get:39 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libsasl2-modules-db amd64 2.1.27+dfsg2-3ubuntu1.2 [20.5 kB]
+Get:40 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libsasl2-2 amd64 2.1.27+dfsg2-3ubuntu1.2 [53.8 kB]
+Get:41 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libldap-2.5-0 amd64 2.5.20+dfsg-0ubuntu0.22.04.1 [184 kB]
+Get:42 http://archive.ubuntu.com/ubuntu jammy/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2build4 [58.2 kB]
+Get:43 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libssh-4 amd64 0.9.6-2ubuntu0.22.04.8 [189 kB]
+Get:44 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libcc1-0 amd64 12.3.0-1ubuntu1~22.04.3 [48.3 kB]
+Get:45 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libgomp1 amd64 12.3.0-1ubuntu1~22.04.3 [127 kB]
+Get:46 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libitm1 amd64 12.3.0-1ubuntu1~22.04.3 [30.2 kB]
+Get:47 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libatomic1 amd64 12.3.0-1ubuntu1~22.04.3 [10.5 kB]
+Get:48 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libasan6 amd64 11.4.0-1ubuntu1~22.04.3 [2283 kB]
+Get:49 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 liblsan0 amd64 12.3.0-1ubuntu1~22.04.3 [1069 kB]
+Get:50 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libtsan0 amd64 11.4.0-1ubuntu1~22.04.3 [2260 kB]
+Get:51 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libubsan1 amd64 12.3.0-1ubuntu1~22.04.3 [976 kB]
+Get:52 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libquadmath0 amd64 12.3.0-1ubuntu1~22.04.3 [154 kB]
+Get:53 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libgcc-11-dev amd64 11.4.0-1ubuntu1~22.04.3 [2517 kB]
+Get:54 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gcc-11 amd64 11.4.0-1ubuntu1~22.04.3 [20.1 MB]
+Get:55 http://archive.ubuntu.com/ubuntu jammy/main amd64 gcc amd64 4:11.2.0-1ubuntu1 [5112 B]
+Get:56 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libdw1 amd64 0.186-1ubuntu0.1 [251 kB]
+Get:57 http://archive.ubuntu.com/ubuntu jammy/main amd64 libbabeltrace1 amd64 1.5.8-2build1 [160 kB]
+Get:58 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libdebuginfod1 amd64 0.186-1ubuntu0.1 [12.8 kB]
+Get:59 http://archive.ubuntu.com/ubuntu jammy/main amd64 libipt2 amd64 2.0.5-1 [46.4 kB]
+Get:60 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libpython3.10 amd64 3.10.12-1~22.04.18 [1950 kB]
+Get:61 http://archive.ubuntu.com/ubuntu jammy/main amd64 libsource-highlight-common all 3.1.9-4.1build2 [64.5 kB]
+Get:62 http://archive.ubuntu.com/ubuntu jammy/main amd64 libboost-regex1.74.0 amd64 1.74.0-14ubuntu3 [511 kB]
+Get:63 http://archive.ubuntu.com/ubuntu jammy/main amd64 libsource-highlight4v5 amd64 3.1.9-4.1build2 [207 kB]
+Get:64 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gdb amd64 12.1-0ubuntu1~22.04.2 [3920 kB]
+Get:65 http://archive.ubuntu.com/ubuntu jammy/universe amd64 musl amd64 1.2.2-4 [407 kB]
+Get:66 http://archive.ubuntu.com/ubuntu jammy/universe amd64 musl-dev amd64 1.2.2-4 [605 kB]
+Get:67 http://archive.ubuntu.com/ubuntu jammy/universe amd64 musl-tools amd64 1.2.2-4 [5520 B]
+[2m18:49:28[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+debconf: delaying package configuration, since apt-utils is not installed
+Fetched 73.6 MB in 1s (93.3 MB/s)
+Selecting previously unselected package ucf.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 4393 files and directories currently installed.)
+Preparing to unpack .../00-ucf_3.0043_all.deb ...
+Moving old data out of the way
+Unpacking ucf (3.0043) ...
+Selecting previously unselected package libdebuginfod-common.
+Preparing to unpack .../01-libdebuginfod-common_0.186-1ubuntu0.1_all.deb ...
+Unpacking libdebuginfod-common (0.186-1ubuntu0.1) ...
+Selecting previously unselected package openssl.
+Preparing to unpack .../02-openssl_3.0.2-0ubuntu1.30_amd64.deb ...
+Unpacking openssl (3.0.2-0ubuntu1.30) ...
+Selecting previously unselected package ca-certificates.
+Preparing to unpack .../03-ca-certificates_20260816ubuntu0.22.04.1_all.deb ...
+Unpacking ca-certificates (20260816ubuntu0.22.04.1) ...
+Selecting previously unselected package libelf1:amd64.
+Preparing to unpack .../04-libelf1_0.186-1ubuntu0.1_amd64.deb ...
+Unpacking libelf1:amd64 (0.186-1ubuntu0.1) ...
+Selecting previously unselected package libexpat1:amd64.
+Preparing to unpack .../05-libexpat1_2.4.7-1ubuntu0.9_amd64.deb ...
+Unpacking libexpat1:amd64 (2.4.7-1ubuntu0.9) ...
+Selecting previously unselected package libglib2.0-0:amd64.
+Preparing to unpack .../06-libglib2.0-0_2.72.4-0ubuntu2.10_amd64.deb ...
+Unpacking libglib2.0-0:amd64 (2.72.4-0ubuntu2.10) ...
+[2m18:49:29[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package libicu70:amd64.
+Preparing to unpack .../07-libicu70_70.1-2_amd64.deb ...
+Unpacking libicu70:amd64 (70.1-2) ...
+Selecting previously unselected package libmpdec3:amd64.
+Preparing to unpack .../08-libmpdec3_2.5.1-2build2_amd64.deb ...
+Unpacking libmpdec3:amd64 (2.5.1-2build2) ...
+Selecting previously unselected package libpython3.10-minimal:amd64.
+Preparing to unpack .../09-libpython3.10-minimal_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking libpython3.10-minimal:amd64 (3.10.12-1~22.04.18) ...
+Selecting previously unselected package media-types.
+Preparing to unpack .../10-media-types_7.0.0_all.deb ...
+Unpacking media-types (7.0.0) ...
+Selecting previously unselected package readline-common.
+Preparing to unpack .../11-readline-common_8.1.2-1_all.deb ...
+Unpacking readline-common (8.1.2-1) ...
+Selecting previously unselected package libreadline8:amd64.
+Preparing to unpack .../12-libreadline8_8.1.2-1_amd64.deb ...
+Unpacking libreadline8:amd64 (8.1.2-1) ...
+Selecting previously unselected package libsqlite3-0:amd64.
+Preparing to unpack .../13-libsqlite3-0_3.37.2-2ubuntu0.8_amd64.deb ...
+Unpacking libsqlite3-0:amd64 (3.37.2-2ubuntu0.8) ...
+[2m18:49:30[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package libpython3.10-stdlib:amd64.
+Preparing to unpack .../14-libpython3.10-stdlib_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking libpython3.10-stdlib:amd64 (3.10.12-1~22.04.18) ...
+Selecting previously unselected package libmagic-mgc.
+Preparing to unpack .../15-libmagic-mgc_1%3a5.41-3ubuntu0.1_amd64.deb ...
+Unpacking libmagic-mgc (1:5.41-3ubuntu0.1) ...
+Selecting previously unselected package libmagic1:amd64.
+Preparing to unpack .../16-libmagic1_1%3a5.41-3ubuntu0.1_amd64.deb ...
+Unpacking libmagic1:amd64 (1:5.41-3ubuntu0.1) ...
+Selecting previously unselected package file.
+Preparing to unpack .../17-file_1%3a5.41-3ubuntu0.1_amd64.deb ...
+Unpacking file (1:5.41-3ubuntu0.1) ...
+Selecting previously unselected package libnghttp2-14:amd64.
+Preparing to unpack .../18-libnghttp2-14_1.43.0-1ubuntu0.4_amd64.deb ...
+Unpacking libnghttp2-14:amd64 (1.43.0-1ubuntu0.4) ...
+Selecting previously unselected package libpsl5:amd64.
+Preparing to unpack .../19-libpsl5_0.21.0-1.2build2_amd64.deb ...
+Unpacking libpsl5:amd64 (0.21.0-1.2build2) ...
+Selecting previously unselected package libunwind8:amd64.
+Preparing to unpack .../20-libunwind8_1.3.2-2build2.1_amd64.deb ...
+Unpacking libunwind8:amd64 (1.3.2-2build2.1) ...
+Selecting previously unselected package strace.
+Preparing to unpack .../21-strace_5.16-0ubuntu3_amd64.deb ...
+Unpacking strace (5.16-0ubuntu3) ...
+[2m18:49:31[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package binutils-common:amd64.
+Preparing to unpack .../22-binutils-common_2.38-4ubuntu2.12_amd64.deb ...
+Unpacking binutils-common:amd64 (2.38-4ubuntu2.12) ...
+Selecting previously unselected package libbinutils:amd64.
+Preparing to unpack .../23-libbinutils_2.38-4ubuntu2.12_amd64.deb ...
+Unpacking libbinutils:amd64 (2.38-4ubuntu2.12) ...
+Selecting previously unselected package libctf-nobfd0:amd64.
+Preparing to unpack .../24-libctf-nobfd0_2.38-4ubuntu2.12_amd64.deb ...
+Unpacking libctf-nobfd0:amd64 (2.38-4ubuntu2.12) ...
+Selecting previously unselected package libctf0:amd64.
+Preparing to unpack .../25-libctf0_2.38-4ubuntu2.12_amd64.deb ...
+Unpacking libctf0:amd64 (2.38-4ubuntu2.12) ...
+Selecting previously unselected package binutils-x86-64-linux-gnu.
+Preparing to unpack .../26-binutils-x86-64-linux-gnu_2.38-4ubuntu2.12_amd64.deb ...
+Unpacking binutils-x86-64-linux-gnu (2.38-4ubuntu2.12) ...
+Selecting previously unselected package binutils.
+Preparing to unpack .../27-binutils_2.38-4ubuntu2.12_amd64.deb ...
+Unpacking binutils (2.38-4ubuntu2.12) ...
+Selecting previously unselected package gcc-11-base:amd64.
+Preparing to unpack .../28-gcc-11-base_11.4.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking gcc-11-base:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libisl23:amd64.
+Preparing to unpack .../29-libisl23_0.24-2build1_amd64.deb ...
+Unpacking libisl23:amd64 (0.24-2build1) ...
+[2m18:49:32[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package libmpfr6:amd64.
+Preparing to unpack .../30-libmpfr6_4.1.0-3build3_amd64.deb ...
+Unpacking libmpfr6:amd64 (4.1.0-3build3) ...
+Selecting previously unselected package libmpc3:amd64.
+Preparing to unpack .../31-libmpc3_1.2.1-2build1_amd64.deb ...
+Unpacking libmpc3:amd64 (1.2.1-2build1) ...
+Selecting previously unselected package cpp-11.
+Preparing to unpack .../32-cpp-11_11.4.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking cpp-11 (11.4.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package cpp.
+Preparing to unpack .../33-cpp_4%3a11.2.0-1ubuntu1_amd64.deb ...
+Unpacking cpp (4:11.2.0-1ubuntu1) ...
+Selecting previously unselected package libbrotli1:amd64.
+Preparing to unpack .../34-libbrotli1_1.0.9-2build6_amd64.deb ...
+Unpacking libbrotli1:amd64 (1.0.9-2build6) ...
+Selecting previously unselected package libsasl2-modules-db:amd64.
+Preparing to unpack .../35-libsasl2-modules-db_2.1.27+dfsg2-3ubuntu1.2_amd64.deb ...
+Unpacking libsasl2-modules-db:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+Selecting previously unselected package libsasl2-2:amd64.
+Preparing to unpack .../36-libsasl2-2_2.1.27+dfsg2-3ubuntu1.2_amd64.deb ...
+Unpacking libsasl2-2:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+[2m18:49:32[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package libldap-2.5-0:amd64.
+Preparing to unpack .../37-libldap-2.5-0_2.5.20+dfsg-0ubuntu0.22.04.1_amd64.deb ...
+Unpacking libldap-2.5-0:amd64 (2.5.20+dfsg-0ubuntu0.22.04.1) ...
+Selecting previously unselected package librtmp1:amd64.
+Preparing to unpack .../38-librtmp1_2.4+20151223.gitfa8646d.1-2build4_amd64.deb ...
+Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build4) ...
+Selecting previously unselected package libssh-4:amd64.
+Preparing to unpack .../39-libssh-4_0.9.6-2ubuntu0.22.04.8_amd64.deb ...
+Unpacking libssh-4:amd64 (0.9.6-2ubuntu0.22.04.8) ...
+Selecting previously unselected package libcurl4:amd64.
+Preparing to unpack .../40-libcurl4_7.81.0-1ubuntu1.30_amd64.deb ...
+Unpacking libcurl4:amd64 (7.81.0-1ubuntu1.30) ...
+Selecting previously unselected package curl.
+Preparing to unpack .../41-curl_7.81.0-1ubuntu1.30_amd64.deb ...
+Unpacking curl (7.81.0-1ubuntu1.30) ...
+Selecting previously unselected package libcc1-0:amd64.
+Preparing to unpack .../42-libcc1-0_12.3.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libcc1-0:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libgomp1:amd64.
+Preparing to unpack .../43-libgomp1_12.3.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libgomp1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libitm1:amd64.
+Preparing to unpack .../44-libitm1_12.3.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libitm1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libatomic1:amd64.
+Preparing to unpack .../45-libatomic1_12.3.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libatomic1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+[2m18:49:33[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package libasan6:amd64.
+Preparing to unpack .../46-libasan6_11.4.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libasan6:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package liblsan0:amd64.
+Preparing to unpack .../47-liblsan0_12.3.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking liblsan0:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libtsan0:amd64.
+Preparing to unpack .../48-libtsan0_11.4.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libtsan0:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libubsan1:amd64.
+Preparing to unpack .../49-libubsan1_12.3.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libubsan1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libquadmath0:amd64.
+Preparing to unpack .../50-libquadmath0_12.3.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libquadmath0:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package libgcc-11-dev:amd64.
+Preparing to unpack .../51-libgcc-11-dev_11.4.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking libgcc-11-dev:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Selecting previously unselected package gcc-11.
+Preparing to unpack .../52-gcc-11_11.4.0-1ubuntu1~22.04.3_amd64.deb ...
+Unpacking gcc-11 (11.4.0-1ubuntu1~22.04.3) ...
+[2m18:49:34[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package gcc.
+Preparing to unpack .../53-gcc_4%3a11.2.0-1ubuntu1_amd64.deb ...
+Unpacking gcc (4:11.2.0-1ubuntu1) ...
+Selecting previously unselected package libdw1:amd64.
+Preparing to unpack .../54-libdw1_0.186-1ubuntu0.1_amd64.deb ...
+Unpacking libdw1:amd64 (0.186-1ubuntu0.1) ...
+Selecting previously unselected package libbabeltrace1:amd64.
+Preparing to unpack .../55-libbabeltrace1_1.5.8-2build1_amd64.deb ...
+Unpacking libbabeltrace1:amd64 (1.5.8-2build1) ...
+Selecting previously unselected package libcurl3-gnutls:amd64.
+Preparing to unpack .../56-libcurl3-gnutls_7.81.0-1ubuntu1.30_amd64.deb ...
+Unpacking libcurl3-gnutls:amd64 (7.81.0-1ubuntu1.30) ...
+Selecting previously unselected package libdebuginfod1:amd64.
+Preparing to unpack .../57-libdebuginfod1_0.186-1ubuntu0.1_amd64.deb ...
+Unpacking libdebuginfod1:amd64 (0.186-1ubuntu0.1) ...
+Selecting previously unselected package libipt2.
+Preparing to unpack .../58-libipt2_2.0.5-1_amd64.deb ...
+Unpacking libipt2 (2.0.5-1) ...
+Selecting previously unselected package libpython3.10:amd64.
+Preparing to unpack .../59-libpython3.10_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking libpython3.10:amd64 (3.10.12-1~22.04.18) ...
+[2m18:49:35[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Selecting previously unselected package libsource-highlight-common.
+Preparing to unpack .../60-libsource-highlight-common_3.1.9-4.1build2_all.deb ...
+Unpacking libsource-highlight-common (3.1.9-4.1build2) ...
+Selecting previously unselected package libboost-regex1.74.0:amd64.
+Preparing to unpack .../61-libboost-regex1.74.0_1.74.0-14ubuntu3_amd64.deb ...
+Unpacking libboost-regex1.74.0:amd64 (1.74.0-14ubuntu3) ...
+Selecting previously unselected package libsource-highlight4v5.
+Preparing to unpack .../62-libsource-highlight4v5_3.1.9-4.1build2_amd64.deb ...
+Unpacking libsource-highlight4v5 (3.1.9-4.1build2) ...
+Selecting previously unselected package gdb.
+Preparing to unpack .../63-gdb_12.1-0ubuntu1~22.04.2_amd64.deb ...
+Unpacking gdb (12.1-0ubuntu1~22.04.2) ...
+Selecting previously unselected package musl:amd64.
+Preparing to unpack .../64-musl_1.2.2-4_amd64.deb ...
+Unpacking musl:amd64 (1.2.2-4) ...
+Selecting previously unselected package musl-dev:amd64.
+Preparing to unpack .../65-musl-dev_1.2.2-4_amd64.deb ...
+Unpacking musl-dev:amd64 (1.2.2-4) ...
+Selecting previously unselected package musl-tools.
+Preparing to unpack .../66-musl-tools_1.2.2-4_amd64.deb ...
+Unpacking musl-tools (1.2.2-4) ...
+Setting up libexpat1:amd64 (2.4.7-1ubuntu0.9) ...
+Setting up media-types (7.0.0) ...
+Setting up gcc-11-base:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up libpsl5:amd64 (0.21.0-1.2build2) ...
+Setting up libmagic-mgc (1:5.41-3ubuntu0.1) ...
+Setting up libglib2.0-0:amd64 (2.72.4-0ubuntu2.10) ...
+[2m18:49:36[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+No schema files found: doing nothing.
+Setting up libbrotli1:amd64 (1.0.9-2build6) ...
+Setting up libsqlite3-0:amd64 (3.37.2-2ubuntu0.8) ...
+Setting up binutils-common:amd64 (2.38-4ubuntu2.12) ...
+Setting up libnghttp2-14:amd64 (1.43.0-1ubuntu0.4) ...
+Setting up libmagic1:amd64 (1:5.41-3ubuntu0.1) ...
+Setting up libctf-nobfd0:amd64 (2.38-4ubuntu2.12) ...
+Setting up file (1:5.41-3ubuntu0.1) ...
+Setting up libgomp1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up libunwind8:amd64 (1.3.2-2build2.1) ...
+Setting up libsource-highlight-common (3.1.9-4.1build2) ...
+Setting up libasan6:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up libsasl2-modules-db:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+Setting up libmpfr6:amd64 (4.1.0-3build3) ...
+Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build4) ...
+Setting up strace (5.16-0ubuntu3) ...
+Setting up libquadmath0:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up libmpc3:amd64 (1.2.1-2build1) ...
+Setting up libatomic1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up libpython3.10-minimal:amd64 (3.10.12-1~22.04.18) ...
+Setting up libipt2 (2.0.5-1) ...
+Setting up ucf (3.0043) ...
+Setting up libsasl2-2:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+Setting up libssh-4:amd64 (0.9.6-2ubuntu0.22.04.8) ...
+Setting up libubsan1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up musl:amd64 (1.2.2-4) ...
+Setting up libmpdec3:amd64 (2.5.1-2build2) ...
+Setting up libbinutils:amd64 (2.38-4ubuntu2.12) ...
+Setting up libisl23:amd64 (0.24-2build1) ...
+Setting up openssl (3.0.2-0ubuntu1.30) ...
+Setting up libelf1:amd64 (0.186-1ubuntu0.1) ...
+Setting up readline-common (8.1.2-1) ...
+Setting up libcc1-0:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up liblsan0:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up libitm1:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up libicu70:amd64 (70.1-2) ...
+Setting up libtsan0:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up libctf0:amd64 (2.38-4ubuntu2.12) ...
+Setting up cpp-11 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up libdw1:amd64 (0.186-1ubuntu0.1) ...
+Setting up libdebuginfod-common (0.186-1ubuntu0.1) ...
+[2m18:49:36[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+
+Creating config file /etc/profile.d/debuginfod.sh with new version
+[2m18:49:37[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+
+Creating config file /etc/profile.d/debuginfod.csh with new version
+[2m18:49:38[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Setting up libreadline8:amd64 (8.1.2-1) ...
+Setting up libldap-2.5-0:amd64 (2.5.20+dfsg-0ubuntu0.22.04.1) ...
+Setting up libpython3.10-stdlib:amd64 (3.10.12-1~22.04.18) ...
+Setting up ca-certificates (20260816ubuntu0.22.04.1) ...
+[2m18:49:39[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:40[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:40[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:41[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:42[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:43[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+Updating certificates in /etc/ssl/certs...
+[2m18:49:44[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:44[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:45[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:46[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:47[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:48[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:48[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:49[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:50[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:51[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+120 added, 0 removed; done.
+Setting up libboost-regex1.74.0:amd64 (1.74.0-14ubuntu3) ...
+Setting up libbabeltrace1:amd64 (1.5.8-2build1) ...
+Setting up libgcc-11-dev:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up cpp (4:11.2.0-1ubuntu1) ...
+Setting up libcurl4:amd64 (7.81.0-1ubuntu1.30) ...
+Setting up curl (7.81.0-1ubuntu1.30) ...
+Setting up libsource-highlight4v5 (3.1.9-4.1build2) ...
+Setting up binutils-x86-64-linux-gnu (2.38-4ubuntu2.12) ...
+Setting up libpython3.10:amd64 (3.10.12-1~22.04.18) ...
+Setting up libcurl3-gnutls:amd64 (7.81.0-1ubuntu1.30) ...
+Setting up binutils (2.38-4ubuntu2.12) ...
+Setting up gcc-11 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up libdebuginfod1:amd64 (0.186-1ubuntu0.1) ...
+Setting up gcc (4:11.2.0-1ubuntu1) ...
+Setting up musl-dev:amd64 (1.2.2-4) ...
+Setting up gdb (12.1-0ubuntu1~22.04.2) ...
+Setting up musl-tools (1.2.2-4) ...
+Processing triggers for libc-bin (2.35-0ubuntu3.15) ...
+Processing triggers for ca-certificates (20260816ubuntu0.22.04.1) ...
+Updating certificates in /etc/ssl/certs...
+[2m18:49:51[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:52[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:53[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:54[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:55[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:55[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:56[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:49:57[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+0 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
++ curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs -o /probe/rustup-init.sh
++ sh /probe/rustup-init.sh -y --profile minimal --default-toolchain 1.99.1
+[2m18:49:58[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+info: downloading installer
+[2m18:49:59[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+info: profile set to minimal
+info: default host tuple is x86_64-unknown-linux-gnu
+info: syncing channel updates for 1.99.1-x86_64-unknown-linux-gnu
+info: latest update on 2026-10-15 for version 1.99.1 (58cf8f9c3 2026-10-13)
+info: downloading 3 components
+[2m18:49:59[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:00[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:01[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:02[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:03[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:04[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:04[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:05[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:06[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:07[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:08[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:08[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:09[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:10[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:11[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:12[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:12[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:13[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:14[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:15[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:16[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:16[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:17[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+info: default toolchain set to 1.99.1-x86_64-unknown-linux-gnu
+
+[2m18:50:18[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+  1.99.1-x86_64-unknown-linux-gnu installed - rustc 1.99.1 (58cf8f9c3 2026-10-13)
+
+
+Rust is installed now. Great!
+
+To get started you may need to restart your current shell.
+This would reload your PATH environment variable to include
+Cargo's bin directory (/probe/cargo/bin).
+
+To configure your current shell, you need to source the
+corresponding env file under /probe/cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "/probe/cargo/env" # For sh/ash/dash/pdksh/bash
+cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+CC_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+CC_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+CFLAGS_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+CFLAGS_x86_64-unknown-linux-gnu = None
++ rustup target add x86_64-unknown-linux-musl
+info: downloading component rust-std
+[2m18:50:19[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:20[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:21[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:21[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
++ uname -a
+Linux 41ecd98f4df4 6.8.0-64-generic #67-Ubuntu SMP PREEMPT_DYNAMIC Sun Jun 15 20:23:40 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
++ musl-gcc -v
+Using built-in specs.
+Reading specs from /usr/lib/x86_64-linux-musl/musl-gcc.specs
+rename spec cpp_options to old_cpp_options
+COLLECT_GCC=/usr/bin/x86_64-linux-gnu-gcc
+COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-linux-gnu/11/lto-wrapper
+OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
+OFFLOAD_TARGET_DEFAULT=1
+Target: x86_64-linux-gnu
+Configured with: ../src/configure -v --with-pkgversion='Ubuntu 11.4.0-1ubuntu1~22.04.3' --with-bugurl=file:///usr/share/doc/gcc-11/README.Bugs --enable-languages=c,ada,c++,go,brig,d,fortran,objc,obj-c++,m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-11 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-bootstrap --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32,m64,mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-11-0odw26/gcc-11-11.4.0/debian/tmp-nvptx/usr,amdgcn-amdhsa=/build/gcc-11-0odw26/gcc-11-11.4.0/debian/tmp-gcn/usr --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu --with-build-config=bootstrap-lto-lean --enable-link-serialization=2
+Thread model: posix
+Supported LTO compression algorithms: zlib zstd
+gcc version 11.4.0 (Ubuntu 11.4.0-1ubuntu1~22.04.3) 
++ rustc -vV
+[2m18:50:22[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+binary: rustc
+commit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67
+commit-date: 2026-10-13
+host: x86_64-unknown-linux-gnu
+release: 1.99.1
+LLVM version: 23.1.1
++ printf 'fn main() { println!("minimal startup reached"); }\n'
++ rustc /probe/minimal.rs --target x86_64-unknown-linux-musl -C linker=musl-gcc -o /probe/minimal-musl
+[2m18:50:23[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:24[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:25[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
++ file /probe/minimal-musl
+/probe/minimal-musl: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-musl-x86_64.so.1, with debug_info, not stripped
++ readelf -lW /probe/minimal-musl
+
+Elf file type is DYN (Position-Independent Executable file)
+Entry point 0xa6a6
+There are 11 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  PHDR           0x000040 0x0000000000000040 0x0000000000000040 0x000268 0x000268 R   0x8
+  INTERP         0x0002a8 0x00000000000002a8 0x00000000000002a8 0x000019 0x000019 R   0x1
+      [Requesting program interpreter: /lib/ld-musl-x86_64.so.1]
+  LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x004188 0x004188 R   0x1000
+  LOAD           0x005000 0x0000000000005000 0x0000000000005000 0x04ed56 0x04ed56 R E 0x1000
+  LOAD           0x054000 0x0000000000054000 0x0000000000054000 0x013388 0x013388 R   0x1000
+  LOAD           0x067aa0 0x0000000000068aa0 0x0000000000068aa0 0x0030c0 0x004900 RW  0x1000
+  DYNAMIC        0x069650 0x000000000006a650 0x000000000006a650 0x000190 0x000190 RW  0x8
+  TLS            0x067aa0 0x0000000000068aa0 0x0000000000068aa0 0x000030 0x000050 R   0x8
+  GNU_EH_FRAME   0x05f264 0x000000000005f264 0x000000000005f264 0x0012ac 0x0012ac R   0x4
+  GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0x10
+  GNU_RELRO      0x067aa0 0x0000000000068aa0 0x0000000000068aa0 0x002560 0x002560 R   0x1
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     
+   01     .interp 
+   02     .interp .hash .gnu.hash .dynsym .dynstr .rela.dyn 
+   03     .init .plt .plt.got .text .fini 
+   04     .rodata .eh_frame_hdr .eh_frame .gcc_except_table 
+   05     .tdata .init_array .fini_array .data.rel.ro .dynamic .got .data .bss 
+   06     .dynamic 
+   07     .tdata .tbss 
+   08     .eh_frame_hdr 
+   09     
+   10     .tdata .init_array .fini_array .data.rel.ro .dynamic .got 
++ set +e
++ /probe/minimal-musl
+/probe/run.sh: line 18:  3222 Segmentation fault      (core dumped) /probe/minimal-musl
++ minimal_status=139
++ gdb -batch -ex run -ex bt -ex 'info files' --args /probe/minimal-musl
+[2m18:50:25[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+warning: Error disabling address space randomization: Operation not permitted
+Couldn't get registers: Input/output error.
+Python Exception <class 'gdb.error'>: Couldn't get registers: Input/output error.
+Couldn't get registers: Input/output error.
+Couldn't get registers: Input/output error.
+Symbols from "/probe/minimal-musl".
+Native process:
+	Using the running image of child process 3231.
+	While running this, GDB does not access memory from...
+Local exec file:
+	`/probe/minimal-musl', file type elf64-x86-64.
+	Entry point: 0xa6a6
+	0x00000000000002a8 - 0x00000000000002c1 is .interp
+	0x00000000000002c8 - 0x00000000000002f4 is .hash
+	0x00000000000002f8 - 0x0000000000000314 is .gnu.hash
+	0x0000000000000318 - 0x00000000000003a8 is .dynsym
+	0x00000000000003a8 - 0x0000000000000406 is .dynstr
+	0x0000000000000408 - 0x0000000000004188 is .rela.dyn
+	0x0000000000005000 - 0x0000000000005003 is .init
+	0x0000000000005010 - 0x0000000000005020 is .plt
+	0x0000000000005020 - 0x0000000000005038 is .plt.got
+	0x0000000000005040 - 0x0000000000053d53 is .text
+	0x0000000000053d53 - 0x0000000000053d56 is .fini
+	0x0000000000054000 - 0x000000000005f264 is .rodata
+	0x000000000005f264 - 0x0000000000060510 is .eh_frame_hdr
+	0x0000000000060510 - 0x000000000006634c is .eh_frame
+	0x000000000006634c - 0x0000000000067388 is .gcc_except_table
+	0x0000000000068aa0 - 0x0000000000068ad0 is .tdata
+	0x0000000000068ad0 - 0x0000000000068af0 is .tbss
+	0x0000000000068ad0 - 0x0000000000068ad8 is .init_array
+	0x0000000000068ad8 - 0x0000000000068ae0 is .fini_array
+	0x0000000000068ae0 - 0x000000000006a650 is .data.rel.ro
+	0x000000000006a650 - 0x000000000006a7e0 is .dynamic
+	0x000000000006a7e0 - 0x000000000006b000 is .got
+	0x000000000006b000 - 0x000000000006bb60 is .data
+	0x000000000006bb60 - 0x000000000006d3a0 is .bss
++ set -e
++ printf 'minimal_status=%s\n' 139
+minimal_status=139
++ cd /source/native/device-helper
++ export CARGO_TARGET_DIR=/probe/target CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
++ CARGO_TARGET_DIR=/probe/target
++ CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
++ cargo test --locked --target x86_64-unknown-linux-musl --no-run
+info: syncing channel updates for 1.99.1-x86_64-unknown-linux-gnu
+info: latest update on 2026-10-15 for version 1.99.1 (58cf8f9c3 2026-10-13)
+info: downloading 2 components
+[2m18:50:26[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:27[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:28[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+    Updating crates.io index
+[2m18:50:29[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+ Downloading crates ...
+  Downloaded itoa v1.0.18
+  Downloaded memchr v2.8.3
+  Downloaded zmij v1.0.23
+  Downloaded serde_core v1.0.229
+[2m18:50:29[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+  Downloaded serde_json v1.0.154
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+[2m18:50:30[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:31[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+[2m18:50:32[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648446 bytes.
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/probe/target/debug/build/zmij-40a85e84efafef87/rustclypwxu/symbols.o" "<2 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libpanic_unwind-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/probe/target/debug/build/zmij-40a85e84efafef87/rustclypwxu/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/probe/target/debug/build/zmij-40a85e84efafef87/build_script_build-40a85e84efafef87" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: cannot open Scrt1.o: No such file or directory
+          rust-lld: error: cannot open crti.o: No such file or directory
+          rust-lld: error: unable to find library -lutil
+          rust-lld: error: unable to find library -lrt
+          rust-lld: error: unable to find library -lpthread
+          rust-lld: error: unable to find library -lm
+          rust-lld: error: unable to find library -ldl
+          rust-lld: error: unable to find library -lc
+          rust-lld: error: cannot open crtn.o: No such file or directory
+          collect2: error: ld returned 1 exit status
+          
+
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/probe/target/debug/build/serde_core-59e4dd46642b255e/rustciwYUsH/symbols.o" "<2 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libpanic_unwind-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/probe/target/debug/build/serde_core-59e4dd46642b255e/rustciwYUsH/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/probe/target/debug/build/serde_core-59e4dd46642b255e/build_script_build-59e4dd46642b255e" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: cannot open Scrt1.o: No such file or directory
+          rust-lld: error: cannot open crti.o: No such file or directory
+          rust-lld: error: unable to find library -lutil
+          rust-lld: error: unable to find library -lrt
+          rust-lld: error: unable to find library -lpthread
+          rust-lld: error: unable to find library -lm
+          rust-lld: error: unable to find library -ldl
+          rust-lld: error: unable to find library -lc
+          rust-lld: error: cannot open crtn.o: No such file or directory
+          collect2: error: ld returned 1 exit status
+          
+
+error: could not compile `serde_core` (build script) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `zmij` (build script) due to 1 previous error
+[2m18:50:33[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52648498 bytes.

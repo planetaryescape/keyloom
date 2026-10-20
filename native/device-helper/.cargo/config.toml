@@ -1,0 +1,4 @@
+# Use the pinned toolchain's self-contained musl CRT and linker. Ubuntu 22.04's
+# musl-gcc specs turn Rust's -static-pie into a dynamically loaded executable.
+[target.x86_64-unknown-linux-musl]
+linker = "rust-lld"

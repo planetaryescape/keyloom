@@ -1,0 +1,12 @@
+$ depcruise src --config .dependency-cruiser.cjs
+
+✔ no dependency violations found (656 modules, 2738 dependencies cruised)
+
+‼ missing-typescript-transpiler: dependency-cruiser detected a TypeScript environment,
+    but not a compatible TypeScript compiler (typescript: >=2.0.0 <7.0.0). This means
+    it's likely to have missed TypeScript sources and dependencies.
+
+    Install typescript to get better results (e.g. npm i -D typescript@^6).
+
+    => Support for typescript@>=7 will follow when its API is published and stable.
+

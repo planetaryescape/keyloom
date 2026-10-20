@@ -223,6 +223,15 @@ describe("boards", () => {
 });
 
 describe("doctor", () => {
+  test("helper-only source diagnostics skip database, provider, device and toolchain probes", async () => {
+    const dir = join(tempDir(), "not-created");
+    const r = json(await cli(["doctor", "--device-helper-only", "--data-dir", dir]));
+    expect(r.ok).toBe(true);
+    expect(r.checks.map((c: { name: string }) => c.name)).toEqual(["device helper"]);
+    expect(r.checks[0].deviceHelper.code).toBe("not_bundled");
+    expect(await Bun.file(join(dir, "keyloom.db")).exists()).toBe(false);
+  });
+
   test("a missing database is fine and is not created; a real one passes every check", async () => {
     const dir = tempDir();
     const fresh = await cli(["doctor", "--data-dir", join(dir, "new"), "--format", "table"]);

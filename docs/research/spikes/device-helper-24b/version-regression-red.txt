@@ -1,0 +1,24 @@
+bun test v1.3.14 (0d9b296a)
+
+test/firmware/toolchain/device-helper-native.test.ts:
+16 | }
+17 | async function identity() {
+18 |   const child = launch(["--version"]);
+19 |   const result = identitySchema.parse(JSON.parse(await new Response(child.stdout).text()));
+20 |   expect(await child.exited).toBe(0);
+21 |   expect(result.helperVersion).toBe(pkg.version);
+                                    ^
+error: expect(received).toBe(expected)
+
+Expected: "0.45.0"
+Received: "0.0.0"
+
+      at identity (<repo>/test/firmware/toolchain/device-helper-native.test.ts:21:32)
+      at async <anonymous> (<repo>/test/firmware/toolchain/device-helper-native.test.ts:35:24)
+(fail) native diagnostics child contract > exact identity, parallel hello/ping/shutdown and observed exits [4.35ms]
+
+ 0 pass
+ 4 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [38.00ms]

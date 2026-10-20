@@ -1,0 +1,4 @@
+src/app/doctor.ts:33:66: error anti-slop(no-conditional-empty-object-spread): This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.
+
+1 finding(s) on lines you changed.
+33 pre-existing finding(s) on untouched lines of those files were hidden — out of scope, leave them alone (--whole-files to see them).

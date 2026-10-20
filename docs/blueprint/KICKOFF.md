@@ -1,4 +1,25 @@
-# Kickoff prompt for the first build session
+# Kickoff prompts
+
+## Follow-on prompt for the Rust device helper
+
+Rung 24b diagnostics is implemented in the candidate (D-426); read its [evidence and unrun release gates](../research/spikes/device-helper-24b.md) before continuing. Start the next native transport rung only after its prerequisite release and explicit hardware authorization. The planning prompt below preserves the broader scope; do not rebuild the diagnostics slice. The older prompts belong to separate work.
+
+---
+
+Build the focused Rust device-helper extension described in chapters 31–33, keeping the product in TypeScript. Include native macOS, Linux and Windows; do not turn helper support into an unearned full-app platform claim.
+
+1. Read `AGENTS.md`, the blueprint README, chapters 01, 17, 23, 24 and 26, then 31–33. Read D-418 to D-425, Q37–Q42, S58–S62 and `docs/research/rust-device-helper.md`. Fetch current origin/main, name its SHA and compare the reuse paths with the research baseline. Preserve unrelated work.
+2. Begin with device-helper phase 0 in chapter 13. Characterize the existing transports through independent adversarial fixtures; investigate the Linux report-ID mismatch rather than blindly matching it. Inspect candidate libraries, licences, native cancellation and platform metadata before pinning dependencies. All three targets get compile/contract coverage early.
+3. Keep product logic, firmware command parsing, consent and sync authority in TypeScript. Implement the proposed process seam, not an arbitrary file/command interface or a raw agent tool. Migrate synchronous serial callers to awaited I/O. Normal Rust and Bun tests must be unable to open devices.
+4. Confirm only the Q entries that gate the chosen rung. Q37/Q41 govern target release/packaging; Q38 gates the Windows product scope. Q39 requires permission in this execution session before capture, reset or flash; stop if a device needs new firmware. Use scratch data and fake keyboards by default. Never start serve/sync on my real auto-sync data directory.
+5. Deliver rungs 24b–24f as independent useful releases after I authorize publication. For each adopted backend, run the exact installed CLI journey, native OS and hardware checks and the relevant lab/sync screenshot gate. Record absent hardware/signing access as a blocker, not a passed or waived check. A Windows cross-compile is not native Windows support.
+6. Record evidence in `docs/research/spikes/S<n>.md`, update statuses and make an explicit per-backend adoption recommendation. Keep legacy adapters only for comparison/rollback, never silent failover after a possibly effective write. Update the decision log before changing protocol safety or release shape. Do not commit, push, publish or flash unless I ask.
+
+Historical planning status: the proposal created documentation only. D-426's diagnostics implementation supersedes that no-code status, not the remaining platform certification or hardware-authorization gates. The private helper adds no visual identity: keep the keyboard under the light, and make interruptions truthful in the existing lab, sync and doctor surfaces.
+
+---
+
+## Historical prompt for the first build session
 
 Paste this to the coding agent on the build machine, after `git clone git@github.com:planetaryescape/keyloom.git`:
 

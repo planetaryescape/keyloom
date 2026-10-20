@@ -1,0 +1,22 @@
+[
+  {"name":"ping","request":{"v":1,"type":"request","id":"2","method":"ping","params":{}},"envelopeValid":true,"outcome":"ok"},
+  {"name":"shutdown","request":{"v":1,"type":"request","id":"2","method":"shutdown","params":{}},"envelopeValid":true,"outcome":"ok"},
+  {"name":"device method is unsupported","request":{"v":1,"type":"request","id":"2","method":"hid.open","params":{"deviceRef":"synthetic"}},"envelopeValid":true,"outcome":"unsupported"},
+  {"name":"bad ping params","request":{"v":1,"type":"request","id":"2","method":"ping","params":{"x":1}},"envelopeValid":true,"outcome":"invalid_request"},
+  {"name":"wrong version","request":{"v":2,"type":"request","id":"2","method":"ping","params":{}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"duplicate id","request":{"v":1,"type":"request","id":"1","method":"ping","params":{}},"envelopeValid":true,"outcome":"fatal"},
+  {"name":"leading zero","request":{"v":1,"type":"request","id":"02","method":"ping","params":{}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"numeric id","request":{"v":1,"type":"request","id":2,"method":"ping","params":{}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"array params","request":{"v":1,"type":"request","id":"2","method":"ping","params":[]},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"prototype key method","request":{"v":1,"type":"request","id":"2","method":"__proto__","params":{}},"envelopeValid":true,"outcome":"unsupported"},
+  {"name":"null","request":null,"envelopeValid":false,"outcome":"fatal"},
+  {"name":"false","request":false,"envelopeValid":false,"outcome":"fatal"},
+  {"name":"u64 overflow","request":{"v":1,"type":"request","id":"18446744073709551616","method":"ping","params":{}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"u64 maximum","request":{"v":1,"type":"request","id":"18446744073709551615","method":"ping","params":{}},"envelopeValid":true,"outcome":"ok"},
+  {"name":"object method","request":{"v":1,"type":"request","id":"2","method":{},"params":{}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"boolean version","request":{"v":true,"type":"request","id":"2","method":"ping","params":{}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"unknown envelope key","request":{"v":1,"type":"request","id":"2","method":"ping","params":{},"__proto__":{"polluted":true}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"text id","request":{"v":1,"type":"request","id":"bad-id","method":"ping","params":{}},"envelopeValid":false,"outcome":"fatal"},
+  {"name":"equivalent JSON numeric version","request":{"v":1.0,"type":"request","id":"2","method":"ping","params":{}},"envelopeValid":true,"outcome":"ok"},
+  {"name":"reordered keys","request":{"params":{},"method":"ping","id":"2","type":"request","v":1},"envelopeValid":true,"outcome":"ok"}
+]

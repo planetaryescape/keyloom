@@ -79,7 +79,7 @@ keyloom
   version compare <config> <revision|version|name>   key-by-key diff against the head
   autosync on|off|pause|resume|status <board>   whether Apply puts the change on the board by itself
   remap <subcommand>                        MacBook kanata setup and management; see remap --help (21)
-  doctor                                   Docker, toolchain images, pinned checkouts, attached keyboard and its firmware, API key, database
+  doctor [--device-helper-only]            installed helper; normally also Docker, checkouts, keyboards, API key and database
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
@@ -176,6 +176,28 @@ A config is a layout. Each board has one config on its keyboard (D-300); `keyloo
 - `version list` prints `{ layout_id, head_revision_id, pending: [revision], versions: [{ id, revision_id, name, put_on_at, ended_at, current, summary, created_at, revisions: [revision] }] }`. `pending` is revisions newer than the newest version. A version with `put_on_at: null` was named without being put on a keyboard.
 - `version compare` prints `{ layout_id, from, to, same, keys: [{ layer_id, layer_name, position, before, after, before_label, after_label }], layers_added, layers_removed, layers_renamed, layers_reordered, lighting, macros, tap_dances, combos, hold_tap_profiles, settings, passthrough }`. `before` is the revision's binding and `after` the head's.
 - `version restore` prints `{ revision_id, restored_revision_id }` (exit 4 for a rule it would break, exit 2 for no change). It creates a new head revision; there is no CLI `undo --to` flag. A running server may auto-sync the restored head, so restore is not a hardware-safe read on real data.
+
+## doctor checks the installed helper without opening a keyboard
+
+```sh
+keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
+keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only --format table
+```
+
+The flag skips database, provider, Docker, USB/serial discovery and remapper probes. Without it, doctor keeps those checks and adds the helper row. A successful helper check verifies the embedded manifest/hash, exact release/protocol/target handshake, ping, shutdown acknowledgement and observed child exit. It does not check device permissions or enumerate keyboards.
+
+JSON retains `{ schema_version, ok, checks }`. The `device helper` row adds `deviceHelper: { available, hostVersion, protocol, target, capabilities, helperVersion?, helperSha256?, code? }`. Successful diagnostics advertise `capabilities: []`. A source/dev invocation has no helper asset: it reports `not_bundled` as a warning, without starting a process.
+
+An invalid installed pair sets `ok: false` and exits 1, matching doctor's existing failed-check convention. Stable helper codes are `version_mismatch`, `integrity_error`, `unsafe_cache`, `protocol_error`, `timeout`, `helper_exited` and `helper_unavailable`. The helper exchange has a two-second deadline; cleanup has separate bounded waits and terminates a stalled child. Error output contains no helper payload or stderr text.
+
+Inspect the selected cache before repairing it:
+
+```sh
+keyloom --version
+ls -ld "${XDG_CACHE_HOME:-$HOME/.cache}/keyloom/device-helper"
+```
+
+Use a user-owned, nonsymlink cache that other users cannot write. Reinstall the matching keyloom release for a wrong/missing pair. If that release's extracted cache was changed, remove only its named release directory and retry; keyloom re-extracts its embedded bytes, never downloads or searches for another helper. Import/editing remains available after a helper failure. See [build and packaging reference](../../native/device-helper/README.md).
 
 ## Global flags
 

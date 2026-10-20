@@ -39,9 +39,14 @@ keyloom is built; the [latest release](https://github.com/planetaryescape/keyloo
 | 28 | [The agent works beside the keyboard](28-agent-experience.md) | Implemented 26a message/activity/folding experience; proposed domain questions, rich artifacts and later interaction gates |
 | 29 | [The agent operates the app](29-agent-app-control.md) | Released observation and durable-run contracts; proposed app-wide capabilities, confirmation and coverage gates |
 | 30 | [Talk to any keyboard](30-agent-keyboard-context.md) | Proposed collection awareness, request focus, cross-keyboard writes, transfers, batch outcomes and physical-device identity limits |
-| — | [Kickoff](KICKOFF.md) | The prompt to give the coding agent for the first build session |
+| 31 | [Rust device helper](31-device-helper.md) | Built diagnostics subset; proposed native ownership, unchanged TypeScript policy and backend adoption gate |
+| 32 | [Device-helper protocol](32-device-helper-protocol.md) | Built diagnostics stdio subset; proposed device/session identity, bounded I/O, loss and no-replay semantics |
+| 33 | [Device-helper platforms](33-device-helper-platforms.md) | Native macOS/Linux/Windows plan, matched binary packaging and installed/hardware proof |
+| — | [Kickoff](KICKOFF.md) | Historical first build and follow-on implementation prompts |
 
 Research behind these decisions:
+
+- [../research/rust-device-helper.md](../research/rust-device-helper.md): transport source baseline, conversation/reversal, pinned local reuse map, native API contracts and unverified platform assumptions.
 
 - [../research/qmk-and-moonlander.md](../research/qmk-and-moonlander.md): the Moonlander's two revisions, Oryx's export and API, `keymap.json` limits, tap-hold options, Zapp, and VIA and Vial.
 - [../research/zmk-and-glove80.md](../research/zmk-and-glove80.md): where Glove80 firmware lives, MoErgo's build routes, the Layout Editor's export, UF2 flashing, ZMK Studio and physical layouts.
@@ -80,6 +85,12 @@ Research behind these decisions:
 - **Apply ends on the keyboard:** hands-free flashing on all three boards, through a `keyloom-zmk` module for ZMK, and auto-sync. Live writes come only if the wait hurts (D-094 to D-097, [17](17-keyboard-sync.md)).
 - **The UI:** the board is the page, one click does one job, kind is shown by shape, plain words first, and every visual rung passes a screenshot gate (D-098 to D-102, [18](18-visual-design.md)).
 - **Providers:** the agent runs on an Anthropic key, an OpenRouter key or BK's Codex subscription. A Claude subscription isn't allowed for third-party apps (D-106 to D-111, [19](19-model-providers.md)).
+
+## Rust device-helper proposal (2026-10-20)
+
+BK asked for a focused Rust device helper, including Linux and Windows, after reconsidering the TypeScript choice with implementation hindsight. The application remains TypeScript (D-418); each transport replacement must earn adoption through reliability and packaging evidence (D-419). Rung 24b implements installed diagnostics only: hello/ping/shutdown with empty capabilities (D-426). Chapters 31–33 retain the **unbuilt native transport** design. [S58/S62 evidence](../research/spikes/device-helper-24b.md) separates local installed macOS checks from unrun native CI, signed-chain and released-installation gates. The broader choices remain D-420 to D-425 and Q37–Q42.
+
+Read these chapters together and follow rungs 24b–24f in [13](13-roadmap.md). This track is independent of unfinished agent rungs. Windows means native helper support plus an installed CLI device journey under the Q38 assumption, not an already-supported full Windows app. No real capture, reset or flash is authorized by the planning request. Use the device-helper prompt in [KICKOFF](KICKOFF.md).
 
 ## Rules for coding agents
 

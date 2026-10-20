@@ -1,0 +1,54 @@
+agent-work: task 9415; inspect with 'pueue status', cancel with 'agent-work cancel 9415'
+[2m19:40:39[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+agent-work: checking memory before start
+agent-work: starting cargo
+[2m19:40:39[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+[2m19:40:40[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:40[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+   Compiling keyloom-device v0.0.0 (<repo>/native/device-helper)
+[2m19:40:41[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:42[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+    Finished `release` profile [optimized] target(s) in 3.75s
+     Running tests/lifetime.rs (target/release/deps/lifetime-fcab1b25227228b2)
+
+running 3 tests
+
+thread 'closed_stderr_preserves_fatal_protocol_exit_code' (6996489) panicked at tests/lifetime.rs:140:5:
+assertion `left == right` failed
+  left: Some(101)
+ right: Some(1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test closed_stderr_preserves_fatal_protocol_exit_code ... FAILED
+[2m19:40:43[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:44[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:44[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:45[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:46[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:47[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:48[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+{"closedStderr":false,"elapsedMs":5272,"exitCode":1,"osPipeBackpressure":true,"queuedPings":2157,"stderrBytes":64,"stdinHeldUntilObservedExit":true,"stdoutWasNeverRead":true,"timedOut":false}
+test unread_stdout_pipe_exits_without_parent_drain ... ok
+[2m19:40:48[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+{"closedStderr":true,"elapsedMs":6531,"exitCode":null,"osPipeBackpressure":true,"queuedPings":2157,"stderrBytes":0,"stdinHeldUntilObservedExit":true,"stdoutWasNeverRead":true,"timedOut":true}
+
+thread 'unread_stdout_pipe_with_closed_stderr_exits_without_parent_drain' (6996491) panicked at tests/lifetime.rs:93:5:
+helper exceeded the unchanged OS exit budget
+test unread_stdout_pipe_with_closed_stderr_exits_without_parent_drain ... FAILED
+
+failures:
+
+failures:
+    closed_stderr_preserves_fatal_protocol_exit_code
+    unread_stdout_pipe_with_closed_stderr_exits_without_parent_drain
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.55s
+
+error: test failed, to rerun pass `--test lifetime`
+[2m19:40:49[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721563 bytes.
+[2m19:40:50[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52721615 bytes.
+exit=101

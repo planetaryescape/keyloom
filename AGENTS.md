@@ -11,6 +11,7 @@ The code is built and released (v0.36.1 at the time of writing). The blueprint i
 3. `docs/blueprint/14-decision-log.md` before you change a direction. Most alternatives were considered and rejected there, with reasons.
 4. `docs/blueprint/15-open-questions.md` for spikes and product questions, and `docs/research/` for the evidence behind them.
 5. `CONTRIBUTING.md` and `.claude/skills/add-keyboard/SKILL.md` to add a board.
+6. Before changing HID/serial transports or native-helper packaging, read `docs/blueprint/31-device-helper.md` through `33-device-helper-platforms.md` and `docs/research/rust-device-helper.md`. This macOS/Linux/Windows plan is a proposal; run S58–S62 before adopting a backend. It grants no hardware access.
 
 ## Stack
 

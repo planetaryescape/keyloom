@@ -1,0 +1,8 @@
+agent-work: task 9397; inspect with 'pueue status', cancel with 'agent-work cancel 9397'
+[2m18:27:58[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52578589 bytes.
+[2m18:27:59[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52578718 bytes.
+agent-work: checking memory before start
+agent-work: starting cargo
+   Compiling keyloom-device v0.0.0 (<repo>/dist/mismatched/native/device-helper)
+    Finished `release` profile [optimized] target(s) in 0.47s
+[2m18:28:00[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52578718 bytes.
