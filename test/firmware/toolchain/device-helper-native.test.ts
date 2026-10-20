@@ -1,7 +1,7 @@
 // Native CI explicitly supplies a diagnostics-only build. It contains no device backend or OS device APIs.
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { diagnoseHelper } from "../../../src/firmware/toolchain/device-helper/client.ts";
 import { manifestSchema } from "../../../src/firmware/toolchain/device-helper/extract.ts";
@@ -35,6 +35,26 @@ async function waitExit(child: ReturnType<typeof launch>, ms = 6500) {
         ).stdout.toString().trim();
         // Observe OS state before kill/drain: an unread pipe may delay a runtime exit notification.
         console.error(JSON.stringify({ nativeExitDeadline: { pid: child.pid, pidProbe, processState, exitCode: child.exitCode, signalCode: child.signalCode, budgetMs: ms } }));
+        if (process.platform === "darwin" && pidProbe === "present") {
+          try {
+            const samplePath = join(tempDir("keyloom-native-timeout-"), "sample.txt");
+            const started = performance.now();
+            const sample = Bun.spawnSync(
+              ["/usr/bin/sample", String(child.pid), "1", "10", "-mayDie", "-file", samplePath],
+              { env: {}, timeout: 2000 },
+            );
+            const report = existsSync(samplePath) ? readFileSync(samplePath, "utf8") : "";
+            const start = report.indexOf("Call graph:");
+            const end = report.indexOf("Binary Images:");
+            const stack = (start >= 0 ? report.slice(start, end >= 0 ? end : undefined) : report).slice(0, 32768);
+            console.error(JSON.stringify({ nativeStackSample: {
+              pid: child.pid, elapsedMs: performance.now() - started, exitCode: sample.exitCode,
+              signalCode: sample.signalCode, stderr: sample.stderr.toString().slice(0, 2000), stack,
+            } }));
+          } catch (error) {
+            console.error(JSON.stringify({ nativeStackSampleFailed: error instanceof Error ? error.message : String(error) }));
+          }
+        }
         child.kill();
         reject(new Error("native helper did not exit"));
       }, ms);
