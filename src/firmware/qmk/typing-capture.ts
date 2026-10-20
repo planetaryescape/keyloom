@@ -29,6 +29,15 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
   const started = new Promise<void>((resolve) => (begun = resolve));
   let expected: number | undefined;
   let closed = false;
+  let closing: Promise<void> | undefined;
+  let finishing: Promise<CapturedTrace> | undefined;
+  let keepaliveWrite: Promise<void> | undefined;
+  let stopping = false;
+  const message = (error: unknown) => error instanceof Error ? error.message : "connection unavailable";
+  const interrupted = (reason: string) => {
+    if (endedBy === undefined || endedBy === "the host asked") endedBy = reason;
+    settle(endedBy);
+  };
 
   const end = (reason: string) => {
     if (endedBy !== undefined) return;
@@ -42,7 +51,7 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
       const report = decodeTypingReport(bytes);
       if (!report) return;
       if (expected !== undefined && report.seq !== expected) {
-        builder.warn(`${(report.seq - expected) & 0xff} report(s) from the keyboard never arrived, so some key events are missing`);
+        builder.warn(`Recording incomplete: ${(report.seq - expected) & 0xff} report(s) from the keyboard never arrived, so some key events are missing`);
       }
       expected = (report.seq + 1) & 0xff;
       if (report.kind === "status") {
@@ -52,32 +61,34 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
         } else end(report.reason ?? "the keyboard stopped the stream");
         return;
       }
-      if (report.dropped > 0) builder.warn(`the keyboard dropped ${report.dropped} event(s) because it could not send them fast enough`);
+      if (report.dropped > 0) builder.warn(`Recording incomplete: the keyboard dropped ${report.dropped} event(s) because it could not send them fast enough`);
       for (const e of report.events) {
         const added = builder.add(e.atMs, e.position, e.pressed);
         if (added) hooks.onEvent?.(added);
       }
     },
-    (error) => end(`the connection to the keyboard failed: ${error.message}`),
+    (error) => interrupted(`the connection to the keyboard failed: ${error.message}`),
   );
 
-  const close = async () => {
-    if (closed) return;
-    closed = true;
-    clearInterval(keepalive);
-    await session.close();
+  const close = () => {
+    closing ??= (async () => {
+      closed = true;
+      clearInterval(keepalive);
+      await session.close();
+    })();
+    return closing;
   };
   const keepalive = setInterval(() => {
-    try {
-      void Promise.resolve(session.write(typingPacket("keepalive"))).catch((e: Error) => end(`the connection to the keyboard failed: ${e.message}`));
-    } catch (e) {
-      end(`the connection to the keyboard failed: ${(e as Error).message}`);
-    }
+    if (stopping || endedBy !== undefined || keepaliveWrite) return;
+    keepaliveWrite = (async () => {
+      try { await session.write(typingPacket("keepalive")); }
+      catch (error) { interrupted(`the connection to the keyboard failed: ${message(error)}`); }
+    })().finally(() => { keepaliveWrite = undefined; });
   }, hooks.keepaliveMs ?? KEEPALIVE_MS);
 
   try {
     await session.write(typingPacket("start"));
-    const answered = await Promise.race([started.then(() => true), sleep(hooks.startTimeoutMs ?? 2000).then(() => false)]);
+    const answered = await Promise.race([started.then(() => true), ended.then(() => false), sleep(hooks.startTimeoutMs ?? 2000).then(() => false)]);
     if (!answered) {
       throw new CaptureError("the keyboard didn't start streaming. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it, then try again");
     }
@@ -94,19 +105,25 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
   return {
     snapshot: () => builder.snapshot(),
     ended,
-    async finish(): Promise<CapturedTrace> {
-      if (endedBy === undefined && !closed) {
-        try {
-          await session.write(typingPacket("stop"));
-          await Promise.race([ended, sleep(500)]);
-        } catch {
-          // A keyboard that has gone cannot be told; the trace so far is still good.
+    finish(): Promise<CapturedTrace> {
+      finishing ??= (async () => {
+        stopping = true;
+        clearInterval(keepalive);
+        await keepaliveWrite;
+        if (endedBy === undefined && !closed) {
+          try {
+            await session.write(typingPacket("stop"));
+            const acknowledged = await Promise.race([ended.then(() => true), sleep(500).then(() => false)]);
+            if (!acknowledged) interrupted("the keyboard did not confirm that recording stopped");
+          } catch (error) { interrupted(`the connection to the keyboard failed: ${message(error)}`); }
         }
-      }
-      await close();
-      const events = builder.finish();
-      if (endedBy !== undefined && endedBy !== "the host asked") builder.warn(`the keyboard ended the stream early: ${endedBy}`);
-      return { events, warnings: [...builder.warnings], endedBy: endedBy === undefined || endedBy === "the host asked" ? "host" : endedBy };
+        try { await close(); }
+        catch (error) { interrupted(`the keyboard connection did not close: ${message(error)}`); }
+        const events = builder.finish();
+        if (endedBy !== undefined && endedBy !== "the host asked") builder.warn(`Recording incomplete: the keyboard ended the stream early: ${endedBy}`);
+        return { events, warnings: [...builder.warnings], endedBy: endedBy === "the host asked" ? "host" : endedBy ?? "recording stopped without confirmation" };
+      })();
+      return finishing;
     },
   };
 }

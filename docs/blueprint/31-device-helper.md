@@ -1,6 +1,6 @@
 # 31: Rust owns device resources; TypeScript owns the product
 
-Status: diagnostics-only rung 24b shipped in v0.46.1, 2026-10-20. Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). Native HID/serial ownership remains proposed and no hardware is verified. Source transport baseline: `7d3ca25981a5213b8aa9e90fcf3330d5272787fd`, unchanged through `bd1a58652db0dbfa528e0e4fa68de173702a1e9e`. [Published proof and remaining transport gates](../research/spikes/device-helper-24b.md). [Research and reuse map](../research/rust-device-helper.md); [wire contract](32-device-helper-protocol.md); [platforms and shipping](33-device-helper-platforms.md).
+Status: diagnostics-only rung 24b shipped in v0.46.1, 2026-10-20. Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). Native macOS HID ownership exists as an unadopted 24c candidate; serial ownership remains proposed and no hardware is verified. Source transport baseline: `7d3ca25981a5213b8aa9e90fcf3330d5272787fd`, unchanged through `bd1a58652db0dbfa528e0e4fa68de173702a1e9e`. [Published proof and remaining transport gates](../research/spikes/device-helper-24b.md). [Research and reuse map](../research/rust-device-helper.md); [wire contract](32-device-helper-protocol.md); [platforms and shipping](33-device-helper-platforms.md).
 
 Build a small Rust executable behind the existing HID and serial transport seams. Keep the layout model, validator, agent and application in TypeScript (D-418). The goal is reliable resource ownership and failure handling, not a rewrite or an unmeasured speed claim.
 
@@ -14,7 +14,7 @@ keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 
 D-426 narrows the first implementation to `hello`, `ping` and `shutdown`, with empty capabilities and no device APIs. Doctor owns the short-lived child; import, editing and the server start none. Source invocation warns `not_bundled`. The installed check verifies manifest, extracted bytes, paired identity and bounded shutdown. Normal doctor retains its other checks. See [CLI output and repair](10-cli.md#doctor-checks-the-installed-helper-without-opening-a-keyboard) and [native build commands](../../native/device-helper/README.md).
 
-The sections below describe the remaining transport design, not implemented capture/session behavior.
+The [24c candidate](../research/spikes/device-helper-24c.md) implements compile-gated macOS HID ownership, leases, bounded sessions/events and an explicit TS adapter. QMK interruption warnings persist and prevent timing analysis. No production default or release-build feature is enabled. The sections below specify the full target; serial and other-platform backends remain unimplemented.
 
 ## Scope is device I/O on three operating systems
 
@@ -58,7 +58,7 @@ The helper does not read SQLite, provider credentials, board files or layout rev
 
 ### Locations
 
-The diagnostics crate, client/launcher, schema and fixtures now exist. HID/serial adapters and native sessions in this table remain proposed (Q40).
+The diagnostics crate, client/launcher, schema and fixtures now exist. The 24c HID/session implementation is compile-gated; serial adapters and the production adoption described in this table remain pending (Q40).
 
 | Location | Responsibility | Allowed dependencies |
 |---|---|---|

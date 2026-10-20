@@ -201,6 +201,9 @@ function proposalFor(layout: Layout, s: Suggestion, recordedOn: number) {
  */
 export async function analyseSession(app: App, id: string, deps: LabDeps, opts: AnalyseOptions = {}): Promise<{ session: TypingSessionSummary; analysis: StoredAnalysis }> {
   const row = sessionRow(app, id);
+  if (row.warnings.some((warning) => warning.startsWith("Recording incomplete:"))) {
+    throw new UsageError("This recording is incomplete. Start a new recording before testing timing changes; the partial recording is still saved.");
+  }
   const view = getLayout(app, row.layoutId, row.revisionId);
   const board = view.board.definition;
   const boardRevision = row.boardRevision ?? (board.revisions[0] as { id: string }).id;

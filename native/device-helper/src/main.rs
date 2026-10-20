@@ -1,6 +1,24 @@
-// Diagnostics only: no OS device libraries, enumeration, native handles or firmware commands.
+// Default builds remain diagnostics. Native and synthetic implementations are compile-time exclusive.
+#[cfg(all(feature = "native-hid", feature = "synthetic-hid"))]
+compile_error!("synthetic and production backends must never coexist");
+#[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+mod backend;
+#[cfg(all(feature = "native-hid", target_os = "macos"))]
+mod macos;
+#[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+mod transport;
+
+fn capabilities() -> Vec<&'static str> {
+    if cfg!(feature = "synthetic-hid") || cfg!(all(feature = "native-hid", target_os = "macos")) {
+        vec!["hid.list", "hid.open", "hid.write"]
+    } else {
+        vec![]
+    }
+}
 use serde_json::{Value, json};
-use std::io::{self, BufRead, Read, Write};
+#[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+use std::io::Write;
+use std::io::{self, BufRead, Read};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
@@ -70,7 +88,7 @@ impl Protocol {
                     return Ok((refusal(id, "version_mismatch"), true));
                 }
                 self.ready = true;
-                json!({"protocol":1,"helperVersion":RELEASE,"target":TARGET,"capabilities":[]})
+                json!({"protocol":1,"helperVersion":RELEASE,"target":TARGET,"capabilities":capabilities()})
             }
             "ping" | "shutdown" => {
                 if !empty(params) {
@@ -127,6 +145,21 @@ fn serve() -> i32 {
         }
     });
     let mut protocol = Protocol::default();
+    #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+    let native_output = transport::Output::start();
+    #[cfg(feature = "synthetic-hid")]
+    let native = Some(transport::Transport::new(
+        Arc::new(backend::synthetic::Synthetic::default()),
+        native_output.clone(),
+    ));
+    #[cfg(all(feature = "native-hid", target_os = "macos"))]
+    let native = Some(transport::Transport::new(
+        Arc::new(macos::Macos),
+        native_output.clone(),
+    ));
+    #[cfg(all(feature = "native-hid", not(target_os = "macos")))]
+    let native: Option<transport::Transport> = None;
+    #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
     let mut output = io::stdout().lock();
     loop {
         let value = match receive.recv_timeout(QUIET) {
@@ -134,17 +167,50 @@ fn serve() -> i32 {
             Ok(Ok(None)) => return 0,
             _ => return 1,
         };
+        #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+        let request = value.clone();
         let (reply, stop) = match protocol.handle(value) {
             Ok(reply) => reply,
             Err(()) => return 1,
         };
-        *alive.lock().unwrap() = Instant::now();
+        #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+        {
+            *alive.lock().unwrap() = Instant::now();
+        }
+        #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+        if request["method"] == "hello" || request["method"] == "ping" {
+            *alive.lock().unwrap() = Instant::now();
+        }
+        #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+        {
+            if reply["error"]["code"] == "unsupported"
+                && let Some(native) = &native
+            {
+                native.handle(
+                    request["id"].as_str().unwrap().to_owned(),
+                    request["method"].as_str().unwrap(),
+                    &request["params"],
+                );
+                continue;
+            }
+            if stop {
+                if native.as_ref().is_some_and(|n| !n.shutdown()) {
+                    return 1;
+                }
+                native_output.flush(reply.clone());
+                return if reply["ok"] == true { 0 } else { 1 };
+            }
+            native_output.reply(reply);
+            continue;
+        }
+        #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
         if serde_json::to_writer(&mut output, &reply).is_err()
             || output.write_all(b"\n").is_err()
             || output.flush().is_err()
         {
             return 1;
         }
+        #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
         if stop {
             return if reply["ok"] == true { 0 } else { 1 };
         }
@@ -157,7 +223,8 @@ fn main() {
         [arg] if arg == "--version" => {
             println!(
                 "{}",
-                json!({"helperVersion":RELEASE,"protocol":1,"target":TARGET,"capabilities":[],
+                json!({"helperVersion":RELEASE,"protocol":1,"target":TARGET,"capabilities":capabilities(),
+                    "syntheticBackend":cfg!(feature="synthetic-hid"),
                     "thirdPartyNotices":include_str!("../THIRD-PARTY-NOTICES.txt")})
             );
             0
@@ -223,7 +290,7 @@ mod tests {
         let mut protocol = Protocol::default();
         assert_eq!(
             protocol.handle(hello()).unwrap().0["result"]["capabilities"],
-            json!([])
+            json!(capabilities())
         );
         assert!(protocol.handle(hello()).is_err());
         let mut wrong = hello();

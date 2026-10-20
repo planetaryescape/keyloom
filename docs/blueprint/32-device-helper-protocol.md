@@ -1,6 +1,6 @@
 # 32: A bounded device protocol with explicit failure
 
-Status: diagnostics-v1 subset shipped in v0.46.1, 2026-10-20 (D-426). Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). Device/session/event methods below remain proposal assumptions under D-421 to D-424 and Q40. [S58/S62 evidence](../research/spikes/device-helper-24b.md) records local/native-CI and published evidence, plus the remaining hardware and future transport gates. [31](31-device-helper.md) owns scope and experience; [33](33-device-helper-platforms.md) owns OS behavior and shipping.
+Status: diagnostics-v1 subset shipped in v0.46.1, 2026-10-20 (D-426). Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). The HID/session/event subset below has a compile-gated 24c implementation candidate (D-427); serial and production adoption remain pending under D-421 to D-424 and Q40. [S58/S62 evidence](../research/spikes/device-helper-24b.md) records local/native-CI and published evidence, plus the remaining hardware and future transport gates. [31](31-device-helper.md) owns scope and experience; [33](33-device-helper-platforms.md) owns OS behavior and shipping.
 
 ## Implemented diagnostics subset
 
@@ -12,7 +12,7 @@ The frame limit is 65,536 bytes **including newline**. The Rust reader admits on
 
 Doctor admits one sequential hello/ping/shutdown exchange per child, with a two-second overall deadline. It requires matching response IDs, exact paired identity and empty capabilities, then waits for stdout EOF and exit 0. Failure closes stdin, terminates a still-running child and bounds exit/pipe cleanup waits. It never retries. Multiple doctor calls own independent children.
 
-The remaining sections preserve the future transport contract. Their session counts, event queues, leases, heartbeat scheduling and native cancellation are not built. No generic RPC/session framework was added for diagnostics.
+The [24c candidate](../research/spikes/device-helper-24c.md) implements the HID/session subset behind mutually exclusive `native-hid` and `synthetic-hid` compile-time features. `transport-v1.schema.json` supplements the frozen diagnostics schema; regenerate it with `bun scripts/gen-device-helper-schema.ts`. The native callback and shared IPC data queues hold at most 510 reports each, conservatively below the 1024-event/256-KiB per-session ceiling. Session/control bounds and parent deadlines below are enforced. Serial methods remain unsupported. Default/release builds still compile only diagnostics; physical and installed native adoption gates have not passed.
 
 ## Version 1 uses private JSON lines
 

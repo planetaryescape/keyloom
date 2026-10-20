@@ -51,14 +51,8 @@ describe("USB serial ports on Linux", () => {
 });
 
 describe.skipIf(process.platform !== "darwin")("USB serial ports on macOS", () => {
-  test("lists what is attached with numeric ids and a device node, whatever that is, and opens nothing", async () => {
-    const found = await macosSerial().list();
-    expect(Array.isArray(found)).toBe(true);
-    for (const p of found) {
-      expect(p.vendorId).toBeGreaterThan(0);
-      expect(p.productId).toBeGreaterThan(0);
-      expect(p.path).toMatch(/^\/dev\/cu\./);
-    }
+  test("default metadata enumeration is synthetic and empty", async () => {
+    expect(await macosSerial().list()).toEqual([]);
   });
 
   test("a touch of a real device node is refused by the test preload", async () => {

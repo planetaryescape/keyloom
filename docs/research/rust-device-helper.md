@@ -4,7 +4,7 @@ Reviewed 2026-10-20. Source baseline: fetched `origin/main` at `7d3ca25981a5213b
 
 This is a source/documentation review, not a hardware experiment. No helper was built, keyboard opened, typing captured, firmware built or device flashed. The proposed design is in [31](../blueprint/31-device-helper.md), [32](../blueprint/32-device-helper-protocol.md) and [33](../blueprint/33-device-helper-platforms.md).
 
-Implementation follow-up: [rung 24b S58/S62 evidence](spikes/device-helper-24b.md) records the later diagnostics-only helper. The source review below is historical; no native HID/serial crate or backend has been adopted.
+Implementation follow-up: [rung 24b S58/S62 evidence](spikes/device-helper-24b.md) records the later diagnostics-only helper. The source review below is historical; no native HID/serial backend has been adopted as a production default. The [24c candidate](spikes/device-helper-24c.md) records a later pinned HIDAPI source comparison, the direct macOS implementation and synthetic tests, without a physical support claim.
 
 ## How the conversation changed the recommendation
 

@@ -61,10 +61,12 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
       const readout = r.readout ?? (await api.analyse(token, id)).readout;
       if (readout === null) throw new Error("This recording has no read-out yet.");
       setPhase({ kind: "readout", session: r.session, readout, open: null, trying: null });
-      void api.fetchSessions(token, layoutRef).then(setSessions, () => {});
     } catch (error) {
       say(error);
       setPhase({ kind: "start" });
+    } finally {
+      // An incomplete capture is saved even when analysis is refused.
+      void api.fetchSessions(token, layoutRef).then(setSessions, () => {});
     }
   }, [token, layoutRef]);
 

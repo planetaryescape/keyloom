@@ -49,6 +49,23 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Native HID compile gate (no device invocation)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: native/device-helper
+        run: |
+          cargo clippy --locked --all-targets --features native-hid -- -D warnings
+          cargo test --locked --features native-hid
+      - name: Synthetic-only native HID contract
+        shell: bash
+        run: |
+          cd native/device-helper
+          cargo clippy --locked --all-targets --features synthetic-hid -- -D warnings
+          cargo test --locked --features synthetic-hid
+          cargo build --locked --features synthetic-hid
+          cp "target/debug/keyloom-device${{ matrix.exe }}" "target/debug/keyloom-device-synthetic${{ matrix.exe }}"
+          cd ../..
+          KEYLOOM_TEST_SYNTHETIC_HID="$PWD/native/device-helper/target/debug/keyloom-device-synthetic${{ matrix.exe }}" bun test test/firmware/toolchain/device-helper-hid.test.ts test/firmware/toolchain/device-helper-client-order.test.ts
       - name: Locked Rust checks and native diagnostics build
         shell: bash
         working-directory: native/device-helper

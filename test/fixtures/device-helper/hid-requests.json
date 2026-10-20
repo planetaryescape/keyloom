@@ -1,0 +1,10 @@
+[
+  {"valid":true,"request":{"v":1,"type":"request","id":"2","method":"hid.open","params":{"deviceRef":"d1-0"}}},
+  {"valid":true,"request":{"v":1,"type":"request","id":"3","method":"session.close","params":{"sessionId":"s1"}}},
+  {"valid":false,"request":{"v":1,"type":"request","id":"4","method":"hid.open","params":{"deviceRef":9}}},
+  {"valid":false,"request":{"v":1,"type":"request","id":"5","method":"hid.open","params":{"deviceRef":"d1-0","path":"/dev/ordinary-keyboard"}}},
+  {"valid":false,"request":{"v":1,"type":"request","id":"6","method":"hid.write","params":{"deviceRef":"d1-0","reportId":1,"bytes":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}}},
+  {"valid":false,"request":{"v":1,"type":"request","id":"7","method":"hid.write","params":{"deviceRef":"d1-0","reportId":0,"bytes":"AA=="}}},
+  {"valid":false,"request":{"v":1,"type":"request","id":"8","method":"hid.write","params":{"deviceRef":"d1-0","reportId":0,"bytes":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB="}}},
+  {"valid":false,"request":{"v":1,"type":"request","id":"9","method":"session.write","params":{"sessionId":"s1","reportId":0,"bytes":null}}}
+]
