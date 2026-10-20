@@ -16,7 +16,7 @@ keyloom's own firmware-neutral layout document is the thing everything edits (D-
 ```ts
 // src/layout/schema.ts — the zod schemas are the source; these types are inferred from them.
 
-type Firmware = "qmk" | "zmk";
+type Firmware = "qmk" | "zmk" | "kanata";
 
 type Layout = {
   schemaVersion: 1;
@@ -52,7 +52,9 @@ type Binding =
   | { kind: "none" }                                                // does nothing
   | { kind: "native"; firmware: Firmware; source: string; label: string }; // escape hatch (D-024)
 
-type TapAction = { code: KeyCode; mods?: Mod[] };
+// Exactly one: a nonempty key code, or a macroId without key modifiers.
+// The parsed macro form uses code: "" as a compatibility sentinel for existing consumers.
+type TapAction = { code: KeyCode; mods?: Mod[] } | { code: ""; macroId: string };
 type HoldAction = { mods: Mod[] } | { layerId: string };
 
 type Macro = {

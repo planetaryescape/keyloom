@@ -1,6 +1,6 @@
 # 07: Change validation
 
-Status: validator built. The audit candidate adds combo-conflict and ZMK identifier-clash checks; not yet released. Rules below describe the candidate code, not new hardware evidence.
+Status: validator built. The audit closeout adds combo-conflict and ZMK identifier-clash checks, with table and integration regressions. Rules below describe code behavior, not new hardware evidence.
 
 Every change set passes through one validator before BK sees it, and again before it's applied (D-014). The agent's output is a proposal, not a fact. Without the validator, the first sign of a broken layer would be a keyboard BK can't type on. The validator is a pure function in `src/validation/`:
 
@@ -37,7 +37,7 @@ An identical document-rule problem already present before the change is reported
 | `schema` | Ops and resulting document parse with the zod schemas | Nothing malformed reaches firmware generation |
 | `stale_base` | Ops touch a slot that changed since the change set's base revision | The proposal was made against a layout that no longer exists ([02](02-layout-model.md#applying-undoing-and-stale-bases)) |
 | `binding_count` | Every layer has exactly `board.keyCount` bindings | Generated firmware would not compile |
-| `unknown_ref` | Referenced layer IDs (including conditional-layer targets), macro IDs, hold-tap profiles, tap-dance IDs in layer bindings and combo positions must exist | Dangling references. Missing tap-dance IDs in ZMK combo outputs are not currently covered by the layer-binding lookup |
+| `unknown_ref` | Referenced layer IDs (including conditional-layer targets), macro IDs, hold-tap profiles, tap-dance IDs in layer bindings and combo outputs, and combo positions must exist | Dangling references are refused before generation |
 | `function_lost` | Every function reachable before is reachable after, unless a `dropFunction` op names it | Principle 5: nothing gets lost silently (D-020) |
 | `layer_unreachable` | Every layer can be reached from the base layer through layer actions, layer-taps or combos | A layer nobody can reach is a lost function |
 | `conditional_layer_invalid` | A conditional layer names three different layers, and the layer it turns on is not one of the two it waits for | It could never fire (D-386) |

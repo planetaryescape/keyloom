@@ -1,6 +1,6 @@
 # 11: Observability and evals
 
-Status: logs, recovery commands and eval harness built. The audit candidate adds apply logging, doctor credential checks and the two missing D-006 scenarios with offline oracle tests; it is not yet released. Paid live evals and hardware checks were not run for this audit.
+Status: logs, recovery commands and eval harness built. The audit closeout adds apply logging, doctor credential checks and the two missing D-006 scenarios with offline oracle tests. Paid live evals and hardware checks were not run for this audit.
 
 keyloom calls a model and flashes hardware. Both need evidence when something goes wrong. "The agent suggested something odd" and "the keyboard stopped typing after a flash" are the two failures that matter, and both must be diagnosable from logs, not from memory.
 

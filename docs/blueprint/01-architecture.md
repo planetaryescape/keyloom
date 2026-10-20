@@ -1,6 +1,6 @@
 # 01: Architecture
 
-Status: local server and CLI built. The audit candidate includes the one-second SQLite watcher that publishes external CLI head changes over SSE; not yet released. This is source/test evidence, not hardware validation.
+Status: local server and CLI built. The audit closeout implements the one-second SQLite head watcher and verifies CLI-to-editor updates against the compiled client. See [verification scope](../research/blueprint-audit-closeout.md); no hardware validation is claimed.
 
 ```
  ┌────────────── browser (localhost) ──────────────┐      ┌──────────── terminal ────────────┐
@@ -59,8 +59,8 @@ TypeScript, strict, ESM, on bun (D-029). One package. Folders are grouped by job
 - **Requests carry a per-launch token.** `keyloom serve` generates a random token, opens `http://127.0.0.1:4477/?t=<token>`, and the page sends it as a header on every request. The server also rejects any `Host` header other than `127.0.0.1:<port>` or `localhost:<port>`. Why: this local server can spend BK's Anthropic credits and flash his keyboard, and without a token any web page could reach it through DNS rebinding.
 - **API:** JSON over `/api/…`, one route per use case, with bodies validated by the same zod schemas.
 - **Configs and versions (rung 23):** the routes are listed at the top of `src/api/configs.ts`: `GET|POST /api/configs` (`POST` takes `from: "config" | "blank" | "import"` and answers with the config and a `note` saying where a blank one started), `POST /api/configs/:ref/{rename,archive,restore,delete,use}`, `GET /api/configs/:ref/versions`, `POST /api/configs/:ref/versions/{name,restore}` and `GET /api/configs/:ref/compare?to=`. `:ref` is a config's ID or name. `use` answers like `POST /api/sync` (202 with the boards), and a refusal is 400 with the choice unchanged.
-- **Streaming:** Server-Sent Events. `/api/conversations/:id/stream` relays agent text and tool progress. `/api/events` pushes `layout.updated`, `build.progress` and `flash.progress`.
-- **Seeing CLI writes:** `src/cli/data-version-watcher.ts` polls `PRAGMA data_version` once a second. On an external commit, it compares saved layout heads and emits `layout.updated` for new or changed heads; the watcher stops with the server. A CLI `change apply` therefore refreshes an open editor. This is a head-change notification, not a general event for every metadata write or deletion.
+- **Streaming:** Server-Sent Events. Legacy `POST /api/layouts/:ref/chat` streams one turn; `/api/agent/v1/runs/:id/events` follows saved run snapshots. `/api/events` carries sync snapshots, review notifications and `layout.updated`; build/flash detail is polled from the corresponding job routes, not separate `build.progress`/`flash.progress` frames.
+- **Seeing CLI writes:** `src/cli/data-version-watcher.ts` polls `PRAGMA data_version` once a second, alongside `total_changes()` for writes made through this server's own connection. It compares layout heads and emits `layout.updated` for new or changed heads. Subscribers receive current heads on reconnect so an offline edit is not lost. The watcher stops with the server. A CLI `change apply` therefore refreshes an open editor. This is a head-change notification, not a general event for every metadata write or deletion.
 - **Static assets:** the React app is an HTML import bundled by Bun. In the release binary it's embedded by `bun build --compile` (oven-sh/bun `a9c57bd` `docs/bundler/executables.mdx:557-640`).
 
 ## Firmware toolchains
