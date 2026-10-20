@@ -1,10 +1,42 @@
 # S58/S62: installed diagnostics, not a native transport adoption
 
-2026-10-20. Candidate based on `bd1a58652db0dbfa528e0e4fa68de173702a1e9e` (v0.45.0). That version identifies the test build, not a claim that the published v0.45.0 contains a helper. Runtime: Bun 1.3.14, Rust 1.99.1, native macOS 27.0.1 (26A434), arm64. During the initial local candidate checks, no keyboard was opened, captured, reset or flashed and no Docker/eval/model generation ran. Later synthetic debugging used Docker emulation, recorded in the [CI follow-up](device-helper-24b/ci-followup.md); it used no device access.
+Initial local candidate, 2026-10-20, based on `bd1a58652db0dbfa528e0e4fa68de173702a1e9e` (v0.45.0). That version identifies the test build, not a claim that the published v0.45.0 contains a helper. Runtime: Bun 1.3.14, Rust 1.99.1, native macOS 27.0.1 (26A434), arm64. During the initial local candidate checks, no keyboard was opened, captured, reset or flashed and no Docker/eval/model generation ran. Later synthetic debugging used Docker emulation, recorded in the [CI follow-up](device-helper-24b/ci-followup.md); it used no device access.
 
-**Native CI follow-up:** `125d001` later failed Linux startup and the misleading Intel blocked-output test. Linux's linker correction passed native CI. Intel's [native clock proof and stronger OS-pipe regression oracle](device-helper-24b/ci-followup.md#native-clock-proof-and-final-oracle) supersede the original buffered-stream assumption. The final source still requires fresh full/native CI and whole-diff review; these earlier local results do not establish overall acceptance.
+**Native CI follow-up:** `125d001` later failed Linux startup and the misleading Intel blocked-output test. Linux's linker correction passed native CI. Intel's [native clock proof and stronger OS-pipe regression oracle](device-helper-24b/ci-followup.md#native-clock-proof-and-final-oracle) supersede the original buffered-stream assumption. Those development gates later passed on reviewed tree `49ce7bde8bdf9aec03050dbc2b4c01530cf02f04`, merged in PR 136. The [release-proof section](#published-release-proof) separates that source acceptance from verified published CLI and desktop-sidecar receipts.
 
 Public evidence uses `<repo>` for this worktree root and `<HOME>` for the local user home. The orchestrator retained unredacted originals in its private durable run archive before these prefix substitutions; test results and other transcript bytes are unchanged.
+
+## Published release proof
+
+Source acceptance is confirmed: PR 136 merged as `316f4bec7fc9e0e7283b7d85fba94fa03fbe48fd` with reviewed tree `49ce7bde8bdf9aec03050dbc2b4c01530cf02f04`. Exact-head full suites, [native CI](https://github.com/planetaryescape/keyloom/actions/runs/39479943823) and fresh independent whole-diff review passed. This does not by itself verify a published download.
+
+Release-please PR 137 merged as `1430414e7cee69ed97d16398ef720167a21edeb5` for v0.46.0 after its dispatched CI passed. [Release build 39482403055](https://github.com/planetaryescape/keyloom/actions/runs/39482403055) failed during Intel helper signing and was canceled without publishing release assets. Interleaved stdout/stderr did not establish which command emitted the keychain error. The existing v0.45.0 desktop had signed and notarised successfully using the same credentials. The helper script omitted a documented codesign prerequisite: its temporary keychain must be on the user's search list even with `--keychain`. The healthy default download was restored to v0.45.0 without changing tags or assets.
+
+PR 138 merged the signing correction as `3142d77bebb80064944367a192efe73146c3e586`, tree `d2cde5c44e3097df59b391697d798c4d097190aa`: register the CI keychain, restore the original search list on exit, and add constant stage markers plus credential-free OS-command regressions. Exact-head full suites passed (2725 pass, 213 gated skips, 0 fail) and [native CI](https://github.com/planetaryescape/keyloom/actions/runs/39484818658) passed. Gemini returned no verdict after a headless file-read permission denial; BK explicitly waived that signing-patch review. This is a waiver, not an independent review pass.
+
+PR 138 also fixed an inherited test-only flake: [main-merge CI](https://github.com/planetaryescape/keyloom/actions/runs/39481797351/job/118831962930) returned the same two synthetic Linux HID records in opposite directory-enumeration order. The oracle now requires both exact records and length two; IDs, serial, handles and exclusion checks remain, and production HID code is unchanged.
+
+The [trusted-main two-Mac signing preflight](https://github.com/planetaryescape/keyloom/actions/runs/39502381771) passed on arm64 and Intel: actual Developer ID authority, accepted notarisation, compiled paired CLI, real installer, eight cold concurrent doctors, empty capabilities, corruption refusal and import afterward. These are preflight v0.46.0 artifacts, not a published v0.46.1 installation. Release-please PR 139 subsequently produced [v0.46.1](https://github.com/planetaryescape/keyloom/releases/tag/v0.46.1), tagged at `6c24b623fa01b2bf610a1d76fc965cc147ff55e3`, tree `a02200ca988b0b05114607a1a2d9b388e20c30ec`. The [release workflow](https://github.com/planetaryescape/keyloom/actions/runs/39502908333) passed all three native builds, CLI publication and desktop publication. [Main CI](https://github.com/planetaryescape/keyloom/actions/runs/39502908456) passed. The latest-release API reports v0.46.1 with nine assets. Published CLI and desktop-sidecar verification passed.
+
+| Published receipt | State |
+|---|---|
+| Release asset checksums | All three official CLI downloads match the published [SHA256SUMS](https://github.com/planetaryescape/keyloom/releases/download/v0.46.1/SHA256SUMS) |
+| Installed CLI host/helper pair | Real GitHub installer to scratch, version/table/JSON doctor passed on macOS arm64: host/helper 0.46.1, protocol 1, capabilities `[]` |
+| Extracted macOS helper signature | Strict codesign verification and online `--check-notarization` passed on the extracted arm64 helper |
+| Published desktop bundle and sidecar | Official arm64 `.app.zip` checksum matched; deep/strict app signature passed, Gatekeeper accepted `Notarized Developer ID`, and bundled `Contents/MacOS/keyloom` version/doctor passed under isolated scratch HOME/PATH/data outside the repo |
+| Update / rollback / re-upgrade | v0.46.1 installation, v0.45.0 reading the same scratch layout database, then v0.46.1 paired doctor passed |
+
+Downloaded CLI SHA-256 values:
+
+```text
+5e27daaf302852a7b720f8f2cbb0451b42543d12e4105c4cb51fa072a3f78a25  keyloom-darwin-arm64
+84dcfe023c78dbec3f4e50250b3ea12da6dd8c53e6498ee81247406bced94c37  keyloom-darwin-x64
+21a32afc625d3540ca50584ccd2f797fc36aa5c92fd1c155b30bf85a9a1f50ec  keyloom-linux-x64
+```
+
+The extracted published arm64 helper is `35ebcb442c99a7528016c37589df1a58f7996e812cd7c170daeece01a61215bc`. The exact downloaded CLI bytes also passed eight cold concurrent doctors (316.83 ms), deliberate corruption refusal (`integrity_error`) and import afterward, without Rust/node_modules on the runtime PATH. Standalone `spctl --type execute` reports valid code but not an app; that app-only assessment is inapplicable, not an unsigned waiver. The actual online Apple notarisation-ticket check passed.
+
+The published desktop sidecar returned the same v0.46.1 host/helper identity and arm64 helper hash above, with empty capabilities and no Rust/node_modules on its runtime PATH. No GUI, server, real-data launch or device access was used. The shipped slice remains diagnostics only (`capabilities: []`), with the existing TypeScript transports as defaults. Hardware, native HID/serial/capture/touch, old-OS floors and Windows production extraction/CLI support are not established by this release.
 
 ## Reproduce the installed check
 
@@ -71,15 +103,15 @@ Anti-slop reports one conditional optional-property spread in the new DoctorChec
 
 Documentation-refiner ran in refine mode, with code/CLI help/runtime output as truth. README, CLI reference, architecture, roadmap/spikes, D-426, chapters 31–33, desktop and kickoff/navigation now distinguish the built diagnostics subset from proposed native transports. No Obsidian note was changed. No UI changed, so screenshot/React gates are not applicable.
 
-## Not observed / release gates
+## Initial local limits and remaining gates
 
-- Native Intel macOS, Linux and Windows jobs are configured, not executed locally. Linux uses a static musl helper inside the existing GNU Bun host and CI rejects an ELF interpreter; this avoids adding a new glibc/libudev runtime dependency. This local report does not prove Linux execution.
+- Native Intel macOS, Linux and Windows jobs were not executed in the initial local checks. Subsequent native CI results are recorded in [release proof](#published-release-proof). Linux uses a static musl helper inside the existing GNU Bun host and CI rejects an ELF interpreter; this avoids adding a new glibc/libudev runtime dependency. Neither CI nor local checks establish physical transport behavior.
 - Windows runs locked Cargo and real Bun child-contract CI only. Production extraction refuses Windows; private ACL/reparse/executable-locking and installed CLI work remain 24f. No Windows public release asset or app parity is claimed.
-- Release CI signs the visible Rust executable before hashing/embedding using existing secrets; no local credential access occurred. Separate helper notarisation precedes embedding when credentials exist. Developer ID/notarised extraction through an installed desktop bundle is not established by local ad-hoc `codesign --verify`.
+- Release CI signs the visible Rust executable before hashing/embedding using existing secrets; no local credential access occurred. Separate helper notarisation precedes embedding when credentials exist. The initial local ad-hoc check did not establish Developer ID/notarised extraction; the published CLI and desktop-sidecar receipts above now do.
 - The inherited Tauri config says macOS 12.0, while pinned Bun 1.3.14 documents 13+. Neither minimum OS is certified here. The helper's deployment target cannot lower Bun's runtime requirement.
 - No device backend/session exists: native leases, lost device-write acknowledgements, capture sequencing/overflow, handle cycling, sustained streams and native hardware cancellation are not applicable to this diagnostic slice. They remain mandatory backend gates; no automatic replay/failover code was added.
 - No physical transport CPU/RSS/latency comparison or reliability improvement is claimed. Installed startup timing is in the smoke output; artifact/resource sizes belong to the final candidate packet. Existing TS native ownership is unchanged.
-- Publication, released installation, update/rollback and applicable desktop-chain acceptance are orchestrator-owned gates. Previous v0.45.0 remains rollback; there is no database migration.
+- Publication, released installation, update/rollback/re-upgrade and the signed/notarised desktop-bundle sidecar check passed for v0.46.1 as recorded above. Previous v0.45.0 remains the verified rollback; there is no database migration. This does not certify GUI startup or physical device behavior.
 
 ## Resource packet and cleanup boundary
 

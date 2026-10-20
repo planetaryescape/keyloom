@@ -1,6 +1,6 @@
 # 32: A bounded device protocol with explicit failure
 
-Status: diagnostics-v1 subset implemented in rung 24b candidate, 2026-10-20 (D-426). Device/session/event methods below remain proposal assumptions under D-421 to D-424 and Q40. [S58/S62 evidence](../research/spikes/device-helper-24b.md) records the locally tested subset and unrun platform/release gates. [31](31-device-helper.md) owns scope and experience; [33](33-device-helper-platforms.md) owns OS behavior and shipping.
+Status: diagnostics-v1 subset shipped in v0.46.1, 2026-10-20 (D-426). Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). Device/session/event methods below remain proposal assumptions under D-421 to D-424 and Q40. [S58/S62 evidence](../research/spikes/device-helper-24b.md) records local/native-CI and published evidence, plus the remaining hardware and future transport gates. [31](31-device-helper.md) owns scope and experience; [33](33-device-helper-platforms.md) owns OS behavior and shipping.
 
 ## Implemented diagnostics subset
 

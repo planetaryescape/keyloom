@@ -552,7 +552,7 @@ Only BK can do these:
 
 ## Device-helper extension (planned 2026-10-20)
 
-Status: 24b diagnostics implemented in the candidate; deployment/native release gates pending. Native transport rungs 24c–24f remain proposed. Rungs 24b–24f extend the local runtime after rung 24 without renumbering shipped work. They are an independent delivery track, not blocked on rungs 27–30. Each rung ships through the normal release process only when BK authorizes publication; this blueprint itself authorizes neither release nor hardware access.
+Status: 24b diagnostics shipped in v0.46.1; published CLI and signed/notarised desktop-sidecar verification passed. Native transport rungs 24c–24f remain proposed. Rungs 24b–24f extend the local runtime after rung 24 without renumbering shipped work. They are an independent delivery track, not blocked on rungs 27–30. Each rung ships through the normal release process only when BK authorizes publication; this blueprint itself authorizes neither release nor hardware access.
 
 **Build philosophy:** reuse the transport contracts and firmware fakes, ship one usable capability at a time, and keep the previous product working after every rung. At most two new unknowns per rung. If a gate reveals more, split the rung with a letter rather than claiming completion from unit tests.
 
@@ -571,7 +571,7 @@ Protocol and experience assumptions Q40/Q42 are documented for review; synthetic
 
 ## Rung 24b: I can diagnose the installed device helper
 
-Status: implemented in the candidate, 2026-10-20 (D-426). Local macOS arm64 installer/child/concurrency/corruption/mismatch checks passed; full suite, types and dependency rules passed. Native CI found Linux startup and a misleading Intel buffered-output deadline test in `125d001`. [Native clock evidence and the final real OS-pipe oracle](../research/spikes/device-helper-24b/ci-followup.md#native-clock-proof-and-final-oracle) resolve the test assumption and add closed-stderr regressions without increasing deadlines. Final exact-head full/native CI, whole-diff review, signed desktop and released-installation acceptance remain gates. [Commands, raw evidence and limitations](../research/spikes/device-helper-24b.md).
+Status: shipped in v0.46.1, 2026-10-20 (D-426; PRs 136, 138, 139). Full/native CI, both-Mac signing preflight and published CLI/checksum/helper-signature checks passed. The downloaded signed/notarised desktop bundle's sidecar doctor and scratch update/rollback/re-upgrade also passed. [Published proof](../research/spikes/device-helper-24b.md#published-release-proof) records release hashes, the failed v0.46.0 attempt and the explicitly waived signing-patch review, not a Gemini pass. [Native clock evidence and the real OS-pipe oracle](../research/spikes/device-helper-24b/ci-followup.md#native-clock-proof-and-final-oracle) preserve the resolved development failures. No hardware or native transport adoption is claimed.
 
 **Previously:** device failures are reported by in-process transports. **Now:** the installed CLI can verify the paired helper and explain installation/protocol failures before opening a keyboard.
 
@@ -583,7 +583,7 @@ Status: implemented in the candidate, 2026-10-20 (D-426). Local macOS arm64 inst
 
 **New unknowns:** paired installed packaging; bounded process/pipe lifecycle. Both are investigated in S62.
 
-**Demo:** install the candidate through the actual release installer into scratch paths; run `keyloom --version` and `keyloom --data-dir <scratch> doctor --device-helper-only` outside the repo. Normal doctor adds the same helper check while retaining its existing probes. Exercise a deliberately mismatched/corrupt helper in an isolated installation and show a clear refusal. Run the synthetic child through EOF and stalled-pipe shutdown.
+**Demo:** install v0.46.1 through the actual release installer into scratch paths; run `keyloom --version` and `keyloom --data-dir <scratch> doctor --device-helper-only` outside the repo. Normal doctor adds the same helper check while retaining its existing probes. Exercise a deliberately mismatched/corrupt helper in an isolated installation and show a clear refusal. Run the synthetic child through EOF and stalled-pipe shutdown.
 
 **Done when:** S58 and the macOS packaging/contract half of S62 have reports; installed doctor detects the valid and invalid pairs without opening a device; all target builds and shared-contract tests run; a cold extraction/concurrent launch works; the existing CLI/import/editor still works. Unavailable signing/minimum-OS evidence is explicitly blocked, not passed.
 
