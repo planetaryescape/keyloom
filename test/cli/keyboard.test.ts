@@ -76,6 +76,29 @@ describe("keyloom keyboard detect", () => {
 });
 
 describe("keyloom keyboard add and put", () => {
+  test.each(["0=0", "0:0", '{"0":0}'])("accepts canonical nonnegative placements %s", async (placement) => {
+    const { cli, dataDir } = harness([]);
+    const app = openApp({ dataDir });
+    await importLayout(app, { board: "moergo/glove80", source: STYLE_FIXTURE, name: "source" });
+    app.db.close();
+    const result = await cli("keyboard", "put", "source", "--on", "foostan/corne", "--placements", placement, "--format", "json");
+    expect(result.code).toBe(0);
+    expect(json(result).config.board_id).toBe("foostan/corne");
+    expect(json(result).proposals).toHaveLength(2);
+  });
+
+  test.each(["4", "4=", "=10", "4=10=11", "4=hello", "4=-1", "4=1.5", "4=1e1", "04=10", "word=10", "__proto__=10", '{"__proto__":{"polluted":true}}', '{"constructor":10}', '{"word":10}', '{"04":10}', '{"4":"10"}', '{"4":null}', '{"4":-1}', '{"4":1.5}', '{"4":true}', '{bad}']) ("rejects malformed placements %s before creating a config", async (placement) => {
+    const { cli, dataDir } = harness([]);
+    const app = openApp({ dataDir });
+    await importLayout(app, { board: "moergo/glove80", source: STYLE_FIXTURE, name: "source" });
+    const before = app.db.query("SELECT id FROM layouts").all();
+    const result = await cli("keyboard", "put", "source", "--on", "foostan/corne", "--placements", placement, "--format", "json");
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("--placements");
+    expect(app.db.query("SELECT id FROM layouts").all()).toEqual(before);
+    app.db.close();
+  });
+
   test("add without the confirmations shows the rows and what is needed, stores nothing, and exits 2", async () => {
     const { cli, dataDir } = harness([corne]);
     const r = await cli("keyboard", "add", "--candidate", "zmk:corne", "--format", "json");

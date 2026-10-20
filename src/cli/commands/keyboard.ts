@@ -1,6 +1,7 @@
 // `keyloom keyboard` (22, 10#commands): see what is plugged in, build a board for a keyboard keyloom has never met, and put a config on it.
 // Thin: each calls one use case in src/app. Nothing here flashes, and nothing writes to a device.
 import type { Command } from "commander";
+import { z } from "zod";
 import {
   type AddDeps, type App, type CandidateView, type DetectedKeyboard, type HandsFreeOverrides, UsageError, addKeyboard, detectKeyboards, previewKeyboard, putConfig, searchKeyboards,
 } from "../../app/index.ts";
@@ -20,6 +21,37 @@ export type KeyboardCommandDeps = {
 export type KeyboardCliDeps = AddDeps;
 
 const pct = (c: number) => `${Math.round(c * 100)}%`;
+
+const positionText = /^(0|[1-9]\d*)$/;
+const placementsSchema = z.record(z.string().regex(positionText).refine((s) => Number.isSafeInteger(Number(s))), z.number().int().nonnegative());
+
+function parsePlacements(items: string[]): Record<string, number> {
+  const entries: Array<[string, number]> = [];
+  const invalid = () => new UsageError("--placements must be source=target pairs or a JSON object of nonnegative integer positions (for example 4=10)");
+  for (const item of items) {
+    let input: unknown;
+    if (item.trimStart().startsWith("{")) {
+      try {
+        input = JSON.parse(item);
+      } catch {
+        throw invalid();
+      }
+    } else {
+      const pairs = item.trim().split(/[,\s]+/).map((pair): [string, number] => {
+        const match = /^(0|[1-9]\d*)[=:](0|[1-9]\d*)$/.exec(pair);
+        if (!match) throw invalid();
+        return [match[1]!, Number(match[2])];
+      });
+      input = Object.fromEntries(pairs);
+    }
+    // Zod records intentionally omit __proto__; reject it before parsing rather than accepting an empty map.
+    if (typeof input === "object" && input !== null && Object.hasOwn(input, "__proto__")) throw invalid();
+    const parsed = placementsSchema.safeParse(input);
+    if (!parsed.success) throw invalid();
+    entries.push(...Object.entries(parsed.data));
+  }
+  return Object.fromEntries(entries);
+}
 
 const candidateJson = (c: CandidateView) => ({ id: c.id, firmware: c.firmware, name: c.name, vendor: c.vendor, confidence: c.confidence, reasons: c.reasons, detail: c.detail });
 
@@ -125,27 +157,7 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
     .option("--placements <pairs...>", "layer key placements, as source=target (e.g. 4=10 5=11)")
     .option("--layers <layers...>", "source layers to carry (default: all non-test layers)")
     .action(async (layout: string, opts: { on: string; name?: string; placements?: string[]; layers?: string[] }) => {
-      let placements: Record<string, number> | undefined;
-      if (opts.placements) {
-        placements = {};
-        for (const item of opts.placements) {
-          if (item.startsWith("{")) {
-            try {
-              Object.assign(placements, JSON.parse(item));
-              continue;
-            } catch {
-              // fall through
-            }
-          }
-          const pairs = item.split(/[,\s]+/);
-          for (const p of pairs) {
-            const [src, dst] = p.split(/[=:]/);
-            if (src !== undefined && dst !== undefined && src !== "") {
-              placements[src] = Number(dst);
-            }
-          }
-        }
-      }
+      const placements = opts.placements === undefined ? undefined : parsePlacements(opts.placements);
       let layers: string[] | undefined;
       if (opts.layers) {
         layers = opts.layers.flatMap((l) => l.split(/[,\s]+/)).filter(Boolean);
