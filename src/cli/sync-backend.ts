@@ -4,6 +4,7 @@ import { NotFoundError, UsageError } from "../app/index.ts";
 import type { ReviewEngine } from "../app/review-engine.ts";
 import type { SyncEngine } from "../app/sync-engine.ts";
 import { SyncError, type SyncBackend } from "../server/sync-backend.ts";
+import type { DataVersionWatcher } from "./data-version-watcher.ts";
 
 /** Turns the app's typed errors into the status and code the browser acts on; anything else stays a 500. */
 async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -15,8 +16,6 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     throw err;
   }
 }
-
-import type { DataVersionWatcher } from "./data-version-watcher.ts";
 
 export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine, watcher?: DataVersionWatcher): SyncBackend {
   return {

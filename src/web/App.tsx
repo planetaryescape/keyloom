@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { BoardChoice, ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
@@ -37,6 +37,7 @@ export function App({ token }: { token: string }) {
   // What a board or config switch carries to the layout it opens (D-317), kept with that layout's ID so nothing else picks it up.
   const [carry, setCarry] = useState<(Arrival & { id: string }) | null>(null);
   const [view, setView] = useState<View | null>(null);
+  const requestSequence = useRef(0);
   // The import screen from the layout menu; with no layouts it is the page itself.
   const [importing, setImporting] = useState(false);
   // Bumping this refetches the list; it backs the "Check again" and "Try again" buttons.
@@ -71,29 +72,24 @@ export function App({ token }: { token: string }) {
   useEffect(() => {
     if (selectedId === null) return;
     const controller = new AbortController();
+    const sequence = ++requestSequence.current;
     fetchLayout(token, selectedId, controller.signal)
       .then((detail) => {
-        if (!controller.signal.aborted) crossfade(() => setView({ id: selectedId, detail }));
+        if (!controller.signal.aborted && sequence === requestSequence.current) crossfade(() => setView({ id: selectedId, detail }));
       })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) setView({ id: selectedId, error: describe(error) });
+        if (!controller.signal.aborted && sequence === requestSequence.current) setView({ id: selectedId, error: describe(error) });
       });
     return () => controller.abort();
-  }, [token, selectedId, attempt]);
+  }, [token, selectedId, attempt, sync.lastLayoutUpdated]);
 
   // Refetches the open layout in place after an edit or undo, without the loading state a retry has.
   const refresh = useCallback(async () => {
     if (selectedId === null) return;
+    const sequence = ++requestSequence.current;
     const detail = await fetchLayout(token, selectedId, new AbortController().signal);
-    setView({ id: selectedId, detail });
+    if (sequence === requestSequence.current) setView({ id: selectedId, detail });
   }, [token, selectedId]);
-
-  // When a CLI write (e.g. keyloom change apply) updates the layout, refresh the open editor.
-  useEffect(() => {
-    if (sync.lastLayoutUpdated && sync.lastLayoutUpdated.layoutId === selectedId) {
-      void refresh();
-    }
-  }, [sync.lastLayoutUpdated, selectedId, refresh]);
 
   const retry = () => {
     setView(null);

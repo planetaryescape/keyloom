@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { BoardSync } from "../../src/api/http.ts";
+import type { BoardSync, LayoutUpdatedEvent } from "../../src/api/http.ts";
 import { createEventParser } from "../../src/web/sync/events.ts";
 
 const board = { boardId: "zsa/moonlander", boardName: "Moonlander", layoutId: "lay_1", layoutName: "x", headRevisionId: "rev_1", otherLayouts: 0, state: { kind: "in_sync" }, auto: { on: true, choice: null, paused: false, proven: true, provenAt: 1, dueAt: null }, last: null };
@@ -58,4 +58,16 @@ describe("review frames (D-340)", () => {
     expect(unreadable()).toBe(1);
     expect(seen).toEqual([]);
   });
+});
+
+test("layout.updated frames survive split chunks and reject wrongly typed payloads", () => {
+  const seen: LayoutUpdatedEvent[] = [];
+  let unreadable = 0;
+  const parser = createEventParser(() => {}, () => unreadable++, undefined, (event) => seen.push(event));
+  const text = 'event: layout.updated\ndata: {"type":"layout.updated","layoutId":"lay_1","revisionId":"rev_2"}\n\n';
+  for (const char of text) parser.push(char);
+  expect(seen).toEqual([{ type: "layout.updated", layoutId: "lay_1", revisionId: "rev_2" }]);
+  parser.push('event: layout.updated\ndata: {"type":"layout.updated","layoutId":{},"revisionId":"rev_3"}\n\n');
+  expect(unreadable).toBe(1);
+  expect(seen).toHaveLength(1);
 });
