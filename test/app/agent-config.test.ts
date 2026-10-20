@@ -1,35 +1,22 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readAgentConfig, writeAgentConfig } from "../../src/app/agent-config.ts";
+import { tempDir } from "../helpers/tmp.ts";
 
 describe("agent config", () => {
-  const tmp = `/tmp/keyloom-test-agent-config-${Date.now()}`;
-  mkdirSync(tmp, { recursive: true });
-
   test("missing file returns empty config", () => {
-    expect(readAgentConfig(tmp)).toEqual({});
+    expect(readAgentConfig(tempDir())).toEqual({});
   });
 
-  test("valid config with server.port and agent settings parses cleanly", () => {
-    writeFileSync(join(tmp, "config.json"), JSON.stringify({
-      server: { port: 4000 },
-      agent: { provider: "anthropic", model: "claude-opus-5-5", effort: "high" },
-    }));
-    expect(readAgentConfig(tmp)).toEqual({
-      provider: "anthropic",
-      model: "claude-opus-5-5",
-      effort: "high",
+  test("saving a provider preserves server settings and existing effort", () => {
+    const dir = tempDir();
+    const file = join(dir, "config.json");
+    writeFileSync(file, JSON.stringify({ server: { port: 4000 }, agent: { provider: "anthropic", model: "old", effort: "high" } }));
+    writeAgentConfig(dir, { provider: "openrouter", model: "new" });
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
+      server: { port: 4000 }, agent: { provider: "openrouter", model: "new", effort: "high" },
     });
-  });
-
-  test("writeAgentConfig preserves valid structure", () => {
-    writeAgentConfig(tmp, { provider: "openrouter", model: "anthropic/claude-3.5-sonnet" });
-    expect(readAgentConfig(tmp)).toEqual({
-      provider: "openrouter",
-      model: "anthropic/claude-3.5-sonnet",
-      effort: "high",
-    });
-    rmSync(tmp, { recursive: true, force: true });
+    expect(readAgentConfig(dir)).toEqual({ provider: "openrouter", model: "new", effort: "high" });
   });
 });

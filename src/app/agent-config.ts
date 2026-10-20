@@ -23,9 +23,9 @@ const AgentConfigSchema = z.object({
 export type AgentConfig = z.infer<typeof AgentConfigSchema>["agent"];
 
 /** A missing file is the normal case. A malformed one is BK's mistake to fix, so it is a UsageError that names the file. */
-export function readAgentConfig(dataDir: string): AgentConfig {
+function readConfig(dataDir: string): z.infer<typeof AgentConfigSchema> {
   const path = join(dataDir, CONFIG_FILE);
-  if (!existsSync(path)) return {};
+  if (!existsSync(path)) return { agent: {} };
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(path, "utf8"));
@@ -34,7 +34,11 @@ export function readAgentConfig(dataDir: string): AgentConfig {
   }
   const parsed = AgentConfigSchema.safeParse(raw);
   if (!parsed.success) throw new UsageError(`${path} is not a valid keyloom config: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
-  return parsed.data.agent;
+  return parsed.data;
+}
+
+export function readAgentConfig(dataDir: string): AgentConfig {
+  return readConfig(dataDir).agent;
 }
 
 /**
@@ -43,13 +47,13 @@ export function readAgentConfig(dataDir: string): AgentConfig {
  * whatever BK wrote there. The write goes through a rename so a reader never sees half a file.
  */
 export function writeAgentConfig(dataDir: string, choice: { provider: ProviderId; model?: string | undefined }): AgentConfig {
-  const current = readAgentConfig(dataDir);
-  const agent: AgentConfig = { ...current, provider: choice.provider };
+  const current = readConfig(dataDir);
+  const agent: AgentConfig = { ...current.agent, provider: choice.provider };
   if (choice.model === undefined) delete agent.model;
   else agent.model = choice.model;
   const path = join(dataDir, CONFIG_FILE);
   const temporary = `${path}.${process.pid}.tmp`;
-  writeFileSync(temporary, `${JSON.stringify({ agent }, null, 2)}\n`);
+  writeFileSync(temporary, `${JSON.stringify({ ...current, agent }, null, 2)}\n`);
   renameSync(temporary, path);
   return agent;
 }

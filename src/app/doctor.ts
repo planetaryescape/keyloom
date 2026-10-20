@@ -56,7 +56,7 @@ export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
         const failed = builds.some((b) => b.status === "failed");
         checks.push({
           name: "recent builds",
-          ok: !failed,
+          ok: true,
           warn: failed,
           detail: summary,
         });

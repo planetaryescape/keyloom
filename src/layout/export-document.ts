@@ -9,6 +9,8 @@ export const LAYOUT_EXPORT_KIND = "keyloom-layout";
 /** Version 1 is the first document keyloom writes. A document from a newer keyloom is refused, not guessed at. */
 export const LAYOUT_EXPORT_SCHEMA_VERSION = 1;
 
+const ExportHeaderSchema = z.object({ kind: z.literal(LAYOUT_EXPORT_KIND), schema_version: z.unknown().optional() });
+
 export const LayoutExportDocumentSchema = z.object({
   kind: z.literal(LAYOUT_EXPORT_KIND),
   schema_version: z.literal(LAYOUT_EXPORT_SCHEMA_VERSION),
@@ -44,18 +46,19 @@ export type LayoutExportProbe =
  * `not-keyloom`, so the Oryx, QMK, ZMK and Karabiner importers keep seeing what they always saw.
  */
 export function probeLayoutExport(text: string): LayoutExportProbe {
-  // Cheap test first: a zip or a firmware keymap is not parsed as JSON at all.
-  if (!text.includes(LAYOUT_EXPORT_KIND)) return { kind: "not-keyloom" };
+  // A zip or a firmware keymap is not JSON, even if its source happens to mention "keyloom-layout".
+  if (!text.trimStart().startsWith("{")) return { kind: "not-keyloom" };
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
-    return { kind: "malformed", reason: "it isn't valid JSON, so it may be truncated" };
+    return text.includes(LAYOUT_EXPORT_KIND)
+      ? { kind: "malformed", reason: "it isn't valid JSON, so it may be truncated" }
+      : { kind: "not-keyloom" };
   }
-  if (typeof value !== "object" || value === null || (value as { kind?: unknown }).kind !== LAYOUT_EXPORT_KIND) {
-    return { kind: "not-keyloom" };
-  }
-  const version = (value as { schema_version?: unknown }).schema_version;
+  const header = ExportHeaderSchema.safeParse(value);
+  if (!header.success) return { kind: "not-keyloom" };
+  const version = header.data.schema_version;
   if (version !== LAYOUT_EXPORT_SCHEMA_VERSION) {
     return {
       kind: "malformed",
