@@ -57,6 +57,18 @@ describe("slots are functions", () => {
 });
 
 describe("references", () => {
+  test("a ZMK combo cannot refer to a missing tap dance, but adding that dance makes it valid", () => {
+    const board = { ...tinyBoard, firmware: "zmk" as const };
+    const before = tiny({ firmware: "zmk", holdTapProfiles: [] });
+    const combo: ChangeOp = { op: "upsertCombo", combo: { id: "dance-chord", name: "Dance chord", positions: [1, 3], layerIds: "all", output: td("esc-caps") } };
+    const missing = validate(board, before, [combo]);
+    expect(missing.ok).toBe(false);
+    expect(missing.errors).toContainEqual(expect.objectContaining({ code: "unknown_ref", plain: 'The combo "Dance chord" points at a tap dance that isn\'t in this layout.' }));
+    const supplied = validate(board, before, [upsert(escCaps), combo]);
+    expect(supplied.ok).toBe(true);
+    expect(supplied.errors).toEqual([]);
+  });
+
   test("a key that names a tap dance the layout does not have, or a slot that names a missing layer or macro, is unknown_ref", () => {
     expect(codes(validate(tinyBoard, tiny(), [set("base", 3, td("ghost"))]).errors)).toEqual(["unknown_ref"]);
     const layerSlot: TapDance = { ...escCaps, hold: { kind: "layer", action: "momentary", layerId: "ghost" } };

@@ -51,6 +51,10 @@ export function tapDanceRules(doc: Layout): Issue[] {
     }
   }
   for (const combo of doc.combos) {
+    if (combo.output.kind === "tapDance" && !dances.has(combo.output.tapDanceId)) {
+      out.push(issue("unknown_ref", `combo "${combo.id}" refers to tap dance "${combo.output.tapDanceId}", which does not exist`,
+        `The combo "${combo.name}" points at a tap dance that isn't in this layout.`));
+    }
     if (combo.output.kind === "tapDance" && doc.firmware === "qmk") {
       out.push(issue("qmk_combo_tapdance", `combo "${combo.id}" outputs a tap dance, which QMK's combos can't run`,
         "A combo can't set off a tap dance on this firmware. Tap dance keys can be part of a combo, but not its result."));

@@ -50,7 +50,7 @@ export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
     const layouts = db.query("SELECT COUNT(*) AS n FROM layouts").get() as { n: number };
     checks.push({ name: "layouts", ok: true, detail: String(layouts.n) });
     try {
-      const builds = db.query("SELECT id, status FROM builds ORDER BY created_at DESC LIMIT 5").all() as Array<{ id: string; status: string }>;
+      const builds = db.query("SELECT id, status FROM builds ORDER BY started_at DESC, id DESC LIMIT 5").all() as Array<{ id: string; status: string }>;
       if (builds.length > 0) {
         const summary = builds.map((b) => `${b.id.slice(0, 8)}: ${b.status}`).join(", ");
         const failed = builds.some((b) => b.status === "failed");

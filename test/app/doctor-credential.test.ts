@@ -1,10 +1,25 @@
 // `keyloom doctor` resolves the model credential with a read, not a generation (11#logs). No test touches the
 // network: the check is injectable, and the one test of the real mapping answers the SDK's own fetch.
 import { afterEach, describe, expect, test } from "bun:test";
-import { runCredentialChecks } from "../../src/app/doctor.ts";
+import { runCredentialChecks, runDoctor } from "../../src/app/doctor.ts";
+import { closeApp, getLayout } from "../../src/app/index.ts";
+import { createBuild, finishBuild, newBuildId } from "../../src/persistence/builds.ts";
+import { optionOptionApp } from "../helpers/option-option.ts";
 
 const savedFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = savedFetch; });
+
+test("doctor reports a previous failed build as history, not a failing current health check", async () => {
+  const { app, layoutId } = await optionOptionApp();
+  try {
+    const id = newBuildId();
+    createBuild(app.db, { id, layoutId, revisionId: getLayout(app, layoutId).revision.id, boardRevision: "reva", logPath: "logs/synthetic.log" });
+    finishBuild(app.db, id, { error: "synthetic failure" });
+    expect(runDoctor({ dataDir: app.dataDir })).toContainEqual(expect.objectContaining({ name: "recent builds", ok: true, warn: true, detail: expect.stringContaining("failed") }));
+  } finally {
+    closeApp(app);
+  }
+});
 
 describe("doctor: the model credential", () => {
   test("no key at all is a warning, not a failure, and says how to set one", async () => {
