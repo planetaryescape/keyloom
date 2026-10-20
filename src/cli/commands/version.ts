@@ -1,7 +1,7 @@
 // `keyloom version` (25, 10#commands): a config's versions, the revisions that went onto the keyboard, and what to do with them.
 import type { Command } from "commander";
 import {
-  type CompareView, type VersionView, compareRevision, nameVersion, restoreVersion, showConfig, versionHistory,
+  type CompareView, type VersionView, compareRevision, nameVersion, restoreVersion, versionHistory,
 } from "../../app/index.ts";
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
@@ -119,24 +119,16 @@ export function registerVersionCommands(program: Command, ctx: CliContext & { qu
     .description("go back to a version as a new revision (the same as `undo --to`), refusing one that breaks a rule the head doesn't; the keyboard changes only when it syncs")
     .argument("<config>", "config ID or name")
     .argument("<target>", "a version ID, a version's name or a revision ID")
-    .option("--no-sync", "do not queue a sync even if this config is active on the keyboard")
     .option("--json", "print JSON, whatever the output format")
-    .action(async (ref: string, target: string, opts: { sync: boolean; json?: boolean }) => {
-      const out = await withApp((app) => {
-        const restored = restoreVersion(app, ref, target);
-        let sync_status: "sync_queued" | "skipped" | "not_on_keyboard" = "skipped";
-        if (opts.sync) {
-          sync_status = showConfig(app, ref).onKeyboard ? "sync_queued" : "not_on_keyboard";
-        }
-        return { ...restored, sync_status };
-      });
+    .action(async (ref: string, target: string, opts: { json?: boolean }) => {
+      const out = await withApp((app) => restoreVersion(app, ref, target));
       const fmt = opts.json ? "json" : format();
       print(io, fmt, {
-        json: { revision_id: out.revision.id, restored_revision_id: out.restoredRevisionId, sync_status: out.sync_status },
+        json: { revision_id: out.revision.id, restored_revision_id: out.restoredRevisionId },
         ids: [out.revision.id],
         table: quiet()
           ? out.revision.id
-          : `${out.revision.id}\n${out.revision.summary}${out.sync_status === "sync_queued" ? "\nsync queued for keyboard" : ""}`,
+          : `${out.revision.id}\n${out.revision.summary}`,
       });
     });
 

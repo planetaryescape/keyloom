@@ -11,10 +11,12 @@ async function cli(args: string[]) {
 }
 
 import { applyOps, getLayout } from "../../src/app/index.ts";
+import { setBoardConfig } from "../../src/persistence/configs.ts";
 
 describe("keyloom version commands", () => {
-  test("version list includes stay duration and version restore supports --no-sync", async () => {
+  test("version list includes stay duration; restoring the active config only creates a revision", async () => {
     const { dir, app } = await optionOptionApp();
+    setBoardConfig(app.db, "zsa/moonlander", getLayout(app, "bk").layout.id);
     const headRev = getLayout(app, "bk").revision.id;
 
     // Name a version first so we have a version milestone
@@ -33,18 +35,20 @@ describe("keyloom version commands", () => {
     expect(listTable.code).toBe(0);
     expect(listTable.out).toContain("first-version");
 
-    // Restore with --no-sync
     // Make a change first so we aren't at the same revision
     applyOps(app, "bk", { baseRevisionId: getLayout(app, "bk").revision.id, ops: [{ op: "setBinding", at: { layerId: "layer-0", position: 33 }, binding: { kind: "key", code: "A" } }], summary: "test edit" });
 
-    const restoreNoSync = JSON.parse((await cli(["version", "restore", "bk", "first-version", "--no-sync", "--data-dir", dir])).out);
-    expect(restoreNoSync.sync_status).toBe("skipped");
+    const restored = await cli(["version", "restore", "bk", "first-version", "--json", "--data-dir", dir]);
+    expect(restored.code).toBe(0);
+    expect(JSON.parse(restored.out)).toEqual({ schema_version: 1, revision_id: getLayout(app, "bk").revision.id, restored_revision_id: headRev });
+    expect(app.db.query("SELECT * FROM syncs").all()).toEqual([]);
 
-    // Make another change
     applyOps(app, "bk", { baseRevisionId: getLayout(app, "bk").revision.id, ops: [{ op: "setBinding", at: { layerId: "layer-0", position: 33 }, binding: { kind: "key", code: "B" } }], summary: "test edit 2" });
-
-    // Restore with default sync
-    const restoreDefault = JSON.parse((await cli(["version", "restore", "bk", "first-version", "--data-dir", dir])).out);
-    expect(["sync_queued", "not_on_keyboard"]).toContain(restoreDefault.sync_status);
+    const table = await cli(["version", "restore", "bk", "first-version", "--format", "table", "--data-dir", dir]);
+    expect(table.code).toBe(0);
+    expect(table.out).not.toContain("sync queued");
+    const help = await cli(["version", "restore", "--help"]);
+    expect(help.out).not.toContain("--no-sync");
+    app.db.close();
   });
 });
