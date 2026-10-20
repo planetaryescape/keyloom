@@ -571,7 +571,7 @@ Protocol and experience assumptions Q40/Q42 are documented for review; synthetic
 
 ## Rung 24b: I can diagnose the installed device helper
 
-Status: implemented in the candidate, 2026-10-20 (D-426). Local macOS arm64 installer/child/concurrency/corruption/mismatch checks passed; full suite, types and dependency rules passed. Native Intel/Linux/Windows CI, signed desktop and released-installation checks remain unobserved release gates. [Commands, raw evidence and limitations](../research/spikes/device-helper-24b.md).
+Status: implemented in the candidate, 2026-10-20 (D-426). Local macOS arm64 installer/child/concurrency/corruption/mismatch checks passed; full suite, types and dependency rules passed. Native CI then found Linux startup and Intel blocked-output deadline failures in `125d001`; [the focused follow-up](../research/spikes/device-helper-24b/ci-followup.md) records a linker correction and pending Intel observations. Native acceptance, signed desktop and released-installation checks remain blocked. [Commands, raw evidence and limitations](../research/spikes/device-helper-24b.md).
 
 **Previously:** device failures are reported by in-process transports. **Now:** the installed CLI can verify the paired helper and explain installation/protocol failures before opening a keyboard.
 

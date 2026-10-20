@@ -2,6 +2,8 @@
 
 2026-10-20. Candidate based on `bd1a58652db0dbfa528e0e4fa68de173702a1e9e` (v0.45.0). That version identifies the test build, not a claim that the published v0.45.0 contains a helper. Runtime: Bun 1.3.14, Rust 1.99.1, native macOS 27.0.1 (26A434), arm64. No keyboard was opened, captured, reset or flashed; no Docker/eval/model generation ran.
 
+**Native CI follow-up:** `125d001` later failed Linux startup and the Intel blocked-output deadline. The [focused diagnosis/correction and pending native data wave](device-helper-24b/ci-followup.md) supersede any overall green interpretation of these earlier local results. Merge remains blocked until updated native CI passes.
+
 ## Reproduce the installed check
 
 ```sh

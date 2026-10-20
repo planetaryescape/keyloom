@@ -42,7 +42,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
-      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
       MACOSX_DEPLOYMENT_TARGET: "12.0"
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -50,9 +49,6 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - name: Static Linux helper toolchain
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Locked Rust checks and native diagnostics build
         shell: bash
         working-directory: native/device-helper
@@ -73,9 +69,21 @@ jobs:
           file native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
           if readelf -l native/device-helper/target/${{ matrix.rust }}/release/keyloom-device | grep -q INTERP; then exit 1; fi
       - name: Native Bun child contract and lifetime
+        id: child-contract
         env:
           KEYLOOM_TEST_HELPER: ${{ github.workspace }}/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device${{ matrix.exe }}
         run: bun test test/firmware/toolchain/device-helper.test.ts test/firmware/toolchain/device-helper-native.test.ts
+      - name: Repeat Intel blocked-output lifetime probe without changing deadlines
+        if: ${{ always() && matrix.rust == 'x86_64-apple-darwin' && (steps.child-contract.outcome == 'success' || steps.child-contract.outcome == 'failure') }}
+        env:
+          KEYLOOM_TEST_HELPER: ${{ github.workspace }}/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
+        run: |
+          status=0
+          for attempt in 1 2 3 4 5; do
+            echo "Intel lifetime probe $attempt/5"
+            bun test test/firmware/toolchain/device-helper-native.test.ts --test-name-pattern 'no heartbeat and blocked stdout' || status=1
+          done
+          exit "$status"
       - name: Compile and install the paired CLI outside the repo
         if: runner.os != 'Windows'
         run: |

@@ -1,6 +1,6 @@
 # 33: Prove the helper on macOS, Linux and Windows
 
-Status: diagnostics packaging implemented in the rung 24b candidate, 2026-10-20; local installed evidence covers native macOS arm64 only. CI/release checks are configured for the other current CLI targets and native Windows child contracts, not yet observed here. All device backends and hardware support below remain proposed. [Evidence and unrun gates](../research/spikes/device-helper-24b.md). Source transport baseline: `7d3ca25981a5213b8aa9e90fcf3330d5272787fd`. D-420 and D-424 define the platform and release intent; Q37–Q41 record unsettled scope, hardware access and packaging.
+Status: diagnostics packaging implemented in the rung 24b candidate, 2026-10-20; local installed evidence covers native macOS arm64 only. Native CI subsequently found Linux startup and Intel blocked-output deadline failures in `125d001`; [diagnosis and the pending native data wave](../research/spikes/device-helper-24b/ci-followup.md) block acceptance. Other target/release checks remain gates, not inferred from local success. All device backends and hardware support below remain proposed. [Evidence and unrun gates](../research/spikes/device-helper-24b.md). Source transport baseline: `7d3ca25981a5213b8aa9e90fcf3330d5272787fd`. D-420 and D-424 define the platform and release intent; Q37–Q41 record unsettled scope, hardware access and packaging.
 
 ## Support is a capability claim, not a cross-compile
 

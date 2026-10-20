@@ -23,7 +23,7 @@ agent-work run -- bun scripts/build-binaries.ts --target bun-darwin-arm64
 bun scripts/smoke-device-helper.ts dist/keyloom-darwin-arm64
 ```
 
-Use `bun-darwin-x64` on Intel macOS. On Linux install `musl-tools`, add `x86_64-unknown-linux-musl` to this pinned Rust toolchain and use `bun-linux-x64`. Linux embeds a static musl helper inside the existing GNU Bun executable; it adds no runtime glibc/libudev dependency. Native CI checks the ELF has no interpreter.
+Use `bun-darwin-x64` on Intel macOS. On Linux add `x86_64-unknown-linux-musl` to this pinned Rust toolchain and use `bun-linux-x64`. The crate pins `rust-lld` and uses Rust's self-contained musl CRT; do not override it with Ubuntu 22.04's `musl-gcc`, whose specs rewrite `-static-pie` into a dynamically loaded executable. Linux embeds a static musl helper inside the existing GNU Bun executable; it adds no runtime glibc/libudev dependency. Native CI checks the ELF has no interpreter.
 
 For a signed/prebuilt helper, pass `--helper <absolute-file>` with exactly one `--target`. Sign before invoking the builder: it hashes and embeds the final bytes unchanged. Cross-compiling all Bun targets requires `--helper-dir <directory>` containing `<rust-triple>/keyloom-device` for each target. `--entry <file>` changes the Bun entry; `--out-dir <directory>` isolates build output. Each invocation writes checksums for its outputs only; release CI combines all three native jobs before publishing `SHA256SUMS`.
 

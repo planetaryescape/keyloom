@@ -25,7 +25,19 @@ async function waitExit(child: ReturnType<typeof launch>, ms = 6500) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([child.exited, new Promise<never>((_, reject) => {
-      timer = setTimeout(() => { child.kill(); reject(new Error("native helper did not exit")); }, ms);
+      timer = setTimeout(() => {
+        let pidProbe = "present";
+        try { process.kill(child.pid, 0); }
+        catch (error) { pidProbe = error instanceof Error ? error.message : String(error); }
+        const processState = process.platform === "win32" ? "not a Unix host" : Bun.spawnSync(
+          ["/bin/ps", "-o", "pid=,ppid=,stat=,etime=,command=", "-p", String(child.pid)],
+          { env: {}, timeout: 1000 },
+        ).stdout.toString().trim();
+        // Observe OS state before kill/drain: an unread pipe may delay a runtime exit notification.
+        console.error(JSON.stringify({ nativeExitDeadline: { pid: child.pid, pidProbe, processState, exitCode: child.exitCode, signalCode: child.signalCode, budgetMs: ms } }));
+        child.kill();
+        reject(new Error("native helper did not exit"));
+      }, ms);
     })]);
   } finally { clearTimeout(timer); }
 }
