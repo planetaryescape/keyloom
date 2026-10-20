@@ -47,4 +47,91 @@ describe("QuestionCard", () => {
     expect(optionForKey("3", ["a", "b"])).toBeUndefined();
     expect(optionForKey("a", options)).toBeUndefined();
   });
+
+  test("multiple_choice renders checkboxes and submit button", () => {
+    const multiQ: Question = {
+      toolUseId: "t2",
+      kind: "multiple_choice",
+      question: "Which of these keyboards should receive the macro?",
+      options: [
+        { id: "glove80", label: "Glove80" },
+        { id: "moonlander", label: "Moonlander" },
+      ],
+      allowOther: false,
+      answer: null,
+    };
+    const html = render(multiQ);
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("Glove80");
+    expect(html).toContain("Moonlander");
+    expect(html).toContain("Submit choice");
+  });
+
+  test("short_text renders input field with placeholder and submit button", () => {
+    const textQ: Question = {
+      toolUseId: "t3",
+      kind: "short_text",
+      question: "What should this config be called?",
+      options: [],
+      placeholder: "e.g. Colemak Daily",
+      allowOther: false,
+      answer: null,
+    };
+    const html = render(textQ);
+    expect(html).toContain('placeholder="e.g. Colemak Daily"');
+    expect(html).toContain("Send");
+  });
+
+  test("layer renders layer chips", () => {
+    const layerQ: Question = {
+      toolUseId: "t4",
+      kind: "layer",
+      question: "Which layer should receive Navigation?",
+      options: [
+        { id: "lay_0", label: "Base" },
+        { id: "lay_1", label: "Nav" },
+      ],
+      allowOther: false,
+      answer: null,
+    };
+    const html = render(layerQ);
+    expect(html).toContain("ask-layer-chip");
+    expect(html).toContain("Base");
+    expect(html).toContain("Nav");
+  });
+
+  test("keyboard_or_config renders keyboard options with recommended flag", () => {
+    const kbQ: Question = {
+      toolUseId: "t5",
+      kind: "keyboard_or_config",
+      question: "Which keyboard did you mean?",
+      options: [
+        { id: "glove80", label: "Glove80", recommended: false },
+        { id: "moonlander", label: "Moonlander", recommended: true },
+      ],
+      allowOther: false,
+      answer: null,
+    };
+    const html = render(kbQ);
+    expect(html).toContain("Glove80");
+    expect(html).toContain("Moonlander");
+    expect(html).toContain("Recommended");
+  });
+
+  test("key question renders instruction and options", () => {
+    const keyQ: Question = {
+      toolUseId: "t6",
+      kind: "key",
+      question: "Where should this layer key go?",
+      options: [
+        { id: "pos_24", label: "Key 24 (Thumb)" },
+        { id: "pos_25", label: "Key 25" },
+      ],
+      allowOther: false,
+      answer: null,
+    };
+    const html = render(keyQ);
+    expect(html).toContain("Click a key on the board");
+    expect(html).toContain("Key 24 (Thumb)");
+  });
 });

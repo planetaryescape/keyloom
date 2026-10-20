@@ -462,7 +462,13 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
               {carried === null ? null : <CarriedThreadView thread={carried} boardName={board.name.replace(/ keyboard \(ANSI\)$/, "")} />}
               {transcript.turns.map((turn) =>
                 turn.kind === "user" ? (
-                  <UserMessage key={turn.id} turn={turn} layout={layout} context={`${board.name} · ${configName ?? layoutRef}`} />
+                  <UserMessage
+                    key={turn.id}
+                    turn={turn}
+                    layout={layout}
+                    context={`${board.name} · ${configName ?? layoutRef}`}
+                    onSelectKeys={onRestoreSelection}
+                  />
                 ) : (
                   <AssistantMessage
                     key={turn.id}

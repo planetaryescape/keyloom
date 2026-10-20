@@ -201,11 +201,37 @@ export const ChatSelectionSchema = z.object({
 });
 export type ChatSelection = z.infer<typeof ChatSelectionSchema>;
 
-// The agent's question to BK (D-380): the options as buttons, the recommended one first. `answer` is null while it is open.
+export * from "./artifacts.ts";
+export const QuestionKindSchema = z.enum([
+  "single_choice",
+  "multiple_choice",
+  "short_text",
+  "keyboard_or_config",
+  "layer",
+  "key",
+]);
+export type QuestionKind = z.infer<typeof QuestionKindSchema>;
+
+export const QuestionOptionSchema = z.object({
+  id: z.string().min(1).optional(),
+  label: z.string().min(1),
+  description: z.string().min(1).optional(),
+  recommended: z.boolean().optional(),
+});
+export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
+
+// The agent's question to BK (D-380, Rung 27): options or interactive selection, recommended marked. `answer` is null while open.
 export const QuestionCardSchema = z.object({
   toolUseId: z.string().min(1),
+  kind: QuestionKindSchema.optional(),
   question: z.string().min(1),
-  options: z.array(z.object({ label: z.string().min(1), description: z.string().min(1).optional() })).min(2).max(4),
+  options: z.array(QuestionOptionSchema).default([]),
+  placeholder: z.string().optional(),
+  targetBoard: z.string().optional(),
+  targetLayer: z.string().optional(),
+  allowedPositions: z.array(z.number().int().nonnegative()).optional(),
+  allowedLayers: z.array(z.string()).optional(),
+  allowedKeyboards: z.array(z.string()).optional(),
   allowOther: z.boolean(),
   answer: z.string().nullable(),
 });

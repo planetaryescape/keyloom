@@ -51,7 +51,20 @@ export type ChatEvent =
   | { type: "done"; outcome: ChatOutcome };
 
 /** A question the agent asked BK, as the chat shows it: the options as buttons; `answer` is null while it is open (D-381). */
-export type QuestionCard = AskedQuestion & { toolUseId: string; allowOther: boolean; answer: string | null };
+export type QuestionCard = {
+  toolUseId: string;
+  kind?: AskedQuestion["kind"];
+  question: string;
+  options: { id?: string; label: string; description?: string; recommended?: boolean }[];
+  placeholder?: string;
+  targetBoard?: string;
+  targetLayer?: string;
+  allowedPositions?: number[];
+  allowedLayers?: string[];
+  allowedKeyboards?: string[];
+  allowOther: boolean;
+  answer: string | null;
+};
 
 export type ChatOutcome = {
   conversationId: string;
@@ -107,7 +120,32 @@ export function conversationTitle(message: string): string {
 const answering = new Map<string, string | null>();
 
 
-const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => ({ ...q, allowOther: q.allowOther === true, toolUseId, answer });
+const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => {
+  const card: QuestionCard = {
+    toolUseId,
+    question: q.question,
+    options: (q.options ?? []).map((opt, i) => {
+      const o: { id?: string; label: string; description?: string; recommended?: boolean } = {
+        label: opt.label,
+      };
+      if (opt.id) o.id = opt.id;
+      if (opt.description) o.description = opt.description;
+      if (opt.recommended !== undefined) o.recommended = opt.recommended;
+      else if (i === 0) o.recommended = true;
+      return o;
+    }),
+    allowOther: q.allowOther === true,
+    answer,
+  };
+  if (q.kind) card.kind = q.kind;
+  if (q.placeholder) card.placeholder = q.placeholder;
+  if (q.targetBoard) card.targetBoard = q.targetBoard;
+  if (q.targetLayer) card.targetLayer = q.targetLayer;
+  if (q.allowedPositions) card.allowedPositions = q.allowedPositions;
+  if (q.allowedLayers) card.allowedLayers = q.allowedLayers;
+  if (q.allowedKeyboards) card.allowedKeyboards = q.allowedKeyboards;
+  return card;
+};
 
 /** The question a conversation is waiting on: an `ask_user` call in the stored messages with no result after it (D-382). */
 export function openQuestion(messages: readonly MessageRow[]): { toolUseId: string } | undefined {

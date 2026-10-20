@@ -178,4 +178,73 @@ describe("agent turn composition", () => {
     expect(html).toContain('data-streaming="true"');
     expect(html).toContain(">Stop</button>");
   });
+
+  test("UserMessage renders a clickable key-selection button when onSelectKeys is provided", () => {
+    let selected = false;
+    const html = renderToStaticMarkup(createElement(UserMessage, {
+      turn: { kind: "user", id: "user", text: "Check these keys", selection: { layerId: "base", positions: [32] } },
+      layout: fixture.document,
+      context: "Moonlander · Daily",
+      onSelectKeys: () => { selected = true; },
+    }));
+    expect(html).toContain("msg-selection-action");
+    expect(html).toContain("Selected on Base:");
+  });
+
+  test("AssistantMessage renders confirmation card and outcome card", () => {
+    const withConfirmation: AssistantTurn = {
+      ...turn,
+      confirmation: {
+        planId: "plan_1",
+        title: "Apply Colemak layout to Moonlander",
+        targets: ["Moonlander · Daily"],
+        effects: ["Replaces 32 keys on Base layer"],
+        consequences: ["Existing base bindings will be overwritten"],
+        status: "pending",
+      },
+      outcome: {
+        saved: "Saved to database",
+        hardwareOutcome: "verified",
+        device: "Moonlander",
+      },
+    };
+    const html = render(withConfirmation);
+    expect(html).toContain("Apply Colemak layout to Moonlander");
+    expect(html).toContain("Approve plan");
+    expect(html).toContain("Cancel");
+    expect(html).toContain("Saved to database");
+    expect(html).toContain("Device: Moonlander · verified");
+  });
+
+  test("AssistantMessage renders transfer, key locations, and keyboard list artifacts", () => {
+    const withArtifacts: AssistantTurn = {
+      ...turn,
+      artifacts: [
+        {
+          kind: "transfer",
+          sourceBoard: "zsa/moonlander",
+          destinationBoard: "moergo/glove80",
+          mappedCount: 42,
+          skipped: [{ key: "RGB_TOG", reason: "Glove80 lacks per-key RGB" }],
+        },
+        {
+          kind: "key_locations",
+          functionName: "KC_ESC",
+          locations: [{ layerId: "base", layerName: "Base", position: 0, label: "Esc" }],
+        },
+        {
+          kind: "keyboard_list",
+          keyboards: [{ id: "moonlander", name: "ZSA Moonlander", configs: ["Daily"], connected: true }],
+        },
+      ],
+    };
+    const html = render(withArtifacts);
+    expect(html).toContain("zsa/moonlander");
+    expect(html).toContain("moergo/glove80");
+    expect(html).toContain("42 keys mapped successfully.");
+    expect(html).toContain("RGB_TOG");
+    expect(html).toContain("Locations for KC_ESC");
+    expect(html).toContain("ZSA Moonlander");
+    expect(html).toContain("Connected");
+  });
 });

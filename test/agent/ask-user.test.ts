@@ -167,3 +167,61 @@ describe("a request to copy a setup onto the keyboard", () => {
     expect(JSON.stringify(listMessages(app.db, out.conversationId).map((m) => m.content))).not.toContain("ask_user");
   });
 });
+
+describe("interactive question kinds (Rung 27)", () => {
+  test("ask_user with kind key preserves key targets and answers correctly", async () => {
+    const { app, mac } = await world();
+    const keyQuestion = {
+      kind: "key" as const,
+      question: "Where should the Nav momentary key go?",
+      options: [{ id: "24", label: "Key 24 (Thumb)" }, { id: "25", label: "Key 25" }],
+      targetBoard: "apple/macbook-ansi",
+      targetLayer: "lay_base",
+      allowedPositions: [24, 25],
+    };
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "ask_user", input: keyQuestion }] },
+      { blocks: [{ text: "Placed Nav momentary on key 24." }] },
+    ]);
+    const model = anthropicModel(client);
+    const first = await sendMessage(app, mac.layout.id, { message: "add nav key", model });
+    expect(first.status).toBe("awaiting_answer");
+    expect(first.question?.kind).toBe("key");
+    expect(first.question?.allowedPositions).toEqual([24, 25]);
+    expect(first.question?.options[0]?.id).toBe("24");
+
+    const second = await sendMessage(app, mac.layout.id, {
+      conversationId: first.conversationId,
+      answer: { toolUseId: first.question?.toolUseId ?? "", text: "24" },
+      model,
+    });
+    expect(second.status).toBe("complete");
+    expect(second.text).toBe("Placed Nav momentary on key 24.");
+  });
+
+  test("ask_user with kind multiple_choice and short_text returns the typed answer", async () => {
+    const { app, mac } = await world();
+    const shortTextQ = {
+      kind: "short_text" as const,
+      question: "What should this config be called?",
+      placeholder: "e.g. Work QWERTY",
+    };
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "ask_user", input: shortTextQ }] },
+      { blocks: [{ text: "Created config named Work QWERTY." }] },
+    ]);
+    const model = anthropicModel(client);
+    const first = await sendMessage(app, mac.layout.id, { message: "new config", model });
+    expect(first.status).toBe("awaiting_answer");
+    expect(first.question?.kind).toBe("short_text");
+    expect(first.question?.placeholder).toBe("e.g. Work QWERTY");
+
+    const second = await sendMessage(app, mac.layout.id, {
+      conversationId: first.conversationId,
+      answer: { toolUseId: first.question?.toolUseId ?? "", text: "Work QWERTY" },
+      model,
+    });
+    expect(second.status).toBe("complete");
+    expect(second.text).toBe("Created config named Work QWERTY.");
+  });
+});

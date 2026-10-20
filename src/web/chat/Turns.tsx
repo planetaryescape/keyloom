@@ -1,5 +1,6 @@
-import { ArrowRightLeft, CircleAlert, RefreshCw } from "lucide-react";
-import type { ProposalCard as Proposal } from "../../api/http.ts";
+import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, Keyboard, MapPin, RefreshCw, ShieldCheck } from "lucide-react";
+import type { ChatSelection, ProposalCard as Proposal } from "../../api/http.ts";
+import type { AgentArtifact } from "../../api/artifacts.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { groupProposals } from "./compare.ts";
@@ -9,13 +10,13 @@ import { PriorityChips } from "./PriorityChips.tsx";
 import { ProposalCompare } from "./ProposalCompare.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
 import { keyLabel, layerName, optionLabels } from "./proposal-facts.ts";
-import type { AssistantTurn, UserTurn } from "./transcript.ts";
+import type { AssistantTurn, ConfirmationCard, OutcomeCard, UserTurn } from "./transcript.ts";
 import { AgentWorking } from "./AgentWorking.tsx";
 import type { AgentWorkStatus, AgentWorkView } from "./work-view.ts";
 import { presentationView } from "./presentation-view.ts";
 import { TurnUsage } from "./TurnUsage.tsx";
 
-export function UserMessage({ turn, layout, context }: { turn: UserTurn; layout: Layout; context?: string }) {
+export function UserMessage({ turn, layout, context, onSelectKeys }: { turn: UserTurn; layout: Layout; context?: string; onSelectKeys?: (selection: ChatSelection) => void }) {
   const { selection } = turn;
   return (
     <div className="msg msg-user">
@@ -25,12 +26,155 @@ export function UserMessage({ turn, layout, context }: { turn: UserTurn; layout:
         {selection === null ? null : (
           <p className="msg-selection">
             Selected on {layerName(layout, selection.layerId)}:{" "}
-            {selection.positions.map((position) => keyLabel(layout, { layerId: selection.layerId, position })).join(", ")}
+            {onSelectKeys ? (
+              <button
+                type="button"
+                className="msg-selection-action"
+                onClick={() => onSelectKeys(selection)}
+                title="Select these keys on the board"
+              >
+                {selection.positions.map((position) => keyLabel(layout, { layerId: selection.layerId, position })).join(", ")}
+              </button>
+            ) : (
+              selection.positions.map((position) => keyLabel(layout, { layerId: selection.layerId, position })).join(", ")
+            )}
           </p>
         )}
       </div>
       {context === undefined ? null : <p className="msg-context">{context}</p>}
     </div>
+  );
+}
+
+function ConfirmationCardView({ confirmation, onConfirm, onCancel, disabled }: { confirmation: ConfirmationCard; onConfirm?: (planId: string) => void; onCancel?: (planId: string) => void; disabled?: boolean }) {
+  const isPending = confirmation.status === "pending";
+  return (
+    <section className={`ask-card ${isPending ? "" : "ask-card-done"}`} aria-label="Confirmation">
+      <p className="ask-question">
+        <ShieldCheck size={16} aria-hidden="true" className="ask-icon" />
+        <span>{confirmation.title}</span>
+      </p>
+      <div className="ask-details">
+        {confirmation.targets.length > 0 ? (
+          <p className="ask-description">Targets: {confirmation.targets.join(", ")}</p>
+        ) : null}
+        {confirmation.effects.map((effect, idx) => (
+          <p key={idx} className="ask-description">• {effect}</p>
+        ))}
+        {confirmation.consequences.map((c, idx) => (
+          <p key={idx} className="ask-description" style={{ color: "var(--color-warning)" }}>⚠️ {c}</p>
+        ))}
+      </div>
+      {isPending ? (
+        <div className="ask-actions" style={{ gap: "var(--space-2)" }}>
+          <button
+            type="button"
+            className="button button-primary"
+            disabled={disabled}
+            onClick={() => onConfirm?.(confirmation.planId)}
+          >
+            Approve plan
+          </button>
+          <button
+            type="button"
+            className="button"
+            disabled={disabled}
+            onClick={() => onCancel?.(confirmation.planId)}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <p className="ask-answer">
+          <Check size={14} aria-hidden="true" />
+          <span>{confirmation.status === "approved" ? "Plan approved" : "Plan cancelled"}</span>
+        </p>
+      )}
+    </section>
+  );
+}
+
+function OutcomeCardView({ outcome }: { outcome: OutcomeCard }) {
+  return (
+    <section className="ask-card ask-card-done" aria-label="Hardware outcome">
+      <p className="ask-answer">
+        <CheckCircle2 size={16} aria-hidden="true" style={{ color: "var(--color-success)" }} />
+        <span>{outcome.saved}</span>
+      </p>
+      {outcome.hardwareOutcome !== "unchanged" ? (
+        <p className="ask-description" style={{ marginTop: "4px" }}>
+          Device: {outcome.device ?? "Keyboard"} · {outcome.hardwareOutcome.replace(/_/g, " ")}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function TransferArtifactView({ transfer }: { transfer: Extract<AgentArtifact, { kind: "transfer" }> }) {
+  return (
+    <section className="ask-card ask-card-done" aria-label="Transfer report">
+      <p className="ask-question" style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <span>{transfer.sourceBoard}</span>
+        <ArrowRight size={14} aria-hidden="true" />
+        <span>{transfer.destinationBoard}</span>
+      </p>
+      <p className="ask-description">
+        {transfer.mappedCount} keys mapped successfully.
+      </p>
+      {transfer.skipped.length > 0 ? (
+        <details className="ask-details" style={{ marginTop: "var(--space-1)" }}>
+          <summary style={{ cursor: "pointer", fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+            {transfer.skipped.length} unsupported or skipped item(s)
+          </summary>
+          <ul style={{ margin: "var(--space-1) 0 0 var(--space-3)", padding: 0, fontSize: "var(--text-xs)" }}>
+            {transfer.skipped.map((s, idx) => (
+              <li key={idx} style={{ color: "var(--color-text-muted)" }}>
+                <strong>{s.key}</strong>: {s.reason}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+function KeyLocationsArtifactView({ locations }: { locations: Extract<AgentArtifact, { kind: "key_locations" }> }) {
+  return (
+    <section className="ask-card ask-card-done" aria-label="Key locations">
+      <p className="ask-question" style={{ display: "flex", alignItems: "center", gap: "var(--space-1)" }}>
+        <MapPin size={14} aria-hidden="true" />
+        <span>Locations for {locations.functionName}</span>
+      </p>
+      <div className="ask-chips">
+        {locations.locations.map((loc, idx) => (
+          <span key={idx} className="button ask-layer-chip" style={{ fontSize: "var(--text-xs)" }}>
+            {loc.layerName}: Key {loc.position} ({loc.label})
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function KeyboardListArtifactView({ list }: { list: Extract<AgentArtifact, { kind: "keyboard_list" }> }) {
+  return (
+    <section className="ask-card ask-card-done" aria-label="Registered keyboards">
+      <p className="ask-question" style={{ display: "flex", alignItems: "center", gap: "var(--space-1)" }}>
+        <Keyboard size={14} aria-hidden="true" />
+        <span>Keyboards ({list.keyboards.length})</span>
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", marginTop: "var(--space-1)" }}>
+        {list.keyboards.map((kb) => (
+          <div key={kb.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--text-xs)" }}>
+            <span><strong>{kb.name}</strong> ({kb.configs.join(", ")})</span>
+            <span style={{ color: kb.connected ? "var(--color-success)" : "var(--color-text-muted)" }}>
+              {kb.connected ? "Connected" : "Offline"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -101,6 +245,14 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
         {turn.phase === "done" && offers > 0 ? <p className="sr-only">keyloom offered {offers} {offers === 1 ? "option" : "options"}.</p> : null}
       </div>
       {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
+      {turn.confirmation ? <ConfirmationCardView confirmation={turn.confirmation} disabled={busy} /> : null}
+      {turn.outcome ? <OutcomeCardView outcome={turn.outcome} /> : null}
+      {turn.artifacts?.map((artifact, idx) => {
+        if (artifact.kind === "transfer") return <TransferArtifactView key={idx} transfer={artifact} />;
+        if (artifact.kind === "key_locations") return <KeyLocationsArtifactView key={idx} locations={artifact} />;
+        if (artifact.kind === "keyboard_list") return <KeyboardListArtifactView key={idx} list={artifact} />;
+        return null;
+      })}
       {turn.phase === "stopped" ? <p className="msg-note">Stopped. Configs or proposals prepared before Stop may remain.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}
       {compact

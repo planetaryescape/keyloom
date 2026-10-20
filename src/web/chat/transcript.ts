@@ -2,8 +2,24 @@
 // and fetch lets the streaming rules (partial text, a dropped connection, superseded siblings) be
 // tested directly.
 import type { ChatAccounting, ChatMessage, ChatOutcome, ChatPresentation, ChatSelection, ConversationDetail, ObservedChatEvent, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
+import type { AgentArtifact } from "../../api/artifacts.ts";
 import { toolActivity } from "./activity.ts";
 import type { AgentRunSnapshot } from "../../api/agent-runs.ts";
+
+export type ConfirmationCard = {
+  planId: string;
+  title: string;
+  targets: string[];
+  effects: string[];
+  consequences: string[];
+  status: "pending" | "approved" | "cancelled";
+};
+
+export type OutcomeCard = {
+  saved: string;
+  hardwareOutcome: "verified" | "offline" | "needs_manual_flash" | "unchanged" | "pending";
+  device?: string;
+};
 
 export type UserTurn = { kind: "user"; id: string; text: string; selection: ChatSelection | null };
 export type AssistantTurn = {
@@ -25,6 +41,12 @@ export type AssistantTurn = {
   priorities: PriorityCard[];
   /** What the agent asked BK, open until he answers (D-381). */
   question: QuestionCard | null;
+  /** Explicit confirmation card for plan approval (Rung 27). */
+  confirmation?: ConfirmationCard | null;
+  /** What was saved and what reached hardware (Rung 27). */
+  outcome?: OutcomeCard | null;
+  /** Typed domain artifacts (Rung 27). */
+  artifacts?: AgentArtifact[];
   phase: "streaming" | "done" | "failed" | "stopped";
   failure: { code: string; message: string } | null;
   /** How the model ended the reply: anything but "complete" means the reply is incomplete. */

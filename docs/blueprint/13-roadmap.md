@@ -640,7 +640,7 @@ Previously, completed activity is inspectable but a stream interruption may stil
 
 ## Rung 27: I answer on the keyboard and inspect real results
 
-Status: not built; depends on rung 26.
+Status: Built on feat/rung27-interactive-questions. Interactive question kinds, typed artifact union, native renderers, selection reopening, confirmation and outcome cards.
 
 Previously, questions have a few buttons and free text. Now a key/layer/config/keyboard choice uses the corresponding app control, and tool results use typed cards and existing previews.
 

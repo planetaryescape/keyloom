@@ -1,6 +1,6 @@
 # 28: The agent works beside the keyboard
 
-Status: partly implemented, 2026-10-18. Rung 26a shipped in v0.42.0 with distinct messages, observed tool activity, separate public working notes/final answers, reopenable completed working and interruption warnings. [Published-release evidence](../screenshots/agent-experience/published-0.42.0/README.md) records the tested scope. Domain question/artifact extensions and cross-keyboard flows below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
+Status: partly implemented, 2026-10-20. Rung 26a shipped in v0.42.0. Rung 27 interactive question kinds (single/multiple choice, short text, layer, key, keyboard_or_config), explicit recommendation, reopened selection actions, typed artifacts, and confirmation/outcome cards are built on feat/rung27-interactive-questions. Cross-keyboard target plans below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
 
 Reconciled with origin/main at `72370d0494497ae4bdd6036106fcec9d3f6c1aab`: inherit the no-accent-stripe/no-sparkle rule in [18](18-visual-design.md#patterns-keyloom-doesnt-use) and separate case/keycap controls (D-319).
 
