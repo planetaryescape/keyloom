@@ -16,6 +16,7 @@ import {
   newBuildId, newFlashId, setFlashProgress,
 } from "../persistence/builds.ts";
 import { recordHandsFreeProof } from "../persistence/syncs.ts";
+import { appendLog } from "../persistence/log.ts";
 import { findLayoutRow, listLayoutRows } from "../persistence/layouts.ts";
 import { cacheDir } from "../persistence/paths.ts";
 import { showBoard } from "./boards.ts";
@@ -208,12 +209,30 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
       ...(signal ? { signal } : {}),
     });
     finishBuild(app.db, row.id, { artifactPath: artifactRel });
+    appendLog(app.dataDir, {
+      event: "build",
+      buildId: row.id,
+      layoutId: view.layout.id,
+      revisionId: row.revisionId,
+      boardId: view.board.definition.id,
+      status: "succeeded",
+      artifactRel,
+    });
   } catch (err) {
     const known = err instanceof BuildFailure || err instanceof CheckoutError || err instanceof LockTimeoutError;
     if (!known) log.line(`keyloom: unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     const message = known ? (err as Error).message : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
     log.line(`keyloom: build failed: ${message}`);
     finishBuild(app.db, row.id, { error: message });
+    appendLog(app.dataDir, {
+      event: "build",
+      buildId: row.id,
+      layoutId: view.layout.id,
+      revisionId: row.revisionId,
+      boardId: view.board.definition.id,
+      status: "failed",
+      error: message,
+    });
   } finally {
     log.close();
   }
@@ -382,11 +401,27 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
       },
     });
     finishFlash(app.db, row.id, result.state === "succeeded" ? null : { error: result.error ?? "the flash failed" });
+    appendLog(app.dataDir, {
+      event: "flash",
+      flashId: row.id,
+      buildId: row.buildId,
+      boardId: board.definition.id,
+      status: result.state === "succeeded" ? "succeeded" : "failed",
+      error: result.state === "succeeded" ? undefined : (result.error ?? "the flash failed"),
+    });
     // Auto-sync may turn on only for a board keyloom has reached without hands, and this is the one place that knows (D-160).
     if (result.state === "succeeded" && result.handsFree) recordHandsFreeProof(app.db, board.definition.id, row.buildId);
   } catch (err) {
     log.line(`keyloom: unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     finishFlash(app.db, row.id, { error: `Unexpected error: ${err instanceof Error ? err.message : String(err)}` });
+    appendLog(app.dataDir, {
+      event: "flash",
+      flashId: row.id,
+      buildId: row.buildId,
+      boardId: board.definition.id,
+      status: "failed",
+      error: `Unexpected error: ${err instanceof Error ? err.message : String(err)}`,
+    });
   } finally {
     flashInstructions.delete(row.id);
     log.close();

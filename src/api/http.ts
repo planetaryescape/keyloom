@@ -43,6 +43,12 @@ export const LayoutDetailSchema = z.object({
 });
 export type LayoutDetail = z.infer<typeof LayoutDetailSchema>;
 
+// The portable keyloom layout document `keyloom layout export` writes and `keyloom config new --from import`
+// reads back (10, D-032). The response body is exactly the file, so the browser can save it as one.
+//   GET  /api/layouts/:ref/export[?rev=R]             -> LayoutExportDocument   (the head when rev is omitted)
+export { LayoutExportDocumentSchema } from "../layout/export-document.ts";
+export type { LayoutExportDocument } from "../layout/export-document.ts";
+
 // Editing, building and flashing (rung 2). Every route below takes and returns JSON, needs the
 // session token like the reads, and reports failure with ApiErrorBody.
 //   POST /api/layouts/:ref/check        CheckRequest  -> CheckResponse
@@ -286,6 +292,15 @@ export const ChatUsageSchema = z.object({
   cacheCreationTokens: z.number().int().nonnegative(),
 });
 
+// Recorded facts for one request, not a recomputation from today's model settings or prices.
+export const ChatAccountingSchema = z.object({
+  provider: ChatProviderIdSchema,
+  model: z.string(),
+  usage: ChatUsageSchema,
+  costUsd: z.number().nonnegative().optional(),
+});
+export type ChatAccounting = z.infer<typeof ChatAccountingSchema>;
+
 // `refused`: the model declined even after the server-side fallback. `truncated`, `context_full` and
 // `iteration_limit` mean the reply is incomplete; the panel should say so.
 export const ChatOutcomeSchema = z.object({
@@ -322,6 +337,8 @@ export type ChatEvent = z.infer<typeof ChatEventSchema>;
 
 export const ChatPresentationSchema = z.object({
   version: z.literal(1), userMessageId: z.string().min(1),
+  // Absent on older recordings and when execution did not return usage.
+  accounting: ChatAccountingSchema.optional(),
   questionToolUseId: z.string().min(1).max(128).optional(),
   status: z.enum(["running", "waiting_user", "completed", "incomplete", "failed", "cancelled", "unobserved"]),
   operations: z.array(z.object({
@@ -551,3 +568,10 @@ export const MenuBarSchema = z.object({
 export type MenuBar = z.infer<typeof MenuBarSchema>;
 export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema), newKeyboards: z.array(DetectedKeyboardSchema).optional(), menuBar: MenuBarSchema.optional() });
 export type SyncEvent = z.infer<typeof SyncEventSchema>;
+
+export const LayoutUpdatedEventSchema = z.object({
+  type: z.literal("layout.updated"),
+  layoutId: z.string().min(1),
+  revisionId: z.string().min(1).optional(),
+});
+export type LayoutUpdatedEvent = z.infer<typeof LayoutUpdatedEventSchema>;

@@ -6,7 +6,7 @@ import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
-import type { Binding, LayerRef, Layout, Mod } from "../layout/schema.ts";
+import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Issue } from "./result.ts";
 import { conditionalLayerRules } from "./conditional-layer-rules.ts";
@@ -71,6 +71,7 @@ export function unknownRefs(board: BoardDefinition, doc: Layout): Issue[] {
     if (b.kind === "holdTap") {
       if ("layerId" in b.hold && !layers.has(b.hold.layerId)) missing.push({ noun: "layer", text: `layer "${b.hold.layerId}"` });
       if (!profiles.has(b.profileId)) missing.push({ noun: "hold-tap timing profile", text: `hold-tap profile "${b.profileId}"` });
+      if (b.tap.macroId && !macros.has(b.tap.macroId)) missing.push({ noun: "macro", text: `macro "${b.tap.macroId}"` });
     }
     for (const m of missing) {
       const who = slot ? keyOn(doc, slot) : "A combo";
@@ -84,6 +85,34 @@ export function unknownRefs(board: BoardDefinition, doc: Layout): Issue[] {
     }
     if (combo.layerIds !== "all") {
       for (const id of combo.layerIds.filter((id) => !layers.has(id))) out.push(issue("unknown_ref", `combo "${combo.id}" is on layer "${id}", which does not exist`, "A combo is set up on a layer that isn't in this layout."));
+    }
+  }
+  return out;
+}
+
+/**
+ * `combo_conflict`: two combos can't both fire when their layers overlap and they use the same set of
+ * positions, because the firmware sees one chord of keys and runs one combo. Order doesn't matter
+ * (`[0, 1]` is `[1, 0]`), and `"all"` overlaps every layer. One error per pair, naming both combos. A combo
+ * has no slot of its own to report, so `slots` is left out and the message says as much.
+ */
+export function comboConflict(doc: Layout): Issue[] {
+  const idsOf = (c: Combo): readonly string[] => (c.layerIds === "all" ? [] : c.layerIds);
+  const out: Issue[] = [];
+  for (const [i, a] of doc.combos.entries()) {
+    for (const b of doc.combos.slice(i + 1)) {
+      const positions = [...new Set(a.positions)].sort((x, y) => x - y);
+      if (positions.join(",") !== [...new Set(b.positions)].sort((x, y) => x - y).join(",")) continue;
+      // "all" overlaps whatever the other names; two "all"s overlap everywhere.
+      const shared = a.layerIds === "all" && b.layerIds === "all" ? "every"
+        : a.layerIds === "all" ? idsOf(b)
+        : b.layerIds === "all" ? idsOf(a)
+        : idsOf(a).filter((id) => idsOf(b).includes(id));
+      if (shared !== "every" && shared.length === 0) continue;
+      const on = shared === "every" ? "on every layer" : `on layers ${[...new Set(shared)].map((id) => `"${id}"`).join(", ")}`;
+      out.push(issue("combo_conflict",
+        `combos "${a.id}" and "${b.id}" use the same positions (${positions.join(", ")}) and both fire ${on}, so only one of them could fire; a combo has no slot to name`,
+        `The combos "${a.name}" and "${b.name}" would use the same keys on the same layers, so only one of them could ever fire. Give one of them different keys, or a layer the other isn't on.`));
     }
   }
   return out;
@@ -105,7 +134,7 @@ export function firmwareSupport(board: BoardDefinition, doc: Layout): Issue[] {
   };
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
     if (b.kind === "key") unknownKey(b.code, where, slot);
-    if (b.kind === "holdTap") unknownKey(b.tap.code, where, slot);
+    if (b.kind === "holdTap" && !b.tap.macroId) unknownKey(b.tap.code, where, slot);
     if (b.kind === "native" && b.firmware !== doc.firmware) {
       out.push(issue("firmware_unsupported", `${where} is a ${b.firmware} native binding in a ${doc.firmware} layout`,
         `${slot ? keyOn(doc, slot) : "A key"} has custom behaviour written for a different kind of firmware, so this keyboard can't run it.`, slotOf(slot)));
@@ -136,6 +165,11 @@ export function qmkHoldTap(doc: Layout): Issue[] {
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(doc)) {
     if (b.kind !== "holdTap") continue;
+    if (b.tap.macroId) {
+      out.push(issue("qmk_modtap_basic", `${where}: QMK hold-taps can't tap a macro (${b.tap.macroId})`,
+        `${slot ? keyOn(doc, slot) : "A combo"}: this firmware can't tap a macro from a hold-tap. Use a tap dance instead.`, slotOf(slot)));
+      continue;
+    }
     if (b.tap.mods?.length) out.push(issue("qmk_modtap_basic", `${where}: QMK hold-taps can't tap a modified key (${b.tap.code} with ${b.tap.mods.join("+")})`,
       `${slot ? keyOn(doc, slot) : "A combo"}: this firmware can't tap a modified key like Shift+A from a hold-tap. Tap a plain key instead.`, slotOf(slot)));
     // An unknown code is firmware_unsupported already; saying it isn't basic as well would repeat it.
@@ -214,6 +248,7 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...duplicateIds(doc),
   ...bindingCount(board, doc),
   ...unknownRefs(board, doc),
+  ...comboConflict(doc),
   ...firmwareSupport(board, doc),
   ...qmkHoldTap(doc),
   ...tapDanceRules(doc),

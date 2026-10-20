@@ -6,7 +6,7 @@ import { applyOps } from "../../src/layout/apply-ops.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { KEYCODES, isKeyCode } from "../../src/layout/keycodes.ts";
 import { bindingFunctions } from "../../src/layout/functions.ts";
-import { type Binding, LayoutSchema, ModSchema } from "../../src/layout/schema.ts";
+import { type Binding, LayoutSchema, type MacroStep, ModSchema } from "../../src/layout/schema.ts";
 import { evaluate, validate } from "../../src/validation/validate.ts";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
 import { addReachableLayer, dropFunctions } from "../helpers/ops.ts";
@@ -91,13 +91,20 @@ const binding: fc.Arbitrary<Binding> = fc.oneof(
 );
 const slot = fc.record({ layerId: fc.constantFrom(...layerIds), position: fc.integer({ min: 0, max: 74 }) });
 const op: fc.Arbitrary<ChangeOp> = fc.oneof(
-  { weight: 5, arbitrary: fc.record({ op: fc.constant("setBinding" as const), at: slot, binding }) },
-  { weight: 1, arbitrary: fc.record({ op: fc.constant("moveBinding" as const), from: slot, to: slot }) },
-  { weight: 1, arbitrary: fc.record({ op: fc.constant("swapBindings" as const), a: slot, b: slot }) },
+  { weight: 6, arbitrary: fc.record({ op: fc.constant("setBinding" as const), at: slot, binding }) },
+  { weight: 2, arbitrary: fc.record({ op: fc.constant("moveBinding" as const), from: slot, to: slot }) },
+  { weight: 2, arbitrary: fc.record({ op: fc.constant("swapBindings" as const), a: slot, b: slot }) },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("renameLayer" as const), layerId: fc.constantFrom(...layerIds), name: fc.string({ minLength: 1, maxLength: 10 }) }) },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("setLayerStyle" as const), layerId: fc.constantFrom(...layerIds), shortLabel: fc.option(fc.string({ minLength: 1, maxLength: 4 }), { nil: null }), color: fc.option(fc.integer({ min: 1, max: 6 }), { nil: null }) }) },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("upsertMacro" as const), macro: fc.record({ id: fc.constantFrom("m-prop-1", "m-prop-2"), name: fc.string({ minLength: 1, maxLength: 8 }), steps: fc.constant([{ op: "tap" as const, code: "A" }] as MacroStep[]) }) }) },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("upsertCombo" as const), combo: fc.record({ id: fc.constantFrom("c-prop-1", "c-prop-2"), name: fc.string({ minLength: 1, maxLength: 8 }), positions: fc.constant([60, 61] as number[]), layerIds: fc.constant("all" as const), output: fc.constant({ kind: "key" as const, code: "ESCAPE" } as Binding) }) }) },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("upsertHoldTapProfile" as const), profile: fc.record({ id: fc.constantFrom("prof-1", "prof-2"), name: fc.string({ minLength: 1, maxLength: 8 }), firmware: fc.constant("qmk" as const), options: fc.constant({}) }) }) },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("setFirmwareSetting" as const), setting: fc.record({ firmware: fc.constant("qmk" as const), key: fc.constant("TAPPING_TERM"), value: fc.integer({ min: 100, max: 500 }) }) }) },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("dropFunction" as const), function: fc.constantFrom("key:F16", "key:F17", "key:A"), reason: fc.constant("property test drop") }) },
 );
 
 describe("property: validate and apply agree on real layouts", () => {
-  test("random setBinding, move and swap ops: either validate fails, or the saved document is sound", () => {
+  test("random ops across all kinds: either validate fails, or the saved document is sound and preserves reachability", () => {
     let valid = 0;
     fc.assert(
       fc.property(fc.array(op, { minLength: 1, maxLength: 4 }), (ops) => {
@@ -106,6 +113,8 @@ describe("property: validate and apply agree on real layouts", () => {
         expect(JSON.stringify(layout)).toBe(snapshot);
         valid += result.ok ? 1 : 0;
         if (!result.ok) return;
+        // Invariants: passing result must have no errors
+        expect(result.errors).toEqual([]);
         // The two ways to get the document agree, and it parses.
         const applied = applyOps(layout, ops);
         expect(applied.ok).toBe(true);

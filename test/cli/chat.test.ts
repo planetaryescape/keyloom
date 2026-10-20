@@ -60,6 +60,21 @@ describe("keyloom chat", () => {
     expect(body.usage.input_tokens).toBeGreaterThan(0);
   });
 
+  test("JSON keeps reported cost and usage, and saved conversation JSON retains the same facts", async () => {
+    const { app, dir } = await optionOptionApp();
+    try {
+      const usage = { inputTokens: 123, outputTokens: 45, cacheReadTokens: 67, cacheCreationTokens: 8 };
+      const model = { provider: "openrouter" as const, model: "synthetic", effort: "medium", classifyError: () => null, run: async () => ({ messages: [{ role: "assistant" as const, content: [{ type: "text" as const, text: "Done." }] }], stopReason: "end_turn", iterations: 1, usage, costUsd: 0.0123 }) };
+      const sent = await cli(["chat", "bk", "--message", "Synthetic", "--format", "json", "--data-dir", dir], { model });
+      expect(sent.code).toBe(0);
+      const body = JSON.parse(sent.out);
+      expect(body).toMatchObject({ cost_usd: 0.0123, usage: { input_tokens: 123, output_tokens: 45, cache_read_input_tokens: 67, cache_creation_input_tokens: 8 } });
+      const saved = await cli(["conversations", "show", body.conversation_id, "--format", "json", "--data-dir", dir]);
+      expect(saved.code).toBe(0);
+      expect(JSON.parse(saved.out).presentations[0].accounting).toEqual({ provider: "openrouter", model: "synthetic", usage, costUsd: 0.0123 });
+    } finally { app.db.close(); }
+  });
+
   test("the applying command from the output works", async () => {
     const { dir } = await optionOptionApp();
     const chat = await cli(["chat", "bk", "--message", "x", "--format", "json", "--data-dir", dir], { model: anthropicModel(fakeAnthropic(script).client) });

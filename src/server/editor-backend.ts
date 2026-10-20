@@ -1,5 +1,5 @@
 import type {
-  ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, ImportResponse, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse, UpgradeResponse,
+  ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, ImportResponse, LayoutExportDocument, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse, UpgradeResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 
@@ -17,6 +17,8 @@ export interface EditorBackend {
   upgrade(ref: string): Promise<UpgradeResponse>;
   /** The layout's revisions, newest first. */
   revisions(ref: string): Promise<RevisionEntry[]>;
+  /** The layout as the portable document `keyloom layout export` writes; the head unless a revision is named. */
+  exportLayout(ref: string, revisionId?: string): Promise<LayoutExportDocument>;
   /** The boards keyloom can import a layout for. */
   boards(): Promise<BoardChoice[]>;
   /** Imports an uploaded export (a .zip or a .keymap); the same use case as `keyloom import`. */

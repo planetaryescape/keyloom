@@ -16,7 +16,7 @@ keyloom's own firmware-neutral layout document is the thing everything edits (D-
 ```ts
 // src/layout/schema.ts — the zod schemas are the source; these types are inferred from them.
 
-type Firmware = "qmk" | "zmk";
+type Firmware = "qmk" | "zmk" | "kanata";
 
 type Layout = {
   schemaVersion: 1;
@@ -52,7 +52,9 @@ type Binding =
   | { kind: "none" }                                                // does nothing
   | { kind: "native"; firmware: Firmware; source: string; label: string }; // escape hatch (D-024)
 
-type TapAction = { code: KeyCode; mods?: Mod[] };
+// Exactly one: a nonempty key code, or a macroId without key modifiers.
+// The parsed macro form uses code: "" as a compatibility sentinel for existing consumers.
+type TapAction = { code: KeyCode; mods?: Mod[] } | { code: ""; macroId: string };
 type HoldAction = { mods: Mod[] } | { layerId: string };
 
 type Macro = {
@@ -235,4 +237,4 @@ flashes(
 
 ### Retention and deletion
 
-Everything is local and kept until BK deletes it. `keyloom layout delete <id>` removes a layout with its revisions, change sets, conversations, messages, decisions, builds and flashes, and deletes its build artifacts. There's no multi-tenant isolation: one database belongs to one OS user.
+Everything is local and kept until BK deletes it. `keyloom config delete <id> <name>` requires the config's name and refuses the active config or one a sync is using. It removes the config and its related database history (D-308); `layout delete` is not an implemented alias. Do not assume this command securely erases exported files, logs or every artifact on disk. There's no multi-tenant isolation: one database belongs to one OS user.

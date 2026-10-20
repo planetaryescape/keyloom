@@ -135,4 +135,25 @@ describe("deriveBoard", () => {
     expect(localBoardId(qmkCandidate({ target: "crkbd/rev1" }))).toBe("local/crkbd-rev1");
     expect(localBoardId(qmkCandidate({ target: "Keychron/Q1 Pro" }))).toBe("local/keychron-q1-pro");
   });
+
+  test("derives a one-piece keyboard with no split gap using median x fallback", () => {
+    // 4x12 grid with evenly spaced keys (x: 0..11, y: 0..3)
+    const planckKeys = Array.from({ length: 48 }, (_, i) => ({
+      x: i % 12,
+      y: Math.floor(i / 12),
+      w: 1,
+      h: 1,
+      r: 0,
+      rx: 0,
+      ry: 0,
+    }));
+    const derived = deriveBoard({
+      candidate: qmkCandidate({ target: "planck/rev6", split: false }),
+      geometry: { keys: planckKeys, path: "p" },
+      homeRow: 2,
+      layout: "LAYOUT",
+    });
+    expect(derived.definition.hands.left.length).toBe(24);
+    expect(derived.definition.hands.right.length).toBe(24);
+  });
 });

@@ -171,4 +171,20 @@ describe("BK's Glove80 setup on the derived Corne", () => {
     expect(() => putConfig(app, { from: glove.layoutId, board: "local/corne" })).toThrow(/already exists/);
     expect(listConfigs(app).filter((c) => c.boardId === "local/corne")).toHaveLength(1);
   });
+
+  test("putConfig respects explicit layers and placements options", async () => {
+    const { app, deps } = world();
+    await addKeyboard(app, { candidate: "zmk:corne", homeRow: 2, controller: "nice_nano//zmk" }, deps);
+    const glove = await importLayout(app, { board: "moergo/glove80", source: STYLE_FIXTURE, name: "my-glove" });
+    const out = putConfig(app, {
+      from: glove.layoutId,
+      board: "local/corne",
+      name: "Custom Put",
+      layers: ["Base"],
+      placements: { "73": 39 },
+    });
+    expect(out.config.name).toBe("Custom Put");
+    expect(out.layers).toHaveLength(1);
+    expect(out.layers[0]!.source).toBe("layer-base");
+  });
 });

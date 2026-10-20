@@ -80,7 +80,8 @@ export function chatPresentation(app: App, conversationId: string, userMessageId
       else message({ id: event.id, kind: event.kind, text: event.text });
       publish();
     },
-    finish(status: Presentation["status"], models?: ModelMessage[], stored?: MessageRow[], questionToolUseId?: string) {
+    finish(status: Presentation["status"], models?: ModelMessage[], stored?: MessageRow[], questionToolUseId?: string, accounting?: Presentation["accounting"]) {
+      if (accounting !== undefined) state.accounting = accounting;
       if (questionToolUseId !== undefined) {
         if (questionToolUseId.length <= 128) state.questionToolUseId = questionToolUseId;
         else state.detailsTruncated = true;

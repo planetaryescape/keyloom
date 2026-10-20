@@ -6,7 +6,8 @@ const MOD_ORDER: readonly Mod[] = ["LCTL", "LSFT", "LALT", "LGUI", "RCTL", "RSFT
 
 const modsText = (mods: readonly Mod[]) => MOD_ORDER.filter((m) => mods.includes(m)).join("+");
 
-const keyFunction = (a: TapAction) => `key:${a.code}${a.mods?.length ? `+${modsText(a.mods)}` : ""}`;
+const keyFunction = (a: TapAction) =>
+  a.macroId ? `macro:${a.macroId}` : `key:${a.code}${a.mods?.length ? `+${modsText(a.mods)}` : ""}`;
 
 /** The filled slots in the order a person thinks of them. */
 export function tapDanceSlots(td: TapDance): Array<[TapDanceSlotName, SlotAction]> {

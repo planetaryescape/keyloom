@@ -56,6 +56,7 @@ export function deleteLayoutCascade(db: Database, layoutId: string): void {
   db.query("DELETE FROM change_sets WHERE layout_id = ?").run(layoutId);
   db.query("DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE layout_id = ?)").run(layoutId);
   db.query("DELETE FROM conversations WHERE layout_id = ?").run(layoutId);
+  db.query("DELETE FROM typing_sessions WHERE layout_id = ?").run(layoutId);
   db.query("DELETE FROM revisions WHERE layout_id = ?").run(layoutId);
   db.query("DELETE FROM layouts WHERE id = ?").run(layoutId);
 }

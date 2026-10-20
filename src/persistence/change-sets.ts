@@ -9,8 +9,19 @@ export type ChangeSetStatus = "proposed" | "applied" | "rejected" | "superseded"
 export type ChangeSetSource = "editor" | "agent";
 
 const OpsSchema = z.array(ChangeOpSchema);
-const TradeoffsSchema = z.object({ gains: z.array(z.string()), costs: z.array(z.string()) });
+const TradeoffsSchema = z.object({
+  gains: z.array(z.string()),
+  costs: z.array(z.string()),
+  supersededDecisionIds: z.array(z.string()).optional(),
+});
 export type Tradeoffs = z.infer<typeof TradeoffsSchema>;
+
+export function recordSupersededDecisionIds(db: Database, changeSetId: string, touchedIds: readonly string[]): void {
+  const cs = findChangeSet(db, changeSetId);
+  if (!cs || touchedIds.length === 0) return;
+  const tradeoffs = { ...cs.tradeoffs, supersededDecisionIds: [...new Set([...(cs.tradeoffs.supersededDecisionIds ?? []), ...touchedIds])] };
+  db.query("UPDATE change_sets SET tradeoffs = ? WHERE id = ?").run(JSON.stringify(tradeoffs), changeSetId);
+}
 
 /** The draft plus the messages of BK's it answers, which become the decision's link back to the conversation (08). */
 const StoredDraftSchema = DecisionDraftSchema.extend({ sourceMessageIds: z.array(z.string()).default([]) });

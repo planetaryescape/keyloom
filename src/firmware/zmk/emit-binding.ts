@@ -1,7 +1,11 @@
 // Binding -> the text of one ZMK binding, `&kp LC(A)` (06#generation-writes-glove80keymap-and-glove80conf).
 import type { Binding, Mod } from "../../layout/schema.ts";
+import { labelOf } from "../../layout/firmware-names.ts";
 import { GenerateError } from "./generate-error.ts";
 import { keyExprText } from "./key-expr.ts";
+
+// The rule lives in src/layout so the validator's identifier_clash warning and this writer agree (07#warnings).
+export { labelOf };
 
 export type EmitContext = {
   layerIndex: ReadonlyMap<string, number>;
@@ -12,12 +16,13 @@ export type EmitContext = {
   macroLabels: ReadonlyMap<string, string>;
   /** Tap dance ID to the label of its `zmk,behavior-tap-dance` node. */
   tapDanceLabels: ReadonlyMap<string, string>;
+  /** Specialized hold-taps whose tap invokes a zero-parameter macro. */
+  macroTapLabels?: ReadonlyMap<string, string>;
 };
 
-const LAYER_BEHAVIOR = { momentary: "mo", toggle: "tog", to: "to", oneShot: "sl" } as const;
+export const macroTapKey = (profileId: string, macroId: string, layerHold: boolean): string => JSON.stringify([profileId, macroId, layerHold]);
 
-/** A label or node name devicetree accepts: letters, digits and underscores. */
-export const labelOf = (id: string): string => id.replace(/[^A-Za-z0-9_]/g, "_");
+const LAYER_BEHAVIOR = { momentary: "mo", toggle: "tog", to: "to", oneShot: "sl" } as const;
 
 function layer(id: string, ctx: EmitContext): string {
   const i = ctx.layerIndex.get(id);
@@ -43,7 +48,14 @@ export function bindingToDts(b: Binding, ctx: EmitContext): string {
       const label = ctx.profileLabels.get(b.profileId);
       if (!label) throw new GenerateError(`it uses the hold-tap profile "${b.profileId}", which doesn't exist`);
       const hold = "mods" in b.hold ? key({ mods: b.hold.mods }) : layer(b.hold.layerId, ctx);
-      return `&${label} ${hold} ${key({ code: b.tap.code, ...(b.tap.mods ? { mods: b.tap.mods } : {}) })}`;
+      if (b.tap.macroId !== undefined) {
+        if (!ctx.macroLabels.has(b.tap.macroId)) throw new GenerateError(`it uses the macro "${b.tap.macroId}", which doesn't exist`);
+        const specialized = ctx.macroTapLabels?.get(macroTapKey(b.profileId, b.tap.macroId, "layerId" in b.hold));
+        if (!specialized) throw new GenerateError(`macro-tap hold-tap "${b.profileId}" has no generated behaviour`);
+        return `&${specialized} ${hold} 0`;
+      }
+      const tap = key({ code: b.tap.code, mods: b.tap.mods ?? [] });
+      return `&${label} ${hold} ${tap}`;
     }
     case "layer":
       return `&${LAYER_BEHAVIOR[b.action]} ${layer(b.layerId, ctx)}`;

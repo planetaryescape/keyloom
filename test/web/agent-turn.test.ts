@@ -145,6 +145,20 @@ describe("agent turn composition", () => {
     expect(html).not.toContain("Nothing was changed");
   });
 
+  test("usage is a visible footer after the answer and proposals, hidden only while streaming", async () => {
+    const accounting = { provider: "codex" as const, model: "synthetic", usage: { inputTokens: 1_234, outputTokens: 45, cacheReadTokens: 0, cacheCreationTokens: 0 } };
+    const html = render({ ...turn, accounting });
+    expect(await count(html, ".msg-assistant > .msg-usage")).toBe(1);
+    expect(await count(html, ".agent-work-details .msg-usage")).toBe(0);
+    expect(html).toContain("1,234 input · 45 output tokens");
+    expect(html).toContain("Cost not reported · estimate unavailable");
+    expect(html.indexOf('class="msg-usage"')).toBeGreaterThan(html.indexOf('class="proposal-group"'));
+    expect(await count(render({ ...turn, accounting, phase: "streaming" }), ".msg-usage")).toBe(0);
+    for (const phase of ["stopped", "failed"] as const) {
+      expect(await count(render({ ...turn, phase }), ".msg-usage")).toBe(1);
+    }
+  });
+
   test("an explicit lost-connection observation is not rewritten as a successful or running phase", () => {
     const html = render({ ...turn, phase: "failed", failure: { code: "stream", message: "The connection dropped." } }, { ...work, status: "disconnected" });
     expect(html).toContain("Connection lost · outcome not confirmed");

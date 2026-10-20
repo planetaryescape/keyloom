@@ -63,6 +63,8 @@ export const PutRequestSchema = z.object({
   name: z.string().min(1).optional(),
   // Source position (as a string key) to the target key chosen for a layer key with no counterpart.
   placements: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  // Source layers to carry over; omitted means all non-test layers.
+  layers: z.array(z.string().min(1)).optional(),
 });
 export type PutRequest = z.infer<typeof PutRequestSchema>;
 

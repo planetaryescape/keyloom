@@ -4,6 +4,7 @@ import { NotFoundError, UsageError } from "../app/index.ts";
 import type { ReviewEngine } from "../app/review-engine.ts";
 import type { SyncEngine } from "../app/sync-engine.ts";
 import { SyncError, type SyncBackend } from "../server/sync-backend.ts";
+import type { DataVersionWatcher } from "./data-version-watcher.ts";
 
 /** Turns the app's typed errors into the status and code the browser acts on; anything else stays a 500. */
 async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -16,7 +17,7 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine): SyncBackend {
+export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine, watcher?: DataVersionWatcher): SyncBackend {
   return {
     status: () => translate(() => engine.snapshot()),
     syncNow: (layoutId) =>
@@ -30,5 +31,6 @@ export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine): Sync
     subscribe: (listener) => engine.subscribe(listener),
     newKeyboards: () => engine.newKeyboards(),
     ...(reviews ? { subscribeReviews: (listener: Parameters<ReviewEngine["subscribe"]>[0]) => reviews.subscribe(listener) } : {}),
+    ...(watcher ? { subscribeLayoutUpdated: (listener) => watcher.subscribe(listener) } : {}),
   };
 }

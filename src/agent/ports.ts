@@ -71,6 +71,9 @@ export type TypingFindings = {
     counts: { misfireHold: number; misfireTap: number; typo: number; missed: number; double: number };
     findings: Array<{ kind: string; sentence: string }>;
     fingers: Array<{ finger: string; keys: number; errors: number; medianMsBetweenKeys: number }>;
+    sameFinger?: Array<{ finger: string; from: number; to: number; medianGapMs: number }>;
+    rolls?: Array<{ fromFinger: string; toFinger: string; from: number; to: number; rolls: number; n: number; medianOverlapMs: number }>;
+    holds?: Array<{ position: number; tapsMedianMs: number; holdsMedianMs: number; termMs?: number; nearTerm: number }>;
     suggestions: Array<{
       title: string;
       /** The proposal to show BK; null when it could not be stored (the layout changed since). */
@@ -140,7 +143,7 @@ export interface AgentPorts {
    * Makes a new config on this conversation's board: a copy of this one, or the board's blank start. It is never put on the keyboard, and
    * this conversation's layout is untouched. Throws a readable Error for a name already taken.
    */
-  newConfig(input: { name: string; from: "this" | "blank" }): { id: string; name: string; boardName: string };
+  newConfig(input: { name: string; from: "this" | "blank" }): Promise<{ id: string; name: string; boardName: string }> | { id: string; name: string; boardName: string };
   /** Validates against the head without saving anything. */
   check(ops: ChangeOp[]): ValidationResult;
   /** Validates each alternative and stores the valid ones as proposed change sets sharing one group. */

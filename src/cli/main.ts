@@ -2,8 +2,8 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
-  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
+  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
+  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { registerConfigCommands } from "./commands/config.ts";
@@ -17,6 +17,7 @@ import { registerSyncCommands } from "./commands/sync.ts";
 import { registerVersionCommands } from "./commands/version.ts";
 import { registerRemapCommands } from "./commands/remap.ts";
 import { registerReviewCommand } from "./commands/review.ts";
+import { registerProviderCommands } from "./commands/provider.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
 import { announceServer, liveServer } from "../server/running-server.ts";
@@ -67,7 +68,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .command("import")
     .description("import an existing layout; prints the new layout ID and an import report")
     .requiredOption("--board <board>", "board ID, such as zsa/moonlander or moergo/glove80")
-    .argument("<file>", "Oryx source zip or its folder (Moonlander), a QMK keymap folder or its keymap.json, a Layout Editor .keymap file (Glove80), or a karabiner.json (MacBook; read only)")
+    .argument("<file>", "Oryx source zip or its folder (Moonlander), a QMK keymap folder or its keymap.json, a Layout Editor .keymap file (Glove80), a karabiner.json (MacBook; read only), or a keyloom layout export")
     .option("--name <name>", "layout name (default: taken from the source)")
     .action(async (file: string, opts: { board: string; name?: string }) => {
       const outcome: ImportOutcome = await withApp((app) =>
@@ -134,6 +135,21 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       });
     });
 
+  layout
+    .command("export")
+    .description("write a layout as a keyloom layout document, which `config new --from import` reads back")
+    .argument("<layout>", "layout ID or name")
+    .requiredOption("--out <file>", "the JSON file to write")
+    .option("--rev <revision>", "a revision ID instead of the head")
+    .action(async (ref: string, opts: { out: string; rev?: string }) => {
+      const out = await withApp((app) => exportLayout(app, ref, { out: opts.out, ...(opts.rev === undefined ? {} : { revisionId: opts.rev }) }));
+      print(io, format(), {
+        json: { layout_id: out.layoutId, name: out.name, board_id: out.boardId, revision_id: out.revisionId, path: out.path },
+        ids: [out.path],
+        table: `${out.path}\n${out.name} (${out.layoutId}) on ${out.boardId}, revision ${out.revisionId}`,
+      });
+    });
+
   const boards = program.command("boards").description("board definitions");
 
   boards
@@ -193,6 +209,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   registerChangeCommands(program, { io, format, withApp });
   registerChatCommands(program, { io, format, withApp }, chat);
   registerReviewCommand(program, { io, format, withApp }, chat);
+  registerProviderCommands(program, { io, format, quiet: () => globals().quiet === true, withApp });
   registerDecisionCommands(program, { io, format, withApp });
 
   program
@@ -281,10 +298,11 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
 
   program
     .command("doctor")
-    .description("check the database, Docker, zapp and the pinned firmware checkouts")
+    .description("check the database, the model credential, Docker, zapp and the pinned firmware checkouts")
     .action(async () => {
       const checks = [
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),
+        ...(await runCredentialChecks()),
         ...(await runToolchainChecks()),
         ...(await runKeyboardChecks(handsFree)),
         ...(await runRemapperChecks(handsFree?.remapper)),

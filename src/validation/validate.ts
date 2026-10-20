@@ -8,6 +8,7 @@ import { type Binding, type Layout, LayoutSchema } from "../layout/schema.ts";
 import { conditionalLayerWarnings } from "./conditional-layer-rules.ts";
 import { type DecisionFact, contradictsDecision, touchedDecisions } from "./decision-rules.ts";
 import { homerowSameHandMods, retunedSlots } from "./hold-tap-rules.ts";
+import { identifierClash } from "./identifier-rules.ts";
 import type { Issue, ValidationResult } from "./result.ts";
 import { type PinnedPriority, largeRelearn, movedPinned } from "./priority-rules.ts";
 import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
@@ -54,6 +55,7 @@ export type EvaluationContext = { pinned?: readonly PinnedPriority[]; decisions?
  */
 export const standingIssues = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...documentRules(board, doc), ...doubledLetterTapdance(doc), ...tapDanceWarnings(doc), ...macroSecrets(doc), ...homerowSameHandMods(board, doc), ...conditionalLayerWarnings(doc),
+  ...identifierClash(doc),
 ];
 
 export const validate = (board: BoardDefinition, before: Layout, ops: readonly ChangeOp[], context: EvaluationContext = {}): ValidationResult =>
@@ -120,6 +122,11 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   // Only a hazard this change adds is news; a layout imported with home-row mods already rolling into each other isn't nagged on every edit.
   const knownRolls = new Set(homerowSameHandMods(board, before).map(issueKey));
   warnings.push(...homerowSameHandMods(board, after).filter((i) => !knownRolls.has(issueKey(i))));
+
+  // A name that would clash in the generated firmware is news only when this change introduces it: a layout
+  // imported with one already is shown by the board review, not on every later edit.
+  const knownClashes = new Set(identifierClash(before).map(issueKey));
+  warnings.push(...identifierClash(after).filter((i) => !knownClashes.has(issueKey(i))));
 
   const retuned = retunedSlots(before, after, changed);
   const afterLayerIds = new Set(after.layers.map((l) => l.id));

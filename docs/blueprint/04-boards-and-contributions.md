@@ -1,5 +1,7 @@
 # 04: Boards and contributions
 
+Status: board loading and optional skills built. The audit closeout supplies Moonlander and Glove80 guidance; these notes add no firmware capability.
+
 BK supports his own boards, and anyone with another board adds it (D-008). A board is data that keyloom can validate, plus an optional skill for the agent (D-009). Adding a board must never mean writing another configurator. There's no plugin system or marketplace: a board is a folder in this repo, added by pull request.
 
 ## A board is a folder
@@ -66,7 +68,7 @@ The board ID is the folder path: `zsa/moonlander`, `moergo/glove80`. That's the 
 
 Fields keyloom checks (`keyloom boards check`, [10](10-cli.md)):
 
-- **`firmware`** is `qmk` or `zmk`. It decides the importer, generator and validator rules.
+- **`firmware`** is `qmk`, `zmk` or `kanata`. It decides the importer, generator and validator rules; [21](21-macbook-keyboard.md) covers the software-remapper recipes.
 - **`keyCount`** equals the number of keys in `geometry.json`, and every position from `0` to `keyCount - 1` appears in exactly one hand, one finger and one row group.
 - **`revisions[].source`** names a repo and a full SHA. A `ref` is informational; the SHA is what's checked out ([01](01-architecture.md#firmware-toolchains)).
 - **`build.kind` and `flash.kind`** are recipes keyloom implements, declared as strict schemas in `src/boards/recipes.ts` (D-049). A misspelled or unknown field is an error. Builds: `qmk-docker` for any QMK tree (mainline or a fork), `zmk-west-docker` for upstream ZMK with one `west build` per shield, and `zmk-moergo-template` for the Glove80. Flashes: `zapp` for ZSA boards, `uf2-drives` for UF2 boot drives (ZMK, and QMK on RP2040), `dfu-tool` for QMK boards whose bootloader a command-line tool writes (dfu-programmer, dfu-util, avrdude; D-365), and `manual` for boards keyloom can't flash yet (D-050). A board that needs a flasher or builder that doesn't exist needs code, and that is the one case a contribution is more than data.
@@ -87,7 +89,9 @@ The editor draws keys from `geometry.json`: one entry per position with `x`, `y`
 
 ## `SKILL.md` is optional agent guidance
 
-A board skill is Markdown that keyloom adds to the agent's context for that board ([03](03-agent.md#what-the-agent-sees)). It holds what the facts can't: quirks and conventions. Examples: which key opens the vendor's system layer and must stay reachable, which thumb keys are easiest to reach, and how the vendor's default layout is organised. These are written by someone who owns the board, never guessed. BK's word was "skill", and this is it (D-009).
+A board skill is Markdown that keyloom adds to the agent's context for that board ([03](03-agent.md#what-the-agent-sees)). It holds quirks and conventions: firmware limits, how a vendor default is organised, or owner-reported preferences. Cite the firmware evidence for technical guidance; comfort claims and personal habits must come from the owner, never a guess. BK's word was "skill", and this is it (D-009).
+
+The candidate includes [Moonlander guidance](../../boards/zsa/moonlander/SKILL.md) and [Glove80 guidance](../../boards/moergo/glove80/SKILL.md), grounded in the pinned-firmware research and validation rules. They distinguish vendor defaults from imported bindings and physical LEDs from on-screen colours. `src/boards/load.ts` loads the optional file, and the bundled board registry embeds it; no plugin or mandatory per-board code is needed.
 
 It's limited to 400 lines. `boards check` warns past that, because every agent turn pays for it ([12](12-cost-model.md)).
 

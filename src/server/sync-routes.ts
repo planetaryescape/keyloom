@@ -1,7 +1,7 @@
 // The keyboard sync routes and the events stream (rung 13; src/api/http.ts lists them). startServer calls
 // `handleSyncRoute` for every /api request after its Host check, and serves the Response when one comes back.
 import {
-  AutoSyncRequestSchema, DisableRemappingRequestSchema, PauseRequestSchema, SyncEventSchema, SyncNowRequestSchema, SyncNowResponseSchema, SyncStatusResponseSchema, type ApiErrorBody, type BoardSync,
+  AutoSyncRequestSchema, DisableRemappingRequestSchema, LayoutUpdatedEventSchema, PauseRequestSchema, SyncEventSchema, SyncNowRequestSchema, SyncNowResponseSchema, SyncStatusResponseSchema, type ApiErrorBody, type BoardSync, type LayoutUpdatedEvent,
 } from "../api/http.ts";
 import type { DetectedKeyboard } from "../api/detected-keyboards.ts";
 import { type ReviewEvent, ReviewEventSchema } from "../api/review.ts";
@@ -47,10 +47,14 @@ const frame = (boards: BoardSync[], newKeyboards: DetectedKeyboard[], before?: B
 
 const reviewFrame = (event: ReviewEvent): string => `event: review\ndata: ${JSON.stringify(ReviewEventSchema.parse(event))}\n\n`;
 
+const layoutUpdatedFrame = (event: LayoutUpdatedEvent): string =>
+  `event: layout.updated\ndata: ${JSON.stringify(LayoutUpdatedEventSchema.parse(event))}\n\n`;
+
 function events(request: Request, backend: SyncBackend): Response {
   const encoder = new TextEncoder();
   let unsubscribe = () => {};
   let unsubscribeReviews = () => {};
+  let unsubscribeLayouts = () => {};
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let closed = false;
   let previous: BoardSync[] | undefined;
@@ -68,6 +72,7 @@ function events(request: Request, backend: SyncBackend): Response {
         closed = true;
         unsubscribe();
         unsubscribeReviews();
+        unsubscribeLayouts();
         clearInterval(heartbeat);
         try {
           controller.close();
@@ -82,6 +87,7 @@ function events(request: Request, backend: SyncBackend): Response {
       });
       // A review frame carries no snapshot: the page asks for the review when it hears one, and an event missed is caught by that read.
       unsubscribeReviews = backend.subscribeReviews?.((event) => send(reviewFrame(event))) ?? (() => {});
+      unsubscribeLayouts = backend.subscribeLayoutUpdated?.((event) => send(layoutUpdatedFrame(event))) ?? (() => {});
       heartbeat = setInterval(() => send(": keepalive\n\n"), EVENTS_HEARTBEAT_MS);
       request.signal.addEventListener("abort", end, { once: true });
       void backend.status().then((boards) => {
@@ -93,6 +99,7 @@ function events(request: Request, backend: SyncBackend): Response {
       closed = true;
       unsubscribe();
       unsubscribeReviews();
+      unsubscribeLayouts();
       clearInterval(heartbeat);
     },
   });

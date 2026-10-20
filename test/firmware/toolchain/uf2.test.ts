@@ -33,4 +33,11 @@ describe("UF2 files", () => {
     const same = new Uint8Array([...uf2Image(0x9807b007, 2), ...uf2Image(0x9807b007, 2)]);
     expect(uf2Problem(same)).toContain("different family IDs");
   });
+
+  test("rejects an image that targets the bootloader family", () => {
+    const blImage = uf2Image(0xd663823c, 2);
+    expect(uf2Problem(blImage, "single")).toBe("UF2 targets the bootloader family (0xd663823c); refusing to overwrite bootloader");
+    const combinedWithBl = new Uint8Array([...uf2Image(0x9807b007, 2), ...blImage]);
+    expect(uf2Problem(combinedWithBl, "halves")).toBe("UF2 targets the bootloader family (0xd663823c); refusing to overwrite bootloader");
+  });
 });

@@ -137,7 +137,7 @@ export function bindingLegend(binding: Binding, ctx: GridContext): Legend {
     case "holdTap":
       return {
         kind: "holdTap",
-        tap: capText(binding.tap.code, binding.tap.mods),
+        tap: binding.tap.macroId ? (ctx.macros.find((m) => m.id === binding.tap.macroId)?.name ?? "M") : capText(binding.tap.code, binding.tap.mods),
         hold: "mods" in binding.hold ? capMods(binding.hold.mods) : layerLegend(binding.hold.layerId, ctx),
       };
     case "layer":

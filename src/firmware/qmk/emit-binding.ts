@@ -42,8 +42,8 @@ function wrap(mods: readonly Mod[], inner: string): string {
   return sortMods(mods).reduceRight((acc, m) => `${m}(${acc})`, inner);
 }
 
-/** The tap side of a hold-tap: MT() and LT() store it in 8 bits, with no modifiers. */
-function tapKey(tap: { code: string; mods?: readonly Mod[] | undefined }): string {
+function tapKey(tap: { code: string; mods?: readonly Mod[] | undefined; macroId?: string | undefined }): string {
+  if (tap.macroId !== undefined) throw new GenerateError("QMK mod-tap and layer-tap cannot take a macro as the tap action; use a tap dance instead");
   const info = known(tap.code);
   if (tap.mods?.length) throw new GenerateError(`a hold-tap's tap side can't carry modifiers (${tap.mods.join("+")}+${tap.code}); QMK's MT() and LT() take a plain key`);
   if (!info.qmkBasic) throw new GenerateError(`${tap.code} can't be the tap side of a hold-tap; QMK's MT() and LT() take a basic 8-bit key`);

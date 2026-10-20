@@ -28,7 +28,7 @@ export const TAB_TITLE: Readonly<Record<PickerTab, string>> = {
 /** The tabs a slot offers. A hold is a modifier or a layer; the tap of a hold-tap is a key; a free tap is anything. */
 export function tabsFor(slot: SlotName, keysOnly: boolean): PickerTab[] {
   if (slot === "hold") return ["modifiers", "layers"];
-  const keys: PickerTab[] = ["letters", "punctuation", "modifiers", "navigation", "media", "function", "other"];
+  const keys: PickerTab[] = ["letters", "punctuation", "modifiers", "navigation", "media", "function", "macro", "other"];
   if (keysOnly) return keys;
   // A dance can't be a slot of another dance, and Any reads a whole binding.
   if (isExtraSlot(slot)) return ["letters", "punctuation", "modifiers", "layers", "navigation", "media", "function", "macro", "other"];

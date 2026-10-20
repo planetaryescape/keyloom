@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { NotFoundError, UsageError, closeApp, getLayout, importLayout, listLayouts, openApp } from "../../src/app/index.ts";
+import { join } from "node:path";
+import {
+  NotFoundError, UsageError, closeApp, exportLayout, getLayout, importLayout, layoutExportDocument, listLayouts, openApp,
+} from "../../src/app/index.ts";
+import { deepEqual } from "../../src/layout/equal.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
 import { tempDir } from "../helpers/tmp.ts";
 
@@ -61,8 +65,86 @@ describe("importLayout", () => {
   });
 });
 
-describe("getLayout", () => {
-  test("by id or by name, head or a named revision", async () => {
+describe("keyloom layout documents", () => {
+  /** Writes a document beside the test's temp files, returning its path and the object written. */
+  async function write(document: unknown, name = "layout.json"): Promise<string> {
+    const file = join(tempDir(), name);
+    await Bun.write(file, JSON.stringify(document));
+    return file;
+  }
+
+  test("an export imports back by its shape, whatever the file is called, with its whole document and a report", async () => {
+    const app = open();
+    const out = await importLayout(app, input);
+    const exported = await exportLayout(app, out.layoutId, { out: join(tempDir(), "layout.txt") });
+    expect(exported.document).toMatchObject({ kind: "keyloom-layout", schema_version: 1, board_id: "zsa/moonlander", layout_name: "synchronized" });
+
+    const second = open();
+    const back = await importLayout(second, { board: "zsa/moonlander", source: exported.path });
+    expect(back.name).toBe("synchronized");
+    expect(back.report).toMatchObject({ boardId: "zsa/moonlander", layers: 6, keysPerLayer: 72 });
+    expect(back.report.bindings.native).toBeGreaterThanOrEqual(0);
+    expect(deepEqual(getLayout(second, back.layoutId).document, exported.document.layout)).toBe(true);
+    closeApp(app);
+    closeApp(second);
+  });
+
+  test("the optional name and revision are not needed, and a name can be a prototype key", async () => {
+    const app = open();
+    const out = await importLayout(app, input);
+    const document = layoutExportDocument(app, out.layoutId);
+    const { layout_name: _name, revision_id: _revision, ...withoutOptional } = document;
+
+    const bare = open();
+    const back = await importLayout(bare, { board: "zsa/moonlander", source: await write(withoutOptional) });
+    expect(back.name).toBe("Moonlander layout");
+    expect(deepEqual(getLayout(bare, back.layoutId).document, document.layout)).toBe(true);
+
+    const named = open();
+    const prototype = await importLayout(named, { board: "zsa/moonlander", source: await write({ ...document, layout_name: "constructor" }) });
+    expect(prototype.name).toBe("constructor");
+    expect(getLayout(named, "constructor").layout.name).toBe("constructor");
+
+    closeApp(app);
+    closeApp(bare);
+    closeApp(named);
+  });
+
+  test("a document whose board_id disagrees with its layout, or is for another board, is refused and stored nowhere", async () => {
+    const app = open();
+    const out = await importLayout(app, input);
+    const document = layoutExportDocument(app, out.layoutId);
+
+    const damaged = open();
+    await expect(importLayout(damaged, { board: "zsa/moonlander", source: await write({ ...document, board_id: "foostan/corne" }) })).rejects.toThrow(/damaged/);
+    expect(listLayouts(damaged)).toHaveLength(0);
+
+    const mismatch = await importLayout(damaged, { board: "moergo/glove80", source: await write(document) }).then(() => null, (err: unknown) => err);
+    expect(mismatch).toBeInstanceOf(UsageError);
+    expect(String(mismatch)).toContain("is a layout for zsa/moonlander, not moergo/glove80");
+    expect(listLayouts(damaged)).toHaveLength(0);
+    closeApp(app);
+    closeApp(damaged);
+  });
+
+  test("two imports of one document race safely, and a later one gets a numbered name", async () => {
+    const app = open();
+    const out = await importLayout(app, input);
+    const file = await write(layoutExportDocument(app, out.layoutId));
+    const second = open();
+    const [a, b, c] = await Promise.all([
+      importLayout(second, { board: "zsa/moonlander", source: file }),
+      importLayout(second, { board: "zsa/moonlander", source: file }),
+      importLayout(second, { board: "zsa/moonlander", source: file }),
+    ]);
+    expect(new Set([a.name, b.name, c.name]).size).toBe(3);
+    expect(new Set([a.layoutId, b.layoutId, c.layoutId]).size).toBe(3);
+    closeApp(app);
+    closeApp(second);
+  });
+});
+
+describe("getLayout", () => {  test("by id or by name, head or a named revision", async () => {
     const app = open();
     const out = await importLayout(app, input);
     expect(getLayout(app, "synchronized").layout.id).toBe(out.layoutId);

@@ -2,15 +2,18 @@
 // line, with comment lines for keep-alive. The chunks can split a frame anywhere; a frame the page can't read is dropped and reported,
 // because the next one is a whole snapshot and nothing is lost by skipping.
 import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
-import { SyncEventSchema, type BoardSync } from "../../api/http.ts";
+import { LayoutUpdatedEventSchema, SyncEventSchema, type BoardSync, type LayoutUpdatedEvent } from "../../api/http.ts";
 import { type ReviewEvent, ReviewEventSchema } from "../../api/review.ts";
 
 /**
  * `newKeyboards` is empty from a sender that doesn't carry them. A `review` frame (D-340) says a board review changed; it is passed to
- * `onReview`, and ignored when the caller has none.
+ * `onReview`, and ignored when the caller has none. `onLayoutUpdated` is called when a layout's head revision moved (e.g. from CLI).
  */
 export function createEventParser(
-  onBoards: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void, onUnreadable: () => void, onReview?: (event: ReviewEvent) => void,
+  onBoards: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void,
+  onUnreadable: () => void,
+  onReview?: (event: ReviewEvent) => void,
+  onLayoutUpdated?: (event: LayoutUpdatedEvent) => void,
 ): { push: (chunk: string) => void } {
   let pending = "";
   const frame = (raw: string): void => {
@@ -27,6 +30,12 @@ export function createEventParser(
       const review = ReviewEventSchema.safeParse(json);
       if (!review.success) onUnreadable();
       else onReview?.(review.data);
+      return;
+    }
+    if ((json as { type?: unknown } | null)?.type === "layout.updated") {
+      const updated = LayoutUpdatedEventSchema.safeParse(json);
+      if (!updated.success) onUnreadable();
+      else onLayoutUpdated?.(updated.data);
       return;
     }
     const parsed = SyncEventSchema.safeParse(json);

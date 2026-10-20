@@ -182,4 +182,49 @@ describe("writes", () => {
     expect((await call("/api/sync/auto", { method: "POST", body: JSON.stringify({ boardId: BOARD, enabled: "yes" }) })).status).toBe(400);
     expect((await call("/api/sync", { method: "POST", body: JSON.stringify({ layoutId: w.layoutId }) }, null)).status).toBe(401);
   });
+
+  test("GET /api/events relays layout.updated events", async () => {
+    let notifyUpdated: ((event: { type: "layout.updated"; layoutId: string; revisionId?: string }) => void) | undefined;
+    const backend = {
+      status: async () => [],
+      syncNow: async () => ({ result: "in_sync" as const, boards: [] }),
+      setAutoSync: async () => [],
+      setPaused: async () => [],
+      disableRemapping: async () => [],
+      subscribe: () => () => {},
+      newKeyboards: () => [],
+      subscribeLayoutUpdated: (listener: (event: { type: "layout.updated"; layoutId: string; revisionId?: string }) => void) => {
+        notifyUpdated = listener;
+        return () => { notifyUpdated = undefined; };
+      },
+    };
+    const server = Bun.serve({
+      port: 0,
+      idleTimeout: 0,
+      fetch: async (request) => (await handleSyncRoute(request, new URL(request.url).pathname, backend, TOKEN)) ?? new Response(null, { status: 404 }),
+    });
+    servers.push(server);
+
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/events`, { headers: { "x-keyloom-token": TOKEN } });
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+
+    void (async () => {
+      for (;;) {
+        const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }));
+        if (done) return;
+        text += decoder.decode(value);
+      }
+    })();
+
+    await waitFor(() => notifyUpdated !== undefined, "subscription");
+    notifyUpdated!({ type: "layout.updated", layoutId: "lay_123", revisionId: "rev_abc" });
+
+    await waitFor(() => text.includes("event: layout.updated") && text.includes("lay_123"), "layout.updated frame");
+
+    expect(text).toContain("event: layout.updated");
+    expect(text).toContain('"layoutId":"lay_123"');
+    await reader.cancel();
+  });
 });

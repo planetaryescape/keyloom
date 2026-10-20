@@ -1,4 +1,5 @@
-import type { BoardSync, SyncNowResponse } from "../api/http.ts";
+import type { BoardSync, LayoutUpdatedEvent, SyncNowResponse } from "../api/http.ts";
+export type { LayoutUpdatedEvent };
 import type { DetectedKeyboard } from "../api/detected-keyboards.ts";
 import type { ReviewEvent } from "../api/review.ts";
 
@@ -19,6 +20,8 @@ export interface SyncBackend {
   newKeyboards(): DetectedKeyboard[];
   /** Calls `listener` whenever a board review is made or its agent part changes (D-340), so the events stream carries it beside the sync state. */
   subscribeReviews?(listener: (event: ReviewEvent) => void): () => void;
+  /** Calls `listener` whenever a layout's head revision changes (e.g. via CLI write detected by data_version polling). */
+  subscribeLayoutUpdated?(listener: (event: LayoutUpdatedEvent) => void): () => void;
 }
 
 /** A failure the browser should see as-is. */

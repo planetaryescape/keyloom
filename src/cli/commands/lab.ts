@@ -3,7 +3,7 @@
 // here, because it is what a command line does; tests pass a scripted one.
 import type { Command } from "commander";
 import {
-  type App, type LabDeps, type StoredAnalysis, UsageError, analyseSession, beginRecording, deleteSession, endRecording, labPassages, labSessions, realLabDeps, sessionAnalysis,
+  type App, type LabDeps, type StoredAnalysis, UsageError, analyseSession, beginRecording, deleteSession, endRecording, labPassages, labSessions, realLabDeps, sessionAnalysis, sessionContent,
 } from "../../app/index.ts";
 import { type Io, type Format, columns, print } from "../output.ts";
 import { progressLine, untilInterrupted } from "./firmware.ts";
@@ -81,6 +81,15 @@ export function analysisText(id: string, a: StoredAnalysis): string {
   else lines.push("What stood out:", ...a.findings.slice(0, 5).map((f) => `  ${f.sentence}`));
   if (a.stats.fingers.length > 0) {
     lines.push("", "Per finger:", columns([["FINGER", "KEYS", "ERRORS", "BETWEEN KEYS"], ...a.stats.fingers.map((f) => [f.finger.replaceAll("-", " "), String(f.attempts), String(f.errors), f.interKey.n === 0 ? "-" : `${Math.round(f.interKey.median)} ms`])]).replace(/^/gm, "  "));
+  }
+  if (a.stats.sameFinger.length > 0) {
+    lines.push("", "Same-finger transitions:", columns([["FINGER", "KEYS", "BETWEEN KEYS"], ...a.stats.sameFinger.map((r) => [r.finger.replaceAll("-", " "), `${r.from}→${r.to}`, `${Math.round(r.interKey.median)} ms`])]).replace(/^/gm, "  "));
+  }
+  if (a.stats.rolls.length > 0) {
+    lines.push("", "Rolls:", columns([["FROM", "TO", "OVERLAP", "COUNT"], ...a.stats.rolls.map((r) => [r.fromFinger.replaceAll("-", " "), r.toFinger.replaceAll("-", " "), `${Math.round(r.overlap.median)} ms`, `${r.rolls}/${r.n}`])]).replace(/^/gm, "  "));
+  }
+  if (a.stats.holds.length > 0) {
+    lines.push("", "Holds:", columns([["POSITION", "TAPS MEDIAN", "HOLDS MEDIAN", "TERM", "NEAR TERM"], ...a.stats.holds.map((h) => [String(h.position), `${Math.round(h.taps.median)} ms`, `${Math.round(h.holds.median)} ms`, h.termMs !== undefined ? `${h.termMs} ms` : "-", String(h.nearTerm)])]).replace(/^/gm, "  "));
   }
   if (a.suggestions.length > 0) {
     lines.push("", "Tried on this recording:");
@@ -183,6 +192,7 @@ export function registerLabCommands(program: Command, deps: LabCommandDeps): voi
         print(io, format(), {
           json: {
             session_id: r.session.id, presses: a.presses, duration_ms: a.durationMs, counts: a.counts, findings: a.findings, fingers: a.stats.fingers,
+            same_finger: a.stats.sameFinger, rolls: a.stats.rolls, holds: a.stats.holds,
             suggestions: a.suggestions.map((s) => ({ title: s.candidate.title, evidence: s.evidence, ops: s.ops, change_set_id: a.proposals.find((p) => p.candidateId === s.candidate.id)?.changeSetId ?? null })),
             emulator_runs: a.emulatorRuns, coarse_search: a.coarseSearch, notes: a.notes,
           },
@@ -192,6 +202,29 @@ export function registerLabCommands(program: Command, deps: LabCommandDeps): voi
       } finally {
         progress.end();
       }
+    });
+
+  group
+    .command("show")
+    .description("show what you typed during a recorded session and its prompt passage (local only)")
+    .argument("<session>", "session ID")
+    .action(async (id: string) => {
+      const content = await withApp((app) => sessionContent(app, id));
+      const passageText = content.passage.steps.map((s) => (s.kind === "text" ? s.text : `[hold ${s.key}, press ${s.then}]`)).join("");
+      print(io, format(), {
+        json: {
+          session_id: id,
+          passage_id: content.passage.id,
+          passage_title: content.passage.title,
+          passage_text: passageText,
+          typed_text: content.typedText,
+          seconds: content.seconds,
+        },
+        table: quiet()
+          ? content.typedText
+          : `Session: ${id} (${content.seconds.toFixed(1)} s)\nPassage: ${content.passage.title}\n${passageText}\n\nTyped:\n${content.typedText}`,
+        ids: [id],
+      });
     });
 
   group

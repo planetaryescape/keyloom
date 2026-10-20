@@ -98,6 +98,7 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
 
       let usage = emptyUsage();
       let costUsd: number | undefined;
+      let completeCost = true;
       let iterations = 0;
       let stopReason: string | null = null;
       let pause: { message: { content: unknown[] }; call: { id: string; name: string; input: unknown } } | undefined;
@@ -111,15 +112,21 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         stream.on("streamEvent", (event) => {
           if (event.type !== "message_delta") return;
           const reported = (event.usage as RawUsage).cost;
-          if (typeof reported === "number") cost = reported;
+          if (typeof reported === "number" && Number.isFinite(reported) && reported >= 0) cost = reported;
         });
         const message = await stream.finalMessage();
         iterations++;
         usage = addUsage(usage, usageOf(message.usage));
         if (cost !== undefined) costUsd = (costUsd ?? 0) + cost;
+        else completeCost = false;
         stopReason = message.stop_reason;
-        const publicText = message.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
-        if (publicText) request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind: message.stop_reason === "end_turn" && !message.content.some((b) => b.type === "tool_use") ? "answer" : "working_note", text: publicText });
+        if (message.stop_reason !== "refusal") {
+          const publicText = message.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
+          if (publicText) request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind: message.stop_reason === "end_turn" && !message.content.some((b) => b.type === "tool_use") ? "answer" : "working_note", text: publicText });
+        }
+        if (message.stop_reason === "refusal") {
+          break;
+        }
         // A question for the person ends the turn here, before the runner runs any tool or asks the model again (D-382).
         const call = message.content.find((b) => b.type === "tool_use" && pausing.has(b.name) && request.tools.find((tool) => tool.name === b.name)?.inputSchema.safeParse(b.input).success);
         if (call !== undefined && call.type === "tool_use") {
@@ -127,6 +134,8 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
           break;
         }
       }
+      // One missing iteration makes the total unknown. A partial sum is not the reported price of a turn.
+      if (!completeCost) costUsd = undefined;
       if (pause !== undefined) {
         // The runner appends the assistant message only when it goes on to answer the calls, so the stopped one is added here. Calls beside
         // the question get an error result: they did not run, and the API wants a result for every call before the next message.
@@ -178,7 +187,7 @@ export function classifyModelError(err: unknown, provider: AnthropicFamily = "an
   return null;
 }
 
-/** The client for BK's Anthropic key. Reads ANTHROPIC_API_KEY only; the key is never stored (03#model-and-sdk). */
+/** The direct API client reads only the explicit API key, never another app's login or token cache. */
 export function clientFromEnv(env: Record<string, string | undefined> = process.env): Anthropic | null {
   const apiKey = env.ANTHROPIC_API_KEY?.trim();
   return apiKey ? new Anthropic({ apiKey }) : null;

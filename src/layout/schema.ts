@@ -17,8 +17,12 @@ export const KeyCodeNameSchema = z.string().min(1);
 const mods = z.array(ModSchema).min(1);
 
 export const TapActionSchema = z.object({
-  code: KeyCodeNameSchema,
+  // Keep code a string for existing consumers; only a macro tap may use the empty sentinel.
+  code: z.string().default(""),
   mods: mods.optional(),
+  macroId: z.string().min(1).optional(),
+}).refine((tap) => tap.macroId === undefined ? tap.code.length > 0 : tap.code === "" && tap.mods === undefined, {
+  message: "a tap action needs either a key code (with optional modifiers) or a macroId without a key code or modifiers",
 });
 export type TapAction = z.infer<typeof TapActionSchema>;
 

@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import { transact } from "./transaction.ts";
+import { AccountingSchema, type Accounting } from "./chat-presentations.ts";
 
 export const RunRowSchema = z.object({
   id: z.string(), request_id: z.string(), request_json: z.string(), layout_id: z.string(), conversation_id: z.string(),
@@ -9,6 +10,25 @@ export const RunRowSchema = z.object({
   cancel_requested: z.number(), seq: z.number(), created_at: z.number(), finished_at: z.number().nullable(), outcome_json: z.string().nullable(),
 });
 export type RunRow = z.infer<typeof RunRowSchema>;
+
+/** Older saved runs already recorded these facts in their outcomes. Read, never regenerate them. */
+export function runAccounting(outcomeJson: string | null): Accounting | undefined {
+  if (outcomeJson === null) return undefined;
+  try {
+    const parsed = AccountingSchema.safeParse(JSON.parse(outcomeJson));
+    return parsed.success ? parsed.data : undefined;
+  } catch { return undefined; }
+}
+
+export function conversationAccounting(db: Database, conversationId: string): Map<string, Accounting> {
+  const result = new Map<string, Accounting>();
+  for (const raw of db.query("SELECT user_message_id, outcome_json FROM agent_runs WHERE conversation_id = ? AND outcome_json IS NOT NULL").all(conversationId)) {
+    const row = z.object({ user_message_id: z.string(), outcome_json: z.string() }).parse(raw);
+    const accounting = runAccounting(row.outcome_json);
+    if (accounting !== undefined) result.set(row.user_message_id, accounting);
+  }
+  return result;
+}
 const effectTool = z.enum(["put_config", "create_config", "propose_changes", "record_priority", "update_decision_outcome"]);
 const resultReference = z.object({ id: z.string().optional(), config: z.object({ id: z.string() }).optional(), changeSetId: z.string().nullable().optional() });
 export type EffectSummary = { operationId: string; tool: z.infer<typeof effectTool>; references: Array<{ kind: "config" | "proposal" | "priority" | "decision"; id: string }> };

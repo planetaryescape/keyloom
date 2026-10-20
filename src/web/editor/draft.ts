@@ -91,8 +91,15 @@ export function draftFromBinding(binding: Binding, layout: Layout, currentLayerI
       draft.holdMods = [...draft.modifier];
       break;
     case "holdTap":
-      draft.tap = { code: binding.tap.code, mods: sortMods(binding.tap.mods ?? []) };
-      draft.key = { ...draft.tap };
+      if (binding.tap.macroId) {
+        draft.macroId = binding.tap.macroId;
+        draft.tap = { code: null, mods: [] };
+        draft.key = { code: null, mods: [] };
+      } else {
+        draft.macroId = null;
+        draft.tap = { code: binding.tap.code, mods: sortMods(binding.tap.mods ?? []) };
+        draft.key = { ...draft.tap };
+      }
       draft.profileId = binding.profileId;
       if ("mods" in binding.hold) {
         draft.holdType = "mods";
@@ -186,7 +193,7 @@ export function incompleteReason(draft: Draft, layout: Layout): string | null {
     case "modifier":
       return draft.modifier.length === 0 ? "Turn on at least one modifier." : null;
     case "holdTap":
-      if (draft.tap.code === null) return "Pick the key to send on a tap.";
+      if (draft.tap.code === null && draft.macroId === null) return "Pick the key or macro to send on a tap.";
       if (draft.holdType === "mods" && draft.holdMods.length === 0) return "Turn on at least one modifier for the hold.";
       if (draft.holdType === "layer" && draft.holdLayerId === null) return "Pick the layer to hold.";
       // A tap dance times its hold itself, so it needs no hold-tap profile.
@@ -227,7 +234,9 @@ export function bindingFromDraft(draft: Draft, layout: Layout): Binding | null {
     case "holdTap":
       return {
         kind: "holdTap",
-        tap: withMods(draft.tap as KeyChoice & { code: string }),
+        tap: draft.macroId !== null && draft.tap.code === null
+          ? { code: "", macroId: draft.macroId }
+          : withMods(draft.tap as KeyChoice & { code: string }),
         hold:
           draft.holdType === "mods"
             ? { mods: sortMods(draft.holdMods) }
@@ -259,7 +268,7 @@ export function normalise(binding: Binding): Binding {
     case "holdTap":
       return {
         ...binding,
-        tap: withMods({ code: binding.tap.code, mods: binding.tap.mods ?? [] }),
+        tap: binding.tap.macroId === undefined ? withMods({ code: binding.tap.code, mods: binding.tap.mods ?? [] }) : { code: "", macroId: binding.tap.macroId },
         hold: "mods" in binding.hold ? { mods: sortMods(binding.hold.mods) } : binding.hold,
       };
     default:

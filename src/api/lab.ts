@@ -53,6 +53,34 @@ export const FingerReadoutSchema = z.object({
 });
 export type FingerReadout = z.infer<typeof FingerReadoutSchema>;
 
+export const SameFingerRowSchema = z.object({
+  finger: z.string(),
+  from: z.number().int().nonnegative(),
+  to: z.number().int().nonnegative(),
+  medianGapMs: z.number().nonnegative(),
+});
+export type SameFingerRow = z.infer<typeof SameFingerRowSchema>;
+
+export const RollRowSchema = z.object({
+  fromFinger: z.string(),
+  toFinger: z.string(),
+  from: z.number().int().nonnegative(),
+  to: z.number().int().nonnegative(),
+  rolls: z.number().int().nonnegative(),
+  n: z.number().int().nonnegative(),
+  medianOverlapMs: z.number().nonnegative(),
+});
+export type RollRow = z.infer<typeof RollRowSchema>;
+
+export const HoldRowSchema = z.object({
+  position: z.number().int().nonnegative(),
+  tapsMedianMs: z.number().nonnegative(),
+  holdsMedianMs: z.number().nonnegative(),
+  termMs: z.number().nonnegative().optional(),
+  nearTerm: z.number().int().nonnegative(),
+});
+export type HoldRow = z.infer<typeof HoldRowSchema>;
+
 export const LabReadoutSchema = z.object({
   presses: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
@@ -61,6 +89,9 @@ export const LabReadoutSchema = z.object({
   /** The sentence that leads the fingers block: the slowest finger and the one with most errors, in words. */
   fingersLead: z.string(),
   fingers: z.array(FingerReadoutSchema),
+  sameFinger: z.array(SameFingerRowSchema).optional(),
+  rolls: z.array(RollRowSchema).optional(),
+  holds: z.array(HoldRowSchema).optional(),
   findings: z.array(z.object({
     id: z.string(), kind: z.string(), sentence: z.string(),
     /** The keys to mark on the caps for this finding (layer 0 positions). */

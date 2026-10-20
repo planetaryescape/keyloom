@@ -1,5 +1,7 @@
 // Configs and versions as use cases (25, D-300, D-301): making, renaming, archiving and deleting configs, and the version history,
 // going back and comparing. The sync engine's side is in configs-sync.test.ts.
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   type App, NotFoundError, UsageError, ValidationFailedError, applyOps, archiveConfig, blankDocument, compareRevision, deleteConfig, getLayout, importLayout, listConfigs,
@@ -184,6 +186,8 @@ describe("rename, archive and delete", () => {
     createFlash(app.db, { id: flash, buildId: build, logPath: "l" });
     finishFlash(app.db, flash, null);
     nameVersion(app, other.id, head, "named");
+    mkdirSync(join(app.dataDir as string, "builds", other.id), { recursive: true });
+    app.db.query("INSERT INTO typing_sessions (id, layout_id, revision_id, board_id, firmware, started_at, ended_at, passage_id, passage, typed_text, events, warnings) VALUES ('sess-1', ?, ?, 'zsa/moonlander', 'qmk', 100, 200, 'p1', 'hello', 'hello', '[]', '[]')").run(other.id, head);
 
     const tables = ["layouts", "revisions", "change_sets", "decisions", "conversations", "builds", "flashes", "syncs", "versions"] as const;
     const count = (t: string) => (app.db.query(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
@@ -191,6 +195,8 @@ describe("rename, archive and delete", () => {
     deleteConfig(app, other.id, "Colemak");
     const after = Object.fromEntries(tables.map((t) => [t, count(t)]));
     expect(after).toEqual({ ...before, layouts: 1, revisions: 4, change_sets: before.change_sets! - 2, decisions: 0, conversations: 0, builds: 0, flashes: 0, versions: 1 });
+    expect(existsSync(join(app.dataDir as string, "builds", other.id))).toBe(false);
+    expect(app.db.query("SELECT COUNT(*) AS n FROM typing_sessions WHERE layout_id = ?").get(other.id)).toEqual({ n: 0 });
     expect(app.db.query("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(listRevisions(app, ref)).toHaveLength(4);
   });

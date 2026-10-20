@@ -3,6 +3,7 @@
 // (flash-recipe.ts); the home row is the one thing the person has to say. The result goes through the same checks as a
 // contributed board (`keyloom boards check`), which the caller runs. Pure.
 import type { BoardDefinition, BoardRevision, Geometry, GeometryKey } from "../schema.ts";
+import { keyCentre } from "../key-slots.ts";
 import type { Candidate } from "./detect.ts";
 import { qmkFlash, targetId, zmkFlash, zmkControllersWithBootDrive } from "./flash-recipe.ts";
 import { deriveFingers, deriveHands, deriveMirror, deriveRowGroups, guessHomeRow, rowNames } from "./heuristics.ts";
@@ -89,14 +90,16 @@ function revisionFor(input: DeriveInput): { revision: BoardRevision; manualFlash
     throw new DeriveError(`keyloom doesn't know the name of ${controller}'s boot drive, so it can't write the flash steps. Ones it does: ${zmkControllersWithBootDrive().join(", ")}`);
   }
   const split = e.siblings.length > 1;
-  const nice = controller === "nice_nano//zmk" && split && flash.kind === "uf2-drives";
+  const nice = controller === "nice_nano//zmk" && flash.kind === "uf2-drives";
   // Hands-free flashing is the keyloom-zmk module's, which is proven on the nice!nano (D-095); every other controller is flashed by hand until it is.
   const withHandsFree: typeof flash = nice
     ? {
         ...flash,
         handsFree: {
           trigger: "cdc-1200",
-          halves: flash.steps.map((s, i) => ({ role: i === 0 ? "central" : "peripheral", step: s.label, marker: i === 0 ? "L" : "R", ...(i === 0 ? {} : { relay: true }) })),
+          halves: split
+            ? flash.steps.map((s, i) => ({ role: i === 0 ? "central" : "peripheral", step: s.label, marker: i === 0 ? ("L" as const) : ("R" as const), ...(i === 0 ? {} : { relay: true }) }))
+            : flash.steps.map((s) => ({ role: "central" as const, step: s.label, marker: "L" as const })),
           serialMarker: "usb-sn-override",
           serialTail: ":0123456789ABCDEF",
         },
@@ -117,11 +120,42 @@ function revisionFor(input: DeriveInput): { revision: BoardRevision; manualFlash
   };
 }
 
+function resolveHands(keys: readonly GeometryKey[]): { left: number[]; right: number[] } {
+  const xs = [...new Set(keys.map((k) => keyCentre(k).x))].sort((a, b) => a - b);
+  let maxGap = 0;
+  for (let i = 1; i < xs.length; i++) {
+    const d = (xs[i] as number) - (xs[i - 1] as number);
+    if (d > maxGap) maxGap = d;
+  }
+  // If there's no split gap (> 1.25 key units), it's a one-piece keyboard; split at median X.
+  if (maxGap <= 1.25 && xs.length > 1) {
+    const allXs = keys.map((k) => keyCentre(k).x).sort((a, b) => a - b);
+    const medianX = (allXs[Math.floor(allXs.length / 2)]! + allXs[Math.ceil(allXs.length / 2) - 1]!) / 2;
+    const left: number[] = [];
+    const right: number[] = [];
+    keys.forEach((k, p) => (keyCentre(k).x < medianX ? left : right).push(p));
+    if (left.length > 0 && right.length > 0) return { left, right };
+  }
+  let hands: { left: number[]; right: number[] };
+  try {
+    hands = deriveHands(keys);
+  } catch {
+    hands = { left: [], right: [] };
+  }
+  if (hands.left.length === 0 || hands.right.length === 0) {
+    const mid = Math.floor(keys.length / 2);
+    hands = {
+      left: Array.from({ length: mid }, (_, i) => i),
+      right: Array.from({ length: keys.length - mid }, (_, i) => i + mid),
+    };
+  }
+  return hands;
+}
+
 export function deriveBoard(input: DeriveInput): DerivedBoard {
   const { candidate: c, geometry } = input;
   const keys = geometry.keys;
-  const hands = deriveHands(keys);
-  if (hands.left.length === 0 || hands.right.length === 0) throw new DeriveError("the layout has no gap between two halves, so keyloom can't tell the hands apart");
+  const hands = resolveHands(keys);
   const found = deriveFingers(keys, hands);
   const groups = deriveRowGroups(keys, found);
   if (input.homeRow < 1 || input.homeRow > groups.length) {
@@ -165,7 +199,7 @@ export function deriveBoard(input: DeriveInput): DerivedBoard {
 
 /** The rows a candidate's geometry would have, so the person can be shown them before choosing the home row. */
 export function previewRows(keys: readonly GeometryKey[]): { rows: number[][]; guessedHomeRow: number } {
-  const found = deriveFingers(keys, deriveHands(keys));
+  const found = deriveFingers(keys, resolveHands(keys));
   const rows = deriveRowGroups(keys, found);
   return { rows, guessedHomeRow: guessHomeRow(rows.length) };
 }

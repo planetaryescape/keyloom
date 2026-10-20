@@ -89,7 +89,7 @@ The picker's Macro tab builds a macro for this slot (D-088):
   - A macro used by more than one key appears in the layout's library (see [the library](#the-library-lists-what-keys-share-and-is-never-a-required-step)).
   - Editing a shared macro from any key asks "this key only, or every key that uses it?".
 - **Passwords.** A macro whose text looks like a password gets the warning keyloom already gives ([07](07-change-validation.md#warnings)).
-- **Holds.** Oryx refuses a hold on a macro key. QMK and ZMK can both put a macro in a hold-tap's tap slot, so keyloom allows it where the firmware does, and says so where it doesn't (D-024).
+- **Holds.** ZMK and kanata can run a macro from a hold-tap's tap slot; keyloom preserves that macro while editing the hold. QMK's basic `MT`/`LT` tap parameter cannot run a macro, so validation refuses that combination and recommends a tap dance instead (D-024). ZMK generation uses a specialized behavior rather than placing a macro label in a keycode cell ([06](06-firmware-zmk.md#generation-writes-glove80keymap-and-glove80conf)).
 
 ### Tap dance is a key with a double-tap slot
 
