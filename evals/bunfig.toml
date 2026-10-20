@@ -1,0 +1,4 @@
+# Keep hardware and real data blocked, but let provider.ts enforce the explicit paid-eval gate.
+# The default test config additionally removes credentials, so normal `bun test` stays offline.
+[test]
+preload = ["./test/helpers/no-real-flash.ts", "./test/helpers/isolate-data-dir.ts"]
