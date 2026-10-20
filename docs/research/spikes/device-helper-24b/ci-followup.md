@@ -1,6 +1,6 @@
 # Native CI follow-up: Linux linker and Intel lifetime observation
 
-2026-10-20, starting from candidate `125d001e141a107d477a4379d54cbad381e8f6c8`. This follow-up is **not a green verification report**. Native Linux and Intel CI must pass the updated candidate before merge.
+Historical development record, 2026-10-20, starting from candidate `125d001e141a107d477a4379d54cbad381e8f6c8`. The failures, hypotheses and intermediate gates below describe that investigation. Final native/full CI and independent review later passed on tree `49ce7bde8bdf9aec03050dbc2b4c01530cf02f04`, merged in PR 136; [published installation proof](../device-helper-24b.md#published-release-proof) records the subsequently shipped v0.46.1 CLI and desktop-sidecar checks separately. Do not interpret an intermediate failure or pending gate below as the final source status.
 
 ## Observed native failures
 

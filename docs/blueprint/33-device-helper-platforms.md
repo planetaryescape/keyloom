@@ -1,6 +1,6 @@
 # 33: Prove the helper on macOS, Linux and Windows
 
-Status: diagnostics packaging implemented in the rung 24b candidate, 2026-10-20; local installed evidence covers native macOS arm64 only. Native CI found Linux startup and a misleading Intel buffered-output test in `125d001`. [Native clock proof and the final OS-pipe oracle](../research/spikes/device-helper-24b/ci-followup.md#native-clock-proof-and-final-oracle) resolve that test assumption; fresh final-source native CI and review remain acceptance gates, not inferred from local success. All device backends and hardware support below remain proposed. [Evidence and unrun gates](../research/spikes/device-helper-24b.md). Source transport baseline: `7d3ca25981a5213b8aa9e90fcf3330d5272787fd`. D-420 and D-424 define the platform and release intent; Q37–Q41 record unsettled scope, hardware access and packaging.
+Status: diagnostics packaging shipped in v0.46.1, 2026-10-20. Native CI passed macOS arm64/x64 and Linux x64 compiled/installed checks and Windows native child contracts; full suites and both-Mac signing preflight passed. Published CLI/checksum/helper-signature and signed/notarised desktop-bundle sidecar doctor verification passed in the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). All device backends, hardware behavior and Windows production extraction/CLI support remain unproven. [Native clock proof and the OS-pipe oracle](../research/spikes/device-helper-24b/ci-followup.md#native-clock-proof-and-final-oracle) preserve the resolved development failures. Source transport baseline: `7d3ca25981a5213b8aa9e90fcf3330d5272787fd`. D-420 and D-424 define the platform and release intent; Q37–Q41 record unsettled scope, hardware access and packaging.
 
 ## Support is a capability claim, not a cross-compile
 
@@ -59,7 +59,7 @@ A PowerShell install path must check the release checksum, install per-user with
 
 ## Package two processes as one version
 
-Rung 24b implements Q41's embedded-helper shape for the current Unix CLI targets. `scripts/build-binaries.ts` replaces the source-only packaged module with a static binary-asset import and manifest. The installed native macOS arm64 test proves unsigned/ad-hoc extraction and execution; Developer ID/notarised desktop and other native target evidence remain release gates, not observed successes.
+Rung 24b implements Q41's embedded-helper shape for the current Unix CLI targets. `scripts/build-binaries.ts` replaces the source-only packaged module with a static binary-asset import and manifest. Native CI passed paired compiled/installed diagnostics on macOS arm64/x64 and Linux x64. Published v0.46.1 downloads/checksums, arm64 installed helper signature/online notarisation, and the signed/notarised desktop bundle's sidecar doctor also passed in the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). No GUI/server or real-data launch was part of that desktop check.
 
 Proposed build flow:
 

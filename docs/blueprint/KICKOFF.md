@@ -2,7 +2,7 @@
 
 ## Follow-on prompt for the Rust device helper
 
-Rung 24b diagnostics is implemented in the candidate (D-426); read its [evidence and unrun release gates](../research/spikes/device-helper-24b.md) before continuing. Start the next native transport rung only after its prerequisite release and explicit hardware authorization. The planning prompt below preserves the broader scope; do not rebuild the diagnostics slice. The older prompts belong to separate work.
+Rung 24b diagnostics shipped in v0.46.1 (D-426), with published CLI and signed/notarised desktop-sidecar verification passed; read its [published proof and remaining transport gates](../research/spikes/device-helper-24b.md#published-release-proof) before continuing. Start the next native transport rung only after its prerequisite release and explicit hardware authorization. The planning prompt below preserves the broader scope; do not rebuild the diagnostics slice. The older prompts belong to separate work.
 
 ---
 
