@@ -138,10 +138,10 @@ export function toggleHoldMod(draft: Draft, mod: Mod): Draft {
   return draft.kind === "holdTap" ? { ...draft, holdType: "mods", holdMods: toggleMod(draft.holdMods, mod) } : draft;
 }
 
-/** Empties the hold slot; the tap goes back to being a plain key. */
+/** Empties the hold slot; the tap goes back to being a plain key or macro. */
 export function clearHold(draft: Draft): Draft {
   if (draft.kind !== "holdTap") return draft;
-  return { ...switchKind(draft, "key"), holdMods: [], holdType: "mods" };
+  return { ...switchKind(draft, tapKind(draft) === "macro" ? "macro" : "key"), holdMods: [], holdType: "mods" };
 }
 
 /**

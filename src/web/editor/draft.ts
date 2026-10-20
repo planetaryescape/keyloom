@@ -268,7 +268,7 @@ export function normalise(binding: Binding): Binding {
     case "holdTap":
       return {
         ...binding,
-        tap: withMods({ code: binding.tap.code, mods: binding.tap.mods ?? [] }),
+        tap: binding.tap.macroId === undefined ? withMods({ code: binding.tap.code, mods: binding.tap.mods ?? [] }) : { code: "", macroId: binding.tap.macroId },
         hold: "mods" in binding.hold ? { mods: sortMods(binding.hold.mods) } : binding.hold,
       };
     default:

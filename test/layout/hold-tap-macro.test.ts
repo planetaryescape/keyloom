@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { TapActionSchema, type Binding } from "../../src/layout/schema.ts";
-import { canAddHold, addHold, pickTap, tapKind } from "../../src/web/panel/slots.ts";
-import { draftFromBinding } from "../../src/web/editor/draft.ts";
-import { bindingToDts } from "../../src/firmware/zmk/emit-binding.ts";
+import { BindingSchema, TapActionSchema, type Binding } from "../../src/layout/schema.ts";
+import { canAddHold, addHold, clearHold, pickHold, pickTap, tapKind } from "../../src/web/panel/slots.ts";
+import { bindingFromDraft, draftFromBinding, normalise, sameBinding } from "../../src/web/editor/draft.ts";
 import { bindingToC } from "../../src/firmware/qmk/emit-binding.ts";
 import { generateKanataSource, KBD_FILE } from "../../src/firmware/kanata/generate.ts";
 import { macbook, richLayout } from "../helpers/macbook.ts";
@@ -14,6 +13,15 @@ describe("hold-tap with macro tap action", () => {
     expect(TapActionSchema.parse({ kind: "macro", macroId: "paste-macro" })).toEqual({ code: "", macroId: "paste-macro" });
   });
 
+  test.each([{}, { code: "" }, { code: "A", macroId: "m1" }, { macroId: "m1", mods: ["LCTL"] }, { code: "", macroId: "m1", mods: ["LSFT"] }])("rejects missing or contradictory tap action %j", (tap) => {
+    expect(TapActionSchema.safeParse(tap).success).toBe(false);
+  });
+
+  test("accepts the normalized empty code only with a macro, and keeps key modifiers", () => {
+    expect(TapActionSchema.parse({ code: "", macroId: "m1" })).toEqual({ code: "", macroId: "m1" });
+    expect(TapActionSchema.parse({ code: "A", mods: ["LCTL"] })).toEqual({ code: "A", mods: ["LCTL"] });
+  });
+
   test("canAddHold allows macro draft and addHold keeps macroId", () => {
     const layout = richLayout();
     const draft = draftFromBinding({ kind: "macro", macroId: "my-macro" }, layout, "base");
@@ -22,6 +30,9 @@ describe("hold-tap with macro tap action", () => {
     expect(withHoldDraft.kind).toBe("holdTap");
     expect(withHoldDraft.macroId).toBe("my-macro");
     expect(tapKind(withHoldDraft)).toBe("macro");
+    const complete = pickHold(withHoldDraft, { t: "mods", mods: ["LCTL"] });
+    expect(BindingSchema.parse(bindingFromDraft(complete, layout))).toMatchObject({ kind: "holdTap", tap: { code: "", macroId: "my-macro" } });
+    expect(bindingFromDraft(clearHold(complete), layout)).toEqual({ kind: "macro", macroId: "my-macro" });
 
     const changedToKey = pickTap(withHoldDraft, { t: "key", code: "A" });
     expect(changedToKey.macroId).toBeNull();
@@ -32,20 +43,11 @@ describe("hold-tap with macro tap action", () => {
     expect(backToMacro.tap.code).toBeNull();
   });
 
-  test("ZMK emits holdTap with macro tap action", () => {
-    const binding: Binding = {
-      kind: "holdTap",
-      tap: { code: "", macroId: "m1" },
-      hold: { mods: ["LCTL"] },
-      profileId: "hp_fast",
-    };
-    const ctx = {
-      layerIndex: new Map([["base", 0]]),
-      profileLabels: new Map([["hp_fast", "hp_fast"]]),
-      macroLabels: new Map([["m1", "macro_m1"]]),
-      tapDanceLabels: new Map<string, string>(),
-    };
-    expect(bindingToDts(binding, ctx)).toBe("&hp_fast LCTRL &macro_m1");
+  test("normalizing a macro tap preserves its function and distinguishes different macros", () => {
+    const a: Binding = { kind: "holdTap", tap: { code: "", macroId: "first" }, hold: { mods: ["LCTL"] }, profileId: "p" };
+    const b: Binding = { ...a, tap: { code: "", macroId: "second" } };
+    expect(normalise(a)).toEqual(a);
+    expect(sameBinding(a, b)).toBe(false);
   });
 
   test("QMK refuses holdTap with macro tap action with helpful error", () => {

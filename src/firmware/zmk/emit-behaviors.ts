@@ -39,14 +39,24 @@ function bindingsProp(profile: HoldTapProfile, layerHold: boolean): string {
 }
 
 export function renderProfile(profile: HoldTapProfile, layerHold: boolean): string[] {
-  const label = labelOf(profile.id);
+  return renderHoldTap(labelOf(profile.id), profile.name, bindingsProp(profile, layerHold), profile.options);
+}
+
+/** A hold-tap forwards numeric arguments, never a phandle in a parameter cell. The macro ignores its dummy tap argument. */
+export function renderMacroHoldTap(profile: HoldTapProfile, label: string, layerHold: boolean, macroLabel: string): string[] {
+  return renderHoldTap(label, profile.name, `bindings = <&${layerHold ? "mo" : "kp"}>, <&${macroLabel}>;`, {
+    ...BUILTIN_OPTIONS[profile.id], ...profile.options,
+  });
+}
+
+function renderHoldTap(label: string, name: string, bindings: string, options: Readonly<Record<string, OptionValue>>): string[] {
   return [
     `${label}: ${label} {`,
     '    compatible = "zmk,behavior-hold-tap";',
-    `    display-name = ${quote(profile.name)};`,
+    `    display-name = ${quote(name)};`,
     "    #binding-cells = <2>;",
-    `    ${bindingsProp(profile, layerHold)}`,
-    ...propLines(profile.options, new Set(["bindings"])).map((l) => `    ${l}`),
+    `    ${bindings}`,
+    ...propLines(options, new Set(["bindings"])).map((l) => `    ${l}`),
     "};",
   ];
 }

@@ -16,7 +16,11 @@ export type EmitContext = {
   macroLabels: ReadonlyMap<string, string>;
   /** Tap dance ID to the label of its `zmk,behavior-tap-dance` node. */
   tapDanceLabels: ReadonlyMap<string, string>;
+  /** Specialized hold-taps whose tap invokes a zero-parameter macro. */
+  macroTapLabels?: ReadonlyMap<string, string>;
 };
+
+export const macroTapKey = (profileId: string, macroId: string, layerHold: boolean): string => JSON.stringify([profileId, macroId, layerHold]);
 
 const LAYER_BEHAVIOR = { momentary: "mo", toggle: "tog", to: "to", oneShot: "sl" } as const;
 
@@ -44,9 +48,13 @@ export function bindingToDts(b: Binding, ctx: EmitContext): string {
       const label = ctx.profileLabels.get(b.profileId);
       if (!label) throw new GenerateError(`it uses the hold-tap profile "${b.profileId}", which doesn't exist`);
       const hold = "mods" in b.hold ? key({ mods: b.hold.mods }) : layer(b.hold.layerId, ctx);
-      const tap = b.tap.macroId !== undefined
-        ? `&${ctx.macroLabels.get(b.tap.macroId) ?? b.tap.macroId}`
-        : key({ code: b.tap.code, ...(b.tap.mods ? { mods: b.tap.mods } : {}) });
+      if (b.tap.macroId !== undefined) {
+        if (!ctx.macroLabels.has(b.tap.macroId)) throw new GenerateError(`it uses the macro "${b.tap.macroId}", which doesn't exist`);
+        const specialized = ctx.macroTapLabels?.get(macroTapKey(b.profileId, b.tap.macroId, "layerId" in b.hold));
+        if (!specialized) throw new GenerateError(`macro-tap hold-tap "${b.profileId}" has no generated behaviour`);
+        return `&${specialized} ${hold} 0`;
+      }
+      const tap = key({ code: b.tap.code, mods: b.tap.mods ?? [] });
       return `&${label} ${hold} ${tap}`;
     }
     case "layer":

@@ -14,6 +14,7 @@ import { renderLayers } from "./emit-keymap.ts";
 import { handsFreeConf } from "./handsfree.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
 import { GenerateError } from "./generate-error.ts";
+import { macroHoldTaps } from "./macro-hold-taps.ts";
 
 export { GenerateError } from "./generate-error.ts";
 
@@ -101,12 +102,14 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
   const layerHold = new Set<string>();
   for (const layer of layout.layers) for (const b of layer.bindings) if (b.kind === "holdTap" && "layerId" in b.hold) layerHold.add(b.profileId);
 
+  const macroTaps = macroHoldTaps(layout);
   const ctx: EmitContext = {
     layerIndex: new Map(layout.layers.map((l, i) => [l.id, i])),
     layerNames: layerDefineNames(input.layout),
     profileLabels: new Map(layout.holdTapProfiles.map((p) => [p.id, labelOf(p.id)])),
     macroLabels: new Map(layout.macros.map((m) => [m.id, labelOf(m.id)])),
     tapDanceLabels: new Map(layout.tapDances.map((t) => [t.id, labelOf(t.id)])),
+    macroTapLabels: macroTaps.labels,
   };
 
   const kept = (section: (typeof SECTIONS)[number]) => layout.passthrough.filter((p) => p.file === KEYMAP_FILE && sectionOf(p) === section);
@@ -119,6 +122,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
 
   const behaviors = container("behaviors", [], [
     ...layout.holdTapProfiles.filter((p) => !BUILTIN_PROFILES.has(p.id)).map((p) => renderProfile(p, layerHold.has(p.id))),
+    ...macroTaps.nodes,
     ...layout.tapDances.map((t) => renderTapDance(t, ctx)),
     ...sources("behavior"),
   ]);
