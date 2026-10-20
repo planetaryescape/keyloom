@@ -51,20 +51,34 @@ describe("OpenRouter through the Anthropic adapter", () => {
     expect(result.costUsd).toBeCloseTo(0.03);
   });
 
+  test("a partial reported cost is never presented as a whole-turn charge", async () => {
+    const tool = { name: "t", description: "d", inputSchema: (await import("zod")).z.object({}), run: () => "ok" };
+    for (const [first, last] of [[0.01, undefined], [undefined, 0.02], [0, undefined]]) {
+      const fake = fakeAnthropic([
+        { blocks: [{ tool: "t", input: {} }], usage: { input: 1, output: 1, ...(first === undefined ? {} : { cost: first }) } },
+        { blocks: [{ text: "done" }], usage: { input: 1, output: 1, ...(last === undefined ? {} : { cost: last }) } },
+      ], { apiKey: null, authToken: "synthetic", baseURL: "https://openrouter.ai/api" });
+      const result = await anthropicModel(fake.client, { provider: "openrouter" }).run({ ...request, tools: [tool] });
+      expect(result.iterations).toBe(2);
+      expect(result.usage.inputTokens).toBe(2);
+      expect(result.costUsd).toBeUndefined();
+    }
+  });
+
   test("openRouterClientFromEnv reads only OPENROUTER_API_KEY", () => {
     expect(openRouterClientFromEnv({})).toBeNull();
     expect(openRouterClientFromEnv({ ANTHROPIC_API_KEY: "a" })).toBeNull();
     expect(openRouterClientFromEnv({ OPENROUTER_API_KEY: " k " })?.baseURL).toBe("https://openrouter.ai/api");
   });
 
-  test("clientFromEnv reads ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or credentials.json", () => {
+  test("clientFromEnv uses only the explicit API key, not login tokens or credential files", () => {
     expect(clientFromEnv({ ANTHROPIC_API_KEY: "key-1" })).not.toBeNull();
-    expect(clientFromEnv({ ANTHROPIC_AUTH_TOKEN: "token-1" })).not.toBeNull();
+    expect(clientFromEnv({ ANTHROPIC_AUTH_TOKEN: "token-1" })).toBeNull();
 
     const home = tempDir("keyloom-ant-home-");
     mkdirSync(join(home, ".config", "anthropic"), { recursive: true });
     writeFileSync(join(home, ".config", "anthropic", "credentials.json"), JSON.stringify({ token: "ant-token" }));
-    expect(clientFromEnv({ HOME: home })).not.toBeNull();
+    expect(clientFromEnv({ HOME: home })).toBeNull();
 
     expect(clientFromEnv({ HOME: tempDir("empty-home-") })).toBeNull();
   });

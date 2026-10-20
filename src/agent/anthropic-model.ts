@@ -1,7 +1,5 @@
 // The Anthropic implementation of AgentModel (D-031): the SDK's beta Tool Runner over zod tools,
 // streaming, with adaptive thinking and an explicit effort. This is the only file that imports the SDK.
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { transformJSONSchema } from "@anthropic-ai/sdk/lib/transform-json-schema";
@@ -100,6 +98,7 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
 
       let usage = emptyUsage();
       let costUsd: number | undefined;
+      let completeCost = true;
       let iterations = 0;
       let stopReason: string | null = null;
       let pause: { message: { content: unknown[] }; call: { id: string; name: string; input: unknown } } | undefined;
@@ -113,12 +112,13 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         stream.on("streamEvent", (event) => {
           if (event.type !== "message_delta") return;
           const reported = (event.usage as RawUsage).cost;
-          if (typeof reported === "number") cost = reported;
+          if (typeof reported === "number" && Number.isFinite(reported) && reported >= 0) cost = reported;
         });
         const message = await stream.finalMessage();
         iterations++;
         usage = addUsage(usage, usageOf(message.usage));
         if (cost !== undefined) costUsd = (costUsd ?? 0) + cost;
+        else completeCost = false;
         stopReason = message.stop_reason;
         if (message.stop_reason !== "refusal") {
           const publicText = message.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
@@ -134,6 +134,8 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
           break;
         }
       }
+      // One missing iteration makes the total unknown. A partial sum is not the reported price of a turn.
+      if (!completeCost) costUsd = undefined;
       if (pause !== undefined) {
         // The runner appends the assistant message only when it goes on to answer the calls, so the stopped one is added here. Calls beside
         // the question get an error result: they did not run, and the API wants a result for every call before the next message.
@@ -185,28 +187,10 @@ export function classifyModelError(err: unknown, provider: AnthropicFamily = "an
   return null;
 }
 
-/** The client for BK's Anthropic key. Reads ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or ~/.config/anthropic/credentials.json (03#model-and-sdk). */
+/** The direct API client reads only the explicit API key, never another app's login or token cache. */
 export function clientFromEnv(env: Record<string, string | undefined> = process.env): Anthropic | null {
-  const direct = env.ANTHROPIC_API_KEY?.trim() || env.ANTHROPIC_AUTH_TOKEN?.trim();
-  if (direct) return new Anthropic({ apiKey: direct });
-  const home = env.HOME ?? process.env.HOME;
-  if (home) {
-    for (const sub of [".config/anthropic/credentials.json", ".anthropic/credentials.json"]) {
-      const p = join(home, sub);
-      if (existsSync(p)) {
-        try {
-          const creds = JSON.parse(readFileSync(p, "utf8"));
-          const key = creds.apiKey ?? creds.api_key ?? creds.token;
-          if (typeof key === "string" && key.trim()) {
-            return new Anthropic({ apiKey: key.trim() });
-          }
-        } catch {
-          // ignore unparseable credentials file
-        }
-      }
-    }
-  }
-  return null;
+  const apiKey = env.ANTHROPIC_API_KEY?.trim();
+  return apiKey ? new Anthropic({ apiKey }) : null;
 }
 
 /** OpenRouter serves an Anthropic Messages endpoint at /api/v1/messages; the SDK appends /v1 to this base (D-107). */
