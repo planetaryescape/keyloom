@@ -103,28 +103,14 @@ fn frame(reader: &mut impl BufRead) -> Result<Option<Value>, ()> {
     serde_json::from_slice(&bytes).map(Some).map_err(|_| ())
 }
 
-// Fatal-path observations contain process-local clock ages only, never request/device bytes.
-fn liveness_diagnostic(reason: &str, started: Instant, last_activity: Instant) {
-    let now = Instant::now();
-    eprintln!(
-        "{}",
-        json!({"diagnostic":reason,
-            "uptimeMs":now.duration_since(started).as_millis(),
-            "idleMs":now.duration_since(last_activity).as_millis()})
-    );
-}
-
 fn serve() -> i32 {
-    let started = Instant::now();
-    let alive = Arc::new(Mutex::new(started));
+    let alive = Arc::new(Mutex::new(Instant::now()));
     let watchdog = Arc::clone(&alive);
-    // Also bounds a blocked stdout write, not just an idle stdin read.
+    // No fallible I/O before exit: even closed stderr must not kill only this watchdog thread.
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(50));
-            let last_activity = *watchdog.lock().unwrap();
-            if last_activity.elapsed() >= QUIET {
-                liveness_diagnostic("watchdog_timeout", started, last_activity);
+            if watchdog.lock().unwrap().elapsed() >= QUIET {
                 std::process::exit(1);
             }
         }
@@ -146,11 +132,6 @@ fn serve() -> i32 {
         let value = match receive.recv_timeout(QUIET) {
             Ok(Ok(Some(value))) => value,
             Ok(Ok(None)) => return 0,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                let last_activity = *alive.lock().unwrap();
-                liveness_diagnostic("stdin_timeout", started, last_activity);
-                return 1;
-            }
             _ => return 1,
         };
         let (reply, stop) = match protocol.handle(value) {
@@ -184,9 +165,6 @@ fn main() {
         [arg] if arg == "--stdio" => serve(),
         _ => 2,
     };
-    if code == 1 {
-        eprintln!("keyloom-device: protocol_error");
-    }
     std::process::exit(code);
 }
 

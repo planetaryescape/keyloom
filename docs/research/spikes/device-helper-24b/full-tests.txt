@@ -1735,11 +1735,11 @@ keyloom: request failed 199 |   });
 204 |       throw new Error("disk on fire: /secret/path");
                       ^
 error: disk on fire: /secret/path
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/test/server/editor-routes.test.ts:204:17)
-      at check (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/editor-routes.ts:160:36)
-      at async handleEditorRoute (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/editor-routes.ts:79:24)
-      at async <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:127:41)
-      at async respond (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:188:18)
+      at <anonymous> (<repo>/test/server/editor-routes.test.ts:204:17)
+      at check (<repo>/src/server/editor-routes.ts:160:36)
+      at async handleEditorRoute (<repo>/src/server/editor-routes.ts:79:24)
+      at async <anonymous> (<repo>/src/server/start-server.ts:127:41)
+      at async respond (<repo>/src/server/start-server.ts:188:18)
 
 (pass) the edit journey > an error that is not an EditorError becomes a bare 500 [1.81ms]
 (pass) the edit journey > an unknown ref is the backend's 404 [2.14ms]
@@ -1826,10 +1826,10 @@ keyloom: request failed 134 |
 139 |           throw new Error("secret path /Users/someone/keyloom.db");
                           ^
 error: secret path /Users/someone/keyloom.db
-      at get (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/test/server/server.test.ts:139:21)
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:144:35)
-      at respond (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:188:18)
-      at api (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:143:12)
+      at get (<repo>/test/server/server.test.ts:139:21)
+      at <anonymous> (<repo>/src/server/start-server.ts:144:35)
+      at respond (<repo>/src/server/start-server.ts:188:18)
+      at api (<repo>/src/server/start-server.ts:143:12)
 
 (pass) GET /api/layouts/:ref > a source that throws gets a generic 500 and no internal detail [2.09ms]
 keyloom: request failed ZodError: [
@@ -1855,10 +1855,10 @@ keyloom: request failed 155 |
 160 |           throw new Error("disk gone");
                           ^
 error: disk gone
-      at list (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/test/server/server.test.ts:160:21)
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:138:78)
-      at respond (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:188:18)
-      at api (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/server/start-server.ts:137:14)
+      at list (<repo>/test/server/server.test.ts:160:21)
+      at <anonymous> (<repo>/src/server/start-server.ts:138:78)
+      at respond (<repo>/src/server/start-server.ts:188:18)
+      at api (<repo>/src/server/start-server.ts:137:14)
 
 (pass) GET /api/layouts/:ref > a list source that throws gets 500 [2.02ms]
 (pass) Host check covers the page and its assets > GET / with Host: evil.example gets 403 [1.01ms]

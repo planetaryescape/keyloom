@@ -60,6 +60,7 @@ jobs:
           cargo clippy --locked --all-targets --target "${{ matrix.rust }}" -- -D warnings
           cargo test --locked --target "${{ matrix.rust }}"
           cargo build --locked --release --target "${{ matrix.rust }}"
+          cargo test --locked --release --target "${{ matrix.rust }}" --test lifetime -- --nocapture
       - name: Ad-hoc helper signature before embedding
         if: runner.os == 'macOS'
         run: codesign --force --sign - native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
@@ -73,15 +74,14 @@ jobs:
         env:
           KEYLOOM_TEST_HELPER: ${{ github.workspace }}/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device${{ matrix.exe }}
         run: bun test test/firmware/toolchain/device-helper.test.ts test/firmware/toolchain/device-helper-native.test.ts
-      - name: Repeat Intel blocked-output lifetime probe without changing deadlines
+      - name: Repeat Intel release-profile OS-pipe backpressure oracle
         if: ${{ always() && matrix.rust == 'x86_64-apple-darwin' && (steps.child-contract.outcome == 'success' || steps.child-contract.outcome == 'failure') }}
-        env:
-          KEYLOOM_TEST_HELPER: ${{ github.workspace }}/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
+        working-directory: native/device-helper
         run: |
           status=0
           for attempt in 1 2 3 4 5; do
-            echo "Intel lifetime probe $attempt/5"
-            bun test test/firmware/toolchain/device-helper-native.test.ts --test-name-pattern 'no heartbeat and blocked stdout' || status=1
+            echo "Intel real OS-pipe probe $attempt/5"
+            cargo test --locked --release --target "${{ matrix.rust }}" --test lifetime -- --nocapture || status=1
           done
           exit "$status"
       - name: Compile and install the paired CLI outside the repo

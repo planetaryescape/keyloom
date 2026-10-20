@@ -27,7 +27,7 @@ error: exit 1, expected 0: /var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyl
   ]
 }
 
-      at run (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/scripts/smoke-device-helper.ts:25:36)
-      at async doctor (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/scripts/smoke-device-helper.ts:29:46)
+      at run (<repo>/scripts/smoke-device-helper.ts:25:36)
+      at async doctor (<repo>/scripts/smoke-device-helper.ts:29:46)
 
 Bun v1.3.14 (macOS arm64)

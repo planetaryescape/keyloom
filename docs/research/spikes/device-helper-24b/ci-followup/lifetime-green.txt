@@ -1,0 +1,58 @@
+agent-work: task 9416; inspect with 'pueue status', cancel with 'agent-work cancel 9416'
+[2m19:42:15[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729507 bytes.
+[2m19:42:16[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+agent-work: checking memory before start
+agent-work: starting sh
+    Checking keyloom-device v0.0.0 (<repo>/native/device-helper)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+    Checking keyloom-device v0.0.0 (<repo>/native/device-helper)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.41s
+   Compiling keyloom-device v0.0.0 (<repo>/native/device-helper)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running unittests src/main.rs (target/debug/deps/keyloom_device-1eec5180858c19d0)
+[2m19:42:16[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+
+running 4 tests
+test tests::bounded_frames_and_utf8 ... ok
+test tests::handshake_order_identity_and_no_replay ... ok
+test tests::canonical_schema_constraints ... ok
+test tests::shared_corpus ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lifetime.rs (target/debug/deps/lifetime-b868b88d959c51a0)
+
+running 3 tests
+test closed_stderr_preserves_fatal_protocol_exit_code ... ok
+[2m19:42:17[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:18[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:19[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:20[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:20[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:21[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+test unread_stdout_pipe_exits_without_parent_drain ... ok
+test unread_stdout_pipe_with_closed_stderr_exits_without_parent_drain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.31s
+
+   Compiling keyloom-device v0.0.0 (<repo>/native/device-helper)
+[2m19:42:22[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+    Finished `release` profile [optimized] target(s) in 0.33s
+     Running tests/lifetime.rs (target/release/deps/lifetime-fcab1b25227228b2)
+
+running 3 tests
+test closed_stderr_preserves_fatal_protocol_exit_code ... ok
+[2m19:42:23[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:24[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:25[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:25[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:26[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+[2m19:42:27[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729586 bytes.
+{"closedStderr":true,"elapsedMs":5195,"exitCode":1,"osPipeBackpressure":true,"queuedPings":2157,"stderrBytes":0,"stdinHeldUntilObservedExit":true,"stdoutWasNeverRead":true,"timedOut":false}
+test unread_stdout_pipe_with_closed_stderr_exits_without_parent_drain ... ok
+{"closedStderr":false,"elapsedMs":5225,"exitCode":1,"osPipeBackpressure":true,"queuedPings":2157,"stderrBytes":0,"stdinHeldUntilObservedExit":true,"stdoutWasNeverRead":true,"timedOut":false}
+test unread_stdout_pipe_exits_without_parent_drain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.24s
+
+[2m19:42:28[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52729636 bytes.

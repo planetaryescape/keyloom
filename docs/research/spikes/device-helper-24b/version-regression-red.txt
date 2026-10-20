@@ -13,8 +13,8 @@ error: expect(received).toBe(expected)
 Expected: "0.45.0"
 Received: "0.0.0"
 
-      at identity (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/test/firmware/toolchain/device-helper-native.test.ts:21:32)
-      at async <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/test/firmware/toolchain/device-helper-native.test.ts:35:24)
+      at identity (<repo>/test/firmware/toolchain/device-helper-native.test.ts:21:32)
+      at async <anonymous> (<repo>/test/firmware/toolchain/device-helper-native.test.ts:35:24)
 (fail) native diagnostics child contract > exact identity, parallel hello/ping/shutdown and observed exits [4.35ms]
 
  0 pass

@@ -3,8 +3,8 @@ agent-work: task 9402; inspect with 'pueue status', cancel with 'agent-work canc
 [2m18:37:41[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52617129 bytes.
 agent-work: checking memory before start
 agent-work: starting bun
-   Compiling keyloom-device v0.0.0 (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/native/device-helper)
+   Compiling keyloom-device v0.0.0 (<repo>/native/device-helper)
     Finished `release` profile [optimized] target(s) in 0.33s
-/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/native/device-helper/target/aarch64-apple-darwin/release/keyloom-device: replacing existing signature
+<repo>/native/device-helper/target/aarch64-apple-darwin/release/keyloom-device: replacing existing signature
 built dist/keyloom-darwin-arm64; helper 1cb854ba54cff75d1ebdfb7c3cd9a62133c84760cc2e6437281fd69c77fff7f9
 [2m18:37:41[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52617129 bytes.

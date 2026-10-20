@@ -1,8 +1,10 @@
 # S58/S62: installed diagnostics, not a native transport adoption
 
-2026-10-20. Candidate based on `bd1a58652db0dbfa528e0e4fa68de173702a1e9e` (v0.45.0). That version identifies the test build, not a claim that the published v0.45.0 contains a helper. Runtime: Bun 1.3.14, Rust 1.99.1, native macOS 27.0.1 (26A434), arm64. No keyboard was opened, captured, reset or flashed; no Docker/eval/model generation ran.
+2026-10-20. Candidate based on `bd1a58652db0dbfa528e0e4fa68de173702a1e9e` (v0.45.0). That version identifies the test build, not a claim that the published v0.45.0 contains a helper. Runtime: Bun 1.3.14, Rust 1.99.1, native macOS 27.0.1 (26A434), arm64. During the initial local candidate checks, no keyboard was opened, captured, reset or flashed and no Docker/eval/model generation ran. Later synthetic debugging used Docker emulation, recorded in the [CI follow-up](device-helper-24b/ci-followup.md); it used no device access.
 
-**Native CI follow-up:** `125d001` later failed Linux startup and the Intel blocked-output deadline. The [focused diagnosis/correction and pending native data wave](device-helper-24b/ci-followup.md) supersede any overall green interpretation of these earlier local results. Merge remains blocked until updated native CI passes.
+**Native CI follow-up:** `125d001` later failed Linux startup and the misleading Intel blocked-output test. Linux's linker correction passed native CI. Intel's [native clock proof and stronger OS-pipe regression oracle](device-helper-24b/ci-followup.md#native-clock-proof-and-final-oracle) supersede the original buffered-stream assumption. The final source still requires fresh full/native CI and whole-diff review; these earlier local results do not establish overall acceptance.
+
+Public evidence uses `<repo>` for this worktree root and `<HOME>` for the local user home. The orchestrator retained unredacted originals in its private durable run archive before these prefix substitutions; test results and other transcript bytes are unchanged.
 
 ## Reproduce the installed check
 
@@ -51,7 +53,7 @@ The Rust binary compiles only JSON/stdio/thread/time code. It implements hello/p
 | Unix symlinks, modes, hash/release/target mismatch, valid existing 0755 general cache | Pass using synthetic temporary paths | [Synthetic output](device-helper-24b/synthetic-tests.txt) |
 | Blueprint relative file links | Pass after report creation; checks file targets, not remote URLs or all heading anchors | [Output](device-helper-24b/link-check.txt), [checker](device-helper-24b/check-links.mjs) |
 
-Native child tests cover parallel independent handshakes, fragmented/joined frames, unsupported device methods, malformed/oversized/invalid-UTF8 inputs, stale response IDs, changed release/capabilities, unexpected exit 0, late frames, non-exiting shutdown and bounded stderr. They observe child exit after termination rather than treating a kill request as completion. Rust's five-second watchdog handles idle stdin and blocked stdout. Killing the Bun parent leaves no live helper after EOF/watchdog. Parent-death tests first verify that the OS can observe the live helper PID, avoiding a false pass from an unsupported probe.
+Native child tests cover parallel independent handshakes, fragmented/joined frames, unsupported device methods, malformed/oversized/invalid-UTF8 inputs, stale response IDs, changed release/capabilities, unexpected exit 0, late frames, non-exiting shutdown and bounded stderr. They observe child exit after termination rather than treating a kill request as completion. The original Bun-flooded stdout case did not prove backpressure; the final Rust integration test uses an actually unread OS pipe and covers both open and closed stderr, with stdin held open until observed child exit. Rust's watchdog keeps its five-second idle rule. Killing the Bun parent leaves no live helper after EOF/watchdog. Parent-death tests first verify that the OS can observe the live helper PID, avoiding a false pass from an unsupported probe.
 
 The launcher has a dedicated absolute-path spawn boundary, empty child environment and private pipes, not `run.ts` (which inherits credentials, resolves PATH and logs unbounded lines). Stderr is discarded and capped; synthetic secret-like input is not echoed. Unix extraction checks ownership/modes/type/size/hash and rejects managed symlinks. An exclusive same-directory temporary file plus atomic no-replace hard link avoids replacement/publication races. This is integrity anchored in the installed host, not a sandbox against the same OS user.
 
@@ -81,7 +83,7 @@ Documentation-refiner ran in refine mode, with code/CLI help/runtime output as t
 
 ## Resource packet and cleanup boundary
 
-Worktree: `/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b`, branch `feat/device-helper-diagnostics`. Final local measurements: worktree 1.1 GiB, sole Cargo target directory 98 MiB, `dist` 263 MiB, node_modules 192 MiB; below the 8-GiB worker budget. Native CLI is 70,133,474 bytes and helper 657,680 bytes. No server/port was allocated; no helper/installed-smoke process remained in the final process-table check.
+Worktree: `<repo>`, branch `feat/device-helper-diagnostics`. Final local measurements: worktree 1.1 GiB, sole Cargo target directory 98 MiB, `dist` 263 MiB, node_modules 192 MiB; below the 8-GiB worker budget. Native CLI is 70,133,474 bytes and helper 657,680 bytes. No server/port was allocated; no helper/installed-smoke process remained in the final process-table check.
 
 Owned queue IDs: 9382-9390, 9393-9402 (not the intervening foreign jobs). Final Cargo gate was 9400, final build 9402, single full suite 9390. All returned; raw build/check logs identify the relevant IDs. No queue cancellation or foreign process cleanup was performed.
 

@@ -9,13 +9,13 @@ test/firmware/toolchain/device-helper.test.ts:
 7 |   id: z.string().regex(/^[1-9][0-9]{0,19}$/).refine((id) => BigInt(id) <= 18446744073709551615n),
                                                                 ^
 SyntaxError: Failed to parse String to BigInt
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/src/firmware/toolchain/device-helper/protocol.ts:7:61)
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/schemas.js:2584:23)
-      at runChecks (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/schemas.js:51:35)
-      at <anonymous> (file:///Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/doc.js:68:35)
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/schemas.js:1187:23)
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/node_modules/zod/v4/core/parse.js:43:32)
-      at <anonymous> (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/test/firmware/toolchain/device-helper.test.ts:36:51)
+      at <anonymous> (<repo>/src/firmware/toolchain/device-helper/protocol.ts:7:61)
+      at <anonymous> (<repo>/node_modules/zod/v4/core/schemas.js:2584:23)
+      at runChecks (<repo>/node_modules/zod/v4/core/schemas.js:51:35)
+      at <anonymous> (file://<repo>/node_modules/zod/v4/core/doc.js:68:35)
+      at <anonymous> (<repo>/node_modules/zod/v4/core/schemas.js:1187:23)
+      at <anonymous> (<repo>/node_modules/zod/v4/core/parse.js:43:32)
+      at <anonymous> (<repo>/test/firmware/toolchain/device-helper.test.ts:36:51)
 (fail) shared adversarial corpus validates the TS wire boundary [1.64ms]
 
  0 pass

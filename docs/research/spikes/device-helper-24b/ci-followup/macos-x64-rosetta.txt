@@ -2,7 +2,7 @@ agent-work: task 9409; inspect with 'pueue status', cancel with 'agent-work canc
 [2m18:59:41[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
 agent-work: checking memory before start
 agent-work: starting bash
-+ root=/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b
++ root=<repo>
 + cd native/device-helper
 + rustup target add x86_64-apple-darwin
 info: downloading component rust-std
@@ -16,11 +16,11 @@ info: downloading component rust-std
    Compiling memchr v2.8.3
    Compiling itoa v1.0.18
 [2m18:59:44[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
-   Compiling keyloom-device v0.0.0 (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/native/device-helper)
+   Compiling keyloom-device v0.0.0 (<repo>/native/device-helper)
 [2m18:59:45[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
 [2m18:59:46[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
     Finished `release` profile [optimized] target(s) in 3.09s
-+ cd /Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b
++ cd <repo>
 + codesign --force --sign - native/device-helper/target/x86_64-apple-darwin/release/keyloom-device
 + curl -fsSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-darwin-x64.zip -o dist/macos-x64-probe/bun.zip
 [2m18:59:47[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
@@ -29,8 +29,8 @@ Archive:  dist/macos-x64-probe/bun.zip
    creating: dist/macos-x64-probe/bun-darwin-x64
   inflating: dist/macos-x64-probe/bun-darwin-x64/bun  [2m18:59:48[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
 
-+ bun_x64=/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/dist/macos-x64-probe/bun-darwin-x64/bun
-+ /Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/dist/macos-x64-probe/bun-darwin-x64/bun --revision
++ bun_x64=<repo>/dist/macos-x64-probe/bun-darwin-x64/bun
++ <repo>/dist/macos-x64-probe/bun-darwin-x64/bun --revision
 [2m18:59:48[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
 [2m18:59:49[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
 [2m18:59:50[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52681047 bytes.
@@ -45,11 +45,11 @@ Archive:  dist/macos-x64-probe/bun.zip
 warn: CPU lacks AVX support, strange crashes may occur. Reinstall Bun or use *-baseline build:
   https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-darwin-x64-baseline.zip
 1.3.14+0d9b296af
-+ file /Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/dist/macos-x64-probe/bun-darwin-x64/bun native/device-helper/target/x86_64-apple-darwin/release/keyloom-device
-/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/dist/macos-x64-probe/bun-darwin-x64/bun: Mach-O 64-bit executable x86_64
++ file <repo>/dist/macos-x64-probe/bun-darwin-x64/bun native/device-helper/target/x86_64-apple-darwin/release/keyloom-device
+<repo>/dist/macos-x64-probe/bun-darwin-x64/bun: Mach-O 64-bit executable x86_64
 native/device-helper/target/x86_64-apple-darwin/release/keyloom-device:                                     Mach-O 64-bit executable x86_64
-+ KEYLOOM_TEST_HELPER=/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/native/device-helper/target/x86_64-apple-darwin/release/keyloom-device
-+ /Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/dist/macos-x64-probe/bun-darwin-x64/bun test test/firmware/toolchain/device-helper-native.test.ts --test-name-pattern 'no heartbeat and blocked stdout'
++ KEYLOOM_TEST_HELPER=<repo>/native/device-helper/target/x86_64-apple-darwin/release/keyloom-device
++ <repo>/dist/macos-x64-probe/bun-darwin-x64/bun test test/firmware/toolchain/device-helper-native.test.ts --test-name-pattern 'no heartbeat and blocked stdout'
 warn: CPU lacks AVX support, strange crashes may occur. Reinstall Bun or use *-baseline build:
   https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-darwin-x64-baseline.zip
 bun test v1.3.14 (0d9b296a)

@@ -3,9 +3,9 @@ agent-work: task 9400; inspect with 'pueue status', cancel with 'agent-work canc
 [2m18:33:38[0m [33m WARN[0m [2mpueue_lib::network::protocol[0m[2m:[0m Client is sending a large payload: 52601903 bytes.
 agent-work: checking memory before start
 agent-work: starting sh
-    Checking keyloom-device v0.0.0 (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/native/device-helper)
+    Checking keyloom-device v0.0.0 (<repo>/native/device-helper)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
-    Checking keyloom-device v0.0.0 (/Users/bhekanik/code/planetaryescape/.worktrees/keyloom-device-24b/native/device-helper)
+    Checking keyloom-device v0.0.0 (<repo>/native/device-helper)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
      Running unittests src/main.rs (target/debug/deps/keyloom_device-1eec5180858c19d0)

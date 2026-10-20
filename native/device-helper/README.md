@@ -6,11 +6,14 @@ cargo fmt --check
 cargo check --locked
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
+cargo test --locked --release --test lifetime -- --nocapture
 cargo build --locked --release
 ./target/release/keyloom-device --version
 ```
 
 Rust 1.99.1 is pinned here. The displayed release comes from the root `package.json`; Cargo's internal `0.0.0` is not a separate release stream.
+
+The lifetime integration test uses the real helper with a genuinely unread OS pipe, holds stdin open until observed exit, and checks open/closed stderr without increasing the 6500-ms exit budget. Fatal termination performs no diagnostic I/O, so closed stderr cannot disable the watchdog. Native CI repeats the release-profile oracle on Intel; Bun retains separate real-child/client checks.
 
 The helper implements only private `hello`, `ping` and `shutdown` JSON-lines requests. It advertises `capabilities: []`, contains no device backend, and refuses device methods with `unsupported`. Existing TypeScript transports remain production defaults. See [the implemented contract and remaining proposal](../../docs/blueprint/32-device-helper-protocol.md).
 
