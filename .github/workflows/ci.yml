@@ -84,6 +84,9 @@ jobs:
             cargo test --locked --release --target "${{ matrix.rust }}" --test lifetime -- --nocapture || status=1
           done
           exit "$status"
+      - name: Sign final macOS helper after all Cargo invocations
+        if: runner.os == 'macOS'
+        run: codesign --force --sign - native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
       - name: Compile and install the paired CLI outside the repo
         if: runner.os != 'Windows'
         run: |
