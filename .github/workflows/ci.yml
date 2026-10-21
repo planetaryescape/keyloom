@@ -60,12 +60,13 @@ jobs:
         shell: bash
         run: |
           cd native/device-helper
-          cargo clippy --locked --all-targets --features synthetic-hid -- -D warnings
-          cargo test --locked --features synthetic-hid
-          cargo build --locked --features synthetic-hid
-          cp "target/debug/keyloom-device${{ matrix.exe }}" "target/debug/keyloom-device-synthetic${{ matrix.exe }}"
+          rustup target add "${{ matrix.rust }}"
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" --features synthetic-hid -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}" --features synthetic-hid
+          cargo build --locked --target "${{ matrix.rust }}" --features synthetic-hid
+          cp "target/${{ matrix.rust }}/debug/keyloom-device${{ matrix.exe }}" "target/${{ matrix.rust }}/debug/keyloom-device-synthetic${{ matrix.exe }}"
           cd ../..
-          KEYLOOM_TEST_SYNTHETIC_HID="$PWD/native/device-helper/target/debug/keyloom-device-synthetic${{ matrix.exe }}" bun test test/firmware/toolchain/device-helper-hid.test.ts test/firmware/toolchain/device-helper-client-order.test.ts
+          KEYLOOM_TEST_SYNTHETIC_HID="$PWD/native/device-helper/target/${{ matrix.rust }}/debug/keyloom-device-synthetic${{ matrix.exe }}" bun test test/firmware/toolchain/device-helper-hid.test.ts test/firmware/toolchain/device-helper-client-order.test.ts
       - name: Installed candidate CLI over compile-only synthetic capture (no devices)
         if: runner.os == 'macOS'
         shell: bash
