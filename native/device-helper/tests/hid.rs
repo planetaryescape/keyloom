@@ -8,7 +8,7 @@ use std::{
 static LEASE_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
 struct Peer {
     child: Child,
-    input: ChildStdin,
+    input: Option<ChildStdin>,
     output: BufReader<ChildStdout>,
     id: u64,
 }
@@ -23,7 +23,7 @@ impl Peer {
             .spawn()
             .unwrap();
         let mut peer = Self {
-            input: child.stdin.take().unwrap(),
+            input: child.stdin.take(),
             output: BufReader::new(child.stdout.take().unwrap()),
             child,
             id: 0,
@@ -36,7 +36,7 @@ impl Peer {
         self.id += 1;
         let id = self.id.to_string();
         writeln!(
-            self.input,
+            self.input.as_mut().unwrap(),
             "{}",
             json!({"v":1,"type":"request","id":id,"method":method,"params":params})
         )
@@ -169,4 +169,115 @@ fn lost_response_proves_one_effect_attempt_without_payload_logs() {
         .read_to_string(&mut stderr)
         .unwrap();
     assert_eq!(stderr, "synthetic-write-attempt:1\n");
+}
+
+#[test]
+fn references_and_sessions_from_a_previous_helper_are_invalid() {
+    let _guard = LEASE_TEST.lock().unwrap();
+    let mut first = Peer::new();
+    let old_ref = first.reference();
+    let old_session =
+        first.call("hid.open", json!({"deviceRef":old_ref}))["result"]["sessionId"].clone();
+    first.send("session.close", json!({"sessionId":old_session}));
+    assert_eq!(first.read()["event"], "closed");
+    assert_eq!(first.read()["ok"], true);
+    let mut second = Peer::new();
+    let new_ref = second.reference();
+    assert_ne!(old_ref, new_ref);
+    let stale = second.call("hid.open", json!({"deviceRef":old_ref}));
+    assert_eq!(stale["error"]["code"], "stale_device");
+    let stale = second.call("session.close", json!({"sessionId":old_session}));
+    assert_eq!(stale["error"]["code"], "invalid_session");
+    assert_eq!(
+        second.call("test.stats", json!({}))["result"],
+        json!({"opens":0,"writes":0})
+    );
+    let new_session =
+        second.call("hid.open", json!({"deviceRef":new_ref}))["result"]["sessionId"].clone();
+    assert_ne!(old_session, new_session);
+}
+
+#[test]
+fn stalled_stdout_exits_despite_continued_observed_pings() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use std::{
+        io::Read,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Instant,
+    };
+    let _guard = LEASE_TEST.lock().unwrap();
+    let mut peer = Peer::new();
+    let reference = peer.reference();
+    let opened = peer.call("hid.open", json!({"deviceRef":reference}));
+    assert_eq!(opened["ok"], true);
+    let started = Instant::now();
+    peer.send("session.write",json!({"sessionId":opened["result"]["sessionId"],"reportId":0,"bytes":STANDARD.encode([252u8;32])}));
+    // Do not read stdout again. Rust owns the actual OS pipe; no runtime prefetcher exists.
+    let mut stdin = peer.input.take().unwrap();
+    let mut id = peer.id;
+    let stop = Arc::new(AtomicBool::new(false));
+    let producer_stop = stop.clone();
+    let producer = std::thread::spawn(move || {
+        while !producer_stop.load(Ordering::Acquire) {
+            id += 1;
+            if writeln!(
+                stdin,
+                "{}",
+                json!({"v":1,"type":"request","id":id.to_string(),"method":"ping","params":{}})
+            )
+            .is_err()
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        // Ownership remains here until the main test has observed child exit or killed it.
+        while !producer_stop.load(Ordering::Acquire) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    });
+    let mut stderr = peer.child.stderr.take().unwrap();
+    let observed = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).unwrap();
+        bytes
+    });
+    let status = loop {
+        if let Some(status) = peer.child.try_wait().unwrap() {
+            break Some(status);
+        }
+        if started.elapsed() > Duration::from_millis(6500) {
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let timed_out = status.is_none();
+    if timed_out {
+        peer.child.kill().unwrap();
+        peer.child.wait().unwrap();
+    }
+    stop.store(true, Ordering::Release);
+    producer.join().unwrap();
+    let diagnostics = observed.join().unwrap();
+    let pings = diagnostics
+        .split(|byte| *byte == b'\n')
+        .filter(|line| *line == b"synthetic-ping-observed")
+        .count();
+    eprintln!(
+        "{}",
+        json!({"continuedObservedPings":pings,"elapsedMs":started.elapsed().as_millis(),"stdoutNeverDrainedAfterOpen":true,"stdinHeldUntilObservedExit":true,"timedOut":timed_out})
+    );
+    assert!(
+        !timed_out,
+        "stdout progress watchdog did not terminate helper"
+    );
+    assert_eq!(status.and_then(|status| status.code()), Some(1));
+    assert!(
+        pings >= 8,
+        "parent enqueue is not proof: helper must observe continued pings"
+    );
+    assert!(started.elapsed() >= Duration::from_secs(5));
 }

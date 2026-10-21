@@ -14,7 +14,7 @@ keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 
 D-426 narrows the first implementation to `hello`, `ping` and `shutdown`, with empty capabilities and no device APIs. Doctor owns the short-lived child; import, editing and the server start none. Source invocation warns `not_bundled`. The installed check verifies manifest, extracted bytes, paired identity and bounded shutdown. Normal doctor retains its other checks. See [CLI output and repair](10-cli.md#doctor-checks-the-installed-helper-without-opening-a-keyboard) and [native build commands](../../native/device-helper/README.md).
 
-The [24c candidate](../research/spikes/device-helper-24c.md) implements compile-gated macOS HID ownership, leases, bounded sessions/events and an explicit TS adapter. QMK interruption warnings persist and prevent timing analysis. No production default or release-build feature is enabled. The sections below specify the full target; serial and other-platform backends remain unimplemented.
+The [24c candidate](../research/spikes/device-helper-24c.md) implements compile-gated macOS HID ownership, leases, bounded sessions/events and an explicit TS adapter. QMK interruption warnings persist and prevent timing analysis. Ordinary production builds remain unchanged. Explicit `--device-backend native-hid` candidate builds statically select the verified helper through the real CLI/app path and require a separate output directory; a synthetic-only installed PTY smoke proves stop/reopen and helper-death interruption without hardware. The sections below specify the full target; serial and other-platform backends remain unimplemented.
 
 ## Scope is device I/O on three operating systems
 

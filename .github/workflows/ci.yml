@@ -66,6 +66,18 @@ jobs:
           cp "target/debug/keyloom-device${{ matrix.exe }}" "target/debug/keyloom-device-synthetic${{ matrix.exe }}"
           cd ../..
           KEYLOOM_TEST_SYNTHETIC_HID="$PWD/native/device-helper/target/debug/keyloom-device-synthetic${{ matrix.exe }}" bun test test/firmware/toolchain/device-helper-hid.test.ts test/firmware/toolchain/device-helper-client-order.test.ts
+      - name: Installed candidate CLI over compile-only synthetic capture (no devices)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd native/device-helper
+          cargo build --locked --release --target "${{ matrix.rust }}" --features synthetic-capture
+          cp "target/${{ matrix.rust }}/release/keyloom-device" "target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
+          codesign --force --sign - "target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
+          cd ../..
+          helper="$PWD/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
+          bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --device-backend native-hid --helper "$helper" --out-dir dist/native-candidate-test
+          bun scripts/smoke-native-hid-candidate.ts "dist/native-candidate-test/keyloom-${{ matrix.rust == 'aarch64-apple-darwin' && 'darwin-arm64' || 'darwin-x64' }}" "$helper"
       - name: Locked Rust checks and native diagnostics build
         shell: bash
         working-directory: native/device-helper

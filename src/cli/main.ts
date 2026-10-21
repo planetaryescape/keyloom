@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
+  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -342,6 +342,12 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
     const c = classify(err, state.dataDir || (program.opts<Globals>().dataDir ?? ""));
     io.err(jsonErrors ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: c.kind, message: c.message } })}\n` : `error: ${c.message}\n`);
     return c.code;
+  } finally {
+    try { await shutdownDeviceConnections(); }
+    catch {
+      io.err("keyboard connection cleanup could not be confirmed; start a new command before using the keyboard connection again\n");
+      return EXIT.bug;
+    }
   }
 }
 

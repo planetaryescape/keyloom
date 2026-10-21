@@ -23,6 +23,7 @@ pub trait Device {
     fn write(&mut self, bytes: &[u8; 32]) -> Result<(), &'static str>;
     fn read(&mut self) -> Result<Option<[u8; 32]>, &'static str>;
     fn pending(&mut self) -> Result<Option<[u8; 32]>, &'static str>;
+    fn close(&mut self) -> Result<(), &'static str>;
 }
 pub trait Backend: Send + Sync {
     fn list(&self) -> Result<Vec<Endpoint>, &'static str>;
@@ -116,7 +117,7 @@ pub mod synthetic {
                 key: "synthetic-moonlander".into(),
                 vendor: 0x3297,
                 product: 0x1969,
-                serial: Some("keyloom:synthetic".into()),
+                serial: Some("keyloom/NPQRSTVWXYZ0".into()),
                 descriptor: DESCRIPTOR.to_vec(),
             }])
         }
@@ -126,6 +127,7 @@ pub mod synthetic {
                 writes: self.writes.clone(),
                 queue: std::collections::VecDeque::new(),
                 seq: 0,
+                close_fail: false,
             }))
         }
     }
@@ -133,6 +135,7 @@ pub mod synthetic {
         writes: Arc<AtomicUsize>,
         queue: std::collections::VecDeque<[u8; 32]>,
         seq: u8,
+        close_fail: bool,
     }
     impl Device for Fake {
         fn write(&mut self, bytes: &[u8; 32]) -> Result<(), &'static str> {
@@ -148,8 +151,25 @@ pub mod synthetic {
                 status[3] = u8::from(bytes[9] == 1);
                 status[5..9].copy_from_slice(&1000u32.to_le_bytes());
                 self.queue.push_back(status);
+                #[cfg(feature = "synthetic-capture")]
+                if bytes[9] == 1 {
+                    // Synthetic CLI passage: two firmware-timestamped events, never OS key capture.
+                    let mut report = [0; 32];
+                    report[0] = 0xe8;
+                    report[1] = 1;
+                    report[2] = self.seq.wrapping_add(1);
+                    report[3] = 2;
+                    report[4..8].copy_from_slice(&1030u32.to_le_bytes());
+                    report[8] = 30;
+                    report[9] = 1;
+                    report[12] = 30;
+                    report[14..16].copy_from_slice(&40u16.to_le_bytes());
+                    self.queue.push_back(report);
+                    self.seq = self.seq.wrapping_add(1);
+                }
             } else {
                 match bytes[0] {
+                    249 => self.close_fail = true,
                     250 => return Err("io_failed"),
                     251 => {
                         use std::io::Write;
@@ -173,13 +193,20 @@ pub mod synthetic {
         fn pending(&mut self) -> Result<Option<[u8; 32]>, &'static str> {
             Ok(self.queue.pop_front())
         }
+        fn close(&mut self) -> Result<(), &'static str> {
+            if self.close_fail {
+                Err("io_failed")
+            } else {
+                Ok(())
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "synthetic-hid")]
+    #[cfg(all(feature = "synthetic-hid", not(feature = "synthetic-capture")))]
     #[test]
     fn shared_firmware_bytes_match_synthetic_native_reports() {
         use base64::{Engine as _, engine::general_purpose::STANDARD};

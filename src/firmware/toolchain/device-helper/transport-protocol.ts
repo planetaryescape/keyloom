@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { identitySchema, requestSchema } from "./protocol.ts";
 
-export const capabilitySchema = z.enum(["hid.list", "hid.open", "hid.write"]);
+export const HID_CAPABILITIES = ["hid.list", "hid.open", "hid.write"] as const;
+export const capabilitySchema = z.enum(HID_CAPABILITIES);
 export const transportIdentitySchema = identitySchema.extend({ capabilities: z.array(capabilitySchema).max(3).refine((v) => new Set(v).size === v.length) });
 const token = z.string().min(1).max(128);
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);

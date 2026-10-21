@@ -181,8 +181,18 @@ fn serve() -> i32 {
         if request["method"] == "hello" || request["method"] == "ping" {
             *alive.lock().unwrap() = Instant::now();
         }
+        // Synthetic-only observation proves receipt (not parent enqueue) in the unread-pipe oracle.
+        #[cfg(feature = "synthetic-hid")]
+        if request["method"] == "ping" {
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(b"synthetic-ping-observed\n");
+        }
         #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
         {
+            if !native_output.admit(request["id"].as_str().unwrap()) {
+                native_output.reply(refusal(request["id"].as_str().unwrap(), "capacity"));
+                continue;
+            }
             if reply["error"]["code"] == "unsupported"
                 && let Some(native) = &native
             {
@@ -224,7 +234,7 @@ fn main() {
             println!(
                 "{}",
                 json!({"helperVersion":RELEASE,"protocol":1,"target":TARGET,"capabilities":capabilities(),
-                    "syntheticBackend":cfg!(feature="synthetic-hid"),
+                    "syntheticBackend":cfg!(feature="synthetic-hid"),"syntheticCapture":cfg!(feature="synthetic-capture"),
                     "thirdPartyNotices":include_str!("../THIRD-PARTY-NOTICES.txt")})
             );
             0

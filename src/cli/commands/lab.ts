@@ -3,7 +3,7 @@
 // here, because it is what a command line does; tests pass a scripted one.
 import type { Command } from "commander";
 import {
-  type App, type LabDeps, type StoredAnalysis, UsageError, analyseSession, beginRecording, deleteSession, endRecording, labPassages, labSessions, realLabDeps, sessionAnalysis, sessionContent,
+  type App, type LabDeps, type StoredAnalysis, UsageError, incompleteRecording, analyseSession, beginRecording, deleteSession, endRecording, labPassages, labSessions, realLabDeps, sessionAnalysis, sessionContent,
 } from "../../app/index.ts";
 import { type Io, type Format, columns, print } from "../output.ts";
 import { progressLine, untilInterrupted } from "./firmware.ts";
@@ -234,10 +234,10 @@ export function registerLabCommands(program: Command, deps: LabCommandDeps): voi
     .action(async (ref?: string) => {
       const list = await withApp((app) => labSessions(app, ref));
       print(io, format(), {
-        json: { sessions: list.map((s) => ({ session_id: s.id, layout_id: s.layoutId, revision_id: s.revisionId, board_id: s.boardId, passage: s.passageId, key_events: s.eventCount, started_at: s.startedAt, ended_at: s.endedAt, analysed: s.analysed })) },
+        json: { sessions: list.map((s) => ({ session_id: s.id, layout_id: s.layoutId, revision_id: s.revisionId, board_id: s.boardId, passage: s.passageId, key_events: s.eventCount, started_at: s.startedAt, ended_at: s.endedAt, analysed: s.analysed, incomplete: incompleteRecording(s.warnings), warnings: s.warnings })) },
         ids: list.map((s) => s.id),
-        table: list.length === 0 ? "no sessions yet; record one with: keyloom lab start <layout>" : columns([["ID", "WHEN", "PASSAGE", "KEY EVENTS", "ANALYSED"], ...list.map((s) => [s.id, new Date(s.startedAt).toISOString(), s.passageId, String(s.eventCount), s.analysed ? "yes" : "no"])]),
-        rows: list.map((s) => ({ schema_version: 1, session_id: s.id, layout_id: s.layoutId, started_at: s.startedAt, key_events: s.eventCount, analysed: s.analysed })),
+        table: list.length === 0 ? "no sessions yet; record one with: keyloom lab start <layout>" : columns([["ID", "WHEN", "PASSAGE", "KEY EVENTS", "RECORDING", "ANALYSED"], ...list.map((s) => [s.id, new Date(s.startedAt).toISOString(), s.passageId, String(s.eventCount), incompleteRecording(s.warnings) ? "incomplete" : "recorded", s.analysed ? "yes" : "no"])]),
+        rows: list.map((s) => ({ schema_version: 1, session_id: s.id, layout_id: s.layoutId, started_at: s.startedAt, key_events: s.eventCount, analysed: s.analysed, incomplete: incompleteRecording(s.warnings), warnings: s.warnings })),
       });
     });
 

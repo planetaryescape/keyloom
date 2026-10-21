@@ -32,7 +32,7 @@ export async function runDeviceHelperCheck(): Promise<DoctorCheck> {
   return {
     name: "device helper", ok: deviceHelper.available || source, ...(source ? { warn: true } : {}), deviceHelper,
     detail: deviceHelper.available
-      ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [] (diagnostics only)`
+      ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [${deviceHelper.capabilities.join(", ")}] (${deviceHelper.capabilities.length === 0 ? "diagnostics only" : "native HID candidate; hardware acceptance pending"})`
       : source
         ? "not bundled in source/dev invocation; build with scripts/build-binaries.ts or install a release"
         : `${deviceHelper.code}; reinstall this keyloom release; if the private helper cache was changed, remove that release from $XDG_CACHE_HOME/keyloom/device-helper and retry`,

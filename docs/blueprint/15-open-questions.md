@@ -29,7 +29,7 @@ D-426 implements only diagnostics with empty capabilities. Q40/Q42 are settled f
 
 ### S59 HID implementation candidate
 
-The [24c report](../research/spikes/device-helper-24c.md) records the pinned HIDAPI rejection, compile-gated direct macOS adapter, bounded synthetic native contracts and persistent QMK interruption handling. The candidate enumerated/opened no device; pre-existing legacy metadata tests ran before a preload gap was discovered and corrected, as recorded in that report. No operational device open occurred. S59 remains open: installed native selection, actual descriptor/framing, permissions, stop/reopen, unplug/kill, ordinary typing and both Mac architectures still need authorized evidence. Serial remains 24d; default builds and TypeScript transport selection are unchanged.
+The [24c report](../research/spikes/device-helper-24c.md) records the pinned HIDAPI rejection, compile-gated direct macOS adapter, bounded synthetic native contracts and persistent QMK interruption handling. The candidate enumerated/opened no device; pre-existing legacy metadata tests ran before a preload gap was discovered and corrected, as recorded in that report. No operational device open occurred. S59 remains open: installed physical native capture, actual descriptor/framing, permissions, stop/reopen, unplug/kill, ordinary typing and both Mac architectures still need authorized evidence. Serial remains 24d; default builds and TypeScript transport selection are unchanged.
 
 ## Spikes (phase 0 and per rung; run against BK's real boards and exports)
 

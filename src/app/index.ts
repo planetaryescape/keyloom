@@ -1,5 +1,6 @@
 // The only module src/cli (and src/server) may import (01#modules).
 export { type App, closeApp, openApp } from "./context.ts";
+export { shutdownDeviceConnections } from "./device-connections.ts";
 export { BusyError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
@@ -72,5 +73,5 @@ export { type ConditionalBackfillOutcome, backfillConditionalLayers } from "./co
 export { type UpgradeOffer, type UpgradeOutcome, upgradeLayout, upgradeOffer } from "./upgrade.ts";
 export {
   type AnalyseOptions, type LabDeps, type PassageView, type RecordingInProgress, type StoredAnalysis, analyseSession, beginRecording, deleteSession,
-  endRecording, labPassages, realLabDeps, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
+  endRecording, labPassages, realLabDeps, incompleteRecording, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
 } from "./lab.ts";

@@ -111,7 +111,7 @@ export class DeviceTransportClient {
     let pending = Buffer.alloc(0);
     for (;;) {
       const chunk = await this.reader.read();
-      if (chunk.done) { if (!this.stopping) throw channelError("helper_exited"); return; }
+      if (chunk.done) { if (pending.length !== 0) throw channelError("protocol_error"); if (!this.stopping) throw channelError("helper_exited"); return; }
       // Split first: a joined OS read may contain many individually valid frames.
       let start = 0;
       for (let i = 0; i < chunk.value.length; i++) {
@@ -155,10 +155,19 @@ export class DeviceTransportClient {
     void this.terminate().catch(() => { /* Failure remains latched; never start another child. */ });
   }
   async shutdown(): Promise<void> {
-    await Promise.all([...this.sessions.keys()].map((id) => this.close(id)));
-    clearInterval(this.heartbeat);
-    this.stopping = true;
-    try { await this.request("shutdown", {}, z.strictObject({}), 1_000); } finally { await this.terminate(); }
+    if (this.failure) { await this.terminate(); return; }
+    try {
+      await Promise.all([...this.sessions.keys()].map((id) => this.close(id)));
+      clearInterval(this.heartbeat);
+      this.stopping = true;
+      await this.request("shutdown", {}, z.strictObject({}), 1_000);
+      if (await this.waitForExit(1_000) !== 0) throw channelError("helper_exited");
+    } finally { await this.terminate(); }
+  }
+  private async waitForExit(ms: number): Promise<number> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try { return await Promise.race([this.child.exited, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(channelError("timeout")), ms); })]); }
+    finally { clearTimeout(timer); }
   }
   terminate(): Promise<void> {
     if (this.cleanup) return this.cleanup;
@@ -166,9 +175,8 @@ export class DeviceTransportClient {
     this.cleanup = (async () => {
       try { void Promise.resolve(this.child.stdin.end()).catch(() => {}); } catch { /* Broken pipe. */ }
       if (this.child.exitCode === null && this.child.signalCode === null) this.child.kill("SIGKILL");
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try { await Promise.race([this.child.exited, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(channelError("timeout")), 2_000); })]); }
-      finally { clearTimeout(timer); void this.reader.cancel().catch(() => {}); void this.stderr.cancel().catch(() => {}); }
+      try { await this.waitForExit(2_000); }
+      finally { void this.reader.cancel().catch(() => {}); void this.stderr.cancel().catch(() => {}); }
     })();
     return this.cleanup;
   }

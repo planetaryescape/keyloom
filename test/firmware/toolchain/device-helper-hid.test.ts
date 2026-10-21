@@ -114,6 +114,25 @@ describe.skipIf(!binary)("native synthetic-only HID through real TS client", () 
       expect(await stats(client)).toEqual({ opens: 1, writes: 1 });
     } finally { await client.shutdown(); }
   });
+  test("uncertain native close exits the owner instead of acknowledging release", async () => {
+    const client = await connect();
+    try {
+      const target = (await devices(client)).devices[0]!;
+      const failure = Promise.withResolvers<Error>();
+      const sessionId = await client.open(target.deviceRef, () => {}, failure.resolve);
+      await client.request("session.write", { sessionId, reportId: 0, bytes: packet(249) }, writtenSchema, 500);
+      await expect(client.close(sessionId)).rejects.toThrow("helper_exited");
+      expect((await failure.promise).message).toContain("helper_exited");
+      await client.terminate();
+    } finally { await client.shutdown(); }
+    const next = await connect();
+    try {
+      const target = (await devices(next)).devices[0]!;
+      const id = await next.open(target.deviceRef, () => {}, () => {});
+      await next.close(id);
+      expect(await stats(next)).toEqual({ opens: 1, writes: 0 });
+    } finally { await next.shutdown(); }
+  });
   test("lost write response never restarts a helper or repeats the effect", async () => {
     const client = await connect();
     const target = (await devices(client)).devices[0]!;

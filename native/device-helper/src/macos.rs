@@ -12,6 +12,7 @@ use std::{
     collections::VecDeque,
     ffi::{c_char, c_void},
     ptr,
+    rc::Rc,
 };
 
 type Ref = *const c_void;
@@ -164,12 +165,13 @@ impl Backend for Macos {
         }
         let device = Box::new(MacDevice {
             handle,
-            buffer: Box::new(UnsafeCell::new([0; 33])),
-            state: Box::new(UnsafeCell::new(CallbackState {
+            buffer: Rc::new(UnsafeCell::new([0; 33])),
+            state: Rc::new(UnsafeCell::new(CallbackState {
                 queue: VecDeque::new(),
                 failure: None,
             })),
             runloop: unsafe { CFRunLoopGetCurrent() },
+            close_attempted: false,
         });
         let context = device.state.get().cast();
         unsafe {
@@ -196,9 +198,10 @@ struct CallbackState {
 }
 struct MacDevice {
     handle: CFType,
-    buffer: Box<UnsafeCell<[u8; 33]>>,
-    state: Box<UnsafeCell<CallbackState>>,
+    buffer: Rc<UnsafeCell<[u8; 33]>>,
+    state: Rc<UnsafeCell<CallbackState>>,
     runloop: Ref,
+    close_attempted: bool,
 }
 unsafe extern "C" fn report(
     context: *mut c_void,
@@ -270,10 +273,12 @@ impl Device for MacDevice {
         }
         Ok(())
     }
-}
-impl Drop for MacDevice {
-    fn drop(&mut self) {
-        unsafe {
+    fn close(&mut self) -> Result<(), &'static str> {
+        if self.close_attempted {
+            return Ok(());
+        }
+        self.close_attempted = true;
+        let result = unsafe {
             let raw = self.handle.as_CFTypeRef();
             IOHIDDeviceUnscheduleFromRunLoop(raw, self.runloop, kCFRunLoopDefaultMode);
             IOHIDDeviceRegisterInputReportCallback(
@@ -284,7 +289,18 @@ impl Drop for MacDevice {
                 ptr::null_mut(),
             );
             IOHIDDeviceRegisterRemovalCallback(raw, None, ptr::null_mut());
-            IOHIDDeviceClose(raw, 0);
+            IOHIDDeviceClose(raw, 0)
+        };
+        if result != 0 {
+            return Err("io_failed");
+        }
+        Ok(())
+    }
+}
+impl Drop for MacDevice {
+    fn drop(&mut self) {
+        if !self.close_attempted && self.close().is_err() {
+            std::process::exit(1);
         }
     }
 }

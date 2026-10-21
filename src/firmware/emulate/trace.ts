@@ -15,6 +15,9 @@ export type CapturedTrace = {
   endedBy: string;
 };
 
+/** Persisted warning marker, shared by analysis refusal and CLI summaries. */
+export const incompleteRecording = (warnings: readonly string[]): boolean => warnings.some((warning) => warning.startsWith("Recording incomplete:"));
+
 export type KeyCapture = {
   /** The events so far, in order. */
   snapshot(): TraceEvent[];

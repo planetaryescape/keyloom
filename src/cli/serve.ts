@@ -1,7 +1,7 @@
 // `keyloom serve`: the local web app over the same use cases the CLI calls (01#server-and-transport).
 import {
   type AddDeps, type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, ReviewEngine, type ReviewOptions, type SyncDeps, boardDevView, createSyncEngine, defaultAgentModel, getLayout,
-  listLayouts, upgradeOffer,
+  listLayouts, upgradeOffer, shutdownDeviceConnections,
 } from "../app/index.ts";
 import type { AgentModel } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
@@ -87,9 +87,10 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   reviews.start(engine);
   const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const watcher = createDataVersionWatcher(app.db);
+  const lab = appLabBackend(app, opts.lab ?? realLabDeps());
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
-    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab: appLabBackend(app, opts.lab ?? realLabDeps()), open: opts.open,
+    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab, open: opts.open,
   });
   let drained: Promise<void> | undefined;
   return {
@@ -98,7 +99,9 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
       watcher.stop();
       running.stop();
       // A build is stopped; a flash is let finish, so the keyboard isn't left half written.
-      drained ??= Promise.all([drainAgentRuns(app), started.then(() => Promise.all([engine.stop(), reviews.stop()]))]).then(() => undefined);
+      drained ??= Promise.all([lab.cancel(), drainAgentRuns(app), started.then(() => Promise.all([engine.stop(), reviews.stop()]))])
+        .then(() => undefined)
+        .finally(shutdownDeviceConnections);
     },
     drain: async () => {
       await drained;

@@ -8,7 +8,7 @@ import { findQmkStreamDevice, startQmkCapture } from "../firmware/qmk/typing-cap
 import { defaultHidTransport } from "../firmware/toolchain/hid-default.ts";
 import { defaultSerialTransport } from "../firmware/toolchain/serial-default.ts";
 import { findZmkStreamPort, startZmkCapture } from "../firmware/zmk/typing-capture.ts";
-import { CaptureError } from "../firmware/emulate/trace.ts";
+import { CaptureError, incompleteRecording } from "../firmware/emulate/trace.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { type Analysis, type Replay, analyse } from "../lab/analyse.ts";
 import { builtinPassages, customPassage, passageLines } from "../lab/passages.ts";
@@ -32,6 +32,8 @@ import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+
+export { incompleteRecording };
 
 export type LabDeps = {
   /** Starts the key stream on the keyboard of `board` that is plugged in. Throws CaptureError with what to do when there is none. */
@@ -201,7 +203,7 @@ function proposalFor(layout: Layout, s: Suggestion, recordedOn: number) {
  */
 export async function analyseSession(app: App, id: string, deps: LabDeps, opts: AnalyseOptions = {}): Promise<{ session: TypingSessionSummary; analysis: StoredAnalysis }> {
   const row = sessionRow(app, id);
-  if (row.warnings.some((warning) => warning.startsWith("Recording incomplete:"))) {
+  if (incompleteRecording(row.warnings)) {
     throw new UsageError("This recording is incomplete. Start a new recording before testing timing changes; the partial recording is still saved.");
   }
   const view = getLayout(app, row.layoutId, row.revisionId);

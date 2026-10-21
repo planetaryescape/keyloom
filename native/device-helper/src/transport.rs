@@ -42,15 +42,32 @@ impl Output {
         let inflight = pending.clone();
         let control_frames = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let queued = control_frames.clone();
+        // Parent pings cannot refresh this independent output-progress deadline.
+        let writing = Arc::new(Mutex::new(None::<Instant>));
+        let stalled = writing.clone();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_millis(50));
+                if stalled
+                    .lock()
+                    .unwrap()
+                    .is_some_and(|at| at.elapsed() >= Duration::from_secs(5))
+                {
+                    std::process::exit(1); // Fatal paths perform no diagnostic I/O.
+                }
+            }
+        });
         std::thread::spawn(move || {
             let mut stdout = std::io::stdout().lock();
             let write = |value: Value, stdout: &mut std::io::StdoutLock<'_>| {
+                *writing.lock().unwrap() = Some(Instant::now());
                 if serde_json::to_writer(&mut *stdout, &value).is_err()
                     || stdout.write_all(b"\n").is_err()
                     || stdout.flush().is_err()
                 {
                     std::process::exit(1);
                 }
+                *writing.lock().unwrap() = None;
                 if value["type"] == "response"
                     && let Some(id) = value["id"].as_str()
                 {
@@ -110,6 +127,14 @@ impl Output {
             std::process::exit(1);
         }
     }
+    pub fn admit(&self, id: &str) -> bool {
+        let mut pending = self.pending.lock().unwrap();
+        if pending.len() >= 32 {
+            return false;
+        }
+        pending.insert(id.to_owned());
+        true
+    }
     pub fn reply(&self, value: Value) {
         self.control(vec![value], false, None);
     }
@@ -143,10 +168,20 @@ pub struct Transport {
     state: Arc<Mutex<State>>,
     output: Output,
     origin: Instant,
+    nonce: String,
 }
 impl Transport {
     pub fn new(backend: Arc<dyn Backend>, output: Output) -> Self {
+        let mut bytes = [0u8; 16];
+        if getrandom::fill(&mut bytes).is_err() {
+            std::process::exit(1);
+        }
+        let nonce = bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
         Self {
+            nonce,
             backend,
             output,
             state: Arc::new(Mutex::new(State {
@@ -161,15 +196,6 @@ impl Transport {
         }
     }
     pub fn handle(&self, id: String, method: &str, params: &Value) {
-        {
-            let mut pending = self.output.pending.lock().unwrap();
-            if pending.len() >= 32 {
-                drop(pending);
-                self.output.reply(fail(&id, "capacity", "none"));
-                return;
-            }
-            pending.insert(id.clone());
-        }
         match method {
             #[cfg(feature = "synthetic-hid")]
             "test.stats" => self.output.reply(ok(&id, self.backend.test_stats())),
@@ -196,7 +222,8 @@ impl Transport {
                         Ok(endpoints) if endpoints.len() <= 256 => {
                             let mut devices = Vec::new();
                             for (index, endpoint) in endpoints.into_iter().enumerate() {
-                                let reference = format!("d{}-{index}", state.generation);
+                                let reference =
+                                    format!("d{}-{}-{index}", this.nonce, state.generation);
                                 devices.push(endpoint.record(&reference));
                                 state.refs.insert(reference, endpoint);
                             }
@@ -244,7 +271,7 @@ impl Transport {
                     return;
                 };
                 state.next += 1;
-                let session = format!("s{}", state.next);
+                let session = format!("s{}-{}", self.nonce, state.next);
                 let (send, receive) = mpsc::sync_channel(32);
                 state.sessions.insert(
                     session.clone(),
@@ -335,6 +362,9 @@ impl Transport {
         };
         if let Some(bytes) = one_shot {
             let result = device.write(&bytes);
+            if device.close().is_err() {
+                std::process::exit(1);
+            }
             drop(device);
             drop(lease);
             self.state.lock().unwrap().sessions.remove(&session);
@@ -408,6 +438,11 @@ impl Transport {
                     }
                 }
             }
+        }
+        // A failed native close cannot publish release or drop the lease first. Exit reaps
+        // the entire owner task; parent EOF marks every outstanding effect/loss unknown.
+        if device.close().is_err() {
+            std::process::exit(1);
         }
         // Drop the native handle BEFORE releasing the lease or publishing closed.
         drop(device);

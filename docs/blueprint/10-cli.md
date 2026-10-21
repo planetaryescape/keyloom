@@ -117,6 +117,8 @@ Stop is explicit and does not roll back saved configs, proposals or memory. `age
 
 ## The typing lab records your typing and tunes the board to it
 
+`keyloom lab sessions` retains interruption in both formats: JSON/JSONL include `incomplete` and `warnings`; table rows say `incomplete` or `recorded`. An incomplete saved recording cannot run timing analysis or generate proposals. Its partial trace remains saved.
+
 `keyloom lab start g80` prints what it records (which key, when, and what you type in this terminal), that it stays on this Mac, and how to delete it, then shows the passage and your typed text until Ctrl-C. It needs a keyboard running a keyloom build (the Moonlander over raw HID, the ZMK boards over the module's serial port), and says what to do when there is none. `keyloom lab analyse typ_…` replays the recording through the layout's firmware logic in Docker, prints what went wrong per finger, and stores each setting change that clearly helps as a proposed change set with the counts from the recording; `--no-propose` prints them without storing. JSON has the counts, findings, per-finger rows and each suggestion's evidence and ops, never the passage or the typed text. [24](24-typing-lab.md) has the design.
 
 ## Emulate prints what a layout types for a sequence of key presses
