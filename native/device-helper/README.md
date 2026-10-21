@@ -37,6 +37,22 @@ The [24c evidence and adoption gates](../../docs/research/spikes/device-helper-2
 
 For a fake-only installed native journey, build `--features synthetic-capture`, copy/sign that helper, build the host with `--device-backend native-hid --out-dir dist/native-candidate-test --helper <copied-helper>`, then run `bun scripts/smoke-native-hid-candidate.ts <candidate-cli> <synthetic-capture-helper>`. The smoke verifies the embedded hash and synthetic marker before device requests. It drives the real CLI over a PTY, stops/reopens, kills the owned synthetic helper and checks persisted interruption/analysis refusal. See [the complete safe command](../../docs/research/spikes/device-helper-24c.md#build-and-exercise-the-actual-cli-without-a-keyboard).
 
+## Compile the direct macOS serial candidate without discovering devices
+
+```sh
+cd native/device-helper
+cargo clippy --locked --all-targets --features native-serial -- -D warnings
+cargo test --locked --features native-serial
+cd ../..
+bun scripts/build-binaries.ts --target bun-darwin-arm64 \
+  --device-backend native-serial --out-dir dist/native-serial-source-test
+dist/native-serial-source-test/keyloom-darwin-arm64 --version
+```
+
+`native-serial` is macOS-only and exclusive with all other device features. It advertises exactly `serial.list` and `serial.open`; `serial.touch` remains unsupported. It shares metadata-only IORegistry ownership with HID and owns the callout fd directly. Setup checks raw 115200 8N1, disabled flow control, cleared HUPCL and DTR-high readback; close checks DTR-low, exclusive-release and fd close. Reads poll for at most 50 ms, writes accept the complete chunk within a 500-ms total deadline, and pending reads never wait. The backend retains no native queue; the owner bounds shared output at 16 chunks.
+
+Use the pinned Rust/Bun toolchains and `CARGO_NET_OFFLINE=true`. Direct optional `libc =0.2.191` reuses the locked ABI definitions for termios, polling and syscalls; its MIT notice is already included. Pure/injected tests and anonymous `openpty` tests perform no registry enumeration or real-port access. They cannot establish USB DTR behavior or prevent an OS-initiated DTR transition during open; see [the exact sequence and limitations](../../docs/research/spikes/device-helper-24d.md#slice-2-owns-the-macos-port-with-checked-transitions). Ordinary builds still enable no device backend. On Intel use `bun-darwin-x64`; CI builds the source candidate on each native Mac runner.
+
 ## Test the synthetic serial candidate
 
 ```sh
@@ -52,7 +68,7 @@ KEYLOOM_TEST_SYNTHETIC_SERIAL="$PWD/native/device-helper/target/debug/keyloom-de
   bun test test/firmware/toolchain/device-helper-serial.test.ts
 ```
 
-Run heavy commands through `agent-work run --` on BK's machine. `synthetic-serial` compiles one fake Glove80 endpoint, raw byte echo and scripted START/STOP. `synthetic-serial-capture` also emits two firmware-timestamped events split mid-line. Neither feature compiles OS-device code; combining serial with either HID feature is a compile error. No crates were added. `serial.touch` always refuses `unsupported` and is not advertised. The [24d record](../../docs/research/spikes/device-helper-24d.md) gives the candidate build and installed PTY smoke commands, observed checks and the next real-port adapter contract.
+Run heavy commands through `agent-work run --` on BK's machine. `synthetic-serial` compiles one fake Glove80 endpoint, raw byte echo and scripted START/STOP. `synthetic-serial-capture` also emits two firmware-timestamped events split mid-line. Neither feature compiles OS-device code; combining serial with either HID feature is a compile error. No crate versions were added. `serial.touch` always refuses `unsupported` and is not advertised. The [24d record](../../docs/research/spikes/device-helper-24d.md) gives the candidate build and installed PTY smoke commands, observed checks and the direct backend's unverified hardware gates.
 
 ## Compile an installed CLI pair
 
@@ -87,6 +103,6 @@ cargo metadata --locked --format-version 1
 
 Direct normal/build dependency: `serde_json =1.0.154`, default `std` feature. The compiled tree contains `itoa 1.0.18` (MIT OR Apache-2.0), `memchr 2.8.3` (Unlicense OR MIT), `serde_core 1.0.229` (MIT OR Apache-2.0), `serde_json 1.0.154` (MIT OR Apache-2.0), and `zmij 1.0.23` (MIT). MIT notices are [included](THIRD-PARTY-NOTICES.txt) and embedded in the helper's `--version` output.
 
-The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for HID and synthetic serial builds and, on macOS only, `core-foundation =0.10.1` with `core-foundation-sys 0.8.7` and `libc 0.2.191`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in HID or synthetic serial features; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; no serial crate is selected. The direct macOS candidate is not a production default.
+The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for device-enabled builds and, on macOS only, `core-foundation =0.10.1` with `core-foundation-sys 0.8.7` and `libc 0.2.191`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in device-enabled features; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; D-431 replaces the serialport candidate with direct macOS ownership. The direct macOS candidate is not a production default.
 
 See [S58/S62 evidence](../../docs/research/spikes/device-helper-24b.md) for observed results and unverified release/signing/platform gates.

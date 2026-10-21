@@ -55,6 +55,7 @@ dependencies = [
  "base64",
  "core-foundation",
  "getrandom",
+ "libc",
  "serde_json",
 ]
 

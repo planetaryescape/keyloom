@@ -51,6 +51,8 @@ The [hidapi 2.6.7 write contract](https://docs.rs/hidapi/2.6.7/hidapi/struct.Hid
 
 No crate is installed or selected by this review. The versions above identify the fetched API documentation, not a final dependency lock. S62 must commit `Cargo.lock`, an explicit Rust toolchain, backend features and a licence inventory before adoption. Use library APIs first; do not copy upstream source without a licence check, immutable SHA and adaptation comment.
 
+D-431 (2026-10-21) supersedes the macOS `serialport` candidate in this historical comparison. BK chose direct IORegistry/POSIX ownership after reading `serialport 4.10.1` at revision `41496a9958aa47ff930a0ac5e659110e35d3d752`: `src/posix/tty.rs:202-208` ignores the builder DTR setter error, failure paths at 134-188 can close before the requested baud, and 21-37/409-412 perform no explicit checked DTR-low close. The [24d implementation record](spikes/device-helper-24d.md#slice-2-owns-the-macos-port-with-checked-transitions) distinguishes software checks from unobserved physical behavior. No crate source was copied or new crate version added.
+
 ## Reuse map at the fetched source SHA
 
 All paths below are inside keyloom, AGPL-3.0-or-later. Counts are exact for the baseline; check changes after fetching before reuse. Keep one canonical implementation of firmware parsing and application policy.
@@ -58,6 +60,7 @@ All paths below are inside keyloom, AGPL-3.0-or-later. Counts are exact for the 
 | Piece | Existing path | Lines | Reuse / adapt |
 |---|---|---:|---|
 | HID seam | `src/firmware/toolchain/hid.ts` | 40 | Preserve payload contract and dependency injection; map opaque references internally |
+| Direct macOS serial ownership (D-431) | `native/device-helper/src/registry.rs`; `serial_macos.rs` | Current candidate | Reuse shared CF/IOKit ownership and TS USB-parent matching knowledge; own checked termios/DTR/read/write/close directly. `serialport` remains comparison evidence, superseded as the macOS candidate |
 | Serial seam | `src/firmware/toolchain/serial.ts` | 74 | Make session write/close awaitable; remove stty only for adopted backends |
 | macOS native knowledge | `src/firmware/toolchain/hid-macos.ts`; `serial-macos.ts` | 217; 103 | Identity, properties and lifecycle tests; do not translate pointer declarations mechanically |
 | Linux native knowledge | `src/firmware/toolchain/hid-linux.ts`; `serial-linux.ts` | 79; 76 | Matching, permissions and enumeration tests; correct framing from the independent specification |

@@ -18,9 +18,22 @@ pub trait SerialDevice {
     fn pending(&mut self) -> Result<Option<Vec<u8>>, &'static str>;
     fn close(&mut self) -> Result<(), &'static str>;
 }
+#[derive(Debug, PartialEq)]
+pub struct OpenError {
+    pub code: &'static str,
+    pub possible: bool,
+}
+impl From<&'static str> for OpenError {
+    fn from(code: &'static str) -> Self {
+        Self {
+            code,
+            possible: false,
+        }
+    }
+}
 pub trait SerialBackend: Send + Sync {
     fn list(&self) -> Result<Vec<SerialEndpoint>, &'static str>;
-    fn open(&self, endpoint: &SerialEndpoint) -> Result<Box<dyn SerialDevice>, &'static str>;
+    fn open(&self, endpoint: &SerialEndpoint) -> Result<Box<dyn SerialDevice>, OpenError>;
     #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]
     fn test_stats(&self) -> Value;
 }
@@ -50,7 +63,7 @@ pub mod serial_synthetic {
                 interface_number: Some(0),
             }])
         }
-        fn open(&self, _: &SerialEndpoint) -> Result<Box<dyn SerialDevice>, &'static str> {
+        fn open(&self, _: &SerialEndpoint) -> Result<Box<dyn SerialDevice>, OpenError> {
             self.opens.fetch_add(1, Ordering::SeqCst);
             Ok(Box::new(Fake {
                 writes: self.writes.clone(),

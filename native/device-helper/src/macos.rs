@@ -1,31 +1,21 @@
 //! Small native adapter, not a translation/copy of HIDAPI. Registry reads never call
 //! IOHIDDeviceOpen. The owner pumps one runloop; callbacks never block or silently drop.
 use crate::backend::{Backend, Device, Endpoint, raw_descriptor};
+use crate::registry::{
+    IOIteratorNext, IORegistryEntryGetRegistryEntryID, IORegistryEntryIDMatching,
+    IOServiceGetMatchingService, IOServiceGetMatchingServices, IOServiceMatching, Registry, number,
+    property,
+};
 use core_foundation::{
     base::{CFType, TCFType},
     data::CFData,
-    number::CFNumber,
     string::CFString,
 };
-use std::{
-    cell::UnsafeCell,
-    collections::VecDeque,
-    ffi::{c_char, c_void},
-    ptr,
-    rc::Rc,
-};
+use std::{cell::UnsafeCell, collections::VecDeque, ffi::c_void, ptr, rc::Rc};
 
 type Ref = *const c_void;
 #[link(name = "IOKit", kind = "framework")]
 unsafe extern "C" {
-    fn IOServiceMatching(name: *const c_char) -> *mut c_void;
-    fn IOServiceGetMatchingServices(port: u32, matching: *mut c_void, iterator: *mut u32) -> i32;
-    fn IOIteratorNext(iterator: u32) -> u32;
-    fn IOObjectRelease(object: u32) -> i32;
-    fn IORegistryEntryGetRegistryEntryID(entry: u32, id: *mut u64) -> i32;
-    fn IORegistryEntryCreateCFProperty(entry: u32, key: Ref, allocator: Ref, options: u32) -> Ref;
-    fn IORegistryEntryIDMatching(id: u64) -> *mut c_void;
-    fn IOServiceGetMatchingService(port: u32, matching: *mut c_void) -> u32;
     fn IOHIDDeviceCreate(allocator: Ref, service: u32) -> Ref;
     fn IOHIDDeviceOpen(device: Ref, options: u32) -> i32;
     fn IOHIDDeviceClose(device: Ref, options: u32) -> i32;
@@ -53,28 +43,6 @@ unsafe extern "C" {
     fn CFRunLoopGetCurrent() -> Ref;
     fn CFRunLoopRunInMode(mode: Ref, seconds: f64, once: u8) -> i32;
     static kCFRunLoopDefaultMode: Ref;
-}
-struct Registry(u32);
-impl Drop for Registry {
-    fn drop(&mut self) {
-        unsafe {
-            IOObjectRelease(self.0);
-        }
-    }
-}
-fn property(entry: u32, key: &str) -> Option<CFType> {
-    let key = CFString::new(key);
-    let value = unsafe {
-        IORegistryEntryCreateCFProperty(entry, key.as_concrete_TypeRef().cast(), ptr::null(), 0)
-    };
-    if value.is_null() {
-        None
-    } else {
-        Some(unsafe { CFType::wrap_under_create_rule(value) })
-    }
-}
-fn number(entry: u32, key: &str) -> Option<u16> {
-    u16::try_from(property(entry, key)?.downcast::<CFNumber>()?.to_i64()?).ok()
 }
 fn endpoint(entry: u32) -> Option<Endpoint> {
     if number(entry, "PrimaryUsagePage")? != 0xff60 || number(entry, "PrimaryUsage")? != 0x61 {

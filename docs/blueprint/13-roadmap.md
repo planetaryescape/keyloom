@@ -591,7 +591,7 @@ Status: shipped in v0.46.1, 2026-10-20 (D-426; PRs 136, 138, 139). Full/native C
 
 ## Rung 24c: My Moonlander recording survives transport failure honestly
 
-Status: native HID/capture implementation candidate; explicit compile-time installed CLI selection is synthetic-tested. Production adoption remains blocked on the HID half of S59 and installed physical acceptance. The compile-gated macOS adapter, bounded session protocol, explicit TS adapter and QMK incomplete-recording path are implemented in the [24c candidate](../research/spikes/device-helper-24c.md); the 24d TypeScript ZMK interruption path now runs on the legacy serial transport, while the native serial adapter remains pending. Defaults and release builds remain diagnostics/legacy; no physical gate passed.
+Status: native HID/capture implementation candidate; explicit compile-time installed CLI selection is synthetic-tested. Production adoption remains blocked on the HID half of S59 and installed physical acceptance. The compile-gated macOS adapter, bounded session protocol, explicit TS adapter and QMK incomplete-recording path are implemented in the [24c candidate](../research/spikes/device-helper-24c.md); the 24d TypeScript ZMK interruption path now runs on the legacy serial transport, while the native serial adapter is a compile-gated 24d candidate. Defaults and release builds remain diagnostics/legacy; no physical gate passed.
 
 **Previously:** macOS HID callbacks and lifetimes live in Bun. **Now:** an adopted Rust HID backend owns them, while existing QMK capture and sync policy remain in TS.
 
@@ -611,7 +611,7 @@ Status: native HID/capture implementation candidate; explicit compile-time insta
 
 ## Rung 24d: My Glove80 uses the same owned device connection
 
-Status: TypeScript capture lifecycle on the legacy stty/polling transport built. [Slice 1](../research/spikes/device-helper-24d.md) adds synthetic Rust serial sessions, the explicit installed `native-serial` selector and a software-only PTY smoke, all passing locally. The real Rust serial backend, touch and physical serial S59 remain pending. The 24c dependency and physical acceptance gates remain open.
+Status: TypeScript capture lifecycle on the legacy stty/polling transport built. [Slice 1](../research/spikes/device-helper-24d.md) adds synthetic Rust serial sessions, the explicit installed `native-serial` selector and a software-only PTY smoke, all passing locally. Slice 2 adds direct macOS registry/POSIX serial ownership (D-431), checked raw 115200/DTR setup and checked close, with pure/PTY tests and source candidate builds. Touch, real-port behavior and physical serial S59 remain pending. The 24c dependency and physical acceptance gates remain open.
 
 **Previously:** macOS serial discovery uses FFI and capture/touch use stty/polling. **Now:** the helper owns CDC sessions and explicit touch operations.
 

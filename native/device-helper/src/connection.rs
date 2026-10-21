@@ -1,5 +1,5 @@
 use crate::backend::{Backend, Device, Endpoint};
-use crate::serial::{SerialBackend, SerialDevice, SerialEndpoint};
+use crate::serial::{OpenError, SerialBackend, SerialDevice, SerialEndpoint};
 use serde_json::{Value, json};
 // The owner normalizes only its control flow; HID retains its fixed-size native contract.
 #[allow(dead_code)]
@@ -105,13 +105,16 @@ impl ConnectionBackend {
                 .map(|v| v.into_iter().map(ConnectionEndpoint::Serial).collect()),
         }
     }
-    pub fn open(&self, endpoint: &ConnectionEndpoint) -> Result<ConnectionDevice, &'static str> {
+    pub fn open(&self, endpoint: &ConnectionEndpoint) -> Result<ConnectionDevice, OpenError> {
         match (self, endpoint) {
-            (Self::Hid(b), ConnectionEndpoint::Hid(e)) => b.open(e).map(ConnectionDevice::Hid),
+            (Self::Hid(b), ConnectionEndpoint::Hid(e)) => b
+                .open(e)
+                .map(ConnectionDevice::Hid)
+                .map_err(OpenError::from),
             (Self::Serial(b), ConnectionEndpoint::Serial(e)) => {
                 b.open(e).map(ConnectionDevice::Serial)
             }
-            _ => Err("unsupported"),
+            _ => Err("unsupported".into()),
         }
     }
     #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]

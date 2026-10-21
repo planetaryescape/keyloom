@@ -1,22 +1,43 @@
+#[cfg(all(
+    feature = "native-serial",
+    any(
+        feature = "native-hid",
+        feature = "synthetic-hid",
+        feature = "synthetic-serial"
+    )
+))]
+compile_error!("native serial must be built separately from other device backends");
+#[cfg(all(feature = "native-serial", not(target_os = "macos")))]
+compile_error!("native-serial is only implemented on macOS");
+#[cfg(all(
+    any(feature = "native-hid", feature = "native-serial"),
+    target_os = "macos"
+))]
+mod registry;
+#[cfg(all(feature = "native-serial", target_os = "macos"))]
+mod serial_macos;
 // Default builds remain diagnostics. Native and synthetic implementations are compile-time exclusive.
 #[cfg(all(feature = "native-hid", feature = "synthetic-hid"))]
 compile_error!("synthetic and production backends must never coexist");
 #[cfg(any(
     feature = "native-hid",
     feature = "synthetic-hid",
-    feature = "synthetic-serial"
+    feature = "synthetic-serial",
+    feature = "native-serial"
 ))]
 mod backend;
 #[cfg(any(
     feature = "native-hid",
     feature = "synthetic-hid",
-    feature = "synthetic-serial"
+    feature = "synthetic-serial",
+    feature = "native-serial"
 ))]
 mod connection;
 #[cfg(any(
     feature = "native-hid",
     feature = "synthetic-hid",
-    feature = "synthetic-serial"
+    feature = "synthetic-serial",
+    feature = "native-serial"
 ))]
 mod serial;
 #[cfg(all(
@@ -29,14 +50,17 @@ mod macos;
 #[cfg(any(
     feature = "native-hid",
     feature = "synthetic-hid",
-    feature = "synthetic-serial"
+    feature = "synthetic-serial",
+    feature = "native-serial"
 ))]
 mod transport;
 
 fn capabilities() -> Vec<&'static str> {
     if cfg!(feature = "synthetic-hid") || cfg!(all(feature = "native-hid", target_os = "macos")) {
         vec!["hid.list", "hid.open", "hid.write"]
-    } else if cfg!(feature = "synthetic-serial") {
+    } else if cfg!(feature = "synthetic-serial")
+        || cfg!(all(feature = "native-serial", target_os = "macos"))
+    {
         vec!["serial.list", "serial.open"]
     } else {
         vec![]
@@ -46,7 +70,8 @@ use serde_json::{Value, json};
 #[cfg(not(any(
     feature = "native-hid",
     feature = "synthetic-hid",
-    feature = "synthetic-serial"
+    feature = "synthetic-serial",
+    feature = "native-serial"
 )))]
 use std::io::Write;
 use std::io::{self, BufRead, Read};
@@ -179,7 +204,8 @@ fn serve() -> i32 {
     #[cfg(any(
         feature = "native-hid",
         feature = "synthetic-hid",
-        feature = "synthetic-serial"
+        feature = "synthetic-serial",
+        feature = "native-serial"
     ))]
     let native_output = transport::Output::start(capabilities().contains(&"serial.open"));
     #[cfg(feature = "synthetic-hid")]
@@ -192,6 +218,11 @@ fn serve() -> i32 {
         connection::ConnectionBackend::Hid(Arc::new(macos::Macos)),
         native_output.clone(),
     ));
+    #[cfg(all(feature = "native-serial", target_os = "macos"))]
+    let native = Some(transport::Transport::new(
+        connection::ConnectionBackend::Serial(Arc::new(serial_macos::Macos)),
+        native_output.clone(),
+    ));
     #[cfg(feature = "synthetic-serial")]
     let native = Some(transport::Transport::new(
         connection::ConnectionBackend::Serial(Arc::new(
@@ -199,12 +230,16 @@ fn serve() -> i32 {
         )),
         native_output.clone(),
     ));
-    #[cfg(all(feature = "native-hid", not(target_os = "macos")))]
+    #[cfg(all(
+        any(feature = "native-hid", feature = "native-serial"),
+        not(target_os = "macos")
+    ))]
     let native: Option<transport::Transport> = None;
     #[cfg(not(any(
         feature = "native-hid",
         feature = "synthetic-hid",
-        feature = "synthetic-serial"
+        feature = "synthetic-serial",
+        feature = "native-serial"
     )))]
     let mut output = io::stdout().lock();
     loop {
@@ -216,7 +251,8 @@ fn serve() -> i32 {
         #[cfg(any(
             feature = "native-hid",
             feature = "synthetic-hid",
-            feature = "synthetic-serial"
+            feature = "synthetic-serial",
+            feature = "native-serial"
         ))]
         let request = value.clone();
         let (reply, stop) = match protocol.handle(value) {
@@ -226,7 +262,8 @@ fn serve() -> i32 {
         #[cfg(not(any(
             feature = "native-hid",
             feature = "synthetic-hid",
-            feature = "synthetic-serial"
+            feature = "synthetic-serial",
+            feature = "native-serial"
         )))]
         {
             *alive.lock().unwrap() = Instant::now();
@@ -234,7 +271,8 @@ fn serve() -> i32 {
         #[cfg(any(
             feature = "native-hid",
             feature = "synthetic-hid",
-            feature = "synthetic-serial"
+            feature = "synthetic-serial",
+            feature = "native-serial"
         ))]
         if request["method"] == "hello" || request["method"] == "ping" {
             *alive.lock().unwrap() = Instant::now();
@@ -248,7 +286,8 @@ fn serve() -> i32 {
         #[cfg(any(
             feature = "native-hid",
             feature = "synthetic-hid",
-            feature = "synthetic-serial"
+            feature = "synthetic-serial",
+            feature = "native-serial"
         ))]
         {
             if !native_output.admit(request["id"].as_str().unwrap()) {
@@ -278,7 +317,8 @@ fn serve() -> i32 {
         #[cfg(not(any(
             feature = "native-hid",
             feature = "synthetic-hid",
-            feature = "synthetic-serial"
+            feature = "synthetic-serial",
+            feature = "native-serial"
         )))]
         if serde_json::to_writer(&mut output, &reply).is_err()
             || output.write_all(b"\n").is_err()
@@ -289,7 +329,8 @@ fn serve() -> i32 {
         #[cfg(not(any(
             feature = "native-hid",
             feature = "synthetic-hid",
-            feature = "synthetic-serial"
+            feature = "synthetic-serial",
+            feature = "native-serial"
         )))]
         if stop {
             return if reply["ok"] == true { 0 } else { 1 };
