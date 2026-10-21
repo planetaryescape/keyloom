@@ -40,7 +40,6 @@ function options(argv: string[]) {
   if (backend !== "legacy" && (resolve(outDir) === resolve("dist") || selected.some((target) => RELEASE_TARGETS[target].platform !== "darwin"))) {
     throw new Error(`${backend} is an unadopted macOS candidate; select a Mac target and an explicit separate --out-dir`);
   }
-  if (backend === "native-serial" && !helper) throw new Error("native-serial currently requires --helper with a compiled synthetic-serial helper; the real serial backend is not built");
   return { targets: selected, entry, helper, helperDir, outDir, backend };
 }
 
@@ -51,7 +50,7 @@ async function helperPath(target: BunTarget, backend: "legacy" | "native-hid" | 
   if (process.platform !== spec.platform || process.arch !== spec.arch)
     throw new Error(`cross build ${target} needs --helper-dir with native built/signed helpers, or --helper with one target`);
   const args = ["cargo", "build", "--locked", "--release", "--target", spec.rust];
-  if (backend === "native-hid") args.push("--features", "native-hid");
+  if (backend !== "legacy") args.push("--features", backend);
   const build = Bun.spawn(args, {
     cwd: "native/device-helper", stdout: "inherit", stderr: "inherit",
   });

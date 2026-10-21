@@ -1,7 +1,8 @@
 #![cfg(not(any(
     feature = "native-hid",
     feature = "synthetic-hid",
-    feature = "synthetic-serial"
+    feature = "synthetic-serial",
+    feature = "native-serial"
 )))]
 // Real OS-pipe backpressure for the diagnostics build, not a runtime-buffered stdout stream.
 // Based on the run-owned adversarial pipe probe; stdin ownership is deliberately explicit.

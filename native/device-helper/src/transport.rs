@@ -405,7 +405,7 @@ impl Transport {
             let lease = lease(&endpoint.lease_key())?;
             let current = self.backend.list()?;
             if !current.contains(&endpoint) {
-                return Err("stale_device");
+                return Err(crate::serial::OpenError::from("stale_device"));
             }
             let device = self.backend.open(&endpoint)?;
             Ok((lease, device))
@@ -414,7 +414,11 @@ impl Transport {
             Ok(v) => v,
             Err(code) => {
                 self.state.lock().unwrap().sessions.remove(&session);
-                self.output.reply(fail(&id, code, "none"));
+                self.output.reply(fail(
+                    &id,
+                    code.code,
+                    if code.possible { "possible" } else { "none" },
+                ));
                 return;
             }
         };
@@ -666,6 +670,65 @@ fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
 #[cfg(test)]
 mod frame_tests {
     use super::*;
+    #[test]
+    fn open_failure_preserves_native_effect_on_the_wire() {
+        struct FailedOpen(crate::serial::SerialEndpoint, bool);
+        impl crate::serial::SerialBackend for FailedOpen {
+            fn list(&self) -> Result<Vec<crate::serial::SerialEndpoint>, &'static str> {
+                Ok(vec![self.0.clone()])
+            }
+            fn open(
+                &self,
+                _: &crate::serial::SerialEndpoint,
+            ) -> Result<Box<dyn crate::serial::SerialDevice>, crate::serial::OpenError>
+            {
+                Err(crate::serial::OpenError {
+                    code: "io_failed",
+                    possible: self.1,
+                })
+            }
+            #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]
+            fn test_stats(&self) -> Value {
+                json!({})
+            }
+        }
+        for possible in [false, true] {
+            let endpoint = crate::serial::SerialEndpoint {
+                key: format!("synthetic-owner-error-{}-{possible}", std::process::id()),
+                vendor: 1,
+                product: 2,
+                serial: None,
+                product_name: None,
+                interface_number: None,
+            };
+            let (control, replies) = mpsc::sync_channel(64);
+            let (data, _events) = mpsc::sync_channel(16);
+            let output = Output {
+                control,
+                data,
+                pending: Arc::new(Mutex::new(HashSet::new())),
+                control_frames: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            };
+            let transport = Transport::new(
+                ConnectionBackend::Serial(Arc::new(FailedOpen(endpoint.clone(), possible))),
+                output,
+            );
+            let (_send, commands) = mpsc::sync_channel(1);
+            transport.owner(
+                "2".into(),
+                "s-test".into(),
+                ConnectionEndpoint::Serial(endpoint),
+                None,
+                commands,
+            );
+            let reply = replies.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert_eq!(
+                reply.values[0]["error"],
+                json!({"code":"io_failed", "effect":if possible { "possible" } else { "none" }, "retry":"never"})
+            );
+            assert!(transport.state.lock().unwrap().sessions.is_empty());
+        }
+    }
     #[test]
     fn reference_invalidation_is_scoped_to_one_transport() {
         let hid = ConnectionEndpoint::Hid(crate::backend::Endpoint {

@@ -79,6 +79,21 @@ jobs:
           helper="$PWD/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
           bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --device-backend native-hid --helper "$helper" --out-dir dist/native-candidate-test
           bun scripts/smoke-native-hid-candidate.ts "dist/native-candidate-test/keyloom-${{ matrix.rust == 'aarch64-apple-darwin' && 'darwin-arm64' || 'darwin-x64' }}" "$helper"
+      - name: Direct macOS serial compile and diagnostics (no discovery)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd native/device-helper
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" --features native-serial -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}" --features native-serial
+          cd ../..
+          bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --device-backend native-serial --out-dir dist/native-serial-source-test
+          candidate="dist/native-serial-source-test/keyloom-${{ matrix.rust == 'aarch64-apple-darwin' && 'darwin-arm64' || 'darwin-x64' }}"
+          "$candidate" --version
+          scratch=$(mktemp -d)
+          HOME="$scratch" XDG_CACHE_HOME="$scratch/cache" "$candidate" --data-dir "$scratch/data" doctor --device-helper-only --format json > "$scratch/doctor.json"
+          bun -e 'const result = await Bun.file(process.argv[1]).json(); if (JSON.stringify(result.checks[0].deviceHelper.capabilities) !== JSON.stringify(["serial.list", "serial.open"]) || !result.checks[0].deviceHelper.available || result.checks.length !== 1 || !result.ok) throw new Error(JSON.stringify(result));' "$scratch/doctor.json"
+          rm -rf "$scratch"
       - name: Synthetic serial contract and installed candidate (no devices)
         if: runner.os == 'macOS'
         shell: bash
