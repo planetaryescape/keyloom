@@ -28,12 +28,13 @@ pub trait Device {
 pub trait Backend: Send + Sync {
     fn list(&self) -> Result<Vec<Endpoint>, &'static str>;
     fn open(&self, endpoint: &Endpoint) -> Result<Box<dyn Device>, &'static str>;
-    #[cfg(feature = "synthetic-hid")]
+    #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]
     fn test_stats(&self) -> Value;
 }
 
 // Conservative descriptor admission: unnumbered, single vendor application collection,
 // exactly 256 input/output bits. Refuse complex descriptors instead of guessing their shape.
+#[cfg(any(feature = "native-hid", feature = "synthetic-hid", test))]
 pub fn raw_descriptor(bytes: &[u8]) -> bool {
     let (mut i, mut page, mut usage, mut size, mut count) = (0, 0, 0, 0, 0);
     let (mut depth, mut input, mut output, mut collection) = (0, 0, 0, false);

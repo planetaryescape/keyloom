@@ -10,6 +10,8 @@ default = []
 native-hid = ["dep:core-foundation", "dep:base64", "dep:getrandom"]
 synthetic-hid = ["dep:base64", "dep:getrandom"]
 synthetic-capture = ["synthetic-hid"]
+synthetic-serial = ["dep:base64", "dep:getrandom"]
+synthetic-serial-capture = ["synthetic-serial"]
 
 [dependencies]
 serde_json = "=1.0.154"

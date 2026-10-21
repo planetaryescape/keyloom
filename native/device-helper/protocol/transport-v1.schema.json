@@ -27,7 +27,10 @@
               "properties": {
                 "transport": {
                   "type": "string",
-                  "const": "hid"
+                  "enum": [
+                    "hid",
+                    "serial"
+                  ]
                 }
               },
               "required": [
@@ -63,6 +66,49 @@
             "method": {
               "type": "string",
               "const": "hid.open"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "deviceRef": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": [
+                "deviceRef"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "request"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "method": {
+              "type": "string",
+              "const": "serial.open"
             },
             "params": {
               "type": "object",
@@ -161,28 +207,53 @@
               "const": "session.write"
             },
             "params": {
-              "type": "object",
-              "properties": {
-                "sessionId": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 128
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "reportId": {
+                      "type": "number",
+                      "const": 0
+                    },
+                    "bytes": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9+/]{43}=$"
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "reportId",
+                    "bytes"
+                  ],
+                  "additionalProperties": false
                 },
-                "reportId": {
-                  "type": "number",
-                  "const": 0
-                },
-                "bytes": {
-                  "type": "string",
-                  "pattern": "^[A-Za-z0-9+/]{43}=$"
+                {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "bytes": {
+                      "type": "string",
+                      "minLength": 4,
+                      "maxLength": 5464,
+                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "bytes"
+                  ],
+                  "additionalProperties": false
                 }
-              },
-              "required": [
-                "sessionId",
-                "reportId",
-                "bytes"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
@@ -387,7 +458,9 @@
             },
             "bytes": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9+/]{43}=$"
+              "minLength": 4,
+              "maxLength": 5464,
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
             }
           },
           "required": [
@@ -557,14 +630,16 @@
           "type": "string"
         },
         "capabilities": {
-          "maxItems": 3,
+          "maxItems": 5,
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "hid.list",
               "hid.open",
-              "hid.write"
+              "hid.write",
+              "serial.list",
+              "serial.open"
             ]
           }
         }
@@ -649,6 +724,77 @@
       ],
       "additionalProperties": false
     },
+    "serialDevices": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "devices": {
+          "maxItems": 256,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "deviceRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "transport": {
+                "type": "string",
+                "const": "serial"
+              },
+              "vendorId": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              "productId": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              "serial": {
+                "type": "string"
+              },
+              "product": {
+                "type": "string"
+              },
+              "interfaceNumber": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              }
+            },
+            "required": [
+              "deviceRef",
+              "transport",
+              "vendorId",
+              "productId"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "devices"
+      ],
+      "additionalProperties": false
+    },
+    "serialWritten": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "acceptedBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        }
+      },
+      "required": [
+        "acceptedBytes"
+      ],
+      "additionalProperties": false
+    },
     "closed": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -668,5 +814,7 @@
   "x-maxFrameBytes": 65536,
   "x-maxSessions": 8,
   "x-maxPending": 32,
-  "x-maxDataEvents": 1024
+  "x-maxDataEvents": 1024,
+  "x-maxSerialOutputChunks": 16,
+  "x-maxSerialChunkBytes": 4096
 }

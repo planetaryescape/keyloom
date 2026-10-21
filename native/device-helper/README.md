@@ -15,7 +15,7 @@ Rust 1.99.1 is pinned here. The displayed release comes from the root `package.j
 
 The lifetime integration test uses the real helper with a genuinely unread OS pipe, holds stdin open until observed exit, and checks open/closed stderr without increasing the 6500-ms exit budget. Fatal termination performs no diagnostic I/O, so closed stderr cannot disable the watchdog. Native CI repeats the release-profile oracle on Intel; Bun retains separate real-child/client checks.
 
-The helper implements only private `hello`, `ping` and `shutdown` JSON-lines requests. It advertises `capabilities: []`, contains no device backend, and refuses device methods with `unsupported`. Existing TypeScript transports remain production defaults. See [the implemented contract and remaining proposal](../../docs/blueprint/32-device-helper-protocol.md).
+By default, the helper implements only private `hello`, `ping` and `shutdown` JSON-lines requests. It advertises `capabilities: []`, contains no device backend, and refuses device methods with `unsupported`. Existing TypeScript transports remain production defaults. See [the implemented contract and remaining proposal](../../docs/blueprint/32-device-helper-protocol.md).
 
 ## Test the unadopted HID candidate
 
@@ -37,6 +37,23 @@ The [24c evidence and adoption gates](../../docs/research/spikes/device-helper-2
 
 For a fake-only installed native journey, build `--features synthetic-capture`, copy/sign that helper, build the host with `--device-backend native-hid --out-dir dist/native-candidate-test --helper <copied-helper>`, then run `bun scripts/smoke-native-hid-candidate.ts <candidate-cli> <synthetic-capture-helper>`. The smoke verifies the embedded hash and synthetic marker before device requests. It drives the real CLI over a PTY, stops/reopens, kills the owned synthetic helper and checks persisted interruption/analysis refusal. See [the complete safe command](../../docs/research/spikes/device-helper-24c.md#build-and-exercise-the-actual-cli-without-a-keyboard).
 
+## Test the synthetic serial candidate
+
+```sh
+cd native/device-helper
+cargo fmt --check
+cargo clippy --locked --all-targets --features synthetic-serial -- -D warnings
+cargo test --locked --features synthetic-serial
+cargo build --locked --features synthetic-serial
+cp target/debug/keyloom-device target/debug/keyloom-device-synthetic-serial
+codesign --force --sign - target/debug/keyloom-device-synthetic-serial
+cd ../..
+KEYLOOM_TEST_SYNTHETIC_SERIAL="$PWD/native/device-helper/target/debug/keyloom-device-synthetic-serial" \
+  bun test test/firmware/toolchain/device-helper-serial.test.ts
+```
+
+Run heavy commands through `agent-work run --` on BK's machine. `synthetic-serial` compiles one fake Glove80 endpoint, raw byte echo and scripted START/STOP. `synthetic-serial-capture` also emits two firmware-timestamped events split mid-line. Neither feature compiles OS-device code; combining serial with either HID feature is a compile error. No crates were added. `serial.touch` always refuses `unsupported` and is not advertised. The [24d record](../../docs/research/spikes/device-helper-24d.md) gives the candidate build and installed PTY smoke commands, observed checks and the next real-port adapter contract.
+
 ## Compile an installed CLI pair
 
 From the repository root on the native target:
@@ -56,7 +73,7 @@ For a signed/prebuilt helper, pass `--helper <absolute-file>` with exactly one `
 keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 ```
 
-An ordinary compiled pair reports its release, protocol, target, helper SHA-256 and empty capabilities. An explicit native candidate reports its selected HID capabilities and says hardware acceptance is pending; doctor still performs no discovery. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
+An ordinary compiled pair reports its release, protocol, target, helper SHA-256 and empty capabilities. An explicit native candidate reports its selected HID or serial capabilities and says hardware acceptance is pending; doctor still performs no discovery. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
 
 The Unix extractor rejects symlinks in managed paths, unexpected owners, unsafe modes and wrong hashes. It publishes without replacing an existing executable. Old releases coexist until explicitly removed; no automatic cleanup or downloads occur. A same-user malicious process is outside this integrity boundary. Windows currently runs native Cargo/Bun child-contract checks only: production extraction refuses Windows until private ACL/reparse checks are implemented.
 
@@ -70,6 +87,6 @@ cargo metadata --locked --format-version 1
 
 Direct normal/build dependency: `serde_json =1.0.154`, default `std` feature. The compiled tree contains `itoa 1.0.18` (MIT OR Apache-2.0), `memchr 2.8.3` (Unlicense OR MIT), `serde_core 1.0.229` (MIT OR Apache-2.0), `serde_json 1.0.154` (MIT OR Apache-2.0), and `zmij 1.0.23` (MIT). MIT notices are [included](THIRD-PARTY-NOTICES.txt) and embedded in the helper's `--version` output.
 
-The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for both HID feature builds and, on macOS only, `core-foundation =0.10.1` with `core-foundation-sys 0.8.7` and `libc 0.2.191`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in either HID feature; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; no serial crate is selected. The direct macOS candidate is not a production default.
+The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for HID and synthetic serial builds and, on macOS only, `core-foundation =0.10.1` with `core-foundation-sys 0.8.7` and `libc 0.2.191`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in HID or synthetic serial features; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; no serial crate is selected. The direct macOS candidate is not a production default.
 
 See [S58/S62 evidence](../../docs/research/spikes/device-helper-24b.md) for observed results and unverified release/signing/platform gates.

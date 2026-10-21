@@ -1,4 +1,4 @@
-use crate::backend::{Backend, Endpoint};
+use crate::connection::{ConnectionBackend, ConnectionEndpoint};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use std::{
@@ -46,9 +46,9 @@ pub struct Output {
     control_frames: Arc<std::sync::atomic::AtomicUsize>,
 }
 impl Output {
-    pub fn start() -> Self {
+    pub fn start(serial: bool) -> Self {
         let (control, controls) = mpsc::sync_channel::<Control>(64);
-        let (data, events) = mpsc::sync_channel::<Value>(510);
+        let (data, events) = mpsc::sync_channel::<Value>(if serial { 16 } else { 510 });
         let pending = Arc::new(Mutex::new(HashSet::new()));
         let inflight = pending.clone();
         let control_frames = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -158,31 +158,38 @@ impl Output {
     }
 }
 enum Command {
-    Write(String, [u8; 32]),
+    Write(String, Vec<u8>),
     Close(Option<String>),
 }
 struct SessionControl {
     send: mpsc::SyncSender<Command>,
     closing: bool,
+    transport: &'static str,
 }
 struct State {
-    refs: HashMap<String, Endpoint>,
-    generation: u64,
+    refs: HashMap<String, ConnectionEndpoint>,
+    generation: HashMap<String, u64>,
     next: u64,
     sessions: HashMap<String, SessionControl>,
     closed: VecDeque<(String, u64)>,
-    listing: bool,
+    listing: HashSet<String>,
+}
+impl State {
+    fn invalidate_refs(&mut self, transport: &str) {
+        self.refs
+            .retain(|_, endpoint| endpoint.transport() != transport);
+    }
 }
 #[derive(Clone)]
 pub struct Transport {
-    backend: Arc<dyn Backend>,
+    backend: ConnectionBackend,
     state: Arc<Mutex<State>>,
     output: Output,
     origin: Instant,
     nonce: String,
 }
 impl Transport {
-    pub fn new(backend: Arc<dyn Backend>, output: Output) -> Self {
+    pub fn new(backend: ConnectionBackend, output: Output) -> Self {
         let mut bytes = [0u8; 16];
         if getrandom::fill(&mut bytes).is_err() {
             std::process::exit(1);
@@ -197,51 +204,64 @@ impl Transport {
             output,
             state: Arc::new(Mutex::new(State {
                 refs: HashMap::new(),
-                generation: 0,
+                generation: HashMap::new(),
                 next: 0,
                 sessions: HashMap::new(),
                 closed: VecDeque::new(),
-                listing: false,
+                listing: HashSet::new(),
             })),
             origin: Instant::now(),
         }
     }
     pub fn handle(&self, id: String, method: &str, params: &Value) {
         match method {
-            #[cfg(feature = "synthetic-hid")]
+            #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]
             "test.stats" => self.output.reply(ok(&id, self.backend.test_stats())),
             "list" => {
-                if params.as_object().is_none_or(|p| p.len() != 1) || params["transport"] != "hid" {
+                if params.as_object().is_none_or(|p| p.len() != 1)
+                    || params["transport"] != self.backend.transport()
+                {
                     self.output.reply(fail(&id, "unsupported", "none"));
                     return;
                 }
                 let mut state = self.state.lock().unwrap();
-                if state.listing {
+                if state.listing.contains(self.backend.transport()) {
                     self.output.reply(fail(&id, "busy", "none"));
                     return;
                 }
-                state.listing = true;
-                state.refs.clear();
-                state.generation += 1;
+                let transport = self.backend.transport();
+                state.listing.insert(transport.to_owned());
+                state.invalidate_refs(transport);
+                *state.generation.entry(transport.to_owned()).or_default() += 1;
                 drop(state);
                 let this = self.clone();
                 std::thread::spawn(move || {
                     let result = this.backend.list();
                     let mut state = this.state.lock().unwrap();
-                    state.listing = false;
+                    state.listing.remove(this.backend.transport());
                     match result {
                         Ok(endpoints) if endpoints.len() <= 256 => {
                             let mut devices = Vec::new();
                             for (index, endpoint) in endpoints.into_iter().enumerate() {
-                                let reference =
-                                    format!("d{}-{}-{index}", this.nonce, state.generation);
-                                devices.push(endpoint.record(&reference));
+                                let reference = format!(
+                                    "d{}-{}-{index}",
+                                    this.nonce,
+                                    state.generation[this.backend.transport()]
+                                );
+                                match endpoint.record(&reference) {
+                                    Ok(record) => devices.push(record),
+                                    Err(code) => {
+                                        state.invalidate_refs(this.backend.transport());
+                                        this.output.reply(fail(&id, code, "none"));
+                                        return;
+                                    }
+                                }
                                 state.refs.insert(reference, endpoint);
                             }
                             match list_reply(&id, devices) {
                                 Ok(reply) => this.output.reply(reply),
                                 Err(code) => {
-                                    state.refs.clear();
+                                    state.invalidate_refs(this.backend.transport());
                                     this.output.reply(fail(&id, code, "none"));
                                 }
                             }
@@ -251,10 +271,19 @@ impl Transport {
                     }
                 });
             }
-            "hid.open" | "hid.write" => {
+            "hid.open" | "hid.write" | "serial.open" => {
+                let transport = if method == "serial.open" {
+                    "serial"
+                } else {
+                    "hid"
+                };
+                if transport != self.backend.transport() {
+                    self.output.reply(fail(&id, "unsupported", "none"));
+                    return;
+                }
                 let one_shot = method == "hid.write";
                 let bytes = if one_shot {
-                    match payload(params) {
+                    match payload(params, "hid") {
                         Some(v) => Some(v),
                         None => {
                             self.output.reply(fail(&id, "invalid_request", "none"));
@@ -295,6 +324,7 @@ impl Transport {
                     SessionControl {
                         send,
                         closing: false,
+                        transport,
                     },
                 );
                 drop(state);
@@ -312,17 +342,29 @@ impl Transport {
                     return;
                 };
                 let close = method == "session.close";
-                if params
-                    .as_object()
-                    .is_none_or(|p| p.len() != if close { 1 } else { 3 })
-                {
+                let mut state = self.state.lock().unwrap();
+                let transport = state
+                    .sessions
+                    .get(session)
+                    .map(|c| c.transport)
+                    .unwrap_or(self.backend.transport());
+                if params.as_object().is_none_or(|p| {
+                    p.len()
+                        != if close {
+                            1
+                        } else if transport == "hid" {
+                            3
+                        } else {
+                            2
+                        }
+                }) {
                     self.output.reply(fail(&id, "invalid_request", "none"));
                     return;
                 }
                 let command = if close {
                     Command::Close(Some(id.clone()))
                 } else {
-                    match payload(params) {
+                    match payload(params, transport) {
                         Some(bytes) => Command::Write(id.clone(), bytes),
                         None => {
                             self.output.reply(fail(&id, "invalid_request", "none"));
@@ -330,7 +372,6 @@ impl Transport {
                         }
                     }
                 };
-                let mut state = self.state.lock().unwrap();
                 if let Some(control) = state.sessions.get_mut(session) {
                     if !close && control.closing {
                         self.output.reply(fail(&id, "invalid_session", "none"));
@@ -356,12 +397,12 @@ impl Transport {
         &self,
         id: String,
         session: String,
-        endpoint: Endpoint,
-        one_shot: Option<[u8; 32]>,
+        endpoint: ConnectionEndpoint,
+        one_shot: Option<Vec<u8>>,
         commands: mpsc::Receiver<Command>,
     ) {
         let opened = (|| {
-            let lease = lease(&endpoint.key)?;
+            let lease = lease(&endpoint.lease_key())?;
             let current = self.backend.list()?;
             if !current.contains(&endpoint) {
                 return Err("stale_device");
@@ -411,7 +452,9 @@ impl Transport {
                     break;
                 }
                 Ok(Command::Write(id, bytes)) => match device.write(&bytes) {
-                    Ok(()) => self.output.reply(ok(&id, json!({"acceptedBytes":32}))),
+                    Ok(()) => self
+                        .output
+                        .reply(ok(&id, json!({"acceptedBytes":bytes.len()}))),
                     Err(code) => {
                         self.output.reply(fail(&id, code, "possible"));
                         failure = Some(code);
@@ -423,6 +466,10 @@ impl Transport {
             }
             match device.read() {
                 Ok(Some(bytes)) => {
+                    if !endpoint.valid_chunk(&bytes) {
+                        failure = Some("protocol_error");
+                        break;
+                    }
                     let value = json!({"v":1,"type":"event","sessionId":session,"seq":seq+1,"event":"data","receivedAtUs":self.origin.elapsed().as_micros().to_string(),"bytes":STANDARD.encode(bytes)});
                     if self.output.data.try_send(value).is_err() {
                         failure = Some("overflow");
@@ -441,6 +488,10 @@ impl Transport {
             loop {
                 match device.pending() {
                     Ok(Some(bytes)) => {
+                        if !endpoint.valid_chunk(&bytes) {
+                            failure = Some("protocol_error");
+                            break;
+                        }
                         let value = json!({"v":1,"type":"event","sessionId":session,"seq":seq+1,"event":"data","receivedAtUs":self.origin.elapsed().as_micros().to_string(),"bytes":STANDARD.encode(bytes)});
                         if self.output.data.try_send(value).is_err() {
                             failure = Some("overflow");
@@ -504,7 +555,7 @@ impl Transport {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(1) {
             let state = self.state.lock().unwrap();
-            if state.sessions.is_empty() && !state.listing {
+            if state.sessions.is_empty() && state.listing.is_empty() {
                 return true;
             }
             drop(state);
@@ -513,19 +564,34 @@ impl Transport {
         false
     }
 }
-fn payload(params: &Value) -> Option<[u8; 32]> {
-    if params["reportId"].as_u64() != Some(0) {
+fn payload(params: &Value, transport: &str) -> Option<Vec<u8>> {
+    if transport == "hid" && params["reportId"].as_u64() != Some(0) {
+        return None;
+    }
+    if transport == "serial" && params.get("reportId").is_some() {
         return None;
     }
     let text = params["bytes"].as_str()?;
-    if text.len() != 44 {
+    if text.len() > 5464 {
         return None;
     }
     let bytes = STANDARD.decode(text).ok()?;
-    if STANDARD.encode(&bytes) != text {
+    if bytes.is_empty()
+        || bytes.len() > 4096
+        || STANDARD.encode(&bytes) != text
+        || (transport == "hid" && bytes.len() != 32)
+    {
         return None;
     }
-    bytes.try_into().ok()
+    Some(bytes)
+}
+
+fn lease_name(key: &str) -> String {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in key.bytes() {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
 }
 
 #[cfg(unix)]
@@ -549,10 +615,6 @@ fn lease(key: &str) -> Result<std::fs::File, &'static str> {
     if !metadata.is_dir() || metadata.uid() != uid || metadata.mode() & 0o077 != 0 {
         return Err("permission_denied");
     }
-    let mut hash = 0xcbf29ce484222325u64;
-    for byte in key.bytes() {
-        hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
-    }
     #[cfg(target_os = "macos")]
     let nofollow = 0x100;
     #[cfg(not(target_os = "macos"))]
@@ -564,7 +626,7 @@ fn lease(key: &str) -> Result<std::fs::File, &'static str> {
         .truncate(false)
         .mode(0o600)
         .custom_flags(nofollow)
-        .open(root.join(format!("{hash:016x}")))
+        .open(root.join(lease_name(key)))
         .map_err(|_| "permission_denied")?;
     let metadata = file.metadata().map_err(|_| "permission_denied")?;
     if !metadata.is_file() || metadata.uid() != uid || metadata.mode() & 0o077 != 0 {
@@ -576,21 +638,27 @@ fn lease(key: &str) -> Result<std::fs::File, &'static str> {
     Ok(file)
 }
 // Windows production is unavailable; this lock exercises only the compiled synthetic backend.
-#[cfg(all(not(unix), feature = "synthetic-hid"))]
-fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
-    let root = std::env::temp_dir().join("keyloom-synthetic-hid-lease");
+#[cfg(all(
+    not(unix),
+    any(feature = "synthetic-hid", feature = "synthetic-serial")
+))]
+fn lease(key: &str) -> Result<std::fs::File, &'static str> {
+    let root = std::env::temp_dir().join("keyloom-synthetic-device-leases");
     std::fs::create_dir_all(&root).map_err(|_| "permission_denied")?;
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(root.join("endpoint"))
+        .open(root.join(lease_name(key)))
         .map_err(|_| "permission_denied")?;
     file.try_lock().map_err(|_| "busy")?;
     Ok(file)
 }
-#[cfg(all(not(unix), not(feature = "synthetic-hid")))]
+#[cfg(all(
+    not(unix),
+    not(any(feature = "synthetic-hid", feature = "synthetic-serial"))
+))]
 fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
     Err("unsupported")
 }
@@ -599,8 +667,40 @@ fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
 mod frame_tests {
     use super::*;
     #[test]
+    fn reference_invalidation_is_scoped_to_one_transport() {
+        let hid = ConnectionEndpoint::Hid(crate::backend::Endpoint {
+            key: "same".into(),
+            vendor: 1,
+            product: 2,
+            serial: None,
+            descriptor: vec![],
+        });
+        let serial = ConnectionEndpoint::Serial(crate::serial::SerialEndpoint {
+            key: "same".into(),
+            vendor: 1,
+            product: 2,
+            serial: None,
+            product_name: None,
+            interface_number: None,
+        });
+        assert_ne!(hid.lease_key(), serial.lease_key());
+        let mut state = State {
+            refs: HashMap::from([("h".into(), hid.clone()), ("s".into(), serial.clone())]),
+            generation: HashMap::new(),
+            next: 0,
+            sessions: HashMap::new(),
+            closed: VecDeque::new(),
+            listing: HashSet::new(),
+        };
+        state.invalidate_refs("serial");
+        assert_eq!(state.refs, HashMap::from([("h".into(), hid)]));
+        state.refs.insert("s".into(), serial.clone());
+        state.invalidate_refs("hid");
+        assert_eq!(state.refs, HashMap::from([("s".into(), serial)]));
+    }
+    #[test]
     fn maximum_metadata_cannot_create_an_oversized_wire_frame() {
-        let endpoint = Endpoint {
+        let endpoint = crate::backend::Endpoint {
             key: "not-a-path".into(),
             vendor: 0x3297,
             product: 0x1969,

@@ -1,22 +1,53 @@
 // Default builds remain diagnostics. Native and synthetic implementations are compile-time exclusive.
 #[cfg(all(feature = "native-hid", feature = "synthetic-hid"))]
 compile_error!("synthetic and production backends must never coexist");
-#[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+#[cfg(any(
+    feature = "native-hid",
+    feature = "synthetic-hid",
+    feature = "synthetic-serial"
+))]
 mod backend;
+#[cfg(any(
+    feature = "native-hid",
+    feature = "synthetic-hid",
+    feature = "synthetic-serial"
+))]
+mod connection;
+#[cfg(any(
+    feature = "native-hid",
+    feature = "synthetic-hid",
+    feature = "synthetic-serial"
+))]
+mod serial;
+#[cfg(all(
+    feature = "synthetic-serial",
+    any(feature = "native-hid", feature = "synthetic-hid")
+))]
+compile_error!("synthetic serial must be built separately from HID backends");
 #[cfg(all(feature = "native-hid", target_os = "macos"))]
 mod macos;
-#[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+#[cfg(any(
+    feature = "native-hid",
+    feature = "synthetic-hid",
+    feature = "synthetic-serial"
+))]
 mod transport;
 
 fn capabilities() -> Vec<&'static str> {
     if cfg!(feature = "synthetic-hid") || cfg!(all(feature = "native-hid", target_os = "macos")) {
         vec!["hid.list", "hid.open", "hid.write"]
+    } else if cfg!(feature = "synthetic-serial") {
+        vec!["serial.list", "serial.open"]
     } else {
         vec![]
     }
 }
 use serde_json::{Value, json};
-#[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+#[cfg(not(any(
+    feature = "native-hid",
+    feature = "synthetic-hid",
+    feature = "synthetic-serial"
+)))]
 use std::io::Write;
 use std::io::{self, BufRead, Read};
 use std::sync::{Arc, Mutex, mpsc};
@@ -145,21 +176,36 @@ fn serve() -> i32 {
         }
     });
     let mut protocol = Protocol::default();
-    #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
-    let native_output = transport::Output::start();
+    #[cfg(any(
+        feature = "native-hid",
+        feature = "synthetic-hid",
+        feature = "synthetic-serial"
+    ))]
+    let native_output = transport::Output::start(capabilities().contains(&"serial.open"));
     #[cfg(feature = "synthetic-hid")]
     let native = Some(transport::Transport::new(
-        Arc::new(backend::synthetic::Synthetic::default()),
+        connection::ConnectionBackend::Hid(Arc::new(backend::synthetic::Synthetic::default())),
         native_output.clone(),
     ));
     #[cfg(all(feature = "native-hid", target_os = "macos"))]
     let native = Some(transport::Transport::new(
-        Arc::new(macos::Macos),
+        connection::ConnectionBackend::Hid(Arc::new(macos::Macos)),
+        native_output.clone(),
+    ));
+    #[cfg(feature = "synthetic-serial")]
+    let native = Some(transport::Transport::new(
+        connection::ConnectionBackend::Serial(Arc::new(
+            serial::serial_synthetic::Synthetic::default(),
+        )),
         native_output.clone(),
     ));
     #[cfg(all(feature = "native-hid", not(target_os = "macos")))]
     let native: Option<transport::Transport> = None;
-    #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+    #[cfg(not(any(
+        feature = "native-hid",
+        feature = "synthetic-hid",
+        feature = "synthetic-serial"
+    )))]
     let mut output = io::stdout().lock();
     loop {
         let value = match receive.recv_timeout(QUIET) {
@@ -167,17 +213,29 @@ fn serve() -> i32 {
             Ok(Ok(None)) => return 0,
             _ => return 1,
         };
-        #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+        #[cfg(any(
+            feature = "native-hid",
+            feature = "synthetic-hid",
+            feature = "synthetic-serial"
+        ))]
         let request = value.clone();
         let (reply, stop) = match protocol.handle(value) {
             Ok(reply) => reply,
             Err(()) => return 1,
         };
-        #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+        #[cfg(not(any(
+            feature = "native-hid",
+            feature = "synthetic-hid",
+            feature = "synthetic-serial"
+        )))]
         {
             *alive.lock().unwrap() = Instant::now();
         }
-        #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+        #[cfg(any(
+            feature = "native-hid",
+            feature = "synthetic-hid",
+            feature = "synthetic-serial"
+        ))]
         if request["method"] == "hello" || request["method"] == "ping" {
             *alive.lock().unwrap() = Instant::now();
         }
@@ -187,7 +245,11 @@ fn serve() -> i32 {
             use std::io::Write;
             let _ = std::io::stderr().write_all(b"synthetic-ping-observed\n");
         }
-        #[cfg(any(feature = "native-hid", feature = "synthetic-hid"))]
+        #[cfg(any(
+            feature = "native-hid",
+            feature = "synthetic-hid",
+            feature = "synthetic-serial"
+        ))]
         {
             if !native_output.admit(request["id"].as_str().unwrap()) {
                 native_output.reply(refusal(request["id"].as_str().unwrap(), "capacity"));
@@ -213,14 +275,22 @@ fn serve() -> i32 {
             native_output.reply(reply);
             continue;
         }
-        #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+        #[cfg(not(any(
+            feature = "native-hid",
+            feature = "synthetic-hid",
+            feature = "synthetic-serial"
+        )))]
         if serde_json::to_writer(&mut output, &reply).is_err()
             || output.write_all(b"\n").is_err()
             || output.flush().is_err()
         {
             return 1;
         }
-        #[cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+        #[cfg(not(any(
+            feature = "native-hid",
+            feature = "synthetic-hid",
+            feature = "synthetic-serial"
+        )))]
         if stop {
             return if reply["ok"] == true { 0 } else { 1 };
         }
@@ -234,7 +304,7 @@ fn main() {
             println!(
                 "{}",
                 json!({"helperVersion":RELEASE,"protocol":1,"target":TARGET,"capabilities":capabilities(),
-                    "syntheticBackend":cfg!(feature="synthetic-hid"),"syntheticCapture":cfg!(feature="synthetic-capture"),
+                    "syntheticBackend":cfg!(any(feature="synthetic-hid",feature="synthetic-serial")),"syntheticCapture":cfg!(any(feature="synthetic-capture",feature="synthetic-serial-capture")),
                     "thirdPartyNotices":include_str!("../THIRD-PARTY-NOTICES.txt")})
             );
             0
