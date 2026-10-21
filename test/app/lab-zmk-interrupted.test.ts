@@ -2,8 +2,16 @@ import { expect, test } from "bun:test";
 import { analyseSession, beginRecording, endRecording, sessions, type LabDeps } from "../../src/app/lab.ts";
 import { UsageError } from "../../src/app/errors.ts";
 import { startZmkCapture } from "../../src/firmware/zmk/typing-capture.ts";
-import { commandShiftApp } from "../helpers/command-shift.ts";
+import { importLayout, openApp } from "../../src/app/index.ts";
+import { tempDir } from "../helpers/tmp.ts";
+import { TEMPLATE_FIXTURE } from "../helpers/zmk.ts";
 import { fakeGlove } from "../helpers/fake-key-stream.ts";
+
+async function glove80App() {
+  const app = openApp({ dataDir: tempDir() });
+  const { layoutId } = await importLayout(app, { board: "moergo/glove80", source: TEMPLATE_FIXTURE, name: "glove80" });
+  return { app, layoutId };
+}
 
 const failures = [
   { name: "serial transport error", run: (kb: ReturnType<typeof fakeGlove>) => kb.fail("synthetic disconnect") },
@@ -19,7 +27,7 @@ const failures = [
 
 for (const failure of failures) {
   test(`ZMK ${failure.name} is saved and refused by timing analysis`, async () => {
-    const { app, layoutId } = await commandShiftApp();
+    const { app, layoutId } = await glove80App();
     const keyboard = fakeGlove("options" in failure ? failure.options : {});
     const deps: LabDeps = {
       startCapture: (_board, hooks) => {
@@ -37,6 +45,7 @@ for (const failure of failures) {
       failure.run(keyboard);
       const saved = await endRecording(app, recording, "t");
       const reloaded = sessions(app, layoutId).find((session) => session.id === saved.session.id);
+      expect(reloaded).toMatchObject({ boardId: "moergo/glove80", firmware: "zmk" });
       expect(reloaded?.warnings.some((warning) => warning.startsWith("Recording incomplete:"))).toBe(true);
       let refusal: unknown;
       try { await analyseSession(app, saved.session.id, deps); } catch (error) { refusal = error; }
@@ -49,7 +58,7 @@ for (const failure of failures) {
 }
 
 test("coalesced complete events before invalid UTF-8 are saved and analysis is refused", async () => {
-  const { app, layoutId } = await commandShiftApp();
+  const { app, layoutId } = await glove80App();
   const keyboard = fakeGlove();
   const deps: LabDeps = {
     startCapture: (_board, hooks) => startZmkCapture(keyboard.transport, "/fake/serial", hooks),
