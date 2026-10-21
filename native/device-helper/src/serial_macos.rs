@@ -27,23 +27,20 @@ fn endpoint(record: Record) -> Option<SerialEndpoint> {
     let path = record
         .path
         .filter(|s| s.starts_with("/dev/cu.") && !s.contains('\0'))?;
-    let usb = record
+    let owner = record
         .parents
         .iter()
-        .find(|p| p.vendor.is_some() && p.product.is_some())?;
+        .position(|p| p.vendor.is_some() && p.product.is_some())?;
+    let usb = &record.parents[owner];
+    // Identity comes from the owning USB device only: a hub further up must never lend its serial.
+    let present = |value: &Option<String>| value.as_ref().filter(|s| !s.is_empty()).cloned();
     Some(SerialEndpoint {
         key: format!("{}:{path}", record.id),
         vendor: usb.vendor?,
         product: usb.product?,
-        serial: record
-            .parents
-            .iter()
-            .find_map(|p| p.serial.as_ref().filter(|s| !s.is_empty()).cloned()),
-        product_name: record
-            .parents
-            .iter()
-            .find_map(|p| p.product_name.as_ref().filter(|s| !s.is_empty()).cloned()),
-        interface_number: record.parents.iter().find_map(|p| p.interface),
+        serial: present(&usb.serial),
+        product_name: present(&usb.product_name),
+        interface_number: record.parents[..owner].iter().find_map(|p| p.interface),
     })
 }
 fn sorted(mut endpoints: Vec<SerialEndpoint>) -> Result<Vec<SerialEndpoint>, &'static str> {

@@ -72,7 +72,7 @@ Use Rust 1.99.1, Bun 1.3.14, `CARGO_NET_OFFLINE=true`, `RUSTC_WRAPPER=` and five
 
 ### Capture verifies baud before explicitly changing DTR
 
-`registry.rs` owns shared CF/IOKit property and registry-reference lifetimes; HID uses the same helpers. `serial_macos.rs` lists `IOSerialBSDClient` callout paths and walks USB parents for VID/PID/serial/product/interface metadata. It never opens a node during discovery. The opaque endpoint key contains registry ID plus callout path, so path reuse changes identity; equal USB serials do not merge endpoints. Results sort by key and refuse more than 256 endpoints. The device buffers no native chunks; the owner's shared output queue holds at most 16.
+`registry.rs` owns shared CF/IOKit property and registry-reference lifetimes; HID uses the same helpers. `serial_macos.rs` lists `IOSerialBSDClient` callout paths and walks its registry parents to the nearest USB device, which supplies VID/PID/serial/product; the interface number comes from an entry between the port and that device. A hub further up never lends its serial. It never opens a node during discovery. The opaque endpoint key contains registry ID plus callout path, so path reuse changes identity; equal USB serials do not merge endpoints. Results sort by key and refuse more than 256 endpoints. The device buffers no native chunks; the owner's shared output queue holds at most 16.
 
 The owner acquires its lease and relists before backend open. The backend then performs this sequence:
 

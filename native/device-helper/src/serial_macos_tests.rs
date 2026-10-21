@@ -47,6 +47,23 @@ fn synthetic_registry_records_keep_attachment_identity_and_sort_order() {
     assert_eq!(sorted(vec![a; 257]), Err("capacity"));
 }
 #[test]
+fn identity_metadata_comes_from_the_owning_usb_device_not_a_hub_above_it() {
+    let mut hub = record(30, "/dev/cu.synthetic", "");
+    hub.parents[1].product_name = None;
+    hub.parents.push(Properties {
+        vendor: Some(0x05e3),
+        product: Some(0x0610),
+        serial: Some("hub-serial".into()),
+        product_name: Some("Synthetic Hub".into()),
+        interface: Some(9),
+    });
+    let endpoint = endpoint(hub).unwrap();
+    assert_eq!((endpoint.vendor, endpoint.product), (0x16c0, 0x27db));
+    assert_eq!(endpoint.serial, None);
+    assert_eq!(endpoint.product_name, None);
+    assert_eq!(endpoint.interface_number, Some(3));
+}
+#[test]
 fn readback_rejects_each_configuration_mismatch() {
     let value = raw(blank()).unwrap();
     assert!(
