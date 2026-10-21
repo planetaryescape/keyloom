@@ -8,10 +8,8 @@ import { handleLabRoute } from "../../src/server/lab-routes.ts";
 import { commandShiftApp } from "../helpers/command-shift.ts";
 
 const TOKEN = "t".repeat(43);
-const servers: Array<{ stop(force?: boolean): void }> = [];
 const apps: Array<{ db: { close(): void } }> = [];
 afterAll(() => {
-  for (const server of servers) server.stop(true);
   for (const app of apps) app.db.close();
 });
 
@@ -31,16 +29,13 @@ async function startFailure(error: Error) {
     replay: () => { replays++; throw new Error("recording start must not replay"); },
   };
   const backend = appLabBackend(app, deps);
-  const server = Bun.serve({
-    port: 0,
-    fetch: async (request) => (await handleLabRoute(request, new URL(request.url).pathname, backend, TOKEN)) ?? new Response("no", { status: 404 }),
-  });
-  servers.push(server);
-  const response = await fetch(`http://127.0.0.1:${server.port}/api/lab/${layoutId}/recording`, {
+  const request = new Request(`http://keyloom.test/api/lab/${layoutId}/recording`, {
     method: "POST",
     headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" },
     body: "{}",
   });
+  const response = await handleLabRoute(request, new URL(request.url).pathname, backend, TOKEN);
+  if (response === null) throw new Error("the lab recording route did not match");
   return { response, opens: () => opens, writes: () => writes, replays: () => replays };
 }
 
