@@ -528,33 +528,6 @@ fn payload(params: &Value) -> Option<[u8; 32]> {
     bytes.try_into().ok()
 }
 
-#[cfg(test)]
-mod frame_tests {
-    use super::*;
-    #[test]
-    fn maximum_metadata_cannot_create_an_oversized_wire_frame() {
-        let endpoint = Endpoint {
-            key: "not-a-path".into(),
-            vendor: 0x3297,
-            product: 0x1969,
-            serial: Some("s".repeat(256)),
-            descriptor: vec![],
-        };
-        let devices = (0..256)
-            .map(|index| endpoint.record(&format!("d{}-1-{index}", "n".repeat(32))))
-            .collect::<Vec<_>>();
-        assert!(
-            serde_json::to_vec(&ok("2", json!({"devices":devices})))
-                .unwrap()
-                .len()
-                + 1
-                > crate::MAX_FRAME
-        );
-        assert_eq!(list_reply("2", devices), Err("capacity"));
-        assert!(list_reply("2", vec![endpoint.record("d-valid")]).is_ok());
-    }
-}
-
 #[cfg(unix)]
 fn lease(key: &str) -> Result<std::fs::File, &'static str> {
     use std::os::unix::{
@@ -620,4 +593,31 @@ fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
 #[cfg(all(not(unix), not(feature = "synthetic-hid")))]
 fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
     Err("unsupported")
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    #[test]
+    fn maximum_metadata_cannot_create_an_oversized_wire_frame() {
+        let endpoint = Endpoint {
+            key: "not-a-path".into(),
+            vendor: 0x3297,
+            product: 0x1969,
+            serial: Some("s".repeat(256)),
+            descriptor: vec![],
+        };
+        let devices = (0..256)
+            .map(|index| endpoint.record(&format!("d{}-1-{index}", "n".repeat(32))))
+            .collect::<Vec<_>>();
+        assert!(
+            serde_json::to_vec(&ok("2", json!({"devices":devices})))
+                .unwrap()
+                .len()
+                + 1
+                > crate::MAX_FRAME
+        );
+        assert_eq!(list_reply("2", devices), Err("capacity"));
+        assert!(list_reply("2", vec![endpoint.record("d-valid")]).is_ok());
+    }
 }

@@ -173,7 +173,11 @@ pub mod synthetic {
                     250 => return Err("io_failed"),
                     251 => {
                         use std::io::Write;
-                        let _ = std::io::stderr().write_all(b"synthetic-write-attempt:1\n");
+                        let _ = writeln!(
+                            std::io::stderr(),
+                            "synthetic-write-attempt:{}",
+                            self.writes.load(Ordering::SeqCst)
+                        );
                         std::process::exit(1);
                     }
                     252 => self.queue.extend(std::iter::repeat_n([0; 32], 2048)),
