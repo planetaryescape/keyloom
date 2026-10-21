@@ -1,7 +1,7 @@
 // Exit codes (10#exit-codes). Only the codes this build can produce are mapped.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { BuildFailedError, BusyError, EmulateFailedError, FlashFailedError, ModelError, NotFoundError, StaleBaseError, ToolchainUnavailableError, UsageError, ValidationFailedError, logsDir } from "../app/index.ts";
+import { BuildFailedError, BusyError, LabCaptureError, EmulateFailedError, FlashFailedError, ModelError, NotFoundError, StaleBaseError, ToolchainUnavailableError, UsageError, ValidationFailedError, logsDir } from "../app/index.ts";
 
 export const EXIT = { ok: 0, bug: 1, usage: 2, notFound: 3, validation: 4, staleBase: 5, toolchain: 6, buildFailed: 7, flashFailed: 8, modelApi: 9 } as const;
 
@@ -10,6 +10,7 @@ export type Classified = { code: number; kind: string; message: string };
 export function classify(err: unknown, dataDir: string): Classified {
   if (err instanceof ModelError) return { code: EXIT.modelApi, kind: err.kind === "missing_key" ? "missing_api_key" : "model_api", message: err.message };
   if (err instanceof BusyError) return { code: EXIT.usage, kind: "busy", message: err.message };
+  if (err instanceof LabCaptureError) return { code: EXIT.usage, kind: err.code, message: err.message };
   if (err instanceof UsageError) return { code: EXIT.usage, kind: "usage", message: err.message };
   if (err instanceof NotFoundError) return { code: EXIT.notFound, kind: "not_found", message: err.message };
   if (err instanceof ValidationFailedError) return { code: EXIT.validation, kind: "validation_failed", message: err.message };
