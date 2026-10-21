@@ -92,9 +92,9 @@ mock.module("../../src/firmware/toolchain/serial.ts", () => ({
     if (path.startsWith("/dev/")) refuse(`touchWithStty(${path})`);
     return realTouch(path, baud, platform);
   },
-  openWithStty: async (path: string, ...rest: [never, never, never]) => {
+  openWithStty: async (path: string, onData: (bytes: Uint8Array) => void, onError?: (error: Error) => void, platform?: NodeJS.Platform) => {
     if (path.startsWith("/dev/")) refuse(`openWithStty(${path})`);
-    return realOpenWithStty(path, ...rest);
+    return realOpenWithStty(path, onData, onError, platform);
   },
 }));
 mock.module("../../src/firmware/toolchain/serial-default.ts", () => ({

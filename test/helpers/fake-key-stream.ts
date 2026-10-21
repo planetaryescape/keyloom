@@ -97,49 +97,63 @@ export const glovePort = (serial = "keyloom/NPQRSTVWXYZ0-L:GLV80-0123456789ABCDE
 export type FakeGlove = {
   transport: SerialTransport;
   stream: FakeStream<string>;
-  /** Writes lines to the host in chunks of `chunk` characters, so a line can arrive in pieces. */
+  /** Writes serial bytes to the host in chunks, which may split UTF-8 characters or line endings. */
   say(text: string, chunk?: number): void;
+  sayBytes(bytes: Uint8Array, chunk?: number): void;
   press(events: ReadonlyArray<{ position: number; pressed: boolean; ms: number; source?: number }>): void;
   stopBy(reason: number): void;
+  fail(message: string): void;
+  releasePendingWrite(): void;
   isOn(): boolean;
 };
 
-export function fakeGlove(opts: { answers?: boolean; ports?: SerialPort[]; clockMs?: number } = {}): FakeGlove {
+export function fakeGlove(opts: {
+  answers?: boolean; ports?: SerialPort[]; clockMs?: number; chunkBytes?: number;
+  rejectWrite?: "start" | "ping" | "stop"; pendingWrite?: "ping"; rejectClose?: boolean; neverOff?: boolean;
+} = {}): FakeGlove {
   const written: string[] = [];
   let opened = 0;
   let closed = 0;
   let on = false;
-  let sink: ((text: string) => void) | undefined;
+  let sink: ((bytes: Uint8Array) => void) | undefined;
+  let onError: ((error: Error) => void) | undefined;
+  let releasePending: (() => void) | undefined;
   const clock = opts.clockMs ?? 5000;
-  const say = (text: string, chunk = text.length) => {
-    for (let i = 0; i < text.length; i += chunk) {
-      const piece = text.slice(i, i + chunk);
+  const sayBytes = (bytes: Uint8Array, chunk = opts.chunkBytes ?? (bytes.length || 1)) => {
+    for (let i = 0; i < bytes.length; i += chunk) {
+      const piece = bytes.slice(i, i + chunk);
       queueMicrotask(() => sink?.(piece));
     }
   };
+  const say = (text: string, chunk?: number) => sayBytes(new TextEncoder().encode(text), chunk);
   const transport: SerialTransport = {
     list: async () => opts.ports ?? [glovePort()],
     touch: async () => {
       throw new Error("the fake keyboard must never be touched");
     },
-    open: async (_path, onData) => {
+    open: async (_path, onData, onErr) => {
       opened++;
       sink = onData;
+      onError = onErr;
       const session: SerialSession = {
-        write(text) {
+        async write(text) {
           written.push(text);
+          const action = text === "KLTYPE START\n" ? "start" : text === "KLTYPE PING\n" ? "ping" : text === "KLTYPE STOP\n" ? "stop" : undefined;
+          if (opts.rejectWrite === action) throw new Error(`synthetic ${action} write failure`);
+          if (opts.pendingWrite === action) await new Promise<void>((resolve) => { releasePending = resolve; });
           if (opts.answers === false) return;
           if (text === "KLTYPE START\n" && !on) {
             on = true;
             say(`KLTYPE ON ${clock}\n`);
           } else if (text === "KLTYPE STOP\n" && on) {
             on = false;
-            say("KLTYPE OFF 0\n");
+            if (!opts.neverOff) say("KLTYPE OFF 0\n");
           }
         },
-        close() {
+        async close() {
           closed++;
           sink = undefined;
+          if (opts.rejectClose) throw new Error("synthetic close failure");
         },
       };
       return session;
@@ -149,6 +163,7 @@ export function fakeGlove(opts: { answers?: boolean; ports?: SerialPort[]; clock
     transport,
     stream: { written, opened: () => opened, closed: () => closed },
     say,
+    sayBytes,
     press(events) {
       for (const e of events) say(eventLine(e.position, e.pressed, clock + e.ms, e.source));
     },
@@ -156,6 +171,8 @@ export function fakeGlove(opts: { answers?: boolean; ports?: SerialPort[]; clock
       on = false;
       say(`KLTYPE OFF ${reason}\n`);
     },
+    fail(message) { onError?.(new Error(message)); },
+    releasePendingWrite() { releasePending?.(); releasePending = undefined; },
     isOn: () => on,
   };
 }

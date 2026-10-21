@@ -5,6 +5,7 @@ import { type CaptureHooks, CaptureError, type CapturedTrace, type KeyCapture, T
 import type { SerialSession, SerialTransport } from "../toolchain/serial.ts";
 import { zmkRevision } from "./board-config.ts";
 import { halfTargets, portsOfHalf } from "./handsfree-flash.ts";
+import { StreamLineError, StreamLines } from "./stream-lines.ts";
 import { PING_MS, TYPING_PING, TYPING_START, TYPING_STOP, parseStreamLine } from "./typing-stream.ts";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -27,20 +28,27 @@ export async function findZmkStreamPort(board: BoardDefinition, transport: Seria
 export async function startZmkCapture(transport: SerialTransport, path: string, hooks: CaptureHooks = {}): Promise<KeyCapture> {
   if (!transport.open) throw new CaptureError("keyloom can't read a keyboard's serial port on this computer");
   const builder = new TraceBuilder();
+  const framer = new StreamLines();
   let endedBy: string | undefined;
   let settle: (reason: string) => void = () => {};
   const ended = new Promise<string>((resolve) => (settle = resolve));
   let begun: () => void = () => {};
   const started = new Promise<void>((resolve) => (begun = resolve));
-  let pending = "";
-  let closed = false;
+  let closing: Promise<void> | undefined;
+  let finishing: Promise<CapturedTrace> | undefined;
+  let pingWrite: Promise<void> | undefined;
+  let stopping = false;
 
+  const interrupted = (reason: string) => {
+    if (endedBy === undefined || endedBy === "the host asked") endedBy = reason;
+    settle(endedBy);
+  };
   const end = (reason: string) => {
     if (endedBy !== undefined) return;
     endedBy = reason;
     settle(reason);
   };
-
+  const failFraming = (error: StreamLineError) => interrupted(`the serial stream is incomplete: ${error.message}`);
   const handleLine = (line: string) => {
     const parsed = parseStreamLine(line);
     if (!parsed) return;
@@ -48,7 +56,7 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
       builder.start(parsed.deviceMs);
       begun();
     } else if (parsed.kind === "off") end(parsed.reason ?? "the keyboard stopped the stream");
-    else if (parsed.kind === "drop") builder.warn(`the keyboard dropped ${parsed.count} event(s) because the port was read too slowly`);
+    else if (parsed.kind === "drop") builder.warn(`Recording incomplete: the keyboard dropped ${parsed.count} event(s) because the port was read too slowly`);
     else {
       const added = builder.add(parsed.deviceMs, parsed.position, parsed.pressed, parsed.source);
       if (added) hooks.onEvent?.(added);
@@ -57,61 +65,80 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
 
   const session: SerialSession = await transport.open(
     path,
-    (text) => {
-      pending += text;
-      const lines = pending.split("\n");
-      pending = lines.pop() ?? "";
-      for (const line of lines) handleLine(line);
+    (bytes) => {
+      if (endedBy !== undefined) return;
+      try {
+        for (const line of framer.push(bytes)) handleLine(line);
+      } catch (error) {
+        if (error instanceof StreamLineError) failFraming(error);
+        else interrupted(`the serial stream could not be processed: ${error instanceof Error ? error.message : "connection unavailable"}`);
+      }
     },
-    (error) => end(`the connection to the keyboard failed: ${error.message}`),
+    (error) => interrupted(`the connection to the keyboard failed: ${error.message}`),
   );
 
   const close = () => {
-    if (closed) return;
-    closed = true;
-    clearInterval(ping);
-    session.close();
+    closing ??= (async () => {
+      stopping = true;
+      clearInterval(ping);
+      await session.close();
+    })();
+    return closing;
   };
   const ping = setInterval(() => {
-    try {
-      session.write(TYPING_PING);
-    } catch (e) {
-      end(`the connection to the keyboard failed: ${(e as Error).message}`);
-    }
+    if (stopping || endedBy !== undefined || pingWrite) return;
+    pingWrite = (async () => {
+      try { await session.write(TYPING_PING); }
+      catch (error) { interrupted(`the connection to the keyboard failed: ${error instanceof Error ? error.message : "connection unavailable"}`); }
+    })().finally(() => { pingWrite = undefined; });
   }, hooks.keepaliveMs ?? PING_MS);
 
   try {
-    session.write(TYPING_START);
-    const answered = await Promise.race([started.then(() => true), sleep(hooks.startTimeoutMs ?? 2000).then(() => false)]);
+    await session.write(TYPING_START);
+    const answered = await Promise.race([
+      started.then(() => true),
+      ended.then(() => false),
+      sleep(hooks.startTimeoutMs ?? 2000).then(() => false),
+    ]);
     if (!answered) {
-      throw new CaptureError("the keyboard didn't start streaming. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it, then try again");
+      const reason = endedBy ? `: ${endedBy}` : "";
+      throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it`);
     }
-  } catch (err) {
-    try {
-      session.write(TYPING_STOP);
-    } catch {
-      // Closing is what matters now.
-    }
-    close();
-    throw err;
+  } catch (error) {
+    try { await session.write(TYPING_STOP); } catch { /* The failed start is primary; close still releases the session. */ }
+    try { await close(); } catch { /* Preserve the start failure. */ }
+    throw error;
   }
 
   return {
     snapshot: () => builder.snapshot(),
     ended,
-    async finish(): Promise<CapturedTrace> {
-      if (endedBy === undefined && !closed) {
-        try {
-          session.write(TYPING_STOP);
-          await Promise.race([ended, sleep(500)]);
-        } catch {
-          // A keyboard that has gone cannot be told; the trace so far is still good.
+    finish(): Promise<CapturedTrace> {
+      finishing ??= (async () => {
+        stopping = true;
+        clearInterval(ping);
+        await pingWrite;
+        if (endedBy === undefined) {
+          try {
+            await session.write(TYPING_STOP);
+            const acknowledged = await Promise.race([ended.then(() => true), sleep(500).then(() => false)]);
+            if (!acknowledged) interrupted("the keyboard did not confirm that recording stopped");
+          } catch (error) {
+            interrupted(`the connection to the keyboard failed: ${error instanceof Error ? error.message : "connection unavailable"}`);
+          }
         }
-      }
-      close();
-      const events = builder.finish();
-      if (endedBy !== undefined && endedBy !== "the host asked") builder.warn(`the keyboard ended the stream early: ${endedBy}`);
-      return { events, warnings: [...builder.warnings], endedBy: endedBy === undefined || endedBy === "the host asked" ? "host" : endedBy };
+        try { await close(); }
+        catch (error) { interrupted(`the keyboard connection did not close: ${error instanceof Error ? error.message : "connection unavailable"}`); }
+        try { framer.finish(); }
+        catch (error) {
+          if (error instanceof StreamLineError) failFraming(error);
+          else interrupted(`the serial stream could not be finalized: ${error instanceof Error ? error.message : "connection unavailable"}`);
+        }
+        const events = builder.finish();
+        if (endedBy !== undefined && endedBy !== "the host asked") builder.warn(`Recording incomplete: the keyboard ended the stream early: ${endedBy}`);
+        return { events, warnings: [...builder.warnings], endedBy: endedBy === "the host asked" ? "host" : endedBy ?? "recording stopped without confirmation" };
+      })();
+      return finishing;
     },
   };
 }
