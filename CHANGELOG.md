@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.47.0](https://github.com/planetaryescape/keyloom/compare/v0.46.1...v0.47.0) (2026-10-21)
+
+
+### Features
+
+* add gated macOS native HID capture candidate ([da99297](https://github.com/planetaryescape/keyloom/commit/da9929778d36222daf84347f1234bbb3e6402044))
+* record a Glove80 through the Rust helper in a synthetic serial candidate ([449a4e2](https://github.com/planetaryescape/keyloom/commit/449a4e2fcd4cdf4ac8a82a1ca17ff4083fed969e))
+
+
+### Bug Fixes
+
+* record broken ZMK recordings as incomplete ([3bf16e4](https://github.com/planetaryescape/keyloom/commit/3bf16e4f65fb914287d36f96284f134470b8c2ce))
+
 ## [0.46.1](https://github.com/planetaryescape/keyloom/compare/v0.46.0...v0.46.1) (2026-10-20)
 
 
