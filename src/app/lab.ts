@@ -6,6 +6,7 @@ import type { TypingFindings } from "../agent/ports.ts";
 import type { CaptureHooks, CapturedTrace, KeyCapture } from "../firmware/emulate/trace.ts";
 import { findQmkStreamDevice, startQmkCapture } from "../firmware/qmk/typing-capture.ts";
 import { defaultHidTransport } from "../firmware/toolchain/hid-default.ts";
+import { DeviceTransportError } from "../firmware/toolchain/device-helper/transport-client.ts";
 import { defaultSerialTransport } from "../firmware/toolchain/serial-default.ts";
 import { findZmkStreamPort, startZmkCapture } from "../firmware/zmk/typing-capture.ts";
 import { CaptureError, incompleteRecording } from "../firmware/emulate/trace.ts";
@@ -28,7 +29,7 @@ import { tappingTermOf } from "../lab/terms.ts";
 
 import type { App } from "./context.ts";
 import { emulateEvents } from "./emulate.ts";
-import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
+import { LabCaptureError, NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -107,7 +108,15 @@ export async function beginRecording(
   const passage = choosePassage(view, opts);
   // After the checks that can refuse and before the first key is heard: the person is told before anything is recorded.
   opts.announce?.(passage);
-  const capture = await deps.startCapture(view.board.definition, opts.hooks ?? {});
+  let capture: KeyCapture;
+  try {
+    capture = await deps.startCapture(view.board.definition, opts.hooks ?? {});
+  } catch (err) {
+    if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
+      throw new LabCaptureError(err.detail.code);
+    }
+    throw err;
+  }
   return { view, passage, capture, startedAt: Date.now() };
 }
 

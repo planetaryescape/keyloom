@@ -1,7 +1,7 @@
 // The only module src/cli (and src/server) may import (01#modules).
 export { type App, closeApp, openApp } from "./context.ts";
 export { shutdownDeviceConnections } from "./device-connections.ts";
-export { BusyError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { BusyError, LabCaptureError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";

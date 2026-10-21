@@ -41,3 +41,13 @@ export class ModelError extends Error {
 export class BusyError extends Error {
   override name = "BusyError";
 }
+
+/** A capture could not begin because the operating system or another client refused keyboard access. */
+export class LabCaptureError extends Error {
+  override name = "LabCaptureError";
+  constructor(readonly code: "busy" | "permission_denied") {
+    super(code === "busy"
+      ? "Another application or keyloom instance is using this keyboard. Stop the other client, then try again."
+      : "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.");
+  }
+}
