@@ -328,30 +328,47 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
   const program = buildProgram(io, state, chat, handsFree, syncDeps, lab, keyboards);
-  let jsonErrors = false;
+  let commandError: unknown;
+  let hasCommandError = false;
+  let commandResult: number = EXIT.ok;
   try {
     await program.parseAsync(argv, { from: "user" });
-    return state.exitCode;
+    commandResult = state.exitCode;
   } catch (err) {
     if (err instanceof CommanderError) {
-      // Help and version are not failures.
-      if (err.code === "commander.helpDisplayed" || err.code === "commander.help" || err.code === "commander.version") return EXIT.ok;
-      return EXIT.usage; // commander already printed the message
-    }
-    jsonErrors = (program.opts<Globals>().format ?? defaultFormat(io)) !== "table";
-    const c = classify(err, state.dataDir || (program.opts<Globals>().dataDir ?? ""));
-    io.err(jsonErrors ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: c.kind, message: c.message } })}\n` : `error: ${c.message}\n`);
-    return c.code;
-  } finally {
-    try { await shutdownDeviceConnections(); }
-    catch {
-      const warning = "keyboard helper termination could not be confirmed; restart keyloom before using the keyboard connection again";
-      io.err(jsonErrors
-        ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: "cleanup_unconfirmed", message: warning } })}\n`
-        : `${warning}\n`);
-      return EXIT.bug;
+      // Help and version are not failures; other commander errors already printed their message.
+      commandResult = err.code === "commander.helpDisplayed" || err.code === "commander.help" || err.code === "commander.version"
+        ? EXIT.ok
+        : EXIT.usage;
+    } else {
+      commandError = err;
+      hasCommandError = true;
     }
   }
+
+  const jsonErrors = (program.opts<Globals>().format ?? defaultFormat(io)) !== "table";
+  let cleanupFailed = false;
+  try { await shutdownDeviceConnections(); }
+  catch { cleanupFailed = true; }
+
+  const classified = hasCommandError
+    ? classify(commandError, state.dataDir || (program.opts<Globals>().dataDir ?? ""))
+    : undefined;
+  if (cleanupFailed) {
+    const warning = "keyboard helper termination could not be confirmed; restart keyloom before using the keyboard connection again";
+    if (classified && !jsonErrors) io.err(`error: ${classified.message}\n`);
+    io.err(jsonErrors
+      ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: "cleanup_unconfirmed", message: warning } })}\n`
+      : `${warning}\n`);
+    return EXIT.bug;
+  }
+  if (classified) {
+    io.err(jsonErrors
+      ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: classified.kind, message: classified.message } })}\n`
+      : `error: ${classified.message}\n`);
+    return classified.code;
+  }
+  return commandResult;
 }
 
 if (import.meta.main) {

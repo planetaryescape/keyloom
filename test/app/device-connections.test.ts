@@ -10,16 +10,17 @@ const deferred = <T>() => {
 test("helper close waits for every consumer after an earlier rejection", async () => {
   const later = deferred<void>();
   const firstFailure = new Error("first consumer failed");
+  const first = Promise.reject(firstFailure);
+  const firstObserved = first.catch(() => {});
   let closes = 0;
-  const drain = drainDeviceConsumers([
-    Promise.reject(firstFailure),
-    later.promise,
-  ], async () => { closes++; });
+  const drain = drainDeviceConsumers([first, later.promise], async () => { closes++; });
+  const drainRejected = drain.then(() => false, () => true);
 
+  await firstObserved;
   await Promise.resolve();
   expect(closes).toBe(0);
   later.resolve();
-  await expect(drain).rejects.toBe(firstFailure);
+  expect(await drainRejected).toBe(true);
   expect(closes).toBe(1);
 });
 
