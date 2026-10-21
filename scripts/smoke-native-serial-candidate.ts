@@ -15,9 +15,9 @@ const scratch = mkdtempSync(join(tmpdir(), "keyloom-native-serial-candidate-"));
 const cache = join(scratch, "cache space é"), data = join(scratch, "data"), installed = join(scratch, "bin/keyloom");
 const env = { PATH: "/usr/bin:/bin", HOME: scratch, XDG_CACHE_HOME: cache };
 let passed = false;
-async function run(cmd: string[], expected = 0, extra: Record<string, string> = {}) {
+async function run(cmd: string[], expected = 0, extra: Record<string, string> = {}, timeoutMs = 25_000) {
   const child = Bun.spawn(cmd, { cwd: scratch, env: { ...env, ...extra }, stdout: "pipe", stderr: "pipe" });
-  const timer = setTimeout(() => child.kill("SIGKILL"), 25_000);
+  const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
   try {
     const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
     if (code !== expected) throw new Error(`candidate smoke exit ${code}, expected ${expected}: ${stderr} ${stdout}`);
@@ -38,7 +38,8 @@ try {
   if (doctor.checks.length !== 1) throw new Error("doctor must perform only the paired-helper check");
   const fixture = join(scratch, "glove80.keymap"); cpSync(resolve("test/fixtures/zmk/glove80-template/glove80.keymap"), fixture);
   const imported = z.object({ layout_id: z.string() }).parse(JSON.parse(await run([installed, "--data-dir", data, "import", "--board", "moergo/glove80", fixture])));
-  const journey = JSON.parse(await run(["/usr/bin/python3", resolve("scripts/smoke-native-serial-candidate.py"), installed, data, imported.layout_id, cache]));
+  // Three recordings at up to 15 s each plus bounded waits: stay above the driver's own budget so it reports and cleans up first.
+  const journey = JSON.parse(await run(["/usr/bin/python3", resolve("scripts/smoke-native-serial-candidate.py"), installed, data, imported.layout_id, cache], 0, {}, 60_000));
   const sessionList = z.object({ sessions: z.array(z.object({ session_id: z.string(), incomplete: z.boolean(), warnings: z.array(z.string()) })) }).parse(JSON.parse(await run([installed, "--data-dir", data, "lab", "sessions"])));
   const incomplete = sessionList.sessions.filter((s) => s.warnings.some((w) => w.startsWith("Recording incomplete:")));
   if (sessionList.sessions.length !== 3 || incomplete.length !== 1) throw new Error("saved interruption did not survive reopening the CLI");
