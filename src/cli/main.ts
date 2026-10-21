@@ -345,7 +345,10 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
   } finally {
     try { await shutdownDeviceConnections(); }
     catch {
-      io.err("keyboard connection cleanup could not be confirmed; start a new command before using the keyboard connection again\n");
+      const warning = "keyboard helper termination could not be confirmed; restart keyloom before using the keyboard connection again";
+      io.err(jsonErrors
+        ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: "cleanup_unconfirmed", message: warning } })}\n`
+        : `${warning}\n`);
       return EXIT.bug;
     }
   }

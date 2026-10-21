@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { HelperManifest } from "./extract.ts";
 import { MAX_FRAME } from "./protocol.ts";
 import { launchHelper, type HelperChild } from "./spawn.ts";
+import { HelperSetupFailure } from "./setup-failure.ts";
 import { closedSchema, openedSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, type TransportError, type TransportEvent } from "./transport-protocol.ts";
 
 export class DeviceTransportError extends Error {
@@ -45,7 +46,17 @@ export class DeviceTransportClient {
         void client.request("ping", {}, z.strictObject({}), 1_000).catch((e: Error) => client.fail(e)).finally(() => { client.heartbeatPending = false; });
       }, 1_000);
       return client;
-    } catch (e) { await client.terminate(); throw e; }
+    } catch (e) {
+      try {
+        await client.terminate();
+      } catch (cleanupFailure) {
+        const original = e instanceof Error ? e : new Error("helper handshake failed with a non-Error value", { cause: e });
+        const cleanup = cleanupFailure instanceof Error ? cleanupFailure : new Error("helper termination failed with a non-Error value", { cause: cleanupFailure });
+        throw new HelperSetupFailure(original, "unconfirmed", cleanup);
+      }
+      const original = e instanceof Error ? e : new Error("helper handshake failed with a non-Error value", { cause: e });
+      throw new HelperSetupFailure(original, "terminated");
+    }
   }
   request<T>(method: string, params: Record<string, unknown>, schema: z.ZodType<T>, timeout: number, admitted?: (result: T) => void): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);

@@ -1,4 +1,5 @@
 import { HidError, type HidTransport } from "../hid.ts";
+import { HelperCleanupUnconfirmedError, HelperSetupFailure } from "./setup-failure.ts";
 import { packagedHidTransport } from "./hid.ts";
 
 type OwnedHid = { transport: HidTransport; shutdown(): Promise<void> };
@@ -10,10 +11,25 @@ export class CandidateHidOwner {
   async transport(): Promise<HidTransport> {
     if (this.closing) throw new HidError("the keyboard connection has shut down; start a new command");
     this.owned ??= Promise.resolve().then(this.connect);
-    return (await this.owned).transport;
+    try {
+      return (await this.owned).transport;
+    } catch (error) {
+      if (error instanceof HelperSetupFailure) throw error.original;
+      throw error;
+    }
   }
   shutdown(): Promise<void> {
-    this.closing ??= (async () => { if (this.owned) await (await this.owned).shutdown(); })();
+    this.closing ??= (async () => {
+      if (!this.owned) return;
+      let owned: OwnedHid;
+      try {
+        owned = await this.owned;
+      } catch (error) {
+        if (error instanceof HelperSetupFailure && error.ownership !== "unconfirmed") return;
+        throw new HelperCleanupUnconfirmedError();
+      }
+      await owned.shutdown();
+    })();
     return this.closing;
   }
 }

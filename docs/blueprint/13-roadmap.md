@@ -591,7 +591,7 @@ Status: shipped in v0.46.1, 2026-10-20 (D-426; PRs 136, 138, 139). Full/native C
 
 ## Rung 24c: My Moonlander recording survives transport failure honestly
 
-Status: native HID/capture implementation candidate; explicit compile-time installed CLI selection is synthetic-tested. Production adoption remains blocked on the HID half of S59 and installed physical acceptance. The compile-gated macOS adapter, bounded session protocol, explicit TS adapter and honest incomplete-recording path are implemented in the [24c candidate](../research/spikes/device-helper-24c.md). Defaults and release builds remain diagnostics/legacy; no physical gate passed.
+Status: native HID/capture implementation candidate; explicit compile-time installed CLI selection is synthetic-tested. Production adoption remains blocked on the HID half of S59 and installed physical acceptance. The compile-gated macOS adapter, bounded session protocol, explicit TS adapter and QMK-only incomplete-recording path are implemented in the [24c candidate](../research/spikes/device-helper-24c.md); ZMK serial interruption handling remains 24d work. Defaults and release builds remain diagnostics/legacy; no physical gate passed.
 
 **Previously:** macOS HID callbacks and lifetimes live in Bun. **Now:** an adopted Rust HID backend owns them, while existing QMK capture and sync policy remain in TS.
 

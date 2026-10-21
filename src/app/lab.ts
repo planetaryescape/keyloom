@@ -115,6 +115,9 @@ export async function beginRecording(
     if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
       throw new LabCaptureError(err.detail.code);
     }
+    if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
+      throw new LabCaptureError("restart_required");
+    }
     throw err;
   }
   return { view, passage, capture, startedAt: Date.now() };

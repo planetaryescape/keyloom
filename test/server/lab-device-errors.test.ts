@@ -77,6 +77,27 @@ test("denied keyboard access returns an actionable conflict without claiming a s
   } finally { log.mockRestore(); }
 });
 
+for (const code of ["helper_exited", "protocol_error", "timeout"] as const) {
+  test(`${code} requires restarting the long-lived keyloom process without retrying or exposing details`, async () => {
+    const error = new DeviceTransportError({ code, effect: "possible", retry: "never" });
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await startFailure(error);
+      expect(result.response.status).toBe(409);
+      expect(await result.response.json()).toEqual({
+        error: {
+          code: "restart_required",
+          message: "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.",
+        },
+      });
+      expect(result.opens()).toBe(1);
+      expect(result.writes()).toBe(0);
+      expect(result.replays()).toBe(0);
+      expect(log).not.toHaveBeenCalled();
+    } finally { log.mockRestore(); }
+  });
+}
+
 test("an unclassified capture error remains an internal error and is not exposed", async () => {
   const log = spyOn(console, "error").mockImplementation(() => {});
   try {

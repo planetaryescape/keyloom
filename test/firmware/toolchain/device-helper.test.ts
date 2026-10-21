@@ -4,6 +4,9 @@ import { chmodSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSy
 import { join } from "node:path";
 import { z } from "zod";
 import { diagnoseHelper } from "../../../src/firmware/toolchain/device-helper/client.ts";
+import { DeviceTransportError, DeviceTransportClient } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
+import { extractForSetup } from "../../../src/firmware/toolchain/device-helper/hid.ts";
+import { HelperSetupFailure } from "../../../src/firmware/toolchain/device-helper/setup-failure.ts";
 import { HelperFailure } from "../../../src/firmware/toolchain/device-helper/errors.ts";
 import { currentTarget, extractHelper, type HelperManifest } from "../../../src/firmware/toolchain/device-helper/extract.ts";
 import { helloSchema, identitySchema, MAX_FRAME, requestSchema, responseSchema } from "../../../src/firmware/toolchain/device-helper/protocol.ts";
@@ -142,6 +145,35 @@ for await (const chunk of Bun.stdin.stream()) {
     },
   };
 }
+
+test("packaged-helper verification failure is explicitly confirmed to have spawned no child", () => {
+  let failure: unknown;
+  try { extractForSetup(bytes, { ...manifest(), sha256: "f".repeat(64) }, manifest().release); }
+  catch (error) { failure = error; }
+  if (!(failure instanceof HelperSetupFailure)) throw new Error("verification failure must record no-child ownership");
+  expect(failure.ownership).toBe("no_child");
+  expect(failure.original).toBeInstanceOf(HelperFailure);
+});
+
+test("transport setup reports confirmed termination only after the failed handshake child exits", async () => {
+  const script = join(tempDir(), "handshake-child.ts");
+  writeFileSync(script, `
+for await (const chunk of Bun.stdin.stream()) {
+  const request = JSON.parse(new TextDecoder().decode(chunk).trim());
+  process.stdout.write(JSON.stringify({v:1,type:"response",id:request.id,ok:true,result:{protocol:1,helperVersion:"wrong",target:request.params.target,capabilities:["hid.list","hid.open","hid.write"]}})+"\\n");
+}
+`);
+  const child = Bun.spawn([process.execPath, script], { env: {}, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  let failure: unknown;
+  try {
+    await DeviceTransportClient.connect("/synthetic", manifest(), () => child);
+  } catch (error) { failure = error; }
+  if (!(failure instanceof HelperSetupFailure)) throw new Error("failed handshake must include its cleanup receipt");
+  expect(failure.ownership).toBe("terminated");
+  expect(failure.original).toBeInstanceOf(DeviceTransportError);
+  expect(failure.cleanupFailure).toBeUndefined();
+  expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+});
 
 test("parallel independent handshakes accept fragmented/reordered metadata without prototype pollution", async () => {
   for (const mode of ["fragment", "order", "proto"]) {
