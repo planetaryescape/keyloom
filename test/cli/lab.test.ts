@@ -213,6 +213,32 @@ describe("keyloom lab, end to end", () => {
     expect(w.keyboard.stream.opened()).toBe(0);
   });
 
+  test("start table output distinguishes complete and incomplete recordings", async () => {
+    const complete = await world();
+    const completeResult = await cli(complete, ["lab", "start", complete.layoutId, "--format", "table"]);
+    expect(completeResult.code).toBe(0);
+    expect(completeResult.out).toContain("See what it shows: keyloom lab analyse");
+
+    const incomplete = await world();
+    incomplete.lab.lab!.startCapture = async () => ({
+      snapshot: () => [], ended: new Promise(() => {}),
+      finish: async () => ({ events: [{ at: 0, position: 1, action: "press" }, { at: 1, position: 1, action: "release" }], warnings: ["Recording incomplete: synthetic disconnect"], endedBy: "synthetic disconnect" }),
+    });
+    const typeNormally = incomplete.lab.terminal!.typing;
+    incomplete.lab.terminal = {
+      isInteractive: true,
+      async typing(show, ended) {
+        const typed = await typeNormally(show, ended);
+        return typed;
+      },
+    };
+    const incompleteResult = await cli(incomplete, ["lab", "start", incomplete.layoutId, "--format", "table"]);
+    expect(incompleteResult.code).toBe(0);
+    expect(incompleteResult.out).toContain("Recording incomplete");
+    expect(incompleteResult.out).toContain(`keyloom lab start ${incomplete.layoutId}`);
+    expect(incompleteResult.out).not.toContain("keyloom lab analyse");
+  });
+
   test("unknown passages and sessions are usage and not-found errors", async () => {
     const w = await world();
     const bad = await cli(w, ["lab", "start", w.layoutId, "--passage", "nope"]);

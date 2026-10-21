@@ -26,8 +26,8 @@ export class DeviceTransportClient {
   private readonly child: HelperChild;
   private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
   private readonly stderr: ReadableStreamDefaultReader<Uint8Array>;
-  private constructor(path: string, launch: typeof launchHelper) {
-    this.child = launch(path);
+  private constructor(child: HelperChild) {
+    this.child = child;
     this.reader = this.child.stdout.getReader();
     this.stderr = this.child.stderr.getReader();
     void this.read().catch((e: Error) => this.fail(e));
@@ -35,7 +35,14 @@ export class DeviceTransportClient {
     void this.child.exited.then(() => { if (!this.stopping) this.fail(channelError("helper_exited")); });
   }
   static async connect(path: string, manifest: HelperManifest, launch = launchHelper): Promise<DeviceTransportClient> {
-    const client = new DeviceTransportClient(path, launch);
+    let child: HelperChild;
+    try {
+      child = launch(path);
+    } catch (e) {
+      const original = e instanceof Error ? e : new Error("helper launch failed with a non-Error value", { cause: e });
+      throw new HelperSetupFailure(original, "no_child");
+    }
+    const client = new DeviceTransportClient(child);
     try {
       const identity = await client.request("hello", { protocol: 1, hostVersion: manifest.release, target: manifest.target }, transportIdentitySchema, 2_000);
       if (identity.helperVersion !== manifest.release || identity.target !== manifest.target || identity.protocol !== manifest.protocol) throw new DeviceTransportError({ code: "version_mismatch", effect: "none", retry: "never" });
@@ -173,7 +180,10 @@ export class DeviceTransportClient {
       this.stopping = true;
       await this.request("shutdown", {}, z.strictObject({}), 1_000);
       if (await this.waitForExit(1_000) !== 0) throw channelError("helper_exited");
-    } finally { await this.terminate(); }
+    } catch {
+      // Graceful shutdown can fail after the child has already exited; termination is the cleanup receipt.
+    }
+    await this.terminate();
   }
   private async waitForExit(ms: number): Promise<number> {
     let timer: ReturnType<typeof setTimeout> | undefined;

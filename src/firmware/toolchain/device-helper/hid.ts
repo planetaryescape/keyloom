@@ -27,7 +27,8 @@ export function helperHidTransport(client: DeviceTransportClient): HidTransport 
       });
     },
     async write(target, report) {
-      await client.request("hid.write", { deviceRef: reference(target), reportId: 0, bytes: encoded(report) }, writtenSchema, 500);
+      // The one-shot helper request includes endpoint open and close around the write.
+      await client.request("hid.write", { deviceRef: reference(target), reportId: 0, bytes: encoded(report) }, writtenSchema, 3_500);
     },
     async openSession(target, onReport, onError = () => {}) {
       const sessionId = await client.open(reference(target), onReport, onError);

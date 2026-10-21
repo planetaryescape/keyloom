@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { tempDir } from "../../helpers/tmp.ts";
 import { DeviceTransportClient, DeviceTransportError } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
+import type { HelperChild } from "../../../src/firmware/toolchain/device-helper/spawn.ts";
 import { manifestSchema } from "../../../src/firmware/toolchain/device-helper/extract.ts";
 
 async function rejectedResult<T>(operation: Promise<T>): Promise<unknown> {
@@ -53,15 +54,16 @@ for await (const chunk of Bun.stdin.stream()) {
   if(r.method==="first") {held={v:1,type:"response",id:r.id,ok:true,result:1};continue;}
   if(r.method==="second") {reply(2);send(held);continue;}
   if(r.method==="never") continue;
-  if(r.method==="shutdown") {reply({});process.exit(0);}
+  if(r.method==="shutdown") {if(mode==="shutdownNoReply") process.exit(2);reply({});process.exit(0);}
   reply({});
  }
 }
 `);
   let launches = 0;
-  const launch = () => { launches++; return Bun.spawn([process.execPath, script], { env: {}, stdin: "pipe", stdout: "pipe", stderr: "pipe" }); };
+  const children: Array<ReturnType<typeof Bun.spawn<"pipe", "pipe", "pipe">>> = [];
+  const launch = () => { launches++; const child = Bun.spawn([process.execPath, script], { env: {}, stdin: "pipe", stdout: "pipe", stderr: "pipe" }); children.push(child); return child; };
   const manifest = manifestSchema.parse({ protocol: 1, release: "0.0.0", target: "aarch64-apple-darwin", sha256: "0".repeat(64) });
-  return { connect: () => DeviceTransportClient.connect(script, manifest, launch), launches: () => launches };
+  return { connect: () => DeviceTransportClient.connect(script, manifest, launch), launches: () => launches, children };
 }
 for (const mode of ["before", "gap", "badsize", "wrongterminal"]) {
   test(`${mode} delivery fails the channel, without restart or complete capture`, async () => {
@@ -108,3 +110,35 @@ test("pending budget refuses before write; deadline fails all siblings and no re
     expect(fake.launches()).toBe(1);
   } finally { await client.terminate(); }
 });
+
+test("shutdown resolves when the helper exits without replying", async () => {
+  const fake = fixture("shutdownNoReply"), client = await fake.connect();
+  const watchdog = setTimeout(() => { for (const child of fake.children) child.kill(); }, 4_000);
+  try {
+    await client.shutdown();
+    expect(fake.launches()).toBe(1);
+  } finally {
+    clearTimeout(watchdog);
+    await client.terminate();
+  }
+}, 5_000);
+
+test("shutdown rejects when helper exit cannot be observed", async () => {
+  let output!: ReadableStreamDefaultController<Uint8Array>;
+  const stdout = new ReadableStream<Uint8Array>({ start(controller) { output = controller; } });
+  const stderr = new ReadableStream<Uint8Array>({ start() {} });
+  const child = {
+    stdout, stderr,
+    stdin: {
+      write(line: string) {
+        const request = JSON.parse(line);
+        if (request.method === "hello") output.enqueue(new TextEncoder().encode(JSON.stringify({ v: 1, type: "response", id: request.id, ok: true, result: { protocol: 1, helperVersion: request.params.hostVersion, target: request.params.target, capabilities: ["hid.list", "hid.open", "hid.write"] } }) + "\n"));
+      },
+      flush: () => Promise.resolve(), end: () => {},
+    },
+    exited: new Promise<number>(() => {}), exitCode: null, signalCode: null, kill: () => {},
+  } as unknown as HelperChild;
+  const manifest = manifestSchema.parse({ protocol: 1, release: "0.0.0", target: "aarch64-apple-darwin", sha256: "0".repeat(64) });
+  const client = await DeviceTransportClient.connect("/synthetic", manifest, () => child);
+  await expect(client.shutdown()).rejects.toThrow();
+}, 5_000);

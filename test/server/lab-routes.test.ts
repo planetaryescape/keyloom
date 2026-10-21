@@ -1,12 +1,13 @@
 // The typing lab routes (src/api/lab.ts, D-314), over a real app with a scripted fake keyboard and the replay model: the guard, a whole
 // session from start to read-out to delete, per-finger typos, the board that can't be recorded, and a second start refused.
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { applyOps, getLayout } from "../../src/app/index.ts";
+import { applyOps, getLayout, type LabDeps } from "../../src/app/index.ts";
 import { LabPassagesResponseSchema, LabReadoutResponseSchema, LabSessionResponseSchema, LabSessionsResponseSchema, RecordingResponseSchema } from "../../src/api/lab.ts";
 import { appLabBackend } from "../../src/cli/lab-backend.ts";
 import { handleLabRoute } from "../../src/server/lab-routes.ts";
 import { commandShiftApp } from "../helpers/command-shift.ts";
 import { SCRIPT, scriptedLabDeps } from "../helpers/lab-world.ts";
+import { modelReplay } from "../helpers/typing-lab.ts";
 
 setDefaultTimeout(20_000);
 
@@ -95,4 +96,65 @@ describe("a session through the routes", () => {
     const list = LabSessionsResponseSchema.parse(await (await call(`/api/lab/${layoutId}/sessions`)).json());
     expect(list.sessions).toEqual([]);
   });
+});
+
+test("shutdown waits for an in-flight stop to persist its session", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  const finish = Promise.withResolvers<{ events: [{ at: number; position: number; action: "press" }]; warnings: []; endedBy: string }>();
+  const deps: LabDeps = {
+    startCapture: async () => ({ snapshot: () => [], ended: new Promise(() => {}), finish: () => finish.promise }),
+    replay: () => modelReplay(getLayout(app, layoutId).board.definition),
+  };
+  let stopping: Promise<unknown> | undefined;
+  let cancelling: Promise<void> | undefined;
+  try {
+    const backend = appLabBackend(app, deps);
+    await backend.start(layoutId, {});
+    stopping = backend.stop("x");
+    let cancelSettled = false;
+    cancelling = backend.cancel().then(() => { cancelSettled = true; });
+    await Bun.sleep(10);
+    expect(cancelSettled).toBe(false);
+    finish.resolve({ events: [{ at: 0, position: 1, action: "press" }], warnings: [], endedBy: "host" });
+    await Promise.all([stopping, cancelling]);
+    expect((await backend.sessions(layoutId))).toHaveLength(1);
+  } finally {
+    finish.resolve({ events: [{ at: 0, position: 1, action: "press" }], warnings: [], endedBy: "host" });
+    await Promise.allSettled([stopping, cancelling]);
+    app.db.close();
+  }
+});
+
+test("shutdown waits for a pending start and finishes the capture it acquires", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  const started = Promise.withResolvers<ReturnType<LabDeps["startCapture"]> extends Promise<infer T> ? T : never>();
+  const finish = Promise.withResolvers<{ events: []; warnings: []; endedBy: string }>();
+  const capture = { snapshot: () => [], ended: new Promise<string>(() => {}), finish: () => finish.promise };
+  const deps: LabDeps = {
+    startCapture: () => started.promise,
+    replay: () => modelReplay(getLayout(app, layoutId).board.definition),
+  };
+  let starting: Promise<unknown> | undefined;
+  let cancelling: Promise<void> | undefined;
+  try {
+    const backend = appLabBackend(app, deps);
+    starting = backend.start(layoutId, {});
+    await expect(backend.start(layoutId, {})).rejects.toMatchObject({ status: 409, code: "busy" });
+    let cancelSettled = false;
+    cancelling = backend.cancel().then(() => { cancelSettled = true; });
+    await Bun.sleep(10);
+    expect(cancelSettled).toBe(false);
+    started.resolve(capture);
+    await Bun.sleep(10);
+    expect(cancelSettled).toBe(false);
+    finish.resolve({ events: [], warnings: [], endedBy: "host" });
+    await Promise.all([starting, cancelling]);
+    expect(cancelSettled).toBe(true);
+    expect(await backend.sessions(layoutId)).toEqual([]);
+  } finally {
+    started.resolve(capture);
+    finish.resolve({ events: [], warnings: [], endedBy: "host" });
+    await Promise.allSettled([starting, cancelling]);
+    app.db.close();
+  }
 });

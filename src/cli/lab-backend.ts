@@ -24,6 +24,10 @@ const sessionView = (s: ReturnType<typeof labSessions>[number]) => ({
 export function appLabBackend(app: App, deps: LabDeps): LabBackend {
   // One keyboard, one recording: a second start while one runs is refused, never stacked.
   let recording: RecordingInProgress | null = null;
+  const starting = new Set<Promise<unknown>>();
+  const stopping = new Set<Promise<unknown>>();
+  let cancellation: Promise<void> | undefined;
+  let shuttingDown = false;
   const readout = (id: string) => {
     const r = labReadout(app, id);
     return { session: sessionView(r.session), readout: r.readout };
@@ -36,29 +40,45 @@ export function appLabBackend(app: App, deps: LabDeps): LabBackend {
         return { passages: labPassages(app, ref), canRecord: why === null, why };
       }),
     sessions: (ref) => translate(() => labSessions(app, ref).map(sessionView)),
-    start: (ref, request) =>
-      translate(async () => {
-        if (recording !== null) throw new LabError(409, "busy", "A recording is already running. Stop it first.");
+    start: (ref, request) => {
+      const operation = translate(async () => {
+        if (shuttingDown || recording !== null || starting.size > 0) throw new LabError(409, "busy", "A recording is already running. Stop it first.");
         const why = cannotRecord(getLayout(app, ref).board.definition);
         if (why !== null) throw new UsageError(why);
         recording = await beginRecording(app, ref, deps, { ...(request.passageId ? { passageId: request.passageId } : {}), ...(request.text !== undefined ? { text: request.text } : {}) });
         const p = recording.passage;
         const passage = labPassages(app, ref).find((x) => x.id === p.id) ?? { id: p.id, title: p.title, why: p.why, text: request.text ?? "" };
         return { passage, startedAt: recording.startedAt };
-      }),
-    stop: (typedText) =>
-      translate(async () => {
+      });
+      starting.add(operation);
+      void operation.then(() => { starting.delete(operation); }, () => { starting.delete(operation); });
+      return operation;
+    },
+    stop: (typedText) => {
+      const operation = translate(async () => {
         const rec = recording;
         if (rec === null) throw new UsageError("no recording is running");
         recording = null;
         const { session } = await endRecording(app, rec, typedText);
         return sessionView(session);
-      }),
+      });
+      stopping.add(operation);
+      void operation.then(() => { stopping.delete(operation); }, () => { stopping.delete(operation); });
+      return operation;
+    },
     cancel: async () => {
-      const rec = recording;
-      recording = null;
-      // The keyboard is asked to stop; what it heard is dropped.
-      await rec?.capture.finish().catch(() => {});
+      shuttingDown = true;
+      cancellation ??= (async () => {
+        // Shutdown must not close the helper or database while a start or stop still owns them.
+        while (starting.size > 0 || stopping.size > 0) {
+          await Promise.allSettled([...starting, ...stopping]);
+        }
+        const rec = recording;
+        recording = null;
+        // The keyboard is asked to stop; what it heard is dropped.
+        await rec?.capture.finish().catch(() => {});
+      })();
+      await cancellation;
     },
     readout: (id) => translate(() => readout(id)),
     analyse: (id) =>

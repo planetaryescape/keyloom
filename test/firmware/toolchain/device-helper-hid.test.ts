@@ -39,6 +39,24 @@ const statsSchema = z.object({ opens: z.number(), writes: z.number() });
 const stats = (client: DeviceTransportClient) => client.request("test.stats", {}, statsSchema, 500);
 const devices = (client: DeviceTransportClient) => client.request("list", { transport: "hid" }, hidDevicesSchema, 500);
 const packet = (byte: number) => Buffer.alloc(32, byte).toString("base64");
+
+test("one-shot HID write allows for lease, rediscovery, open, write and close", async () => {
+  const deadlines: Array<[string, number]> = [];
+  const fake = {
+    request: async (method: string, _params: Record<string, unknown>, _schema: unknown, timeout: number) => {
+      deadlines.push([method, timeout]);
+      if (method === "list") return { devices: [{ deviceRef: "d1", transport: "hid", vendorId: 1, productId: 2, usagePage: 0xff60, usage: 0x61 }] };
+      return { acceptedBytes: 32 };
+    },
+    open: async () => "s1",
+  } as unknown as DeviceTransportClient;
+  const transport = helperHidTransport(fake);
+  const target = (await transport.list())[0]!;
+  await transport.write(target, new Uint8Array(32));
+  const session = await transport.openSession!(target, () => {});
+  await session.write(new Uint8Array(32));
+  expect(deadlines).toEqual([["list", 5_000], ["hid.write", 3_500], ["session.write", 500]]);
+});
 async function rejectedResult<T>(operation: Promise<T>): Promise<unknown> {
   try {
     await operation;

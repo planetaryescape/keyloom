@@ -163,7 +163,9 @@ export function registerLabCommands(program: Command, deps: LabCommandDeps): voi
       for (const w of result.trace.warnings) io.err(`warning: ${w}\n`);
       print(io, format(), {
         json: { session_id: s.id, layout_id: s.layoutId, revision_id: s.revisionId, board_id: s.boardId, key_events: s.eventCount, started_at: s.startedAt, ended_at: s.endedAt, ended_by: result.trace.endedBy, warnings: result.trace.warnings },
-        table: quiet() ? s.id : `${s.id}\nrecorded ${s.eventCount} key events in ${seconds(s.endedAt - s.startedAt)}${result.trace.endedBy === "host" ? "" : ` (the keyboard ended it: ${result.trace.endedBy})`}.\nSee what it shows: keyloom lab analyse ${s.id}`,
+        table: quiet() ? s.id : incompleteRecording(result.trace.warnings)
+          ? `${s.id}\nRecording incomplete; start a new recording with: keyloom lab start ${ref}`
+          : `${s.id}\nrecorded ${s.eventCount} key events in ${seconds(s.endedAt - s.startedAt)}${result.trace.endedBy === "host" ? "" : ` (the keyboard ended it: ${result.trace.endedBy})`}.\nSee what it shows: keyloom lab analyse ${s.id}`,
         ids: [s.id],
       });
     });
