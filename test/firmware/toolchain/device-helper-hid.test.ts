@@ -69,7 +69,8 @@ describe.skipIf(!binary)("native synthetic-only HID through real TS client", () 
       await devices(client);
       expectTransportError(await rejectedResult(client.open(first.deviceRef, () => {}, () => {})), "stale_device", "none");
       for (const item of corpus.filter((c) => !c.valid)) {
-        await expect(client.request(item.request.method, item.request.params, z.unknown(), 500)).rejects.toThrow();
+        const error = await rejectedResult(client.request(item.request.method, item.request.params, z.unknown(), 500));
+        expectTransportError(error, "invalid_request", "none");
       }
       expect(await stats(client)).toEqual({ opens: 0, writes: 0 });
     } finally { await client.shutdown(); }
