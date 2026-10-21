@@ -1,0 +1,84 @@
+import { expect, test } from "bun:test";
+import { analyseSession, beginRecording, endRecording, sessions, type LabDeps } from "../../src/app/lab.ts";
+import { UsageError } from "../../src/app/errors.ts";
+import { startZmkCapture } from "../../src/firmware/zmk/typing-capture.ts";
+import { importLayout, openApp } from "../../src/app/index.ts";
+import { tempDir } from "../helpers/tmp.ts";
+import { TEMPLATE_FIXTURE } from "../helpers/zmk.ts";
+import { fakeGlove } from "../helpers/fake-key-stream.ts";
+
+async function glove80App() {
+  const app = openApp({ dataDir: tempDir() });
+  const { layoutId } = await importLayout(app, { board: "moergo/glove80", source: TEMPLATE_FIXTURE, name: "glove80" });
+  return { app, layoutId };
+}
+
+const failures = [
+  { name: "serial transport error", run: (kb: ReturnType<typeof fakeGlove>) => kb.fail("synthetic disconnect") },
+  { name: "rejected ping write", run: () => {}, options: { rejectWrite: "ping" as const }, waitMs: 10 },
+  { name: "rejected STOP write", run: () => {}, options: { rejectWrite: "stop" as const } },
+  { name: "missing OFF reply", run: () => {}, options: { neverOff: true } },
+  { name: "rejected close", run: () => {}, options: { rejectClose: true } },
+  { name: "invalid UTF-8", run: (kb: ReturnType<typeof fakeGlove>) => kb.sayBytes(Uint8Array.of(0xff)) },
+  { name: "unterminated line", run: (kb: ReturnType<typeof fakeGlove>) => kb.say("E 1 1 5010 255") },
+  { name: "overlong line", run: (kb: ReturnType<typeof fakeGlove>) => kb.say(`${"x".repeat(4097)}\n`) },
+  { name: "firmware DROP", run: (kb: ReturnType<typeof fakeGlove>) => kb.say("KLTYPE DROP 2\n") },
+] as const;
+
+for (const failure of failures) {
+  test(`ZMK ${failure.name} is saved and refused by timing analysis`, async () => {
+    const { app, layoutId } = await glove80App();
+    const keyboard = fakeGlove("options" in failure ? failure.options : {});
+    const deps: LabDeps = {
+      startCapture: (_board, hooks) => {
+        const captureHooks = { ...hooks };
+        if (failure.name === "rejected ping write") captureHooks.keepaliveMs = 5;
+        return startZmkCapture(keyboard.transport, "/fake/serial", captureHooks);
+      },
+      replay: () => { throw new Error("incomplete recordings must never reach replay"); },
+    };
+    try {
+      const recording = await beginRecording(app, layoutId, deps, { text: "test" });
+      keyboard.press([{ position: 2, pressed: true, ms: 10 }, { position: 2, pressed: false, ms: 20 }]);
+      await Bun.sleep(1);
+      if ("waitMs" in failure) await Bun.sleep(failure.waitMs);
+      failure.run(keyboard);
+      const saved = await endRecording(app, recording, "t");
+      const reloaded = sessions(app, layoutId).find((session) => session.id === saved.session.id);
+      expect(reloaded).toMatchObject({ boardId: "moergo/glove80", firmware: "zmk" });
+      expect(reloaded?.warnings.some((warning) => warning.startsWith("Recording incomplete:"))).toBe(true);
+      let refusal: unknown;
+      try { await analyseSession(app, saved.session.id, deps); } catch (error) { refusal = error; }
+      expect(refusal).toBeInstanceOf(UsageError);
+      expect(refusal).toMatchObject({ message: expect.stringContaining("recording is incomplete") });
+    } finally {
+      app.db.close();
+    }
+  }, 5000);
+}
+
+test("coalesced complete events before invalid UTF-8 are saved and analysis is refused", async () => {
+  const { app, layoutId } = await glove80App();
+  const keyboard = fakeGlove();
+  const deps: LabDeps = {
+    startCapture: (_board, hooks) => startZmkCapture(keyboard.transport, "/fake/serial", hooks),
+    replay: () => { throw new Error("incomplete recordings must never reach replay"); },
+  };
+  try {
+    const recording = await beginRecording(app, layoutId, deps, { text: "test" });
+    const events = new TextEncoder().encode("E 2 1 5010 255\nE 2 0 5020 255\n");
+    keyboard.sayBytes(Uint8Array.from([...events, 0xff]));
+    await Bun.sleep(1);
+
+    const saved = await endRecording(app, recording, "t");
+    expect(saved.trace.events).toHaveLength(2);
+    const reloaded = sessions(app, layoutId).find((session) => session.id === saved.session.id);
+    expect(reloaded?.eventCount).toBe(2);
+    expect(reloaded?.warnings.some((warning) => warning.startsWith("Recording incomplete:"))).toBe(true);
+    let refusal: unknown;
+    try { await analyseSession(app, saved.session.id, deps); } catch (error) { refusal = error; }
+    expect(refusal).toBeInstanceOf(UsageError);
+  } finally {
+    app.db.close();
+  }
+}, 5000);

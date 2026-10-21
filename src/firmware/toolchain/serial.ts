@@ -2,7 +2,7 @@
 // "touch" it, which means setting its baud rate and closing it. Listing reads the registry or sysfs and opens
 // nothing; only touch() reaches a device. Each platform's listing is in its own file; callers take a
 // SerialTransport so tests never touch a keyboard.
-import { openPolled } from "./polled-file.ts";
+import { type PolledOptions, openPolled } from "./polled-file.ts";
 import { capture } from "./run.ts";
 
 export type SerialPort = {
@@ -16,8 +16,8 @@ export type SerialPort = {
 
 /** A serial port held open: bytes from the keyboard arrive in the callback given to open(), and write() sends to it. */
 export type SerialSession = {
-  write(text: string): void;
-  close(): void;
+  write(text: string): Promise<void>;
+  close(): Promise<void>;
 };
 
 export type SerialTransport = {
@@ -26,7 +26,7 @@ export type SerialTransport = {
   /** Sets the port's baud rate and closes it. */
   touch(path: string, baud: number): Promise<void>;
   /** Holds the port open to read what the keyboard writes (the typing lab's key stream, D-281). Never changes it to 1200 or 1201 baud. */
-  open?(path: string, onData: (text: string) => void, onError?: (error: Error) => void): Promise<SerialSession>;
+  open?(path: string, onData: (bytes: Uint8Array) => void, onError?: (error: Error) => void): Promise<SerialSession>;
 };
 
 export class SerialError extends Error {
@@ -54,7 +54,7 @@ export const STREAM_BAUD = 115200;
  * `stty raw` first, because a terminal in line mode would hold characters back, rewrite newlines and echo; then the port is held
  * open by this process so closing it later is a close at STREAM_BAUD, which the restart trigger ignores.
  */
-export async function openWithStty(path: string, onData: (text: string) => void, onError?: (error: Error) => void, platform: NodeJS.Platform = process.platform): Promise<SerialSession> {
+export async function openWithStty(path: string, onData: (bytes: Uint8Array) => void, onError?: (error: Error) => void, platform: NodeJS.Platform = process.platform): Promise<SerialSession> {
   const r = await capture(["stty", platform === "darwin" ? "-f" : "-F", path, "raw", "-echo", String(STREAM_BAUD)], { timeoutMs: 10_000 });
   if (r.exitCode !== 0) {
     const said = (r.stderr || r.stdout).trim();
@@ -63,11 +63,12 @@ export async function openWithStty(path: string, onData: (text: string) => void,
     }
     throw new SerialError(`stty could not set up ${path}${said ? `: ${said}` : ""}`);
   }
-  const decoder = new TextDecoder();
   try {
-    const file = openPolled(path, (chunk) => onData(decoder.decode(chunk, { stream: true })), { chunkSize: 256, ...(onError ? { onError } : {}) });
+    const options: PolledOptions = { chunkSize: 256 };
+    if (onError) options.onError = onError;
+    const file = openPolled(path, onData, options);
     const encoder = new TextEncoder();
-    return { write: (text) => file.write(encoder.encode(text)), close: () => file.close() };
+    return { write: async (text) => file.write(encoder.encode(text)), close: async () => file.close() };
   } catch (err) {
     throw new SerialError(`could not open ${path}: ${(err as Error).message}`);
   }

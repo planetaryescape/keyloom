@@ -74,7 +74,7 @@ Generate or mechanically check Rust and TS wire representations against the cano
 
 Retain dependency injection through `HidTransport` and `SerialTransport`. Map helper references to the legacy handle/path fields only inside adapters during migration; no caller should derive native identity from their spelling. Change path-shaped serial selection to an opaque reference where needed, and update matching tests. Persist neither references nor sessions.
 
-HID already permits awaitable write/close. Serial does not. Make both serial methods `Promise<void>`, update real and fake adapters, and await every call in ZMK capture start, keepalive, stop and cleanup. A pending IPC error must reach capture failure rather than become an unhandled rejection. Serialize keepalives so slow writes cannot accumulate them (D-422).
+HID and serial expose awaitable write/close (`Promise<void>`); serial data reaches TypeScript as raw byte chunks and the ZMK capture adapter performs strict streaming UTF-8 decoding with a bounded line framer. The legacy stty/polling adapter remains in place until the Rust serial backend is adopted. Await ZMK start, keepalive, stop and cleanup writes; a transport error must become an incomplete capture rather than an unhandled rejection. Serialize keepalives so slow writes cannot accumulate them (D-422).
 
 The helper receives firmware bytes from existing encoders. It never sends a start, keepalive, stop or reboot command on its own. On orderly lab stop, TypeScript sends the firmware stop, waits for its bounded response, then awaits transport close. On a crash it cannot promise a stop command was sent; test firmware timeout/DTR behavior and report the interruption (D-423).
 

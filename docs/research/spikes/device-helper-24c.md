@@ -57,7 +57,7 @@ The owner has separately allocated `Rc<UnsafeCell<...>>` buffer/state. `Rc` also
 
 ## Honest persisted results
 
-For QMK capture, concurrent finish shares one stop/close promise. Keepalives do not accumulate. Missing stop acknowledgement, write/close failure, helper death, sequence gaps and reported drops cannot silently become complete. The existing warnings persist the `Recording incomplete:` marker. Analysis refuses such traces before replay/proposals. CLI sessions JSON/JSONL include `incomplete` and `warnings`; table rows visibly say incomplete. Ordinary unflagged rows say recorded, not a new proof of physical completeness. This evidence does not cover ZMK serial interruption classification or persistence; that is 24d work.
+For QMK capture, concurrent finish shares one stop/close promise. Keepalives do not accumulate. Missing stop acknowledgement, write/close failure, helper death, sequence gaps and reported drops cannot silently become complete. The existing warnings persist the `Recording incomplete:` marker. Analysis refuses such traces before replay/proposals. CLI sessions JSON/JSONL include `incomplete` and `warnings`; table rows visibly say incomplete. Ordinary unflagged rows say recorded, not a new proof of physical completeness. This evidence does not cover ZMK. ZMK serial interruption classification and persistence were added later on the legacy transport (D-429); the Rust serial backend remains 24d work.
 
 The existing web alert and session refresh show the same saved outcome. The first screenshot batch exposed a phone-hidden alert; the final batch corrected it. [Durable four-theme/width fixture evidence](../ui-audit/device-helper-24c/README.md) records exact UI blob hashes. This is not released-app or physical acceptance.
 

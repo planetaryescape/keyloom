@@ -156,6 +156,8 @@ describe("recording from a Glove80", () => {
     expect(kb.stream.written.slice(1, -1).every((w) => w === "KLTYPE PING\n")).toBe(true);
     expect(kb.stream.written.at(-1)).toBe("KLTYPE STOP\n");
     expect(kb.stream.closed()).toBe(1);
+    expect(trace.warnings).toEqual([]);
+    expect(trace.endedBy).toBe("host");
   });
 
   test("lines that are not the stream's are ignored, and drops are reported", async () => {
@@ -165,7 +167,60 @@ describe("recording from a Glove80", () => {
     await tick(10);
     const trace = await capture.finish();
     expect(trace.events).toHaveLength(2);
-    expect(trace.warnings.join("\n")).toContain("dropped 4 event(s)");
+    expect(trace.warnings.join("\n")).toContain("Recording incomplete: the keyboard dropped 4 event(s)");
+  });
+
+  test("a pending ping is singular, and concurrent finish calls share stop and close", async () => {
+    const kb = fakeGlove({ pendingWrite: "ping" });
+    const capture = await startZmkCapture(kb.transport, "/fake/p", { keepaliveMs: 5 });
+    await tick(20);
+    expect(kb.stream.written.filter((w) => w === "KLTYPE PING\n")).toHaveLength(1);
+    const first = capture.finish();
+    const second = capture.finish();
+    await tick(5);
+    expect(kb.stream.written).not.toContain("KLTYPE STOP\n");
+    kb.releasePendingWrite();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a).toBe(b);
+    expect(kb.stream.written.filter((w) => w === "KLTYPE STOP\n")).toHaveLength(1);
+    expect(kb.stream.closed()).toBe(1);
+  }, 5000);
+
+  test("transport loss during start fails promptly and closes the session", async () => {
+    const kb = fakeGlove({ answers: false });
+    const transport = {
+      ...kb.transport,
+      async open(path: string, onData: (bytes: Uint8Array) => void, onError?: (error: Error) => void) {
+        const session = await kb.transport.open!(path, onData, onError);
+        return {
+          close: () => session.close(),
+          async write(text: string) {
+            if (text === "KLTYPE START\n") onError?.(new Error("synthetic start loss"));
+            else await session.write(text);
+          },
+        };
+      },
+    };
+    await expect(startZmkCapture(transport, "/fake/p", { startTimeoutMs: 1000 })).rejects.toThrow("synthetic start loss");
+    expect(kb.stream.closed()).toBe(1);
+  }, 5000);
+
+  test("a rejected start write preserves its error after awaited stop and close", async () => {
+    const kb = fakeGlove({ rejectWrite: "start" });
+    await expect(startZmkCapture(kb.transport, "/fake/p")).rejects.toThrow("synthetic start write failure");
+    expect(kb.stream.written).toEqual(["KLTYPE START\n", "KLTYPE STOP\n"]);
+    expect(kb.stream.closed()).toBe(1);
+  });
+
+  test("finish after a transport error reports loss without another stop", async () => {
+    const kb = fakeGlove();
+    const capture = await startZmkCapture(kb.transport, "/fake/p");
+    kb.fail("synthetic disconnect");
+    await capture.ended;
+    const trace = await capture.finish();
+    expect(trace.warnings.some((warning) => warning.startsWith("Recording incomplete:"))).toBe(true);
+    expect(trace.endedBy).toContain("synthetic disconnect");
+    expect(kb.stream.written).not.toContain("KLTYPE STOP\n");
   });
 
   test("silent firmware is refused, and a keyboard-side stop is reported", async () => {
@@ -224,17 +279,18 @@ describe("reading a device node", () => {
     await session.close();
   }, SLOW_RUNNER_MS);
 
-  test("a serial port is put in raw mode at 115200 first (never 1200) and then read as text", async () => {
+  test("a serial port is put in raw mode at 115200 first (never 1200) and then read as bytes", async () => {
     const dir = tempDir();
     const node = join(dir, "ttyfake");
     await mkfifo(node);
     const bin = fakeBinDir({ stty: `echo "$@" >> "${join(dir, "stty.calls")}"` });
-    const text: string[] = [];
-    const session = await withPath(bin, () => openWithStty(node, (t) => text.push(t), undefined, "darwin"));
-    session.write("KLTYPE START\n");
+    const bytes: number[] = [];
+    const session = await withPath(bin, () => openWithStty(node, (chunk) => bytes.push(...chunk), undefined, "darwin"));
+    await session.write("KLTYPE START\n");
     await tick(30);
-    session.close();
-    expect(text.join("")).toBe("KLTYPE START\n");
+    await session.close();
+    await expect(session.write("late write\n")).rejects.toThrow("closed");
+    expect(new TextDecoder().decode(Uint8Array.from(bytes))).toBe("KLTYPE START\n");
     expect(await Bun.file(join(dir, "stty.calls")).text()).toBe(`-f ${node} raw -echo 115200\n`);
   }, SLOW_RUNNER_MS);
 
