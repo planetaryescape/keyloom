@@ -6,4 +6,4 @@
 
 Pass one drain that awaits `started` once and then stops both, while keeping each stop's own failure separate.
 
-Not fixed: found in the 2026-10-21 review of the 24c failure-lifecycle delta. The spawn-classification problem that shared this file was fixed in `b5a3a6d` on PR 141.
+Not fixed: found in the 2026-10-21 review of the 24c failure-lifecycle delta. The spawn-classification problem that shared this file was fixed by PR 141 (`da99297` on main).
