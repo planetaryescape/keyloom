@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.48.0](https://github.com/planetaryescape/keyloom/compare/v0.47.0...v0.48.0) (2026-10-21)
+
+
+### Features
+
+* own the macOS serial port directly in the native serial candidate ([2537547](https://github.com/planetaryescape/keyloom/commit/2537547d8c252c29c9279058c4747322a6bf5cd1))
+
 ## [0.47.0](https://github.com/planetaryescape/keyloom/compare/v0.46.1...v0.47.0) (2026-10-21)
 
 
