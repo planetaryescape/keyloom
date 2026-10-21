@@ -1,7 +1,7 @@
 // `keyloom serve`: the local web app over the same use cases the CLI calls (01#server-and-transport).
 import {
   type AddDeps, type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, ReviewEngine, type ReviewOptions, type SyncDeps, boardDevView, createSyncEngine, defaultAgentModel, getLayout,
-  listLayouts, upgradeOffer, drainDeviceConsumers, shutdownDeviceConnections,
+  listLayouts, upgradeOffer, drainDeviceConsumers, drainManualFlashTasks, shutdownDeviceConnections,
 } from "../app/index.ts";
 import type { AgentModel } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
@@ -98,9 +98,9 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
     stop: () => {
       watcher.stop();
       running.stop();
-      // A build is stopped; a flash is let finish, so the keyboard isn't left half written.
+      // A build is stopped; manual and sync flashes are let finish so the keyboard isn't left half written.
       drained ??= drainDeviceConsumers(
-        [lab.cancel(), drainAgentRuns(app), started.then(() => engine.stop()), started.then(() => reviews.stop())],
+        [lab.cancel(), drainAgentRuns(app), started.then(() => engine.stop()), started.then(() => reviews.stop()), drainManualFlashTasks()],
         shutdownDeviceConnections,
       );
     },

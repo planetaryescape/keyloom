@@ -91,11 +91,44 @@ describe("a session through the routes", () => {
   test("stopping with nothing running is a usage error, and cancel saves nothing", async () => {
     const { layoutId, call, post } = await serve();
     expect((await post("/api/lab/recording/stop", { typedText: "x" })).status).toBe(400);
+    expect((await post("/api/lab/recording/cancel")).status).toBe(200);
+    expect((await post("/api/lab/recording/cancel")).status).toBe(200);
+    expect((await post(`/api/lab/${layoutId}/recording`, {})).status).toBe(201);
+    expect((await post("/api/lab/recording/cancel")).status).toBe(200);
     expect((await post(`/api/lab/${layoutId}/recording`, {})).status).toBe(201);
     expect((await post("/api/lab/recording/cancel")).status).toBe(200);
     const list = LabSessionsResponseSchema.parse(await (await call(`/api/lab/${layoutId}/sessions`)).json());
     expect(list.sessions).toEqual([]);
   });
+});
+
+test("a start during route cancellation is refused, and a later start succeeds", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  const finish = Promise.withResolvers<{ events: []; warnings: []; endedBy: string }>();
+  const finishCalled = Promise.withResolvers<void>();
+  const deps: LabDeps = {
+    startCapture: async () => ({ snapshot: () => [], ended: new Promise(() => {}), finish: () => { finishCalled.resolve(); return finish.promise; } }),
+    replay: () => modelReplay(getLayout(app, layoutId).board.definition),
+  };
+  const backend = appLabBackend(app, deps);
+  const server = Bun.serve({ port: 0, fetch: async (r) => (await handleLabRoute(r, new URL(r.url).pathname, backend, TOKEN)) ?? new Response("no", { status: 404 }) });
+  servers.push(server);
+  const post = (path: string, body: unknown = {}) => fetch(`http://127.0.0.1:${server.port}${path}`, {
+    method: "POST", headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  try {
+    expect((await post(`/api/lab/${layoutId}/recording`)).status).toBe(201);
+    const cancelling = post("/api/lab/recording/cancel");
+    await finishCalled.promise;
+    expect((await post(`/api/lab/${layoutId}/recording`)).status).toBe(409);
+    finish.resolve({ events: [], warnings: [], endedBy: "host" });
+    expect((await cancelling).status).toBe(200);
+    expect((await post(`/api/lab/${layoutId}/recording`)).status).toBe(201);
+    expect((await post("/api/lab/recording/cancel")).status).toBe(200);
+  } finally {
+    finish.resolve({ events: [], warnings: [], endedBy: "host" });
+    app.db.close();
+  }
 });
 
 test("shutdown waits for an in-flight stop to persist its session", async () => {

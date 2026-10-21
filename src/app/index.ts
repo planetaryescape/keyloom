@@ -34,7 +34,7 @@ export {
 export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
-  getBuild, getFlash, startBuild, startFlash,
+  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash,
 } from "./firmware.ts";
 export {
   type AutoSyncReport, type BoardSyncView, type RunSyncOptions, type SyncDeps, type SyncEngine, type SyncOptions, type SyncOutcome, type SyncSetup, type SyncState,

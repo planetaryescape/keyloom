@@ -27,7 +27,6 @@ export function appLabBackend(app: App, deps: LabDeps): LabBackend {
   const starting = new Set<Promise<unknown>>();
   const stopping = new Set<Promise<unknown>>();
   let cancellation: Promise<void> | undefined;
-  let shuttingDown = false;
   const readout = (id: string) => {
     const r = labReadout(app, id);
     return { session: sessionView(r.session), readout: r.readout };
@@ -42,7 +41,7 @@ export function appLabBackend(app: App, deps: LabDeps): LabBackend {
     sessions: (ref) => translate(() => labSessions(app, ref).map(sessionView)),
     start: (ref, request) => {
       const operation = translate(async () => {
-        if (shuttingDown || recording !== null || starting.size > 0) throw new LabError(409, "busy", "A recording is already running. Stop it first.");
+        if (cancellation !== undefined || recording !== null || starting.size > 0) throw new LabError(409, "busy", "A recording is already running. Stop it first.");
         const why = cannotRecord(getLayout(app, ref).board.definition);
         if (why !== null) throw new UsageError(why);
         recording = await beginRecording(app, ref, deps, { ...(request.passageId ? { passageId: request.passageId } : {}), ...(request.text !== undefined ? { text: request.text } : {}) });
@@ -67,17 +66,24 @@ export function appLabBackend(app: App, deps: LabDeps): LabBackend {
       return operation;
     },
     cancel: async () => {
-      shuttingDown = true;
-      cancellation ??= (async () => {
-        // Shutdown must not close the helper or database while a start or stop still owns them.
-        while (starting.size > 0 || stopping.size > 0) {
-          await Promise.allSettled([...starting, ...stopping]);
-        }
-        const rec = recording;
-        recording = null;
-        // The keyboard is asked to stop; what it heard is dropped.
-        await rec?.capture.finish().catch(() => {});
-      })();
+      if (cancellation === undefined) {
+        const operation = (async () => {
+          // Do not close the helper or database while a start or stop still owns them.
+          while (starting.size > 0 || stopping.size > 0) {
+            await Promise.allSettled([...starting, ...stopping]);
+          }
+          const rec = recording;
+          recording = null;
+          // The keyboard is asked to stop; what it heard is dropped.
+          await rec?.capture.finish().catch(() => {});
+        })();
+        cancellation = operation;
+        void operation.then(() => {
+          if (cancellation === operation) cancellation = undefined;
+        }, () => {
+          if (cancellation === operation) cancellation = undefined;
+        });
+      }
       await cancellation;
     },
     readout: (id) => translate(() => readout(id)),

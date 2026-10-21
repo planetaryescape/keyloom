@@ -370,6 +370,11 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
   return toFlashView(app, row);
 }
 
+/** Waits for every flash currently running in this process to finish, without surfacing task failures. */
+export async function drainManualFlashTasks(): Promise<void> {
+  await Promise.allSettled([...flashTasks.values()]);
+}
+
 async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: string, artifact: string, opts: FlashOptions): Promise<void> {
   const log = new LogSink(absolute(app, row.logPath));
   // States are told in order and the last one before the flash task ends: each view reads the log, so unchained reads can land

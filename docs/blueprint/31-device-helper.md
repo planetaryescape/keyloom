@@ -52,7 +52,7 @@ No BLE transport, general keylogger, OS keyboard hook, input injection, arbitrar
  keyboard firmware (unchanged)
 ```
 
-Each CLI or server process lazily owns one helper. The desktop still owns the Bun server, and the server owns the helper; Tauri does not start another copy. Closing a browser tab does not kill an app-owned recording or sync job. Existing application lifecycle rules still decide when to stop them (D-421, D-422).
+Each CLI or server process lazily owns one helper. The desktop still owns the Bun server, and the server owns the helper; Tauri does not start another copy. Closing a browser tab does not kill an app-owned recording or sync job. On server shutdown, the server drains in-flight lab operations, sync work and manual editor flashes before closing the helper (D-421, D-422).
 
 The helper does not read SQLite, provider credentials, board files or layout revisions. Spawn with a minimal platform environment and private pipes, not inherited secrets or shell interpolation. It binds no socket. A subprocess limits crash propagation; it is not a security sandbox against the same OS user.
 
