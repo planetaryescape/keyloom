@@ -611,7 +611,7 @@ Status: native HID/capture implementation candidate; explicit compile-time insta
 
 ## Rung 24d: My Glove80 uses the same owned device connection
 
-Status: TypeScript capture lifecycle on the legacy stty/polling transport built; native Rust serial backend and physical serial S59 remain pending. The 24c dependency and physical acceptance gates remain open.
+Status: TypeScript capture lifecycle on the legacy stty/polling transport built. [Slice 1](../research/spikes/device-helper-24d.md) adds synthetic Rust serial sessions, the explicit installed `native-serial` selector and a software-only PTY smoke, all passing locally. The real Rust serial backend, touch and physical serial S59 remain pending. The 24c dependency and physical acceptance gates remain open.
 
 **Previously:** macOS serial discovery uses FFI and capture/touch use stty/polling. **Now:** the helper owns CDC sessions and explicit touch operations.
 

@@ -30,6 +30,10 @@ impl Peer {
         };
         let hello=peer.call("hello",json!({"protocol":1,"hostVersion":env!("KEYLOOM_RELEASE"),"target":env!("KEYLOOM_TARGET")}));
         assert_eq!(hello["ok"], true);
+        assert_eq!(
+            hello["result"]["capabilities"],
+            json!(["hid.list", "hid.open", "hid.write"])
+        );
         peer
     }
     fn send(&mut self, method: &str, params: Value) -> String {
@@ -280,4 +284,28 @@ fn stalled_stdout_exits_despite_continued_observed_pings() {
         "parent enqueue is not proof: helper must observe continued pings"
     );
     assert!(started.elapsed() >= Duration::from_secs(5));
+}
+
+#[test]
+fn serial_relist_preserves_hid_refs_and_serial_write_shape_is_refused() {
+    let _guard = LEASE_TEST.lock().unwrap();
+    let mut peer = Peer::new();
+    let reference = peer.reference();
+    assert_eq!(
+        peer.call("list", json!({"transport":"serial"}))["error"]["code"],
+        "unsupported"
+    );
+    let opened = peer.call("hid.open", json!({"deviceRef":reference}));
+    assert_eq!(opened["ok"], true);
+    assert_eq!(
+        peer.call(
+            "session.write",
+            json!({"sessionId":opened["result"]["sessionId"],"bytes":"AA=="})
+        )["error"]["code"],
+        "invalid_request"
+    );
+    assert_eq!(
+        peer.call("test.stats", json!({}))["result"],
+        json!({"opens":1,"writes":0})
+    );
 }

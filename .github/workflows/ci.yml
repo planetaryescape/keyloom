@@ -79,6 +79,26 @@ jobs:
           helper="$PWD/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
           bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --device-backend native-hid --helper "$helper" --out-dir dist/native-candidate-test
           bun scripts/smoke-native-hid-candidate.ts "dist/native-candidate-test/keyloom-${{ matrix.rust == 'aarch64-apple-darwin' && 'darwin-arm64' || 'darwin-x64' }}" "$helper"
+      - name: Synthetic serial contract and installed candidate (no devices)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd native/device-helper
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" --features synthetic-serial -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}" --features synthetic-serial
+          cargo build --locked --target "${{ matrix.rust }}" --features synthetic-serial
+          cp "target/${{ matrix.rust }}/debug/keyloom-device" "target/${{ matrix.rust }}/debug/keyloom-device-synthetic-serial"
+          codesign --force --sign - "target/${{ matrix.rust }}/debug/keyloom-device-synthetic-serial"
+          cd ../..
+          KEYLOOM_TEST_SYNTHETIC_SERIAL="$PWD/native/device-helper/target/${{ matrix.rust }}/debug/keyloom-device-synthetic-serial" bun test test/firmware/toolchain/device-helper-serial.test.ts
+          cd native/device-helper
+          cargo build --locked --release --target "${{ matrix.rust }}" --features synthetic-serial-capture
+          cp "target/${{ matrix.rust }}/release/keyloom-device" "target/${{ matrix.rust }}/release/keyloom-device-synthetic-serial-capture"
+          codesign --force --sign - "target/${{ matrix.rust }}/release/keyloom-device-synthetic-serial-capture"
+          cd ../..
+          helper="$PWD/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device-synthetic-serial-capture"
+          bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --device-backend native-serial --helper "$helper" --out-dir dist/native-serial-candidate-test
+          bun scripts/smoke-native-serial-candidate.ts "dist/native-serial-candidate-test/keyloom-${{ matrix.rust == 'aarch64-apple-darwin' && 'darwin-arm64' || 'darwin-x64' }}" "$helper"
       - name: Locked Rust checks and native diagnostics build
         shell: bash
         working-directory: native/device-helper

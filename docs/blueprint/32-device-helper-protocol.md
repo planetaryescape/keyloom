@@ -1,6 +1,6 @@
 # 32: A bounded device protocol with explicit failure
 
-Status: diagnostics-v1 subset shipped in v0.46.1, 2026-10-20 (D-426). Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). The HID/session/event subset below has a compile-gated 24c implementation candidate (D-427). TypeScript capture now classifies and persists incomplete ZMK serial recordings on the legacy transport; the Rust serial backend, physical S59 serial evidence and production adoption remain pending under D-421 to D-424 and Q40. The serial seam carries raw byte chunks and has awaitable writes and closes. [S58/S62 evidence](../research/spikes/device-helper-24b.md) records local/native-CI and published evidence, plus the remaining hardware and future transport gates. [31](31-device-helper.md) owns scope and experience; [33](33-device-helper-platforms.md) owns OS behavior and shipping.
+Status: diagnostics-v1 subset shipped in v0.46.1, 2026-10-20 (D-426). Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). The HID/session/event subset below has a compile-gated 24c implementation candidate (D-427); the serial/session subset has a synthetic-only 24d candidate (D-430), with Rust and installed acceptance pending. TypeScript capture now classifies and persists incomplete ZMK serial recordings on the legacy transport; the real Rust serial backend, physical S59 serial evidence and production adoption remain pending under D-421 to D-424 and Q40. The serial seam carries raw byte chunks and has awaitable writes and closes. [S58/S62 evidence](../research/spikes/device-helper-24b.md) records local/native-CI and published evidence, plus the remaining hardware and future transport gates. [31](31-device-helper.md) owns scope and experience; [33](33-device-helper-platforms.md) owns OS behavior and shipping.
 
 ## Implemented diagnostics subset
 
@@ -12,7 +12,7 @@ The frame limit is 65,536 bytes **including newline**. The Rust reader admits on
 
 Doctor admits one sequential hello/ping/shutdown exchange per child, with a two-second overall deadline. It requires matching response IDs, exact paired identity and empty capabilities, then waits for stdout EOF and exit 0. Failure closes stdin, terminates a still-running child and bounds exit/pipe cleanup waits. It never retries. Multiple doctor calls own independent children.
 
-The [24c candidate](../research/spikes/device-helper-24c.md) implements the HID/session subset behind mutually exclusive `native-hid` and `synthetic-hid` compile-time features. `transport-v1.schema.json` supplements the frozen diagnostics schema; regenerate it with `bun scripts/gen-device-helper-schema.ts`. The native callback and shared IPC data queues hold at most 510 reports each, conservatively below the 1024-event/256-KiB per-session ceiling. A random helper nonce makes raw references/session IDs distinct across child lifetimes. An independent five-second stdout-write watchdog terminates even while parent pings continue. Session/control bounds and parent deadlines below are enforced. Serial methods remain unsupported. Default/release builds still compile only diagnostics; physical and installed native adoption gates have not passed.
+The [24c candidate](../research/spikes/device-helper-24c.md) implements the HID/session subset behind mutually exclusive `native-hid` and `synthetic-hid` compile-time features. `transport-v1.schema.json` supplements the frozen diagnostics schema; regenerate it with `bun scripts/gen-device-helper-schema.ts`. The native callback and shared IPC data queues hold at most 510 reports each, conservatively below the 1024-event/256-KiB per-session ceiling. A random helper nonce makes raw references/session IDs distinct across child lifetimes. An independent five-second stdout-write watchdog terminates even while parent pings continue. Session/control bounds and parent deadlines below are enforced. The [24d candidate](../research/spikes/device-helper-24d.md) adds `serial.list`/`serial.open` behind `synthetic-serial`, with arbitrary 1–4096-byte chunks and a separate installed `native-serial` selector. It shares the HID session owner; synthetic serial cannot combine with HID features. `serial.touch` remains unsupported and unadvertised. Default/release builds still compile only diagnostics; physical and installed native adoption gates have not passed.
 
 ## Version 1 uses private JSON lines
 
@@ -46,9 +46,9 @@ The data example illustrates the envelope, not a valid 32-byte QMK report. Exact
 | `list` | `transport: hid \| serial` | `devices: Device[]`; metadata only, no operational session or line-state change |
 | `hid.open` | `deviceRef` | `sessionId`; acquires lease and exact endpoint, begins receiving reports, writes none |
 | `hid.write` | `deviceRef`, `reportId: 0`, `bytes` | `acceptedBytes: 32`; one-shot open/write/close with lease, no stream |
-| `serial.open` | `deviceRef` | `sessionId`; 115200 baud, raw 8N1, no flow control, capture DTR behavior from platform adapter; no firmware command |
-| `serial.touch` | `deviceRef`, `baud: 1200 \| 1201` | `lineStateApplied: true`; executes verified baud/DTR/close sequence, not proof of reboot |
-| `session.write` | `sessionId`, `bytes`; HID also requires `reportId: 0` | `acceptedBytes`; serialized native write, not proof that firmware acted |
+| `serial.open` | `deviceRef` | `sessionId`; synthetic backend in 24d slice 1, no firmware command. Real 115200/raw 8N1/no-flow-control/DTR setup remains a platform gate |
+| `serial.touch` | `deviceRef`, `baud: 1200 \| 1201` | `unsupported`, `effect: none` in every current build; future verified touch would return `lineStateApplied: true` |
+| `session.write` | `sessionId`, strict-base64 `bytes`; HID requires `reportId: 0` and exactly 32 decoded bytes; serial omits `reportId` and accepts 1–4096 bytes | `{ acceptedBytes: n }`, exactly the decoded payload length; serialized native write, not proof that firmware acted |
 | `session.close` | `sessionId` | `finalSeq`; closes resources with the ordering below |
 | `shutdown` | Empty | Empty after all sessions close; helper exits |
 
@@ -68,7 +68,7 @@ The v1 HID payload is exactly 32 bytes without an ID; `reportId` is explicitly z
 
 Read reports preserve report boundaries. Do not strip a byte from an unnumbered payload just because it is zero. Refuse unexpected report lengths/IDs rather than silently truncate. S58–S61 establish exact native conventions against known firmware packets.
 
-Serial data events carry arbitrary byte chunks, not lines or decoded text. The TS adapter uses streaming UTF-8 decoding and existing line parsers. Test every split point, multiple lines in one chunk, invalid UTF-8 and incomplete trailing lines. Impose a bounded firmware-line accumulator in the TS parser as well; bounded transport chunks alone do not bound an unterminated line. Initial line limit: 4 KiB, then fail the capture as malformed/incomplete rather than drop bytes.
+Serial data events carry 1–4096 arbitrary bytes as strict base64, not lines or decoded text. The parent records each opened session's transport: HID still requires exactly 32 bytes, while serial admits any length in that range. A write shaped for the wrong transport is `invalid_request`. The TS adapter uses streaming UTF-8 decoding and existing line parsers. Test every split point, multiple lines in one chunk, invalid UTF-8 and incomplete trailing lines. Impose a bounded firmware-line accumulator in the TS parser as well; bounded transport chunks alone do not bound an unterminated line. Initial line limit: 4 KiB, then fail the capture as malformed/incomplete rather than drop bytes.
 
 Firmware sequence numbers, DROP messages, device timestamps and wrap handling stay in existing TS readers. Helper `seq` detects missing IPC messages only. It cannot prove that the keyboard produced every physical event. `receivedAtUs` measures receipt relative to helper startup; never substitute it for a firmware event timestamp in typing analysis.
 
@@ -105,7 +105,7 @@ Initial budgets are proposal defaults under Q40, not measured performance claims
 | Serial data/write chunk | 4 KiB decoded | Reject outgoing oversized chunks; split incoming bytes without reordering |
 | Listed endpoints per transport | 256 | `capacity`; never silently omit matching candidates |
 | Open sessions / pending requests | 8 / 32 | `capacity`, no device effect |
-| Buffered data per session | 256 KiB or 1024 events, whichever comes first | Fail session with detected loss; never silently drop and continue |
+| Buffered data per session | Ceiling: 256 KiB or 1024 events. HID: 510 native + 510 shared output reports. Serial: at most 16 native chunks + 16 shared output chunks, each ≤4096 decoded bytes | Fail session with detected loss; never silently drop and continue |
 | Control/response queue | 64 entries, separate from data | Fatal supervisor failure rather than starving close indefinitely |
 | Native read timeout target | 50 ms | Wake owner to process control; S59–S61 must verify actual behavior |
 | Hello / list / open / touch deadline | 2 s / 5 s / 2 s / 2 s | Fail or mark uncertain effect as appropriate; no implicit retry |
@@ -114,6 +114,8 @@ Initial budgets are proposal defaults under Q40, not measured performance claims
 | Parent fallback termination wait | 2 s | Report cleanup unconfirmed, refuse new device operations |
 | Parent ping / helper liveness timeout | Every 1 s / 5 s without a ping | Close sessions and exit; stalled application must not record indefinitely |
 | stderr buffer retained by parent | 64 KiB | Keep bounded sanitized diagnostics, never data payloads |
+
+The serial output queue is shared across all sessions. Sixteen maximum-size native chunks plus sixteen encoded output events remain below 256 KiB, including base64/frame overhead. The synthetic backend scripts a flood on demand rather than allocating thousands of chunks; overflow during close drain still emits `failed` with `loss: detected`, then `closed`, then the close receipt. A real serial adapter must preserve the 16-chunk native bound.
 
 Control processing must not block on draining stdout or on native reads. Preserve each session's event order while reserving capacity for terminal/control messages. If stdout remains blocked until the liveness deadline, exit; parent marks all outstanding work unknown. Do not promise delivery of an overflow event over a pipe that cannot drain.
 

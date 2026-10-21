@@ -1,0 +1,126 @@
+[
+  {
+    "name": "list",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "list",
+      "params": {
+        "transport": "serial"
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "open",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "serial.open",
+      "params": {
+        "deviceRef": "d1"
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "write",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "session.write",
+      "params": {
+        "sessionId": "s1",
+        "bytes": "AA=="
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "empty write",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "session.write",
+      "params": {
+        "sessionId": "s1",
+        "bytes": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "noncanonical padding",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "session.write",
+      "params": {
+        "sessionId": "s1",
+        "bytes": "AB=="
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "whitespace base64",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "session.write",
+      "params": {
+        "sessionId": "s1",
+        "bytes": "AA==\n"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "serial open extra",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "serial.open",
+      "params": {
+        "deviceRef": "d1",
+        "path": "/dev/tty"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "write extra",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "session.write",
+      "params": {
+        "sessionId": "s1",
+        "bytes": "AA==",
+        "length": 32
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "serial open empty",
+    "request": {
+      "v": 1,
+      "type": "request",
+      "id": "2",
+      "method": "serial.open",
+      "params": {
+        "deviceRef": ""
+      }
+    },
+    "valid": false
+  }
+]

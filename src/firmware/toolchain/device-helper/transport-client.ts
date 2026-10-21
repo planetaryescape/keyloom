@@ -3,14 +3,14 @@ import type { HelperManifest } from "./extract.ts";
 import { MAX_FRAME } from "./protocol.ts";
 import { launchHelper, type HelperChild } from "./spawn.ts";
 import { HelperSetupFailure } from "./setup-failure.ts";
-import { closedSchema, openedSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, type TransportError, type TransportEvent } from "./transport-protocol.ts";
+import { HID_CAPABILITIES, reportBytesSchema, serialBytesSchema, type Capability, type SessionTransport, closedSchema, openedSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, type TransportError, type TransportEvent } from "./transport-protocol.ts";
 
 export class DeviceTransportError extends Error {
   constructor(readonly detail: TransportError) { super(`keyboard connection: ${detail.code}`); }
 }
 const channelError = (code: "protocol_error" | "helper_exited" | "timeout") => new DeviceTransportError({ code, effect: "possible", retry: "never" });
 type Pending = { accept(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> };
-type Session = { seq: number; received: bigint; phase: "open" | "closing" | "failed" | "closed"; failed: boolean; onReport(bytes: Uint8Array): void; onError(error: Error): void; close?: Promise<void> };
+type Session = { transport: SessionTransport; seq: number; received: bigint; phase: "open" | "closing" | "failed" | "closed"; failed: boolean; onReport(bytes: Uint8Array): void; onError(error: Error): void; close?: Promise<void> };
 
 /** One child lifetime. There is deliberately no restart, fallback or request replay. */
 export class DeviceTransportClient {
@@ -34,7 +34,7 @@ export class DeviceTransportClient {
     void this.drain().catch((e: Error) => this.fail(e));
     void this.child.exited.then(() => { if (!this.stopping) this.fail(channelError("helper_exited")); });
   }
-  static async connect(path: string, manifest: HelperManifest, launch = launchHelper): Promise<DeviceTransportClient> {
+  static async connect(path: string, manifest: HelperManifest, launch = launchHelper, expectedCapabilities: readonly Capability[] = HID_CAPABILITIES): Promise<DeviceTransportClient> {
     let child: HelperChild;
     try {
       child = launch(path);
@@ -46,7 +46,7 @@ export class DeviceTransportClient {
     try {
       const identity = await client.request("hello", { protocol: 1, hostVersion: manifest.release, target: manifest.target }, transportIdentitySchema, 2_000);
       if (identity.helperVersion !== manifest.release || identity.target !== manifest.target || identity.protocol !== manifest.protocol) throw new DeviceTransportError({ code: "version_mismatch", effect: "none", retry: "never" });
-      if (!["hid.list", "hid.open", "hid.write"].every((c) => identity.capabilities.some((v) => v === c))) throw new DeviceTransportError({ code: "unsupported", effect: "none", retry: "never" });
+      if (identity.capabilities.length !== expectedCapabilities.length || !expectedCapabilities.every((c) => identity.capabilities.some((v) => v === c))) throw new DeviceTransportError({ code: "unsupported", effect: "none", retry: "never" });
       client.heartbeat = setInterval(() => {
         if (client.heartbeatPending) return;
         client.heartbeatPending = true;
@@ -84,10 +84,10 @@ export class DeviceTransportClient {
       } catch { this.fail(channelError("helper_exited")); }
     });
   }
-  async open(deviceRef: string, onReport: (bytes: Uint8Array) => void, onError: (error: Error) => void): Promise<string> {
-    const opened = await this.request("hid.open", { deviceRef }, openedSchema, 2_000, ({ sessionId }) => {
+  async open(deviceRef: string, onReport: (bytes: Uint8Array) => void, onError: (error: Error) => void, transport: SessionTransport = "hid"): Promise<string> {
+    const opened = await this.request(`${transport}.open`, { deviceRef }, openedSchema, 2_000, ({ sessionId }) => {
       if (this.sessions.has(sessionId) || this.sessions.size - this.closed.length >= 8) throw channelError("protocol_error");
-      this.sessions.set(sessionId, { seq: 0, received: 0n, phase: "open", failed: false, onReport, onError });
+      this.sessions.set(sessionId, { transport, seq: 0, received: 0n, phase: "open", failed: false, onReport, onError });
     });
     return opened.sessionId;
   }
@@ -107,6 +107,7 @@ export class DeviceTransportClient {
     if (!session || session.phase === "closed" || event.seq !== session.seq + 1) throw channelError("protocol_error");
     session.seq = event.seq;
     if (event.event === "data") {
+      if (!(session.transport === "hid" ? reportBytesSchema : serialBytesSchema).safeParse(event.bytes).success) throw channelError("protocol_error");
       const received = BigInt(event.receivedAtUs);
       if (session.failed || received < session.received) throw channelError("protocol_error");
       session.received = received;

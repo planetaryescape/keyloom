@@ -22,7 +22,7 @@ function options(argv: string[]) {
   let helper: string | undefined;
   let helperDir: string | undefined;
   let outDir = "dist";
-  let backend: "legacy" | "native-hid" = "legacy";
+  let backend: "legacy" | "native-hid" | "native-serial" = "legacy";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const value = argv[++i];
@@ -32,18 +32,19 @@ function options(argv: string[]) {
     else if (arg === "--helper") helper = value;
     else if (arg === "--helper-dir") helperDir = value;
     else if (arg === "--out-dir") outDir = value;
-    else if (arg === "--device-backend" && (value === "legacy" || value === "native-hid")) backend = value;
+    else if (arg === "--device-backend" && (value === "legacy" || value === "native-hid" || value === "native-serial")) backend = value;
     else throw new Error(`invalid option: ${arg}; targets: ${Object.keys(RELEASE_TARGETS).join(", ")}`);
   }
   const selected = targets.length ? targets : Object.keys(RELEASE_TARGETS).filter(isBunTarget);
   if (helper && (selected.length !== 1 || helperDir)) throw new Error("--helper requires exactly one --target and no --helper-dir");
-  if (backend === "native-hid" && (resolve(outDir) === resolve("dist") || selected.some((target) => RELEASE_TARGETS[target].platform !== "darwin"))) {
-    throw new Error("native-hid is an unadopted macOS candidate; select a Mac target and an explicit separate --out-dir");
+  if (backend !== "legacy" && (resolve(outDir) === resolve("dist") || selected.some((target) => RELEASE_TARGETS[target].platform !== "darwin"))) {
+    throw new Error(`${backend} is an unadopted macOS candidate; select a Mac target and an explicit separate --out-dir`);
   }
+  if (backend === "native-serial" && !helper) throw new Error("native-serial currently requires --helper with a compiled synthetic-serial helper; the real serial backend is not built");
   return { targets: selected, entry, helper, helperDir, outDir, backend };
 }
 
-async function helperPath(target: BunTarget, backend: "legacy" | "native-hid", helper?: string, helperDir?: string): Promise<string> {
+async function helperPath(target: BunTarget, backend: "legacy" | "native-hid" | "native-serial", helper?: string, helperDir?: string): Promise<string> {
   const spec = RELEASE_TARGETS[target];
   if (helper) return resolve(helper);
   if (helperDir) return resolve(helperDir, spec.rust, "keyloom-device");

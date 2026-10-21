@@ -1,5 +1,5 @@
 import { deviceBackend } from "../firmware/toolchain/device-helper/selection.ts";
-import { shutdownCandidateHid } from "../firmware/toolchain/device-helper/owner.ts";
+import { shutdownCandidateDevice } from "../firmware/toolchain/device-helper/owner.ts";
 
 /** Drain every consumer before closing the shared helper; neither a rejected drain nor close may hide the other. */
 export async function drainDeviceConsumers(
@@ -19,5 +19,5 @@ export async function drainDeviceConsumers(
 
 /** App/CLI lifecycle boundary. Legacy builds own no helper; a candidate must observe cleanup. */
 export async function shutdownDeviceConnections(): Promise<void> {
-  if (deviceBackend() === "native-hid") await shutdownCandidateHid();
+  if (deviceBackend() !== "legacy") await shutdownCandidateDevice();
 }

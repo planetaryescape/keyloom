@@ -3,7 +3,7 @@ import { HelperFailure } from "./errors.ts";
 import type { HelperManifest } from "./extract.ts";
 import { identitySchema, MAX_FRAME, responseSchema } from "./protocol.ts";
 import { type HelperChild, launchHelper } from "./spawn.ts";
-import { HID_CAPABILITIES, transportIdentitySchema } from "./transport-protocol.ts";
+import { type Capability, transportIdentitySchema } from "./transport-protocol.ts";
 
 async function deadline<T>(work: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -15,7 +15,7 @@ async function deadline<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 /** One bounded diagnostics exchange, not a session/RPC framework. Each call owns and reaps its child. */
-export async function diagnoseHelper(path: string, manifest: HelperManifest, launch = launchHelper, expectedCapabilities: readonly (typeof HID_CAPABILITIES[number])[] = []) {
+export async function diagnoseHelper(path: string, manifest: HelperManifest, launch = launchHelper, expectedCapabilities: readonly Capability[] = []) {
   const child: HelperChild = launch(path);
   const reader = child.stdout.getReader();
   const stderr = child.stderr.getReader();
