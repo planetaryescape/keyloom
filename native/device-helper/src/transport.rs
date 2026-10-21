@@ -22,6 +22,17 @@ fn ok(id: &str, result: Value) -> Value {
 fn fail(id: &str, code: &str, effect: &str) -> Value {
     json!({"v":1,"type":"response","id":id,"ok":false,"error":error(code,effect)})
 }
+fn list_reply(id: &str, devices: Vec<Value>) -> Result<Value, &'static str> {
+    let reply = ok(id, json!({"devices":devices}));
+    let size = serde_json::to_vec(&reply)
+        .map_err(|_| "protocol_error")?
+        .len()
+        + 1;
+    if size > crate::MAX_FRAME {
+        return Err("capacity");
+    }
+    Ok(reply)
+}
 struct Control {
     values: Vec<Value>,
     drain: bool,
@@ -227,7 +238,13 @@ impl Transport {
                                 devices.push(endpoint.record(&reference));
                                 state.refs.insert(reference, endpoint);
                             }
-                            this.output.reply(ok(&id, json!({"devices":devices})));
+                            match list_reply(&id, devices) {
+                                Ok(reply) => this.output.reply(reply),
+                                Err(code) => {
+                                    state.refs.clear();
+                                    this.output.reply(fail(&id, code, "none"));
+                                }
+                            }
                         }
                         Ok(_) => this.output.reply(fail(&id, "capacity", "none")),
                         Err(code) => this.output.reply(fail(&id, code, "none")),
@@ -509,6 +526,33 @@ fn payload(params: &Value) -> Option<[u8; 32]> {
         return None;
     }
     bytes.try_into().ok()
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    #[test]
+    fn maximum_metadata_cannot_create_an_oversized_wire_frame() {
+        let endpoint = Endpoint {
+            key: "not-a-path".into(),
+            vendor: 0x3297,
+            product: 0x1969,
+            serial: Some("s".repeat(256)),
+            descriptor: vec![],
+        };
+        let devices = (0..256)
+            .map(|index| endpoint.record(&format!("d{}-1-{index}", "n".repeat(32))))
+            .collect::<Vec<_>>();
+        assert!(
+            serde_json::to_vec(&ok("2", json!({"devices":devices})))
+                .unwrap()
+                .len()
+                + 1
+                > crate::MAX_FRAME
+        );
+        assert_eq!(list_reply("2", devices), Err("capacity"));
+        assert!(list_reply("2", vec![endpoint.record("d-valid")]).is_ok());
+    }
 }
 
 #[cfg(unix)]

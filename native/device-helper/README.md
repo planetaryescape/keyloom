@@ -56,7 +56,7 @@ For a signed/prebuilt helper, pass `--helper <absolute-file>` with exactly one `
 keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 ```
 
-A compiled pair reports its release, protocol, target, helper SHA-256 and empty capabilities. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
+An ordinary compiled pair reports its release, protocol, target, helper SHA-256 and empty capabilities. An explicit native candidate reports its selected HID capabilities and says hardware acceptance is pending; doctor still performs no discovery. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
 
 The Unix extractor rejects symlinks in managed paths, unexpected owners, unsafe modes and wrong hashes. It publishes without replacing an existing executable. Old releases coexist until explicitly removed; no automatic cleanup or downloads occur. A same-user malicious process is outside this integrity boundary. Windows currently runs native Cargo/Bun child-contract checks only: production extraction refuses Windows until private ACL/reparse checks are implemented.
 
