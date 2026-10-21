@@ -6,9 +6,10 @@ import type { TypingFindings } from "../agent/ports.ts";
 import type { CaptureHooks, CapturedTrace, KeyCapture } from "../firmware/emulate/trace.ts";
 import { findQmkStreamDevice, startQmkCapture } from "../firmware/qmk/typing-capture.ts";
 import { defaultHidTransport } from "../firmware/toolchain/hid-default.ts";
+import { DeviceTransportError } from "../firmware/toolchain/device-helper/transport-client.ts";
 import { defaultSerialTransport } from "../firmware/toolchain/serial-default.ts";
 import { findZmkStreamPort, startZmkCapture } from "../firmware/zmk/typing-capture.ts";
-import { CaptureError } from "../firmware/emulate/trace.ts";
+import { CaptureError, incompleteRecording } from "../firmware/emulate/trace.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { type Analysis, type Replay, analyse } from "../lab/analyse.ts";
 import { builtinPassages, customPassage, passageLines } from "../lab/passages.ts";
@@ -28,10 +29,12 @@ import { tappingTermOf } from "../lab/terms.ts";
 
 import type { App } from "./context.ts";
 import { emulateEvents } from "./emulate.ts";
-import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
+import { LabCaptureError, NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+
+export { incompleteRecording };
 
 export type LabDeps = {
   /** Starts the key stream on the keyboard of `board` that is plugged in. Throws CaptureError with what to do when there is none. */
@@ -105,7 +108,18 @@ export async function beginRecording(
   const passage = choosePassage(view, opts);
   // After the checks that can refuse and before the first key is heard: the person is told before anything is recorded.
   opts.announce?.(passage);
-  const capture = await deps.startCapture(view.board.definition, opts.hooks ?? {});
+  let capture: KeyCapture;
+  try {
+    capture = await deps.startCapture(view.board.definition, opts.hooks ?? {});
+  } catch (err) {
+    if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
+      throw new LabCaptureError(err.detail.code);
+    }
+    if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
+      throw new LabCaptureError("restart_required");
+    }
+    throw err;
+  }
   return { view, passage, capture, startedAt: Date.now() };
 }
 
@@ -201,6 +215,9 @@ function proposalFor(layout: Layout, s: Suggestion, recordedOn: number) {
  */
 export async function analyseSession(app: App, id: string, deps: LabDeps, opts: AnalyseOptions = {}): Promise<{ session: TypingSessionSummary; analysis: StoredAnalysis }> {
   const row = sessionRow(app, id);
+  if (incompleteRecording(row.warnings)) {
+    throw new UsageError("This recording is incomplete. Start a new recording before testing timing changes; the partial recording is still saved.");
+  }
   const view = getLayout(app, row.layoutId, row.revisionId);
   const board = view.board.definition;
   const boardRevision = row.boardRevision ?? (board.revisions[0] as { id: string }).id;

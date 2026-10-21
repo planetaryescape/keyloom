@@ -1,0 +1,672 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "request"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "method": {
+              "type": "string",
+              "const": "list"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "transport": {
+                  "type": "string",
+                  "const": "hid"
+                }
+              },
+              "required": [
+                "transport"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "request"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "method": {
+              "type": "string",
+              "const": "hid.open"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "deviceRef": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": [
+                "deviceRef"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "request"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "method": {
+              "type": "string",
+              "const": "hid.write"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "deviceRef": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "reportId": {
+                  "type": "number",
+                  "const": 0
+                },
+                "bytes": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9+/]{43}=$"
+                }
+              },
+              "required": [
+                "deviceRef",
+                "reportId",
+                "bytes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "request"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "method": {
+              "type": "string",
+              "const": "session.write"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "sessionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "reportId": {
+                  "type": "number",
+                  "const": 0
+                },
+                "bytes": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9+/]{43}=$"
+                }
+              },
+              "required": [
+                "sessionId",
+                "reportId",
+                "bytes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "request"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "method": {
+              "type": "string",
+              "const": "session.close"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "sessionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": [
+                "sessionId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "response"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "result": {}
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "ok",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "response"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "permission_denied",
+                    "busy",
+                    "not_found",
+                    "stale_device",
+                    "ambiguous_device",
+                    "unsupported",
+                    "invalid_request",
+                    "invalid_session",
+                    "capacity",
+                    "io_failed",
+                    "timeout",
+                    "disconnected",
+                    "overflow",
+                    "protocol_error",
+                    "helper_exited",
+                    "version_mismatch",
+                    "helper_unavailable"
+                  ]
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "possible",
+                    "confirmed_transport_only"
+                  ]
+                },
+                "retry": {
+                  "type": "string",
+                  "enum": [
+                    "never",
+                    "after_rediscovery",
+                    "after_user_action"
+                  ]
+                }
+              },
+              "required": [
+                "code",
+                "effect",
+                "retry"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "id",
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "event"
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "event": {
+              "type": "string",
+              "const": "data"
+            },
+            "receivedAtUs": {
+              "type": "string",
+              "maxLength": 20,
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "bytes": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9+/]{43}=$"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "sessionId",
+            "seq",
+            "event",
+            "receivedAtUs",
+            "bytes"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "event"
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "event": {
+              "type": "string",
+              "const": "failed"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "permission_denied",
+                    "busy",
+                    "not_found",
+                    "stale_device",
+                    "ambiguous_device",
+                    "unsupported",
+                    "invalid_request",
+                    "invalid_session",
+                    "capacity",
+                    "io_failed",
+                    "timeout",
+                    "disconnected",
+                    "overflow",
+                    "protocol_error",
+                    "helper_exited",
+                    "version_mismatch",
+                    "helper_unavailable"
+                  ]
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "possible",
+                    "confirmed_transport_only"
+                  ]
+                },
+                "retry": {
+                  "type": "string",
+                  "enum": [
+                    "never",
+                    "after_rediscovery",
+                    "after_user_action"
+                  ]
+                }
+              },
+              "required": [
+                "code",
+                "effect",
+                "retry"
+              ],
+              "additionalProperties": false
+            },
+            "loss": {
+              "type": "string",
+              "enum": [
+                "none_known",
+                "detected",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "sessionId",
+            "seq",
+            "event",
+            "error",
+            "loss"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "event"
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "event": {
+              "type": "string",
+              "const": "closed"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "requested",
+                "failed"
+              ]
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "sessionId",
+            "seq",
+            "event",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "identity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "number",
+          "const": 1
+        },
+        "helperVersion": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "capabilities": {
+          "maxItems": 3,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "hid.list",
+              "hid.open",
+              "hid.write"
+            ]
+          }
+        }
+      },
+      "required": [
+        "protocol",
+        "helperVersion",
+        "target",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "devices": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "devices": {
+          "maxItems": 256,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "deviceRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "transport": {
+                "type": "string",
+                "const": "hid"
+              },
+              "vendorId": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              "productId": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              "serial": {
+                "type": "string"
+              },
+              "usagePage": {
+                "type": "number",
+                "const": 65376
+              },
+              "usage": {
+                "type": "number",
+                "const": 97
+              }
+            },
+            "required": [
+              "deviceRef",
+              "transport",
+              "vendorId",
+              "productId",
+              "usagePage",
+              "usage"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "devices"
+      ],
+      "additionalProperties": false
+    },
+    "written": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "acceptedBytes": {
+          "type": "number",
+          "const": 32
+        }
+      },
+      "required": [
+        "acceptedBytes"
+      ],
+      "additionalProperties": false
+    },
+    "closed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "finalSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "finalSeq"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "x-maxFrameBytes": 65536,
+  "x-maxSessions": 8,
+  "x-maxPending": 32,
+  "x-maxDataEvents": 1024
+}

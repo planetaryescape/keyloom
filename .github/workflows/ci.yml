@@ -49,6 +49,36 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Native HID compile gate (no device invocation)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: native/device-helper
+        run: |
+          cargo clippy --locked --all-targets --features native-hid -- -D warnings
+          cargo test --locked --features native-hid
+      - name: Synthetic-only native HID contract
+        shell: bash
+        run: |
+          cd native/device-helper
+          rustup target add "${{ matrix.rust }}"
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" --features synthetic-hid -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}" --features synthetic-hid
+          cargo build --locked --target "${{ matrix.rust }}" --features synthetic-hid
+          cp "target/${{ matrix.rust }}/debug/keyloom-device${{ matrix.exe }}" "target/${{ matrix.rust }}/debug/keyloom-device-synthetic${{ matrix.exe }}"
+          cd ../..
+          KEYLOOM_TEST_SYNTHETIC_HID="$PWD/native/device-helper/target/${{ matrix.rust }}/debug/keyloom-device-synthetic${{ matrix.exe }}" bun test test/firmware/toolchain/device-helper-hid.test.ts test/firmware/toolchain/device-helper-client-order.test.ts
+      - name: Installed candidate CLI over compile-only synthetic capture (no devices)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd native/device-helper
+          cargo build --locked --release --target "${{ matrix.rust }}" --features synthetic-capture
+          cp "target/${{ matrix.rust }}/release/keyloom-device" "target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
+          codesign --force --sign - "target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
+          cd ../..
+          helper="$PWD/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device-synthetic-capture"
+          bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --device-backend native-hid --helper "$helper" --out-dir dist/native-candidate-test
+          bun scripts/smoke-native-hid-candidate.ts "dist/native-candidate-test/keyloom-${{ matrix.rust == 'aarch64-apple-darwin' && 'darwin-arm64' || 'darwin-x64' }}" "$helper"
       - name: Locked Rust checks and native diagnostics build
         shell: bash
         working-directory: native/device-helper

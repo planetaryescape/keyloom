@@ -1,4 +1,5 @@
-// Real OS-pipe backpressure, not a runtime-buffered stdout stream. No device backend exists.
+#![cfg(not(any(feature = "native-hid", feature = "synthetic-hid")))]
+// Real OS-pipe backpressure for the diagnostics build, not a runtime-buffered stdout stream.
 // Based on the run-owned adversarial pipe probe; stdin ownership is deliberately explicit.
 use std::io::{Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};

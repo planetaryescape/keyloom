@@ -27,6 +27,10 @@ The 2026-10-20 proposal in chapters [31](31-device-helper.md), [32](32-device-he
 
 D-426 implements only diagnostics with empty capabilities. Q40/Q42 are settled for this subset; native session/queue semantics remain proposals. Q41 has local unsigned/ad-hoc Unix extraction evidence, not signed/notarised desktop or Windows ACL proof. Native matrix CI is configured, not observed in this local report. S59–S61 still require separately authorized hardware; no physical access was granted.
 
+### S59 HID implementation candidate
+
+The [24c report](../research/spikes/device-helper-24c.md) records the pinned HIDAPI rejection, compile-gated direct macOS adapter, bounded synthetic native contracts and persistent QMK interruption handling. The candidate enumerated/opened no device; pre-existing legacy metadata tests ran before a preload gap was discovered and corrected, as recorded in that report. No operational device open occurred. S59 remains open: installed physical native capture, actual descriptor/framing, permissions, stop/reopen, unplug/kill, ordinary typing and both Mac architectures still need authorized evidence. Serial remains 24d; default builds and TypeScript transport selection are unchanged.
+
 ## Spikes (phase 0 and per rung; run against BK's real boards and exports)
 
 For each spike, record the command or request, the output (with private data removed), the date and the conclusion in `docs/research/spikes/S<n>.md`. Then update the blueprint document it affects. Results are added here in place under `### S<n> result (<date>)`.

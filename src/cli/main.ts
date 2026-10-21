@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
+  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -328,21 +328,47 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
   const program = buildProgram(io, state, chat, handsFree, syncDeps, lab, keyboards);
-  let jsonErrors = false;
+  let commandError: unknown;
+  let hasCommandError = false;
+  let commandResult: number = EXIT.ok;
   try {
     await program.parseAsync(argv, { from: "user" });
-    return state.exitCode;
+    commandResult = state.exitCode;
   } catch (err) {
     if (err instanceof CommanderError) {
-      // Help and version are not failures.
-      if (err.code === "commander.helpDisplayed" || err.code === "commander.help" || err.code === "commander.version") return EXIT.ok;
-      return EXIT.usage; // commander already printed the message
+      // Help and version are not failures; other commander errors already printed their message.
+      commandResult = err.code === "commander.helpDisplayed" || err.code === "commander.help" || err.code === "commander.version"
+        ? EXIT.ok
+        : EXIT.usage;
+    } else {
+      commandError = err;
+      hasCommandError = true;
     }
-    jsonErrors = (program.opts<Globals>().format ?? defaultFormat(io)) !== "table";
-    const c = classify(err, state.dataDir || (program.opts<Globals>().dataDir ?? ""));
-    io.err(jsonErrors ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: c.kind, message: c.message } })}\n` : `error: ${c.message}\n`);
-    return c.code;
   }
+
+  const jsonErrors = (program.opts<Globals>().format ?? defaultFormat(io)) !== "table";
+  let cleanupFailed = false;
+  try { await shutdownDeviceConnections(); }
+  catch { cleanupFailed = true; }
+
+  const classified = hasCommandError
+    ? classify(commandError, state.dataDir || (program.opts<Globals>().dataDir ?? ""))
+    : undefined;
+  if (cleanupFailed) {
+    const warning = "keyboard helper termination could not be confirmed; restart keyloom before using the keyboard connection again";
+    if (classified && !jsonErrors) io.err(`error: ${classified.message}\n`);
+    io.err(jsonErrors
+      ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: "cleanup_unconfirmed", message: warning } })}\n`
+      : `${warning}\n`);
+    return EXIT.bug;
+  }
+  if (classified) {
+    io.err(jsonErrors
+      ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: classified.kind, message: classified.message } })}\n`
+      : `error: ${classified.message}\n`);
+    return classified.code;
+  }
+  return commandResult;
 }
 
 if (import.meta.main) {

@@ -1,6 +1,7 @@
 // The only module src/cli (and src/server) may import (01#modules).
 export { type App, closeApp, openApp } from "./context.ts";
-export { BusyError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { drainDeviceConsumers, shutdownDeviceConnections } from "./device-connections.ts";
+export { BusyError, LabCaptureError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
@@ -33,7 +34,7 @@ export {
 export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
-  getBuild, getFlash, startBuild, startFlash,
+  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash,
 } from "./firmware.ts";
 export {
   type AutoSyncReport, type BoardSyncView, type RunSyncOptions, type SyncDeps, type SyncEngine, type SyncOptions, type SyncOutcome, type SyncSetup, type SyncState,
@@ -72,5 +73,5 @@ export { type ConditionalBackfillOutcome, backfillConditionalLayers } from "./co
 export { type UpgradeOffer, type UpgradeOutcome, upgradeLayout, upgradeOffer } from "./upgrade.ts";
 export {
   type AnalyseOptions, type LabDeps, type PassageView, type RecordingInProgress, type StoredAnalysis, analyseSession, beginRecording, deleteSession,
-  endRecording, labPassages, realLabDeps, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
+  endRecording, labPassages, realLabDeps, incompleteRecording, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
 } from "./lab.ts";

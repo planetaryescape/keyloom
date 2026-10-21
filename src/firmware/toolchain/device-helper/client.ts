@@ -3,6 +3,7 @@ import { HelperFailure } from "./errors.ts";
 import type { HelperManifest } from "./extract.ts";
 import { identitySchema, MAX_FRAME, responseSchema } from "./protocol.ts";
 import { type HelperChild, launchHelper } from "./spawn.ts";
+import { HID_CAPABILITIES, transportIdentitySchema } from "./transport-protocol.ts";
 
 async function deadline<T>(work: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -14,7 +15,7 @@ async function deadline<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 /** One bounded diagnostics exchange, not a session/RPC framework. Each call owns and reaps its child. */
-export async function diagnoseHelper(path: string, manifest: HelperManifest, launch = launchHelper) {
+export async function diagnoseHelper(path: string, manifest: HelperManifest, launch = launchHelper, expectedCapabilities: readonly (typeof HID_CAPABILITIES[number])[] = []) {
   const child: HelperChild = launch(path);
   const reader = child.stdout.getReader();
   const stderr = child.stderr.getReader();
@@ -55,8 +56,9 @@ export async function diagnoseHelper(path: string, manifest: HelperManifest, lau
     return parsed.data.result;
   }
   const exchange = (async () => {
-    const hello = identitySchema.safeParse(await request("1", "hello", { protocol: 1, hostVersion: manifest.release, target: manifest.target }));
-    if (!hello.success) throw new HelperFailure("protocol_error");
+    const schema = expectedCapabilities.length === 0 ? identitySchema : transportIdentitySchema;
+    const hello = schema.safeParse(await request("1", "hello", { protocol: 1, hostVersion: manifest.release, target: manifest.target }));
+    if (!hello.success || hello.data.capabilities.length !== expectedCapabilities.length || !expectedCapabilities.every((c) => hello.data.capabilities.some((v) => v === c))) throw new HelperFailure("protocol_error");
     if (hello.data.helperVersion !== manifest.release || hello.data.target !== manifest.target) throw new HelperFailure("version_mismatch");
     if (!z.strictObject({}).safeParse(await request("2", "ping", {})).success) throw new HelperFailure("protocol_error");
     if (!z.strictObject({}).safeParse(await request("3", "shutdown", {})).success) throw new HelperFailure("protocol_error");

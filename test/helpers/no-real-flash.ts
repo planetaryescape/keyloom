@@ -8,6 +8,9 @@ import { mock } from "bun:test";
 import * as hid from "../../src/firmware/toolchain/hid.ts";
 import * as hidDefault from "../../src/firmware/toolchain/hid-default.ts";
 import * as hidMacos from "../../src/firmware/toolchain/hid-macos.ts";
+import * as serialMacos from "../../src/firmware/toolchain/serial-macos.ts";
+import * as usb from "../../src/firmware/toolchain/usb.ts";
+import { isSyntheticExecutable } from "./fake-bin.ts";
 import * as polled from "../../src/firmware/toolchain/polled-file.ts";
 import * as serial from "../../src/firmware/toolchain/serial.ts";
 import * as serialDefault from "../../src/firmware/toolchain/serial-default.ts";
@@ -51,12 +54,12 @@ mock.module("../../src/firmware/zmk/volumes.ts", () => ({
 }));
 
 // A keyboard running keyloom's firmware reboots into its bootloader on one raw-HID packet, so no test may reach the real
-// HID transports. Listing stays real (it only reads the registry); every write is refused. Tests inject fakes (HandsFreeDeps).
+// HID transports. Metadata enumeration also stays synthetic; tests must never inventory a real bus. Tests inject fakes (HandsFreeDeps).
 const refuseHid = (what: string): never => {
   throw new Error(`${what}: tests must inject a fake transport (HandsFreeDeps); a real write would reboot a real keyboard`);
 };
-const readOnly = (real: hid.HidTransport): hid.HidTransport => ({
-  list: () => real.list(),
+const readOnly = (): hid.HidTransport => ({
+  list: async () => [],
   write: async () => refuseHid("HidTransport.write()"),
   // The typing lab's reader (D-281) would start a key stream on a real keyboard.
   openSession: async () => refuseHid("HidTransport.openSession()"),
@@ -65,9 +68,18 @@ mock.module("../../src/firmware/toolchain/hid-default.ts", () => ({
   ...hidDefault,
   defaultHidTransport: async () => refuseHid("defaultHidTransport()"),
 }));
-// The real function is kept first, for the reason given at realVolumeFinderAt above.
-const realMacosHid = hidMacos.macosHid;
-mock.module("../../src/firmware/toolchain/hid-macos.ts", () => ({ ...hidMacos, macosHid: () => readOnly(realMacosHid()) }));
+mock.module("../../src/firmware/toolchain/hid-macos.ts", () => ({ ...hidMacos, macosHid: () => readOnly() }));
+const realMacosSerial = serialMacos.macosSerial;
+mock.module("../../src/firmware/toolchain/serial-macos.ts", () => ({
+  ...serialMacos, macosSerial: () => ({ ...realMacosSerial(), list: async () => [] }),
+}));
+const syntheticUsbList = usb.listUsbDevices;
+mock.module("../../src/firmware/toolchain/usb.ts", () => ({
+  ...usb, listUsbDevices: async () => {
+    const profiler = Bun.which("system_profiler", { PATH: process.env.PATH ?? "" });
+    return profiler && isSyntheticExecutable(profiler) ? syntheticUsbList() : [];
+  },
+}));
 
 // A half running keyloom's firmware reboots into its bootloader when its serial port is closed at 1200 baud, so no test may touch a
 // real port. Touching a path under /dev is refused; a test's fake stty on a temporary path still runs. Listing is replaced by an empty

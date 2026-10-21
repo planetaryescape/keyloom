@@ -2,6 +2,10 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tempDir } from "./tmp.ts";
 
+const syntheticExecutables = new Set<string>();
+/** The device guard permits only fixtures created in this process, never the machine's profiler. */
+export const isSyntheticExecutable = (path: string): boolean => syntheticExecutables.has(path);
+
 /** A directory of fake executables, to put on PATH in place of docker, zapp or git. Nothing here ever runs the real tool. */
 export function fakeBinDir(scripts: Record<string, string>): string {
   const dir = tempDir("keyloom-bin-");
@@ -10,6 +14,7 @@ export function fakeBinDir(scripts: Record<string, string>): string {
     const path = join(dir, name);
     writeFileSync(path, `#!/bin/sh\n${body}\n`);
     chmodSync(path, 0o755);
+    syntheticExecutables.add(path);
   }
   return dir;
 }

@@ -65,7 +65,6 @@ function StartCard({ lab, boardName, phone, onClose }: { lab: Lab; boardName: st
             </button>
           </div>
           {choice === "own" ? <textarea className="lab-own" aria-label="Your own text" value={own} placeholder="Paste a paragraph you'd normally type" onChange={(e) => setOwn(e.target.value)} /> : null}
-          {lab.problem === null ? null : <p className="lab-problem" role="alert">{lab.problem}</p>}
           <div className="lab-actions">
             <span className="lab-note">Don't type passwords here. Recording stops if you leave this screen.</span>
             <button type="button" className="sheet-action" onClick={onClose}>Not now</button>
@@ -75,6 +74,7 @@ function StartCard({ lab, boardName, phone, onClose }: { lab: Lab; boardName: st
           </div>
         </>
       ) : null}
+      {lab.problem === null ? null : <p className="lab-problem" role="alert">{lab.problem}</p>}
       {lab.sessions.length === 0 ? null : (
         <div className="lab-past">
           <h3>Earlier sessions</h3>
