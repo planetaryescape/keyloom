@@ -80,6 +80,25 @@ fn registry_endpoint(entry: u32) -> Result<Option<SerialEndpoint>, &'static str>
     }
     Ok(endpoint(Record { id, path, parents }))
 }
+fn resolve_endpoint(id: u64) -> Result<Option<SerialEndpoint>, &'static str> {
+    // SAFETY: matching dictionary is consumed; returned nonzero service is retained for Registry.
+    let entry = unsafe { IOServiceGetMatchingService(0, IORegistryEntryIDMatching(id)) };
+    if entry == 0 {
+        return Ok(None);
+    }
+    let entry = Registry(entry);
+    registry_endpoint(entry.0)
+}
+fn check_endpoint(
+    expected: &SerialEndpoint,
+    mut resolve: impl FnMut() -> Result<Option<SerialEndpoint>, &'static str>,
+) -> Result<(), &'static str> {
+    if resolve()?.as_ref() == Some(expected) {
+        Ok(())
+    } else {
+        Err("stale_device")
+    }
+}
 pub struct Macos;
 impl SerialBackend for Macos {
     fn list(&self) -> Result<Vec<SerialEndpoint>, &'static str> {
@@ -116,15 +135,8 @@ impl SerialBackend for Macos {
     fn open(&self, expected: &SerialEndpoint) -> Result<Box<dyn SerialDevice>, OpenError> {
         let (id, path) = expected.key.split_once(':').ok_or("stale_device")?;
         let id = id.parse().map_err(|_| "stale_device")?;
-        // SAFETY: matching dictionary is consumed; returned nonzero service is retained for Registry.
-        let entry = unsafe { IOServiceGetMatchingService(0, IORegistryEntryIDMatching(id)) };
-        if entry == 0 {
-            return Err("stale_device".into());
-        }
-        let entry = Registry(entry);
-        if registry_endpoint(entry.0)?.as_ref() != Some(expected) {
-            return Err("stale_device".into());
-        }
+        let mut resolve = || resolve_endpoint(id);
+        check_endpoint(expected, &mut resolve)?;
         let path = CString::new(path).map_err(|_| "stale_device")?;
         // SAFETY: path is NUL terminated and lives through open; success transfers a unique fd below.
         let fd = unsafe { open(path.as_ptr(), O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC) };
@@ -136,17 +148,21 @@ impl SerialBackend for Macos {
             hungup: false,
         };
         // Open itself can assert DTR. Every subsequent failure has uncertain effects, even before configuration.
-        initialize(&mut FdConfig(fd), |safe_baud| {
-            let result = if safe_baud {
-                device.close()
-            } else {
-                device.abandon()
-            };
-            // Keep the owner's lease until process exit when cleanup cannot confirm release.
-            if result.is_err() {
-                std::process::exit(1);
-            }
-        })?;
+        initialize(
+            &mut FdConfig(fd),
+            || check_endpoint(expected, &mut resolve),
+            |safe_baud| {
+                let result = if safe_baud {
+                    device.close()
+                } else {
+                    device.abandon()
+                };
+                // Keep the owner's lease until process exit when cleanup cannot confirm release.
+                if result.is_err() {
+                    std::process::exit(1);
+                }
+            },
+        )?;
         Ok(Box::new(device))
     }
 }
@@ -230,15 +246,21 @@ fn configure(io: &mut impl Config, safe_baud: &mut bool) -> Result<(), &'static 
     }
     Ok(())
 }
-fn initialize(io: &mut impl Config, mut cleanup: impl FnMut(bool)) -> Result<(), OpenError> {
+fn initialize(
+    io: &mut impl Config,
+    recheck: impl FnOnce() -> Result<(), &'static str>,
+    mut cleanup: impl FnMut(bool),
+) -> Result<(), OpenError> {
     let mut safe_baud = false;
-    configure(io, &mut safe_baud).map_err(|code| {
-        cleanup(safe_baud);
-        OpenError {
-            code,
-            possible: true,
-        }
-    })
+    recheck()
+        .and_then(|_| configure(io, &mut safe_baud))
+        .map_err(|code| {
+            cleanup(safe_baud);
+            OpenError {
+                code,
+                possible: true,
+            }
+        })
 }
 struct FdConfig(RawFd);
 fn control(fd: RawFd, request: c_int) -> Result<(), &'static str> {
@@ -344,7 +366,7 @@ fn read_ready(
 }
 fn close_steps(
     mut line: impl FnMut(c_int) -> Result<(), &'static str>,
-    mut release: impl FnMut() -> bool,
+    release: impl FnOnce() -> bool,
 ) -> Result<(), &'static str> {
     let dtr = line(TIOCCDTR);
     let exclusive = line(TIOCNXCL);
@@ -368,6 +390,12 @@ impl Port {
             }
         }
         Ok(())
+    }
+    fn close_with(&mut self, release: impl FnOnce(RawFd) -> bool) -> Result<(), &'static str> {
+        let Some(fd) = self.fd.take() else {
+            return Ok(());
+        };
+        close_steps(|request| control(fd, request), || release(fd))
     }
     fn receive(&mut self, timeout: c_int) -> Result<Option<Vec<u8>>, &'static str> {
         let fd = self.fd.ok_or("disconnected")?;
@@ -432,16 +460,10 @@ impl SerialDevice for Port {
         )
     }
     fn close(&mut self) -> Result<(), &'static str> {
-        let Some(fd) = self.fd.take() else {
-            return Ok(());
-        };
-        close_steps(
-            |request| control(fd, request),
-            || {
-                // SAFETY: take transfers the unique fd; close is attempted exactly once even if DTR failed.
-                unsafe { close(fd) == 0 }
-            },
-        )
+        self.close_with(|fd| {
+            // SAFETY: close_with transfers the unique fd exactly once, even if a line ioctl failed.
+            unsafe { close(fd) == 0 }
+        })
     }
 }
 impl Drop for Port {

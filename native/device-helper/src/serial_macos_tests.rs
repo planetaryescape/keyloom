@@ -312,12 +312,19 @@ fn pty_modem_failure_is_reported_and_close_still_releases_fd() {
     // A pty supplies no USB modem signals. This checks error handling, never physical DTR.
     assert_eq!(FdConfig(fd).modem(), Err("io_failed"));
     assert_eq!(control(fd, TIOCCDTR), Err("io_failed"));
-    assert_eq!(slave.close(), Err("io_failed"));
+    let mut closed = vec![];
+    assert_eq!(
+        slave.close_with(|owned| {
+            // SAFETY: close_with transfers its unique PTY fd once; the observer closes it without retry.
+            let success = unsafe { close(owned) == 0 };
+            closed.push((owned, success));
+            success
+        }),
+        Err("io_failed")
+    );
     assert!(slave.fd.is_none());
-    // SAFETY: F_GETFD observes whether the old number is closed; this test opens no intervening fd.
-    assert_eq!(unsafe { fcntl(fd, F_GETFD) }, -1);
-    assert_eq!(errno(), EBADF);
-    assert_eq!(slave.close(), Ok(()));
+    assert_eq!(closed, [(fd, true)]);
+    assert_eq!(slave.close_with(|_| panic!("must not close twice")), Ok(()));
 }
 
 #[test]
@@ -331,7 +338,7 @@ fn failed_open_cleanup_carries_possible_effect_after_dtr_or_unsafe_readback() {
         }
         let mut cleanup = vec![];
         assert_eq!(
-            initialize(&mut io, |safe| cleanup.push(safe)),
+            initialize(&mut io, || Ok(()), |safe| cleanup.push(safe)),
             Err(OpenError {
                 code: "io_failed",
                 possible: true
@@ -385,5 +392,46 @@ fn close_attempts_dtr_exclusion_and_fd_release_even_after_failure() {
             }
         );
         assert_eq!(*calls.borrow(), [TIOCCDTR, TIOCNXCL, -1]);
+    }
+}
+
+#[test]
+fn post_open_identity_change_closes_without_configuration() {
+    let expected = endpoint(record(20, "/dev/cu.synthetic", "same")).unwrap();
+    let replacement = endpoint(record(21, "/dev/cu.synthetic", "same")).unwrap();
+    let mut metadata_changed = expected.clone();
+    metadata_changed.product += 1;
+    for after_open in [None, Some(replacement), Some(metadata_changed)] {
+        let mut snapshots = VecDeque::from([Ok(Some(expected.clone())), Ok(after_open)]);
+        let mut resolve = || snapshots.pop_front().unwrap();
+        assert_eq!(check_endpoint(&expected, &mut resolve), Ok(()));
+        let (_master, mut opened) = pty();
+        let mut io = Script::new();
+        let mut cleanup = vec![];
+        let result = initialize(
+            &mut io,
+            || check_endpoint(&expected, &mut resolve),
+            |safe| {
+                cleanup.push(safe);
+                assert_eq!(opened.abandon(), Ok(()));
+            },
+        );
+        assert_eq!(
+            result,
+            Err(OpenError {
+                code: "stale_device",
+                possible: true
+            })
+        );
+        assert!(
+            io.calls.is_empty(),
+            "must recheck before any configuration ioctl"
+        );
+        assert_eq!(cleanup, [false]);
+        assert!(opened.fd.is_none());
+        assert!(
+            snapshots.is_empty(),
+            "both pre-open and post-open checks must resolve identity"
+        );
     }
 }
