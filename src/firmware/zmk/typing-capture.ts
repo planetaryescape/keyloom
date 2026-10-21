@@ -68,7 +68,9 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
     (bytes) => {
       if (endedBy !== undefined) return;
       try {
-        for (const line of framer.push(bytes)) handleLine(line);
+        const framed = framer.push(bytes);
+        for (const line of framed.lines) handleLine(line);
+        if (framed.error) failFraming(framed.error);
       } catch (error) {
         if (error instanceof StreamLineError) failFraming(error);
         else interrupted(`the serial stream could not be processed: ${error instanceof Error ? error.message : "connection unavailable"}`);

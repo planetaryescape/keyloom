@@ -47,3 +47,29 @@ for (const failure of failures) {
     }
   }, 5000);
 }
+
+test("coalesced complete events before invalid UTF-8 are saved and analysis is refused", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  const keyboard = fakeGlove();
+  const deps: LabDeps = {
+    startCapture: (_board, hooks) => startZmkCapture(keyboard.transport, "/fake/serial", hooks),
+    replay: () => { throw new Error("incomplete recordings must never reach replay"); },
+  };
+  try {
+    const recording = await beginRecording(app, layoutId, deps, { text: "test" });
+    const events = new TextEncoder().encode("E 2 1 5010 255\nE 2 0 5020 255\n");
+    keyboard.sayBytes(Uint8Array.from([...events, 0xff]));
+    await Bun.sleep(1);
+
+    const saved = await endRecording(app, recording, "t");
+    expect(saved.trace.events).toHaveLength(2);
+    const reloaded = sessions(app, layoutId).find((session) => session.id === saved.session.id);
+    expect(reloaded?.eventCount).toBe(2);
+    expect(reloaded?.warnings.some((warning) => warning.startsWith("Recording incomplete:"))).toBe(true);
+    let refusal: unknown;
+    try { await analyseSession(app, saved.session.id, deps); } catch (error) { refusal = error; }
+    expect(refusal).toBeInstanceOf(UsageError);
+  } finally {
+    app.db.close();
+  }
+}, 5000);
