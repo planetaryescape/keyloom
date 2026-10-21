@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import { DeviceTransportClient } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
+import { DeviceTransportClient, DeviceTransportError } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
 import { helperHidTransport } from "../../../src/firmware/toolchain/device-helper/hid.ts";
 import { manifestSchema, type HelperManifest } from "../../../src/firmware/toolchain/device-helper/extract.ts";
 import { closedSchema, hidDevicesSchema, operationSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, writtenSchema } from "../../../src/firmware/toolchain/device-helper/transport-protocol.ts";
@@ -39,6 +39,19 @@ const statsSchema = z.object({ opens: z.number(), writes: z.number() });
 const stats = (client: DeviceTransportClient) => client.request("test.stats", {}, statsSchema, 500);
 const devices = (client: DeviceTransportClient) => client.request("list", { transport: "hid" }, hidDevicesSchema, 500);
 const packet = (byte: number) => Buffer.alloc(32, byte).toString("base64");
+async function rejectedResult<T>(operation: Promise<T>): Promise<unknown> {
+  try {
+    await operation;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("expected transport operation to reject");
+}
+function expectTransportError(error: unknown, code: DeviceTransportError["detail"]["code"], effect: DeviceTransportError["detail"]["effect"]): void {
+  if (!(error instanceof DeviceTransportError)) throw new Error("expected a DeviceTransportError");
+  expect(error.detail.code).toBe(code);
+  expect(error.detail.effect).toBe(effect);
+}
 
 describe.skipIf(!binary)("native synthetic-only HID through real TS client", () => {
   beforeAll(async () => {
@@ -54,7 +67,7 @@ describe.skipIf(!binary)("native synthetic-only HID through real TS client", () 
     try {
       const first = (await devices(client)).devices[0]!;
       await devices(client);
-      await expect(client.open(first.deviceRef, () => {}, () => {})).rejects.toThrow("stale_device");
+      expectTransportError(await rejectedResult(client.open(first.deviceRef, () => {}, () => {})), "stale_device", "none");
       for (const item of corpus.filter((c) => !c.valid)) {
         await expect(client.request(item.request.method, item.request.params, z.unknown(), 500)).rejects.toThrow();
       }
@@ -108,7 +121,7 @@ describe.skipIf(!binary)("native synthetic-only HID through real TS client", () 
       const target = (await devices(client)).devices[0]!;
       const failed = Promise.withResolvers<Error>();
       const sessionId = await client.open(target.deviceRef, () => {}, failed.resolve);
-      await expect(client.request("session.write", { sessionId, reportId: 0, bytes: packet(250) }, writtenSchema, 500)).rejects.toThrow("io_failed");
+      expectTransportError(await rejectedResult(client.request("session.write", { sessionId, reportId: 0, bytes: packet(250) }, writtenSchema, 500)), "io_failed", "possible");
       expect((await failed.promise).message).toContain("io_failed");
       await client.close(sessionId);
       expect(await stats(client)).toEqual({ opens: 1, writes: 1 });

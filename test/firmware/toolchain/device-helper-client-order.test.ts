@@ -3,8 +3,23 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { tempDir } from "../../helpers/tmp.ts";
-import { DeviceTransportClient } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
+import { DeviceTransportClient, DeviceTransportError } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
 import { manifestSchema } from "../../../src/firmware/toolchain/device-helper/extract.ts";
+
+async function rejectedResult<T>(operation: Promise<T>): Promise<unknown> {
+  try {
+    await operation;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("expected transport operation to reject");
+}
+
+function expectTransportError(error: unknown, code: DeviceTransportError["detail"]["code"], effect: DeviceTransportError["detail"]["effect"]): void {
+  if (!(error instanceof DeviceTransportError)) throw new Error("expected a DeviceTransportError");
+  expect(error.detail.code).toBe(code);
+  expect(error.detail.effect).toBe(effect);
+}
 
 function fixture(mode: string) {
   const script = join(tempDir(), "synthetic-stdio.ts");
@@ -55,9 +70,9 @@ for (const mode of ["before", "gap", "badsize", "wrongterminal"]) {
     let delivered = 0;
     try {
       const opened = client.open("d1", () => { delivered++; }, failure.resolve);
-      if (mode === "before") await expect(opened).rejects.toThrow("protocol_error");
+      if (mode === "before") expectTransportError(await rejectedResult(opened), "protocol_error", "possible");
       else { await opened; expect((await failure.promise).message).toContain("protocol_error"); }
-      await expect(client.request("ping", {}, z.object({}), 500)).rejects.toThrow("protocol_error");
+      expectTransportError(await rejectedResult(client.request("ping", {}, z.object({}), 500)), "protocol_error", "possible");
       expect(fake.launches()).toBe(1);
       expect(delivered).toBe(0);
     } finally { await client.terminate(); }
@@ -80,7 +95,7 @@ test("an event after finalSeq invalidates the channel and completed close is cac
     const session = await client.open("d1", () => {}, () => {});
     await client.close(session);
     await client.close(session);
-    await expect(client.request("ping", {}, z.object({}), 500)).rejects.toThrow("protocol_error");
+    expectTransportError(await rejectedResult(client.request("ping", {}, z.object({}), 500)), "protocol_error", "possible");
   } finally { await client.terminate(); }
 });
 test("pending budget refuses before write; deadline fails all siblings and no reconnect occurs", async () => {
