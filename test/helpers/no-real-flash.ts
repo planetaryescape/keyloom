@@ -59,10 +59,11 @@ mock.module("../../src/firmware/zmk/volumes.ts", () => ({
       return real(label);
     };
   },
-  volumeFinderAt: (root: string) => {
+  // A test's drives are plain folders in a temporary directory, not mounts, unless the test asks for the mount check.
+  volumeFinderAt: (root: string, opts?: volumes.VolumeFinderOptions) => {
     const r = resolve(root);
     if (REAL_ROOTS.some((p) => r === p || r.startsWith(`${p}/`))) refuse(`volumeFinderAt(${root})`);
-    return realVolumeFinderAt(root);
+    return realVolumeFinderAt(root, { mountedOnly: false, ...opts });
   },
 }));
 

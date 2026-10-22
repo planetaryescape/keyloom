@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, renameSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { flashUf2Drives } from "../../../src/firmware/zmk/flash.ts";
@@ -198,4 +198,44 @@ test("two Linux mounts with one label are ambiguous", async () => {
   await withPath(bin, async () => {
     await expect(lsblkFinder()("NICENANO")).rejects.toThrow(/ambiguous.*NICENANO/i);
   });
+});
+
+// A directory on another device stands in for a mounted drive; /dev is one on macOS and Linux. Writes are stubbed.
+const otherDevice = "/dev";
+const canMount = existsSync(otherDevice) && statSync(otherDevice).dev !== statSync(tempDir()).dev;
+
+test.skipIf(!canMount)("a mount point is not a drive until something is mounted on it", async () => {
+  const root = join(tempDir(), "Volumes");
+  mkdirSync(join(root, "GLV80RHBOOT"), { recursive: true });
+  const find = volumeFinderAt(root, { mountedOnly: true });
+  expect(await find("GLV80RHBOOT")).toBeNull();
+  rmSync(join(root, "GLV80RHBOOT"), { recursive: true });
+  symlinkSync(otherDevice, join(root, "GLV80RHBOOT"));
+  expect(await find("GLV80RHBOOT")).toBe(join(root, "GLV80RHBOOT"));
+});
+
+test.skipIf(!canMount)("the flash writes once the drive is mounted over its mount point, not into the bare directory", async () => {
+  const dir = tempDir();
+  const root = join(dir, "Volumes");
+  const point = join(root, "GLV80RHBOOT");
+  mkdirSync(point, { recursive: true });
+  const artifactPath = join(dir, "image.uf2");
+  await Bun.write(artifactPath, uf2Image(0x9807b007, 2));
+  // macOS mounts the drive over the directory it made a moment earlier.
+  setTimeout(() => { rmSync(point, { recursive: true }); symlinkSync(otherDevice, point); }, 60);
+  const writes: string[] = [];
+  const result = await flashUf2Drives({
+    artifactPath, shape: "single", steps: [{ label: "right half", volume: "GLV80RHBOOT", enter: "Press reset." }],
+    findVolume: volumeFinderAt(root, { mountedOnly: true }),
+    hooks: { enterBootloader: async () => ({ ok: true }) },
+    log: new LogSink(join(dir, "flash.log")), onState: () => {},
+    writeImage: async (path) => {
+      writes.push(lstatSync(point).isSymbolicLink() ? "mounted" : "bare");
+      expect(path).toBe(join(point, "glove80.uf2"));
+      rmSync(point);
+    },
+    writeRetryMs: 200, pollMs: 20, bootloaderWaitMs: 1000, unmountWaitMs: 100,
+  });
+  expect(writes).toEqual(["mounted"]);
+  expect(result.state).toBe("succeeded");
 });

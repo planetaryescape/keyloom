@@ -233,8 +233,9 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     input.onState("writing", WRITING_INSTRUCTION);
     const target = join(mount, input.driveFileName ?? "glove80.uf2");
     try {
-      // A boot drive macOS has only just mounted can refuse the first open with EACCES for a few seconds, then take the same write
-      // (BK's Glove80 left half, 2026-10-16). Retry a refused open while the drive stays mounted; a lasting refusal is still reported.
+      // A drive can refuse the first open with EACCES for a few seconds, then take the same write (BK's Glove80 left half,
+      // 2026-10-16, most likely the bare mount point that D-439 now skips). Retry a refused open while the drive stays mounted; a
+      // lasting refusal is still reported.
       const retryUntil = Date.now() + (recovery ? 0 : input.writeRetryMs ?? WRITE_RETRY_MS);
       for (;;) {
         const unsafe = await checkMount();
