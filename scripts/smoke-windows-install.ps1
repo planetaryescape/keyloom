@@ -43,8 +43,11 @@ try {
     } finally { $lock.Dispose() }
     & $shell -NoProfile -File $installer -Version "v$version"
     if ($LASTEXITCODE -ne 0) { throw 'update after releasing exe lock failed' }
-    # No Bun, Rust, WSL or Docker on the runtime path.
+    # No Bun, Rust, WSL or Docker on the runtime path, and nothing read from the checkout: fixtures are copied into scratch.
     $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
+    Copy-Item -LiteralPath (Join-Path $repo 'test\fixtures\oryx\synchronized') -Destination (Join-Path $scratch 'layout') -Recurse
+    Copy-Item -LiteralPath (Join-Path $repo 'test\fixtures\windows\set-key-6-f17.json') -Destination (Join-Path $scratch 'set-key-6-f17.json')
+    Push-Location -LiteralPath $scratch
     if ((Invoke-Keyloom @('--version')).Trim() -ne $version) { throw 'wrong version' }
     $data = Join-Path $scratch 'data'
     for ($i = 0; $i -lt 8; $i++) {
@@ -64,10 +67,17 @@ try {
     Write-Output ($doctor | ConvertTo-Json -Depth 10)
     $full = Invoke-Keyloom @('--data-dir', $data, 'doctor', '--format', 'json') | ConvertFrom-Json
     if (-not $full.ok -or -not ($full.checks.detail -match 'not available on Windows yet')) { throw 'doctor did not report unsupported components' }
-    $fixture = Join-Path $repo 'test\fixtures\oryx\synchronized'
-    $import = Invoke-Keyloom @('--data-dir', $data, 'import', '--board', 'zsa/moonlander', $fixture, '--format', 'json') | ConvertFrom-Json
+    $import = Invoke-Keyloom @('--data-dir', $data, 'import', '--board', 'zsa/moonlander', (Join-Path $scratch 'layout'), '--format', 'json') | ConvertFrom-Json
     Invoke-Keyloom @('--data-dir', $data, 'layout', 'show', $import.layout_id) | Out-Null
     Invoke-Keyloom @('--data-dir', $data, 'boards', 'list') | Out-Null
+    # The editing loop on Windows: check, propose, apply, then read the changed key back.
+    $ops = Join-Path $scratch 'set-key-6-f17.json'
+    Invoke-Keyloom @('--data-dir', $data, 'change', 'check', $import.layout_id, '--ops', $ops) | Out-Null
+    $proposed = Invoke-Keyloom @('--data-dir', $data, 'change', 'propose', $import.layout_id, '--ops', $ops, '--explain', 'F17 on key 6', '--format', 'json') | ConvertFrom-Json
+    Invoke-Keyloom @('--data-dir', $data, 'change', 'apply', $proposed.change_set_id, '--format', 'json') | Out-Null
+    $shown = Invoke-Keyloom @('--data-dir', $data, 'layout', 'show', $import.layout_id, '--layer', 'layer-0', '--format', 'json') | ConvertFrom-Json
+    $key = $shown.layout.layers[0].bindings[6]
+    if ($key.kind -ne 'key' -or $key.code -ne 'F17') { throw "applied change did not read back: $($key | ConvertTo-Json -Compress)" }
     Invoke-Keyloom @('--data-dir', $data, 'change', 'list', $import.layout_id) | Out-Null
     $unsupported = Invoke-Keyloom @('--data-dir', $data, 'build', $import.layout_id, '--format', 'json') 6
     if ($unsupported -notmatch 'not available on Windows yet' -or $unsupported -notmatch 'keyloom build' -or $unsupported -notmatch 'rung-24f') { throw "bad unsupported diagnostic: $unsupported" }
@@ -92,8 +102,9 @@ try {
     $refused = Invoke-Keyloom @('--data-dir', $data, 'doctor', '--device-helper-only', '--format', 'json') 1 | ConvertFrom-Json
     if ($refused.checks[0].deviceHelper.code -ne 'integrity_error') { throw 'helper corruption was not refused' }
     Invoke-Keyloom @('--data-dir', $data, 'layout', 'show', $import.layout_id) | Out-Null
-    Write-Output 'Windows installed diagnostics, import/layout/boards/change, unsupported workflow, checksum and cache corruption checks passed.'
+    Write-Output 'Windows installed diagnostics, import/layout/boards, change check/propose/apply with read-back, unsupported workflow, checksum and cache corruption checks passed.'
 } finally {
+    if ((Get-Location).Path -eq $scratch) { Pop-Location }
     foreach ($parent in $parents) {
         if (-not $parent.child.HasExited) { $parent.child.Kill(); $parent.child.WaitForExit() }
         $parent.child.Dispose()

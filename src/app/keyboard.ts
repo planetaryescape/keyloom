@@ -1,6 +1,7 @@
 // What is attached and what it is running (`keyloom doctor`), and restarting it into its bootloader
 // (`keyloom flash --reboot-only`). Both read USB and, for the restart, raw HID through HandsFreeDeps.
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
+import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { portOfAnotherBoard } from "./zmk-ports.ts";
 import { type HalfFirmware, type ZmkHandsFreeDeps, halfTargets, readHalf } from "../firmware/zmk/handsfree-flash.ts";
@@ -84,6 +85,7 @@ export type RebootOutcome = { board: string; revision: string; previousFirmware:
  * stays in the bootloader until it is flashed or unplugged. Only a keyboard running keyloom's firmware can be restarted.
  */
 export async function rebootKeyboard(opts: { board?: string; handsFree?: Partial<HandsFreeDeps>; onLine?: (line: string) => void } = {}): Promise<RebootOutcome> {
+  requirePlatformSupport("keyloom flash --reboot-only");
   const deps = realHandsFreeDeps(opts.handsFree);
   const seen = (await attachedKeyboards(deps)).filter((k) => opts.board === undefined || k.boardId === opts.board);
   const attached = seen.filter((k) => k.target !== undefined);

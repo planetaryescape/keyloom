@@ -1,0 +1,38 @@
+[
+ {
+  "op": "dropFunction",
+  "function": "key:F16",
+  "reason": "test edit"
+ },
+ {
+  "op": "dropFunction",
+  "function": "key:F5",
+  "reason": "test edit"
+ },
+ {
+  "op": "dropFunction",
+  "function": "key:F17",
+  "reason": "test edit"
+ },
+ {
+  "op": "dropFunction",
+  "function": "key:F18",
+  "reason": "test edit"
+ },
+ {
+  "op": "dropFunction",
+  "function": "key:F19",
+  "reason": "test edit"
+ },
+ {
+  "op": "setBinding",
+  "at": {
+   "layerId": "layer-0",
+   "position": 6
+  },
+  "binding": {
+   "kind": "key",
+   "code": "F17"
+  }
+ }
+]

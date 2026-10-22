@@ -1,4 +1,4 @@
-import { windowsUnavailable } from "../firmware/toolchain/platform-support.ts";
+import { WINDOWS_ROADMAP, windowsUnavailable } from "../firmware/toolchain/platform-support.ts";
 // `keyloom doctor` (10): the database, the model credential, then the firmware toolchain.
 import { existsSync } from "node:fs";
 import { deviceHelperDiagnostic, type HelperDiagnostic } from "../firmware/toolchain/device-helper/diagnostics.ts";
@@ -148,8 +148,14 @@ export async function runCredentialChecks(over: CredentialOverrides = {}): Promi
   return checks;
 }
 
+/** On Windows the device and toolchain checks report what isn't available yet instead of probing (D-435). */
+function unavailableOnWindows(name: string): DoctorCheck {
+  return { name, ok: true, warn: true, detail: `not available on Windows yet; see ${WINDOWS_ROADMAP}` };
+}
+
 /** Docker, its disk, Zapp and the pinned checkouts. A missing Zapp is a warning: building works without it. */
 export async function runToolchainChecks(): Promise<DoctorCheck[]> {
+  if (windowsUnavailable()) return [unavailableOnWindows("Docker builds and flashing")];
   const checks: DoctorCheck[] = [];
   const docker = await dockerStatus();
   checks.push({ name: "docker", ok: docker.ok, detail: docker.ok ? `running, server ${docker.version}` : docker.reason });
@@ -241,6 +247,7 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
 
 /** The MacBook remapper's setup, as warnings: a machine that never set it up shouldn't fail `keyloom doctor` (21). Read-only. */
 export async function runRemapperChecks(over: RemapperOverrides = {}): Promise<DoctorCheck[]> {
+  if (windowsUnavailable()) return [unavailableOnWindows("kanata remapping")];
   if (process.platform !== "darwin" && over.probe === undefined) return [];
   const board = listBoardDefinitions().find((b) => b.definition.firmware === "kanata");
   if (!board) return [];
@@ -254,6 +261,7 @@ export async function runRemapperChecks(over: RemapperOverrides = {}): Promise<D
 
 /** Which keyboards are attached and whether keyloom's own firmware is on them, which decides if a flash needs a keypress. */
 export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<DoctorCheck[]> {
+  if (windowsUnavailable()) return [unavailableOnWindows("keyboards over USB, raw HID and serial")];
   const deps = realHandsFreeDeps(over);
   let attached: Awaited<ReturnType<typeof attachedKeyboards>>;
   try {

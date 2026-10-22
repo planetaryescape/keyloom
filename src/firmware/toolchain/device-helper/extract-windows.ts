@@ -14,22 +14,29 @@ const aclChecked = new Set<string>();
 // PowerShell's built-in .NET APIs cover those tags and ACLs without an extra native addon.
 // Inspect ACLs only on first use in this process; warm launches still inspect attributes
 // and hash the final executable. The boundary excludes a malicious same-user process.
-function inspectWindowsPaths(paths: string[]): void {
+// Ancestors above LocalAppData are checked for the rights that would let another account
+// rename one away and substitute a junction: delete, delete-child, change-permissions and
+// take-ownership. Creating new entries there (C:\ grants that to Users) is not enough.
+function inspectWindowsPaths(paths: string[], ancestors: string[] = []): void {
   const script = `
 $ErrorActionPreference = 'Stop'
 $paths = ConvertFrom-Json $env:KEYLOOM_CACHE_INSPECT
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
+$trustedInstaller = 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'
+$rename = [System.Security.AccessControl.FileSystemRights]::Delete -bor [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [System.Security.AccessControl.FileSystemRights]::ChangePermissions -bor [System.Security.AccessControl.FileSystemRights]::TakeOwnership
 $writes = [System.Security.AccessControl.FileSystemRights]::Write -bor [System.Security.AccessControl.FileSystemRights]::Delete -bor [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [System.Security.AccessControl.FileSystemRights]::ChangePermissions -bor [System.Security.AccessControl.FileSystemRights]::TakeOwnership
 foreach ($entry in $paths) {
   if (([System.IO.File]::GetAttributes($entry.path) -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { throw "reparse point: $($entry.path)" }
   if ($entry.acl) {
     $acl = Get-Acl -LiteralPath $entry.path
     $owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
-    if ($trusted -notcontains $owner) { throw "untrusted owner $owner of $($entry.path)" }
+    $owners = if ($entry.ancestor) { $trusted + $trustedInstaller } else { $trusted }
+    if ($owners -notcontains $owner) { throw "untrusted owner $owner of $($entry.path)" }
+    $mask = if ($entry.ancestor) { $rename } else { $writes }
     foreach ($rule in $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
       if (($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
-      if ($rule.AccessControlType -eq 'Allow' -and ($rule.FileSystemRights -band $writes) -ne 0 -and $trusted -notcontains $rule.IdentityReference.Value) { throw "writable by $($rule.IdentityReference.Value) ($($rule.FileSystemRights)): $($entry.path)" }
+      if ($rule.AccessControlType -eq 'Allow' -and ($rule.FileSystemRights -band $mask) -ne 0 -and $owners -notcontains $rule.IdentityReference.Value) { throw "writable by $($rule.IdentityReference.Value) ($($rule.FileSystemRights)): $($entry.path)" }
     }
   }
 }
@@ -39,20 +46,25 @@ foreach ($entry in $paths) {
   const result = spawnSync(win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), [
     "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
   ], {
-    env: { ...process.env, KEYLOOM_CACHE_INSPECT: JSON.stringify(paths.map((path) => ({ path, acl: !aclChecked.has(path) }))) },
+    env: { ...process.env, KEYLOOM_CACHE_INSPECT: JSON.stringify([
+      ...ancestors.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: true })),
+      ...paths.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: false })),
+    ]) },
     windowsHide: true, timeout: 10_000, stdio: "pipe",
   });
   if (result.error || result.status !== 0) {
     const said = result.error?.message ?? result.stderr?.toString("utf8").split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
     throw new HelperFailure("unsafe_cache", said?.slice(0, 300));
   }
-  for (const path of paths) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
+  for (const path of [...ancestors, ...paths]) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
 }
 
 /** Injectable filesystem/security boundary lets non-Windows tests exercise refusal and races. */
-export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base: string | undefined, io: WindowsFs = fs, inspect = inspectWindowsPaths): string {
+export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base: string | undefined, io: WindowsFs = fs, inspect: (paths: string[], ancestors?: string[]) => void = inspectWindowsPaths): string {
   if (!base || !win32.isAbsolute(base)) throw new HelperFailure("unsafe_cache");
   const root = win32.resolve(base);
+  const ancestors: string[] = [];
+  for (let up = win32.dirname(root); up !== ancestors.at(-1) && up !== root; up = win32.dirname(up)) ancestors.push(up);
   const paths = [root];
   // LocalAppData must already exist. Never recursively mkdir through unchecked parents.
   function checkDirectory(path: string): void {
@@ -73,7 +85,7 @@ export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base
   }
   // Inspect existing parents before creating anything below them, including reparse
   // tags which lstat cannot describe. New directories inherit the checked parent ACL.
-  inspect(paths);
+  inspect(paths, ancestors);
   for (const path of missing) {
     try { io.mkdirSync(path); }
     catch (error) {

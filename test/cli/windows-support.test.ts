@@ -41,7 +41,27 @@ test("the CLI guard precedes layout lookup and normal Windows doctor skips devic
     expect(await runCli(["--data-dir", dir, "doctor", "--format", "json"], io)).toBe(0);
     const report = JSON.parse(out);
     expect(report.ok).toBe(true);
-    expect(report.checks.filter((check: { detail: string }) => check.detail.includes("not available on Windows yet"))).toHaveLength(5);
+    expect(report.checks.filter((check: { detail: string }) => check.detail.includes("not available on Windows yet"))).toHaveLength(3);
     expect(err).toBe("");
   } finally { Object.defineProperty(process, "platform", original); }
+});
+
+test("app entry points refuse or report on Windows when called directly, without probing", async () => {
+  const { detectKeyboards } = await import("../../src/app/keyboard-detect.ts");
+  const { rebootKeyboard } = await import("../../src/app/keyboard.ts");
+  const { runToolchainChecks, runKeyboardChecks, runRemapperChecks } = await import("../../src/app/doctor.ts");
+  const original = Object.getOwnPropertyDescriptor(process, "platform")!;
+  try {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    let probed = false;
+    await expect(detectKeyboards({ usb: async () => { probed = true; return []; } })).rejects.toThrow(PlatformUnavailableError);
+    await expect(rebootKeyboard()).rejects.toThrow("keyloom flash --reboot-only is not available on Windows yet");
+    for (const checks of [await runToolchainChecks(), await runKeyboardChecks(), await runRemapperChecks()]) {
+      expect(checks).toHaveLength(1);
+      expect(checks[0]!.detail).toContain("not available on Windows yet");
+    }
+    expect(probed).toBe(false);
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
 });

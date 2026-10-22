@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  requireCommandSupport, windowsUnavailable, type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
+  requireCommandSupport, type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -311,13 +311,9 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         helper,
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),
         ...(await runCredentialChecks()),
-        ...(windowsUnavailable() ? ["Docker builds", "flashing / USB / UF2", "raw HID / serial / lab", "kanata / remap", "serve device features"].map((name) => ({
-          name, ok: true, warn: true, detail: "not available on Windows yet; see docs/blueprint/13-roadmap.md#rung-24f-i-can-use-the-device-helper-on-native-windows",
-        })) : [
-          ...(await runToolchainChecks()),
-          ...(await runKeyboardChecks(handsFree)),
-          ...(await runRemapperChecks(handsFree?.remapper)),
-        ]),
+        ...(await runToolchainChecks()),
+        ...(await runKeyboardChecks(handsFree)),
+        ...(await runRemapperChecks(handsFree?.remapper)),
       ];
       print(io, format(), {
         json: { ok: checks.every((c) => c.ok), checks },

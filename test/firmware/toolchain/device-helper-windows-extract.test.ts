@@ -103,3 +103,26 @@ test.skipIf(process.platform !== "win32")("native Windows refuses a cache writab
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("unsafe_cache");
   expect(fs.readdirSync(base)).toEqual([]);
 });
+
+test("ancestors above LocalAppData are inspected for replacement rights, up to the drive root", () => {
+  const { io, base } = fixture();
+  const seen: string[][] = [];
+  extractWindowsHelper(bytes, manifest, base, io, (_paths, ancestors = []) => { if (ancestors.length) seen.push(ancestors); });
+  expect(seen).toEqual([["C:\\Users\\test space é\\AppData", "C:\\Users\\test space é", "C:\\Users", "C:\\"]]);
+  const refused = fixture();
+  expect(() => extractWindowsHelper(bytes, manifest, refused.base, refused.io, (_paths, ancestors = []) => {
+    if (ancestors.includes("C:\\Users")) throw new Error("unsafe_cache: writable by S-1-1-0 (Delete): C:\\Users");
+  })).toThrow("unsafe_cache");
+});
+
+test.skipIf(process.platform !== "win32")("native Windows refuses a cache whose parent another account can rename away", () => {
+  const parent = tempDir();
+  const base = join(parent, "Local");
+  fs.mkdirSync(base);
+  // Delete on the parent itself (no inheritance), so the cache directory's own ACL stays clean.
+  const script = `$acl = Get-Acl -LiteralPath $env:KEYLOOM_TEST_ACL; $sid = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0'); $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'Delete', 'None', 'None', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $env:KEYLOOM_TEST_ACL -AclObject $acl`;
+  const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { env: { ...process.env, KEYLOOM_TEST_ACL: parent } });
+  expect(result.exitCode).toBe(0);
+  expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("writable by S-1-1-0");
+  expect(fs.readdirSync(base)).toEqual([]);
+});
