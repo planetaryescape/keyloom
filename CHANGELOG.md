@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.48.1](https://github.com/planetaryescape/keyloom/compare/v0.48.0...v0.48.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* native macOS device helper finds a real Glove80 and reports unplugs as disconnected ([2ccca84](https://github.com/planetaryescape/keyloom/commit/2ccca847ca3584e3b467af8019a136794b048ea3))
+* raise the kanata daemon's open-file limit ([c1325ca](https://github.com/planetaryescape/keyloom/commit/c1325ca9a3dc5e91d8c839fb006f211d36e141ca))
+
 ## [0.48.0](https://github.com/planetaryescape/keyloom/compare/v0.47.0...v0.48.0) (2026-10-21)
 
 
