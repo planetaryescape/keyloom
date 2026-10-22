@@ -8,6 +8,7 @@ import { localBoardId } from "../boards/derive/build-board.ts";
 import { listBoards } from "../boards/registry.ts";
 import type { Board } from "../boards/load.ts";
 import { realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
+import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 import type { UsbDevice } from "../firmware/toolchain/usb.ts";
 import { listBoardDefinitions } from "./boards.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
@@ -58,6 +59,7 @@ export const candidateView = (c: Candidate): CandidateView => ({
 
 /** The keyboards on USB that are, or may be, a QMK or ZMK keyboard. A hub, a mouse or a phone is left out. */
 export async function detectKeyboards(deps: KeyboardDeps = {}, over: HandsFreeOverrides = {}): Promise<DetectedKeyboard[]> {
+  requirePlatformSupport("keyloom keyboard detect");
   const devices = await (deps.usb ?? realHandsFreeDeps(over).usb)();
   const boards = (deps.boards ?? listBoardDefinitions()).map((b) => b.definition);
   const index = keyboardIndex();

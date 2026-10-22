@@ -1,3 +1,4 @@
+import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 // Use cases for the typing lab (D-280 to D-283, 24-typing-lab.md): record a session from the connected keyboard, keep it, analyse it by
 // replaying it through the real firmware logic, propose what that proves as ordinary change sets, and delete it.
 // Hardware and the emulator are parameters (LabDeps), so the CLI's end-to-end test runs on a fake keyboard and a model.
@@ -104,6 +105,7 @@ export type RecordingInProgress = {
 export async function beginRecording(
   app: App, ref: string, deps: LabDeps, opts: { passageId?: string; text?: string; hooks?: CaptureHooks; announce?: (passage: Passage) => void } = {},
 ): Promise<RecordingInProgress> {
+  requirePlatformSupport("keyloom lab start");
   const view = getLayout(app, ref);
   const passage = choosePassage(view, opts);
   // After the checks that can refuse and before the first key is heard: the person is told before anything is recorded.

@@ -1,3 +1,4 @@
+import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 // Use cases for firmware: generate, build and flash (01#modules). A build or flash returns its row
 // at once and finishes in the background; callers poll getBuild / getFlash, which is what the web
 // app does. The CLI waits with buildAndWait / flashAndWait.
@@ -172,6 +173,7 @@ export type BuildOptions = {
  * poll getBuild for its progress.
  */
 export async function startBuild(app: App, ref: string, opts: BuildOptions = {}): Promise<BuildView> {
+  requirePlatformSupport("keyloom build");
   const view = getLayout(app, ref, opts.revisionId);
   const boardRevision = await resolveBoardRevision(view.board, opts.boardRevision);
   const id = newBuildId();
@@ -347,6 +349,7 @@ function chooseBuild(app: App, opts: FlashOptions): BuildRow {
 
 /** Starts flashing a successful build and returns the flash at once, waiting for the bootloader. */
 export async function startFlash(app: App, opts: FlashOptions): Promise<FlashView> {
+  requirePlatformSupport("keyloom flash");
   const build = chooseBuild(app, opts);
   if (build.status !== "succeeded" || build.artifactPath === null) {
     throw new UsageError(`build ${build.id} is ${build.status}${build.error ? ` (${build.error})` : ""}; only a successful build can be flashed`);

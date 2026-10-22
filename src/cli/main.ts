@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
+  requireCommandSupport, type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -46,7 +46,12 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .configureOutput({ writeOut: io.out, writeErr: io.err });
 
   // Boards derived on this machine live in the data directory; every command, including the ones that never open the database, sees them.
-  program.hook("preAction", () => loadUserBoards(globals().dataDir));
+  program.hook("preAction", (_program, action) => {
+    const names: string[] = [];
+    for (let cmd: Command | null = action; cmd?.parent; cmd = cmd.parent) names.unshift(cmd.name());
+    requireCommandSupport(names.join(" "), { offline: action.opts().offline === true });
+    loadUserBoards(globals().dataDir);
+  });
 
   const globals = (): Globals => program.opts<Globals>();
   const format = (): Format => globals().format ?? defaultFormat(io);
@@ -371,6 +376,15 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
   return commandResult;
 }
 
-if (import.meta.main) {
-  process.exit(await runCli(process.argv.slice(2)));
+/** Runs the CLI for this process's arguments and exits with its code. */
+export async function main(): Promise<never> {
+  const code = await runCli(process.argv.slice(2));
+  // On Windows a piped stdout is written asynchronously, and exiting at once loses it (seen as an
+  // empty `keyloom --version`). A zero-length write's callback runs after everything queued before it.
+  // The callback also runs with an error on a closed stream; a reader that never drains gets 5 s, not forever.
+  const flushed = (stream: NodeJS.WriteStream) => new Promise<void>((resolve) => stream.write("", () => resolve()));
+  await Promise.race([Promise.all([flushed(process.stdout), flushed(process.stderr)]), new Promise((resolve) => setTimeout(resolve, 5_000).unref())]);
+  process.exit(code);
 }
+
+if (import.meta.main) await main();

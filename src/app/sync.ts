@@ -1,3 +1,4 @@
+import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 // Use cases for keyboard sync (17, 10#commands): the engine the server runs, and the one-shot commands the CLI calls
 // against the same database. A one-shot `sync` is the same engine without its timer: it starts one sync and waits.
 import type { App } from "./context.ts";
@@ -18,6 +19,7 @@ export type SyncSetup = DefaultDepsOptions & SyncOptions & { deps?: SyncDeps };
 
 /** The engine `keyloom serve` runs; tests and demos pass fake deps or fake USB. */
 export function createSyncEngine(app: App, setup: SyncSetup = {}): SyncEngine {
+  requirePlatformSupport("keyloom sync");
   const { deps, handsFree, volumesRoot, bootloaderWaitMs, ...options } = setup;
   return new SyncEngine(app, deps ?? appSyncDeps(app, { ...(handsFree ? { handsFree } : {}), ...(volumesRoot === undefined ? {} : { volumesRoot }), ...(bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs }) }), options);
 }
@@ -57,6 +59,7 @@ const STEP_WORDS = {
  * the keyboard could not be flashed or the flash could not be verified; a keyboard that is already on the head is a success.
  */
 export async function runSync(app: App, ref: string, opts: RunSyncOptions = {}): Promise<SyncOutcome> {
+  requirePlatformSupport("keyloom sync");
   const engine = createSyncEngine(app, opts);
   const stop = () => void engine.stop({ flashGraceMs: 10 * 60_000 });
   opts.signal?.addEventListener("abort", stop, { once: true });

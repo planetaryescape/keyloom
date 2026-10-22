@@ -1,3 +1,4 @@
+import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 // Use case: what would this layout type for a sequence of key presses, run on the real firmware logic (10#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses).
 import { join } from "node:path";
 import { EmulationError } from "../firmware/emulate/error.ts";
@@ -58,6 +59,7 @@ export type EmulateEventsOptions = {
 
 /** Runs key events on the real firmware logic for `view`'s document (which a caller may have changed from the stored one). */
 export async function emulateEvents(app: App, view: LayoutView, events: readonly EmulatorEvent[], opts: EmulateEventsOptions): Promise<EmulateOutcome> {
+  requirePlatformSupport("keyloom emulate");
   const board = view.board.definition;
   const emulator = board.firmware === "kanata" ? undefined : EMULATORS[board.firmware];
   if (!emulator) throw new UsageError(`emulating ${board.firmware.toUpperCase()} boards isn't available yet`);

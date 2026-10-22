@@ -100,9 +100,14 @@ describe.skipIf(process.platform === "win32")("private Unix extraction", () => {
   });
 });
 
-test.skipIf(process.platform !== "win32")("Windows production extraction is explicitly unavailable pending private ACL proof", () => {
-  expect(() => extractHelper(bytes, manifest(), "0.45.0", tempDir())).toThrow(HelperFailure);
-});
+test.skipIf(process.platform !== "win32")("Windows extraction uses an exe and rechecks corruption", () => {
+  const base = tempDir();
+  const pair = extractHelper(bytes, manifest(), "0.45.0", base);
+  expect(pair.path.endsWith("keyloom-device.exe")).toBe(true);
+  expect(extractHelper(bytes, manifest(), "0.45.0", base).path).toBe(pair.path);
+  writeFileSync(pair.path, "corrupt");
+  expect(() => extractHelper(bytes, manifest(), "0.45.0", base)).toThrow("integrity_error");
+}, 60_000);
 
 function synthetic(mode = "valid") {
   const script = join(tempDir(), "child.ts");

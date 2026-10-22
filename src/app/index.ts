@@ -75,3 +75,4 @@ export {
   type AnalyseOptions, type LabDeps, type PassageView, type RecordingInProgress, type StoredAnalysis, analyseSession, beginRecording, deleteSession,
   endRecording, labPassages, realLabDeps, incompleteRecording, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
 } from "./lab.ts";
+export { PlatformUnavailableError, requireCommandSupport, windowsUnavailable } from "../firmware/toolchain/platform-support.ts";

@@ -55,7 +55,9 @@ curl -fsSL https://raw.githubusercontent.com/planetaryescape/keyloom/main/instal
 
 The script downloads the binary for your machine from the latest GitHub release, checks it against `SHA256SUMS`, and puts it in `~/.local/bin`. Releases exist for macOS (Apple silicon and Intel) and Linux (x64). Add `--version vX.Y.Z` to pin a release.
 
-Then start the app:
+Windows x64 (PowerShell): `irm https://raw.githubusercontent.com/planetaryescape/keyloom/main/install.ps1 -OutFile install.ps1; .\install.ps1 -AddToPath` installs a checksum-verified unsigned executable under `%LOCALAPPDATA%\Programs\keyloom`; omit `-AddToPath` to leave PATH unchanged, use `-Version vX.Y.Z` to pin a release, or set `KEYLOOM_INSTALL_DIR` / `KEYLOOM_DOWNLOAD_BASE` for another directory / mirror. Windows currently supports diagnostics, import, layout, boards and change; build, flash, sync, lab, kanata and serve are [not available yet](docs/blueprint/13-roadmap.md#rung-24f-i-can-use-the-device-helper-on-native-windows). The installed journey is checked on a native Windows runner in CI; the executable is unsigned, so keep SmartScreen and antivirus enabled.
+
+On macOS or Linux, start the app:
 
 ```sh
 keyloom serve
@@ -71,7 +73,7 @@ To check only the installed helper, without device discovery, credentials or Doc
 keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 ```
 
-This reports the paired release, protocol, target, SHA-256 and capabilities. On Apple Silicon Macs the helper is keyloom's keyboard connection: it lists `hid.list`, `hid.open`, `hid.write`, `serial.list`, `serial.open`, `serial.touch.1200` and `serial.touch.1201` (D-433). On Intel Macs and Linux it is diagnostics only (`capabilities: []`) and keyboard connections use the existing TypeScript transports. A corrupt or mismatched pair fails with an installation code, without opening a keyboard. See [build, cache and repair details](native/device-helper/README.md).
+This reports the paired release, protocol, target, SHA-256 and capabilities. On Apple Silicon Macs the helper is keyloom's keyboard connection: it lists `hid.list`, `hid.open`, `hid.write`, `serial.list`, `serial.open`, `serial.touch.1200` and `serial.touch.1201` (D-433). On Intel Macs, Linux and Windows it is diagnostics only (`capabilities: []`) and Intel/Linux keyboard connections use the existing TypeScript transports; Windows device operations remain unavailable. A corrupt or mismatched pair fails with an installation code, without opening a keyboard. See [build, cache and repair details](native/device-helper/README.md).
 
 To start from your existing layout, import it:
 
