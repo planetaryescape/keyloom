@@ -142,14 +142,25 @@ export function fakeWorld(opts: {
       const half = halves.find((h) => h.volume === volume && h.mode === "boot");
       rmSync(dir, { recursive: true, force: true });
       if (!half) continue;
-      // The Glove80's file holds both halves, so the key is read from the whole file; the bootloader keeps only its own family.
-      const key = keyInFirmware(bytes);
+      // Glove80 bootloaders keep their own family; a shared-family board runs the role in the written image.
+      const family = half.vendorId === GLOVE80_VENDOR ? (half.letter === "L" ? 0x9807b007 : 0x9808b007) : 0xada52840;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const blocks: Uint8Array[] = [];
+      const payload: Uint8Array[] = [];
+      for (let off = 0; off + 512 <= bytes.length; off += 512) {
+        if (view.getUint32(off + 28, true) !== family) continue;
+        blocks.push(bytes.subarray(off, off + 512));
+        payload.push(bytes.subarray(off + 32, off + 32 + view.getUint32(off + 16, true)));
+      }
+      if (blocks.length === 0) continue;
+      const key = keyInFirmware(Buffer.concat(blocks));
+      const role = /keyloom\/[0-9A-Z]{12}-([LR]):/.exec(Buffer.concat(payload).toString("latin1"))?.[1] as HalfLetter | undefined;
       flashed.push({ letter: half.letter, key });
       half.mode = "boot";
       setTimeout(() => {
         half.mode = "app";
         if (opts.portLagMs !== undefined) portAt.set(half.letter, Date.now() + opts.portLagMs);
-        const next = opts.after ? opts.after(half, key) : key === undefined ? undefined : serialOf(key, half.letter);
+        const next = opts.after ? opts.after(half, key) : key === undefined || role === undefined ? undefined : serialOf(key, role);
         if (next === undefined) delete half.serial;
         else half.serial = next;
       }, opts.comeBackMs ?? 40);

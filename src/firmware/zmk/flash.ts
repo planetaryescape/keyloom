@@ -119,6 +119,11 @@ async function payloads(input: Uf2FlashInput, say: (line: string) => void): Prom
 export const instructionFor = (step: FlashStep, index: number, total: number, waitMs: number): string =>
   `Flash the ${step.label} (${index + 1} of ${total}). ${step.enter} keyloom waits ${Math.round(waitMs / 60_000) >= 1 ? `${Math.round(waitMs / 60_000)} minutes` : `${Math.round(waitMs / 1000)} seconds`}.`;
 
+export function sharedDriveRemedy(step: FlashStep, steps: readonly FlashStep[]): string {
+  const others = steps.filter((s) => s !== step && s.volume === step.volume).map((s) => s.label).join(" and ");
+  return `For manual recovery, put only the ${step.label} in its bootloader: ${step.enter} The ${others} must not be in its bootloader. Before retrying in keyloom, return both halves to running firmware; keyloom must restart each target itself and observe its drive appear. Retry starts with the ${steps[0]!.label}.`;
+}
+
 export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult> {
   const output: string[] = [];
   const say = (line: string) => {
@@ -141,20 +146,32 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
   let allRestarted = true;
   const attempt = async (i: number, image: Uint8Array, recovery?: { verify: () => Promise<VerifyResult>; instruction?: string }): Promise<VerifyResult> => {
     const step = input.steps[i] as FlashStep;
+    const shared = input.steps.some((s) => s !== step && s.volume === step.volume);
     // Cancelling the new build must not cancel restoring the previous one.
     const signal = recovery ? undefined : input.signal;
     const failed = (error: string): VerifyResult => ({ ok: false, error });
     let instruction = recovery?.instruction ?? instructionFor(step, i, input.steps.length, waitMs);
     let restarted = false;
     let byKeyloom = false;
-    if (input.hooks?.enterBootloader && recovery?.instruction === undefined) {
+    let restartReason: string | undefined;
+    if (input.hooks?.enterBootloader && (recovery?.instruction === undefined || shared)) {
       const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text));
       if (!entered.ok) {
+        restartReason = entered.reason;
         say(`keyloom: couldn't restart the ${step.label} by itself: ${entered.reason}`);
         instruction = `keyloom couldn't restart the ${step.label} by itself: ${entered.reason}. ${instruction}`;
       }
       restarted = entered.ok;
       byKeyloom = entered.ok && entered.alreadyThere !== true;
+    }
+    // A label shared by both halves names no half. It is safe after keyloom restarted this target itself, or, outside
+    // recovery, when the drive appears only after the person was asked for this half (a normal first flash). A drive
+    // already mounted before the prompt could be the other half, as after a failed split flash, so it is refused.
+    if (shared && !byKeyloom && (recovery !== undefined || (await input.findVolume(step.volume)) !== null)) {
+      const remedy = sharedDriveRemedy(step, input.steps);
+      const error = `Not writing to ${step.volume}: its shared drive could belong to either half. ${restartReason ? `${restartReason}. ` : ""}${remedy}`;
+      input.onState("waiting_for_bootloader", error, { needsHand: true });
+      return failed(error);
     }
     say(`keyloom: waiting for ${step.volume} (${step.label}, step ${i + 1} of ${input.steps.length})`);
     // A half keyloom restarted needs nothing from the person; its drive is already there.
@@ -245,6 +262,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       checked = { ok: false, error: (err as Error).message };
     }
     if (!checked.ok) {
+      if (i > 0 && input.hooks?.recover) input.onState("writing", "keyloom is checking recovery of the partial flash. Don't unplug the keyboard.", { recovering: true });
       const error = input.hooks?.recover ? await input.hooks.recover(i, checked.error, restore, say) : checked.error;
       return fail(error);
     }

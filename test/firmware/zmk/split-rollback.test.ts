@@ -18,6 +18,26 @@ const KEY = "4NY1MKBCK6TY";
 const board = await loadBoardDir(`${import.meta.dir}/../../../boards/moergo/glove80`);
 const half = (letter: HalfLetter) => ({ letter, volume: letter === "L" ? "GLV80LHBOOT" : "GLV80RHBOOT", serial: serialOf(OLD_KEY, letter) });
 
+test("the fake runs the written role on shared-family hardware and filters Glove80 families", async () => {
+  const root = tempDir();
+  const w = fakeWorld({ root, bootDelayMs: 0, halves: [
+    { ...half("R"), volume: "NICENANO", vendorId: 0x1d50, productId: 0x615e },
+    half("L"),
+  ] });
+  try {
+    w.press("R");
+    w.press("L");
+    await Bun.sleep(20);
+    await writeFile(join(root, "NICENANO", "wrong.uf2"), uf2Carrying(serialOf(KEY, "L"), 0xada52840));
+    // Opposite keys prove the fake selected the Glove80's left family, not the first marker it found.
+    await writeFile(join(root, "GLV80LHBOOT", "combined.uf2"), Buffer.concat([
+      uf2Carrying(serialOf(OLD_KEY, "R"), 0x9808b007), uf2Carrying(serialOf(KEY, "L"), 0x9807b007),
+    ]));
+    for (let i = 0; i < 100 && w.halves.some((h) => h.serial !== serialOf(KEY, "L")); i++) await Bun.sleep(10);
+    expect(w.halves.map((h) => h.serial)).toEqual([serialOf(KEY, "L"), serialOf(KEY, "L")]);
+  } finally { w.stop(); }
+});
+
 type Options = {
   world?: Partial<Omit<Parameters<typeof fakeWorld>[0], "root">>;
   board?: typeof board;
@@ -26,6 +46,8 @@ type Options = {
   previous?: (letter: HalfLetter) => Uint8Array | null;
   write?: (path: string, image: Uint8Array) => Promise<void>;
   instruction?: (w: FakeWorld, instruction: string) => void;
+  prepare?: (w: FakeWorld) => Promise<void>;
+  findVolume?: (volume: string, find: (volume: string) => Promise<string | null>) => Promise<string | null>;
 };
 async function flash(opts: Options = {}) {
   const selected = opts.board ?? board;
@@ -40,7 +62,9 @@ async function flash(opts: Options = {}) {
   const saved: Array<{ half: HalfLetter; key: string | undefined; flashed: number }> = [];
   const states: Array<[string, string | null]> = [];
   const lines: string[] = [];
-  const findVolume = volumeFinderAt(root);
+  await opts.prepare?.(w);
+  const find = volumeFinderAt(root);
+  const findVolume = opts.findVolume ? (volume: string) => opts.findVolume!(volume, find) : find;
   const hooks = zmkHandsFreeHooks({
     deps: w.deps, board: selected.definition, handsFree: recipe.handsFree!, steps: recipe.steps,
     artifact, buildId: BUILD, findVolume, log: (l) => lines.push(l),
@@ -166,7 +190,7 @@ test("a shared drive already open for the failed half is never mistaken for the 
     world: { halves: ["L", "R"].map((letter) => ({ ...half(letter as HalfLetter), volume: "NICENANO", vendorId: 0x1d50, productId: 0x615e })) },
     write: async (path, image) => { if (++writes === 2) throw new Error("injected copy failure"); await writeFile(path, image); },
   });
-  expect(r.result.error).toContain("NICENANO is already mounted and could belong to either half");
+  expect(r.result.error).toContain("Not writing to NICENANO: its shared drive could belong to either half");
   expect(r.result.error).toContain(`left half is running build ${KEY}`);
   expect(r.result.error).toContain("right half is absent or in its bootloader");
   expect(writes).toBe(2);
@@ -203,4 +227,63 @@ test("a saved image targeting the bootloader is refused before any recovery writ
   expect(r.result.error).toContain("refusing to overwrite bootloader");
   expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }]);
   expect(r.saved).toEqual([]);
+});
+
+test("a failed half's saved key must match its known pre-flash key", async () => {
+  const r = await flash({
+    world: { halves: [half("R"), { ...half("L"), serial: serialOf("BBBBBBBBBBBB", "L") }], after: (h, key) => h.letter === "L" && key === KEY ? undefined : serialOf(key!, h.letter) },
+    instruction: (w, i) => { if (i.startsWith("Restore the left half")) w.press("L"); },
+  });
+  expect(r.result.error).toContain(`left half's last-good image is build ${OLD_KEY}, but it ran build BBBBBBBBBBBB before the flash`);
+  expect(r.w.flashed).not.toContainEqual({ letter: "L", key: OLD_KEY });
+});
+
+const corneInput = async () => ({
+  board: await loadBoardDir(`${import.meta.dir}/../../../boards/foostan/corne`),
+  artifact: zipSync({ "left.uf2": uf2Carrying(serialOf(KEY, "L"), 0xada52840), "right.uf2": uf2Carrying(serialOf(KEY, "R"), 0xada52840) }),
+  previous: (letter: HalfLetter) => uf2Carrying(serialOf(OLD_KEY, letter), 0xada52840),
+  world: { halves: ["L", "R"].map((letter) => ({ ...half(letter as HalfLetter), volume: "NICENANO", vendorId: 0x1d50, productId: 0x615e })) },
+});
+
+test("a shared drive appearing between recovery checks cannot receive the other half's image", async () => {
+  let writes = 0;
+  let checks = 0;
+  const r = await flash({ ...await corneInput(),
+    write: async (path, image) => { if (++writes === 2) throw new Error("injected copy failure"); await writeFile(path, image); },
+    // The first check reports the failed copy's drive; the old recovery guard then misses its arrival.
+    findVolume: async (volume, find) => writes === 2 && ++checks === 2 ? null : find(volume),
+  });
+  expect(r.w.flashed).not.toContainEqual({ letter: "R", key: OLD_KEY });
+  expect(r.w.halves.find((h) => h.letter === "R")?.serial).not.toBe(serialOf(OLD_KEY, "L"));
+  expect(r.result.error).toContain("could belong to either half");
+  expect(r.result.error).toContain("Retry starts with the left half");
+});
+
+test("Flash again refuses a failed right half's shared drive when its first step is left", async () => {
+  const r = await flash({ ...await corneInput(), prepare: async (w) => { w.press("R"); await Bun.sleep(50); } });
+  expect(r.w.flashed).toEqual([]);
+  expect(r.result.error).toContain("left half");
+  expect(r.result.error).toContain("right half must not be in its bootloader");
+});
+
+test("an absent shared-drive half's remedy distinguishes manual recovery from the retry's first step", async () => {
+  const input = await corneInput();
+  const r = await flash({ ...input, world: { ...input.world, after: (h, key) => h.letter === "R" && key === KEY ? undefined : serialOf(key!, h.letter) } });
+  expect(r.result.error).not.toContain("Put it in its bootloader and flash again");
+  expect(r.result.error).toContain("For manual recovery, put only the right half in its bootloader");
+  expect(r.result.error).toContain("The left half must not be in its bootloader");
+  expect(r.result.error).toContain("Before retrying in keyloom, return both halves to running firmware");
+  expect(r.result.error).toContain("Retry starts with the left half");
+  expect(r.w.flashed).toEqual([{ letter: "L", key: KEY }, { letter: "R", key: KEY }]);
+});
+
+test.each(["bootloader block", "truncated", "count", "gap"])("an unsafe saved UF2 (%s) cannot be written during recovery", async (damage) => {
+  const image = glove80Image(OLD_KEY);
+  const view = new DataView(image.buffer);
+  if (damage === "bootloader block") view.setUint32(512 + 28, 0xd663823c, true);
+  if (damage === "count") view.setUint32(512 + 24, 12, true);
+  if (damage === "gap") view.setUint32(512 + 20, 3, true);
+  const r = await flash({ world: restartFails, previous: () => damage === "truncated" ? image.subarray(0, image.length - 512) : image });
+  expect(r.result.error).toContain("last-good image is unsafe");
+  expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }]);
 });

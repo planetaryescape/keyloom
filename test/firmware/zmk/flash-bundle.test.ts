@@ -19,11 +19,11 @@ const left = uf2Image(0xada52840, 3);
 const right = uf2Image(0xada52840, 5);
 
 /** The drive appears, takes a file, and unmounts; then appears again for the next half. */
-function fakeNiceNano(root: string, times: number) {
+function fakeNiceNano(root: string, times: number, handsFree = false) {
   const received: Uint8Array[] = [];
   const names: string[] = [];
   const drive = join(root, LABEL);
-  mkdirSync(drive, { recursive: true });
+  if (!handsFree) mkdirSync(drive, { recursive: true });
   // A real bootloader acts once the whole file is in. Taking it at first sight raced the copy on a
   // slow CI runner (seen 2026-10-15), so wait until its size holds still across two ticks.
   let lastSize = -1;
@@ -40,10 +40,10 @@ function fakeNiceNano(root: string, times: number) {
       names.push(...other);
       received.push(new Uint8Array(readFileSync(join(drive, other[0] as string))));
       rmSync(drive, { recursive: true, force: true });
-      if (received.length < times) setTimeout(() => mkdirSync(drive, { recursive: true }), 80);
+      if (!handsFree && received.length < times) setTimeout(() => mkdirSync(drive, { recursive: true }), 80);
     }
   }, 10);
-  return { received, names, stop: () => clearInterval(timer) };
+  return { received, names, restart: async () => { mkdirSync(drive, { recursive: true }); return { ok: true as const }; }, stop: () => clearInterval(timer) };
 }
 const readdirNames = (d: string): string[] => (existsSync(d) ? readdirSync(d) : []);
 
@@ -65,12 +65,23 @@ async function setup(artifact: Uint8Array, name = "bld.zip") {
 describe("flashUf2Drives with a bundle", () => {
   test("each half receives its own UF2, byte for byte, in step order", async () => {
     const s = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
-    const boot = fakeNiceNano(s.root, 2);
-    const r = await s.flash();
+    const boot = fakeNiceNano(s.root, 2, true);
+    const r = await s.flash({ hooks: { enterBootloader: boot.restart } });
     boot.stop();
     expect(r).toMatchObject({ state: "succeeded", error: null });
     expect(boot.received).toEqual([left, right]);
     expect(boot.names).toEqual(["firmware.uf2", "firmware.uf2"]);
+  });
+
+  test("a manual shared drive without a target restart flashes nothing", async () => {
+    const s = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
+    const boot = fakeNiceNano(s.root, 2);
+    try {
+      const r = await s.flash();
+      expect(r.state).toBe("failed");
+      expect(r.error).toContain("could belong to either half");
+      expect(boot.received).toEqual([]);
+    } finally { boot.stop(); }
   });
 
   test("a bundle missing a half's UF2 flashes nothing", async () => {
@@ -106,5 +117,33 @@ describe("flashUf2Drives with a bundle", () => {
     const s = await setup(left, "bld.uf2");
     const r = await s.flash({ steps: [{ volume: LABEL, label: "board", enter: "Reset." }] });
     expect(r.error).toContain("one image per half");
+  });
+
+  test("a shared drive that appears only after keyloom asks for a half is written; one already mounted is refused", async () => {
+    // A normal first flash: nothing mounted, keyloom asks for the left half, and only then does its drive appear.
+    const s = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
+    const drive = join(s.root, LABEL);
+    let prompts = 0;
+    const received: number[] = [];
+    const timer = setInterval(() => {
+      const names = readdirNames(drive);
+      if (names.length === 0) return;
+      received.push(statSync(join(drive, names[0] as string)).size);
+      rmSync(drive, { recursive: true, force: true });
+    }, 30);
+    const r = await s.flash({ bootloaderWaitMs: 2000, onState: (state) => {
+      if (state === "waiting_for_bootloader" && !existsSync(drive)) { prompts++; setTimeout(() => mkdirSync(drive, { recursive: true }), 50); }
+    } });
+    clearInterval(timer);
+    expect(r.state).toBe("succeeded");
+    expect(prompts).toBeGreaterThanOrEqual(2);
+    expect(received).toHaveLength(2);
+    // After a failed split flash the other half's drive may already be mounted: keyloom can't tell whose it is.
+    const t = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
+    mkdirSync(join(t.root, LABEL), { recursive: true });
+    const refused = await t.flash({ bootloaderWaitMs: 500 });
+    expect(refused.state).toBe("failed");
+    expect(refused.error).toContain("could belong to either half");
+    expect(readdirNames(join(t.root, LABEL))).toEqual([]);
   });
 });

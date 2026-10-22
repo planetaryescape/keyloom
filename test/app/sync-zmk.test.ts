@@ -2,6 +2,7 @@
 // Apply to both halves restarted, written and checked, the halves that need a hand, and firmware that isn't keyloom's.
 import { describe, expect, test, setDefaultTimeout } from "bun:test";
 import { join } from "node:path";
+import { rm } from "node:fs/promises";
 import { type ChangeOp, applyOps, buildAndWait, flashAndWait, getBuild, getLayout } from "../../src/app/index.ts";
 import { backfillConditionalLayers, backfillLayerRefs } from "../../src/app/index.ts";
 import { appSyncDeps } from "../../src/app/sync-deps.ts";
@@ -14,6 +15,7 @@ import { getBoardSync, lastSyncOfBoard, recentSyncs } from "../../src/persistenc
 import { OLD_KEY, fakeWorld, glove80Image, serialOf } from "../helpers/fake-zmk-halves.ts";
 import { waitFor } from "../helpers/fake-sync.ts";
 import { zmkEnv } from "../helpers/zmk.ts";
+import { syncLine, syncNotice } from "../../src/web/sync/words.ts";
 
 // waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
 setDefaultTimeout(20_000);
@@ -21,9 +23,9 @@ setDefaultTimeout(20_000);
 const BOARD = "moergo/glove80";
 const half = (letter: "L" | "R", over: object = {}) => ({ letter, volume: letter === "L" ? "GLV80LHBOOT" : "GLV80RHBOOT", serial: serialOf(OLD_KEY, letter), ...over });
 
-async function setup(halves: Array<ReturnType<typeof half>>, extra: { bootloaderWaitMs?: number } = {}) {
+async function setup(halves: Array<ReturnType<typeof half>>, extra: { bootloaderWaitMs?: number } = {}, after?: Parameters<typeof fakeWorld>[0]["after"]) {
   const e = await zmkEnv();
-  const world = fakeWorld({ root: e.volumes, halves });
+  const world = fakeWorld({ root: e.volumes, halves, ...(after ? { after } : {}) });
   const handsFree = { usb: async () => [], zmk: world.deps };
   const base = appSyncDeps(e.app, { handsFree, volumesRoot: e.volumes, ...extra });
   const deps = {
@@ -58,6 +60,75 @@ async function setup(halves: Array<ReturnType<typeof half>>, extra: { bootloader
 }
 
 describe("Apply to both halves of a Glove80", () => {
+  test("an absent left half after failed recovery never reports success or hides the error", async () => {
+    let fail = false;
+    const s = await setup([half("L"), half("R")], { bootloaderWaitMs: 100 }, (h, key) => fail && h.letter === "L" ? undefined : serialOf(key!, h.letter));
+    await s.proveByHand();
+    await rm(join(s.e.dataDir, "firmware", "last-good", "moergo-glove80", "R.uf2"));
+    fail = true;
+    try {
+      await s.e.run(async () => {
+        const engine = new SyncEngine(s.e.app, s.deps, { quietMs: 40, tickMs: 10, pollMs: 20 });
+        const notices: ReturnType<typeof syncNotice>[] = [];
+        let previous: ReturnType<typeof engine.views>[number] | undefined;
+        engine.subscribe((views) => { const next = views[0]; if (next) { notices.push(syncNotice(previous, next)); previous = next; } });
+        await engine.start();
+        try {
+          s.apply();
+          await waitFor(() => lastSyncOfBoard(s.e.app.db, BOARD)?.status === "failed", "incomplete recovery", 8000);
+          await engine.tick();
+          const view = engine.views()[0]!;
+          const error = lastSyncOfBoard(s.e.app.db, BOARD)!.error!;
+          expect(view.state.kind).toBe("needs_hand");
+          expect(syncLine(view, view.layoutId).detail).toContain(error);
+          expect(syncLine(view, view.layoutId).tone).not.toBe("success");
+          expect(notices.filter((n) => n?.kind === "success")).toEqual([]);
+          expect((await engine.syncNow("glove80")).kind).not.toBe("in_sync");
+        } finally { await engine.stop(); }
+      });
+    } finally { s.world.stop(); }
+  });
+
+  test.each(["pause", "stop"])("%s during recovery preserves the failed result and prevents automatic retry", async (action) => {
+    let fail = false;
+    const s = await setup([half("L"), half("R")], { bootloaderWaitMs: 100 }, (h, key) => fail && h.letter === "L" ? undefined : serialOf(key!, h.letter));
+    await s.proveByHand();
+    fail = true;
+    try {
+      await s.e.run(async () => {
+        const engine = new SyncEngine(s.e.app, s.deps, { quietMs: 40, tickMs: 10, pollMs: 20 });
+        const base = s.deps.flash;
+        let requested = false;
+        let stopping: Promise<void> | undefined;
+        s.deps.flash = (a) => base({ ...a, onFlasherState: (state, instruction, note) => {
+          a.onFlasherState(state, instruction, note);
+          if (!requested && instruction?.startsWith("Restore the left half")) {
+            requested = true;
+            if (action === "pause") engine.setPaused(BOARD, true);
+            else stopping = engine.stop();
+          }
+        } });
+        await engine.start();
+        try {
+          s.apply();
+          await waitFor(() => !!lastSyncOfBoard(s.e.app.db, BOARD)?.finishedAt, "recovery result", 8000);
+          await stopping;
+          expect(requested).toBe(true);
+          const row = lastSyncOfBoard(s.e.app.db, BOARD)!;
+          const error = row.error;
+          expect(error).toContain("Rollback of the left half failed");
+          expect(row).toMatchObject({ status: "failed", failure: "flash", error: expect.stringContaining("left half is absent or in its bootloader") });
+          const count = recentSyncs(s.e.app.db).length;
+          if (action === "pause") {
+            engine.setPaused(BOARD, false);
+            await Bun.sleep(200);
+            expect(recentSyncs(s.e.app.db)).toHaveLength(count);
+          }
+        } finally { await engine.stop(); }
+      });
+    } finally { s.world.stop(); }
+  });
+
   test("a split flash rolled back to the previous build is failed and behind, and flash again still works", async () => {
     const s = await setup([half("L"), half("R")], { bootloaderWaitMs: 100 });
     const first = await s.proveByHand();

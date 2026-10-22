@@ -310,7 +310,7 @@ describe("the first keyloom flash and failures to restart", () => {
 });
 
 describe("the Corne: two halves under one volume name", () => {
-  const bundle = () => zipSync({ "left.uf2": uf2Carrying(serialOf(KEY, "L", ":0123456789ABCDEF"), 0xada52840), "right.uf2": uf2Carrying(serialOf(KEY, "L", ":0123456789ABCDEF"), 0xada52840, 6) });
+  const bundle = () => zipSync({ "left.uf2": uf2Carrying(serialOf(KEY, "L", ":0123456789ABCDEF"), 0xada52840), "right.uf2": uf2Carrying(serialOf(KEY, "R", ":0123456789ABCDEF"), 0xada52840, 6) });
   const half = (letter: "L" | "R") => ({ letter, volume: "NICENANO", vendorId: 0x1d50, productId: 0x615e, serial: serialOf(OLD_KEY, letter, ":0123456789ABCDEF") });
 
   test("flashes one half after the other, each triggered by its own marker, and each gets its own image", async () => {
@@ -322,18 +322,20 @@ describe("the Corne: two halves under one volume name", () => {
     expect(r.lines.at(-1)).toContain("Verified: the left half is running build");
   });
 
-  test("a peripheral with no port is relayed to by the left half, whose touch is the only one that happens first", async () => {
+  test("a shared-drive peer with no marker cannot be ruled out as an open bootloader, so keyloom asks for the half instead of restarting it", async () => {
     const r = await run(CORNE, bundle(), (root) => fakeWorld({ root, halves: [half("L"), { letter: "R", volume: "NICENANO", vendorId: 0x1d50, productId: 0x615e }] }));
-    expect(r.result.state).toBe("succeeded");
-    // Left first (its own port). When the left half is back, the right is relayed to through it.
-    expect(r.w.touches).toEqual([{ path: "/dev/fake-ttyACM-L", baud: 1200 }, { path: "/dev/fake-ttyACM-L", baud: 1201 }]);
+    expect(r.result.state).toBe("failed");
+    // No drive appeared after the prompt, so nothing was written to either half.
+    expect(r.result.error).toContain("Put the left half in bootloader mode");
+    expect(r.w.touches).toEqual([]);
+    expect(r.w.flashed).toEqual([]);
   });
 });
 
 describe("two boards on one desk", () => {
   const corneHalf = (letter: "L" | "R") => ({ letter, volume: "NICENANO", vendorId: 0x1d50, productId: 0x615e, path: `/dev/fake-corne-${letter}`, serial: serialOf(OLD_KEY, letter, ":0123456789ABCDEF") });
   const glove80Half = (letter: "L" | "R") => ({ ...running(letter), path: `/dev/fake-glove-${letter}` });
-  const bundle = () => zipSync({ "left.uf2": uf2Carrying(serialOf(KEY, "L", ":0123456789ABCDEF"), 0xada52840), "right.uf2": uf2Carrying(serialOf(KEY, "L", ":0123456789ABCDEF"), 0xada52840) });
+  const bundle = () => zipSync({ "left.uf2": uf2Carrying(serialOf(KEY, "L", ":0123456789ABCDEF"), 0xada52840), "right.uf2": uf2Carrying(serialOf(KEY, "R", ":0123456789ABCDEF"), 0xada52840) });
 
   test("the Corne's flash never touches a Glove80 half, though both carry keyloom's marker with the same letters", async () => {
     const r = await run(CORNE, bundle(), (root) => fakeWorld({ root, halves: [glove80Half("L"), glove80Half("R"), corneHalf("L"), corneHalf("R")] }), { foreign: true });

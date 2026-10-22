@@ -10,6 +10,7 @@ import type { SerialPort, SerialTransport } from "../toolchain/serial.ts";
 import { uf2Problem } from "../toolchain/uf2.ts";
 import { type UsbDevice, listUsbDevices } from "../toolchain/usb.ts";
 import type { EnterResult, FlashStep, StepHooks, VerifyResult } from "./flash.ts";
+import { sharedDriveRemedy } from "./flash.ts";
 import { type HalfLetter, LOCAL_BAUD, RELAY_BAUD, buildKey, halfMarker, keyInArtifact, keyInFirmware, parseSerial } from "./handsfree.ts";
 import type { VolumeFinder } from "./volumes.ts";
 
@@ -114,14 +115,21 @@ export async function restartHalf(opts: {
   const waitMs = deps.restartWaitMs ?? RESTART_WAIT_MS;
 
   try {
-    // A drive that is already there is a half already in its bootloader, which is where this is trying to get it.
+    // Only a distinct label identifies a half that is already in its bootloader.
     if (opts.waitForVolume !== false && await opts.findVolume(t.step.volume)) {
+      if (opts.targets.some((other) => other !== t && other.step.volume === t.step.volume)) {
+        return { ok: false, reason: `${t.step.volume} is already mounted and could belong to either half` };
+      }
       log(`keyloom: ${t.step.volume} is already mounted, so the ${label} is already in its bootloader`);
       return { ok: true, alreadyThere: true };
     }
 
     const transport = await deps.serial();
     const ports = await transport.list();
+    const peers = opts.targets.filter((other) => other !== t && other.step.volume === t.step.volume);
+    if (peers.some((other) => portsOfHalf(ports, other).keyloom.length !== 1)) {
+      return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware` };
+    }
     const own = portsOfHalf(ports, t);
     const keys = new Set(own.keyloom.map((k) => k.key));
     if (own.keyloom.length > 1 && (keys.size > 1 || new Set(own.keyloom.map((k) => k.port.path)).size > 1)) {
@@ -152,6 +160,10 @@ export async function restartHalf(opts: {
     const deadline = Date.now() + waitMs;
     for (;;) {
       if (await opts.findVolume(t.step.volume)) {
+        const after = peers.length ? await transport.list() : [];
+        if (peers.some((other) => portsOfHalf(after, other).keyloom.length !== 1)) {
+          return { ok: false, reason: `${t.step.volume} could belong to either half; the other half is no longer confirmed running firmware` };
+        }
         log(`keyloom: ${t.step.volume} appeared; the ${label} is in its bootloader`);
         return { ok: true };
       }
@@ -167,7 +179,7 @@ export async function restartHalf(opts: {
 }
 
 /** After a flash: the half must come back with the new build ID's key, or a saved image's key during rollback. */
-export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTarget; log: (line: string) => void } & ({ buildId: string; key?: never } | { key: string; buildId?: never })): Promise<VerifyResult> {
+export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTarget; steps?: readonly FlashStep[]; log: (line: string) => void } & ({ buildId: string; key?: never } | { key: string; buildId?: never })): Promise<VerifyResult> {
   const { deps, target: t } = opts;
   const label = t.step.label;
   const key = opts.key ?? buildKey(opts.buildId);
@@ -198,7 +210,10 @@ export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTar
   if (seen.state === "absent") {
     // The copy can be cut short when the bootloader's drive disappears mid-write, and a half with incomplete firmware never
     // comes back on USB (BK's Glove80 left half, 2026-10-22: the rewrite from its bootloader then verified). Lead with that remedy.
-    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. Put it in its bootloader and flash again: ${t.step.enter} If it doesn't appear even then, check its USB cable and run \`keyloom doctor\`.` };
+    const remedy = opts.steps?.some((step) => step !== t.step && step.volume === t.step.volume)
+      ? sharedDriveRemedy(t.step, opts.steps)
+      : `Put it in its bootloader and flash again: ${t.step.enter}`;
+    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. ${remedy} If it doesn't appear even then, check its USB cable and run \`keyloom doctor\`.` };
   }
   if (seen.state === "keyloom") {
     return { ok: false, error: `the ${label} was written, but it is running build ${seen.key} and not ${build} (${expected}). The flash may not have been written; flash again.` };
@@ -247,7 +262,7 @@ export function zmkHandsFreeHooks(input: {
     hooks.verify = async (step, _index, image) => {
       const target = forStep(step);
       if (!target) return { ok: true, message: `the ${step.label} was written` };
-      const result = await verifyHalf({ deps: input.deps, target, buildId: input.buildId, log: input.log });
+      const result = await verifyHalf({ deps: input.deps, target, steps: input.steps, buildId: input.buildId, log: input.log });
       if (result.ok) images.set(target, image);
       return result;
     };
@@ -281,8 +296,9 @@ export function zmkHandsFreeHooks(input: {
         });
         return `${states.join(", and ")}.`;
       };
-      const remedy = `To finish the new build, put the ${failed.step.label} in its bootloader and flash again: ${failed.step.enter}`;
-      const stopped = async (reason: string) => `${error} ${reason} ${await summary()} ${remedy}`;
+      const shared = targets.some((t) => t !== failed && t.step.volume === failed.step.volume);
+      const remedy = shared ? sharedDriveRemedy(failed.step, input.steps) : `To finish the new build, put the ${failed.step.label} in its bootloader and flash again: ${failed.step.enter}`;
+      const stopped = async (reason: string, includeRemedy = true) => `${error} ${reason} ${await summary()}${includeRemedy ? ` ${remedy}` : ""}`;
       // Read before touching a rollback target: the failed half may still run its previous build.
       const failedState = await current(failed);
       const previous = new Map<HalfTarget, { image: Uint8Array; key: string }>();
@@ -310,22 +326,20 @@ export function zmkHandsFreeHooks(input: {
         const key = image ? keyInFirmware(image) : undefined;
         // Restore the verified halves even when the failed half has no usable saved image.
         const problem = image ? uf2Problem(image, shape) : undefined;
-        if (image && key === oldKey && !problem) previous.set(failed, { image, key });
+        const old = observedKey(before.get(failed), failed);
+        if (key !== undefined && old !== undefined && key !== old) failedImageProblem = `the ${failed.step.label}'s last-good image is build ${key}, but it ran build ${old} before the flash`;
+        else if (image && key === oldKey && !problem) previous.set(failed, { image, key });
         else failedImageProblem ??= problem ? `the ${failed.step.label}'s last-good image is unsafe: ${problem}` : `no last-good image of build ${oldKey} for the ${failed.step.label}`;
       }
       for (const [t, saved] of previous) {
         let result: VerifyResult;
         try {
-          // A shared label cannot identify an already open bootloader. It may belong to the failed half.
-          if (t !== failed && t.step.volume === failed.step.volume && await input.findVolume(t.step.volume)) {
-            return stopped(`Rollback stopped: ${t.step.volume} is already mounted and could belong to either half. Unplug the ${failed.step.label}'s bootloader before flashing again.`);
-          }
           say(`keyloom: Rolling back the ${t.step.label} to build ${saved.key}.`);
           result = await restore(input.steps.indexOf(t.step), saved.image,
-            () => verifyHalf({ deps: input.deps, target: t, key: saved.key, log: say }),
+            () => verifyHalf({ deps: input.deps, target: t, steps: input.steps, key: saved.key, log: say }),
             t === failed ? `Restore the ${t.step.label} to build ${saved.key}. ${t.step.enter}` : undefined);
         } catch (err) { result = { ok: false, error: (err as Error).message }; }
-        if (!result.ok) return stopped(`Rollback of the ${t.step.label} failed: ${result.error} Put the ${t.step.label} in its bootloader to restore it: ${t.step.enter}`);
+        if (!result.ok) return stopped(`Rollback of the ${t.step.label} failed: ${result.error}${shared ? "" : ` Put the ${t.step.label} in its bootloader to restore it: ${t.step.enter}`}`, !shared);
         say(`keyloom: Rollback verified: ${result.message}.`);
       }
       if (failedImageProblem) return stopped(`Rollback is incomplete: ${failedImageProblem}.`);

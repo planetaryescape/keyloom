@@ -3,6 +3,24 @@ import { describeUf2, inspectUf2, uf2Problem } from "../../../src/firmware/toolc
 import { combinedUf2, uf2Image } from "../../helpers/zmk.ts";
 
 describe("UF2 files", () => {
+  test.each(["family", "family flag", "count", "zero count", "first number", "duplicate", "gap", "truncated"])("rejects inconsistent UF2 blocks: %s", (damage) => {
+    const image = uf2Image(0xada52840, 4);
+    const view = new DataView(image.buffer);
+    if (damage === "family") view.setUint32(512 + 28, 0x9807b007, true);
+    if (damage === "family flag") view.setUint32(512 + 8, 0, true);
+    if (damage === "count") view.setUint32(512 + 24, 5, true);
+    if (damage === "zero count") view.setUint32(24, 0, true);
+    if (damage === "first number") view.setUint32(20, 1, true);
+    if (damage === "duplicate") view.setUint32(2 * 512 + 20, 1, true);
+    if (damage === "gap") view.setUint32(2 * 512 + 20, 3, true);
+    expect(uf2Problem(damage === "truncated" ? image.subarray(0, image.length - 512) : image, "single")).toBeDefined();
+  });
+
+  test("checks the bootloader family on nonzero blocks", () => {
+    const image = uf2Image(0xada52840, 4);
+    new DataView(image.buffer).setUint32(512 + 28, 0xd663823c, true);
+    expect(uf2Problem(image, "single")).toContain("refusing to overwrite bootloader");
+  });
   test("a combined Glove80 build is two images at the same addresses, told apart by family ID", () => {
     const info = inspectUf2(combinedUf2());
     expect(info).toEqual({

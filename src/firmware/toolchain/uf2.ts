@@ -29,6 +29,7 @@ export function inspectUf2(bytes: Uint8Array): Uf2Info | { problem: string } {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const images: Uf2Image[] = [];
   let current: Uf2Image | undefined;
+  let declared = 0;
   for (let off = 0, n = 0; off < bytes.length; off += BLOCK, n++) {
     if (view.getUint32(off, true) !== START0 || view.getUint32(off + 4, true) !== START1 || view.getUint32(off + BLOCK - 4, true) !== END) {
       return { problem: `block ${n} doesn't have the UF2 magic numbers` };
@@ -37,18 +38,28 @@ export function inspectUf2(bytes: Uint8Array): Uf2Info | { problem: string } {
     const address = view.getUint32(off + 12, true);
     const size = view.getUint32(off + 16, true);
     const blockNo = view.getUint32(off + 20, true);
+    const count = view.getUint32(off + 24, true);
+    const family = (flags & FLAG_FAMILY) !== 0 ? view.getUint32(off + 28, true) : null;
+    if (family === BOOTLOADER_FAMILY) return { problem: "UF2 targets the bootloader family (0xd663823c); refusing to overwrite bootloader" };
     if (size > 476) return { problem: `block ${n} claims ${size} payload bytes; a block holds at most 476` };
     // Blocks of the same image count up from zero, so a zero starts the next one.
     if (!current || blockNo === 0) {
-      const family = (flags & FLAG_FAMILY) !== 0 ? view.getUint32(off + 28, true) : null;
+      if (current && current.blocks !== declared) return { problem: `UF2 image declares ${declared} blocks but ends after ${current.blocks}` };
+      if (blockNo !== 0) return { problem: `UF2 image starts at block ${blockNo}, not zero` };
+      if (count === 0) return { problem: "UF2 image declares zero blocks" };
+      declared = count;
       current = { family, blocks: 0, firstAddress: address, lastAddress: address };
       images.push(current);
     }
+    if (count !== declared) return { problem: `block ${n} declares ${count} blocks; its image declares ${declared}` };
+    if (family !== current.family) return { problem: `block ${n} has ${familyText(family)}; its image has ${familyText(current.family)}` };
+    if (blockNo !== current.blocks || blockNo >= declared) return { problem: `block ${n} has image block number ${blockNo}; expected ${current.blocks} of ${declared}` };
     if ((flags & FLAG_NOT_MAIN) === 0) {
       current.lastAddress = Math.max(current.lastAddress, address + size);
     }
     current.blocks++;
   }
+  if (current && current.blocks !== declared) return { problem: `UF2 image declares ${declared} blocks but ends after ${current.blocks}` };
   return { bytes: bytes.length, images };
 }
 

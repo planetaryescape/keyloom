@@ -1,6 +1,6 @@
 # 17: Keyboard sync: Apply puts the change on the keyboard
 
-Status: split ZMK rollback is implemented and tested with fake halves (D-437, 2026-10-22); hardware rollback is unobserved. A put onto a new board never starts a sync by itself, tested in `test/app/keyboard-put-sync.test.ts` (D-376), 2026-10-17; hands-free flashing and auto-sync are built (rungs 12 and 13: the Moonlander in v0.9.0, the `keyloom-zmk` module in v0.12.0, the sync engine in v0.14.0), as of v0.36.1. On hardware, the Glove80 has been flashed hands-free on both halves with a verified result (S12, 2026-10-16). The Corne has not (S13 not run). The week of use that rung 13 asks for is not recorded. Live writes (rung 17: Moonlander set-keycode, ZMK Studio) are not built, on purpose: they wait on rung 13's verdict about the wait. Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
+Status: split ZMK rollback, shared-drive identity checks and incomplete-recovery sync states are implemented and tested with fake halves (D-437, 2026-10-22); hardware rollback is unobserved. A put onto a new board never starts a sync by itself, tested in `test/app/keyboard-put-sync.test.ts` (D-376), 2026-10-17; hands-free flashing and auto-sync are built (rungs 12 and 13: the Moonlander in v0.9.0, the `keyloom-zmk` module in v0.12.0, the sync engine in v0.14.0), as of v0.36.1. On hardware, the Glove80 has been flashed hands-free on both halves with a verified result (S12, 2026-10-16). The Corne has not (S13 not run). The week of use that rung 13 asks for is not recorded. Live writes (rung 17: Moonlander set-keycode, ZMK Studio) are not built, on purpose: they wait on rung 13's verdict about the wait. Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
 
 BK on Vial: "vial is really really user friendly in terms of not needing to manually flash, you click a key, click what you want it to be and done." Then: "so is there no way for me to flash without needing to physically interact with the boards, similar to what vial does? Would be great if we could figure this out and build it into keyloom". And: "Not just for glove 80 but for all my boards".
 
@@ -19,7 +19,7 @@ The research is [../research/handsfree-flash-all-boards.md](../research/handsfre
 | Glove80 | ZMK (MoErgo fork `ce69e85`) | No. Each half needs a key combo while it's switched on | The `keyloom-zmk` module: a 1200-baud touch on a USB serial port (S12) | ZMK Studio on the left half, bindings and layers only (S14) |
 | Corne | ZMK v0.3.0, nice!nano v2 assumed (S13) | No. Double-tap reset on each half | The same module, with the halves flashed one at a time (S13) | ZMK Studio, the same as the Glove80 |
 
-The first keyloom flash of each ZMK half still needs the key combo, because nothing in the firmware BK runs today accepts a trigger. The left half exposes only a boot-keyboard HID interface, and the right half enumerates with no interfaces (observed with `ioreg` on 2026-10-15). After that one flash, every later flash is hands-free.
+A ZMK half with a distinct boot-drive label can take its first keyloom flash through the manual key combo. A shared-drive board such as the Corne takes it one half at a time: keyloom asks for a half and writes a `NICENANO` drive only if it appears after that prompt. A drive already open before the prompt is refused, because it could be the other half (D-437).
 
 ## Apply, sync and the keyboard's state
 
@@ -27,7 +27,7 @@ keyloom knows which revision each keyboard runs, because every keyloom build car
 
 | State | Shown as | Meaning |
 |---|---|---|
-| In sync | "On your Moonlander" with a check | The keyboard runs the head revision |
+| In sync | "On your Moonlander" with a check | Every expected half is present and verified on the head revision, with no unresolved split-flash failure |
 | Syncing | "Building…", "Flashing the right half…", "Writing…" with progress | keyloom is putting the head revision on the keyboard |
 | Behind | "2 changes not on your Glove80" with Sync now | Auto-sync is off, paused or failed |
 | Needs a hand | The board's manual instruction, with the reason | The trigger didn't work, or it's the first flash of a ZMK half |
@@ -60,9 +60,10 @@ These numbers decide rung 17 (see [live writes](#live-writes-are-built-only-if-a
 ### Safety
 
 - **A half can't be stranded.** A nRF52 half triggered on battery returns to its app after 3 s. A half triggered on USB waits in its bootloader until it's flashed or switched off. The bootloader reads its key combo before starting the app, so a broken app can always be recovered by hand (`bl-moergo@bb68c75` `src/main.c:197-209`).
-- keyloom keeps the last-good image per board and half, promoting the images only after the whole split flash verifies (D-437). If a later half fails, keyloom reads it and restores every already verified half to the saved build. A failed half still reporting that build needs no rewrite. Otherwise keyloom asks for its bootloader with its own key combo, waits the normal 2 minutes, writes its saved image and verifies it too. Each restore verifies against the key inside the saved image.
-- A rollback is a failed flash and sync. Its log and error name each half's observed build and, after full recovery, say the keyboard is back on the previous build. The board stays behind the applied revision. Flash again can finish the new build.
-- Recovery stops after one attempt per half. Missing or unsafe saved images, a failed restore, or an ambiguous shared boot drive produce an error naming each half's observed state and the next action. A distinct boot drive already open can be used; a shared drive already open cannot identify which half it belongs to. On the first keyloom flash, no saved image exists: put the failed half in its bootloader and flash again to finish the new build.
+- keyloom keeps the last-good image per board and half, promoting the images only after the whole split flash verifies (D-437). If a later half fails, keyloom reads it and restores every already verified half to the saved build. A failed half still reporting that build needs no rewrite. With a distinct boot-drive label, keyloom asks for its bootloader with its own key combo, waits the normal 2 minutes, writes its saved image and verifies it too. Shared labels follow the identity rule below. Each restore verifies against the key inside the saved image.
+- A rollback is a failed flash and sync, including when paused or stopped during recovery. Its log and error name each half's observed build and, after full recovery, say the keyboard is back on the previous build. The board stays behind the applied revision. If an expected half is missing, it needs a hand and shows the stored recovery error, even when the visible half runs the head. A later edit or unplugging every half does not hide a failed split flash. The header and toast cannot report success from the remaining halves. Flash again follows the recipe's original step order.
+- Recovery stops after one attempt per half. Missing or unsafe saved images, a failed restore, or an ambiguous shared boot drive produce an error naming each half's observed state and the next action. A saved image must match that half's known pre-flash key, including the failed half. Every UF2 block's family, number and declared count must agree, and the image must be complete.
+- A distinct boot drive already open can be used. For a shared label, a recovery write requires keyloom to restart that specific target and observe its drive appear afterwards, with the other half reporting running marked firmware. A normal or retry write also accepts a drive that appears only after keyloom asked for that half, and refuses one already mounted before the prompt.
 - **keyloom never writes a bootloader UF2** (family `0xd663823c`) through this path.
 - **Firmware someone else built is never replaced automatically.** A board in the "Not keyloom's" state needs a deliberate Flash keyloom's build, with the flash dialog's existing confirmation (D-094, D-167).
 - **Auto-sync never runs during a chat proposal preview.** Only applied revisions sync.
@@ -95,7 +96,7 @@ The host side reuses what keyloom already has:
 - **Trigger.** `stty -f <port> 1200` on macOS, `stty -F <port> 1200` on Linux. No serial library goes into the compiled binary. Linux users need to be in the `dialout` group (S17).
 - **Flash.** The existing UF2 copy (D-038), which now explains a refused write (`190dd57`).
 - **Verify.** keyloom waits for each half to come back with the new marker, as D-072 does.
-- **Fall back.** If no marker, port or boot drive appears within 15 s, keyloom shows the board's manual instruction with the reason, as D-072 does.
+- **Fall back.** With a distinct boot-drive label, if no marker, port or boot drive appears within 15 s, keyloom shows the board's manual instruction with the reason, as D-072 does. A shared label is written only if keyloom restarted the target itself or the drive appeared after its prompt.
 
 The flash recipe gains one block per revision, so a new nRF52 ZMK board with an Adafruit bootloader needs only data ([04](04-boards-and-contributions.md)). A half names the label of the flash step that writes it, and the block sits in `flash` beside the steps (D-136):
 

@@ -19,7 +19,7 @@ export type KeyboardReading =
   /** Running firmware keyloom didn't build. */
   | { state: "other"; detail: string }
   /** Running keyloom builds; `keys` are the 12-character build keys its serial numbers carry, one per distinct build across its halves. A software remapper has no build keys: it names the layout revision it loaded. */
-  | { state: "keyloom"; keys: string[]; boardRevision: string; revisionId?: string }
+  | { state: "keyloom"; keys: string[]; boardRevision: string; revisionId?: string; missingHalves?: string[] }
   /** A software remapper that is running, with remapping switched off (safe.kbd): keyloom put it there, and it stays until Apply or Sync now turns it back on. */
   | { state: "remapping_off" };
 
@@ -99,7 +99,11 @@ export async function readKeyboards(over: HandsFreeOverrides = {}, onDevices?: (
         out.set(def.id, { state: "other", detail: `the ${other.label} reports USB serial ${other.firmware.serial ?? "unavailable"}` });
       } else {
         const keys = [...new Set(mine.flatMap((h) => (h.firmware.state === "keyloom" ? [h.firmware.key] : [])))];
-        out.set(def.id, { state: "keyloom", keys, boardRevision: def.revisions[0]?.id ?? "" });
+        const recipe = zmkRevision(def).flash;
+        const missingHalves = recipe.handsFree?.halves
+          .filter((half) => !mine.some((h) => h.label === half.step && h.firmware.state === "keyloom"))
+          .map((half) => half.step) ?? [];
+        out.set(def.id, { state: "keyloom", keys, boardRevision: def.revisions[0]?.id ?? "", missingHalves });
       }
     }
   } catch {

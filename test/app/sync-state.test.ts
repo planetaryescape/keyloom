@@ -17,6 +17,19 @@ const row = (over: Partial<SyncRow> = {}): SyncRow => ({
 });
 
 describe("deriveState", () => {
+  test.each([{ state: "absent" }, { state: "other", detail: "unknown firmware" }] as const)("a failed split flash keeps its error when no verified halves remain: %s", (reading) => {
+    const latestSync = row({ status: "failed", failure: "flash", error: "Rollback is incomplete: the left half is absent" });
+    expect(deriveState(base({ split: true, reading, latestSync }))).toEqual({ kind: "needs_hand", instruction: latestSync.error!, reason: "" });
+  });
+
+  test("a split recovery failure stays visible across a later edit", () => {
+    expect(deriveState(base({ split: true, latestSync: row({ status: "failed", failure: "flash", error: "Rollback failed" }), running: { kind: "same" } })))
+      .toMatchObject({ kind: "behind", why: "failed", error: "Rollback failed" });
+  });
+  test("a failed flash of the head wins over the visible half reporting the head", () => {
+    expect(deriveState(base({ running: { kind: "same" }, headSync: row({ status: "failed", failure: "flash", error: "the left half is absent" }) })))
+      .toMatchObject({ kind: "behind", why: "failed", error: "the left half is absent" });
+  });
   test("in sync, when the keyboard runs the head", () => {
     expect(deriveState(base({ running: { kind: "same" } }))).toEqual({ kind: "in_sync" });
   });

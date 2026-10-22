@@ -22,6 +22,7 @@ import {
 import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { SETUP_REVISION } from "../firmware/kanata/generate.ts";
 import { buildKey } from "../firmware/zmk/handsfree.ts";
+import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
@@ -103,6 +104,7 @@ type Running = {
   /** Only aborted while nothing has been written: waiting for a hand, or on shutdown. */
   flashAbort: AbortController;
   reason: "paused" | "superseded" | "stopped" | undefined;
+  recovering?: true;
   done: Promise<SyncRow>;
 };
 
@@ -351,8 +353,10 @@ export class SyncEngine {
     const bs = getBoardSync(db, boardId);
     const proven = bs.provenAt !== null;
     const active = activeSyncs(db).find((s) => s.boardId === boardId);
+    const definition = showBoard(boardId).definition;
     const facts: SyncFacts = {
-      reading, running, active, headSync: lastSyncOfRevision(db, boardId, layout.headRevisionId),
+      reading, running, active, headSync: lastSyncOfRevision(db, boardId, layout.headRevisionId), latestSync: lastSyncOfBoard(db, boardId),
+      split: definition.firmware === "zmk" && zmkRevision(definition).flash.steps.length > 1,
       auto: { on: proven && (bs.autoSync ?? true), paused: bs.paused, proven },
       quiet: this.now() - layout.updatedAt >= this.quietMs,
       ...(lastKnown === undefined ? {} : { lastKnown }),
@@ -562,11 +566,11 @@ export class SyncEngine {
       });
 
       if (!flashed.ok) {
-        if (run.reason !== undefined) return cancelled();
+        if (run.reason !== undefined && !run.recovering) return cancelled();
         const stepNow = findSync(db, row.id)?.step;
         await this.exclusive(() => this.refresh(true));
         const after = this.readingOf(row.boardId);
-        const failure = stepNow === "needs_hand" ? "needs_hand" : after.state === "absent" ? "disconnected" : "flash";
+        const failure = run.recovering ? "flash" : stepNow === "needs_hand" ? "needs_hand" : after.state === "absent" ? "disconnected" : "flash";
         return finish({ status: "failed", failure, error: flashed.error });
       }
       if (!flashed.verified) {
@@ -581,7 +585,7 @@ export class SyncEngine {
       } catch {
         key = undefined;
       }
-      if (!(after.state === "keyloom" && key !== undefined && after.keys.length === 1 && after.keys[0] === key)) {
+      if (!(after.state === "keyloom" && !after.missingHalves?.length && key !== undefined && after.keys.length === 1 && after.keys[0] === key)) {
         return finish({ status: "failed", failure: "verify", error: `The flash finished, but afterwards the keyboard is not running build ${built.buildId}.` });
       }
       return finish({ status: "succeeded" });
@@ -593,6 +597,7 @@ export class SyncEngine {
   }
 
   private onFlasherState(row: SyncRow, state: FlashState, instruction: string | null, note: FlashNote | undefined): void {
+    if (note?.recovering && this.running?.row.id === row.id) this.running.recovering = true;
     if (state === "succeeded" || state === "failed") return;
     // The instruction of a failed hand-off stays on the row (finishSync keeps it for needs_hand), so the header can still show what to do.
     if (note?.needsHand) progressSync(this.app.db, row.id, { step: "needs_hand", instruction });
@@ -770,7 +775,7 @@ export class SyncEngine {
         } catch {
           key = undefined;
         }
-        if (reading.state === "keyloom" && key !== undefined && reading.keys.length === 1 && reading.keys[0] === key) {
+        if (reading.state === "keyloom" && !reading.missingHalves?.length && key !== undefined && reading.keys.length === 1 && reading.keys[0] === key) {
           finishSync(db, row.id, { status: "succeeded" }, this.now());
           continue;
         }
