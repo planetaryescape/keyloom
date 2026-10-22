@@ -73,6 +73,10 @@ test("serial corpus, byte boundaries and metadata are strict", () => {
   }
   for (const item of corpus) expect(operationSchema.safeParse(item.request).success).toBe(item.valid);
   for (const size of [1, 32, 100, 4096]) expect(serialBytesSchema.safeParse(Buffer.alloc(size).toString("base64")).success).toBe(true);
+  for (const size of [1, 2, 3, 4, 5, 4095, 4096]) {
+    const bytes = Uint8Array.from({ length: size }, (_, index) => (index * 73 + size) % 256);
+    expect(serialBytesSchema.safeParse(Buffer.from(bytes).toString("base64")).success).toBe(true);
+  }
   for (const size of [0, 4097]) expect(serialBytesSchema.safeParse(Buffer.alloc(size).toString("base64")).success).toBe(false);
   for (const bytes of ["AB==", "AA==\n", "AA", "AA==="]) expect(serialBytesSchema.safeParse(bytes).success).toBe(false);
   const device = { deviceRef: "opaque", transport: "serial", vendorId: 0x16c0, productId: 0x27db, serial: "é".repeat(128) };
