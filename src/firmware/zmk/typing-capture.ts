@@ -2,6 +2,7 @@
 // trace and stop it. The transport is a parameter, so tests use a fake port and nothing here can reach a real keyboard.
 import { WINDOWS_COM_DRIVER_HINT } from "../toolchain/platform-support.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
+import { DeviceTransportError } from "../toolchain/device-helper/transport-client.ts";
 import { CAPTURE_CLOSE_TIMEOUT_MS, CAPTURE_WRITE_TIMEOUT_MS, captureDeadline } from "../emulate/capture-deadline.ts";
 import { type CaptureHooks, CaptureError, type CapturedTrace, type KeyCapture, TraceBuilder } from "../emulate/trace.ts";
 import type { SerialSession, SerialTransport } from "../toolchain/serial.ts";
@@ -134,7 +135,7 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
     catch (closeError) { cleanupErrors.push(`the keyboard connection did not close: ${message(closeError)}`); }
     // A transport error (the helper died or timed out) keeps its own type, so the app can still say a restart is needed; it
     // already explains why cleanup could not finish.
-    if (cleanupErrors.length > 0 && error instanceof CaptureError) {
+    if (cleanupErrors.length > 0 && !(error instanceof DeviceTransportError)) {
       throw new CaptureError(`${message(error)}; cleanup uncertain: ${cleanupErrors.join("; ")}`, { cause: error });
     }
     throw error;
