@@ -121,7 +121,12 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
       const reason = endedBy ? `: ${endedBy}` : "";
       throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it`);
     }
-  } catch (error) {
+  } catch (thrown) {
+    // An interruption the keyboard reported first (framing, a lost connection) is the real reason; a START write that then
+    // timed out or failed is only how it surfaced.
+    const error = endedBy !== undefined && !message(thrown).includes(endedBy)
+      ? new CaptureError(`the keyboard didn't start streaming: ${endedBy}`, { cause: thrown })
+      : thrown;
     const cleanupErrors: string[] = [];
     try { await captureDeadline(() => session.write(TYPING_STOP), "STOP write", CAPTURE_WRITE_TIMEOUT_MS); }
     catch (stopError) { cleanupErrors.push(`STOP failed: ${message(stopError)}`); }

@@ -265,3 +265,16 @@ for (const kind of ["QMK", "ZMK"] as const) {
     await capture.finish();
   });
 }
+
+for (const kind of ["QMK", "ZMK"] as const) {
+  test(`${kind} keeps an earlier interruption primary when the START write then times out`, async () => {
+    const kb = keyboard(kind, { write: (action) => (action === "START" ? never() : undefined), silentStart: true });
+    const starting = kb.start({ keepaliveMs: 10_000 });
+    await Bun.sleep(20);
+    kb.fail("cable pulled");
+    const err = await starting.catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CaptureError);
+    expect((err as Error).message).toContain("cable pulled");
+    expect(((err as Error).cause as Error | undefined)?.message).toContain("START write timed out");
+  });
+}
