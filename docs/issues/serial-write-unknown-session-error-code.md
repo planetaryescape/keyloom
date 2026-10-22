@@ -4,4 +4,6 @@
 
 Both codes refuse the write with `effect: none`, so nothing is sent or replayed. The only cost is a less precise error. Raised by CodeRabbit on PR 150 against code that predates it.
 
-Fix: return `invalid_session` for a well-formed write whose session is unknown, before the per-transport shape check, and keep malformed-request validation as it is. Add a serial test for an expired session.
+Status: fixed on branch fix/helper-invalid-session.
+
+Well-formed serial- and HID-shaped writes to unknown sessions now return `invalid_session` before transport-specific shape validation; malformed writes still return `invalid_request`. The Rust regression test covers both shapes and malformed payloads.
