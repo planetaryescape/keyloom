@@ -42,7 +42,9 @@ impl SerialBackend for Windows {
                 ReadTotalTimeoutMultiplier: 0,
                 ReadTotalTimeoutConstant: 0,
                 WriteTotalTimeoutMultiplier: 0,
-                WriteTotalTimeoutConstant: 500,
+                // Below the helper's 500 ms overlapped wait, so a stalled write completes short (io_failed) before
+                // the wait gives up and has to cancel, instead of racing it and exiting the helper.
+                WriteTotalTimeoutConstant: 400,
             };
             // SAFETY: initialized timeout structure and owned exclusive COM handle.
             if unsafe { SetCommTimeouts(port.handle.raw(), &timeouts) } == 0 {
