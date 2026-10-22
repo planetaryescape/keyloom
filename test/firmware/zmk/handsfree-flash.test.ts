@@ -8,7 +8,7 @@ import { loadBoardDir } from "../../../src/boards/load.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { flashUf2Drives } from "../../../src/firmware/zmk/flash.ts";
 import { buildKey, halfMarker, keyInArtifact, keyInFirmware, parseSerial } from "../../../src/firmware/zmk/handsfree.ts";
-import { type HalfTarget, halfTargets, portsOfHalf, readHalf, zmkHandsFreeHooks } from "../../../src/firmware/zmk/handsfree-flash.ts";
+import { type HalfTarget, halfTargets, portsOfHalf, readHalf, restartHalf, zmkHandsFreeHooks } from "../../../src/firmware/zmk/handsfree-flash.ts";
 import { zmkRevision } from "../../../src/firmware/zmk/board-config.ts";
 import { portOfAnotherBoard } from "../../../src/app/zmk-ports.ts";
 import * as volumes from "../../../src/firmware/zmk/volumes.ts";
@@ -83,6 +83,38 @@ describe("which port is which half", () => {
     );
     expect(found.keyloom).toHaveLength(1);
     expect(found.other).toHaveLength(1);
+  });
+
+  test("driver diagnostics are neither keyloom nor other-firmware ports", () => {
+    expect(portsOfHalf([
+      { ...port(serialOf(KEY, "L")), driverMissing: true },
+      { ...port("moergo.com:GLV80-TEST"), driverMissing: true },
+    ], left)).toEqual({ keyloom: [], other: [] });
+  });
+
+  test("a right-half driver diagnostic uses the healthy central's 1201 relay", async () => {
+    const right = targets.find((t) => t.half.marker === "R") as HalfTarget;
+    const touches: Array<{ path: string; baud: number }> = [];
+    const result = await restartHalf({
+      deps: {
+        serial: async () => ({
+          list: async () => [
+            { ...port(serialOf(KEY, "R"), 0x16c0, 0x27d9), path: "", driverMissing: true },
+            { ...port(serialOf(KEY, "L")), path: "COM12" },
+          ],
+          touch: async (path, baud) => {
+            touches.push({ path, baud });
+            if (path !== "COM12" || baud !== 1201) throw new Error("unsupported");
+          },
+        }),
+        usb: async () => { throw new Error("reboot-only must not enumerate USB"); },
+      },
+      targets, target: right, waitForVolume: false,
+      findVolume: async () => { throw new Error("reboot-only must not probe volumes"); },
+      log: () => {},
+    });
+    expect(result).toEqual({ ok: true });
+    expect(touches).toEqual([{ path: "COM12", baud: 1201 }]);
   });
 
   test("a Corne half, whose IDs are unknown, takes any port with its letter and never calls an unmarked port its own", () => {

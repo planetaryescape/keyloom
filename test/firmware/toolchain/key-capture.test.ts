@@ -7,7 +7,8 @@ import { findQmkStreamDevice, startQmkCapture } from "../../../src/firmware/qmk/
 import { TYPING_ACTION } from "../../../src/firmware/qmk/typing-stream.ts";
 import { linuxHid } from "../../../src/firmware/toolchain/hid-linux.ts";
 import { openPolled } from "../../../src/firmware/toolchain/polled-file.ts";
-import { openWithStty } from "../../../src/firmware/toolchain/serial.ts";
+import { WINDOWS_COM_DRIVER_HINT } from "../../../src/firmware/toolchain/platform-support.ts";
+import { type SerialPort, openWithStty } from "../../../src/firmware/toolchain/serial.ts";
 import { findZmkStreamPort, startZmkCapture } from "../../../src/firmware/zmk/typing-capture.ts";
 import { loadBoardDir } from "../../../src/boards/load.ts";
 import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
@@ -233,6 +234,23 @@ describe("recording from a Glove80", () => {
     const trace = await capture.finish();
     expect(trace.endedBy).toBe("the host stopped answering");
     expect(trace.events.at(-1)).toMatchObject({ position: 3, action: "release" });
+  });
+
+  test("a failed peripheral driver does not block a healthy central or misdiagnose its absence", async () => {
+    const board = (await loadBoardDir(`${ROOT}/boards/moergo/glove80`)).definition;
+    const central = glovePort("keyloom/NPQRSTVWXYZ0-L:GLV80-TEST", "COM12");
+    const right: SerialPort = { ...glovePort("keyloom/NPQRSTVWXYZ0-R:GLV80-TEST", ""), productId: 0x27d9, driverMissing: true };
+    expect(await findZmkStreamPort(board, fakeGlove({ ports: [right, central] }).transport)).toEqual({ path: "COM12" });
+    await expect(findZmkStreamPort(board, fakeGlove({ ports: [right] }).transport)).rejects.toThrow("running keyloom's firmware is connected");
+    await expect(findZmkStreamPort(board, fakeGlove({ ports: [right, central, { ...central, path: "COM13" }] }).transport)).rejects.toThrow("more than one");
+  });
+
+  test("a missing central driver is diagnosed only when no usable central is available", async () => {
+    const board = (await loadBoardDir(`${ROOT}/boards/moergo/glove80`)).definition;
+    const central = glovePort("keyloom/NPQRSTVWXYZ0-L:GLV80-TEST", "COM12");
+    const failed: SerialPort = { ...central, path: "", driverMissing: true };
+    await expect(findZmkStreamPort(board, fakeGlove({ ports: [failed] }).transport)).rejects.toThrow(WINDOWS_COM_DRIVER_HINT);
+    expect(await findZmkStreamPort(board, fakeGlove({ ports: [failed, central] }).transport)).toEqual({ path: "COM12" });
   });
 
   test("picks the central half's port and refuses the peripheral's, other boards' and several", async () => {

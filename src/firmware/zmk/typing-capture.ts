@@ -5,7 +5,8 @@ import type { BoardDefinition } from "../../boards/schema.ts";
 import { type CaptureHooks, CaptureError, type CapturedTrace, type KeyCapture, TraceBuilder } from "../emulate/trace.ts";
 import type { SerialSession, SerialTransport } from "../toolchain/serial.ts";
 import { zmkRevision } from "./board-config.ts";
-import { halfTargets, portsOfHalf } from "./handsfree-flash.ts";
+import { halfTargets, matchesHalfIds, portsOfHalf } from "./handsfree-flash.ts";
+import { parseSerial } from "./handsfree.ts";
 import { StreamLineError, StreamLines } from "./stream-lines.ts";
 import { PING_MS, TYPING_PING, TYPING_START, TYPING_STOP, parseStreamLine } from "./typing-stream.ts";
 
@@ -19,9 +20,11 @@ export async function findZmkStreamPort(board: BoardDefinition, transport: Seria
   const central = halfTargets(board, handsFree, rev.flash.steps).find((t) => t.half.role === "central");
   if (!central) throw new CaptureError(`${board.name} has no central half to stream from`);
   const ports = await transport.list();
-  if (ports.some((p) => p.driverMissing && (central.vendorId === undefined || `0x${p.vendorId.toString(16).padStart(4, "0")}` === central.vendorId.toLowerCase()))) throw new CaptureError(WINDOWS_COM_DRIVER_HINT);
   const found = portsOfHalf(ports, central).keyloom;
   if (found.length === 0) {
+    const missingCentral = ports.some((p) => p.driverMissing && matchesHalfIds(p, central) &&
+      (central.half.usbProductId !== undefined || parseSerial(p.serial)?.half === central.half.marker));
+    if (missingCentral) throw new CaptureError(WINDOWS_COM_DRIVER_HINT);
     throw new CaptureError(`no ${board.name} running keyloom's firmware is connected over USB (its ${central.step.label} must be). Apply a change and sync once from keyloom, then try again`);
   }
   if (found.length > 1) throw new CaptureError(`more than one ${board.name} running keyloom's firmware is connected; unplug the one you don't want to record`);

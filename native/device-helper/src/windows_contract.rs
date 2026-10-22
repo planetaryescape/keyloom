@@ -82,6 +82,25 @@ pub fn com_path(name: &str) -> Result<String, &'static str> {
 pub fn raw_caps(page: u16, usage: u16, input: u16, output: u16, feature: u16) -> bool {
     page == 0xff60 && usage == 0x61 && input == 33 && output == 33 && feature == 0
 }
+// Keep discovery policy injectable so rejected collections cannot hide driver diagnostics.
+pub fn hid_collections<T: Clone>(
+    records: &[T],
+    mut probe: impl FnMut(&T) -> Result<Option<Vec<u8>>, &'static str>,
+    missing: impl FnOnce(&[T]) -> Result<Vec<T>, &'static str>,
+) -> Result<Vec<(T, Vec<u8>)>, &'static str> {
+    let mut result = Vec::new();
+    for record in records {
+        match probe(record) {
+            Ok(Some(descriptor)) => result.push((record.clone(), descriptor)),
+            Ok(None) => (),
+            Err(e) => return Err(e),
+        }
+    }
+    // Only admitted raw-HID collections prove this USB owner has a usable endpoint.
+    let working: Vec<T> = result.iter().map(|(r, _)| r.clone()).collect();
+    result.extend(missing(&working)?.into_iter().map(|r| (r, vec![])));
+    Ok(result)
+}
 pub fn input_report(bytes: &[u8]) -> Result<[u8; 32], &'static str> {
     if bytes.len() != 33 || bytes[0] != 0 {
         return Err("io_failed");
@@ -211,6 +230,38 @@ mod tests {
         b[0] = 1;
         assert_eq!(input_report(&b), Err("io_failed"));
         assert!(input_report(&b[..32]).is_err());
+    }
+    #[test]
+    fn rejected_keyboard_collection_does_not_hide_raw_hid_driver_failure() {
+        // Both collections share a USB owner; only QMK raw HID can suppress its diagnostic.
+        let keyboard = ("moonlander", 1, 6);
+        let raw = ("moonlander", 0xff60, 0x61);
+        let failed = ("moonlander", 0, 0);
+        for records in [vec![keyboard], vec![keyboard, raw]] {
+            let listed = hid_collections(
+                &records,
+                |r| {
+                    if raw_caps(r.1, r.2, 33, 33, 0) {
+                        Ok(Some(vec![0x60, 0xff, 0x61, 0, 33, 33]))
+                    } else {
+                        Ok(None)
+                    }
+                },
+                |working| {
+                    Ok(if working.iter().any(|r| r.0 == failed.0) {
+                        vec![]
+                    } else {
+                        vec![failed]
+                    })
+                },
+            )
+            .unwrap();
+            if records.contains(&raw) {
+                assert_eq!(listed, vec![(raw, vec![0x60, 0xff, 0x61, 0, 33, 33])]);
+            } else {
+                assert_eq!(listed, vec![(failed, vec![])]);
+            }
+        }
     }
     #[test]
     fn com_numbers_are_ephemeral_and_paths_never_accept_arbitrary_input() {

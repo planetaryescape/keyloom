@@ -50,7 +50,7 @@ export function halfTargets(board: BoardDefinition, handsFree: HandsFree, steps:
   });
 }
 
-const isOurs = (p: SerialPort, t: HalfTarget): boolean =>
+export const matchesHalfIds = (p: SerialPort, t: HalfTarget): boolean =>
   t.foreign?.(p) !== true &&
   (t.vendorId === undefined || hexId(p.vendorId) === t.vendorId.toLowerCase()) &&
   (t.half.usbProductId === undefined || hexId(p.productId) === t.half.usbProductId.toLowerCase());
@@ -64,7 +64,7 @@ export function portsOfHalf(ports: SerialPort[], t: HalfTarget): { keyloom: Arra
   const keyloom: Array<{ port: SerialPort; key: string }> = [];
   const other: SerialPort[] = [];
   for (const port of ports) {
-    if (!isOurs(port, t)) continue;
+    if (port.driverMissing || !matchesHalfIds(port, t)) continue;
     const parsed = parseSerial(port.serial);
     if (parsed) {
       if (parsed.half === t.half.marker) keyloom.push({ port, key: parsed.key });

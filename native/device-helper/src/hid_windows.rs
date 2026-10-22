@@ -1,6 +1,6 @@
 use crate::{
     backend::{Backend, Device, Endpoint},
-    windows_contract::{input_report, raw_caps},
+    windows_contract::{hid_collections, input_report, raw_caps},
     windows_io::{Handle, last},
     windows_registry::{self, Record},
 };
@@ -68,29 +68,28 @@ fn endpoint(r: Record, descriptor: Vec<u8>) -> Endpoint {
 impl Backend for Windows {
     fn list(&self) -> Result<Vec<Endpoint>, &'static str> {
         let records = windows_registry::interfaces(&GUID_DEVINTERFACE_HID, false)?;
-        let mut result = Vec::new();
-        for r in &records {
-            // Zero desired access allows metadata/caps without claiming the keyboard collection.
-            let mut h = match Handle::open(&r.path, true, false) {
-                Ok(h) => h,
-                Err("disconnected" | "permission_denied" | "busy") => continue,
-                Err(e) => return Err(e),
-            };
-            let admitted = caps(&h);
-            h.close()?;
-            match admitted {
-                Ok(d) => result.push(endpoint(r.clone(), d)),
-                Err("unsupported" | "disconnected") => (),
-                Err(e) => return Err(e),
-            }
-        }
-        result.extend(
-            windows_registry::missing_drivers(false, &records)?
-                .into_iter()
-                .map(|r| endpoint(r, vec![])),
-        );
-        Ok(result)
+        let listed = hid_collections(
+            &records,
+            |r| {
+                // Zero desired access allows metadata/caps without claiming the keyboard collection.
+                let mut h = match Handle::open(&r.path, true, false) {
+                    Ok(h) => h,
+                    Err("disconnected" | "permission_denied" | "busy") => return Ok(None),
+                    Err(e) => return Err(e),
+                };
+                let admitted = caps(&h);
+                h.close()?;
+                match admitted {
+                    Ok(d) => Ok(Some(d)),
+                    Err("unsupported" | "disconnected") => Ok(None),
+                    Err(e) => Err(e),
+                }
+            },
+            |working| windows_registry::missing_drivers(false, working),
+        )?;
+        Ok(listed.into_iter().map(|(r, d)| endpoint(r, d)).collect())
     }
+
     fn open(&self, expected: &Endpoint) -> Result<Box<dyn Device>, &'static str> {
         if expected.driver_missing {
             return Err("unsupported");
