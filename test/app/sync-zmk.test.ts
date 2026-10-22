@@ -58,6 +58,49 @@ async function setup(halves: Array<ReturnType<typeof half>>, extra: { bootloader
 }
 
 describe("Apply to both halves of a Glove80", () => {
+  test("a split flash rolled back to the previous build is failed and behind, and flash again still works", async () => {
+    const s = await setup([half("L"), half("R")], { bootloaderWaitMs: 100 });
+    const first = await s.proveByHand();
+    const transport = await s.world.deps.serial();
+    let refuse = true;
+    s.world.deps.serial = async () => ({
+      ...transport,
+      touch: async (path, baud) => {
+        if (refuse && path.endsWith("-L")) throw new Error("injected left restart failure");
+        await transport.touch(path, baud);
+      },
+    });
+    try {
+      await s.e.run(async () => {
+        const engine = new SyncEngine(s.e.app, s.deps, { quietMs: 40, tickMs: 10, pollMs: 20 });
+        await engine.start();
+        try {
+          s.apply();
+          await waitFor(() => lastSyncOfBoard(s.e.app.db, BOARD)?.status === "failed", "rollback", 8000);
+          const row = lastSyncOfBoard(s.e.app.db, BOARD)!;
+          expect(row).toMatchObject({ status: "failed", failure: "flash", error: expect.stringContaining("The keyboard is back on the previous build") });
+          expect(engine.views()[0]?.state).toMatchObject({ kind: "behind", why: "failed", error: expect.stringContaining("back on the previous build") });
+          expect(s.world.halves.map((h) => h.serial)).toEqual([serialOf(buildKey(first.id), "L"), serialOf(buildKey(first.id), "R")]);
+          for (const letter of ["L", "R"]) {
+            const image = new Uint8Array(await Bun.file(join(s.e.dataDir, "firmware", "last-good", "moergo-glove80", `${letter}.uf2`)).arrayBuffer());
+            expect(Buffer.from(image)).toEqual(Buffer.from(glove80Image(buildKey(first.id))));
+          }
+          const failed = await s.e.app.db.query("SELECT status, error FROM flashes WHERE id = ?").get(row.flashId);
+          expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("back on the previous build") });
+          const count = s.world.flashed.length;
+          await Bun.sleep(150);
+          expect(s.world.flashed.length).toBe(count);
+
+          // Reuse the failed build, as the existing flash-again path does.
+          refuse = false;
+          const retried = await flashAndWait(s.e.app, { buildId: row.buildId!, volumesRoot: s.e.volumes, handsFree: s.handsFree });
+          expect(retried.status).toBe("succeeded");
+          expect(s.world.halves.map((h) => h.serial)).toEqual([serialOf(buildKey(row.buildId!), "L"), serialOf(buildKey(row.buildId!), "R")]);
+        } finally { await engine.stop(); }
+      });
+    } finally { s.world.stop(); }
+  });
+
   test("the first hands-free flash is the proof; then a sync restarts each half, writes it and checks it came back, with no key combo", async () => {
     const s = await setup([half("L"), half("R")]);
     const first = await s.proveByHand();

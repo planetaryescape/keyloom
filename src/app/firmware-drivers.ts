@@ -217,7 +217,7 @@ const zmk: FirmwareDriver = {
       ? zmkHandsFreeHooks({
           deps: realZmkHandsFreeDeps(a.handsFree?.zmk), board: a.board.definition, handsFree, steps: rev.flash.steps, buildId: a.buildId, findVolume, foreign: portOfAnotherBoard(a.board.definition.id),
           artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))), log: (line) => a.log.line(line),
-          ...(a.lastGoodDir === undefined ? {} : { saveLastGood: async (half, image) => {
+          ...(a.lastGoodDir === undefined ? {} : { loadLastGood: (half) => restoreLastGoodUf2(a.lastGoodDir as string, a.board.definition.id, half), saveLastGood: async (half, image) => {
             const dir = join(a.lastGoodDir as string, a.board.definition.id.replace("/", "-"));
             await mkdir(dir, { recursive: true });
             await Bun.write(join(dir, `${half}.uf2`), image);
@@ -232,9 +232,6 @@ const zmk: FirmwareDriver = {
       ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
       ...(a.signal ? { signal: a.signal } : {}),
     });
-    if (result.state === "failed" && a.lastGoodDir) {
-      a.log.line(`keyloom: flash failed; last-good image can be restored with restoreLastGoodUf2`);
-    }
     return result;
   },
 };
