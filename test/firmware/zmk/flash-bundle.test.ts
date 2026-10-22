@@ -119,23 +119,18 @@ describe("flashUf2Drives with a bundle", () => {
 
   test("without hands-free hooks a shared drive is written whether it appears after the prompt or was already mounted", async () => {
     // A normal first flash: nothing mounted, keyloom asks for the left half, and only then does its drive appear.
+    // fakeNiceNano(..., true) never mounts by itself; the prompt mounts it, and the fake takes a file only once its size holds.
     const s = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
     const drive = join(s.root, LABEL);
+    const fresh = fakeNiceNano(s.root, 2, true);
     let prompts = 0;
-    const received: number[] = [];
-    const timer = setInterval(() => {
-      const names = readdirNames(drive);
-      if (names.length === 0) return;
-      received.push(statSync(join(drive, names[0] as string)).size);
-      rmSync(drive, { recursive: true, force: true });
-    }, 30);
-    const r = await s.flash({ bootloaderWaitMs: 2000, onState: (state) => {
+    const r = await s.flash({ onState: (state) => {
       if (state === "waiting_for_bootloader" && !existsSync(drive)) { prompts++; setTimeout(() => mkdirSync(drive, { recursive: true }), 50); }
     } });
-    clearInterval(timer);
+    fresh.stop();
     expect(r.state).toBe("succeeded");
     expect(prompts).toBeGreaterThanOrEqual(2);
-    expect(received).toHaveLength(2);
+    expect(fresh.received).toEqual([left, right]);
     // Without hooks there is no rollback to protect, so an already mounted drive keeps the old manual behaviour
     // (hook-enabled refusal is covered in mount-binding and split-rollback tests).
     const t = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
