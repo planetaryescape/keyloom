@@ -42,8 +42,9 @@ fn from_login_shell() -> Option<LoginEnvironment> {
     // Unique per run, so nothing a profile printed earlier can pass for the answer.
     let mark = format!("__KEYLOOM_PATH_{}_{nanos}__", std::process::id());
     // External commands only and `;` between them, so sh, zsh, bash, fish and nushell all read it the same way; nushell
-    // would print "$PATH" literally, and has no `||` to excuse a printenv of an unset name.
-    let script = format!("/bin/echo {mark}; /usr/bin/env; /bin/echo {mark}");
+    // would print "$PATH" literally, and has no `||` to excuse a printenv of an unset name. `env -0` ends each variable with
+    // NUL, which no value can contain, so a value with newlines can't pass for another variable.
+    let script = format!("/bin/echo {mark}; /usr/bin/env -0; /bin/echo {mark}");
     let child = Command::new(shell)
         .args(["-ilc", &script])
         // Oh My Zsh can stop to ask about updating.
@@ -85,20 +86,21 @@ fn collect(mut child: Child, mark: &str, deadline: Duration) -> Option<LoginEnvi
     path
 }
 
+/// The `env -0` records between the marks. The opening mark has to start a line and the closing one has to follow a NUL,
+/// so a profile that prints the command, or a value that contains the mark, can't move either end.
 fn between_marks(out: &str, mark: &str) -> Option<String> {
-    let mut parts = out.split(mark);
-    parts.next()?;
-    let env = parts.next()?;
-    parts.next()?;
-    Some(env.to_owned())
+    let open = format!("{mark}\n");
+    let start = if out.starts_with(&open) { open.len() } else { out.find(&format!("\n{open}"))? + 1 + open.len() };
+    let end = start + out[start..].find(&format!("\0{mark}"))?;
+    Some(out[start..end].to_owned())
 }
 
 /// PATH and the allowlisted settings from `env` output; every other variable is dropped here.
 fn parse_env(env: &str) -> Option<LoginEnvironment> {
     let mut path = None;
     let mut variables: Vec<(String, String)> = Vec::new();
-    for line in env.lines() {
-        let Some((name, value)) = line.split_once('=') else { continue };
+    for record in env.split('\0') {
+        let Some((name, value)) = record.split_once('=') else { continue };
         if value.is_empty() {
             continue;
         }
@@ -132,7 +134,7 @@ mod tests {
 
     #[test]
     fn takes_the_marked_env_from_noisy_profile_output() {
-        let out = format!("Welcome!\n{M}\nHOME=/Users/x\nPATH=/opt/homebrew/bin:/usr/bin\n{M}\nbye\n");
+        let out = format!("Welcome!\n{M}\nHOME=/Users/x\0PATH=/opt/homebrew/bin:/usr/bin\0{M}\nbye\n");
         let env = between_marks(&out, M).and_then(|e| parse_env(&e)).unwrap();
         assert_eq!(env.path, "/opt/homebrew/bin:/usr/bin");
         assert!(env.variables.is_empty());
@@ -141,26 +143,40 @@ mod tests {
     #[test]
     fn refuses_output_without_both_marks_or_without_folders() {
         assert!(between_marks("no marks", M).is_none());
-        assert!(between_marks(&format!("{M}\nPATH=/usr/bin\n"), M).is_none());
-        assert!(parse_env("HOME=/x\n").is_none());
-        assert!(parse_env("PATH=$PATH\n").is_none());
+        assert!(between_marks(&format!("{M}\nPATH=/usr/bin\0"), M).is_none());
+        assert!(parse_env("HOME=/x\0").is_none());
+        assert!(parse_env("PATH=$PATH\0").is_none());
     }
 
     #[test]
     fn a_mark_printed_by_an_earlier_run_is_not_this_runs_answer() {
-        let out = "__KEYLOOM_PATH_9_9__\nPATH=/tmp/forged\n__KEYLOOM_PATH_9_9__\n";
+        let out = "__KEYLOOM_PATH_9_9__\nPATH=/tmp/forged\0__KEYLOOM_PATH_9_9__\n";
         assert!(between_marks(out, M).is_none());
     }
 
     #[test]
+    fn the_mark_inside_a_value_or_a_printed_command_moves_neither_end() {
+        // A profile that prints the command (bash's BASH_EXECUTION_STRING), and a value that contains the mark.
+        let out = format!("/bin/echo {M}; /usr/bin/env -0; /bin/echo {M}\n{M}\nNOTE=see {M}\nhere\0PATH=/usr/bin\0{M}\n");
+        let env = between_marks(&out, M).and_then(|e| parse_env(&e)).unwrap();
+        assert_eq!(env.path, "/usr/bin");
+    }
+
+    #[test]
+    fn a_multiline_value_cannot_pass_for_an_allowlisted_variable() {
+        let env = parse_env("PATH=/usr/bin\0DOTENV=x=1\nANTHROPIC_API_KEY=smuggled\r\nKEYLOOM_PROVIDER=anthropic\0").unwrap();
+        assert!(env.variables.is_empty());
+    }
+
+    #[test]
     fn takes_only_allowlisted_provider_settings_that_are_set() {
-        let env = parse_env("PATH=/usr/bin\nANTHROPIC_API_KEY=sk-a\nOPENROUTER_API_KEY=\nAWS_SECRET_ACCESS_KEY=nope\nKEYLOOM_PROVIDER=codex\nANTHROPIC_API_KEY=second\n").unwrap();
+        let env = parse_env("PATH=/usr/bin\0ANTHROPIC_API_KEY=sk-a\0OPENROUTER_API_KEY=\0AWS_SECRET_ACCESS_KEY=nope\0KEYLOOM_PROVIDER=codex\0ANTHROPIC_API_KEY=second\0").unwrap();
         assert_eq!(env.variables, vec![("ANTHROPIC_API_KEY".to_owned(), "sk-a".to_owned()), ("KEYLOOM_PROVIDER".to_owned(), "codex".to_owned())]);
     }
 
     #[test]
     fn a_value_containing_equals_signs_is_kept_whole() {
-        let env = parse_env("PATH=/usr/bin\nCODEX_API_KEY=a=b=c\n").unwrap();
+        let env = parse_env("PATH=/usr/bin\0CODEX_API_KEY=a=b=c\0").unwrap();
         assert_eq!(env.variables, vec![("CODEX_API_KEY".to_owned(), "a=b=c".to_owned())]);
     }
 
@@ -177,7 +193,7 @@ mod tests {
     #[test]
     fn a_background_process_holding_the_pipe_does_not_hold_up_the_answer() {
         let started = std::time::Instant::now();
-        let child = shell(&format!("sleep 30 & /bin/echo {M}; /usr/bin/env; /bin/echo {M}"));
+        let child = shell(&format!("sleep 30 & /bin/echo {M}; /usr/bin/env -0; /bin/echo {M}"));
         assert!(collect(child, M, DEADLINE).is_some_and(|env| !env.path.is_empty()));
         assert!(started.elapsed() < Duration::from_secs(1));
     }
