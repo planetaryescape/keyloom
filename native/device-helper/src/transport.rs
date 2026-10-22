@@ -949,6 +949,20 @@ mod frame_tests {
         }
         let fourth = state.relist("serial", vec![denied], |i| format!("g4-{i}"));
         assert_eq!(fourth[0].0, "g3-0");
+        let allowed = serial("10:/dev/cu.a", "other");
+        let fifth = state.relist("serial", vec![allowed], |i| format!("g5-{i}"));
+        assert_eq!(fifth[0].0, "g3-0");
+        // The same holds for HID, in both directions, and the stored snapshot carries the new hint.
+        let mut hid_denied = hid.clone();
+        if let ConnectionEndpoint::Hid(e) = &mut hid_denied {
+            e.permission_denied = true;
+        }
+        let hid_first = state.relist("hid", vec![hid.clone()], |i| format!("h1-{i}"));
+        let hid_second = state.relist("hid", vec![hid_denied], |i| format!("h2-{i}"));
+        let hid_third = state.relist("hid", vec![hid.clone()], |i| format!("h3-{i}"));
+        assert_eq!(hid_second[0].0, hid_first[0].0);
+        assert_eq!(hid_third[0].0, hid_first[0].0);
+        assert!(matches!(&hid_second[0].1, ConnectionEndpoint::Hid(e) if e.permission_denied));
         assert_eq!(state.refs.len(), 2);
     }
     #[test]

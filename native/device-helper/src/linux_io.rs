@@ -199,11 +199,13 @@ mod tests {
             },
         );
         assert_eq!((ok, polls, sent), (Ok(()), 0, vec![33]));
-        // A tty with a full buffer: EAGAIN, wait, then the rest.
+        // A tty with a full buffer: partial write, EAGAIN, EINTR, then the rest; every byte once, in order.
+        let payload: Vec<u8> = (0..10).collect();
         let mut calls = 0;
         let mut polls = 0;
+        let mut out = vec![];
         let ok = write_within(
-            &[1; 10],
+            &payload,
             false,
             Duration::from_millis(500),
             |_| {
@@ -213,13 +215,21 @@ mod tests {
             |b| {
                 calls += 1;
                 match calls {
-                    1 => Ok(4),
+                    1 => {
+                        out.extend_from_slice(&b[..4]);
+                        Ok(4)
+                    }
                     2 => Err(EAGAIN),
-                    _ => Ok(b.len()),
+                    3 => Err(EINTR),
+                    _ => {
+                        out.extend_from_slice(b);
+                        Ok(b.len())
+                    }
                 }
             },
         );
-        assert_eq!((ok, polls, calls), (Ok(()), 1, 3));
+        assert_eq!((ok, polls, calls), (Ok(()), 1, 4));
+        assert_eq!(out, payload);
         // A short HID report fails instead of sending the tail as a second report.
         assert_eq!(
             write_within(
