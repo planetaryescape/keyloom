@@ -2,10 +2,11 @@ import { z } from "zod";
 
 // Canonical diagnostics-v1 subset. The checked-in JSON schema is mechanically compared in tests.
 const REQUEST_ID = /^[1-9][0-9]{0,19}$/;
+export const requestIdSchema = z.string().regex(REQUEST_ID).refine((id) => REQUEST_ID.test(id) && BigInt(id) <= 18446744073709551615n);
 export const requestSchema = z.strictObject({
   v: z.literal(1),
   type: z.literal("request"),
-  id: z.string().regex(REQUEST_ID).refine((id) => REQUEST_ID.test(id) && BigInt(id) <= 18446744073709551615n),
+  id: requestIdSchema,
   method: z.string().min(1).max(64),
   params: z.record(z.string(), z.unknown()),
 });

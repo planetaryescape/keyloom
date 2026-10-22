@@ -10,6 +10,7 @@ import { encodeEventsReport } from "../../../src/firmware/qmk/typing-stream.ts";
 import pkg from "../../../package.json" with { type: "json" };
 import canonical from "../../../native/device-helper/protocol/transport-v1.schema.json";
 import corpus from "../../fixtures/device-helper/hid-requests.json";
+import refinementFixtures from "../../fixtures/device-helper/transport-refinements.json";
 import firmwareReports from "../../fixtures/device-helper/qmk-reports.json";
 import { decodeTypingReport } from "../../../src/firmware/qmk/typing-stream.ts";
 
@@ -21,6 +22,21 @@ test("native transport canonical schema and shared adversarial requests", () => 
   expect(JSON.stringify(transportContract())).toBe(JSON.stringify(canonical));
   for (const item of corpus) expect(operationSchema.safeParse(item.request).success).toBe(item.valid);
   for (const item of firmwareReports) expect(decodeTypingReport(Buffer.from(item.report, "base64"))).toMatchObject({ kind: "status", on: item.on, seq: item.seq, deviceMs: 1000 });
+});
+
+test("runtime refinements are present in the canonical JSON Schema", () => {
+  for (const item of refinementFixtures) {
+    const validator = item.schema === "event" ? transportEventSchema : transportIdentitySchema;
+    expect(validator.safeParse(item.value).success).toBe(false);
+  }
+
+  expect(canonical.$defs.identity.properties.capabilities.uniqueItems).toBe(true);
+  const serialized = JSON.stringify(canonical);
+  expect(serialized).toContain('"seq":{"type":"integer","minimum":1');
+  expect(serialized).toContain('"contentEncoding":"base64"');
+  expect(serialized).toContain('"x-minDecodedBytes":1');
+  expect(serialized).toContain('"x-maxDecodedBytes":4096');
+  expect(serialized).toContain('"x-maxUtf8Bytes":256');
 });
 
 const binary = process.env.KEYLOOM_TEST_SYNTHETIC_HID;

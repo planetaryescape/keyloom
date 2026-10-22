@@ -6,7 +6,7 @@ Native serial setup failures after the OS open report `effect: possible`; the OS
 
 ## Implemented diagnostics subset
 
-`native/device-helper/protocol/v1.schema.json` describes request/response envelopes, with hello parameter/result definitions. Bun tests mechanically compare it with the Zod representations; Rust checks its discriminators/limits and both languages consume the shared adversarial request corpus.
+`native/device-helper/protocol/v1.schema.json` describes request/response envelopes, with hello parameter/result definitions. The transport supplement is generated from Zod and includes expressible runtime refinements such as positive event sequences, unique capabilities and strict base64 patterns; its generator requires every custom refinement to carry an explicit documented allowance. Bun tests compare the generated schemas with the Zod representations and cover shared refinement fixtures; Rust checks schema discriminators/limits and consumes the shared adversarial request corpus.
 
 A helper built without transport features implements only `hello`, `ping` and `shutdown`. Hello returns `{ protocol: 1, helperVersion, target, capabilities: [] }`. Every device/session method returns `unsupported` with `effect: none`; no backend is compiled. Valid envelopes with invalid ping/shutdown params return `invalid_request`. Invalid envelopes, duplicate/nonincreasing IDs, a second hello, wrong ordering or malformed frames terminate the channel. Request IDs are bounded positive u64 decimal strings.
 

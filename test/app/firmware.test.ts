@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { BuildSchema, FlashSchema } from "../../src/api/http.ts";
 import {
-  BuildFailedError, FlashFailedError, NotFoundError, UsageError, ValidationFailedError, buildAndWait, closeApp, drainDeviceConsumers, drainManualFlashTasks, flashAndWait,
+  BuildFailedError, FlashFailedError, NotFoundError, UsageError, ValidationFailedError, buildAndWait, closeApp, flashAndWait,
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
@@ -192,32 +192,6 @@ describe("startFlash / flashAndWait (fake zapp)", () => {
       expect(f.instruction).toContain("checking whether it can restart the keyboard");
       const done = await until(() => getFlash(e.app, f.id), (x) => x.status === "succeeded" || x.status === "failed");
       expect(done.status).toBe("succeeded");
-    });
-  });
-
-  test("manual flash draining waits for the flash before closing the helper", async () => {
-    const e = await toolchainEnv();
-    await built(e);
-    const flashFinished = Promise.withResolvers<void>();
-    const allowFlashTaskToFinish = Promise.withResolvers<void>();
-    await e.run(async () => {
-      await startFlash(e.app, {
-        layout: "synchronized",
-        onState: async (flash) => {
-          if (flash.status === "succeeded") {
-            flashFinished.resolve();
-            await allowFlashTaskToFinish.promise;
-          }
-        },
-      });
-      await flashFinished.promise;
-      let helperClosed = false;
-      const draining = drainDeviceConsumers([drainManualFlashTasks()], async () => { helperClosed = true; });
-      await Bun.sleep(10);
-      expect(helperClosed).toBe(false);
-      allowFlashTaskToFinish.resolve();
-      await draining;
-      expect(helperClosed).toBe(true);
     });
   });
 

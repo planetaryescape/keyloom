@@ -7,7 +7,8 @@ export const NATIVE_CAPABILITIES = [...HID_CAPABILITIES, ...SERIAL_CAPABILITIES]
 export const capabilitySchema = z.enum([...HID_CAPABILITIES, ...SERIAL_CAPABILITIES]);
 export type Capability = z.infer<typeof capabilitySchema>;
 export type SessionTransport = "hid" | "serial";
-export const transportIdentitySchema = identitySchema.extend({ capabilities: z.array(capabilitySchema).max(7).refine((v) => new Set(v).size === v.length) });
+// The runtime check is retained as defense in depth; JSON Schema expresses the same rule with uniqueItems.
+export const transportIdentitySchema = identitySchema.extend({ capabilities: z.array(capabilitySchema).max(7).refine((v) => new Set(v).size === v.length).meta({ uniqueItems: true, "x-runtime-refinement": "duplicate capabilities are rejected; uniqueItems expresses this rule" }) });
 const token = z.string().min(1).max(128);
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const decimal = z.string().regex(/^(0|[1-9][0-9]*)$/).max(20);
@@ -20,12 +21,13 @@ export const transportResponseSchema = z.discriminatedUnion("ok", [
   z.object({ v: z.literal(1), type: z.literal("response"), id: token, ok: z.literal(true), result: z.unknown() }),
   z.object({ v: z.literal(1), type: z.literal("response"), id: token, ok: z.literal(false), error: transportErrorSchema }),
 ]);
-const eventBase = { v: z.literal(1), type: z.literal("event"), sessionId: token, seq: count.refine((n) => n > 0) };
-export const reportBytesSchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/).refine((v) => Buffer.from(v, "base64").toString("base64") === v);
-export const serialBytesSchema = z.string().min(4).max(5464).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/).refine((v) => {
+const eventBase = { v: z.literal(1), type: z.literal("event"), sessionId: token, seq: count.min(1) };
+export const reportBytesSchema = z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/).meta({ contentEncoding: "base64" });
+export const serialBytesSchema = z.string().min(4).max(5464).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/).refine((v) => {
   const bytes = Buffer.from(v, "base64");
   return bytes.length >= 1 && bytes.length <= 4096 && bytes.toString("base64") === v;
-});
+// JSON Schema can describe base64 syntax and encoded length, but not decoded byte length.
+}).meta({ contentEncoding: "base64", "x-minDecodedBytes": 1, "x-maxDecodedBytes": 4096, "x-runtime-refinement": "decoded base64 payload must contain 1 to 4096 bytes" });
 export const transportEventSchema = z.discriminatedUnion("event", [
   z.object({ ...eventBase, event: z.literal("data"), receivedAtUs: decimal, bytes: serialBytesSchema }),
   z.object({ ...eventBase, event: z.literal("failed"), error: transportErrorSchema, loss: z.enum(["none_known", "detected", "unknown"]) }),
@@ -36,15 +38,17 @@ export const hidDevicesSchema = z.object({ devices: z.array(z.object({
   deviceRef: token, transport: z.literal("hid"), vendorId: u16, productId: u16,
   permissionDenied: z.literal(true).optional(),
   driverMissing: z.literal(true).optional(),
-  serial: z.string().refine((v) => Buffer.byteLength(v) <= 256).optional(),
+  // JSON Schema maxLength counts characters, not UTF-8 bytes; the byte limit stays a runtime check.
+  serial: z.string().max(256).refine((v) => Buffer.byteLength(v) <= 256).meta({ "x-maxUtf8Bytes": 256, "x-runtime-refinement": "UTF-8 encoded string must not exceed 256 bytes" }).optional(),
   usagePage: z.literal(0xff60), usage: z.literal(0x61),
 })).max(256) });
 export const serialDevicesSchema = z.object({ devices: z.array(z.strictObject({
   deviceRef: token, transport: z.literal("serial"), vendorId: u16, productId: u16,
   permissionDenied: z.literal(true).optional(),
   driverMissing: z.literal(true).optional(),
-  serial: z.string().refine((v) => Buffer.byteLength(v) <= 256).optional(),
-  product: z.string().refine((v) => Buffer.byteLength(v) <= 256).optional(),
+  // JSON Schema maxLength counts characters, not UTF-8 bytes; the byte limit stays a runtime check.
+  serial: z.string().max(256).refine((v) => Buffer.byteLength(v) <= 256).meta({ "x-maxUtf8Bytes": 256, "x-runtime-refinement": "UTF-8 encoded string must not exceed 256 bytes" }).optional(),
+  product: z.string().max(256).refine((v) => Buffer.byteLength(v) <= 256).meta({ "x-maxUtf8Bytes": 256, "x-runtime-refinement": "UTF-8 encoded string must not exceed 256 bytes" }).optional(),
   interfaceNumber: z.number().int().min(0).max(255).optional(),
 })).max(256) });
 export const serialWrittenSchema = z.object({ acceptedBytes: z.number().int().min(1).max(4096) });

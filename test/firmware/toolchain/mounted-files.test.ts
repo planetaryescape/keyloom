@@ -8,6 +8,7 @@ import { tempDir } from "../../helpers/tmp.ts";
 
 const FAKE_DOCKER = `
 echo "$@" >> "$FAKE_DOCKER_LOG"
+sleep "\${FAKE_PROBE_SECONDS:-0}"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/mnt}"; prev="$a"; done
 ${fakeSha256Probe("/mnt")}
@@ -25,7 +26,8 @@ async function setup() {
       bin,
       () =>
         awaitMountedFiles({
-          image: "img", mountArgs: ["-v", `${root}:/mnt`], hostRoot: root, containerRoot: "/mnt", log, retryEveryMs: 10, settleMs: over.settleMs ?? 200,
+          // Four subprocess probes can exceed 200 ms on a loaded runner; the failure case supplies its own short deadline.
+          image: "img", mountArgs: ["-v", `${root}:/mnt`], hostRoot: root, containerRoot: "/mnt", log, retryEveryMs: 10, settleMs: over.settleMs ?? 3_000,
           files: over.files ?? [join(root, "a", "default.nix"), join(root, "b.conf")], ...(over.signal ? { signal: over.signal } : {}),
         }),
       { FAKE_DOCKER_LOG: join(dir, "docker.calls"), ...env },
@@ -48,11 +50,17 @@ describe("awaitMountedFiles", () => {
     expect(await s.calls()).toHaveLength(4);
   });
 
+  test("slow probes still get enough time to retry a view that settles", async () => {
+    const s = await setup();
+    await s.check({ FAKE_STALE_CALLS: "3", FAKE_PROBE_SECONDS: "0.08" });
+    expect(await s.calls()).toHaveLength(4);
+  });
+
   test("a container that never agrees fails the build, naming the files and the way out", async () => {
     const s = await setup();
-    const err = await s.check({ FAKE_STALE_CALLS: "forever" }).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(BuildFailure);
-    expect((err as Error).message).toMatch(/still sees an old or missing copy of a\/default\.nix, b\.conf after 0 s.*colima restart/);
+    const result = s.check({ FAKE_STALE_CALLS: "forever" }, { settleMs: 50 });
+    await expect(result).rejects.toBeInstanceOf(BuildFailure);
+    await expect(result).rejects.toThrow(/still sees an old or missing copy of a\/default\.nix, b\.conf after 0 s.*colima restart/);
   });
 
   test("a cancelled build stops waiting", async () => {
