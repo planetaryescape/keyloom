@@ -15,7 +15,7 @@ Rust 1.99.1 is pinned here. The displayed release comes from the root `package.j
 
 The lifetime integration test uses the real helper with a genuinely unread OS pipe, holds stdin open until observed exit, and checks open/closed stderr without increasing the 6500-ms exit budget. Fatal termination performs no diagnostic I/O, so closed stderr cannot disable the watchdog. Native CI repeats the release-profile oracle on Intel; Bun retains separate real-child/client checks.
 
-Cargo without features implements only private `hello`, `ping` and `shutdown` JSON-lines requests. It advertises `capabilities: []`, contains no device backend, and refuses device methods with `unsupported`. The release builder enables `native-macos` on Apple Silicon, with all seven HID/serial capabilities. Intel and Linux releases retain TypeScript transports and diagnostics-only helpers (D-433). See [the implemented contract and remaining proposal](../../docs/blueprint/32-device-helper-protocol.md).
+Cargo without features implements only private `hello`, `ping` and `shutdown` JSON-lines requests. It advertises `capabilities: []`, contains no device backend, and refuses device methods with `unsupported`. The release builder enables `native-macos` on Apple Silicon, with all seven HID/serial capabilities. Intel and Linux releases retain TypeScript transports and diagnostics-only helpers (D-433). A prebuilt `--helper` must advertise exactly the selected backend's capabilities (for arm64, build it with `--features native-macos`). The builder runs its `--version` on the build host and refuses a mismatch. See [the implemented contract and remaining proposal](../../docs/blueprint/32-device-helper-protocol.md).
 
 ## Test the single-transport HID build
 

@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import pkg from "../package.json" with { type: "json" };
+import { HID_CAPABILITIES, NATIVE_CAPABILITIES, SERIAL_CAPABILITIES } from "../src/firmware/toolchain/device-helper/transport-protocol.ts";
 
 const RELEASE_TARGETS = {
   "bun-darwin-arm64": { name: "keyloom-darwin-arm64", rust: "aarch64-apple-darwin", platform: "darwin", arch: "arm64" },
@@ -66,12 +67,33 @@ async function helperPath(target: BunTarget, backend: "legacy" | "native" | "nat
   return path;
 }
 
+type Backend = "legacy" | "native" | "native-hid" | "native-serial";
+const EXPECTED_CAPABILITIES: Record<Backend, readonly string[]> = {
+  legacy: [], native: NATIVE_CAPABILITIES, "native-hid": HID_CAPABILITIES, "native-serial": SERIAL_CAPABILITIES,
+};
+
+/** A prebuilt --helper skips the feature selection above, so refuse a pair the packaged client would reject at runtime. */
+async function checkCapabilities(target: BunTarget, backend: Backend, helper: string): Promise<void> {
+  const spec = RELEASE_TARGETS[target];
+  // Only a helper for this host can run here; each release target builds on its own native runner.
+  if (process.platform !== spec.platform || process.arch !== spec.arch) return;
+  const child = Bun.spawn([helper, "--version"], { stdout: "pipe", stderr: "inherit" });
+  const output = await new Response(child.stdout).text();
+  if (await child.exited !== 0) throw new Error(`${helper} --version failed`);
+  const advertised = [...(JSON.parse(output) as { capabilities: string[] }).capabilities].sort();
+  const expected = [...EXPECTED_CAPABILITIES[backend]].sort();
+  if (advertised.join() !== expected.join()) {
+    throw new Error(`${target} selects the ${backend} backend, which needs helper capabilities [${expected.join(", ")}], but ${helper} advertises [${advertised.join(", ")}]${backend === "native" ? "; build the helper with --features native-macos" : ""}`);
+  }
+}
+
 const opts = options(process.argv.slice(2));
 await mkdir(opts.outDir, { recursive: true });
 const built: string[] = [];
 for (const target of opts.targets) {
   const backend = opts.backend ?? (target === "bun-darwin-arm64" ? "native" : "legacy");
   const helper = await helperPath(target, backend, opts.helper, opts.helperDir);
+  await checkCapabilities(target, backend, helper);
   const bytes = await Bun.file(helper).bytes();
   const manifest = {
     release: pkg.version, protocol: 1, target: RELEASE_TARGETS[target].rust,
