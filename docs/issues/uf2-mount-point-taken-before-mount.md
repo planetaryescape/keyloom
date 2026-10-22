@@ -16,4 +16,4 @@ Polling `stat /Volumes/GLV80RHBOOT` every 100 ms after `keyloom flash --reboot-o
 
 Fix: the finder counts a directory only when its device differs from the mount root's (D-439). Tests whose drives are plain folders turn the check off through the test preload; `test/firmware/zmk/mount-binding.test.ts` covers a bare mount point being skipped and a flash that waits for the mount.
 
-Status: fixed on branch `fix-mount-point-wait`. Hardware check pending: a hands-free Glove80 flash from the release that carries the fix.
+Status: fixed by PR 161; the fixing commit on main is added with the hardware check. Hardware check pending: a hands-free Glove80 flash from the release that carries the fix.

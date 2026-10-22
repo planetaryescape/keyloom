@@ -35,7 +35,12 @@ export function volumeFinderAt(root: string, opts: VolumeFinderOptions = {}): Vo
     }
   };
   return async (label) => {
-    const rootDev = mountedOnly ? (await stat(base).catch(() => undefined))?.dev : undefined;
+    const rootDev = mountedOnly
+      ? (await stat(base).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT" || err.code === "ENOTDIR") return undefined;
+        throw err;
+      }))?.dev
+      : undefined;
     // Without the root's device nothing can be told apart from a bare mount point, so nothing is mounted yet.
     if (mountedOnly && rootDev === undefined) return null;
     const names = await readdir(base).catch((err: NodeJS.ErrnoException) => {
