@@ -24,6 +24,7 @@ function fake(transport: SessionTransport = "serial", capabilities: readonly str
   let crash = false;
   let beforeOpen = false;
   const writes: Uint8Array[] = [];
+  const touches: { deviceRef: string; baud: number }[] = [];
   const send = (value: unknown) => output.enqueue(new TextEncoder().encode(`${JSON.stringify(value)}\n`));
   const data = (bytes: Uint8Array) => send({ v: 1, type: "event", sessionId: "s1", seq: ++seq, event: "data", receivedAtUs: String(seq), bytes: Buffer.from(bytes).toString("base64") });
   const exit = () => { if (exitCode !== null) return; exitCode = 1; output.close(); diagnostics.close(); exited.resolve(1); };
@@ -35,6 +36,7 @@ function fake(transport: SessionTransport = "serial", capabilities: readonly str
         const r = JSON.parse(line);
         const reply = (result: unknown) => send({ v: 1, type: "response", id: r.id, ok: true, result });
         if (r.method === "hello") reply({ protocol: 1, helperVersion: manifest.release, target: manifest.target, capabilities });
+        else if (r.method === "serial.touch") { touches.push(r.params); reply({ lineStateApplied: true }); }
         else if (r.method === `${transport}.open`) { seq = 0; if (beforeOpen) data(new Uint8Array([0])); reply({ sessionId: "s1" }); }
         else if (r.method === "session.write") {
           const bytes = Buffer.from(r.params.bytes, "base64");
@@ -55,10 +57,13 @@ function fake(transport: SessionTransport = "serial", capabilities: readonly str
     },
     exited: exited.promise, get exitCode() { return exitCode; }, signalCode: null, kill: exit,
   } as unknown as HelperChild;
-  return { connect: () => DeviceTransportClient.connect("/synthetic", manifest, () => child, transport === "serial" ? SERIAL_CAPABILITIES : HID_CAPABILITIES), data, exit, writes, attempts: () => attempts, short: () => { short = true; }, crash: () => { crash = true; }, beforeOpen: () => { beforeOpen = true; }, firmware: () => { automatic = true; } };
+  return { connect: () => DeviceTransportClient.connect("/synthetic", manifest, () => child, transport === "serial" ? SERIAL_CAPABILITIES : HID_CAPABILITIES), data, exit, writes, touches, attempts: () => attempts, short: () => { short = true; }, crash: () => { crash = true; }, beforeOpen: () => { beforeOpen = true; }, firmware: () => { automatic = true; } };
 }
 
 test("serial corpus, byte boundaries and metadata are strict", () => {
+  for (const baud of [1200, 1201, 115200, -1, 1200.5, "1200"]) {
+    expect(operationSchema.safeParse({ v: 1, type: "request", id: "1", method: "serial.touch", params: { deviceRef: "opaque", baud } }).success).toBe(baud === 1200 || baud === 1201);
+  }
   for (const item of corpus) expect(operationSchema.safeParse(item.request).success).toBe(item.valid);
   for (const size of [1, 32, 100, 4096]) expect(serialBytesSchema.safeParse(Buffer.alloc(size).toString("base64")).success).toBe(true);
   for (const size of [0, 4097]) expect(serialBytesSchema.safeParse(Buffer.alloc(size).toString("base64")).success).toBe(false);
@@ -107,10 +112,12 @@ test("serial data preserves arbitrary 32-byte and 4096-byte chunks", async () =>
   } finally { await client.terminate(); }
 });
 
-test("serial adapter awaits UTF-8 chunks in order, validates acceptedBytes and refuses touch", async () => {
+test("serial adapter awaits UTF-8 chunks in order, validates acceptedBytes and maps touch without replay", async () => {
   const peer = fake(), client = await peer.connect(), adapter = helperSerialTransport(client);
   try {
-    await expect(adapter.touch("opaque", 1200)).rejects.toThrow("restarts are not available");
+    await adapter.touch("opaque", 1200);
+    await adapter.touch("opaque", 1201);
+    expect(peer.touches).toEqual([{ deviceRef: "opaque", baud: 1200 }, { deviceRef: "opaque", baud: 1201 }]);
     const session = await adapter.open!("opaque", () => {});
     const text = "a".repeat(4095) + "é" + "x".repeat(4096);
     await Promise.all([session.write(text), session.write("last")]);

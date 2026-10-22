@@ -17,7 +17,7 @@ export async function drainDeviceConsumers(
   if (failures.length > 1) throw new AggregateError(failures, "device consumers or helper cleanup failed");
 }
 
-/** App/CLI lifecycle boundary. Legacy builds own no helper; a candidate must observe cleanup. */
+/** App/CLI lifecycle boundary. Legacy builds own no helper; native builds must observe cleanup. */
 export async function shutdownDeviceConnections(): Promise<void> {
   if (deviceBackend() !== "legacy") await shutdownCandidateDevice();
 }

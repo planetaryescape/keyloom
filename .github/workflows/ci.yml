@@ -92,7 +92,7 @@ jobs:
           "$candidate" --version
           scratch=$(mktemp -d)
           HOME="$scratch" XDG_CACHE_HOME="$scratch/cache" "$candidate" --data-dir "$scratch/data" doctor --device-helper-only --format json > "$scratch/doctor.json"
-          bun -e 'const result = await Bun.file(process.argv[1]).json(); if (JSON.stringify(result.checks[0].deviceHelper.capabilities) !== JSON.stringify(["serial.list", "serial.open"]) || !result.checks[0].deviceHelper.available || result.checks.length !== 1 || !result.ok) throw new Error(JSON.stringify(result));' "$scratch/doctor.json"
+          bun -e 'const result = await Bun.file(process.argv[1]).json(); if (JSON.stringify(result.checks[0].deviceHelper.capabilities) !== JSON.stringify(["serial.list", "serial.open", "serial.touch.1200", "serial.touch.1201"]) || !result.checks[0].deviceHelper.available || result.checks.length !== 1 || !result.ok) throw new Error(JSON.stringify(result));' "$scratch/doctor.json"
           rm -rf "$scratch"
       - name: Synthetic serial contract and installed candidate (no devices)
         if: runner.os == 'macOS'
@@ -149,6 +149,35 @@ jobs:
             cargo test --locked --release --target "${{ matrix.rust }}" --test lifetime -- --nocapture || status=1
           done
           exit "$status"
+      - name: Combined macOS checks and Apple Silicon release helper
+        if: runner.os == 'macOS'
+        working-directory: native/device-helper
+        run: |
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" --features native-macos -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}" --features native-macos
+          if [ "${{ matrix.rust }}" = aarch64-apple-darwin ]; then
+            cargo build --locked --release --target "${{ matrix.rust }}" --features native-macos
+          fi
+      - name: Combined synthetic installed journeys (no devices)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd native/device-helper
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" --features synthetic-macos -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}" --features synthetic-macos
+          cargo build --locked --release --target "${{ matrix.rust }}" --features synthetic-macos
+          cp "target/${{ matrix.rust }}/release/keyloom-device" "target/${{ matrix.rust }}/release/keyloom-device-synthetic-macos"
+          codesign --force --sign - "target/${{ matrix.rust }}/release/keyloom-device-synthetic-macos"
+          cd ../..
+          helper="$PWD/native/device-helper/target/${{ matrix.rust }}/release/keyloom-device-synthetic-macos"
+          bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --device-backend native --helper "$helper" --out-dir dist/native-combined-test
+          bun scripts/smoke-native-combined.ts "dist/native-combined-test/keyloom-${{ matrix.rust == 'aarch64-apple-darwin' && 'darwin-arm64' || 'darwin-x64' }}" "$helper"
+          cd native/device-helper
+          if [ "${{ matrix.rust }}" = aarch64-apple-darwin ]; then
+            cargo build --locked --release --target "${{ matrix.rust }}" --features native-macos
+          else
+            cargo build --locked --release --target "${{ matrix.rust }}"
+          fi
       - name: Sign final macOS helper after all Cargo invocations
         if: runner.os == 'macOS'
         run: codesign --force --sign - native/device-helper/target/${{ matrix.rust }}/release/keyloom-device

@@ -11,7 +11,7 @@ The code is built and released (v0.36.1 at the time of writing). The blueprint i
 3. `docs/blueprint/14-decision-log.md` before you change a direction. Most alternatives were considered and rejected there, with reasons.
 4. `docs/blueprint/15-open-questions.md` for spikes and product questions, and `docs/research/` for the evidence behind them.
 5. `CONTRIBUTING.md` and `.claude/skills/add-keyboard/SKILL.md` to add a board.
-6. Before changing HID/serial transports or native-helper packaging, read `docs/blueprint/31-device-helper.md` through `33-device-helper-platforms.md` and `docs/research/rust-device-helper.md`. This macOS/Linux/Windows plan is a proposal; run S58–S62 before adopting a backend. It grants no hardware access.
+6. Before changing HID/serial transports or native-helper packaging, read `docs/blueprint/31-device-helper.md` through `33-device-helper-platforms.md` and `docs/research/rust-device-helper.md`. Apple Silicon releases select the combined native HID/serial helper (D-433); Intel and Linux retain legacy transports and diagnostics-only helpers until their own hardware evidence. The platform plan grants no hardware access.
 
 ## Stack
 
@@ -19,6 +19,7 @@ The code is built and released (v0.36.1 at the time of writing). The blueprint i
 - `web-tree-sitter` with the C and devicetree grammars, to import Oryx's C and ZMK keymaps.
 - The agent runs on one of three providers behind `AgentModel`: Anthropic (`@anthropic-ai/sdk` Tool Runner, `claude-opus-5-5`), OpenRouter, or the Codex CLI through a loopback MCP server (`@modelcontextprotocol/sdk`).
 - QMK firmware builds in Docker from ZSA's fork, and flashes with Zapp (Moonlander). ZMK builds in Docker, either MoErgo's template (Glove80) or `west build` against upstream ZMK (Corne and derived boards). UF2 boards flash by copying to each half's boot drive.
+- Apple Silicon release CLI and desktop sidecar use one paired Rust helper for HID and serial, including 1200/1201-baud touch. Intel Macs and Linux keep the legacy TypeScript transports and diagnostics-only helper (D-433).
 - Hands-free flashing: the Moonlander restarts into its bootloader over raw HID. ZMK boards run keyloom's `keyloom-zmk` module (`firmware/zmk/keyloom-zmk`), which restarts a half when its serial port is closed at 1200 baud.
 - The MacBook keyboard is a board whose "firmware" is a kanata config. Apply writes it and reloads kanata over TCP.
 - Tests: `bun test` and `fast-check`. Releases: release-please, then `bun build --compile` binaries, then `install.sh`.

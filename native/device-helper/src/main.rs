@@ -1,12 +1,8 @@
 #[cfg(all(
-    feature = "native-serial",
-    any(
-        feature = "native-hid",
-        feature = "synthetic-hid",
-        feature = "synthetic-serial"
-    )
+    any(feature = "native-hid", feature = "native-serial"),
+    any(feature = "synthetic-hid", feature = "synthetic-serial")
 ))]
-compile_error!("native serial must be built separately from other device backends");
+compile_error!("synthetic and native backends must never coexist");
 #[cfg(all(feature = "native-serial", not(target_os = "macos")))]
 compile_error!("native-serial is only implemented on macOS");
 #[cfg(all(
@@ -16,9 +12,7 @@ compile_error!("native-serial is only implemented on macOS");
 mod registry;
 #[cfg(all(feature = "native-serial", target_os = "macos"))]
 mod serial_macos;
-// Default builds remain diagnostics. Native and synthetic implementations are compile-time exclusive.
-#[cfg(all(feature = "native-hid", feature = "synthetic-hid"))]
-compile_error!("synthetic and production backends must never coexist");
+// Cargo without features remains diagnostics; releases select native-macos on Apple Silicon.
 #[cfg(any(
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -33,6 +27,8 @@ mod backend;
     feature = "native-serial"
 ))]
 mod connection;
+#[cfg(all(feature = "native-hid", target_os = "macos"))]
+mod macos;
 #[cfg(any(
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -40,13 +36,6 @@ mod connection;
     feature = "native-serial"
 ))]
 mod serial;
-#[cfg(all(
-    feature = "synthetic-serial",
-    any(feature = "native-hid", feature = "synthetic-hid")
-))]
-compile_error!("synthetic serial must be built separately from HID backends");
-#[cfg(all(feature = "native-hid", target_os = "macos"))]
-mod macos;
 #[cfg(any(
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -56,15 +45,21 @@ mod macos;
 mod transport;
 
 fn capabilities() -> Vec<&'static str> {
+    let mut result = Vec::new();
     if cfg!(feature = "synthetic-hid") || cfg!(all(feature = "native-hid", target_os = "macos")) {
-        vec!["hid.list", "hid.open", "hid.write"]
-    } else if cfg!(feature = "synthetic-serial")
+        result.extend(["hid.list", "hid.open", "hid.write"]);
+    }
+    if cfg!(feature = "synthetic-serial")
         || cfg!(all(feature = "native-serial", target_os = "macos"))
     {
-        vec!["serial.list", "serial.open"]
-    } else {
-        vec![]
+        result.extend([
+            "serial.list",
+            "serial.open",
+            "serial.touch.1200",
+            "serial.touch.1201",
+        ]);
     }
+    result
 }
 use serde_json::{Value, json};
 #[cfg(not(any(
@@ -207,34 +202,28 @@ fn serve() -> i32 {
         feature = "synthetic-serial",
         feature = "native-serial"
     ))]
-    let native_output = transport::Output::start(capabilities().contains(&"serial.open"));
-    #[cfg(feature = "synthetic-hid")]
-    let native = Some(transport::Transport::new(
-        connection::ConnectionBackend::Hid(Arc::new(backend::synthetic::Synthetic::default())),
-        native_output.clone(),
-    ));
-    #[cfg(all(feature = "native-hid", target_os = "macos"))]
-    let native = Some(transport::Transport::new(
-        connection::ConnectionBackend::Hid(Arc::new(macos::Macos)),
-        native_output.clone(),
-    ));
-    #[cfg(all(feature = "native-serial", target_os = "macos"))]
-    let native = Some(transport::Transport::new(
-        connection::ConnectionBackend::Serial(Arc::new(serial_macos::Macos)),
-        native_output.clone(),
-    ));
-    #[cfg(feature = "synthetic-serial")]
-    let native = Some(transport::Transport::new(
-        connection::ConnectionBackend::Serial(Arc::new(
-            serial::serial_synthetic::Synthetic::default(),
-        )),
-        native_output.clone(),
-    ));
-    #[cfg(all(
-        any(feature = "native-hid", feature = "native-serial"),
-        not(target_os = "macos")
+    let native_output = transport::Output::start();
+    #[cfg(any(
+        feature = "native-hid",
+        feature = "native-serial",
+        feature = "synthetic-hid",
+        feature = "synthetic-serial"
     ))]
-    let native: Option<transport::Transport> = None;
+    let native = {
+        let backends = vec![
+            #[cfg(feature = "synthetic-hid")]
+            connection::ConnectionBackend::Hid(Arc::new(backend::synthetic::Synthetic::default())),
+            #[cfg(all(feature = "native-hid", target_os = "macos"))]
+            connection::ConnectionBackend::Hid(Arc::new(macos::Macos)),
+            #[cfg(feature = "synthetic-serial")]
+            connection::ConnectionBackend::Serial(Arc::new(
+                serial::serial_synthetic::Synthetic::default(),
+            )),
+            #[cfg(all(feature = "native-serial", target_os = "macos"))]
+            connection::ConnectionBackend::Serial(Arc::new(serial_macos::Macos)),
+        ];
+        Some(transport::Transport::new(backends, native_output.clone()))
+    };
     #[cfg(not(any(
         feature = "native-hid",
         feature = "synthetic-hid",
@@ -363,6 +352,23 @@ mod tests {
     fn hello() -> Value {
         json!({"v":1,"type":"request","id":"1","method":"hello",
             "params":{"protocol":1,"hostVersion":RELEASE,"target":TARGET}})
+    }
+
+    #[test]
+    fn capabilities_are_gated_by_compiled_backends() {
+        let caps = capabilities();
+        assert_eq!(
+            caps.contains(&"hid.open"),
+            cfg!(feature = "synthetic-hid")
+                || cfg!(all(feature = "native-hid", target_os = "macos"))
+        );
+        for cap in ["serial.open", "serial.touch.1200", "serial.touch.1201"] {
+            assert_eq!(
+                caps.contains(&cap),
+                cfg!(feature = "synthetic-serial")
+                    || cfg!(all(feature = "native-serial", target_os = "macos"))
+            );
+        }
     }
 
     #[test]

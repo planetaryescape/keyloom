@@ -105,6 +105,12 @@ impl ConnectionBackend {
                 .map(|v| v.into_iter().map(ConnectionEndpoint::Serial).collect()),
         }
     }
+    pub fn touch(&self, endpoint: &ConnectionEndpoint, baud: u64) -> Result<(), OpenError> {
+        match (self, endpoint) {
+            (Self::Serial(b), ConnectionEndpoint::Serial(e)) => b.touch(e, baud),
+            _ => Err("unsupported".into()),
+        }
+    }
     pub fn open(&self, endpoint: &ConnectionEndpoint) -> Result<ConnectionDevice, OpenError> {
         match (self, endpoint) {
             (Self::Hid(b), ConnectionEndpoint::Hid(e)) => b

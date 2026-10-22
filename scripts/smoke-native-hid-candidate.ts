@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import pkg from "../package.json" with { type: "json" };
-import { transportIdentitySchema } from "../src/firmware/toolchain/device-helper/transport-protocol.ts";
+import { transportIdentitySchema, HID_CAPABILITIES, NATIVE_CAPABILITIES } from "../src/firmware/toolchain/device-helper/transport-protocol.ts";
 
 const [source, helperSource] = process.argv.slice(2);
 if (!source || !helperSource || process.platform !== "darwin") throw new Error("usage (macOS): bun scripts/smoke-native-hid-candidate.ts <compiled candidate> <synthetic-capture helper>");
@@ -28,13 +28,14 @@ async function run(cmd: string[], expected = 0, extra: Record<string, string> = 
 try {
   // --version and doctor are pure. No capture is attempted before both independent checks agree.
   const synthetic = transportIdentitySchema.extend({ syntheticBackend: z.literal(true), syntheticCapture: z.literal(true) }).parse(JSON.parse(await run([helper, "--version"])));
+  if (JSON.stringify(synthetic.capabilities) !== JSON.stringify(HID_CAPABILITIES) && JSON.stringify(synthetic.capabilities) !== JSON.stringify(NATIVE_CAPABILITIES)) throw new Error("expected HID or combined synthetic helper");
   if (synthetic.helperVersion !== pkg.version) throw new Error("synthetic release mismatch");
   const helperHash = createHash("sha256").update(await Bun.file(helper).bytes()).digest("hex");
   const mirror = join(scratch, "mirror/download", `v${pkg.version}`), asset = `keyloom-${process.platform}-${process.arch}`;
   mkdirSync(mirror, { recursive: true }); cpSync(binary, join(mirror, asset));
   writeFileSync(join(mirror, "SHA256SUMS"), `${createHash("sha256").update(await Bun.file(binary).bytes()).digest("hex")}  ${asset}\n`);
   await run(["/bin/sh", resolve("install.sh"), "--version", `v${pkg.version}`], 0, { KEYLOOM_INSTALL_DIR: join(scratch, "bin"), KEYLOOM_DOWNLOAD_BASE: `file://${join(scratch, "mirror")}` });
-  const doctor = z.object({ ok: z.literal(true), checks: z.array(z.object({ deviceHelper: z.object({ available: z.literal(true), helperSha256: z.literal(helperHash), capabilities: z.array(z.enum(["hid.list", "hid.open", "hid.write"])).length(3) }) })) }).parse(JSON.parse(await run([installed, "--data-dir", data, "doctor", "--device-helper-only"])));
+  const doctor = z.object({ ok: z.literal(true), checks: z.array(z.object({ deviceHelper: z.object({ available: z.literal(true), helperSha256: z.literal(helperHash), capabilities: z.array(z.string()).refine((caps) => JSON.stringify(caps) === JSON.stringify(synthetic.capabilities)) }) })) }).parse(JSON.parse(await run([installed, "--data-dir", data, "doctor", "--device-helper-only"])));
   if (doctor.checks.length !== 1) throw new Error("doctor must perform only the paired-helper check");
   const fixture = join(scratch, "public-layout"); cpSync(resolve("test/fixtures/oryx/synchronized"), fixture, { recursive: true });
   const imported = z.object({ layout_id: z.string() }).parse(JSON.parse(await run([installed, "--data-dir", data, "import", "--board", "zsa/moonlander", fixture])));

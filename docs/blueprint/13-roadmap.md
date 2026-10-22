@@ -552,7 +552,7 @@ Only BK can do these:
 
 ## Device-helper extension (planned 2026-10-20)
 
-Status: 24b diagnostics shipped in v0.46.1; published CLI and signed/notarised desktop-sidecar verification passed. Native transport rungs 24c–24f remain proposed. Rungs 24b–24f extend the local runtime after rung 24 without renumbering shipped work. They are an independent delivery track, not blocked on rungs 27–30. Each rung ships through the normal release process only when BK authorizes publication; this blueprint itself authorizes neither release nor hardware access.
+Status: 24b diagnostics shipped in v0.46.1. Stage 5 implements the 24c/24d combined default for Apple Silicon under D-433; Intel and Linux stay legacy. Physical touch/reset and installed desktop acceptance remain with the orchestrator; [evidence](../research/spikes/device-helper-native-default.md). Rungs 24e and 24f remain proposed.
 
 **Build philosophy:** reuse the transport contracts and firmware fakes, ship one usable capability at a time, and keep the previous product working after every rung. At most two new unknowns per rung. If a gate reveals more, split the rung with a letter rather than claiming completion from unit tests.
 
@@ -591,7 +591,7 @@ Status: shipped in v0.46.1, 2026-10-20 (D-426; PRs 136, 138, 139). Full/native C
 
 ## Rung 24c: My Moonlander recording survives transport failure honestly
 
-Status: native HID/capture implementation candidate; explicit compile-time installed CLI selection is synthetic-tested. Production adoption remains blocked on the HID half of S59 and installed physical acceptance. The compile-gated macOS adapter, bounded session protocol, explicit TS adapter and QMK incomplete-recording path are implemented in the [24c candidate](../research/spikes/device-helper-24c.md); the 24d TypeScript ZMK interruption path now runs on the legacy serial transport, while the native serial adapter is a compile-gated 24d candidate. Defaults and release builds remain diagnostics/legacy. The arm64 HID half of S59 passed on BK's Moonlander rev A on 2026-10-22, after the D-432 close fix ([S59](../research/spikes/S59.md)). Intel, S62's installed/desktop path and the default switch remain.
+Status: Stage 5 selects native HID together with serial for Apple Silicon releases (D-433). S59 observed Moonlander rev A capture, helper death, unplug and reopen after D-432. Intel keeps legacy HID. Physical reset and the installed desktop path are pending orchestrator acceptance; [Stage 5 evidence](../research/spikes/device-helper-native-default.md).
 
 **Previously:** macOS HID callbacks and lifetimes live in Bun. **Now:** an adopted Rust HID backend owns them, while existing QMK capture and sync policy remain in TS.
 
@@ -611,7 +611,7 @@ Status: native HID/capture implementation candidate; explicit compile-time insta
 
 ## Rung 24d: My Glove80 uses the same owned device connection
 
-Status: TypeScript capture lifecycle on the legacy stty/polling transport built. [Slice 1](../research/spikes/device-helper-24d.md) adds synthetic Rust serial sessions, the explicit installed `native-serial` selector and a software-only PTY smoke, all passing locally. Slice 2 adds direct macOS registry/POSIX serial ownership (D-431), checked raw 115200/DTR setup and checked close, with pure/PTY tests and source candidate builds. The arm64 serial half of S59 passed on BK's Glove80 on 2026-10-22, after the D-432 identity and close fixes ([S59](../research/spikes/S59.md)). Touch, Intel, S62 and the default switch remain. The 24c dependency and physical acceptance gates remain open.
+Status: Stage 5 selects native serial together with HID for Apple Silicon releases (D-433), including explicit leased 1200/1201-baud touch. S59 observed Glove80 capture, helper death, unplug and reopen after D-432. Intel/Linux keep legacy serial. Physical touch/relay and installed desktop acceptance remain with the orchestrator; [Stage 5 evidence](../research/spikes/device-helper-native-default.md).
 
 **Previously:** macOS serial discovery uses FFI and capture/touch use stty/polling. **Now:** the helper owns CDC sessions and explicit touch operations.
 

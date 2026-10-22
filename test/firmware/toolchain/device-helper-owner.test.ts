@@ -95,3 +95,18 @@ test("unused command cleanup launches no helper", async () => {
   await unused.shutdown();
   expect(attempts).toBe(0);
 });
+
+test("both adapters share one owner and failed cleanup stays latched for both", async () => {
+  const pair = { hid: transport, serial: { list: async () => [], touch: async () => {} } };
+  let connects = 0, closes = 0;
+  const owner = new CandidateHidOwner(async () => {
+    connects++;
+    return { transport: pair, shutdown: async () => { closes++; throw new Error("release unconfirmed"); } };
+  });
+  const [hid, serial] = await Promise.all([owner.transport().then((p) => p.hid), owner.transport().then((p) => p.serial)]);
+  expect(hid).toBe(pair.hid); expect(serial).toBe(pair.serial);
+  await expect(owner.shutdown()).rejects.toThrow("release unconfirmed");
+  await expect(owner.shutdown()).rejects.toThrow("release unconfirmed");
+  await expect(owner.transport()).rejects.toThrow("start a new command");
+  expect(connects).toBe(1); expect(closes).toBe(1);
+});

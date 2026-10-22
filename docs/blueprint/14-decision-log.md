@@ -1835,3 +1835,11 @@ On BK's Glove80 and Moonlander (S59), every unplug made the helper exit, so the 
 - The session still ends `failed` with `disconnected`, and loss stays unknown. Unconfirmed cleanup on a present device still exits the helper. [Evidence](../research/spikes/S59.md)
 - Serial identity also comes from the nearest `IOUSBHostDevice`/`IOUSBDevice`, not the first node with USB IDs, because macOS copies the IDs onto CDC data and interface nodes that carry no string descriptors.
 
+
+### D-433: The native helper is the default on Apple Silicon; Intel/Linux stay legacy until their own hardware evidence. (2026-10-22, Stage 5)
+
+[S59](../research/spikes/S59.md) observed native HID capture on the Moonlander and native serial capture on the Glove80, including helper death, unplug and reopen, on an Apple Silicon Mac after D-432. Select the combined `native-macos` helper for `bun-darwin-arm64` releases. One child serves both default transports, advertises all seven capabilities and implements explicit 1200/1201-baud touch. Intel and Linux retain legacy TypeScript transports and diagnostics-only helpers until their own hardware evidence. The legacy macOS FFI stays because Intel still uses it.
+
+This supersedes the arm64 default-selection restrictions in D-426, D-427, D-428, D-430 and D-431. Single-transport candidates remain available through explicit build overrides with separate output directories. There is no automatic fallback, replacement child after failed setup/cleanup, or replay of a possibly effective request. The desktop uses the released CLI sidecar and its same embedded helper; sign and notarise the combined helper before hashing and embedding it.
+
+Physical touch/reset evidence comes from the orchestrator's run, not the implementation worker. [TK: orchestrator to record Moonlander raw-HID reset, Glove80 1200 local and 1201 relay results, ordinary typing afterwards, and the installed CLI/desktop pair hashes in the Stage 5 evidence record.]

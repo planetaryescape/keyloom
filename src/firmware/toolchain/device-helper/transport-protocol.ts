@@ -2,11 +2,12 @@ import { z } from "zod";
 import { identitySchema, requestSchema } from "./protocol.ts";
 
 export const HID_CAPABILITIES = ["hid.list", "hid.open", "hid.write"] as const;
-export const SERIAL_CAPABILITIES = ["serial.list", "serial.open"] as const;
+export const SERIAL_CAPABILITIES = ["serial.list", "serial.open", "serial.touch.1200", "serial.touch.1201"] as const;
+export const NATIVE_CAPABILITIES = [...HID_CAPABILITIES, ...SERIAL_CAPABILITIES] as const;
 export const capabilitySchema = z.enum([...HID_CAPABILITIES, ...SERIAL_CAPABILITIES]);
 export type Capability = z.infer<typeof capabilitySchema>;
 export type SessionTransport = "hid" | "serial";
-export const transportIdentitySchema = identitySchema.extend({ capabilities: z.array(capabilitySchema).max(5).refine((v) => new Set(v).size === v.length) });
+export const transportIdentitySchema = identitySchema.extend({ capabilities: z.array(capabilitySchema).max(7).refine((v) => new Set(v).size === v.length) });
 const token = z.string().min(1).max(128);
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const decimal = z.string().regex(/^(0|[1-9][0-9]*)$/).max(20);
@@ -43,12 +44,14 @@ export const serialDevicesSchema = z.object({ devices: z.array(z.strictObject({
   interfaceNumber: z.number().int().min(0).max(255).optional(),
 })).max(256) });
 export const serialWrittenSchema = z.object({ acceptedBytes: z.number().int().min(1).max(4096) });
+export const touchedSchema = z.object({ lineStateApplied: z.literal(true) });
 export const openedSchema = z.object({ sessionId: token });
 export const writtenSchema = z.object({ acceptedBytes: z.literal(32) });
 export const closedSchema = z.object({ finalSeq: count });
 export const operationSchema = z.discriminatedUnion("method", [
   requestSchema.extend({ method: z.literal("list"), params: z.strictObject({ transport: z.enum(["hid", "serial"]) }) }),
   requestSchema.extend({ method: z.literal("hid.open"), params: z.strictObject({ deviceRef: token }) }),
+  requestSchema.extend({ method: z.literal("serial.touch"), params: z.strictObject({ deviceRef: token, baud: z.union([z.literal(1200), z.literal(1201)]) }) }),
   requestSchema.extend({ method: z.literal("serial.open"), params: z.strictObject({ deviceRef: token }) }),
   requestSchema.extend({ method: z.literal("hid.write"), params: z.strictObject({ deviceRef: token, reportId: z.literal(0), bytes: reportBytesSchema }) }),
   requestSchema.extend({ method: z.literal("session.write"), params: z.union([z.strictObject({ sessionId: token, reportId: z.literal(0), bytes: reportBytesSchema }), z.strictObject({ sessionId: token, bytes: serialBytesSchema })]) }),

@@ -38,17 +38,24 @@ struct Control {
     drain: bool,
     ack: Option<mpsc::SyncSender<()>>,
 }
+struct QueuedData {
+    value: Value,
+    serial: bool,
+}
 #[derive(Clone)]
 pub struct Output {
     control: mpsc::SyncSender<Control>,
-    data: mpsc::SyncSender<Value>,
+    data: mpsc::SyncSender<QueuedData>,
+    serial_queued: Arc<std::sync::atomic::AtomicUsize>,
     pending: Arc<Mutex<HashSet<String>>>,
     control_frames: Arc<std::sync::atomic::AtomicUsize>,
 }
 impl Output {
-    pub fn start(serial: bool) -> Self {
+    pub fn start() -> Self {
         let (control, controls) = mpsc::sync_channel::<Control>(64);
-        let (data, events) = mpsc::sync_channel::<Value>(if serial { 16 } else { 510 });
+        let (data, events) = mpsc::sync_channel::<QueuedData>(510);
+        let serial_queued = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let serial_pending = serial_queued.clone();
         let pending = Arc::new(Mutex::new(HashSet::new()));
         let inflight = pending.clone();
         let control_frames = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -85,12 +92,18 @@ impl Output {
                     inflight.lock().unwrap().remove(id);
                 }
             };
+            let data_write = |item: QueuedData, stdout: &mut std::io::StdoutLock<'_>| {
+                if item.serial {
+                    serial_pending.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                }
+                write(item.value, stdout);
+            };
             loop {
                 match controls.try_recv() {
                     Ok(message) => {
                         if message.drain {
                             for value in events.try_iter().take(1024) {
-                                write(value, &mut stdout);
+                                data_write(value, &mut stdout);
                             }
                         }
                         for value in message.values {
@@ -104,7 +117,7 @@ impl Output {
                     Err(mpsc::TryRecvError::Disconnected) => return,
                     Err(mpsc::TryRecvError::Empty) => {
                         match events.recv_timeout(Duration::from_millis(2)) {
-                            Ok(value) => write(value, &mut stdout),
+                            Ok(value) => data_write(value, &mut stdout),
                             Err(mpsc::RecvTimeoutError::Disconnected) => return,
                             _ => {}
                         }
@@ -115,9 +128,31 @@ impl Output {
         Self {
             control,
             data,
+            serial_queued,
             pending,
             control_frames,
         }
+    }
+    fn data(&self, value: Value, transport: &str) -> Result<(), ()> {
+        use std::sync::atomic::Ordering;
+        let serial = transport == "serial";
+        if serial
+            && self
+                .serial_queued
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                    (n < 16).then_some(n + 1)
+                })
+                .is_err()
+        {
+            return Err(());
+        }
+        if self.data.try_send(QueuedData { value, serial }).is_err() {
+            if serial {
+                self.serial_queued.fetch_sub(1, Ordering::AcqRel);
+            }
+            return Err(());
+        }
+        Ok(())
     }
     fn control(&self, values: Vec<Value>, drain: bool, ack: Option<mpsc::SyncSender<()>>) {
         use std::sync::atomic::Ordering;
@@ -182,14 +217,14 @@ impl State {
 }
 #[derive(Clone)]
 pub struct Transport {
-    backend: ConnectionBackend,
+    backends: Vec<ConnectionBackend>,
     state: Arc<Mutex<State>>,
     output: Output,
     origin: Instant,
     nonce: String,
 }
 impl Transport {
-    pub fn new(backend: ConnectionBackend, output: Output) -> Self {
+    pub fn new(backends: Vec<ConnectionBackend>, output: Output) -> Self {
         let mut bytes = [0u8; 16];
         if getrandom::fill(&mut bytes).is_err() {
             std::process::exit(1);
@@ -200,7 +235,7 @@ impl Transport {
             .collect::<String>();
         Self {
             nonce,
-            backend,
+            backends,
             output,
             state: Arc::new(Mutex::new(State {
                 refs: HashMap::new(),
@@ -216,42 +251,57 @@ impl Transport {
     pub fn handle(&self, id: String, method: &str, params: &Value) {
         match method {
             #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]
-            "test.stats" => self.output.reply(ok(&id, self.backend.test_stats())),
+            "test.stats" => {
+                let backend = self
+                    .backends
+                    .iter()
+                    .find(|b| params["transport"] == b.transport())
+                    .unwrap_or(&self.backends[0]);
+                self.output.reply(ok(&id, backend.test_stats()));
+            }
             "list" => {
-                if params.as_object().is_none_or(|p| p.len() != 1)
-                    || params["transport"] != self.backend.transport()
-                {
+                let Some(backend) = self
+                    .backends
+                    .iter()
+                    .find(|b| params["transport"] == b.transport())
+                    .cloned()
+                else {
                     self.output.reply(fail(&id, "unsupported", "none"));
+                    return;
+                };
+                if params.as_object().is_none_or(|p| p.len() != 1) {
+                    self.output.reply(fail(&id, "invalid_request", "none"));
                     return;
                 }
                 let mut state = self.state.lock().unwrap();
-                if state.listing.contains(self.backend.transport()) {
+                if state.listing.contains(backend.transport()) {
                     self.output.reply(fail(&id, "busy", "none"));
                     return;
                 }
-                let transport = self.backend.transport();
+                let transport = backend.transport();
                 state.listing.insert(transport.to_owned());
                 state.invalidate_refs(transport);
                 *state.generation.entry(transport.to_owned()).or_default() += 1;
                 drop(state);
                 let this = self.clone();
                 std::thread::spawn(move || {
-                    let result = this.backend.list();
+                    let result = backend.list();
                     let mut state = this.state.lock().unwrap();
-                    state.listing.remove(this.backend.transport());
+                    state.listing.remove(backend.transport());
                     match result {
                         Ok(endpoints) if endpoints.len() <= 256 => {
                             let mut devices = Vec::new();
                             for (index, endpoint) in endpoints.into_iter().enumerate() {
                                 let reference = format!(
-                                    "d{}-{}-{index}",
+                                    "d{}-{}-{}-{index}",
                                     this.nonce,
-                                    state.generation[this.backend.transport()]
+                                    backend.transport(),
+                                    state.generation[backend.transport()]
                                 );
                                 match endpoint.record(&reference) {
                                     Ok(record) => devices.push(record),
                                     Err(code) => {
-                                        state.invalidate_refs(this.backend.transport());
+                                        state.invalidate_refs(backend.transport());
                                         this.output.reply(fail(&id, code, "none"));
                                         return;
                                     }
@@ -261,7 +311,7 @@ impl Transport {
                             match list_reply(&id, devices) {
                                 Ok(reply) => this.output.reply(reply),
                                 Err(code) => {
-                                    state.invalidate_refs(this.backend.transport());
+                                    state.invalidate_refs(backend.transport());
                                     this.output.reply(fail(&id, code, "none"));
                                 }
                             }
@@ -271,14 +321,20 @@ impl Transport {
                     }
                 });
             }
-            "hid.open" | "hid.write" | "serial.open" => {
-                let transport = if method == "serial.open" {
+            "hid.open" | "hid.write" | "serial.open" | "serial.touch" => {
+                let transport = if method.starts_with("serial.") {
                     "serial"
                 } else {
                     "hid"
                 };
-                if transport != self.backend.transport() {
+                if !self.backends.iter().any(|b| b.transport() == transport) {
                     self.output.reply(fail(&id, "unsupported", "none"));
+                    return;
+                }
+                let touch = method == "serial.touch";
+                let baud = params["baud"].as_u64().filter(|n| matches!(n, 1200 | 1201));
+                if touch && baud.is_none() {
+                    self.output.reply(fail(&id, "invalid_request", "none"));
                     return;
                 }
                 let one_shot = method == "hid.write";
@@ -293,10 +349,16 @@ impl Transport {
                 } else {
                     None
                 };
-                if params
-                    .as_object()
-                    .is_none_or(|p| p.len() != if one_shot { 3 } else { 1 })
-                {
+                if params.as_object().is_none_or(|p| {
+                    p.len()
+                        != if one_shot {
+                            3
+                        } else if touch {
+                            2
+                        } else {
+                            1
+                        }
+                }) {
                     self.output.reply(fail(&id, "invalid_request", "none"));
                     return;
                 }
@@ -316,6 +378,10 @@ impl Transport {
                     self.output.reply(fail(&id, "stale_device", "none"));
                     return;
                 };
+                if endpoint.transport() != transport {
+                    self.output.reply(fail(&id, "stale_device", "none"));
+                    return;
+                }
                 state.next += 1;
                 let session = format!("s{}-{}", self.nonce, state.next);
                 let (send, receive) = mpsc::sync_channel(32);
@@ -330,7 +396,14 @@ impl Transport {
                 drop(state);
                 let this = self.clone();
                 std::thread::spawn(move || {
-                    this.owner(id, session, endpoint, bytes, receive);
+                    this.owner(
+                        id,
+                        session,
+                        endpoint,
+                        bytes,
+                        if touch { baud } else { None },
+                        receive,
+                    );
                 });
             }
             "session.write" | "session.close" => {
@@ -347,7 +420,7 @@ impl Transport {
                     .sessions
                     .get(session)
                     .map(|c| c.transport)
-                    .unwrap_or(self.backend.transport());
+                    .unwrap_or("hid");
                 if params.as_object().is_none_or(|p| {
                     p.len()
                         != if close {
@@ -399,16 +472,26 @@ impl Transport {
         session: String,
         endpoint: ConnectionEndpoint,
         one_shot: Option<Vec<u8>>,
+        touch: Option<u64>,
         commands: mpsc::Receiver<Command>,
     ) {
+        let backend = self
+            .backends
+            .iter()
+            .find(|b| b.transport() == endpoint.transport())
+            .unwrap();
         let opened = (|| {
             let lease = lease(&endpoint.lease_key())?;
-            let current = self.backend.list()?;
+            let current = backend.list()?;
             if !current.contains(&endpoint) {
                 return Err(crate::serial::OpenError::from("stale_device"));
             }
-            let device = self.backend.open(&endpoint)?;
-            Ok((lease, device))
+            if let Some(baud) = touch {
+                backend.touch(&endpoint, baud)?;
+                return Ok((lease, None));
+            }
+            let device = backend.open(&endpoint)?;
+            Ok((lease, Some(device)))
         })();
         let (lease, mut device) = match opened {
             Ok(v) => v,
@@ -421,6 +504,12 @@ impl Transport {
                 ));
                 return;
             }
+        };
+        let Some(mut device) = device.take() else {
+            drop(lease);
+            self.state.lock().unwrap().sessions.remove(&session);
+            self.output.reply(ok(&id, json!({"lineStateApplied":true})));
+            return;
         };
         if let Some(bytes) = one_shot {
             let result = device.write(&bytes);
@@ -475,7 +564,7 @@ impl Transport {
                         break;
                     }
                     let value = json!({"v":1,"type":"event","sessionId":session,"seq":seq+1,"event":"data","receivedAtUs":self.origin.elapsed().as_micros().to_string(),"bytes":STANDARD.encode(bytes)});
-                    if self.output.data.try_send(value).is_err() {
+                    if self.output.data(value, endpoint.transport()).is_err() {
                         failure = Some("overflow");
                         break;
                     }
@@ -497,7 +586,7 @@ impl Transport {
                             break;
                         }
                         let value = json!({"v":1,"type":"event","sessionId":session,"seq":seq+1,"event":"data","receivedAtUs":self.origin.elapsed().as_micros().to_string(),"bytes":STANDARD.encode(bytes)});
-                        if self.output.data.try_send(value).is_err() {
+                        if self.output.data(value, endpoint.transport()).is_err() {
                             failure = Some("overflow");
                             break;
                         }
@@ -671,7 +760,7 @@ fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
 mod frame_tests {
     use super::*;
     #[test]
-    fn open_failure_preserves_native_effect_on_the_wire() {
+    fn open_and_touch_failure_preserve_native_effect_on_the_wire() {
         struct FailedOpen(crate::serial::SerialEndpoint, bool);
         impl crate::serial::SerialBackend for FailedOpen {
             fn list(&self) -> Result<Vec<crate::serial::SerialEndpoint>, &'static str> {
@@ -687,12 +776,27 @@ mod frame_tests {
                     possible: self.1,
                 })
             }
+            fn touch(
+                &self,
+                _: &crate::serial::SerialEndpoint,
+                _: u64,
+            ) -> Result<(), crate::serial::OpenError> {
+                Err(crate::serial::OpenError {
+                    code: "io_failed",
+                    possible: self.1,
+                })
+            }
             #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]
             fn test_stats(&self) -> Value {
                 json!({})
             }
         }
-        for possible in [false, true] {
+        for (possible, touch) in [
+            (false, None),
+            (true, None),
+            (false, Some(1200)),
+            (true, Some(1201)),
+        ] {
             let endpoint = crate::serial::SerialEndpoint {
                 key: format!("synthetic-owner-error-{}-{possible}", std::process::id()),
                 vendor: 1,
@@ -706,11 +810,15 @@ mod frame_tests {
             let output = Output {
                 control,
                 data,
+                serial_queued: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
                 pending: Arc::new(Mutex::new(HashSet::new())),
                 control_frames: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             };
             let transport = Transport::new(
-                ConnectionBackend::Serial(Arc::new(FailedOpen(endpoint.clone(), possible))),
+                vec![ConnectionBackend::Serial(Arc::new(FailedOpen(
+                    endpoint.clone(),
+                    possible,
+                )))],
                 output,
             );
             let (_send, commands) = mpsc::sync_channel(1);
@@ -719,6 +827,7 @@ mod frame_tests {
                 "s-test".into(),
                 ConnectionEndpoint::Serial(endpoint),
                 None,
+                touch,
                 commands,
             );
             let reply = replies.recv_timeout(Duration::from_secs(1)).unwrap();

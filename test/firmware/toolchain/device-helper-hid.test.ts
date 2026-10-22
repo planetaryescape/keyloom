@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { DeviceTransportClient, DeviceTransportError } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
 import { helperHidTransport } from "../../../src/firmware/toolchain/device-helper/hid.ts";
 import { manifestSchema, type HelperManifest } from "../../../src/firmware/toolchain/device-helper/extract.ts";
-import { closedSchema, hidDevicesSchema, operationSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, serialDevicesSchema, serialWrittenSchema, writtenSchema } from "../../../src/firmware/toolchain/device-helper/transport-protocol.ts";
+import { closedSchema, hidDevicesSchema, operationSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, serialDevicesSchema, serialWrittenSchema, touchedSchema, writtenSchema } from "../../../src/firmware/toolchain/device-helper/transport-protocol.ts";
 import { startQmkCapture } from "../../../src/firmware/qmk/typing-capture.ts";
 import { encodeEventsReport } from "../../../src/firmware/qmk/typing-stream.ts";
 import pkg from "../../../package.json" with { type: "json" };
@@ -15,7 +15,7 @@ import { decodeTypingReport } from "../../../src/firmware/qmk/typing-stream.ts";
 
 export function transportContract() {
   const schema = (v: z.ZodType) => z.toJSONSchema(v, { unrepresentable: "any" });
-  return { ...schema(z.union([operationSchema, transportResponseSchema, transportEventSchema])), $defs: { identity: schema(transportIdentitySchema), devices: schema(hidDevicesSchema), written: schema(writtenSchema), serialDevices: schema(serialDevicesSchema), serialWritten: schema(serialWrittenSchema), closed: schema(closedSchema) }, "x-maxFrameBytes": 65536, "x-maxSessions": 8, "x-maxPending": 32, "x-maxDataEvents": 1024, "x-maxSerialOutputChunks": 16, "x-maxSerialChunkBytes": 4096 };
+  return { ...schema(z.union([operationSchema, transportResponseSchema, transportEventSchema])), $defs: { identity: schema(transportIdentitySchema), devices: schema(hidDevicesSchema), written: schema(writtenSchema), serialDevices: schema(serialDevicesSchema), serialWritten: schema(serialWrittenSchema), touched: schema(touchedSchema), closed: schema(closedSchema) }, "x-maxFrameBytes": 65536, "x-maxSessions": 8, "x-maxPending": 32, "x-maxDataEvents": 1024, "x-maxSerialOutputChunks": 16, "x-maxSerialChunkBytes": 4096 };
 }
 test("native transport canonical schema and shared adversarial requests", () => {
   expect(JSON.stringify(transportContract())).toBe(JSON.stringify(canonical));
