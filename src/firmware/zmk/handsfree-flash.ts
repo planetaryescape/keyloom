@@ -13,6 +13,7 @@ import type { EnterResult, FlashStep, StepHooks, VerifyResult } from "./flash.ts
 import { retryRemedy, sharedDriveRemedy } from "./flash.ts";
 import { type HalfLetter, LOCAL_BAUD, RELAY_BAUD, buildKey, halfMarker, keyInArtifact, keyInFirmware, parseSerial } from "./handsfree.ts";
 import type { VolumeFinder } from "./volumes.ts";
+import { SCREEN_LOCK_MESSAGE } from "../toolchain/screen-lock.ts";
 
 export type ZmkHandsFreeDeps = {
   serial: () => Promise<SerialTransport>;
@@ -108,6 +109,7 @@ export async function restartHalf(opts: {
   waitForVolume?: boolean;
   log: (line: string) => void;
   announce?: (instruction: string) => void;
+  screenLocked?: (() => Promise<boolean>) | undefined;
 }): Promise<EnterResult> {
   const { deps, target: t, log } = opts;
   const label = t.step.label;
@@ -153,11 +155,19 @@ export async function restartHalf(opts: {
       touched = { path: relay.port.path, baud: RELAY_BAUD };
     }
 
+    if (opts.screenLocked) {
+      try {
+        if (await opts.screenLocked()) return { ok: false, reason: SCREEN_LOCK_MESSAGE };
+      } catch {
+        // The outer flash probe logs failures and fails open.
+      }
+    }
     opts.announce?.(`keyloom is restarting the ${label} into its bootloader. Don't touch the keyboard.`);
     await transport.touch(touched.path, touched.baud);
     if (opts.waitForVolume === false) return { ok: true };
 
     const deadline = Date.now() + waitMs;
+    let lockWasReported = false;
     for (;;) {
       if (await opts.findVolume(t.step.volume)) {
         const after = peers.length ? await transport.list() : [];
@@ -167,9 +177,21 @@ export async function restartHalf(opts: {
         log(`keyloom: ${t.step.volume} appeared; the ${label} is in its bootloader`);
         return { ok: true };
       }
+      if (opts.screenLocked) {
+        let locked = false;
+        try { locked = await opts.screenLocked(); } catch { /* The outer probe logs failures and fails open. */ }
+        if (locked !== lockWasReported) {
+          lockWasReported = locked;
+          opts.announce?.(locked ? SCREEN_LOCK_MESSAGE : `keyloom is restarting the ${label} into its bootloader. Don't touch the keyboard.`);
+        }
+      }
       if (Date.now() >= deadline) break;
       await sleep(poll);
     }
+    if (!lockWasReported && opts.screenLocked) {
+      try { lockWasReported = await opts.screenLocked(); } catch { /* The outer probe logs failures and fails open. */ }
+    }
+    if (lockWasReported) return { ok: false, reason: SCREEN_LOCK_MESSAGE };
     // A relayed peripheral with no cable of its own goes back to its app after 3 s, which looks the same from here.
     const cable = touched.baud === RELAY_BAUD ? ` Is the ${label}'s own USB cable plugged in? A half on battery returns to typing after 3 seconds.` : "";
     return { ok: false, reason: `${t.step.volume} didn't appear within ${Math.round(waitMs / 1000)} seconds of restarting the ${label}.${cable}` };
@@ -235,6 +257,7 @@ export function zmkHandsFreeHooks(input: {
   buildId: string;
   findVolume: VolumeFinder;
   log: (line: string) => void;
+  screenLocked?: (() => Promise<boolean>) | undefined;
   foreign?: (port: SerialPort) => boolean;
   /** Promotes every half's verified image as one set; the previous set must survive any failure (D-437). */
   saveLastGood?: (images: ReadonlyMap<HalfLetter, Uint8Array>) => Promise<void>;
@@ -261,7 +284,7 @@ export function zmkHandsFreeHooks(input: {
       if (target) {
         try { before.set(target, await readHalf(input.deps, target)); } catch { /* Recovery treats an unreadable half as unknown. */ }
       }
-      return target ? restartHalf({ deps: input.deps, targets, target, findVolume: input.findVolume, log: input.log, announce }) : { ok: false, reason: "keyloom has no hands-free recipe for this step" };
+      return target ? restartHalf({ deps: input.deps, targets, target, findVolume: input.findVolume, log: input.log, announce, screenLocked: input.screenLocked }) : { ok: false, reason: "keyloom has no hands-free recipe for this step" };
     },
   };
 

@@ -1938,5 +1938,11 @@ The shell now runs `$SHELL -ilc` with `/usr/bin/printenv PATH` between unique ma
 
 Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
 
+### D-442: Refuse a UF2 restart while the macOS screen is locked. (2026-10-22, Stage 11)
+
+Before a macOS UF2 flash restarts a ZMK half or waits for its boot drive, keyloom reads `IOConsoleUsers` from `ioreg -n Root -d1 -a` through `plutil -extract IOConsoleUsers json` (the full IORegistry plist has `<data>` values plutil can't write as JSON) and matches `kCGSSessionUserIDKey` to the current process uid. A true `CGSSessionScreenIsLocked` refuses before the restart; if the screen locks during the drive wait, the instruction and timeout explain that macOS will not mount the drive until unlock. A drive already mounted needs no check. Missing lock keys mean unlocked. If the probe fails or its output cannot be read, log the failure and continue so a broken probe cannot block a flash. The check is macOS-only; QMK's DFU path is unchanged.
+
+Evidence: `test/firmware/toolchain/screen-lock.test.ts` and `test/firmware/zmk/flash.test.ts`. The lock probe is tested with the JSON shape plutil prints and flash behaviour with injected functions. The live probe on BK's unlocked Mac returned false; no hardware flash was run.
+
 ### D-444: Refuse unknown QMK calls that receive a known layer name. (2026-10-22, stage 11 C3)
 - If kept QMK code passes a layer enum name to a function whose layer semantics keyloom does not know, a layer reorder is refused and the call's line is named. The importer cannot prove how that function uses the layer value.
