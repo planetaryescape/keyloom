@@ -4,4 +4,5 @@
 
 Proposed fix: retry the removal for a few seconds. If it still fails, warn instead of failing the job, because cleanup isn't one of the checks.
 
-Status: open.
+Status: fixed on branch ci/windows-smoke-cleanup.
+Cleanup retries for up to 10 seconds and warns if the runner still holds a file lock, so cleanup cannot fail an otherwise passing smoke run. PowerShell syntax validation could not run locally because `pwsh` is not installed.

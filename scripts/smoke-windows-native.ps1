@@ -68,7 +68,22 @@ try {
     }
 } finally {
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
-    if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }
+    $cleanupDeadline = [DateTime]::UtcNow.AddSeconds(10)
+    $cleanupError = $null
+    while (Test-Path -LiteralPath $scratch) {
+        try {
+            Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction Stop
+        } catch {
+            $cleanupError = $_
+        }
+        if (-not (Test-Path -LiteralPath $scratch)) { break }
+        if ([DateTime]::UtcNow -ge $cleanupDeadline) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    if (Test-Path -LiteralPath $scratch) {
+        if ($null -eq $cleanupError) { $cleanupError = 'The scratch folder still exists after cleanup retries.' }
+        Write-Warning "Could not remove scratch folder '$scratch': $cleanupError"
+    }
 }
 # Every check above passed. The last native command was the deliberate exit-6 refusal, and pwsh -Command would
 # otherwise report that as this script's failure.
