@@ -12,6 +12,7 @@ import { ProposalCard } from "./ProposalCard.tsx";
 import { keyLabel, layerName, optionLabels } from "./proposal-facts.ts";
 import type { AssistantTurn, ConfirmationCard, OutcomeCard, UserTurn } from "./transcript.ts";
 import { AgentWorking } from "./AgentWorking.tsx";
+import { ConfigCardList, type ConfigCards } from "./ConfigCards.tsx";
 import type { AgentWorkStatus, AgentWorkView } from "./work-view.ts";
 import { presentationView } from "./presentation-view.ts";
 import { TurnUsage } from "./TurnUsage.tsx";
@@ -222,9 +223,11 @@ interface Props {
   /** UI-only projection of observed operations and explicit public working notes. */
   working?: AgentWorkView;
   motionPaused?: boolean;
+  /** The configs this reply made, as cards that open them; absent where the page can't switch config. */
+  configCards?: ConfigCards;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -253,6 +256,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
         if (artifact.kind === "keyboard_list") return <KeyboardListArtifactView key={idx} list={artifact} />;
         return null;
       })}
+      <ConfigCardList presentation={turn.presentation} cards={configCards} />
       {turn.phase === "stopped" ? <p className="msg-note">Stopped. Configs or proposals prepared before Stop may remain.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}
       {compact

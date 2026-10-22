@@ -394,3 +394,21 @@ export const isStreaming = (state: Transcript): boolean => state.turns.some((tur
 export function lastUser(state: Transcript): UserTurn | undefined {
   return state.turns.findLast((turn): turn is UserTurn => turn.kind === "user");
 }
+
+/**
+ * A thread carried back to the config it was about meets that config's own conversation, which the page finds again by itself. The
+ * replies they share (by the request that started each) are dropped from the carried part, with the message that asked each, so
+ * nothing shows twice.
+ */
+export function withoutRepeats(carried: readonly Turn[], own: readonly Turn[]): Turn[] {
+  const shown = new Set(own.flatMap((turn) => (turn.kind === "assistant" && turn.userMessageId !== undefined ? [turn.userMessageId] : [])));
+  const kept: Turn[] = [];
+  for (const turn of carried) {
+    if (turn.kind === "assistant" && turn.userMessageId !== undefined && shown.has(turn.userMessageId)) {
+      if (kept.at(-1)?.kind === "user") kept.pop();
+      continue;
+    }
+    kept.push(turn);
+  }
+  return kept;
+}

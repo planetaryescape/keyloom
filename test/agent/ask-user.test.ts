@@ -136,7 +136,7 @@ describe("a request to make a new config", () => {
     const before = getLayout(app, mac.layout.id).revision.id;
     const { client, requests } = fakeAnthropic([
       { blocks: [{ tool: "create_config", input: { name: "Colemak", from: "this" } }] },
-      { blocks: [{ text: "Made a Colemak config. Switch to it from the config menu." }] },
+      { blocks: [{ text: "Made a Colemak config. Want me to start changing it?" }] },
     ]);
     const out = await sendMessage(app, mac.layout.id, { message: "make me a Colemak config", model: anthropicModel(client) });
     expect(out.status).toBe("complete");
@@ -144,6 +144,9 @@ describe("a request to make a new config", () => {
     expect(listConfigs(app).some((c) => c.name === "Colemak")).toBe(true);
     expect(getLayout(app, mac.layout.id).revision.id).toBe(before);
     expect(requests[0]?.body.system).not.toMatch(/`keyloom [a-z]/);
+    // keyloom opens the config and shows its card, so neither the prompt nor the tool result sends BK to the config menu.
+    expect(requests[0]?.body.system).not.toMatch(/switch(es)? to it from the config menu/i);
+    expect(requests[1]?.toolResults.join("\n")).not.toMatch(/config menu/i);
   });
 });
 

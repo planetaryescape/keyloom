@@ -2,7 +2,7 @@
 import type { Command } from "commander";
 import { createInterface } from "node:readline";
 import {
-  type AgentModel, type ChatOutcome, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage, showConversation,
+  type AgentModel, type ChatOutcome, type ConfigView, configsMadeInTurn, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage, showConversation,
 } from "../../app/index.ts";
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
@@ -25,12 +25,16 @@ export function parseSelect(text: string): { layer: string; positions: number[] 
 
 const proposalJson = (p: ChatOutcome["proposals"][number]) => ({ change_set_id: p.changeSetId, title: p.title, validation: p.validation });
 
-const outcomeJson = (o: ChatOutcome) => ({
+const configJson = (c: ConfigView) => ({ id: c.id, name: c.name, board_id: c.boardId, board_name: c.boardName });
+
+const outcomeJson = (o: ChatOutcome, configs: readonly ConfigView[] = []) => ({
   conversation_id: o.conversationId,
   message_ids: o.messageIds,
   status: o.status,
   text: o.text,
   proposals: o.proposals.map(proposalJson),
+  // Additive: the configs the agent made this turn (put_config, create_config). The web opens these; here they are named.
+  configs_made: configs.map(configJson),
   priorities: o.priorities.map((p) => ({ id: p.id, priority_kind: p.priorityKind, statement: p.statement, subject: p.subject })),
   provider: o.provider,
   model: o.model,
@@ -55,6 +59,15 @@ function proposalText(p: ChatOutcome["proposals"][number]): string {
     "  ops:",
     ...p.ops.map((o) => `    ${opLine(o)}`),
     `  apply with: keyloom change apply ${p.changeSetId}`,
+  ].join("\n");
+}
+
+/** The CLI has no card to click, so a config the agent made is named with the commands that reach it. */
+function madeConfigText(c: ConfigView): string {
+  return [
+    `made config "${c.name}" (${c.id}) on the ${c.boardName}`,
+    `  its proposals: keyloom change list ${c.id}`,
+    `  not on the keyboard until you run: keyloom config use ${c.id}`,
   ].join("\n");
 }
 
@@ -119,6 +132,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
         let conversationId = opts.conversation;
         let pendingSelect = select;
         let last: ChatOutcome | undefined;
+        let lastConfigs: ConfigView[] = [];
 
         const turn = async (message: string) => {
           let streamed = false;
@@ -141,16 +155,18 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
           pendingSelect = undefined;
           conversationId = outcome.conversationId;
           last = outcome;
+          lastConfigs = configsMadeInTurn(app, outcome.conversationId, outcome.messageIds[0] ?? "");
           if (!machine) {
             if (streamed) ctx.io.out("\n");
             for (const p of outcome.priorities) ctx.io.err(`remembered ${p.id} (${p.priorityKind}): ${p.statement}\n`);
             for (const p of outcome.proposals) ctx.io.out(`\n${proposalText(p)}\n`);
+            for (const c of lastConfigs) ctx.io.out(`\n${madeConfigText(c)}\n`);
             const notice = NOTICE[outcome.status];
             if (notice) ctx.io.err(`${notice}\n`);
             if (outcome.status === "refused") ctx.io.err("The model declined to answer.\n");
           }
           if (outcome.status === "refused") {
-            if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(outcome), table: "" });
+            if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(outcome, lastConfigs), table: "" });
             throw new ModelError("refused", "the model declined to answer, even after the fallback; rephrase and try again");
           }
         };
@@ -167,7 +183,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
         }
 
         if (last === undefined) return;
-        if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(last), table: "", ids: [last.conversationId] });
+        if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(last, lastConfigs), table: "", ids: [last.conversationId] });
         else ctx.io.err(`conversation ${last.conversationId}\n`);
       });
     });

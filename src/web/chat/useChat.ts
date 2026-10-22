@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { ChatRequest, ChatSelection, ConversationSummary } from "../../api/http.ts";
+import type { ChatPresentation, ChatRequest, ChatSelection, ConversationSummary } from "../../api/http.ts";
 
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
@@ -28,7 +28,14 @@ function classify(error: unknown): Problem {
 
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === "AbortError";
 
+/**
+ * `liveCompleted` is set when a reply this mount sent has been watched finishing, and for no other: a run found again after a reload,
+ * a conversation opened from history and a thread carried in from another config never set it. That is what lets the shell act on a
+ * finished reply (open a config it made) without acting again on every replay. It is state, so whoever reads it sees the transcript
+ * as rendered with the finished reply in it.
+ */
 export function useChat(token: string, layoutRef: string) {
+  const [liveCompleted, setLiveCompleted] = useState<{ presentation: ChatPresentation; id: number } | null>(null);
   const [transcript, dispatch] = useReducer(transcriptReducer, EMPTY);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [history, setHistory] = useState<History>({ status: "idle" });
@@ -44,13 +51,17 @@ export function useChat(token: string, layoutRef: string) {
 
   useEffect(() => () => controller.current?.abort(), []);
 
-  const observe = useCallback(async (id: string, mine: AbortController) => {
+  const observe = useCallback(async (id: string, mine: AbortController, finished?: (presentation: ChatPresentation | null) => void) => {
+    let completed: ChatPresentation | null = null;
     await observeSavedRun(token, id, mine.signal, (snapshot, detail) => {
       if (controller.current !== mine) return;
       savedRun.current = snapshot.id;
       conversationId.current = snapshot.conversationId;
+      completed = snapshot.status === "completed" ? snapshot.presentation : null;
       dispatch({ type: "saved", snapshot, detail });
     });
+    // Only a run that ended while this request was still the one on screen counts as finished here.
+    if (finished !== undefined && controller.current === mine && !mine.signal.aborted) finished(completed);
   }, [token]);
 
   useEffect(() => {
@@ -73,6 +84,10 @@ export function useChat(token: string, layoutRef: string) {
       const mine = new AbortController();
       controller.current = mine;
       let started = false;
+      let streamed: ChatPresentation | null = null;
+      const announce = (presentation: ChatPresentation | null) => {
+        if (presentation?.status === "completed") setLiveCompleted({ presentation, id: ++counter.current });
+      };
       try {
         const body = { ...(answer === undefined ? { message: text } : { answer: { toolUseId: answer.toolUseId, text } }), ...(conversationId.current === null ? {} : { conversationId: conversationId.current }), ...(selection === null ? {} : { selection }), ...(drafts.length === 0 ? {} : { drafts }) };
         const requestId = crypto.randomUUID();
@@ -88,7 +103,7 @@ export function useChat(token: string, layoutRef: string) {
           started = true;
           savedRun.current = accepted.id;
           localStorage.setItem(storageKey, accepted.id);
-          await observe(accepted.id, mine);
+          await observe(accepted.id, mine, announce);
           return;
         }
         localStorage.removeItem(storageKey);
@@ -102,9 +117,11 @@ export function useChat(token: string, layoutRef: string) {
           (event) => {
             if (controller.current !== mine || mine.signal.aborted) return;
             if (event.type === "start") started = true;
+            if (event.type === "presentation") streamed = event.presentation;
             dispatch({ type: "event", event });
           },
         );
+        if (controller.current === mine && !mine.signal.aborted) announce(streamed);
       } catch (error) {
         if (controller.current !== mine) return; // replaced by a new conversation; nothing to report
         // Only an explicit HTTP refusal proves execution never started. Lost observation is not
@@ -233,5 +250,5 @@ export function useChat(token: string, layoutRef: string) {
     [token],
   );
 
-  return { transcript, streaming, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, answer, retry, stop, newConversation, open, markApplied, removePriority };
+  return { transcript, streaming, liveCompleted, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, answer, retry, stop, newConversation, open, markApplied, removePriority };
 }

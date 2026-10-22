@@ -5,7 +5,9 @@ import { fetchConfigs } from "./api-configs.ts";
 export type Configs = { live: ApiConfig[]; archived: ApiConfig[]; loaded: boolean; reload: () => void };
 
 // This board's configs for the switcher (D-315): the live ones newest edited first, and the archived ones for "Archived (n)". Loads
-// again when the board, the config on screen or its head changes, since a rename, archive or copy changes the list.
+// again when the board, the config on screen or its head changes (a rename or archive of it), and on `reload`. A config made somewhere
+// else changes none of those: the agent's create_config and put_config, or the CLI, add one without touching the config on screen, so
+// the chat asks for `reload` when a reply names a config the list lacks (useMadeConfigRefresh).
 export function useConfigs(token: string, boardId: string, key: string): Configs {
   const [live, setLive] = useState<ApiConfig[]>([]);
   const [archived, setArchived] = useState<ApiConfig[]>([]);

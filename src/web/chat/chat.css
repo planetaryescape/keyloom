@@ -689,6 +689,24 @@
   outline-offset: 2px;
 }
 
+/* The config a reply made: the answer card's quiet look, with one button to open it or go back. */
+.config-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.config-card-facts {
+  margin: 0;
+}
+
+.config-card-action {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .ask-card-done {
   border-color: var(--color-border);
   background: transparent;

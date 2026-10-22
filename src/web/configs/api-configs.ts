@@ -11,6 +11,9 @@ const at = (ref: string) => `/api/configs/${encodeURIComponent(ref)}`;
 
 export const fetchConfigs = async (token: string, board: string, opts: { archived?: boolean; signal?: AbortSignal } = {}): Promise<ApiConfig[]> =>
   (await request("GET", `/api/configs?board=${encodeURIComponent(board)}${opts.archived === true ? "&archived=1" : ""}`, token, ConfigListResponseSchema, opts.signal)).configs;
+/** Every config on every board, archived ones included: the config cards in a thread can name any of them. */
+export const fetchAllConfigs = async (token: string, signal?: AbortSignal): Promise<ApiConfig[]> =>
+  (await request("GET", "/api/configs?archived=1", token, ConfigListResponseSchema, signal)).configs;
 export const createConfig = async (token: string, body: NewConfigRequest): Promise<ApiConfig> =>
   (await request("POST", "/api/configs", token, ConfigResponseSchema, undefined, body)).config;
 export const renameConfig = async (token: string, ref: string, name: string): Promise<ApiConfig> =>

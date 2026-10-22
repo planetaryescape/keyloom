@@ -6,7 +6,7 @@ import type { Binding, Layout } from "../layout/schema.ts";
 import type { ChangeOp, Slot } from "../layout/change.ts";
 import { addLayerChange, convertLayerOps, duplicateLayerChange, moveLayerOps, niceLayerName } from "../layout/layer-ops.ts";
 import { bindingLegend } from "../layout/legend.ts";
-import type { ApplyResponse, BoardChoice, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
+import type { ApplyResponse, BoardChoice, ChatPresentation, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { undoChange, upgradeStoredLayout } from "./api-write.ts";
@@ -28,6 +28,7 @@ import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel } from "./review/ReviewPanel.tsx";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
+import { withoutRepeats } from "./chat/transcript.ts";
 import type { Turn } from "./chat/transcript.ts";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
@@ -43,6 +44,8 @@ import { ConfirmDialog, DeleteConfigDialog, NewConfigDialog, RenameDialog } from
 import { leaveToast, takeToast } from "./shell/toast-flash.ts";
 import { EditingStatus } from "./configs/EditingStatus.tsx";
 import { useConfigs } from "./configs/useConfigs.ts";
+import { autoOpenTarget } from "./configs/agent-made-configs.ts";
+import { useMadeConfigRefresh } from "./configs/useMadeConfigRefresh.ts";
 import { ComboEditor, ComboList, draftFromCombo, type ComboDraft } from "./combos/ComboPane.tsx";
 import { combosOn, newComboId } from "./combos/combo-ops.ts";
 import { bindingSummary, withBinding, type Draft } from "./editor/draft.ts";
@@ -1289,15 +1292,42 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
    * travels as what was on screen: this layout's turns, after any it had carried in itself, so a run of switches keeps the whole thread.
    */
   function switchLayout(id: string) {
-    const turns = [...(carriedThread?.turns ?? []), ...turnsNow.current];
-    const carry: Arrival = {
-      layerName: layer?.name ?? null,
-      chatOpen,
-      thread: turns.length === 0 ? null : { fromName: carriedThread !== null && turnsNow.current.length === 0 ? carriedThread.fromName : `${summary.name} on your ${boardDisplayName(board.name)}`, turns },
-    };
+    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry() };
     if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
     else chrome.onSelect(id);
+    // A config made since the page loaded isn't in the page's list yet, and selecting an unknown one leaves the page on its skeleton.
+    if (!chrome.layouts.some((candidate) => candidate.id === id)) chrome.onReload?.(id);
   }
+
+  /** The thread as it stands, with the config it was about, so the next page can show it and its config cards can go back. */
+  function threadToCarry(own: readonly Turn[] = turnsNow.current): CarriedThread | null {
+    const turns = [...withoutRepeats(carriedThread?.turns ?? [], own), ...own];
+    if (turns.length === 0) return null;
+    // With nothing said on this page yet, the thread is still about the config it came from.
+    const inherited = carriedThread !== null && own.length === 0;
+    return {
+      fromName: inherited ? carriedThread.fromName : `${summary.name} on your ${boardDisplayName(board.name)}`,
+      turns,
+      ...(inherited ? (carriedThread.from === undefined ? {} : { from: carriedThread.from }) : { from: { id: summary.id, name: summary.name } }),
+    };
+  }
+
+  // A config the agent made opens by itself when BK watched the reply finish and is not in the middle of anything here (D-442). It
+  // opens with the chat carried (D-317) and its proposals one click away (D-336); a reply loaded from history, found again after a
+  // reload or carried in from another page never gets here, because the chat only announces replies it sent.
+  const openedForAgent = useRef(new Set<string>());
+  const busyHere = editing !== null || draft.dirty || comboDraft !== null || comboPicking || placing !== null || swapping !== null || quick !== null
+    || pendingDrop !== null || parked.size > 0 || changing || renamingId !== null || configDialog !== null || lightingDraft.size > 0 || newBoardPanel;
+  function onReplyCompleted(presentation: ChatPresentation, turns: readonly Turn[]) {
+    const id = autoOpenTarget(presentation, { currentId: layoutRef, opened: openedForAgent.current, busy: busyHere });
+    if (id === null) return;
+    openedForAgent.current.add(id);
+    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen: true, thread: threadToCarry(turns) };
+    if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
+    // The list of configs behind the page doesn't have it yet; reloading also selects it.
+    chrome.onReload?.(id);
+  }
+  const refreshMadeConfigs = useMadeConfigRefresh(configs);
 
   /** After "Make": open the new config with its proposals beside the board (D-336). */
   function openMadeConfig(configId: string) {
@@ -1504,7 +1534,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onClearCarried={() => setCarriedThread(null)}
                 onTurns={(turns) => {
                   turnsNow.current = turns;
+                  refreshMadeConfigs(turns);
                 }}
+                onReplyCompleted={onReplyCompleted}
+                onOpenConfig={switchLayout}
               />
             </>
   );
