@@ -188,6 +188,9 @@ export async function restartHalf(opts: {
       if (Date.now() >= deadline) break;
       await sleep(poll);
     }
+    if (!lockWasReported && opts.screenLocked) {
+      try { lockWasReported = await opts.screenLocked(); } catch { /* The outer probe logs failures and fails open. */ }
+    }
     if (lockWasReported) return { ok: false, reason: SCREEN_LOCK_MESSAGE };
     // A relayed peripheral with no cable of its own goes back to its app after 3 s, which looks the same from here.
     const cable = touched.baud === RELAY_BAUD ? ` Is the ${label}'s own USB cable plugged in? A half on battery returns to typing after 3 seconds.` : "";

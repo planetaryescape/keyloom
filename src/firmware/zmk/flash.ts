@@ -183,7 +183,8 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
     }
     if (input.hooks?.enterBootloader && (recovery?.instruction === undefined || shared)) {
-      const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text));
+      // The unlock message asks something of the person, so it is marked as needing a hand like any other instruction to act.
+      const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined));
       if (!entered.ok) {
         restartReason = entered.reason;
         say(`keyloom: couldn't restart the ${step.label} by itself: ${entered.reason}`);
@@ -226,7 +227,8 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       await sleep(poll, signal);
     }
     if (!mount || !identity) {
-      if (lockWasReported) return failed(`${SCREEN_LOCK_MESSAGE} ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`}`);
+      // The Mac can lock after the last poll; probe once more so the timeout names the real reason.
+      if (lockWasReported || await screenLocked()) return failed(`${SCREEN_LOCK_MESSAGE} ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`}`);
       return failed(
         `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? sharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
       );

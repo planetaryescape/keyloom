@@ -172,6 +172,26 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(r.error).not.toContain("didn't appear");
   });
 
+  test("a Mac that locks after the last poll still gets the unlock reason at the timeout", async () => {
+    const s = await setup();
+    const start = Date.now();
+    const r = await s.flash({ screenLocked: async () => Date.now() >= start + 200, bootloaderWaitMs: 300, pollMs: 1000 });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("Unlock your Mac first:");
+    expect(r.error).not.toContain("didn't appear");
+  });
+
+  test("the hands-free unlock announcement asks for a hand", async () => {
+    const s = await setup();
+    const notes: Array<[string, unknown]> = [];
+    await s.flash({
+      bootloaderWaitMs: 50,
+      onState: (state, instruction, note) => { if (instruction?.startsWith("Unlock your Mac first:")) notes.push([state, note]); },
+      hooks: { enterBootloader: async (_step, _i, announce) => { announce("Unlock your Mac first: macOS doesn't mount the keyboard's boot drive while the screen is locked."); return { ok: false, reason: "locked" }; } },
+    });
+    expect(notes[0]).toEqual(["waiting_for_bootloader", { needsHand: true }]);
+  });
+
   test("a throwing lock probe fails open", async () => {
     const s = await setup();
     const r = await s.flash({ screenLocked: async () => { throw new Error("probe failed"); }, bootloaderWaitMs: 100 });

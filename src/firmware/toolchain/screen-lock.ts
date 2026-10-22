@@ -16,13 +16,15 @@ export function parseConsoleUsers(json: string, uid: number): boolean {
   return session.CGSSessionScreenIsLocked === true;
 }
 
+export const PLUTIL_EXTRACT = ["/usr/bin/plutil", "-extract", "IOConsoleUsers", "json", "-o", "-", "-"] as const;
+
 /** Probe errors fail open: a broken status check must never prevent flashing. */
 export async function screenIsLocked(log: (line: string) => void): Promise<boolean> {
   try {
     const uid = process.getuid?.();
     if (uid === undefined) throw new Error("the current user id is unavailable");
     const ioreg = Bun.spawn(["/usr/sbin/ioreg", "-n", "Root", "-d1", "-a"], { stdout: "pipe", stderr: "ignore" });
-    const plutil = Bun.spawn(["/usr/bin/plutil", "-extract", "IOConsoleUsers", "json", "-o", "-", "-"], { stdin: ioreg.stdout, stdout: "pipe", stderr: "pipe" });
+    const plutil = Bun.spawn([...PLUTIL_EXTRACT], { stdin: ioreg.stdout, stdout: "pipe", stderr: "pipe" });
     const [json, err, code, ioregCode] = await Promise.all([new Response(plutil.stdout).text(), new Response(plutil.stderr).text(), plutil.exited, ioreg.exited]);
     if (ioregCode !== 0 || code !== 0) throw new Error(`ioreg exited ${ioregCode}, plutil exited ${code}${err.trim() ? `: ${err.trim()}` : ""}`);
     return parseConsoleUsers(json, uid);
