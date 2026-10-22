@@ -381,8 +381,9 @@ export async function main(): Promise<never> {
   const code = await runCli(process.argv.slice(2));
   // On Windows a piped stdout is written asynchronously, and exiting at once loses it (seen as an
   // empty `keyloom --version`). A zero-length write's callback runs after everything queued before it.
+  // The callback also runs with an error on a closed stream; a reader that never drains gets 5 s, not forever.
   const flushed = (stream: NodeJS.WriteStream) => new Promise<void>((resolve) => stream.write("", () => resolve()));
-  await Promise.all([flushed(process.stdout), flushed(process.stderr)]);
+  await Promise.race([Promise.all([flushed(process.stdout), flushed(process.stderr)]), new Promise((resolve) => setTimeout(resolve, 5_000).unref())]);
   process.exit(code);
 }
 

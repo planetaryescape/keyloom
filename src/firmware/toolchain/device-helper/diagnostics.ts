@@ -9,7 +9,7 @@ import { HID_CAPABILITIES, SERIAL_CAPABILITIES, NATIVE_CAPABILITIES, type Capabi
 type DiagnosticIdentity = { hostVersion: string; protocol: 1; target: string; capabilities: Capability[] };
 export type HelperDiagnostic = DiagnosticIdentity & (
   | { available: true; helperVersion: string; helperSha256: string }
-  | { available: false; code: HelperFailureCode | "not_bundled" }
+  | { available: false; code: HelperFailureCode | "not_bundled"; detail?: string }
 );
 
 /** Source/dev use reports not_bundled without starting a process. Installed builds carry the only trusted pair. */
@@ -24,6 +24,6 @@ export async function deviceHelperDiagnostic(): Promise<HelperDiagnostic> {
     const hello = await diagnoseHelper(extracted.path, extracted.manifest, undefined, deviceBackend() === "native" ? NATIVE_CAPABILITIES : deviceBackend() === "native-hid" ? HID_CAPABILITIES : deviceBackend() === "native-serial" ? SERIAL_CAPABILITIES : []);
     return { ...base, available: true, helperVersion: hello.helperVersion, helperSha256: extracted.manifest.sha256, target: hello.target, capabilities: hello.capabilities };
   } catch (error) {
-    return { ...base, available: false, code: error instanceof HelperFailure ? error.code : "helper_unavailable" };
+    return { ...base, available: false, code: error instanceof HelperFailure ? error.code : "helper_unavailable", ...(error instanceof HelperFailure && error.detail ? { detail: error.detail } : {}) };
   }
 }

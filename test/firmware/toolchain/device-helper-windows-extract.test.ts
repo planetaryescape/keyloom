@@ -128,3 +128,13 @@ test.skipIf(process.platform !== "win32")("native Windows refuses a cache whose 
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("writable by S-1-1-0");
   expect(fs.readdirSync(base)).toEqual([]);
 }, 60_000);
+
+test.skipIf(process.platform !== "win32")("native Windows refuses a cache root whose inheritable grant would reach what keyloom creates", () => {
+  const base = tempDir();
+  // Inherit-only Everyone FullControl on the root: the root itself is clean, but new children would inherit it.
+  const script = `$dir = [System.IO.DirectoryInfo]::new($env:KEYLOOM_TEST_ACL); $acl = $dir.GetAccessControl(); $sid = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0'); $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'InheritOnly', 'Allow'); $acl.AddAccessRule($rule); $dir.SetAccessControl($acl)`;
+  const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { env: { ...withoutPsModulePath(), KEYLOOM_TEST_ACL: base } });
+  expect(result.exitCode).toBe(0);
+  expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("writable by S-1-1-0");
+  expect(fs.readdirSync(base)).toEqual([]);
+}, 60_000);

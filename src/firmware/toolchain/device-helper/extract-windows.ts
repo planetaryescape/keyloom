@@ -12,8 +12,8 @@ const aclChecked = new Set<string>();
 
 // Node exposes junctions as symbolic links but not every FILE_ATTRIBUTE_REPARSE_POINT.
 // PowerShell's built-in .NET APIs cover those tags and ACLs without an extra native addon.
-// Inspect ACLs only on first use in this process; warm launches still inspect attributes
-// and hash the final executable. The boundary excludes a malicious same-user process.
+// Inspect each path's ACL only once per process; every launch still re-inspects
+// attributes (one PowerShell start per inspection) and hashes the final executable. The boundary excludes a malicious same-user process.
 // Ancestors above LocalAppData are checked for the rights that would let another account
 // rename one away and substitute a junction: delete, delete-child, change-permissions and
 // take-ownership. Creating new entries there (C:\ grants that to Users) is not enough.
@@ -38,7 +38,9 @@ foreach ($entry in $paths) {
     if ($owners -notcontains $owner) { throw "untrusted owner $owner of $($entry.path)" }
     $mask = if ($entry.ancestor) { $rename } else { $writes }
     foreach ($rule in $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
-      if (($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
+      # An ancestor's inherit-only grant never reaches it. A managed directory's does reach what keyloom creates
+      # inside it, so it is refused there too, before anything is created; CREATOR OWNER becomes this user.
+      if (($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0 -and ($entry.ancestor -or $rule.IdentityReference.Value -eq 'S-1-3-0')) { continue }
       if ($rule.AccessControlType -eq 'Allow' -and ($rule.FileSystemRights -band $mask) -ne 0 -and $owners -notcontains $rule.IdentityReference.Value) { throw "writable by $($rule.IdentityReference.Value) ($($rule.FileSystemRights)): $($entry.path)" }
     }
   }
