@@ -1937,3 +1937,11 @@ The shell now runs `$SHELL -ilc` with `/usr/bin/printenv PATH` between unique ma
 `tauri-apps/fix-path-env-rs` does the same, but it isn't published on crates.io and waits on the shell with no deadline, so a slow shell profile would hang the app at launch.
 
 Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
+
+### D-4xx: Shutdown closes manual flash admission before draining accepted starts. (2026-10-22, Stage 11)
+
+Refines D-421/D-422's consumer-before-helper lifetime. Register a manual flash start before checking its artifact asynchronously. Once shutdown begins, refuse new starts with `UsageError` (the editor's existing HTTP 400 `usage` code), wait for every accepted start to register its task or fail, then wait for running tasks before closing the helper. Always release pending starts, including when the artifact check throws. Admission closes for the App being shut down, not the whole process, so other Apps in the same process (a test run's) are unaffected.
+
+Await sync startup once before stopping the sync and review engines, including when startup fails. Log startup rejection without swallowing it: shutdown reports that reason once, alongside any helper cleanup failure. Settle both stops independently so one failure cannot hide the other or close the helper before the remaining stop finishes.
+
+Evidence: `test/app/firmware-shutdown.test.ts` gates artifact checks and checks another App still admits flashes; and final flash callbacks against fake toolchains; `test/cli/serve-shutdown.test.ts` exercises the serve stop hook with deferred startup and stop failures. No real keyboard was flashed.
