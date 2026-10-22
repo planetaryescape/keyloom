@@ -55,7 +55,7 @@ The `windows-2022` job ran the real MSVC helper and the compiled CLI. It found f
 
 - **Windows PowerShell 5.1 couldn't load `Get-Acl`.** It was launched from PowerShell 7 and inherited 7's `PSModulePath`, so every extraction refused the cache. The inspection now reads ACLs through .NET (`DirectoryInfo`/`FileInfo.GetAccessControl`), and the child process gets no `PSModulePath`. The test fixtures set ACLs the same way.
 - **The refusal reason was unreadable.** Redirected PowerShell stderr is CLIXML. The script now prints its reason on stdout and exits 1, and `HelperFailure` carries the detail in its message (`unsafe_cache: …`).
-- **A cold Windows PowerShell start took several seconds on the runner.** The inspection allows 30 s, and runs once per process.
+- **A cold Windows PowerShell start took several seconds on the runner.** The inspection allows 30 s. Each path's ACL is read once per process, but every inspection and private-creation step starts PowerShell (two on a warm launch, more on a cold one).
 - **`keyloom.exe` ran nothing and exited 0.** `import.meta.main` in `src/cli/main.ts` is false in the compiled Windows executable, so `--version` printed nothing through a pipe, a file and `cmd`. Compiled builds now start from `src/cli/compiled.ts`, which always runs the CLI. The CLI also flushes stdout and stderr before it exits.
 
 On the final head the installed smoke passes everything it was written to check:
@@ -76,7 +76,7 @@ Still not observed: SmartScreen and antivirus behaviour on a downloaded unsigned
 
 ## Remaining after slice 1
 
-The installed Windows journey is covered by the `windows-2022` CI job on this PR's final head. Review rounds with Codex (gpt-6.1-sol) closed three Windows cache-safety holes, each now covered by a native test:
+The installed Windows journey is covered by the `windows-2022` CI job; the merged head's run is the evidence of record. Review rounds with Codex (gpt-6.1-sol) closed three Windows cache-safety holes, each now covered by a native test:
 - ancestor folders that another account could rename;
 - inheritable untrusted grants on the cache root;
 - objects created without an explicit descriptor. Folders and the temp exe are now created with a protected DACL.

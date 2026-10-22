@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { HelperFailure } from "./errors.ts";
 
 type Manifest = { release: string; target: string; sha256: string };
-type WindowsFs = Pick<typeof fs, "mkdirSync" | "lstatSync" | "realpathSync" | "openSync" | "writeFileSync" | "closeSync" | "fstatSync" | "readFileSync" | "renameSync" | "unlinkSync">;
+type WindowsFs = Pick<typeof fs, "mkdirSync" | "lstatSync" | "realpathSync" | "openSync" | "writeFileSync" | "closeSync" | "fstatSync" | "readFileSync" | "linkSync" | "unlinkSync">;
 const errno = (error: unknown, code: string): boolean => error instanceof Error && "code" in error && error.code === code;
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 const aclChecked = new Set<string>();
@@ -176,11 +176,12 @@ export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base
       const fd = io.openSync(temporary, "r+");
       try { io.writeFileSync(fd, bytes); } finally { io.closeSync(fd); }
       verify(temporary);
-      // Windows can refuse rename when another parent has published/opened the exe.
-      // Only accept that race if the winner passes the same complete verification.
-      try { io.renameSync(temporary, path); }
+      // Publish with a hard link, which fails if the exe exists, never a rename: Windows rename replaces an
+      // existing file, so a concurrent identical publish swapped the file another process was verifying
+      // (integrity_error with eight cold doctors on windows-2022). A loser verifies the winner instead.
+      try { io.linkSync(temporary, path); }
       catch (error) {
-        if (!["EEXIST", "EPERM", "EACCES", "EBUSY"].some((code) => errno(error, code))) throw error;
+        if (!errno(error, "EEXIST")) throw error;
         verify(path);
       }
     } finally {

@@ -22,7 +22,7 @@ function fixture() {
     realpathSync: ((p: fs.PathLike) => String(p)) as typeof fs.realpathSync,
     openSync: ((p: fs.PathLike, flags: fs.OpenMode) => fs.openSync(map(p), flags)) as typeof fs.openSync,
     writeFileSync: fs.writeFileSync, closeSync: fs.closeSync, fstatSync: fs.fstatSync, readFileSync: fs.readFileSync,
-    renameSync: ((a: fs.PathLike, b: fs.PathLike) => fs.renameSync(map(a), map(b))) as typeof fs.renameSync,
+    linkSync: ((a: fs.PathLike, b: fs.PathLike) => fs.linkSync(map(a), map(b))) as typeof fs.linkSync,
     unlinkSync: ((p: fs.PathLike) => fs.unlinkSync(map(p))) as typeof fs.unlinkSync,
   };
   return { io, base, map };
@@ -60,15 +60,15 @@ test("missing/relative LocalAppData, junctions, redirected paths and ACL/reparse
 
 test("a concurrent locked winner is verified, corrupt winners and unexplained locks refuse", () => {
   const { io, base, map } = fixture();
-  io.renameSync = (from, to) => {
+  io.linkSync = (from, to) => {
     fs.copyFileSync(map(from), map(to));
-    throw Object.assign(new Error("locked winner"), { code: "EPERM" });
+    throw Object.assign(new Error("another process published first"), { code: "EEXIST" });
   };
   expect(extractWindowsHelper(bytes, manifest, base, io, () => {})).toEndWith("keyloom-device.exe");
   const other = fixture();
-  other.io.renameSync = (_from, to) => {
+  other.io.linkSync = (_from, to) => {
     fs.writeFileSync(other.map(to), "wrong");
-    throw Object.assign(new Error("locked winner"), { code: "EACCES" });
+    throw Object.assign(new Error("another process published first"), { code: "EEXIST" });
   };
   expect(() => extractWindowsHelper(bytes, manifest, other.base, other.io, () => {})).toThrow("integrity_error");
 });
@@ -83,7 +83,7 @@ test("a final executable link and a lock without a published winner are refused"
   }) as typeof fs.lstatSync;
   expect(() => extractWindowsHelper(bytes, manifest, base, io, () => {})).toThrow("unsafe_cache");
   const locked = fixture();
-  locked.io.renameSync = () => { throw Object.assign(new Error("locked without winner"), { code: "EPERM" }); };
+  locked.io.linkSync = () => { throw Object.assign(new Error("exists but no winner"), { code: "EEXIST" }); };
   expect(() => extractWindowsHelper(bytes, manifest, locked.base, locked.io, () => {})).toThrow();
   const dir = win32.join(locked.base, "keyloom", "device-helper", manifest.release, manifest.target, manifest.sha256);
   expect(fs.readdirSync(locked.map(dir))).toEqual([]);
@@ -145,15 +145,12 @@ test.skipIf(process.platform !== "win32")("native Windows creates the cache priv
   const setup = `$dir = [System.IO.DirectoryInfo]::new($env:KEYLOOM_TEST_ACL); $acl = [System.Security.AccessControl.DirectorySecurity]::new(); $acl.SetAccessRuleProtection($true, $false); $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User; $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($me, 'FullControl', 'None', 'None', 'Allow')); $dir.SetAccessControl($acl)`;
   expect(Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(setup, "utf16le").toString("base64")], { env: { ...withoutPsModulePath(), KEYLOOM_TEST_ACL: base } }).exitCode).toBe(0);
   const exe = extractWindowsHelper(bytes, manifest, base);
-  const read = `foreach ($p in @($env:KEYLOOM_TEST_DIR, $env:KEYLOOM_TEST_EXE)) { $acl = if ([System.IO.Directory]::Exists($p)) { [System.IO.DirectoryInfo]::new($p).GetAccessControl() } else { [System.IO.FileInfo]::new($p).GetAccessControl() }; $sids = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) -join ','; [Console]::Out.WriteLine("$($acl.AreAccessRulesProtected)|$sids") }`;
+  const read = `[Console]::Out.WriteLine([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value); foreach ($p in @($env:KEYLOOM_TEST_DIR, $env:KEYLOOM_TEST_EXE)) { $acl = if ([System.IO.Directory]::Exists($p)) { [System.IO.DirectoryInfo]::new($p).GetAccessControl() } else { [System.IO.FileInfo]::new($p).GetAccessControl() }; $sids = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) -join ','; [Console]::Out.WriteLine("$($acl.AreAccessRulesProtected)|$sids") }`;
   const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(read, "utf16le").toString("base64")], { env: { ...withoutPsModulePath(), KEYLOOM_TEST_DIR: join(base, "keyloom"), KEYLOOM_TEST_EXE: exe } });
   expect(result.exitCode).toBe(0);
-  const lines = result.stdout.toString().trim().split(/\r?\n/);
+  const [me, ...lines] = result.stdout.toString().trim().split(/\r?\n/);
   expect(lines).toHaveLength(2);
-  // The cache directory is protected and lists only this user, SYSTEM and Administrators; the exe inherits that.
-  expect(lines[0]).toStartWith("True|");
-  for (const line of lines) {
-    const sids = line.split("|")[1]!.split(",");
-    expect(sids.every((sid) => sid === "S-1-5-18" || sid === "S-1-5-32-544" || sid.startsWith("S-1-5-21-"))).toBe(true);
-  }
+  // Both the cache directory and the published exe carry a protected DACL naming exactly this user, SYSTEM and Administrators.
+  const expected = [me!, "S-1-5-18", "S-1-5-32-544"].sort().join(",");
+  for (const line of lines) expect(line).toBe(`True|${expected}`);
 }, 60_000);
