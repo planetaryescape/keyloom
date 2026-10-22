@@ -12,15 +12,14 @@ const aclChecked = new Set<string>();
 
 // Node exposes junctions as symbolic links but not every FILE_ATTRIBUTE_REPARSE_POINT.
 // PowerShell's built-in .NET APIs cover those tags and ACLs without an extra native addon.
-// Inspect each path's ACL only once per process; every launch still re-inspects
-// attributes (one PowerShell start per inspection) and hashes the final executable. The boundary excludes a malicious same-user process.
+// Each path's ACL is inspected once per process; every inspection and creation step still
+// starts Windows PowerShell (two on a warm launch, more on a cold one), and the final
+// executable is hashed before every spawn. The boundary excludes a malicious same-user process.
 // Ancestors above LocalAppData are checked for the rights that would let another account
 // rename one away and substitute a junction: delete, delete-child, change-permissions and
 // take-ownership. Creating new entries there (C:\ grants that to Users) is not enough.
 function inspectWindowsPaths(paths: string[], ancestors: string[] = []): void {
   const script = `
-$ErrorActionPreference = 'Stop'
-try {
 $paths = ConvertFrom-Json $env:KEYLOOM_CACHE_INSPECT
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
@@ -45,6 +44,20 @@ foreach ($entry in $paths) {
     }
   }
 }
+`;
+  runPowerShell(script, "KEYLOOM_CACHE_INSPECT", [
+    ...ancestors.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: true })),
+    ...paths.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: false })),
+  ]);
+  for (const path of [...ancestors, ...paths]) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
+}
+
+/** Runs a script in Windows PowerShell 5.1; a refusal comes back as HelperFailure("unsafe_cache") with the script's reason. */
+function runPowerShell(script: string, variable: string, payload: unknown): void {
+  const wrapped = `
+$ErrorActionPreference = 'Stop'
+try {
+${script}
 } catch {
   # Plain text on stdout: redirected PowerShell stderr is CLIXML, not the reason.
   [Console]::Out.WriteLine($_.Exception.Message)
@@ -55,14 +68,11 @@ foreach ($entry in $paths) {
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw new HelperFailure("unsafe_cache");
   const started = Date.now();
   const result = spawnSync(win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), [
-    "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
+    "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(wrapped, "utf16le").toString("base64"),
   ], {
     // PowerShell 7's PSModulePath breaks Windows PowerShell 5.1's module loading.
-    env: { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH")), KEYLOOM_CACHE_INSPECT: JSON.stringify([
-      ...ancestors.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: true })),
-      ...paths.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: false })),
-    ]) },
-    // Cold Windows PowerShell start can take several seconds on a busy machine; this runs once per process.
+    env: { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH")), [variable]: JSON.stringify(payload) },
+    // A cold Windows PowerShell start can take several seconds on a busy machine.
     windowsHide: true, timeout: 30_000, stdio: "pipe",
   });
   if (result.error || result.status !== 0) {
@@ -72,11 +82,47 @@ foreach ($entry in $paths) {
     const said = result.error?.message ?? (stdout || stderr || undefined);
     throw new HelperFailure("unsafe_cache", `powershell exit ${result.status ?? result.signal} after ${Date.now() - started} ms${said ? `: ${said}` : ""}`.slice(0, 300));
   }
-  for (const path of [...ancestors, ...paths]) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
+}
+
+/**
+ * Creates the missing cache directories and the temporary executable with a protected DACL (this user, SYSTEM and
+ * Administrators only) in the same call that creates them. Without an explicit descriptor a new object takes the
+ * creator token's default DACL when its parent has nothing inheritable, and no later check can revoke a handle
+ * another account opened in between.
+ */
+function createPrivateWindows(dirs: string[], file?: string): void {
+  runPowerShell(`
+$request = ConvertFrom-Json $env:KEYLOOM_CACHE_CREATE
+$principals = @([System.Security.Principal.WindowsIdentity]::GetCurrent().User, [System.Security.Principal.SecurityIdentifier]::new('S-1-5-18'), [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+foreach ($dir in @($request.dirs)) {
+  if (-not $dir) { continue }
+  $security = [System.Security.AccessControl.DirectorySecurity]::new()
+  $security.SetAccessRuleProtection($true, $false)
+  foreach ($sid in $principals) { $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')) }
+  [void][System.IO.Directory]::CreateDirectory($dir, $security)
+}
+if ($request.file) {
+  $security = [System.Security.AccessControl.FileSecurity]::new()
+  $security.SetAccessRuleProtection($true, $false)
+  foreach ($sid in $principals) { $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'Allow')) }
+  $stream = [System.IO.FileStream]::new($request.file, [System.IO.FileMode]::CreateNew, [System.Security.AccessControl.FileSystemRights]::FullControl, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::None, $security)
+  $stream.Dispose()
+}
+`, "KEYLOOM_CACHE_CREATE", { dirs, file: file ?? null });
+}
+
+/** For injected test filesystems, which have no Windows security descriptors to set. */
+function plainCreate(io: WindowsFs): (dirs: string[], file?: string) => void {
+  return (dirs, file) => {
+    for (const dir of dirs) {
+      try { io.mkdirSync(dir); } catch (error) { if (!errno(error, "EEXIST")) throw new HelperFailure("unsafe_cache"); }
+    }
+    if (file) io.closeSync(io.openSync(file, "wx"));
+  };
 }
 
 /** Injectable filesystem/security boundary lets non-Windows tests exercise refusal and races. */
-export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base: string | undefined, io: WindowsFs = fs, inspect: (paths: string[], ancestors?: string[]) => void = inspectWindowsPaths): string {
+export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base: string | undefined, io: WindowsFs = fs, inspect: (paths: string[], ancestors?: string[]) => void = inspectWindowsPaths, create: (dirs: string[], file?: string) => void = io === fs ? createPrivateWindows : plainCreate(io)): string {
   if (!base || !win32.isAbsolute(base)) throw new HelperFailure("unsafe_cache");
   const root = win32.resolve(base);
   const ancestors: string[] = [];
@@ -100,17 +146,13 @@ export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base
     }
   }
   // Inspect existing parents before creating anything below them, including reparse
-  // tags which lstat cannot describe. New directories inherit the checked parent ACL.
+  // tags which lstat cannot describe. Missing directories are created private, in one call.
   inspect(paths, ancestors);
-  for (const path of missing) {
-    try { io.mkdirSync(path); }
-    catch (error) {
-      if (!errno(error, "EEXIST")) throw new HelperFailure("unsafe_cache");
-      // Another parent won creation. Check its attributes/ACL before descending.
-      inspect([...paths, path]);
-    }
-    checkDirectory(path);
-    paths.push(path);
+  if (missing.length > 0) {
+    create(missing);
+    for (const path of missing) { checkDirectory(path); paths.push(path); }
+    // Another parent may have won creation of some of them: inspect them all before descending.
+    inspect(paths);
   }
   const path = win32.join(dir, "keyloom-device.exe");
   function verify(file: string): void {
@@ -129,7 +171,9 @@ export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base
   if (!exists) {
     const temporary = win32.join(dir, `.publish-${randomUUID()}.exe`);
     try {
-      const fd = io.openSync(temporary, "wx");
+      // Created empty with a private DACL, then filled; no other account ever has a handle to it.
+      create([], temporary);
+      const fd = io.openSync(temporary, "r+");
       try { io.writeFileSync(fd, bytes); } finally { io.closeSync(fd); }
       verify(temporary);
       // Windows can refuse rename when another parent has published/opened the exe.

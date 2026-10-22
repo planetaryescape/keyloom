@@ -138,3 +138,22 @@ test.skipIf(process.platform !== "win32")("native Windows refuses a cache root w
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("writable by S-1-1-0");
   expect(fs.readdirSync(base)).toEqual([]);
 }, 60_000);
+
+test.skipIf(process.platform !== "win32")("native Windows creates the cache private even under a parent that passes nothing down", () => {
+  const base = tempDir();
+  // A parent with only a non-inheritable grant: without an explicit descriptor, children would take the token's default DACL.
+  const setup = `$dir = [System.IO.DirectoryInfo]::new($env:KEYLOOM_TEST_ACL); $acl = [System.Security.AccessControl.DirectorySecurity]::new(); $acl.SetAccessRuleProtection($true, $false); $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User; $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($me, 'FullControl', 'None', 'None', 'Allow')); $dir.SetAccessControl($acl)`;
+  expect(Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(setup, "utf16le").toString("base64")], { env: { ...withoutPsModulePath(), KEYLOOM_TEST_ACL: base } }).exitCode).toBe(0);
+  const exe = extractWindowsHelper(bytes, manifest, base);
+  const read = `foreach ($p in @($env:KEYLOOM_TEST_DIR, $env:KEYLOOM_TEST_EXE)) { $acl = if ([System.IO.Directory]::Exists($p)) { [System.IO.DirectoryInfo]::new($p).GetAccessControl() } else { [System.IO.FileInfo]::new($p).GetAccessControl() }; $sids = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) -join ','; [Console]::Out.WriteLine("$($acl.AreAccessRulesProtected)|$sids") }`;
+  const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(read, "utf16le").toString("base64")], { env: { ...withoutPsModulePath(), KEYLOOM_TEST_DIR: join(base, "keyloom"), KEYLOOM_TEST_EXE: exe } });
+  expect(result.exitCode).toBe(0);
+  const lines = result.stdout.toString().trim().split(/\r?\n/);
+  expect(lines).toHaveLength(2);
+  // The cache directory is protected and lists only this user, SYSTEM and Administrators; the exe inherits that.
+  expect(lines[0]).toStartWith("True|");
+  for (const line of lines) {
+    const sids = line.split("|")[1]!.split(",");
+    expect(sids.every((sid) => sid === "S-1-5-18" || sid === "S-1-5-32-544" || sid.startsWith("S-1-5-21-"))).toBe(true);
+  }
+}, 60_000);
