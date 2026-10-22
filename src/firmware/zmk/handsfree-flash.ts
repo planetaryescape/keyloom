@@ -191,7 +191,9 @@ export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTar
   }
   opts.log(`keyloom: after the flash the ${label} reports ${seen.state === "absent" ? "nothing" : seen.state === "keyloom" ? `build ${seen.key}` : `serial ${seen.serial ?? "(none)"}`}; expected ${expected}`);
   if (seen.state === "absent") {
-    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Check its USB cable, then run \`keyloom doctor\` to see what it is running.` };
+    // The copy can be cut short when the bootloader's drive disappears mid-write, and a half with incomplete firmware never
+    // comes back on USB (BK's Glove80 left half, 2026-10-22: the rewrite from its bootloader then verified). Lead with that remedy.
+    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. Put it in its bootloader and flash again: ${t.step.enter} If it doesn't appear even then, check its USB cable and run \`keyloom doctor\`.` };
   }
   if (seen.state === "keyloom") {
     return { ok: false, error: `the ${label} was written, but it is running build ${seen.key} and not ${opts.buildId} (${expected}). The flash may not have been written; flash again.` };
