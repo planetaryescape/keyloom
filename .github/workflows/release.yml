@@ -13,6 +13,11 @@ on:
         description: An existing release tag with no assets yet, such as v0.53.1
         required: true
 
+# A second build of the same tag waits for the first, then finds its assets and stops, so two runs never upload at once.
+concurrency:
+  group: release-${{ inputs.tag || github.sha }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
