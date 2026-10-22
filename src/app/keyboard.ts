@@ -71,7 +71,13 @@ export async function rawHidFinding(deps: HandsFreeDeps, keyboard: AttachedKeybo
   }
   try {
     const hex = (n: number) => `0x${n.toString(16).padStart(4, "0")}`;
-    const found = (await transport.list()).find((h) => hex(h.vendorId) === keyboard.identity.vendorId && hex(h.productId) === keyboard.identity.productId);
+    const matches = (await transport.list()).filter((h) => hex(h.vendorId) === keyboard.identity.vendorId && hex(h.productId) === keyboard.identity.productId);
+    const serial = keyboard.firmware.state === "keyloom" ? keyboard.firmware.serial : undefined;
+    const serialMatch = serial === undefined ? undefined : matches.find((h) => h.serial === serial);
+    const found = serialMatch ?? matches[0];
+    if (!serialMatch && matches.some((h) => h.permissionDenied) && matches.some((h) => !h.permissionDenied)) {
+      return `one of the identical boards isn't readable (hidraw read/write permission denied on one endpoint); add a udev rule scoped to VID ${keyboard.identity.vendorId} and PID ${keyboard.identity.productId} granting your user access, reload rules and reconnect`;
+    }
     if (found?.permissionDenied) return `hidraw read/write permission denied; add a udev rule scoped to VID ${hex(found.vendorId)} and PID ${hex(found.productId)} granting your user access, reload rules and reconnect`;
     return found ? "its raw HID interface is visible" : "its raw HID interface was not found";
   } catch (err) {
