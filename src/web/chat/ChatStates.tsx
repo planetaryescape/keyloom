@@ -62,7 +62,7 @@ export function MissingKey({ providers, onRetry, retryLabel = "Try again" }: { p
         <KeyRound size={22} />
       </span>
       <h3>Chat needs a model</h3>
-      <p>keyloom reads its credentials when it starts, so one set up now won't be seen. Pick one, then stop keyloom in your terminal and start it again.</p>
+      <p>keyloom reads its credentials when it starts, so one set up now won't be seen. Pick one, then restart keyloom: quit the app and open it again, or stop <code>keyloom serve</code> and start it again.</p>
       <ul className="provider-options" aria-label="Ways to set up a model">
         {providers.map((p) => (
           <li key={p.id}>

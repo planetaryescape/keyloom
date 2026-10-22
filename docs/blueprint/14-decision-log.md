@@ -1927,3 +1927,12 @@ Evidence: `docs/issues/uf2-mount-point-taken-before-mount.md` (hardware observat
 Refines D-433's touch sequence on macOS. `tcsetattr` refuses a non-standard rate such as the 1201 relay with EINVAL, so v0.53.1's `serial.touch` at 1201 failed with `io_failed` and the relay never reached the firmware. The touch now sets the speed with the `IOSSIOSPEED` ioctl (`_IOW('T', 2, speed_t)`, IOKit/serial/ioss.h), then verifies both speeds with `tcgetattr` as before, for 1200 and 1201 alike. Linux already uses `termios2` with `BOTHER`, and Windows sets the DCB rate, so neither changes. Intel Macs still touch through `stty`, which has no way to set a non-standard rate on macOS. Their relay stays broken until Intel moves to the native helper.
 
 Evidence: `docs/issues/macos-1201-relay-rejected-by-tcsetattr.md` and [the native-default spike record](../research/spikes/device-helper-native-default.md).
+||||||| parent of f1c4e01 (fix: start the desktop app's keyloom with the login shell's PATH)
+
+### D-441: The desktop app starts keyloom with the login shell's PATH. (2026-10-22, BK's installed app)
+
+An app opened from Finder or the Dock inherits launchd's PATH, `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`. The bundled `keyloom serve` in BK's 0.53.1 app ran with exactly that, so it couldn't find `codex`, `docker`, `zapp` or `kanata` in `/opt/homebrew/bin`. Chat said it had no model, and builds and Moonlander flashing from the app would have failed the same way. The shell now asks `$SHELL -ilc` for its PATH once per server start, with a 3-second deadline, and passes it to the sidecar. If the shell doesn't answer in time, it adds `/opt/homebrew/bin` and `/usr/local/bin` to the inherited PATH. Only PATH is taken, not other variables such as API keys.
+
+`tauri-apps/fix-path-env-rs` does the same, but it isn't published on crates.io and waits on the shell with no deadline, so a slow shell profile would hang the app at launch.
+
+Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
