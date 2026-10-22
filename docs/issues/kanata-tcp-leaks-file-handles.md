@@ -23,7 +23,7 @@ In kanata `src/tcp_server.rs` at v1.12.0 (`02242ef`), and unchanged on main at `
 
 ## Fix
 
-Upstream: <UPSTREAM_PR>. It removes the entry when the reader loop ends, and drops a client whose stream can't be cloned instead of panicking. Its test fails on main with "20 closed clients still registered".
+Upstream: [jtroo/kanata#2227](https://github.com/jtroo/kanata/pull/2227) (head `197b4ca`). It removes the entry when the reader loop ends, and drops a client whose stream can't be cloned instead of panicking. Its test fails on main with "20 closed clients still registered".
 
 keyloom: `launchDaemonPlist` (`src/firmware/kanata/plist.ts`) raises the daemon's soft open-file limit to 4096, so the leak takes far longer to exhaust it. The daemon only picks up the limit when it is reinstalled. Run `keyloom remap setup`, then boot out the old daemon and bootstrap the new plist. The doctor's install command assumes no daemon is loaded, so it can't do the reinstall on its own. Remove the limit once a kanata release with the upstream fix is the minimum keyloom supports.
 
