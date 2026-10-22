@@ -259,16 +259,44 @@ impl Device for MacDevice {
             IOHIDDeviceRegisterRemovalCallback(raw, None, ptr::null_mut());
             IOHIDDeviceClose(raw, 0)
         };
-        if result != 0 {
+        let removed = unsafe { (*self.state.get()).failure } == Some("disconnected");
+        if !close_confirmed(result, removed) {
             return Err("io_failed");
         }
         Ok(())
     }
 }
+// After the removal callback, IOHIDDeviceClose on the terminated device returns kIOReturnBadArgument (observed
+// unplugging a Moonlander). Nothing is left open on a device that no longer exists, so that is a clean close.
+fn close_confirmed(result: i32, removed: bool) -> bool {
+    const BAD_ARGUMENT: u32 = 0xe000_02c2;
+    const NO_DEVICE: u32 = 0xe000_02c0;
+    const NOT_ATTACHED: u32 = 0xe000_02d9;
+    result == 0 || removed && matches!(result as u32, BAD_ARGUMENT | NO_DEVICE | NOT_ATTACHED)
+}
 impl Drop for MacDevice {
     fn drop(&mut self) {
         if !self.close_attempted && self.close().is_err() {
             std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::close_confirmed;
+
+    #[test]
+    fn close_after_removal_accepts_only_device_gone_results() {
+        assert!(close_confirmed(0, false));
+        // kIOReturnBadArgument (observed), kIOReturnNoDevice, kIOReturnNotAttached from IOReturn.h.
+        for gone in [0xe000_02c2_u32, 0xe000_02c0, 0xe000_02d9] {
+            assert!(close_confirmed(gone as i32, true));
+            assert!(!close_confirmed(gone as i32, false));
+        }
+        // kIOReturnError and kIOReturnNotReady still fail, even after removal.
+        for other in [0xe000_02bc_u32, 0xe000_02d8] {
+            assert!(!close_confirmed(other as i32, true));
         }
     }
 }
