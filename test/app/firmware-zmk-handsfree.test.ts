@@ -3,7 +3,8 @@
 // and the boot drives are fakes; nothing here touches a keyboard.
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { buildAndWait, flashAndWait, getFlash } from "../../src/app/index.ts";
+import { buildAndWait, flashAndWait, getFlash, startFlash } from "../../src/app/index.ts";
+import { waitForFlash } from "../../src/app/firmware.ts";
 import { buildKey } from "../../src/firmware/zmk/handsfree.ts";
 import { MODULE_FILES } from "../../src/firmware/zmk/module.ts";
 import { OLD_KEY, fakeWorld, glove80Image, serialOf } from "../helpers/fake-zmk-halves.ts";
@@ -75,6 +76,30 @@ describe("a Glove80 flash", () => {
     expect(world.touches).toEqual([]);
     expect(seen.some((i) => i?.includes("couldn't restart the right half by itself") && i.includes("Flash the right half (1 of 2)"))).toBe(true);
     expect(f.note).toContain("Verified");
+  });
+
+  test("a first partial flash has no rollback image; flash again accepts the failed half's open bootloader", async () => {
+    const e = await zmkEnv();
+    const b = await built(e);
+    let failLeft = true;
+    const world = fakeWorld({ root: e.volumes, halves: [half("L"), half("R")], after: (h, key) => h.letter === "L" && failLeft ? undefined : serialOf(key!, h.letter) });
+    const opts = { buildId: b.id, volumesRoot: e.volumes, bootloaderWaitMs: 2000, handsFree: { zmk: world.deps } };
+    try {
+      const failed = await waitForFlash(e.app, (await startFlash(e.app, opts)).id);
+      expect(failed.status).toBe("failed");
+      expect(failed.note).toBeNull();
+      expect(failed.error).toContain("no verified last-good image for the right half");
+      expect(failed.error).toContain("Retry starts with the right half");
+      expect(failed.error).not.toContain("Put it in its bootloader and flash again");
+      for (const letter of ["L", "R"]) expect(await Bun.file(join(e.dataDir, "firmware", "last-good", "moergo-glove80", `${letter}.uf2`)).exists()).toBe(false);
+      failLeft = false;
+      world.press("L");
+      await Bun.sleep(50);
+      const retried = await flashAndWait(e.app, opts);
+      expect(retried.status).toBe("succeeded");
+      expect(retried.note).toContain("Verified:");
+      expect(world.halves.map((h) => h.serial)).toEqual([serialOf(buildKey(b.id), "L"), serialOf(buildKey(b.id), "R")]);
+    } finally { world.stop(); }
   });
 
   test("a flash of a build without the markers asks for the key combo and flashes as before", async () => {

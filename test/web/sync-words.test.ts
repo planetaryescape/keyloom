@@ -103,6 +103,17 @@ describe("syncNotice", () => {
     });
   });
 
+  test("a failed latest sync cannot produce a success toast from a stale in-sync reading", () => {
+    const failed = { ...run("failed"), error: "the left half is absent" };
+    expect(syncNotice(at(syncing), at({ kind: "in_sync" }, failed))).toMatchObject({ kind: "error", detail: failed.error });
+  });
+
+  test("a final recovery error is news even when the bootloader prompt already needed a hand", () => {
+    const error = "Rollback is incomplete. The left half is absent or in its bootloader.";
+    expect(syncNotice(at({ kind: "needs_hand", instruction: "Restore the left half", reason: "" }), at({ kind: "needs_hand", instruction: error, reason: "" }, run("failed"))))
+      .toMatchObject({ kind: "error", detail: error });
+  });
+
   test("needing a hand is news, whatever came before", () => {
     expect(syncNotice(at(syncing), at({ kind: "needs_hand", instruction: "Press reset", reason: "r" }))).toMatchObject({ kind: "error", message: "Your Glove80 needs a hand", detail: "Press reset" });
   });

@@ -2,7 +2,7 @@
 // changes in the file extension, the instruction and the flash. Nothing here touches a real volume.
 import { describe, expect, test } from "bun:test";
 import { zipSync } from "fflate";
-import { mkdirSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { driverFor } from "../../src/app/firmware-drivers.ts";
 import { loadBoardDir } from "../../src/boards/load.ts";
@@ -139,6 +139,7 @@ describe("ZMK driver", () => {
       board: west, buildId: "bld_test", boardRevision: "default", artifactPath: artifact, log: new LogSink(join(dir, "f.log")), onState: () => {}, volumesRoot: root, bootloaderWaitMs: 3000,
     });
     clearInterval(timer);
+    // A board without hands-free hooks keeps the manual flow: each drive is written as it appears.
     expect(r.state).toBe("succeeded");
     expect(got).toEqual([left, right]);
   }, 15_000);
@@ -156,5 +157,23 @@ describe("ZMK driver", () => {
     const restored = await restoreLastGoodUf2(dir, "foostan/corne", "left");
     expect(restored).not.toBeNull();
     expect(restored).toEqual(img);
+  });
+});
+
+describe("promoting last-good images", () => {
+  test("a failed write of the second half leaves the previous set untouched", async () => {
+    const { promoteLastGood } = await import("../../src/app/firmware-drivers.ts");
+    const dir = join(tempDir(), "moergo-glove80");
+    await promoteLastGood(dir, new Map([["R", new Uint8Array([1])], ["L", new Uint8Array([2])]]));
+    let writes = 0;
+    await expect(promoteLastGood(dir, new Map([["R", new Uint8Array([3])], ["L", new Uint8Array([4])]]), async (path, bytes) => {
+      if (++writes === 2) throw new Error("disk full");
+      await Bun.write(path, bytes);
+    })).rejects.toThrow("disk full");
+    expect([...readFileSync(join(dir, "R.uf2"))]).toEqual([1]);
+    expect([...readFileSync(join(dir, "L.uf2"))]).toEqual([2]);
+    expect(readdirSync(join(dir, "..")).filter((n) => n.includes(".staging-") || n.includes(".old-"))).toEqual([]);
+    await promoteLastGood(dir, new Map([["R", new Uint8Array([5])], ["L", new Uint8Array([6])]]));
+    expect([...readFileSync(join(dir, "R.uf2")), ...readFileSync(join(dir, "L.uf2"))]).toEqual([5, 6]);
   });
 });

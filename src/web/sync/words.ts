@@ -135,10 +135,12 @@ const seconds = (ms: number | null): string | null => (ms === null ? null : `${M
 
 /** The toast for a board whose state just changed, or null when nothing needs saying. */
 export function syncNotice(before: BoardSync | undefined, after: BoardSync): { kind: "success" | "error"; message: string; detail?: string } | null {
-  if (before === undefined || before.state.kind === after.state.kind) return null;
+  if (before === undefined) return null;
+  if (before.state.kind === after.state.kind && !(before.state.kind === "needs_hand" && after.state.kind === "needs_hand" && before.state.instruction !== after.state.instruction)) return null;
   const was = before.state.kind;
   const now = after.state;
   if (was === "syncing" && now.kind === "in_sync") {
+    if (after.last?.status === "failed") return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: after.last.error ?? "The sync failed." };
     const took = seconds(after.last?.timings.totalMs ?? null);
     const ms = after.last?.timings.totalMs ?? null;
     // Under a second is the point of a remapper, so it says milliseconds instead of rounding up to one second.

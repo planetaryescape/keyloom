@@ -5,7 +5,7 @@ export type FlashState = "waiting_for_bootloader" | "writing" | "succeeded" | "f
  * What a flasher adds to a state change beyond the instruction: `needsHand` when the person has to do something because
  * keyloom could not, and `verifying` while the flasher waits for the keyboard to come back. Keyboard sync (17) reads both.
  */
-export type FlashNote = { needsHand?: true; verifying?: true };
+export type FlashNote = { needsHand?: true; verifying?: true; recovering?: true };
 
 export type FlashResult = {
   state: "succeeded" | "failed";

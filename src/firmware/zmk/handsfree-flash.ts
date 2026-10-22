@@ -7,9 +7,11 @@ import type { HandsFree, HandsFreeHalf } from "../../boards/recipes.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { defaultSerialTransport } from "../toolchain/serial-default.ts";
 import type { SerialPort, SerialTransport } from "../toolchain/serial.ts";
+import { uf2Problem } from "../toolchain/uf2.ts";
 import { type UsbDevice, listUsbDevices } from "../toolchain/usb.ts";
 import type { EnterResult, FlashStep, StepHooks, VerifyResult } from "./flash.ts";
-import { type HalfLetter, LOCAL_BAUD, RELAY_BAUD, buildKey, halfMarker, keyInArtifact, parseSerial } from "./handsfree.ts";
+import { retryRemedy, sharedDriveRemedy } from "./flash.ts";
+import { type HalfLetter, LOCAL_BAUD, RELAY_BAUD, buildKey, halfMarker, keyInArtifact, keyInFirmware, parseSerial } from "./handsfree.ts";
 import type { VolumeFinder } from "./volumes.ts";
 
 export type ZmkHandsFreeDeps = {
@@ -113,14 +115,21 @@ export async function restartHalf(opts: {
   const waitMs = deps.restartWaitMs ?? RESTART_WAIT_MS;
 
   try {
-    // A drive that is already there is a half already in its bootloader, which is where this is trying to get it.
+    // Only a distinct label identifies a half that is already in its bootloader.
     if (opts.waitForVolume !== false && await opts.findVolume(t.step.volume)) {
+      if (opts.targets.some((other) => other !== t && other.step.volume === t.step.volume)) {
+        return { ok: false, reason: `${t.step.volume} is already mounted and could belong to either half` };
+      }
       log(`keyloom: ${t.step.volume} is already mounted, so the ${label} is already in its bootloader`);
       return { ok: true, alreadyThere: true };
     }
 
     const transport = await deps.serial();
     const ports = await transport.list();
+    const peers = opts.targets.filter((other) => other !== t && other.step.volume === t.step.volume);
+    if (opts.waitForVolume !== false && peers.some((other) => portsOfHalf(ports, other).keyloom.length !== 1)) {
+      return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware` };
+    }
     const own = portsOfHalf(ports, t);
     const keys = new Set(own.keyloom.map((k) => k.key));
     if (own.keyloom.length > 1 && (keys.size > 1 || new Set(own.keyloom.map((k) => k.port.path)).size > 1)) {
@@ -151,6 +160,10 @@ export async function restartHalf(opts: {
     const deadline = Date.now() + waitMs;
     for (;;) {
       if (await opts.findVolume(t.step.volume)) {
+        const after = peers.length ? await transport.list() : [];
+        if (peers.some((other) => portsOfHalf(after, other).keyloom.length !== 1)) {
+          return { ok: false, reason: `${t.step.volume} could belong to either half; the other half is no longer confirmed running firmware` };
+        }
         log(`keyloom: ${t.step.volume} appeared; the ${label} is in its bootloader`);
         return { ok: true };
       }
@@ -165,12 +178,13 @@ export async function restartHalf(opts: {
   }
 }
 
-/** After a flash: the half must come back running `buildId`'s firmware. */
-export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTarget; buildId: string; log: (line: string) => void }): Promise<VerifyResult> {
+/** After a flash: the half must come back with the new build ID's key, or a saved image's key during rollback. */
+export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTarget; steps?: readonly FlashStep[]; log: (line: string) => void } & ({ buildId: string; key?: never } | { key: string; buildId?: never })): Promise<VerifyResult> {
   const { deps, target: t } = opts;
   const label = t.step.label;
-  const expected = halfMarker(opts.buildId, t.half.marker);
-  const key = buildKey(opts.buildId);
+  const key = opts.key ?? buildKey(opts.buildId);
+  const build = opts.buildId ?? key;
+  const expected = opts.buildId === undefined ? `keyloom/${key}-${t.half.marker}` : halfMarker(opts.buildId, t.half.marker);
   const waitMs = deps.verifyWaitMs ?? VERIFY_WAIT_MS;
   const poll = deps.pollMs ?? 1000;
   const deadline = Date.now() + waitMs;
@@ -181,12 +195,12 @@ export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTar
     } catch {
       // Retried until the deadline, like a half that has not appeared yet.
     }
-    if (seen.state === "keyloom" && seen.key === key) return { ok: true, message: `the ${label} is running build ${opts.buildId}` };
+    if (seen.state === "keyloom" && seen.key === key) return { ok: true, message: `the ${label} is running build ${build}` };
     // A half comes back on USB a moment before its serial port does, so it can first show only as a USB device. Its serial number
     // already names the build it runs: this build is a pass, and another keyloom build may still be its port coming up, so wait.
     // (BK's Glove80, 2026-10-16: the right half was flashed and verified as "not running this build" from its USB device.)
     const usbMarker = seen.state === "other" ? parseSerial(seen.serial) : undefined;
-    if (usbMarker !== undefined && usbMarker.half === t.half.marker && usbMarker.key === key) return { ok: true, message: `the ${label} is running build ${opts.buildId}` };
+    if (usbMarker !== undefined && usbMarker.half === t.half.marker && usbMarker.key === key) return { ok: true, message: `the ${label} is running build ${build}` };
     // A half that is back running something else won't change by waiting longer.
     if (seen.state !== "absent" && usbMarker === undefined) break;
     if (Date.now() >= deadline) break;
@@ -196,17 +210,21 @@ export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTar
   if (seen.state === "absent") {
     // The copy can be cut short when the bootloader's drive disappears mid-write, and a half with incomplete firmware never
     // comes back on USB (BK's Glove80 left half, 2026-10-22: the rewrite from its bootloader then verified). Lead with that remedy.
-    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. Put it in its bootloader and flash again: ${t.step.enter} If it doesn't appear even then, check its USB cable and run \`keyloom doctor\`.` };
+    const remedy = opts.steps?.some((step) => step !== t.step && step.volume === t.step.volume)
+      ? sharedDriveRemedy(t.step, opts.steps)
+      : opts.steps ? `${retryRemedy(opts.steps)} To recover the ${label} on its own, connect only that half and put it in its bootloader: ${t.step.enter}`
+      : `Put it in its bootloader and flash again: ${t.step.enter}`;
+    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. ${remedy} If it doesn't appear even then, check its USB cable and run \`keyloom doctor\`.` };
   }
   if (seen.state === "keyloom") {
-    return { ok: false, error: `the ${label} was written, but it is running build ${seen.key} and not ${opts.buildId} (${expected}). The flash may not have been written; flash again.` };
+    return { ok: false, error: `the ${label} was written, but it is running build ${seen.key} and not ${build} (${expected}). The flash may not have been written; flash again.` };
   }
   return { ok: false, error: `the ${label} was written, but it came back with ${seen.serial ?? "no serial number"} and not ${expected}, so it isn't running this build. Flash again.` };
 }
 
 /**
  * What a ZMK flash adds when the board carries keyloom's module: restarting each half by itself where it can, and
- * verifying each half if the file being written is a keyloom build. `saveLastGood` keeps the image of a verified half.
+ * verifying each half if the file being written is a keyloom build. Last-good images change only after all halves verify.
  */
 export function zmkHandsFreeHooks(input: {
   deps: ZmkHandsFreeDeps;
@@ -218,13 +236,31 @@ export function zmkHandsFreeHooks(input: {
   findVolume: VolumeFinder;
   log: (line: string) => void;
   foreign?: (port: SerialPort) => boolean;
-  saveLastGood?: (half: HalfLetter, image: Uint8Array) => Promise<void>;
+  /** Promotes every half's verified image as one set; the previous set must survive any failure (D-437). */
+  saveLastGood?: (images: ReadonlyMap<HalfLetter, Uint8Array>) => Promise<void>;
+  loadLastGood?: (half: HalfLetter) => Promise<Uint8Array | null>;
 }): StepHooks {
   const targets = halfTargets(input.board, input.handsFree, input.steps, input.foreign);
   const forStep = (step: FlashStep): HalfTarget | undefined => targets.find((t) => t.step === step);
+  const before = new Map<HalfTarget, HalfFirmware>();
   const hooks: StepHooks = {
+    peersRunning: async (step) => {
+      const peers = input.steps.filter((other) => other !== step && other.volume === step.volume);
+      try {
+        const states = await Promise.all(peers.map(async (peer) => {
+          const target = forStep(peer);
+          return target ? readHalf(input.deps, target) : { state: "absent" as const };
+        }));
+        return states.every((state) => state.state !== "absent");
+      } catch {
+        return false;
+      }
+    },
     enterBootloader: async (step, _index, announce) => {
       const target = forStep(step);
+      if (target) {
+        try { before.set(target, await readHalf(input.deps, target)); } catch { /* Recovery treats an unreadable half as unknown. */ }
+      }
       return target ? restartHalf({ deps: input.deps, targets, target, findVolume: input.findVolume, log: input.log, announce }) : { ok: false, reason: "keyloom has no hands-free recipe for this step" };
     },
   };
@@ -236,18 +272,95 @@ export function zmkHandsFreeHooks(input: {
     // Not a build ID keyloom made, so no firmware can carry its marker.
   }
   if (key !== undefined && keyInArtifact(input.artifact) === key) {
+    const images = new Map<HalfTarget, Uint8Array>();
     hooks.verify = async (step, _index, image) => {
       const target = forStep(step);
-      if (!target) return { ok: true, message: `the ${step.label} was written` };
-      const result = await verifyHalf({ deps: input.deps, target, buildId: input.buildId, log: input.log });
-      if (result.ok) {
-        try {
-          await input.saveLastGood?.(target.half.marker, image);
-        } catch (err) {
-          input.log(`keyloom: couldn't keep the ${step.label}'s image as the last good one: ${(err as Error).message}`);
-        }
-      }
+      // The recipe schema requires every step to map to a half; never report an unmapped one as verified.
+      if (!target) return { ok: false, error: `the ${step.label} was written, but its recipe has no hands-free half to verify it against` };
+      const result = await verifyHalf({ deps: input.deps, target, steps: input.steps, buildId: input.buildId, log: input.log });
+      if (result.ok) images.set(target, image);
       return result;
+    };
+    hooks.complete = async () => {
+      if (images.size !== input.steps.length) return;
+      try {
+        await input.saveLastGood?.(new Map([...images].map(([target, image]) => [target.half.marker, image])));
+      } catch (err) {
+        // The keyboard runs the new build either way; only a later rollback is affected, and it keeps the previous set.
+        input.log(`keyloom: couldn't keep this build as the last good one: ${(err as Error).message}`);
+      }
+    };
+    hooks.recover = async (index, error, restore, say) => {
+      if (index === 0 || images.size === 0 || targets.length !== input.steps.length) return error;
+      const failed = targets[index] as HalfTarget;
+      const observedKey = (state: HalfFirmware | undefined, target: HalfTarget): string | undefined => {
+        if (state?.state === "keyloom") return state.key;
+        const marker = state?.state === "other" ? parseSerial(state.serial) : undefined;
+        return marker?.half === target.half.marker ? marker.key : undefined;
+      };
+      const current = async (target: HalfTarget): Promise<HalfFirmware | undefined> => {
+        try { return await readHalf(input.deps, target); } catch { return undefined; }
+      };
+      const summary = async (snapshot?: Array<HalfFirmware | undefined>): Promise<string> => {
+        const reading = snapshot ?? await Promise.all(targets.map(current));
+        const states = reading.map((state, i) => {
+          const t = targets[i] as HalfTarget;
+          const key = observedKey(state, t);
+          return `the ${t.step.label} ${key ? `is running build ${key}` : state?.state === "absent" ? "is absent or in its bootloader" : state?.state === "other" ? `reports firmware with serial ${state.serial ?? "(none)"}` : "could not be read"}`;
+        });
+        return `${states.join(", and ")}.`;
+      };
+      const shared = targets.some((t) => t !== failed && t.step.volume === failed.step.volume);
+      const remedy = shared ? sharedDriveRemedy(failed.step, input.steps) : retryRemedy(input.steps);
+      const stopped = async (reason: string, includeRemedy = true) => `${error} ${reason} ${await summary()}${includeRemedy ? ` ${remedy}` : ""}`;
+      // Read before touching a rollback target: the failed half may still run its previous build.
+      const failedState = await current(failed);
+      const previous = new Map<HalfTarget, { image: Uint8Array; key: string }>();
+      const shape = input.artifact[0] === 0x50 && input.artifact[1] === 0x4b ? "single" : "halves";
+      for (const t of images.keys()) {
+        let image: Uint8Array | null;
+        try { image = await input.loadLastGood?.(t.half.marker) ?? null; }
+        catch (err) { return stopped(`Rollback couldn't read the ${t.step.label}'s last-good image: ${(err as Error).message}.`); }
+        const key = image ? keyInFirmware(image) : undefined;
+        if (!image || !key) return stopped(`Rollback is unavailable: no verified last-good image for the ${t.step.label}.`);
+        const problem = uf2Problem(image, shape);
+        if (problem) return stopped(`Rollback is unavailable: the ${t.step.label}'s last-good image is unsafe: ${problem}.`);
+        const old = observedKey(before.get(t), t);
+        if (old !== undefined && old !== key) return stopped(`Rollback is unavailable: the ${t.step.label}'s last-good image is build ${key}, but it ran build ${old} before the flash.`);
+        previous.set(t, { image, key });
+      }
+      const oldKey = previous.values().next().value!.key;
+      if ([...previous.values()].some((p) => p.key !== oldKey)) return stopped("Rollback is unavailable: the saved halves have different build keys.");
+      const neverWritten = observedKey(failedState, failed) === oldKey;
+      let failedImageProblem: string | undefined;
+      if (!neverWritten) {
+        let image: Uint8Array | null = null;
+        try { image = await input.loadLastGood?.(failed.half.marker) ?? null; }
+        catch (err) { failedImageProblem = `couldn't read the ${failed.step.label}'s last-good image: ${(err as Error).message}`; }
+        const key = image ? keyInFirmware(image) : undefined;
+        // Restore the verified halves even when the failed half has no usable saved image.
+        const problem = image ? uf2Problem(image, shape) : undefined;
+        const old = observedKey(before.get(failed), failed);
+        if (key !== undefined && old !== undefined && key !== old) failedImageProblem = `the ${failed.step.label}'s last-good image is build ${key}, but it ran build ${old} before the flash`;
+        else if (image && key === oldKey && !problem) previous.set(failed, { image, key });
+        else failedImageProblem ??= problem ? `the ${failed.step.label}'s last-good image is unsafe: ${problem}` : `no last-good image of build ${oldKey} for the ${failed.step.label}`;
+      }
+      for (const [t, saved] of previous) {
+        let result: VerifyResult;
+        try {
+          say(`keyloom: Rolling back the ${t.step.label} to build ${saved.key}.`);
+          result = await restore(input.steps.indexOf(t.step), saved.image,
+            () => verifyHalf({ deps: input.deps, target: t, steps: input.steps, key: saved.key, log: say }),
+            t === failed ? `Restore the ${t.step.label} to build ${saved.key}. ${t.step.enter}` : undefined);
+        } catch (err) { result = { ok: false, error: (err as Error).message }; }
+        if (!result.ok) return stopped(`Rollback of the ${t.step.label} failed: ${result.error}${shared ? "" : ` Put the ${t.step.label} in its bootloader to restore it: ${t.step.enter}`}`, !shared);
+        say(`keyloom: Rollback verified: ${result.message}.`);
+      }
+      if (failedImageProblem) return stopped(`Rollback is incomplete: ${failedImageProblem}.`);
+      // Read every half again after restoring: a successful write alone is not proof of the final board state.
+      const final = await Promise.all(targets.map(current));
+      if (!final.every((s, i) => observedKey(s, targets[i] as HalfTarget) === oldKey)) return stopped("Rollback could not confirm every half on the previous build.");
+      return `${error} The keyboard is back on the previous build ${oldKey}. Rollback verified: ${await summary(final)} The new build was not applied; flash again when ready.`;
     };
   } else {
     input.log("keyloom: this build was made before hands-free flashing, so the flash can't be verified from the halves' serial numbers");

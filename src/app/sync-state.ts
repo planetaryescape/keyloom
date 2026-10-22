@@ -44,6 +44,15 @@ export type SyncFacts = {
   active: SyncRow | undefined;
   /** The newest sync of the head revision to this board, if any. */
   headSync: SyncRow | undefined;
+  /** The board's latest sync also carries recovery errors across later edits. */
+  latestSync?: SyncRow | undefined;
+  split?: boolean;
+  /** Kanata readback reports the exact selected head revision, rather than an equivalent older document. */
+  remapperHeadRunning?: boolean;
+  /** Revisions shared by the ancestry of every currently running build, from the selected config. */
+  runningRevisionLine?: string[];
+  /** The oldest successful flash time among every currently visible half's build; absent if any half is missing or unflashed. */
+  runningFlashedAt?: number;
   auto: { on: boolean; paused: boolean; proven: boolean };
   /** Whether the quiet time since the last Apply has passed, so auto-sync is due. */
   quiet: boolean;
@@ -62,6 +71,29 @@ export function deriveState(f: SyncFacts): SyncState {
     if (a.step === "needs_hand") return { kind: "needs_hand", instruction: a.instruction ?? "", reason: NEEDS_HAND_REASON };
     return { kind: "syncing", step: a.step === "done" ? "building" : a.step, syncId: a.id, startedAt: a.startedAt, trigger: a.trigger };
   }
+  // Kanata reports the loaded revision directly. Firmware needs a later successful flash of the failed revision or a descendant.
+  const unsuperseded = (sync: SyncRow | undefined): SyncRow | undefined =>
+    sync?.status === "failed" && f.reading.state === "keyloom" && !f.reading.missingHalves?.length &&
+    ((f.remapperHeadRunning && f.running.kind === "same") ||
+      (f.runningRevisionLine?.includes(sync.revisionId) && f.runningFlashedAt !== undefined &&
+        f.runningFlashedAt > (sync.finishedAt ?? sync.startedAt))) ? undefined : sync;
+  const h = unsuperseded(f.headSync);
+  const latest = unsuperseded(f.latestSync ?? f.headSync);
+  if (f.split && latest?.status === "failed" && (latest.failure === "flash" || latest.failure === "verify" || latest.failure === "needs_hand") && f.reading.state !== "keyloom") {
+    return { kind: "needs_hand", instruction: latest.error ?? latest.instruction ?? "Connect every half, then press Sync now.", reason: "" };
+  }
+  if (f.reading.state === "keyloom" && f.reading.missingHalves?.length) {
+    return {
+      kind: "needs_hand",
+      instruction: latest?.status === "failed" && latest.error ? latest.error : `keyloom cannot confirm the ${f.reading.missingHalves.join(" and ")}. Connect every half, then press Sync now.`,
+      reason: "",
+    };
+  }
+  // A visible head marker does not undo a failed flash or prove the rest of a split keyboard recovered.
+  if (latest?.status === "failed" && f.reading.state === "keyloom" && f.split && (latest.failure === "flash" || latest.failure === "verify" || latest.failure === "needs_hand")) {
+    if (latest.failure === "needs_hand") return { kind: "needs_hand", instruction: [latest.error, latest.instruction].filter(Boolean).join(" "), reason: NEEDS_HAND_REASON };
+    return { kind: "behind", changes: f.running.kind === "behind" ? f.running.changes : null, why: "failed", error: latest.error };
+  }
   if (f.reading.state === "absent") {
     const changes = f.lastKnown?.changes;
     return changes === undefined || changes === 0 ? { kind: "not_connected" } : { kind: "not_connected", changes };
@@ -76,15 +108,14 @@ export function deriveState(f: SyncFacts): SyncState {
   if (f.reading.state === "other") return { kind: "not_keyloom", detail: f.reading.detail };
   if (f.reading.state === "remapping_off") return { kind: "behind", changes: null, why: "remapping_off", error: null };
 
-  if (f.running.kind === "same") return { kind: "in_sync" };
   const changes = f.running.kind === "behind" ? f.running.changes : null;
-  const h = f.headSync;
   if (h?.status === "failed" && h.failure === "needs_hand") {
     return { kind: "needs_hand", instruction: h.instruction ?? h.error ?? "", reason: NEEDS_HAND_REASON };
   }
+  if (h?.status === "failed" && !RETRYABLE_FAILURES.includes(h.failure ?? "flash")) return { kind: "behind", changes, why: "failed", error: h.error };
+  if (f.running.kind === "same") return { kind: "in_sync" };
   if (f.running.kind === "unknown") return { kind: "behind", changes: null, why: "unknown_build", error: null };
   if (f.running.kind === "other_config") return { kind: "behind", changes: null, why: "other_config", error: null };
-  if (h && h.status === "failed" && !RETRYABLE_FAILURES.includes(h.failure ?? "flash")) return { kind: "behind", changes, why: "failed", error: h.error };
   if (h?.status === "succeeded") return { kind: "behind", changes, why: "changed_since", error: null };
   if (f.auto.paused) return { kind: "behind", changes, why: "paused", error: h?.error ?? null };
   if (!f.auto.proven) return { kind: "behind", changes, why: "unproven", error: null };

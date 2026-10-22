@@ -17,6 +17,19 @@ const row = (over: Partial<SyncRow> = {}): SyncRow => ({
 });
 
 describe("deriveState", () => {
+  test.each([{ state: "absent" }, { state: "other", detail: "unknown firmware" }] as const)("a failed split flash keeps its error when no verified halves remain: %s", (reading) => {
+    const latestSync = row({ status: "failed", failure: "flash", error: "Rollback is incomplete: the left half is absent" });
+    expect(deriveState(base({ split: true, reading, latestSync }))).toEqual({ kind: "needs_hand", instruction: latestSync.error!, reason: "" });
+  });
+
+  test("a split recovery failure stays visible across a later edit", () => {
+    expect(deriveState(base({ split: true, latestSync: row({ status: "failed", failure: "flash", error: "Rollback failed" }), running: { kind: "same" } })))
+      .toMatchObject({ kind: "behind", why: "failed", error: "Rollback failed" });
+  });
+  test("a failed flash of the head wins over the visible half reporting the head", () => {
+    expect(deriveState(base({ running: { kind: "same" }, headSync: row({ status: "failed", failure: "flash", error: "the left half is absent" }) })))
+      .toMatchObject({ kind: "behind", why: "failed", error: "the left half is absent" });
+  });
   test("in sync, when the keyboard runs the head", () => {
     expect(deriveState(base({ running: { kind: "same" } }))).toEqual({ kind: "in_sync" });
   });
@@ -98,4 +111,41 @@ describe("autoSyncDue", () => {
   test("is true again when the last attempt was interrupted by the world", () => {
     expect(autoSyncDue(base({ headSync: row({ status: "failed", failure: "disconnected", error: "x" }) }))).toBe(true);
   });
+});
+
+test.each([false, true])("a later successful flash of all observed halves supersedes failure (split=%s)", (split) => {
+  const failed = row({ status: "failed", failure: "flash", error: "failed recovery", finishedAt: 100 });
+  const facts = base({ split, running: { kind: "same" }, headSync: failed, latestSync: failed, runningFlashedAt: 101, runningRevisionLine: [failed.revisionId] });
+  expect(deriveState(facts)).toEqual({ kind: "in_sync" });
+  expect(deriveState({ ...facts, runningFlashedAt: 99 })).toMatchObject({ kind: "behind", why: "failed" });
+  expect(deriveState({ ...facts, runningFlashedAt: 100 })).toMatchObject({ kind: "behind", why: "failed" });
+  expect(deriveState({ ...facts, reading: { ...keyloom, missingHalves: ["left half"] } }).kind).toBe("needs_hand");
+  expect(deriveState({ ...facts, running: { kind: "behind", changes: 1 }, headSync: undefined })).toMatchObject({ kind: "behind", why: "waiting" });
+});
+
+
+test.each([false, true])("a newer flash of an older revision cannot supersede the failed head (auto=%s)", (on) => {
+  const failed = row({ status: "failed", failure: "flash", error: "head failed", finishedAt: 100 });
+  const facts = base({ split: true, headSync: failed, latestSync: failed, runningFlashedAt: 101,
+    auto: { on, paused: false, proven: true } });
+  expect(deriveState(facts)).toMatchObject({ kind: "behind", why: "failed", error: "head failed" });
+  expect(autoSyncDue(facts)).toBe(false);
+});
+
+test("a verified kanata head revision supersedes its failed sync without a flash row", () => {
+  const failed = row({ status: "failed", failure: "flash", error: "reload failed", finishedAt: 100 });
+  const facts = base({ remapperHeadRunning: true, reading: { ...keyloom, keys: [], revisionId: failed.revisionId },
+    running: { kind: "same" }, headSync: failed, latestSync: failed });
+  expect(deriveState(facts)).toEqual({ kind: "in_sync" });
+  expect(deriveState({ ...facts, running: { kind: "behind", changes: 1 } })).toMatchObject({ kind: "behind", why: "failed" });
+  // A matching document from an older loaded revision does not verify the head.
+  expect(deriveState({ ...facts, remapperHeadRunning: false, reading: { ...keyloom, keys: [], revisionId: "rev_old" } })).toMatchObject({ kind: "behind", why: "failed" });
+});
+
+test("every running build must descend from the failed revision, even after another edit", () => {
+  const failed = row({ status: "failed", failure: "flash", error: "recovery failed", finishedAt: 100 });
+  const facts = base({ split: true, latestSync: failed, runningFlashedAt: 101, runningRevisionLine: ["rev_newer", failed.revisionId] });
+  expect(deriveState(facts)).toMatchObject({ kind: "behind", why: "waiting" });
+  expect(deriveState({ ...facts, runningRevisionLine: ["rev_old"] })).toMatchObject({ kind: "behind", why: "failed" });
+  expect(autoSyncDue({ ...facts, runningRevisionLine: ["rev_old"] })).toBe(false);
 });

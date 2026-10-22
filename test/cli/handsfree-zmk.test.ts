@@ -97,3 +97,17 @@ test("reboot-only requests one ZMK half through 1200 or the existing 1201 relay 
   expect(missing.err).toContain("choose --half");
   expect(touches).toHaveLength(2);
 });
+
+test("reboot-only restarts a Corne left half with no peer attached", async () => {
+  const touches: Array<[string, number]> = [];
+  const result = await cli(["flash", "--reboot-only", "--board", "foostan/corne", "--half", "left"], {
+    zmk: {
+      serial: async () => ({ list: async () => [{ path: "synthetic-corne-left", vendorId: 0x1d50, productId: 0x615e, serial: serialOf(OLD_KEY, "L") }],
+        touch: async (path, baud) => { touches.push([path, baud]); } }),
+      usb: async () => { throw new Error("reboot-only must not enumerate USB"); },
+    },
+  });
+  expect(result.code).toBe(0);
+  expect(json(result).transport_only).toBe(true);
+  expect(touches).toEqual([["synthetic-corne-left", 1200]]);
+});
