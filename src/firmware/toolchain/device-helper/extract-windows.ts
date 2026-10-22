@@ -181,7 +181,8 @@ export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base
       // (integrity_error with eight cold doctors on windows-2022). A loser verifies the winner instead.
       try { io.linkSync(temporary, path); }
       catch (error) {
-        if (!errno(error, "EEXIST")) throw error;
+        // FAT/exFAT have no hard links; say so instead of the generic reinstall advice.
+        if (!errno(error, "EEXIST")) throw new HelperFailure("unsafe_cache", `couldn't publish the helper in ${dir} (${(error as Error).message}); keyloom needs an NTFS LocalAppData`);
         verify(path);
       }
     } finally {

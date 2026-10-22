@@ -154,3 +154,11 @@ test.skipIf(process.platform !== "win32")("native Windows creates the cache priv
   const expected = [me!, "S-1-5-18", "S-1-5-32-544"].sort().join(",");
   for (const line of lines) expect(line).toBe(`True|${expected}`);
 }, 60_000);
+
+test("a volume without hard links refuses with the reason and leaves no temporary exe", () => {
+  const { io, base, map } = fixture();
+  io.linkSync = () => { throw Object.assign(new Error("operation not supported"), { code: "EPERM" }); };
+  expect(() => extractWindowsHelper(bytes, manifest, base, io, () => {})).toThrow("keyloom needs an NTFS LocalAppData");
+  const dir = win32.join(base, "keyloom", "device-helper", manifest.release, manifest.target, manifest.sha256);
+  expect(fs.readdirSync(map(dir))).toEqual([]);
+});
