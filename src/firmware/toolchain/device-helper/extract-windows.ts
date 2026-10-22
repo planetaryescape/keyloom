@@ -20,6 +20,7 @@ const aclChecked = new Set<string>();
 function inspectWindowsPaths(paths: string[], ancestors: string[] = []): void {
   const script = `
 $ErrorActionPreference = 'Stop'
+try {
 $paths = ConvertFrom-Json $env:KEYLOOM_CACHE_INSPECT
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
@@ -40,6 +41,11 @@ foreach ($entry in $paths) {
     }
   }
 }
+} catch {
+  # Plain text on stdout: redirected PowerShell stderr is CLIXML, not the reason.
+  [Console]::Out.WriteLine($_.Exception.Message)
+  exit 1
+}
 `;
   const systemRoot = process.env.SystemRoot;
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw new HelperFailure("unsafe_cache");
@@ -53,7 +59,7 @@ foreach ($entry in $paths) {
     windowsHide: true, timeout: 10_000, stdio: "pipe",
   });
   if (result.error || result.status !== 0) {
-    const said = result.error?.message ?? result.stderr?.toString("utf8").split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
+    const said = result.error?.message ?? result.stdout?.toString("utf8").split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
     throw new HelperFailure("unsafe_cache", said?.slice(0, 300));
   }
   for (const path of [...ancestors, ...paths]) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
