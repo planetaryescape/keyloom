@@ -44,7 +44,8 @@ fn from_login_shell() -> Option<LoginEnvironment> {
     // External commands only and `;` between them, so sh, zsh, bash, fish and nushell all read it the same way; nushell
     // would print "$PATH" literally, and has no `||` to excuse a printenv of an unset name. `env -0` ends each variable with
     // NUL, which no value can contain, so a value with newlines can't pass for another variable.
-    let script = format!("/bin/echo {mark}; /usr/bin/env -0; /bin/echo {mark}");
+    // The bare echo ends any line a profile left open, so the opening mark always starts a line.
+    let script = format!("/bin/echo; /bin/echo {mark}; /usr/bin/env -0; /bin/echo {mark}");
     let child = Command::new(shell)
         .args(["-ilc", &script])
         // Oh My Zsh can stop to ask about updating.
@@ -155,6 +156,14 @@ mod tests {
     }
 
     #[test]
+    fn profile_output_without_a_final_newline_does_not_hide_the_answer() {
+        // What `printf hello` in a profile leaves before the script's own bare echo and mark.
+        let out = format!("hello\n{M}\nPATH=/usr/bin\0ANTHROPIC_API_KEY=sk-a\0{M}\n");
+        let env = between_marks(&out, M).and_then(|e| parse_env(&e)).unwrap();
+        assert_eq!(env.variables.len(), 1);
+    }
+
+    #[test]
     fn the_mark_inside_a_value_or_a_printed_command_moves_neither_end() {
         // A profile that prints the command (bash's BASH_EXECUTION_STRING), and a value that contains the mark.
         let out = format!("/bin/echo {M}; /usr/bin/env -0; /bin/echo {M}\n{M}\nNOTE=see {M}\nhere\0PATH=/usr/bin\0{M}\n");
@@ -193,7 +202,7 @@ mod tests {
     #[test]
     fn a_background_process_holding_the_pipe_does_not_hold_up_the_answer() {
         let started = std::time::Instant::now();
-        let child = shell(&format!("sleep 30 & /bin/echo {M}; /usr/bin/env -0; /bin/echo {M}"));
+        let child = shell(&format!("sleep 30 & /bin/echo; /bin/echo {M}; /usr/bin/env -0; /bin/echo {M}"));
         assert!(collect(child, M, DEADLINE).is_some_and(|env| !env.path.is_empty()));
         assert!(started.elapsed() < Duration::from_secs(1));
     }
