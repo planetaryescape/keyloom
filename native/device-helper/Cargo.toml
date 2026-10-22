@@ -7,6 +7,7 @@ publish = false
 
 [features]
 default = []
+native-linux = ["dep:base64", "dep:getrandom", "dep:libc"]
 native-macos = ["native-hid", "native-serial"]
 synthetic-macos = ["synthetic-capture", "synthetic-serial-capture"]
 native-serial = ["dep:core-foundation", "dep:base64", "dep:getrandom", "dep:libc"]
@@ -20,9 +21,9 @@ synthetic-serial-capture = ["synthetic-serial"]
 serde_json = "=1.0.154"
 base64 = { version = "=0.22.1", optional = true }
 getrandom = { version = "=0.3.4", optional = true }
+libc = { version = "=0.2.191", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-libc = { version = "=0.2.191", optional = true }
 core-foundation = { version = "=0.10.1", optional = true }
 
 [build-dependencies]

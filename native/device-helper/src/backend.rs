@@ -1,17 +1,43 @@
 use serde_json::{Value, json};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Endpoint {
     pub key: String,
+    pub permission_denied: bool,
     pub vendor: u16,
     pub product: u16,
     pub serial: Option<String>,
     pub descriptor: Vec<u8>,
+    pub interface_number: Option<u8>,
+}
+// Identity, not access: a permission change after listing must surface as permission_denied at open,
+// not as stale_device, and must not cost the endpoint its reference on a relist.
+impl PartialEq for Endpoint {
+    fn eq(&self, other: &Self) -> bool {
+        (
+            &self.key,
+            self.vendor,
+            self.product,
+            &self.serial,
+            &self.descriptor,
+            self.interface_number,
+        ) == (
+            &other.key,
+            other.vendor,
+            other.product,
+            &other.serial,
+            &other.descriptor,
+            other.interface_number,
+        )
+    }
 }
 impl Endpoint {
     pub fn record(&self, reference: &str) -> Value {
         let mut value = json!({"deviceRef":reference,"transport":"hid","vendorId":self.vendor,
             "productId":self.product,"usagePage":0xff60,"usage":0x61});
+        if self.permission_denied {
+            value["permissionDenied"] = json!(true);
+        }
         if let Some(serial) = &self.serial {
             value["serial"] = json!(serial);
         }
@@ -34,7 +60,12 @@ pub trait Backend: Send + Sync {
 
 // Conservative descriptor admission: unnumbered, single vendor application collection,
 // exactly 256 input/output bits. Refuse complex descriptors instead of guessing their shape.
-#[cfg(any(feature = "native-hid", feature = "synthetic-hid", test))]
+#[cfg(any(
+    feature = "native-linux",
+    feature = "native-hid",
+    feature = "synthetic-hid",
+    test
+))]
 pub fn raw_descriptor(bytes: &[u8]) -> bool {
     let (mut i, mut page, mut usage, mut size, mut count) = (0, 0, 0, 0, 0);
     let (mut depth, mut input, mut output, mut collection) = (0, 0, 0, false);
@@ -116,10 +147,12 @@ pub mod synthetic {
             assert!(raw_descriptor(DESCRIPTOR));
             Ok(vec![Endpoint {
                 key: "synthetic-moonlander".into(),
+                permission_denied: false,
                 vendor: 0x3297,
                 product: 0x1969,
                 serial: Some("keyloom/NPQRSTVWXYZ0".into()),
                 descriptor: DESCRIPTOR.to_vec(),
+                interface_number: None,
             }])
         }
         fn open(&self, _: &Endpoint) -> Result<Box<dyn Device>, &'static str> {

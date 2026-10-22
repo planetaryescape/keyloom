@@ -149,6 +149,22 @@ jobs:
             cargo test --locked --release --target "${{ matrix.rust }}" --test lifetime -- --nocapture || status=1
           done
           exit "$status"
+      - name: Native Linux candidate checks (synthetic sysfs and PTYs only)
+        if: runner.os == 'Linux'
+        working-directory: native/device-helper
+        run: |
+          cargo clippy --locked --all-targets --target "${{ matrix.rust }}" --features native-linux -- -D warnings
+          cargo test --locked --target "${{ matrix.rust }}" --features native-linux
+      - name: Build and install the Linux candidate without device discovery
+        if: runner.os == 'Linux'
+        run: |
+          bun scripts/build-binaries.ts --target bun-linux-x64 --device-backend native --out-dir dist/native-linux-test
+          helper=native/device-helper/target/x86_64-unknown-linux-musl/release/keyloom-device
+          if readelf -l "$helper" | grep -q INTERP; then exit 1; fi
+          if readelf -d "$helper" | grep -q NEEDED; then exit 1; fi
+          bun scripts/smoke-device-helper.ts dist/native-linux-test/keyloom-linux-x64 --native-linux
+          cd native/device-helper
+          cargo build --locked --release --target "${{ matrix.rust }}"
       - name: Combined macOS checks and Apple Silicon release helper
         if: runner.os == 'macOS'
         working-directory: native/device-helper

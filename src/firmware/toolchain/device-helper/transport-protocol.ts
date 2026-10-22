@@ -34,11 +34,13 @@ export const transportEventSchema = z.discriminatedUnion("event", [
 const u16 = z.number().int().min(0).max(65535);
 export const hidDevicesSchema = z.object({ devices: z.array(z.object({
   deviceRef: token, transport: z.literal("hid"), vendorId: u16, productId: u16,
+  permissionDenied: z.literal(true).optional(),
   serial: z.string().refine((v) => Buffer.byteLength(v) <= 256).optional(),
   usagePage: z.literal(0xff60), usage: z.literal(0x61),
 })).max(256) });
 export const serialDevicesSchema = z.object({ devices: z.array(z.strictObject({
   deviceRef: token, transport: z.literal("serial"), vendorId: u16, productId: u16,
+  permissionDenied: z.literal(true).optional(),
   serial: z.string().refine((v) => Buffer.byteLength(v) <= 256).optional(),
   product: z.string().refine((v) => Buffer.byteLength(v) <= 256).optional(),
   interfaceNumber: z.number().int().min(0).max(255).optional(),

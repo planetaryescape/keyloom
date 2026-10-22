@@ -12,13 +12,15 @@ import pkg from "../package.json" with { type: "json" };
 const source = process.argv[2];
 if (!source) throw new Error("pass the native compiled binary");
 const binary = resolve(source);
-const expectedFailure = process.argv[3];
+const linuxCandidate = process.argv[3] === "--native-linux";
+if (linuxCandidate && process.platform !== "linux") throw new Error("Linux candidate smoke requires a Linux host");
+const expectedFailure = linuxCandidate ? undefined : process.argv[3];
 const scratch = mkdtempSync(join(tmpdir(), "keyloom-device-installed-"));
 const cache = join(scratch, "cache space é");
 const installed = join(scratch, "bin/keyloom");
 const env = { PATH: "/usr/bin:/bin", HOME: scratch, XDG_CACHE_HOME: cache };
 const helperReport = z.object({ ok: z.boolean(), checks: z.array(z.object({
-  ok: z.boolean(), deviceHelper: z.object({ available: z.boolean(), hostVersion: z.string(), helperVersion: z.string().optional(), target: z.string(), protocol: z.literal(1), capabilities: z.array(z.string()), helperSha256: z.string().optional(), code: z.string().optional() }),
+  ok: z.boolean(), detail: z.string(), deviceHelper: z.object({ available: z.boolean(), hostVersion: z.string(), helperVersion: z.string().optional(), target: z.string(), protocol: z.literal(1), capabilities: z.array(z.string()), helperSha256: z.string().optional(), code: z.string().optional() }),
 })) });
 async function run(cmd: string[], expected = 0) {
   const child = Bun.spawn(cmd, { cwd: scratch, env, stdout: "pipe", stderr: "pipe" });
@@ -52,7 +54,8 @@ try {
     const reports = await Promise.all(Array.from({ length: 8 }, () => doctor()));
     const coldConcurrentMs = performance.now() - start;
     const info = reports[0]?.checks[0]?.deviceHelper;
-    if (!info?.available || !info.helperSha256 || info.helperVersion !== pkg.version || reports.some((r) => !r.ok || JSON.stringify(r.checks[0]?.deviceHelper.capabilities) !== JSON.stringify(process.platform === "darwin" && process.arch === "arm64" ? NATIVE_CAPABILITIES : []))) throw new Error("invalid installed pair");
+    if (!info?.available || !info.helperSha256 || info.helperVersion !== pkg.version || reports.some((r) => !r.ok || JSON.stringify(r.checks[0]?.deviceHelper.capabilities) !== JSON.stringify(linuxCandidate || (process.platform === "darwin" && process.arch === "arm64") ? NATIVE_CAPABILITIES : []))) throw new Error("invalid installed pair");
+    if (linuxCandidate && !reports[0]?.checks[0]?.detail.includes("native Linux candidate; hardware acceptance pending")) throw new Error("Linux candidate doctor must retain the hardware gate");
     console.log(JSON.stringify({ coldConcurrentMs, children: reports.length, manifest: info }));
     const executable = join(cache, "keyloom/device-helper", pkg.version, info.target, info.helperSha256, "keyloom-device");
     const helperHash = createHash("sha256").update(await Bun.file(executable).bytes()).digest("hex");

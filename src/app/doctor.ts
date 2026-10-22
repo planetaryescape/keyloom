@@ -32,7 +32,7 @@ export async function runDeviceHelperCheck(): Promise<DoctorCheck> {
   return {
     name: "device helper", ok: deviceHelper.available || source, ...(source ? { warn: true } : {}), deviceHelper,
     detail: deviceHelper.available
-      ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [${deviceHelper.capabilities.join(", ")}] (${deviceHelper.capabilities.length === 0 ? "diagnostics only" : deviceHelper.capabilities.includes("hid.open") && deviceHelper.capabilities.includes("serial.open") ? "native backend in use" : deviceHelper.capabilities.includes("serial.open") ? "native serial candidate; hardware acceptance pending" : "native HID candidate; hardware acceptance pending"})`
+      ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [${deviceHelper.capabilities.join(", ")}] (${deviceHelper.capabilities.length === 0 ? "diagnostics only" : deviceHelper.capabilities.includes("hid.open") && deviceHelper.capabilities.includes("serial.open") ? (deviceHelper.target.includes("linux") ? "native Linux candidate; hardware acceptance pending; hidraw needs a udev rule scoped to the keyboard VID/PID; ttyACM needs dialout/uucp group access" : "native backend in use") : deviceHelper.capabilities.includes("serial.open") ? "native serial candidate; hardware acceptance pending" : "native HID candidate; hardware acceptance pending"})`
       : source
         ? "not bundled in source/dev invocation; build with scripts/build-binaries.ts or install a release"
         : `${deviceHelper.code}; reinstall this keyloom release; if the private helper cache was changed, remove that release from $XDG_CACHE_HOME/keyloom/device-helper and retry`,
@@ -266,7 +266,7 @@ export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<
     if (k.firmware.state === "keyloom") {
       const hid = await rawHidFinding(deps, k);
       checks.push({
-        name, ok: true, ...(hid.includes("visible") ? {} : { warn: true }),
+        name, ok: !hid.includes("permission denied"), ...(hid.includes("visible") ? {} : { warn: true }),
         detail: `running keyloom build ${k.firmware.serial}; the next flash needs no keypress (${hid})`,
       });
     } else if (k.firmware.state === "other") {
@@ -283,7 +283,9 @@ export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<
     for (const h of await attachedZmkHalves(realZmkHandsFreeDeps({ usb: deps.usb, ...over.zmk }))) {
       const name = `keyboard ${h.boardId} ${h.label}`;
       if (h.firmware.state === "keyloom") {
-        checks.push({ name, ok: true, detail: `running keyloom build ${h.firmware.key} (serial port ${h.firmware.path}); the next flash needs no keypress` });
+        checks.push({ name, ok: !h.permissionDenied, detail: h.permissionDenied
+          ? "ttyACM read/write permission denied; join the group owning the port (usually dialout or uucp), log out and back in, then retry"
+          : `running keyloom build ${h.firmware.key} (serial port ${h.firmware.path}); the next flash needs no keypress` });
       } else if (h.firmware.state === "other") {
         checks.push({ name, ok: true, detail: `running firmware without keyloom's module (USB serial ${h.firmware.serial ?? "unavailable"}); the first flash needs the bootloader key, and flashes after it need none` });
       }

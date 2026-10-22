@@ -29,7 +29,7 @@ import { tappingTermOf } from "../lab/terms.ts";
 
 import type { App } from "./context.ts";
 import { emulateEvents } from "./emulate.ts";
-import { LabCaptureError, NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
+import { LabCaptureError, linuxDevicePermissionRemedy, NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -113,7 +113,10 @@ export async function beginRecording(
     capture = await deps.startCapture(view.board.definition, opts.hooks ?? {});
   } catch (err) {
     if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
-      throw new LabCaptureError(err.detail.code);
+      const remedy = err.detail.code === "permission_denied"
+        ? linuxDevicePermissionRemedy(view.board.definition.firmware === "qmk" ? "hid" : "serial")
+        : undefined;
+      throw new LabCaptureError(err.detail.code, remedy);
     }
     if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
       throw new LabCaptureError("restart_required");

@@ -11,6 +11,8 @@ export type RawHidInterface = {
   productId: number;
   /** The USB serial number the device reports, which lets the right keyboard be picked when two are attached. */
   serial?: string;
+  /** Read-only Linux access check; a later open is still authoritative. */
+  permissionDenied?: true;
   /** What the platform needs to open it again: a registry entry ID on macOS, a /dev/hidrawN path on Linux. */
   handle: string;
 };

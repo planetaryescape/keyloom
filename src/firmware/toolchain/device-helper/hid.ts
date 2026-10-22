@@ -19,7 +19,7 @@ export function helperHidTransport(client: DeviceTransportClient): HidTransport 
     async list() {
       const { devices } = await client.list("hid", hidDevicesSchema, 5_000);
       return devices.map((device) => {
-        const target: RawHidInterface = { vendorId: device.vendorId, productId: device.productId, handle: device.deviceRef, ...(device.serial === undefined ? {} : { serial: device.serial }) };
+        const target: RawHidInterface = { vendorId: device.vendorId, productId: device.productId, handle: device.deviceRef, ...(device.serial === undefined ? {} : { serial: device.serial }), ...(device.permissionDenied ? { permissionDenied: true as const } : {}) };
         targets.add(target); return target;
       });
     },
