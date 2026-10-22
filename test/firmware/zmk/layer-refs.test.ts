@@ -6,9 +6,9 @@ import type { ZmkSite } from "../../../src/firmware/zmk/layer-refs.ts";
 const ids = ["l0", "l1", "l2", "l3", "l4"];
 const flipped = [...ids].reverse();
 
-async function read(source: string, kind: ZmkSite["kind"] = "node", keymapCalls: { name: string; params: string[] }[] = []) {
+async function read(source: string, kind: ZmkSite["kind"] = "node", keymapCalls: { name: string; params: string[] }[] = [], layerBehaviours = new Map([["lower", 0]])) {
   const found = (await readZmkLayerRefs([{ site: "s", source, kind }], {
-    layerIds: ids, layerBehaviours: new Map([["lower", 0]]), keymapCalls, defines: new Map([["NAV", "1"], ["LOWER", "2"]]),
+    layerIds: ids, layerBehaviours, keymapCalls, defines: new Map([["NAV", "1"], ["LOWER", "2"]]),
   })).get("s");
   return { out: renumber(source, found?.layerRefs, flipped), unprovable: found?.unprovable ?? [] };
 }
@@ -17,6 +17,14 @@ describe("ZMK layer numbers in kept devicetree", () => {
   test("the layer parameter of a layer behaviour is renumbered, and the key parameter is not", async () => {
     const r = await read("td: tap_dance { bindings = <&mo 1>, <&to 3>; };\nm: m { bindings = <&lt 2 3 &kp N3 &sl 4>; };");
     expect(r.out).toBe("td: tap_dance { bindings = <&mo 3>, <&to 1>; };\nm: m { bindings = <&lt 2 3 &kp N3 &sl 0>; };");
+  });
+
+  test("custom layer and sticky behaviours and macro bindings follow layer order", async () => {
+    const source = "my_mo: behavior { compatible = \"zmk,behavior-momentary-layer\"; #binding-cells = <1>; };\nmy_sticky: behavior { compatible = \"zmk,behavior-sticky-key\"; bindings = <&my_mo>; };\nm: macro { bindings = <&mo 1>; };\nx: x { bindings = <&my_mo 1 &my_sticky 3>; };";
+    const r = await read(source, "node", [], new Map([["my_mo", 0], ["my_sticky", 0]]));
+    expect(r.out).toContain("bindings = <&mo 3>");
+    expect(r.out).toContain("bindings = <&my_mo 3 &my_sticky 1>");
+    expect(r.unprovable).toEqual([]);
   });
 
   test("a kept key is read as a binding: &magic's layer, and a custom hold-tap that holds a layer", async () => {

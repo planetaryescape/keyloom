@@ -25,3 +25,28 @@ test("interrupted capture survives persistence and refuses timing analysis befor
     expect(replays).toBe(0);
   } finally { app.db.close(); }
 });
+
+test("a saved legacy loss warning refuses timing analysis before replay", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  let replays = 0;
+  const deps: LabDeps = {
+    startCapture: async () => ({
+      snapshot: () => [],
+      ended: Promise.resolve("host"),
+      finish: async () => ({
+        events: [{ at: 0, position: 2, action: "press" }, { at: 10, position: 2, action: "release" }],
+        warnings: ["2 report(s) from the keyboard never arrived, so some key events are missing"],
+        endedBy: "host",
+      }),
+    }),
+    replay: () => { replays++; throw new Error("incomplete recordings must never reach replay"); },
+  };
+  try {
+    const recording = await beginRecording(app, layoutId, deps, { text: "test" });
+    const saved = await endRecording(app, recording, "t");
+    const reloaded = sessions(app, layoutId).find((session) => session.id === saved.session.id);
+    expect(reloaded?.warnings).toEqual(["2 report(s) from the keyboard never arrived, so some key events are missing"]);
+    await expect(analyseSession(app, saved.session.id, deps)).rejects.toThrow("This recording is incomplete.");
+    expect(replays).toBe(0);
+  } finally { app.db.close(); }
+});

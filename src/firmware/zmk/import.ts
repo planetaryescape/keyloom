@@ -229,8 +229,22 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   );
   // Which numbers in the kept source are layer numbers is read once everything kept is known (D-360).
   const layerBehaviours = new Map<string, number>([...holdKinds].filter(([, kind]) => kind === "layer").map(([name]) => [name, 0]));
-  for (const [label, b] of keptBehaviors) {
-    if (b.compatible === "zmk,behavior-hold-tap" && ["mo", "to", "tog", "sl", "lt"].includes(b.bindings[0] ?? "")) layerBehaviours.set(label, 0);
+  const layerCompatible = new Set(["zmk,behavior-momentary-layer", "zmk,behavior-toggle-layer", "zmk,behavior-to-layer"]);
+  const layerBehaviorNames = new Set(["mo", "to", "tog", "sl", "lt"]);
+  for (const [label, behavior] of keptBehaviors) {
+    if (layerCompatible.has(behavior.compatible ?? "") || (behavior.compatible === "zmk,behavior-hold-tap" && layerBehaviorNames.has(behavior.bindings[0] ?? ""))) {
+      layerBehaviours.set(label, 0);
+      layerBehaviorNames.add(label);
+    }
+  }
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const [label, behavior] of keptBehaviors) {
+      if (behavior.compatible !== "zmk,behavior-sticky-key" || !behavior.bindings.some((name) => layerBehaviorNames.has(name)) || layerBehaviorNames.has(label)) continue;
+      layerBehaviours.set(label, 0);
+      layerBehaviorNames.add(label);
+      changed = true;
+    }
   }
   const numbered = await annotateZmkLayerRefs({ layers, combos, passthrough: keptInOrder }, { layerIds, layerBehaviours, keymapCalls, defines });
   const passthrough = numbered.passthrough;

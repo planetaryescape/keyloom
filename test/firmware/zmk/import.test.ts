@@ -9,8 +9,8 @@ const template = await importZmkSource(TEMPLATE_FIXTURE, board);
 const style = await importZmkSource(STYLE_FIXTURE, board);
 
 /** A keymap with one layer of 80 `&none` and `extra` inside the root node. */
-const small = (opts: { bindings?: string; extra?: string; head?: string } = {}): string =>
-  `${opts.head ?? ""}\n/ {\n  ${opts.extra ?? ""}\n  keymap {\n    compatible = "zmk,keymap";\n    base { bindings = <${opts.bindings ?? Array(80).fill("&none").join(" ")}>; };\n  };\n};\n`;
+const small = (opts: { bindings?: string; extra?: string; head?: string; layers?: string } = {}): string =>
+  `${opts.head ?? ""}\n/ {\n  ${opts.extra ?? ""}\n  keymap {\n    compatible = "zmk,keymap";\n    base { bindings = <${opts.bindings ?? Array(80).fill("&none").join(" ")}>; };\n    ${opts.layers ?? ""}\n  };\n};\n`;
 
 describe("the template's default keymap (MoErgo glove80-zmk-config 34888be)", () => {
   test("has four layers of 80 bindings, named from their nodes", () => {
@@ -66,6 +66,21 @@ describe("the template's default keymap (MoErgo glove80-zmk-config 34888be)", ()
     expect(r.warnings.some((w) => w.includes("macro bt_0 kept as written"))).toBe(true);
     expect(r.warnings.some((w) => w.includes("no .conf"))).toBe(false);
   });
+});
+
+test("kept custom layer and sticky behaviours on native keys are renumbered", async () => {
+  const source = small({
+    extra: `behaviors {
+      my_mo: my_mo { compatible = "zmk,behavior-momentary-layer"; #binding-cells = <1>; };
+      my_sticky: my_sticky { compatible = "zmk,behavior-sticky-key"; bindings = <&my_mo>; };
+    };`,
+    bindings: `&my_mo 2 &my_sticky 1 ${Array(78).fill("&none").join(" ")}`,
+    layers: `lower { bindings = <${Array(80).fill("&none").join(" ")}>; };
+      upper { bindings = <${Array(80).fill("&none").join(" ")}>; };`,
+  });
+  const imported = await importZmk({ name: "custom-layer-behaviours", keymap: source }, board);
+  expect(imported.layout.layers[0]?.bindings[0]).toMatchObject({ kind: "native", layerRefs: [{ layerId: "upper" }] });
+  expect(imported.layout.layers[0]?.bindings[1]).toMatchObject({ kind: "native", layerRefs: [{ layerId: "lower" }] });
 });
 
 describe("a Layout Editor style keymap", () => {
