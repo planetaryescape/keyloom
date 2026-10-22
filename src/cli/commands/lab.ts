@@ -139,7 +139,11 @@ export function registerLabCommands(program: Command, deps: LabCommandDeps): voi
       const result = await withApp(async (app) => {
         const rec = await beginRecording(app, ref, lab, {
           ...(opts.passage ? { passageId: opts.passage } : {}), ...(opts.text ? { text: opts.text } : {}),
-          announce: () => io.err(`${NOTICE}\n\n`),
+          announce: () => {
+            const outputFormat = format();
+            if (outputFormat === "json" || outputFormat === "jsonl") print(io, outputFormat, { json: { notice: NOTICE }, table: NOTICE });
+            else io.err(`${NOTICE}\n\n`);
+          },
         });
         try {
           const width = Math.min(100, Math.max(40, (process.stdout.columns ?? 80) - 2));
