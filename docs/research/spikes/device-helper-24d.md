@@ -1,6 +1,6 @@
 # 24d has synthetic sessions and a direct macOS serial candidate
 
-Status: D-431 adds a compile-gated direct macOS backend over base `449a4e2fcd4cdf4ac8a82a1ca17ff4083fed969e`. Pure/PTY tests and the arm64 source candidate build/doctor pass; Intel cross-target clippy passes. The slice-2 installed synthetic smoke repeat is blocked by sandbox process introspection. Physical discovery, port access and DTR behavior remain unobserved. The slice-2 section records the current sequence and gates.
+Status: D-431 adds a compile-gated direct macOS backend over base `449a4e2fcd4cdf4ac8a82a1ca17ff4083fed969e`. Pure/PTY tests and the arm64 source candidate build/doctor pass. On 2026-10-22, a physical Glove80 capture passed after the D-432 identity and close fixes ([S59](S59.md)); Intel cross-target clippy passes. The slice-2 installed synthetic smoke repeat is blocked by sandbox process introspection. Physical discovery, port access and DTR behavior remain unobserved. The slice-2 section records the current sequence and gates.
 
 Slice-1 status: implementation candidate on `feat/device-helper-serial-synthetic` over `3bf16e4f65fb914287d36f96284f134470b8c2ce`. Rust matrix, full Bun suite and the installed synthetic PTY smoke passed locally on macOS arm64 (2026-10-21). No physical port was enumerated, opened, captured, reset or flashed. No real `serialport` implementation or crate was added.
 

@@ -1,6 +1,6 @@
 # Native HID candidate: ownership and interrupted capture
 
-Status: implementation candidate, not adopted or physically verified. Ordinary release builds still use diagnostics-only helpers and legacy TypeScript transports. An explicit compile-time candidate now reaches the real CLI/app HID path. Serial and native Linux/Windows delivery remain required separate slices.
+Status: implementation candidate, not adopted. The arm64 physical capture gate passed on 2026-10-22 ([S59](S59.md)); Intel and the default switch remain. Ordinary release builds still use diagnostics-only helpers and legacy TypeScript transports. An explicit compile-time candidate now reaches the real CLI/app HID path. Serial and native Linux/Windows delivery remain required separate slices.
 
 No production native backend discovery, operational open, capture, reset or flash was performed. In the initial full test run, pre-existing legacy HID/serial metadata inventory tests ran before a guard gap was discovered; that incident and correction remain recorded below. All subsequent device journeys used compiled synthetic-only backends.
 

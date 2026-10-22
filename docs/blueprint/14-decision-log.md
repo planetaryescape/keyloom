@@ -1825,3 +1825,13 @@ BK replaced the proposed `serialport` macOS candidate with a direct IORegistry/P
 - `native-serial` shares the HID registry ownership helpers, lists USB callout metadata without opening nodes, and identifies each attachment by registry ID plus path. It cannot combine with another device backend and fails compilation on non-macOS targets, so an unsupported native feature cannot resemble a working port backend.
 - Capture opens nonblocking/exclusive, sets and reads back raw 115200 with flow control off and HUPCL cleared, then asserts and reads back DTR. Close checks DTR-low, exclusive-release and fd close. After open succeeds, any setup failure reports `effect: possible`, including failures before configuration: the OS may already have asserted DTR. Cleanup explicitly clears DTR only after capture baud was verified; otherwise it only closes the fd. Failed cleanup exits before releasing the lease. This ordering does not prove what firmware observed.
 - Extend D-430's builder: a separate Mac `native-serial` candidate can compile its helper from source without `--helper`; a supplied synthetic helper still supports the installed smoke. Ordinary releases retain diagnostics/legacy. `serial.touch`, real-port behavior and physical adoption remain gated. [Sequence, tests and limits](../research/spikes/device-helper-24d.md#slice-2-owns-the-macos-port-with-checked-transitions).
+
+### D-432: A close on a vanished device is confirmed by its handle release alone. (2026-10-22, S59 hardware run)
+
+On BK's Glove80 and Moonlander (S59), every unplug made the helper exit, so the recording blamed `helper_exited` instead of `disconnected`. After a CDC unplug, `TIOCCDTR` and `TIOCNXCL` fail with `ENXIO` while `close()` succeeds. After an HID removal callback, `IOHIDDeviceClose` returns `kIOReturnBadArgument`. D-431's checked close counted either as unconfirmed cleanup and exited to keep the lease.
+
+- Serial: `ENXIO`/`ENODEV` from line control mean there is no device left to hold DTR or exclusive state. The fd close alone confirms release. Any other line-control error still fails the close.
+- HID: after the removal callback, `kIOReturnBadArgument`, `kIOReturnNoDevice` or `kIOReturnNotAttached` from `IOHIDDeviceClose` is a clean close. Without that callback, any non-zero result still fails it.
+- The session still ends `failed` with `disconnected`, and loss stays unknown. Unconfirmed cleanup on a present device still exits the helper. [Evidence](../research/spikes/S59.md)
+- Serial identity also comes from the nearest `IOUSBHostDevice`/`IOUSBDevice`, not the first node with USB IDs, because macOS copies the IDs onto CDC data and interface nodes that carry no string descriptors.
+
