@@ -3,7 +3,7 @@ use serde_json::Value;
 #[cfg(feature = "synthetic-serial")]
 use serde_json::json;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct SerialEndpoint {
     pub key: String,
     pub permission_denied: bool,
@@ -12,6 +12,26 @@ pub struct SerialEndpoint {
     pub serial: Option<String>,
     pub product_name: Option<String>,
     pub interface_number: Option<u8>,
+}
+// Identity, not access: see the matching note on the HID Endpoint.
+impl PartialEq for SerialEndpoint {
+    fn eq(&self, other: &Self) -> bool {
+        (
+            &self.key,
+            self.vendor,
+            self.product,
+            &self.serial,
+            &self.product_name,
+            self.interface_number,
+        ) == (
+            &other.key,
+            other.vendor,
+            other.product,
+            &other.serial,
+            &other.product_name,
+            other.interface_number,
+        )
+    }
 }
 pub trait SerialDevice {
     fn write(&mut self, bytes: &[u8]) -> Result<(), &'static str>;

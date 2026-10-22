@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Endpoint {
     pub key: String,
     pub permission_denied: bool,
@@ -9,6 +9,27 @@ pub struct Endpoint {
     pub serial: Option<String>,
     pub descriptor: Vec<u8>,
     pub interface_number: Option<u8>,
+}
+// Identity, not access: a permission change after listing must surface as permission_denied at open,
+// not as stale_device, and must not cost the endpoint its reference on a relist.
+impl PartialEq for Endpoint {
+    fn eq(&self, other: &Self) -> bool {
+        (
+            &self.key,
+            self.vendor,
+            self.product,
+            &self.serial,
+            &self.descriptor,
+            self.interface_number,
+        ) == (
+            &other.key,
+            other.vendor,
+            other.product,
+            &other.serial,
+            &other.descriptor,
+            other.interface_number,
+        )
+    }
 }
 impl Endpoint {
     pub fn record(&self, reference: &str) -> Value {

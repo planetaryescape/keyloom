@@ -114,37 +114,18 @@ impl Fd {
         }
     }
     pub fn write(&self, bytes: &[u8], report: bool) -> Result<(), &'static str> {
-        let start = Instant::now();
-        let mut offset = 0;
-        while offset < bytes.len() {
-            let left = Duration::from_millis(500)
-                .checked_sub(start.elapsed())
-                .filter(|d| !d.is_zero())
-                .ok_or("io_failed")?;
-            if self.poll(POLLOUT, left.as_millis().max(1) as c_int)? & POLLOUT == 0 {
-                continue;
-            }
-            // SAFETY: live fd and readable remaining slice.
-            let n = unsafe {
-                write(
-                    self.raw()?,
-                    bytes[offset..].as_ptr().cast(),
-                    bytes.len() - offset,
-                )
-            };
-            if n < 0 {
-                if matches!(errno(), EAGAIN | EINTR) {
-                    continue;
-                }
-                return Err(io_code(errno()));
-            }
-            // A short HID write is one failed report, never a second report containing the tail.
-            if report && n as usize != bytes.len() {
-                return Err("io_failed");
-            }
-            offset += n as usize;
-        }
-        Ok(())
+        let fd = self.raw()?;
+        write_within(
+            bytes,
+            report,
+            Duration::from_millis(500),
+            |timeout| Ok(self.poll(POLLOUT, timeout)? & POLLOUT != 0),
+            |chunk| {
+                // SAFETY: live fd and readable slice of the advertised length.
+                let n = unsafe { write(fd, chunk.as_ptr().cast(), chunk.len()) };
+                if n < 0 { Err(errno()) } else { Ok(n as usize) }
+            },
+        )
     }
     pub fn close(&mut self) -> Result<(), &'static str> {
         let Some(fd) = self.0.take() else {
@@ -158,6 +139,39 @@ impl Fd {
         }
     }
 }
+/// Writes first and waits for POLLOUT only after EAGAIN. hidraw never needs the wait (its write
+/// is synchronous) and kernels before 5.4 never report it writable at all, so polling first would
+/// stall every Moonlander report; a tty with a full buffer still waits here.
+fn write_within(
+    bytes: &[u8],
+    report: bool,
+    budget: Duration,
+    mut writable: impl FnMut(c_int) -> Result<bool, &'static str>,
+    mut send: impl FnMut(&[u8]) -> Result<usize, c_int>,
+) -> Result<(), &'static str> {
+    let start = Instant::now();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        match send(&bytes[offset..]) {
+            // A short HID write is one failed report, never a second report containing the tail.
+            Ok(n) if report && n != bytes.len() => return Err("io_failed"),
+            Ok(n) => offset += n,
+            Err(EINTR) => {}
+            Err(EAGAIN) => {
+                let left = budget
+                    .checked_sub(start.elapsed())
+                    .filter(|d| !d.is_zero())
+                    .ok_or("io_failed")?;
+                writable(left.as_millis().max(1) as c_int)?;
+            }
+            Err(code) => return Err(io_code(code)),
+        }
+        if offset < bytes.len() && start.elapsed() >= budget {
+            return Err("io_failed");
+        }
+    }
+    Ok(())
+}
 impl Drop for Fd {
     fn drop(&mut self) {
         let _ = self.close();
@@ -166,6 +180,72 @@ impl Drop for Fd {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn writes_without_waiting_for_pollout_and_waits_only_after_eagain() {
+        // hidraw on older kernels never reports POLLOUT; the write must still go out at once.
+        let mut polls = 0;
+        let mut sent = vec![];
+        let ok = write_within(
+            &[0; 33],
+            true,
+            Duration::from_millis(500),
+            |_| {
+                polls += 1;
+                Ok(false)
+            },
+            |b| {
+                sent.push(b.len());
+                Ok(b.len())
+            },
+        );
+        assert_eq!((ok, polls, sent), (Ok(()), 0, vec![33]));
+        // A tty with a full buffer: EAGAIN, wait, then the rest.
+        let mut calls = 0;
+        let mut polls = 0;
+        let ok = write_within(
+            &[1; 10],
+            false,
+            Duration::from_millis(500),
+            |_| {
+                polls += 1;
+                Ok(true)
+            },
+            |b| {
+                calls += 1;
+                match calls {
+                    1 => Ok(4),
+                    2 => Err(EAGAIN),
+                    _ => Ok(b.len()),
+                }
+            },
+        );
+        assert_eq!((ok, polls, calls), (Ok(()), 1, 3));
+        // A short HID report fails instead of sending the tail as a second report.
+        assert_eq!(
+            write_within(
+                &[0; 33],
+                true,
+                Duration::from_millis(500),
+                |_| Ok(true),
+                |_| Ok(32)
+            ),
+            Err("io_failed")
+        );
+        // A tty that stays full runs out of budget.
+        assert_eq!(
+            write_within(
+                &[0; 4],
+                false,
+                Duration::from_millis(20),
+                |_| {
+                    std::thread::sleep(Duration::from_millis(5));
+                    Ok(false)
+                },
+                |_| Err(EAGAIN)
+            ),
+            Err("io_failed")
+        );
+    }
     #[test]
     fn only_proven_removal_allows_missing_line_cleanup() {
         assert!(vanished(ENODEV));

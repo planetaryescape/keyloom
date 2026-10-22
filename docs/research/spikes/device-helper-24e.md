@@ -1,8 +1,8 @@
 # Rung 24e implements an explicit Linux candidate; S60 is open
 
-Status: implementation and local synthetic checks complete; pinned Linux CI/runtime results and all physical-device observations remain pending. Ordinary Linux releases remain diagnostics/legacy (D-433/D-434).
+Status: integrated as PR 152 on `feat/device-helper-linux`, on top of v0.49.0 (`e8dcc688b1a8960046ce1ed5f4140350d3f44ef1`). The ubuntu-22.04 musl CI job runs the native-linux clippy and tests, the static candidate build and the installed doctor smoke. No physical device has been observed; S60 is open. Ordinary Linux releases stay diagnostics/legacy (D-433/D-434).
 
-Source: uncommitted `feat/device-helper-linux` worktree based on `f6833532e4deaecd76221f4d0b4b4cb84a570d48`, the supplied PR 150 head. GitHub fetch failed (DNS unavailable), so no claim about a newer remote head is made. The orchestrator owns rebase and commit. Date: 2026-10-22, macOS arm64 implementation host, Rust 1.99.1 and Bun 1.3.14.
+Source provenance: the worker built and tested this on macOS arm64 on 2026-10-22, from PR 150's head `f6833532e4deaecd76221f4d0b4b4cb84a570d48`, with Linux compilation checked against cached crates. The orchestrator then ran the locked Linux clippy, committed it and rebased it onto main. Review round 1 (Codex gpt-6.1-sol) found two problems. HID writes waited for POLLOUT, which hidraw doesn't report before kernel 5.4, so writes now go out first and wait only after EAGAIN, with a regression test. Permission hints counted as endpoint identity, which they no longer do.
 
 ## Build and diagnose the candidate on Linux x64
 
@@ -62,4 +62,4 @@ These results do not establish a successful build with the pinned native depende
 
 No real device was discovered, opened, touched, restarted or flashed. Unobserved: physical HID read/write framing, Moonlander capture/reset, Glove80 CDC capture and 1200/1201 restart, ordinary typing, busy-port/ModemManager behavior, permission remediation on a distro, unplug errno/close behavior, parent/helper death against firmware, runtime floor and resource comparisons. PTYs cannot establish USB line state.
 
-The exact next action is for the orchestrator to review and commit the uncommitted diff, rebase onto freshly fetched main after PR 150 merges, then run the Ubuntu 22.04 device-helper CI job using the unchanged pins. Record candidate installation/doctor and Linux PTY results in this spike. Keep S60 open and ordinary Linux defaults unchanged until separately authorized physical acceptance. Worker handoff, file map and local logs: `/tmp/keyloom-stage6-worker-report.md`.
+Next action: run S60 on a Linux x64 host with a Moonlander and a Glove80, covering capture, stop, unplug, helper death, denied access and absent by-id links, then the 1200/1201 touch with its own permission. Only after that does D-434's candidate become a default.

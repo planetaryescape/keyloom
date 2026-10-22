@@ -942,6 +942,13 @@ mod frame_tests {
             format!("g3-{i}")
         });
         assert_eq!(third[0].0, "g3-0");
+        // Access is advisory, not identity: a permission change keeps the reference.
+        let mut denied = serial("10:/dev/cu.a", "other");
+        if let ConnectionEndpoint::Serial(e) = &mut denied {
+            e.permission_denied = true;
+        }
+        let fourth = state.relist("serial", vec![denied], |i| format!("g4-{i}"));
+        assert_eq!(fourth[0].0, "g3-0");
         assert_eq!(state.refs.len(), 2);
     }
     #[test]
