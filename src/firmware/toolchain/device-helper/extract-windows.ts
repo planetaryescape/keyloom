@@ -62,8 +62,11 @@ foreach ($entry in $paths) {
     windowsHide: true, timeout: 10_000, stdio: "pipe",
   });
   if (result.error || result.status !== 0) {
-    const said = result.error?.message ?? result.stdout?.toString("utf8").split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
-    throw new HelperFailure("unsafe_cache", said?.slice(0, 300));
+    // The script prints its reason on stdout; anything PowerShell itself raised is CLIXML on stderr.
+    const stdout = result.stdout?.toString("utf8").split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
+    const stderr = [...(result.stderr?.toString("utf8") ?? "").matchAll(/<S S="Error">([^<]*)<\/S>/g)].map((m) => m[1]).join("").replaceAll("_x000D__x000A_", " ").trim();
+    const said = result.error?.message ?? (stdout || stderr || undefined);
+    throw new HelperFailure("unsafe_cache", `powershell exit ${result.status}${said ? `: ${said}` : ""}`.slice(0, 300));
   }
   for (const path of [...ancestors, ...paths]) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
 }
