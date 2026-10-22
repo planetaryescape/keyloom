@@ -93,7 +93,7 @@ test.skipIf(process.platform !== "win32")("native Windows refuses directory junc
   fs.symlinkSync(outside, join(base, "keyloom"), "junction");
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("unsafe_cache");
   expect(fs.readdirSync(outside)).toEqual([]);
-});
+}, 60_000);
 
 test.skipIf(process.platform !== "win32")("native Windows refuses a cache writable by Everyone", () => {
   const base = tempDir();
@@ -102,7 +102,7 @@ test.skipIf(process.platform !== "win32")("native Windows refuses a cache writab
   expect(result.exitCode).toBe(0);
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("unsafe_cache");
   expect(fs.readdirSync(base)).toEqual([]);
-});
+}, 60_000);
 
 test("ancestors above LocalAppData are inspected for replacement rights, up to the drive root", () => {
   const { io, base } = fixture();
@@ -125,4 +125,4 @@ test.skipIf(process.platform !== "win32")("native Windows refuses a cache whose 
   expect(result.exitCode).toBe(0);
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("writable by S-1-1-0");
   expect(fs.readdirSync(base)).toEqual([]);
-});
+}, 60_000);

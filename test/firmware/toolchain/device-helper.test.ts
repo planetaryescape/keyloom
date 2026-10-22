@@ -107,7 +107,7 @@ test.skipIf(process.platform !== "win32")("Windows extraction uses an exe and re
   expect(extractHelper(bytes, manifest(), "0.45.0", base).path).toBe(pair.path);
   writeFileSync(pair.path, "corrupt");
   expect(() => extractHelper(bytes, manifest(), "0.45.0", base)).toThrow("integrity_error");
-});
+}, 60_000);
 
 function synthetic(mode = "valid") {
   const script = join(tempDir(), "child.ts");

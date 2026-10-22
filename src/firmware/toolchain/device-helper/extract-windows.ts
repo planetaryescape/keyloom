@@ -51,6 +51,7 @@ foreach ($entry in $paths) {
 `;
   const systemRoot = process.env.SystemRoot;
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw new HelperFailure("unsafe_cache");
+  const started = Date.now();
   const result = spawnSync(win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), [
     "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
   ], {
@@ -59,14 +60,15 @@ foreach ($entry in $paths) {
       ...ancestors.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: true })),
       ...paths.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: false })),
     ]) },
-    windowsHide: true, timeout: 10_000, stdio: "pipe",
+    // Cold Windows PowerShell start can take several seconds on a busy machine; this runs once per process.
+    windowsHide: true, timeout: 30_000, stdio: "pipe",
   });
   if (result.error || result.status !== 0) {
     // The script prints its reason on stdout; anything PowerShell itself raised is CLIXML on stderr.
     const stdout = result.stdout?.toString("utf8").split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
     const stderr = [...(result.stderr?.toString("utf8") ?? "").matchAll(/<S S="Error">([^<]*)<\/S>/g)].map((m) => m[1]).join("").replaceAll("_x000D__x000A_", " ").trim();
     const said = result.error?.message ?? (stdout || stderr || undefined);
-    throw new HelperFailure("unsafe_cache", `powershell exit ${result.status}${said ? `: ${said}` : ""}`.slice(0, 300));
+    throw new HelperFailure("unsafe_cache", `powershell exit ${result.status ?? result.signal} after ${Date.now() - started} ms${said ? `: ${said}` : ""}`.slice(0, 300));
   }
   for (const path of [...ancestors, ...paths]) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
 }
