@@ -139,7 +139,9 @@ export function registerLabCommands(program: Command, deps: LabCommandDeps): voi
       const result = await withApp(async (app) => {
         const rec = await beginRecording(app, ref, lab, {
           ...(opts.passage ? { passageId: opts.passage } : {}), ...(opts.text ? { text: opts.text } : {}),
-          announce: () => io.err(`${NOTICE}\n\n`),
+          // In JSON formats stderr carries only an error document, so the notice joins the passage display on stdout, where the
+          // one JSON document is the result printed at the end.
+          announce: () => (format() === "json" || format() === "jsonl" ? io.out(`${NOTICE}\n\n`) : io.err(`${NOTICE}\n\n`)),
         });
         try {
           const width = Math.min(100, Math.max(40, (process.stdout.columns ?? 80) - 2));
