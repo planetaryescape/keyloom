@@ -160,4 +160,15 @@ describe("hands-free recipes map every flash step", () => {
     expect(parsed.success).toBe(false);
     expect(JSON.stringify(parsed.error?.issues)).toContain("every flash step must have a handsFree half");
   });
+
+  test("two hands-free halves on one step, or two steps with one label, are errors", async () => {
+    const { Uf2DrivesFlashSchema } = await import("../../src/boards/recipes.ts");
+    const board = await Bun.file(`${import.meta.dir}/../../boards/moergo/glove80/board.json`).json();
+    const flash = board.revisions[0].flash;
+    const [first] = flash.steps;
+    const shared = { ...flash, steps: [first], handsFree: { ...flash.handsFree, halves: flash.handsFree.halves.map((h: { step: string }) => ({ ...h, step: first.label })) } };
+    expect(JSON.stringify(Uf2DrivesFlashSchema.safeParse(shared).error?.issues)).toContain("each handsFree half must name a different flash step");
+    const duplicate = { ...flash, steps: [first, { ...first }] };
+    expect(JSON.stringify(Uf2DrivesFlashSchema.safeParse(duplicate).error?.issues)).toContain("flash step labels must be unique");
+  });
 });

@@ -147,6 +147,15 @@ export const Uf2DrivesFlashSchema = z
   .refine((f) => f.handsFree === undefined || f.steps.every((s) => f.handsFree?.halves.some((h) => h.step === s.label)), {
     message: "with handsFree, every flash step must have a handsFree half",
     path: ["handsFree"],
+  })
+  // One-to-one: two halves on one step would leave one of them unflashed and unverified.
+  .refine((f) => new Set(f.steps.map((s) => s.label)).size === f.steps.length, {
+    message: "flash step labels must be unique",
+    path: ["steps"],
+  })
+  .refine((f) => f.handsFree === undefined || new Set(f.handsFree.halves.map((h) => h.step)).size === f.handsFree.halves.length, {
+    message: "each handsFree half must name a different flash step",
+    path: ["handsFree"],
   });
 export type Uf2DrivesFlash = z.infer<typeof Uf2DrivesFlashSchema>;
 
