@@ -214,6 +214,39 @@ impl State {
         self.refs
             .retain(|_, endpoint| endpoint.transport() != transport);
     }
+    /// Replaces one transport's references with a fresh listing. An endpoint whose full snapshot
+    /// is unchanged keeps its reference, so another caller's list between this caller's list and
+    /// open does not invalidate it (D-433). Changed or vanished endpoints lose theirs; open still
+    /// re-checks identity.
+    fn relist(
+        &mut self,
+        transport: &str,
+        endpoints: Vec<ConnectionEndpoint>,
+        mint: impl Fn(usize) -> String,
+    ) -> Vec<(String, ConnectionEndpoint)> {
+        let previous: Vec<(String, ConnectionEndpoint)> = self
+            .refs
+            .iter()
+            .filter(|(_, e)| e.transport() == transport)
+            .map(|(r, e)| (r.clone(), e.clone()))
+            .collect();
+        self.invalidate_refs(transport);
+        let listed: Vec<(String, ConnectionEndpoint)> = endpoints
+            .into_iter()
+            .enumerate()
+            .map(|(index, endpoint)| {
+                let reference = previous
+                    .iter()
+                    .find(|(_, e)| *e == endpoint)
+                    .map_or_else(|| mint(index), |(r, _)| r.clone());
+                (reference, endpoint)
+            })
+            .collect();
+        for (reference, endpoint) in &listed {
+            self.refs.insert(reference.clone(), endpoint.clone());
+        }
+        listed
+    }
 }
 #[derive(Clone)]
 pub struct Transport {
@@ -289,30 +322,16 @@ impl Transport {
                     state.listing.remove(backend.transport());
                     match result {
                         Ok(endpoints) if endpoints.len() <= 256 => {
-                            // An endpoint whose full snapshot is unchanged keeps its reference, so a caller
-                            // between its own list and open is not invalidated by another caller's list.
-                            // Open still re-checks identity; only vanished or changed endpoints lose refs.
-                            let previous: Vec<(String, ConnectionEndpoint)> = state
-                                .refs
-                                .iter()
-                                .filter(|(_, e)| e.transport() == backend.transport())
-                                .map(|(r, e)| (r.clone(), e.clone()))
-                                .collect();
-                            state.invalidate_refs(backend.transport());
+                            let generation = state.generation[backend.transport()];
+                            let listed = state.relist(backend.transport(), endpoints, |index| {
+                                format!(
+                                    "d{}-{}-{generation}-{index}",
+                                    this.nonce,
+                                    backend.transport()
+                                )
+                            });
                             let mut devices = Vec::new();
-                            for (index, endpoint) in endpoints.into_iter().enumerate() {
-                                let reference = previous
-                                    .iter()
-                                    .find(|(_, e)| *e == endpoint)
-                                    .map(|(r, _)| r.clone())
-                                    .unwrap_or_else(|| {
-                                        format!(
-                                            "d{}-{}-{}-{index}",
-                                            this.nonce,
-                                            backend.transport(),
-                                            state.generation[backend.transport()]
-                                        )
-                                    });
+                            for (reference, endpoint) in listed {
                                 match endpoint.record(&reference) {
                                     Ok(record) => devices.push(record),
                                     Err(code) => {
@@ -321,7 +340,6 @@ impl Transport {
                                         return;
                                     }
                                 }
-                                state.refs.insert(reference, endpoint);
                             }
                             match list_reply(&id, devices) {
                                 Ok(reply) => this.output.reply(reply),
@@ -858,6 +876,69 @@ mod frame_tests {
             );
             assert!(transport.state.lock().unwrap().sessions.is_empty());
         }
+    }
+    #[test]
+    fn relist_keeps_only_unchanged_endpoints_references() {
+        let serial = |key: &str, number: &str| {
+            ConnectionEndpoint::Serial(crate::serial::SerialEndpoint {
+                key: key.into(),
+                vendor: 0x16c0,
+                product: 0x27db,
+                serial: Some(number.into()),
+                product_name: None,
+                interface_number: Some(1),
+            })
+        };
+        let hid = ConnectionEndpoint::Hid(crate::backend::Endpoint {
+            key: "h".into(),
+            vendor: 1,
+            product: 2,
+            serial: None,
+            descriptor: vec![],
+        });
+        let mut state = State {
+            refs: HashMap::from([("hid-ref".into(), hid.clone())]),
+            generation: HashMap::new(),
+            next: 0,
+            sessions: HashMap::new(),
+            closed: VecDeque::new(),
+            listing: HashSet::new(),
+        };
+        let first = state.relist(
+            "serial",
+            vec![
+                serial("10:/dev/cu.a", "L"),
+                serial("11:/dev/cu.b", "R"),
+                serial("12:/dev/cu.c", "X"),
+            ],
+            |i| format!("g1-{i}"),
+        );
+        assert_eq!(
+            first.iter().map(|(r, _)| r.as_str()).collect::<Vec<_>>(),
+            ["g1-0", "g1-1", "g1-2"]
+        );
+        // a: unchanged; b: same path re-attached under a new registry ID; c: vanished; d: new.
+        let second = state.relist(
+            "serial",
+            vec![
+                serial("10:/dev/cu.a", "L"),
+                serial("20:/dev/cu.b", "R"),
+                serial("13:/dev/cu.d", "Y"),
+            ],
+            |i| format!("g2-{i}"),
+        );
+        assert_eq!(
+            second.iter().map(|(r, _)| r.as_str()).collect::<Vec<_>>(),
+            ["g1-0", "g2-1", "g2-2"]
+        );
+        assert!(!state.refs.contains_key("g1-1") && !state.refs.contains_key("g1-2"));
+        assert_eq!(state.refs.get("hid-ref"), Some(&hid));
+        // Same key with different metadata is a changed endpoint, not the same one.
+        let third = state.relist("serial", vec![serial("10:/dev/cu.a", "other")], |i| {
+            format!("g3-{i}")
+        });
+        assert_eq!(third[0].0, "g3-0");
+        assert_eq!(state.refs.len(), 2);
     }
     #[test]
     fn reference_invalidation_is_scoped_to_one_transport() {

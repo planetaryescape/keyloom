@@ -88,8 +88,12 @@ describe.skipIf(!binary)("native synthetic-only HID through real TS client", () 
     const client = await connect();
     try {
       const first = (await devices(client)).devices[0]!;
-      await devices(client);
-      expectTransportError(await rejectedResult(client.open(first.deviceRef, () => {}, () => {})), "stale_device", "none");
+      // An unchanged endpoint keeps its reference across a relist (D-433); a reference from another helper lifetime never resolves.
+      expect((await devices(client)).devices[0]!.deviceRef).toBe(first.deviceRef);
+      const other = await connect();
+      let foreign: string;
+      try { foreign = (await devices(other)).devices[0]!.deviceRef; } finally { await other.shutdown(); }
+      expectTransportError(await rejectedResult(client.open(foreign, () => {}, () => {})), "stale_device", "none");
       for (const item of corpus.filter((c) => !c.valid)) {
         const error = await rejectedResult(client.request(item.request.method, item.request.params, z.unknown(), 500));
         expectTransportError(error, "invalid_request", "none");

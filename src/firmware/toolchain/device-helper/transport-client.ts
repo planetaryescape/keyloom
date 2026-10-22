@@ -87,7 +87,11 @@ export class DeviceTransportClient {
   }
   /** The helper refuses an overlapping list of one transport as busy. Sync polling and a lab start share this client, so lists go one at a time. */
   list<T>(transport: SessionTransport, schema: z.ZodType<T>, timeout: number): Promise<T> {
-    const next = (this.listing.get(transport) ?? Promise.resolve()).catch(() => {}).then(() => this.request("list", { transport }, schema, timeout));
+    const next = (this.listing.get(transport) ?? Promise.resolve()).catch(() => {}).then(() => {
+      // A list queued behind shutdown must settle now, not after its timeout once the channel is gone.
+      if (this.stopping) throw channelError("helper_exited");
+      return this.request("list", { transport }, schema, timeout);
+    });
     this.listing.set(transport, next);
     return next;
   }

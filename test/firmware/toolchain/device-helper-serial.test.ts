@@ -127,6 +127,17 @@ test("concurrent lists from sync and a lab start are sent one at a time, never r
   } finally { await client.terminate(); }
 });
 
+test("a list queued behind shutdown is refused, never sent to a stopping helper", async () => {
+  const peer = fake(), client = await peer.connect(), adapter = helperSerialTransport(client);
+  const inFlight = adapter.list();
+  const queued = adapter.list();
+  await Bun.sleep(5); // the first list is now with the helper; the second waits behind it
+  const stopped = client.shutdown();
+  expect(await inFlight).toHaveLength(1);
+  await expect(queued).rejects.toThrow("helper_exited");
+  await stopped;
+});
+
 test("serial adapter awaits UTF-8 chunks in order, validates acceptedBytes and maps touch without replay", async () => {
   const peer = fake(), client = await peer.connect(), adapter = helperSerialTransport(client);
   try {
