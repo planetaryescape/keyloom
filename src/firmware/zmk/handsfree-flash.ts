@@ -287,7 +287,7 @@ export function zmkHandsFreeHooks(input: {
         await input.saveLastGood?.(new Map([...images].map(([target, image]) => [target.half.marker, image])));
       } catch (err) {
         // The keyboard runs the new build either way; only a later rollback is affected, and it keeps the previous set.
-        input.log(`keyloom: couldn't keep this build as the last good one, so the previous last-good images stay: ${(err as Error).message}`);
+        input.log(`keyloom: couldn't keep this build as the last good one: ${(err as Error).message}`);
       }
     };
     hooks.recover = async (index, error, restore, say) => {

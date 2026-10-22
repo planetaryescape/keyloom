@@ -265,8 +265,14 @@ export async function promoteLastGood(dir: string, images: ReadonlyMap<string, U
   try {
     await rename(staging, dir);
   } catch (err) {
-    if (moved) await rename(old, dir).catch(() => undefined);
     await rm(staging, { recursive: true, force: true });
+    if (moved) {
+      try {
+        await rename(old, dir);
+      } catch {
+        throw new Error(`${(err as Error).message}; the previous last-good images are in ${old}`);
+      }
+    }
     throw err;
   }
   if (moved) await rm(old, { recursive: true, force: true }).catch(() => undefined);
