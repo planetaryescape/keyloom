@@ -14,11 +14,12 @@ on:
         required: true
 
 # Release runs take turns, so a rebuild of a tag can't upload alongside the push run that is still building it; the
-# rebuild then finds the assets and stops. A newer push may replace a waiting push run, which is safe because
-# release-please works from main's current state and still releases any merged PR left pending.
+# rebuild then finds the assets and stops. Every waiting run is kept (`queue: max`): by default a new run replaces a
+# waiting one, and a push replacing a waiting rebuild would leave that release without binaries.
 concurrency:
   group: release
   cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: read
