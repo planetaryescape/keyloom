@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.53.0](https://github.com/planetaryescape/keyloom/compare/v0.52.0...v0.53.0) (2026-10-22)
+
+
+### Features
+
+* roll a split ZMK flash back so both halves stay on the same build ([3a693cd](https://github.com/planetaryescape/keyloom/commit/3a693cd141218aaea734de3887540479c4b508d7))
+
 ## [0.52.0](https://github.com/planetaryescape/keyloom/compare/v0.51.0...v0.52.0) (2026-10-22)
 
 
