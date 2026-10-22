@@ -23,6 +23,7 @@ export class DeviceTransportClient {
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private heartbeatPending = false;
   private cleanup: Promise<void> | undefined;
+  private readonly listing = new Map<string, Promise<unknown>>();
   private readonly child: HelperChild;
   private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
   private readonly stderr: ReadableStreamDefaultReader<Uint8Array>;
@@ -83,6 +84,16 @@ export class DeviceTransportClient {
         void Promise.resolve(this.child.stdin.flush()).catch(() => this.fail(channelError("helper_exited")));
       } catch { this.fail(channelError("helper_exited")); }
     });
+  }
+  /** The helper refuses an overlapping list of one transport as busy. Sync polling and a lab start share this client, so lists go one at a time. */
+  list<T>(transport: SessionTransport, schema: z.ZodType<T>, timeout: number): Promise<T> {
+    const next = (this.listing.get(transport) ?? Promise.resolve()).catch(() => {}).then(() => {
+      // A list queued behind shutdown must settle now, not after its timeout once the channel is gone.
+      if (this.stopping) throw channelError("helper_exited");
+      return this.request("list", { transport }, schema, timeout);
+    });
+    this.listing.set(transport, next);
+    return next;
   }
   async open(deviceRef: string, onReport: (bytes: Uint8Array) => void, onError: (error: Error) => void, transport: SessionTransport = "hid"): Promise<string> {
     const opened = await this.request(`${transport}.open`, { deviceRef }, openedSchema, 2_000, ({ sessionId }) => {

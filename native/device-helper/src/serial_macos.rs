@@ -98,8 +98,13 @@ fn check_endpoint(
         Err("stale_device")
     }
 }
+#[path = "serial_macos_touch.rs"]
+mod touch;
 pub struct Macos;
 impl SerialBackend for Macos {
+    fn touch(&self, expected: &SerialEndpoint, baud: u64) -> Result<(), OpenError> {
+        touch::touch(expected, baud)
+    }
     fn list(&self) -> Result<Vec<SerialEndpoint>, &'static str> {
         let mut iterator = 0;
         // SAFETY: matching dictionary is consumed by IOKit; iterator points to writable storage.

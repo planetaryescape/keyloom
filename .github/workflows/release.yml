@@ -68,8 +68,10 @@ jobs:
         run: |
           rustup show
           rustup target add "${{ matrix.rust }}"
-          cargo build --locked --release --target "${{ matrix.rust }}"
-          cargo test --locked --release --target "${{ matrix.rust }}" --test lifetime -- --nocapture
+          features=""
+          if [ "${{ matrix.rust }}" = aarch64-apple-darwin ]; then features="--features native-macos"; fi
+          cargo build --locked --release --target "${{ matrix.rust }}" $features
+          cargo test --locked --release --target "${{ matrix.rust }}" $features --test lifetime -- --nocapture
       - name: Sign and notarise visible Rust before hashing and embedding
         if: runner.os == 'macOS'
         env:

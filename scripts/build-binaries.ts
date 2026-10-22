@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import pkg from "../package.json" with { type: "json" };
+import { HID_CAPABILITIES, NATIVE_CAPABILITIES, SERIAL_CAPABILITIES } from "../src/firmware/toolchain/device-helper/transport-protocol.ts";
 
 const RELEASE_TARGETS = {
   "bun-darwin-arm64": { name: "keyloom-darwin-arm64", rust: "aarch64-apple-darwin", platform: "darwin", arch: "arm64" },
@@ -22,7 +23,7 @@ function options(argv: string[]) {
   let helper: string | undefined;
   let helperDir: string | undefined;
   let outDir = "dist";
-  let backend: "legacy" | "native-hid" | "native-serial" = "legacy";
+  let backend: "legacy" | "native" | "native-hid" | "native-serial" | undefined;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const value = argv[++i];
@@ -32,25 +33,28 @@ function options(argv: string[]) {
     else if (arg === "--helper") helper = value;
     else if (arg === "--helper-dir") helperDir = value;
     else if (arg === "--out-dir") outDir = value;
-    else if (arg === "--device-backend" && (value === "legacy" || value === "native-hid" || value === "native-serial")) backend = value;
+    else if (arg === "--device-backend" && (value === "legacy" || value === "native" || value === "native-hid" || value === "native-serial")) backend = value;
     else throw new Error(`invalid option: ${arg}; targets: ${Object.keys(RELEASE_TARGETS).join(", ")}`);
   }
   const selected = targets.length ? targets : Object.keys(RELEASE_TARGETS).filter(isBunTarget);
   if (helper && (selected.length !== 1 || helperDir)) throw new Error("--helper requires exactly one --target and no --helper-dir");
-  if (backend !== "legacy" && (resolve(outDir) === resolve("dist") || selected.some((target) => RELEASE_TARGETS[target].platform !== "darwin"))) {
-    throw new Error(`${backend} is an unadopted macOS candidate; select a Mac target and an explicit separate --out-dir`);
+  if (backend !== undefined && resolve(outDir) === resolve("dist")) {
+    throw new Error("an explicit --device-backend requires a separate --out-dir");
+  }
+  if (backend !== undefined && backend !== "legacy" && selected.some((target) => RELEASE_TARGETS[target].platform !== "darwin")) {
+    throw new Error(`${backend} requires a Mac target`);
   }
   return { targets: selected, entry, helper, helperDir, outDir, backend };
 }
 
-async function helperPath(target: BunTarget, backend: "legacy" | "native-hid" | "native-serial", helper?: string, helperDir?: string): Promise<string> {
+async function helperPath(target: BunTarget, backend: "legacy" | "native" | "native-hid" | "native-serial", helper?: string, helperDir?: string): Promise<string> {
   const spec = RELEASE_TARGETS[target];
   if (helper) return resolve(helper);
   if (helperDir) return resolve(helperDir, spec.rust, "keyloom-device");
   if (process.platform !== spec.platform || process.arch !== spec.arch)
     throw new Error(`cross build ${target} needs --helper-dir with native built/signed helpers, or --helper with one target`);
   const args = ["cargo", "build", "--locked", "--release", "--target", spec.rust];
-  if (backend !== "legacy") args.push("--features", backend);
+  if (backend !== "legacy") args.push("--features", backend === "native" ? "native-macos" : backend);
   const build = Bun.spawn(args, {
     cwd: "native/device-helper", stdout: "inherit", stderr: "inherit",
   });
@@ -63,11 +67,33 @@ async function helperPath(target: BunTarget, backend: "legacy" | "native-hid" | 
   return path;
 }
 
+type Backend = "legacy" | "native" | "native-hid" | "native-serial";
+const EXPECTED_CAPABILITIES: Record<Backend, readonly string[]> = {
+  legacy: [], native: NATIVE_CAPABILITIES, "native-hid": HID_CAPABILITIES, "native-serial": SERIAL_CAPABILITIES,
+};
+
+/** A prebuilt --helper skips the feature selection above, so refuse a pair the packaged client would reject at runtime. */
+async function checkCapabilities(target: BunTarget, backend: Backend, helper: string): Promise<void> {
+  const spec = RELEASE_TARGETS[target];
+  // Only a helper for this host can run here; each release target builds on its own native runner.
+  if (process.platform !== spec.platform || process.arch !== spec.arch) return;
+  const child = Bun.spawn([helper, "--version"], { stdout: "pipe", stderr: "inherit" });
+  const output = await new Response(child.stdout).text();
+  if (await child.exited !== 0) throw new Error(`${helper} --version failed`);
+  const advertised = [...(JSON.parse(output) as { capabilities: string[] }).capabilities].sort();
+  const expected = [...EXPECTED_CAPABILITIES[backend]].sort();
+  if (advertised.join() !== expected.join()) {
+    throw new Error(`${target} selects the ${backend} backend, which needs helper capabilities [${expected.join(", ")}], but ${helper} advertises [${advertised.join(", ")}]${backend === "native" ? "; build the helper with --features native-macos" : ""}`);
+  }
+}
+
 const opts = options(process.argv.slice(2));
 await mkdir(opts.outDir, { recursive: true });
 const built: string[] = [];
 for (const target of opts.targets) {
-  const helper = await helperPath(target, opts.backend, opts.helper, opts.helperDir);
+  const backend = opts.backend ?? (target === "bun-darwin-arm64" ? "native" : "legacy");
+  const helper = await helperPath(target, backend, opts.helper, opts.helperDir);
+  await checkCapabilities(target, backend, helper);
   const bytes = await Bun.file(helper).bytes();
   const manifest = {
     release: pkg.version, protocol: 1, target: RELEASE_TARGETS[target].rust,
@@ -81,7 +107,7 @@ for (const target of opts.targets) {
       name: "paired-device-helper",
       setup(build) {
         build.onLoad({ filter: /device-helper\/selection\.ts$/ }, () => ({
-          loader: "ts", contents: `export function deviceBackend() { return ${JSON.stringify(opts.backend)}; }`,
+          loader: "ts", contents: `export function deviceBackend() { return ${JSON.stringify(backend)}; }`,
         }));
         build.onLoad({ filter: /device-helper\/packaged\.ts$/ }, () => ({
           loader: "ts",

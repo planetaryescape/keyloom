@@ -71,7 +71,7 @@ To check only the installed helper, without device discovery, credentials or Doc
 keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 ```
 
-This reports the paired release, protocol, target, SHA-256 and `capabilities: []`. The helper currently provides diagnostics only; keyboard connections still use the existing TypeScript transports. A corrupt or mismatched pair fails with an installation code, without opening a keyboard. See [build, cache and repair details](native/device-helper/README.md). A compile-gated [native HID candidate](docs/research/spikes/device-helper-24c.md) is available for development; it is not selected by installed release builds and has not passed physical acceptance.
+This reports the paired release, protocol, target, SHA-256 and capabilities. On Apple Silicon Macs the helper is keyloom's keyboard connection: it lists `hid.list`, `hid.open`, `hid.write`, `serial.list`, `serial.open`, `serial.touch.1200` and `serial.touch.1201` (D-433). On Intel Macs and Linux it is diagnostics only (`capabilities: []`) and keyboard connections use the existing TypeScript transports. A corrupt or mismatched pair fails with an installation code, without opening a keyboard. See [build, cache and repair details](native/device-helper/README.md).
 
 To start from your existing layout, import it:
 

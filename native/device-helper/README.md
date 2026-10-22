@@ -15,9 +15,9 @@ Rust 1.99.1 is pinned here. The displayed release comes from the root `package.j
 
 The lifetime integration test uses the real helper with a genuinely unread OS pipe, holds stdin open until observed exit, and checks open/closed stderr without increasing the 6500-ms exit budget. Fatal termination performs no diagnostic I/O, so closed stderr cannot disable the watchdog. Native CI repeats the release-profile oracle on Intel; Bun retains separate real-child/client checks.
 
-By default, the helper implements only private `hello`, `ping` and `shutdown` JSON-lines requests. It advertises `capabilities: []`, contains no device backend, and refuses device methods with `unsupported`. Existing TypeScript transports remain production defaults. See [the implemented contract and remaining proposal](../../docs/blueprint/32-device-helper-protocol.md).
+Cargo without features implements only private `hello`, `ping` and `shutdown` JSON-lines requests. It advertises `capabilities: []`, contains no device backend, and refuses device methods with `unsupported`. The release builder enables `native-macos` on Apple Silicon, with all seven HID/serial capabilities. Intel and Linux releases retain TypeScript transports and diagnostics-only helpers (D-433). A prebuilt `--helper` must advertise exactly the selected backend's capabilities (for arm64, build it with `--features native-macos`). The builder runs its `--version` on the build host and refuses a mismatch. See [the implemented contract and remaining proposal](../../docs/blueprint/32-device-helper-protocol.md).
 
-## Test the unadopted HID candidate
+## Test the single-transport HID build
 
 ```sh
 cd native/device-helper
@@ -31,7 +31,7 @@ KEYLOOM_TEST_SYNTHETIC_HID="$PWD/native/device-helper/target/debug/keyloom-devic
   bun test test/firmware/toolchain/device-helper-hid.test.ts test/firmware/toolchain/device-helper-client-order.test.ts
 ```
 
-Use `.exe` paths on Windows. `native-hid` compiles a direct macOS IORegistry/IOKit adapter; other native platforms advertise no HID capability. `synthetic-hid` compiles only the fake backend. Enabling both is a compile error. The native tests above are compilation/unit checks, not permission to run native discovery or capture. Real `--stdio` device requests require separate authorization. Ordinary release commands enable neither feature. Explicit `--device-backend native-hid` builds require a Mac target and a separate `--out-dir`; they statically wire the actual CLI/app selector to the verified helper. There is no runtime environment/path override. CLI/server cleanup waits for the owned helper; doctor reports candidate capabilities without discovery. Physical acceptance still gates ordinary adoption.
+Use `.exe` paths on Windows. `native-hid` compiles a direct macOS IORegistry/IOKit adapter; other native platforms advertise no HID capability. `synthetic-hid` compiles only the fake backend. Enabling both is a compile error. The native tests above are compilation/unit checks, not permission to run native discovery or capture. Real `--stdio` device requests require separate authorization. Apple Silicon release commands enable both native features through `native-macos`. Explicit `--device-backend native-hid` builds require a Mac target and a separate `--out-dir`; they statically wire the actual CLI/app selector to the verified helper. There is no runtime environment/path override. CLI/server cleanup waits for the owned helper; doctor reports candidate capabilities without discovery. [S59](../../docs/research/spikes/S59.md) records arm64 capture evidence; physical reset/touch and desktop release acceptance are recorded separately in [Stage 5](../../docs/research/spikes/device-helper-native-default.md).
 
 The [24c evidence and adoption gates](../../docs/research/spikes/device-helper-24c.md) describe leases, report admission, queues, failure semantics and the explicit `packagedHidTransport()` adapter. Regenerate the supplementary schema with `bun scripts/gen-device-helper-schema.ts`. For the opt-in ten-minute synthetic stream, add `KEYLOOM_TEST_HID_SOAK=1` and select the `ten-minute sustained` test; this is never a physical typing soak.
 
@@ -49,9 +49,9 @@ bun scripts/build-binaries.ts --target bun-darwin-arm64 \
 dist/native-serial-source-test/keyloom-darwin-arm64 --version
 ```
 
-`native-serial` is macOS-only and exclusive with all other device features. It advertises exactly `serial.list` and `serial.open`; `serial.touch` remains unsupported. It shares metadata-only IORegistry ownership with HID and owns the callout fd directly. Setup checks raw 115200 8N1, disabled flow control, cleared HUPCL and DTR-high readback; close checks DTR-low, exclusive-release and fd close. Reads poll for at most 50 ms, writes accept the complete chunk within a 500-ms total deadline, and pending reads never wait. The backend retains no native queue; the owner bounds shared output at 16 chunks.
+`native-serial` is macOS-only and combines with `native-hid` through `native-macos`. It advertises `serial.list`, `serial.open`, `serial.touch.1200` and `serial.touch.1201`. Touch sets and verifies both baud rates before DTR-low and one checked close; post-open failures have possible effects and are never replayed. It shares metadata-only IORegistry ownership with HID and owns the callout fd directly. Setup checks raw 115200 8N1, disabled flow control, cleared HUPCL and DTR-high readback; close checks DTR-low, exclusive-release and fd close. Reads poll for at most 50 ms, writes accept the complete chunk within a 500-ms total deadline, and pending reads never wait. The backend retains no native queue; the owner bounds shared output at 16 chunks.
 
-Use the pinned Rust/Bun toolchains and `CARGO_NET_OFFLINE=true`. Direct optional `libc =0.2.191` reuses the locked ABI definitions for termios, polling and syscalls; its MIT notice is already included. Pure/injected tests and anonymous `openpty` tests perform no registry enumeration or real-port access. They cannot establish USB DTR behavior or prevent an OS-initiated DTR transition during open; see [the exact sequence and limitations](../../docs/research/spikes/device-helper-24d.md#slice-2-owns-the-macos-port-with-checked-transitions). Ordinary builds still enable no device backend. On Intel use `bun-darwin-x64`; CI builds the source candidate on each native Mac runner.
+Use the pinned Rust/Bun toolchains and `CARGO_NET_OFFLINE=true`. Direct optional `libc =0.2.191` reuses the locked ABI definitions for termios, polling and syscalls; its MIT notice is already included. Pure/injected tests and anonymous `openpty` tests perform no registry enumeration or real-port access. They cannot establish USB DTR behavior or prevent an OS-initiated DTR transition during open; see [the exact sequence and limitations](../../docs/research/spikes/device-helper-24d.md#slice-2-owns-the-macos-port-with-checked-transitions). Cargo without features enables no backend; Apple Silicon release builds enable `native-macos`. On Intel use `bun-darwin-x64`; CI builds the source candidate on each native Mac runner.
 
 ## Test the synthetic serial candidate
 
@@ -68,7 +68,25 @@ KEYLOOM_TEST_SYNTHETIC_SERIAL="$PWD/native/device-helper/target/debug/keyloom-de
   bun test test/firmware/toolchain/device-helper-serial.test.ts
 ```
 
-Run heavy commands through `agent-work run --` on BK's machine. `synthetic-serial` compiles one fake Glove80 endpoint, raw byte echo and scripted START/STOP. `synthetic-serial-capture` also emits two firmware-timestamped events split mid-line. Neither feature compiles OS-device code; combining serial with either HID feature is a compile error. No crate versions were added. `serial.touch` always refuses `unsupported` and is not advertised. The [24d record](../../docs/research/spikes/device-helper-24d.md) gives the candidate build and installed PTY smoke commands, observed checks and the direct backend's unverified hardware gates.
+Run heavy commands through `agent-work run --` on BK's machine. `synthetic-serial` compiles one fake Glove80 endpoint, raw byte echo and scripted START/STOP. `synthetic-serial-capture` also emits two firmware-timestamped events split mid-line. Neither feature compiles OS-device code. `synthetic-macos` combines both scripted captures and touch; synthetic and native features remain exclusive. No crate versions were added. The [24d record](../../docs/research/spikes/device-helper-24d.md) gives the candidate build and installed PTY smoke commands, observed checks and the direct backend's unverified hardware gates.
+
+## Exercise both transports without a keyboard
+
+```sh
+cd native/device-helper
+cargo clippy --locked --all-targets --features native-macos -- -D warnings
+cargo test --locked --features native-macos
+cargo build --locked --release --features synthetic-macos
+cp target/release/keyloom-device target/keyloom-device-synthetic-macos
+codesign --force --sign - target/keyloom-device-synthetic-macos
+cd ../..
+bun scripts/build-binaries.ts --target bun-darwin-arm64 --device-backend native \
+  --helper native/device-helper/target/keyloom-device-synthetic-macos --out-dir dist/native-combined-test
+bun scripts/smoke-native-combined.ts dist/native-combined-test/keyloom-darwin-arm64 \
+  native/device-helper/target/keyloom-device-synthetic-macos
+```
+
+The smoke checks the helper's synthetic identity and paired hash before lab capture. It runs both installed production CLI/PTY journeys, including stop/reopen and helper death. For both touch rates it separately installs a test-only CLI entry that uses the production default selectors and shared owner; it verifies the paired executable is synthetic before listing or touching. The test entry is never a release entry. These checks do not prove firmware restart. Run the physical acceptance separately through the orchestrator.
 
 ## Compile an installed CLI pair
 
@@ -89,7 +107,7 @@ For a signed/prebuilt helper, pass `--helper <absolute-file>` with exactly one `
 keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 ```
 
-An ordinary compiled pair reports its release, protocol, target, helper SHA-256 and empty capabilities. An explicit native candidate reports its selected HID or serial capabilities and says hardware acceptance is pending; doctor still performs no discovery. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
+An Apple Silicon release pair reports its release, protocol, target, helper SHA-256, all seven capabilities and "native backend in use". Intel and Linux pairs report empty capabilities and "diagnostics only". An explicit native candidate reports its selected HID or serial capabilities and says hardware acceptance is pending; doctor still performs no discovery. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
 
 The Unix extractor rejects symlinks in managed paths, unexpected owners, unsafe modes and wrong hashes. It publishes without replacing an existing executable. Old releases coexist until explicitly removed; no automatic cleanup or downloads occur. A same-user malicious process is outside this integrity boundary. Windows currently runs native Cargo/Bun child-contract checks only: production extraction refuses Windows until private ACL/reparse checks are implemented.
 
@@ -103,6 +121,6 @@ cargo metadata --locked --format-version 1
 
 Direct normal/build dependency: `serde_json =1.0.154`, default `std` feature. The compiled tree contains `itoa 1.0.18` (MIT OR Apache-2.0), `memchr 2.8.3` (Unlicense OR MIT), `serde_core 1.0.229` (MIT OR Apache-2.0), `serde_json 1.0.154` (MIT OR Apache-2.0), and `zmij 1.0.23` (MIT). MIT notices are [included](THIRD-PARTY-NOTICES.txt) and embedded in the helper's `--version` output.
 
-The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for device-enabled builds and, on macOS only, `core-foundation =0.10.1` with `core-foundation-sys 0.8.7` and `libc 0.2.191`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in device-enabled features; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; D-431 replaces the serialport candidate with direct macOS ownership. The direct macOS candidate is not a production default.
+The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for device-enabled builds and, on macOS only, `core-foundation =0.10.1` with `core-foundation-sys 0.8.7` and `libc 0.2.191`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in device-enabled features; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; D-431 replaces the serialport candidate with direct macOS ownership. The combined direct macOS backend is the Apple Silicon release default; Intel keeps legacy macOS FFI (D-433).
 
 See [S58/S62 evidence](../../docs/research/spikes/device-helper-24b.md) for observed results and unverified release/signing/platform gates.

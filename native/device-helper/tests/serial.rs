@@ -50,7 +50,26 @@ impl Peer {
         let hello = peer.call("hello",json!({"protocol":1,"hostVersion":env!("KEYLOOM_RELEASE"),"target":env!("KEYLOOM_TARGET")}));
         assert_eq!(
             hello["result"]["capabilities"],
-            json!(["serial.list", "serial.open"])
+            json!(
+                if cfg!(all(feature = "synthetic-hid", feature = "synthetic-serial")) {
+                    vec![
+                        "hid.list",
+                        "hid.open",
+                        "hid.write",
+                        "serial.list",
+                        "serial.open",
+                        "serial.touch.1200",
+                        "serial.touch.1201",
+                    ]
+                } else {
+                    vec![
+                        "serial.list",
+                        "serial.open",
+                        "serial.touch.1200",
+                        "serial.touch.1201",
+                    ]
+                }
+            )
         );
         peer
     }
@@ -123,7 +142,7 @@ impl Drop for Peer {
     }
 }
 #[test]
-fn shared_invalid_requests_have_zero_effects_and_touch_is_unavailable() {
+fn shared_invalid_requests_have_zero_effects_and_touch_checks_refs() {
     let mut peer = Peer::new();
     let cases: Value = serde_json::from_str(include_str!(
         "../../../test/fixtures/device-helper/serial-requests.json"
@@ -147,12 +166,12 @@ fn shared_invalid_requests_have_zero_effects_and_touch_is_unavailable() {
         assert_eq!(reply["error"]["effect"], "none");
     }
     assert_eq!(
-        peer.call("test.stats", json!({}))["result"],
+        peer.call("test.stats", json!({"transport":"serial"}))["result"],
         json!({"opens":0,"writes":0})
     );
     assert_eq!(
         peer.call("serial.touch", json!({"deviceRef":"d1","baud":1200}))["error"],
-        json!({"code":"unsupported","effect":"none","retry":"never"})
+        json!({"code":"stale_device","effect":"none","retry":"after_rediscovery"})
     );
 }
 #[test]
@@ -226,17 +245,17 @@ fn chunks_preserve_bytes_limits_and_close_drains_before_receipt() {
 fn refs_relist_by_transport_and_new_writes_are_refused_during_close() {
     let _guard = LEASE_TEST.lock().unwrap();
     let mut peer = Peer::new();
+    // A relist that finds the same endpoint keeps its reference, so another caller's list
+    // between this caller's list and open does not invalidate it.
     let old = peer.reference();
     let new = peer.reference();
-    assert_ne!(old, new);
-    assert_eq!(
-        peer.call("serial.open", json!({"deviceRef":old}))["error"]["code"],
-        "stale_device"
-    );
-    assert_eq!(
-        peer.call("list", json!({"transport":"hid"}))["error"]["code"],
-        "unsupported"
-    );
+    assert_eq!(old, new);
+    let hid = peer.call("list", json!({"transport":"hid"}));
+    if cfg!(feature = "synthetic-hid") {
+        assert_eq!(hid["ok"], true);
+    } else {
+        assert_eq!(hid["error"]["code"], "unsupported");
+    }
     let session = peer.call("serial.open", json!({"deviceRef":new}))["result"]["sessionId"].clone();
     assert!(session.is_string());
     let close = peer.send("session.close", json!({"sessionId":session}));
@@ -392,11 +411,51 @@ fn write_failure_is_terminal_and_never_replayed() {
     assert_eq!(closed["seq"], 2);
     assert_eq!(closed["reason"], "failed");
     assert_eq!(
-        peer.call("test.stats", json!({}))["result"],
+        peer.call("test.stats", json!({"transport":"serial"}))["result"],
         json!({"opens":1,"writes":1})
     );
     assert_eq!(
         peer.call("session.close", json!({"sessionId":session}))["result"]["finalSeq"],
         2
+    );
+}
+
+#[test]
+fn touch_is_leased_rechecks_refs_and_never_opens_when_busy() {
+    let _guard = LEASE_TEST.lock().unwrap();
+    let mut peer = Peer::new();
+    let reference = peer.reference();
+    for baud in [1200, 1201] {
+        let reply = peer.call("serial.touch", json!({"deviceRef":reference,"baud":baud}));
+        assert_eq!(reply["result"], json!({"lineStateApplied":true}));
+    }
+    let session =
+        peer.call("serial.open", json!({"deviceRef":reference}))["result"]["sessionId"].clone();
+    let before = peer.call("test.stats", json!({"transport":"serial"}))["result"].clone();
+    let busy = peer.call("serial.touch", json!({"deviceRef":reference,"baud":1200}));
+    assert_eq!(
+        busy["error"],
+        json!({"code":"busy","effect":"none","retry":"after_user_action"})
+    );
+    assert_eq!(
+        peer.call("test.stats", json!({"transport":"serial"}))["result"],
+        before
+    );
+    let mut other = Peer::new();
+    let other_ref = other.reference();
+    assert_eq!(
+        other.call("serial.touch", json!({"deviceRef":other_ref,"baud":1201}))["error"]["code"],
+        "busy"
+    );
+    peer.call("session.close", json!({"sessionId":session}));
+    // The relist finds the same endpoint, so the caller's reference stays valid (D-433).
+    assert_eq!(peer.reference(), reference);
+    assert_eq!(
+        peer.call("serial.touch", json!({"deviceRef":reference,"baud":1200}))["result"],
+        json!({"lineStateApplied":true})
+    );
+    assert_eq!(
+        peer.call("serial.touch", json!({"deviceRef":other_ref,"baud":1200}))["error"]["code"],
+        "stale_device"
     );
 }

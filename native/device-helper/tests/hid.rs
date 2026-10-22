@@ -32,7 +32,21 @@ impl Peer {
         assert_eq!(hello["ok"], true);
         assert_eq!(
             hello["result"]["capabilities"],
-            json!(["hid.list", "hid.open", "hid.write"])
+            json!(
+                if cfg!(all(feature = "synthetic-hid", feature = "synthetic-serial")) {
+                    vec![
+                        "hid.list",
+                        "hid.open",
+                        "hid.write",
+                        "serial.list",
+                        "serial.open",
+                        "serial.touch.1200",
+                        "serial.touch.1201",
+                    ]
+                } else {
+                    vec!["hid.list", "hid.open", "hid.write"]
+                }
+            )
         );
         peer
     }
@@ -291,10 +305,12 @@ fn serial_relist_preserves_hid_refs_and_serial_write_shape_is_refused() {
     let _guard = LEASE_TEST.lock().unwrap();
     let mut peer = Peer::new();
     let reference = peer.reference();
-    assert_eq!(
-        peer.call("list", json!({"transport":"serial"}))["error"]["code"],
-        "unsupported"
-    );
+    let serial = peer.call("list", json!({"transport":"serial"}));
+    if cfg!(feature = "synthetic-serial") {
+        assert_eq!(serial["ok"], true);
+    } else {
+        assert_eq!(serial["error"]["code"], "unsupported");
+    }
     let opened = peer.call("hid.open", json!({"deviceRef":reference}));
     assert_eq!(opened["ok"], true);
     assert_eq!(

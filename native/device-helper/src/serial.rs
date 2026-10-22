@@ -34,6 +34,9 @@ impl From<&'static str> for OpenError {
 pub trait SerialBackend: Send + Sync {
     fn list(&self) -> Result<Vec<SerialEndpoint>, &'static str>;
     fn open(&self, endpoint: &SerialEndpoint) -> Result<Box<dyn SerialDevice>, OpenError>;
+    fn touch(&self, _: &SerialEndpoint, _: u64) -> Result<(), OpenError> {
+        Err("unsupported".into())
+    }
     #[cfg(any(feature = "synthetic-hid", feature = "synthetic-serial"))]
     fn test_stats(&self) -> Value;
 }
@@ -71,6 +74,16 @@ pub mod serial_synthetic {
                 flood: 0,
                 close_fail: false,
             }))
+        }
+        fn touch(&self, endpoint: &SerialEndpoint, baud: u64) -> Result<(), OpenError> {
+            if !matches!(baud, 1200 | 1201) {
+                return Err("invalid_request".into());
+            }
+            if !self.list()?.contains(endpoint) {
+                return Err("stale_device".into());
+            }
+            self.opens.fetch_add(1, Ordering::SeqCst);
+            Ok(())
         }
         fn test_stats(&self) -> Value {
             json!({"opens":self.opens.load(Ordering::SeqCst),"writes":self.writes.load(Ordering::SeqCst)})

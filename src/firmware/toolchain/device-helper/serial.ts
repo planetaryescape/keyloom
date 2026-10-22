@@ -1,16 +1,16 @@
 import { SerialError, type SerialTransport } from "../serial.ts";
 import type { DeviceTransportClient } from "./transport-client.ts";
 import { packagedTransport } from "./setup.ts";
-import { SERIAL_CAPABILITIES, serialDevicesSchema, serialWrittenSchema } from "./transport-protocol.ts";
+import { SERIAL_CAPABILITIES, serialDevicesSchema, serialWrittenSchema, touchedSchema } from "./transport-protocol.ts";
 
 /** `path` carries an opaque helper reference, never a native path or a caller-parsed identity. */
 export function helperSerialTransport(client: DeviceTransportClient): SerialTransport {
   return {
     async list() {
-      const { devices } = await client.request("list", { transport: "serial" }, serialDevicesSchema, 5_000);
+      const { devices } = await client.list("serial", serialDevicesSchema, 5_000);
       return devices.map((device) => ({ vendorId: device.vendorId, productId: device.productId, path: device.deviceRef, ...(device.serial === undefined ? {} : { serial: device.serial }) }));
     },
-    async touch() { throw new SerialError("keyboard restarts are not available in this native serial candidate build"); },
+    async touch(path, baud) { await client.request("serial.touch", { deviceRef: path, baud }, touchedSchema, 3_500); },
     async open(path, onData, onError = () => {}) {
       const sessionId = await client.open(path, onData, onError, "serial");
       let close: Promise<void> | undefined;

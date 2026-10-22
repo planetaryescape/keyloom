@@ -1,6 +1,6 @@
 # 31: Rust owns device resources; TypeScript owns the product
 
-Status: diagnostics-only rung 24b shipped in v0.46.1, 2026-10-20. Native/full CI, published CLI and signed/notarised desktop-bundle sidecar doctor passed; see the [release-proof record](../research/spikes/device-helper-24b.md#published-release-proof). Native macOS HID ownership exists as an unadopted 24c candidate; serial ownership has a compile-gated direct macOS 24d candidate (D-431), with synthetic sessions and PTY checks. On 2026-10-22, [S59](../research/spikes/S59.md) observed arm64 capture, helper death, unplug and reopen on BK's Moonlander and Glove80 after the D-432 fixes; neither backend is adopted. Source transport baseline: `7d3ca25981a5213b8aa9e90fcf3330d5272787fd`, unchanged through `bd1a58652db0dbfa528e0e4fa68de173702a1e9e`. [Published proof and remaining transport gates](../research/spikes/device-helper-24b.md). [Research and reuse map](../research/rust-device-helper.md); [wire contract](32-device-helper-protocol.md); [platforms and shipping](33-device-helper-platforms.md).
+Status: D-433 implements the native HID and serial helper as the release default on Apple Silicon Macs. Intel Macs and Linux retain legacy TypeScript transports and diagnostics-only helpers. [S59](../research/spikes/S59.md) records arm64 Moonlander/Glove80 capture, unplug and reopen evidence after D-432. This branch adds combined ownership and explicit 1200/1201-baud touch; physical reset/touch and installed desktop acceptance belong to the orchestrator. [Stage 5 evidence and pending acceptance](../research/spikes/device-helper-native-default.md).
 
 Build a small Rust executable behind the existing HID and serial transport seams. Keep the layout model, validator, agent and application in TypeScript (D-418). The goal is reliable resource ownership and failure handling, not a rewrite or an unmeasured speed claim.
 
@@ -12,9 +12,11 @@ BK's reason: "we've learnt a lot from implementing it so tht could enable us to 
 keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 ```
 
-D-426 narrows the first implementation to `hello`, `ping` and `shutdown`, with empty capabilities and no device APIs. Doctor owns the short-lived child; import, editing and the server start none. Source invocation warns `not_bundled`. The installed check verifies manifest, extracted bytes, paired identity and bounded shutdown. Normal doctor retains its other checks. See [CLI output and repair](10-cli.md#doctor-checks-the-installed-helper-without-opening-a-keyboard) and [native build commands](../../native/device-helper/README.md).
+Apple Silicon release builds pair the CLI with `native-macos`: one child advertises three HID capabilities and four serial capabilities, including both touch rates. Doctor verifies the exact pair without device I/O and reports "native backend in use". Intel and Linux pairs advertise no device capabilities and report "diagnostics only". Source invocation reports `not_bundled`.
 
-The [24c candidate](../research/spikes/device-helper-24c.md) implements compile-gated macOS HID ownership, leases, bounded sessions/events and an explicit TS adapter. QMK interruption warnings persist and prevent timing analysis. Ordinary production builds remain unchanged. Explicit `--device-backend native-hid` candidate builds statically select the verified helper through the real CLI/app path and require a separate output directory; a synthetic-only installed PTY smoke proves stop/reopen and helper-death interruption without hardware. The [24d candidate](../research/spikes/device-helper-24d.md) adds serial sessions, direct macOS port ownership and the explicit `--device-backend native-serial` selector. A separate Mac output directory is required; the builder can compile the helper from source or embed a supplied synthetic helper. Slice 1 records a passing installed synthetic PTY smoke; the slice-2 repeat is blocked by sandbox process introspection. Native configuration and checked close have pure/PTY tests; S59 observed them on a Glove80 on arm64 (2026-10-22). Touch and other-platform serial backends remain unimplemented. The sections below specify the full target.
+One lazy app/CLI owner supplies both default transports. Setup failure is latched, unconfirmed cleanup stays visible, and consumer drain precedes child shutdown. The desktop launches the released CLI sidecar; that CLI embeds and owns the same helper. The `native-hid` and `native-serial` build overrides remain available with separate output directories. Neither automatic fallback nor a runtime selector is supported.
+
+The [24c](../research/spikes/device-helper-24c.md) and [24d](../research/spikes/device-helper-24d.md) records preserve development evidence. [D-433](14-decision-log.md#d-433-the-native-helper-is-the-default-on-apple-silicon-intellinux-stay-legacy-until-their-own-hardware-evidence-2026-10-22-stage-5) supersedes their default-selection restrictions for arm64 only. Legacy macOS FFI remains necessary for Intel.
 
 ## Scope is device I/O on three operating systems
 
@@ -58,12 +60,12 @@ The helper does not read SQLite, provider credentials, board files or layout rev
 
 ### Locations
 
-The diagnostics crate, client/launcher, schema and fixtures now exist. The 24c HID/session and 24d serial implementations are compile-gated; 24d includes a direct macOS backend with pure/PTY checks. Arm64 real-port observation passed in S59 (2026-10-22); production adoption remains pending (Q40).
+The diagnostics crate, client/launcher, schema and fixtures now exist. The HID/session and serial implementations are compile-gated. Apple Silicon releases enable both with `native-macos`; Intel and Linux keep diagnostics only (D-433). S59 records the arm64 capture evidence; Stage 5 records touch and release acceptance separately.
 
 | Location | Responsibility | Allowed dependencies |
 |---|---|---|
 | `native/device-helper/` | One Cargo binary crate; protocol, supervisor, per-platform adapters | Rust libraries and OS APIs; no desktop framework or application model |
-| `src/firmware/toolchain/device-helper/` | Diagnostics client, manifest verification, child lifetime and explicit candidate HID/serial adapters | Existing toolchain interfaces; protocol schemas; no app or web imports |
+| `src/firmware/toolchain/device-helper/` | Diagnostics client, manifest verification, child lifetime and selected HID/serial adapters | Existing toolchain interfaces; protocol schemas; no app or web imports |
 | `native/device-helper/protocol/v1.schema.json`, `transport-v1.schema.json` | Diagnostics wire schema and candidate transport supplement | No domain layout schema |
 | `test/fixtures/device-helper/` | Synthetic valid/invalid messages and expected effects | Shared by Rust and Bun tests; no real recordings |
 | Existing QMK/ZMK capture modules | Firmware commands, parsing, clocks, loss interpretation | Existing transport seam only |
@@ -74,7 +76,7 @@ Generate or mechanically check Rust and TS wire representations against the cano
 
 Retain dependency injection through `HidTransport` and `SerialTransport`. Map helper references to the legacy handle/path fields only inside adapters during migration; no caller should derive native identity from their spelling. Change path-shaped serial selection to an opaque reference where needed, and update matching tests. Persist neither references nor sessions.
 
-HID and serial expose awaitable write/close (`Promise<void>`); serial data reaches TypeScript as raw byte chunks and the ZMK capture adapter performs strict streaming UTF-8 decoding with a bounded line framer. The legacy stty/polling adapter remains in place until the Rust serial backend is adopted. Await ZMK start, keepalive, stop and cleanup writes; a transport error must become an incomplete capture rather than an unhandled rejection. Serialize keepalives so slow writes cannot accumulate them (D-422).
+HID and serial expose awaitable write/close (`Promise<void>`); serial data reaches TypeScript as raw byte chunks and the ZMK capture adapter performs strict streaming UTF-8 decoding with a bounded line framer. The legacy stty/polling adapter remains in use on Intel and Linux. Await ZMK start, keepalive, stop and cleanup writes; a transport error must become an incomplete capture rather than an unhandled rejection. Serialize keepalives so slow writes cannot accumulate them (D-422).
 
 The helper receives firmware bytes from existing encoders. It never sends a start, keepalive, stop or reboot command on its own. On orderly lab stop, TypeScript sends the firmware stop, waits for its bounded response, then awaits transport close. On a crash it cannot promise a stop command was sent; test firmware timeout/DTR behavior and report the interruption (D-423).
 

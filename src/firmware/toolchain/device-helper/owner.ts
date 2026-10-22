@@ -1,9 +1,11 @@
 import { HidError, type HidTransport } from "../hid.ts";
 import { HelperCleanupUnconfirmedError, HelperSetupFailure } from "./setup-failure.ts";
 import { SerialError, type SerialTransport } from "../serial.ts";
-import { packagedSerialTransport } from "./serial.ts";
+import { helperSerialTransport, packagedSerialTransport } from "./serial.ts";
 import { deviceBackend } from "./selection.ts";
-import { packagedHidTransport } from "./hid.ts";
+import { helperHidTransport, packagedHidTransport } from "./hid.ts";
+import { packagedTransport } from "./setup.ts";
+import { NATIVE_CAPABILITIES } from "./transport-protocol.ts";
 
 type Owned<T> = { transport: T; shutdown(): Promise<void> };
 /** One explicitly selected parent lifetime. Failed setup and cleanup never create a replacement child. */
@@ -37,17 +39,29 @@ export class CandidateDeviceOwner<T = HidTransport> {
   }
 }
 export { CandidateDeviceOwner as CandidateHidOwner };
-// Only the statically selected backend can acquire a child in this process.
-const parent = deviceBackend() === "native-serial"
-  ? { backend: "native-serial" as const, owner: new CandidateDeviceOwner(packagedSerialTransport, () => new SerialError("the keyboard connection has shut down; start a new command")) }
-  : { backend: "native-hid" as const, owner: new CandidateDeviceOwner(packagedHidTransport) };
-export const candidateHidTransport = (): Promise<HidTransport> => {
-  if (deviceBackend() !== "native-hid" || parent.backend !== "native-hid") return Promise.reject(new HidError("the native HID candidate is not selected"));
-  return parent.owner.transport();
+// One paired client serves both adapters; the owner retains failed setup and cleanup receipts.
+const parent = new CandidateDeviceOwner<{ hid: HidTransport | undefined; serial: SerialTransport | undefined }>(async () => {
+  if (deviceBackend() === "native") return packagedTransport(NATIVE_CAPABILITIES,
+    (client) => ({ hid: helperHidTransport(client), serial: helperSerialTransport(client) }),
+    () => new HidError("the installed keyboard connection is not bundled"));
+  if (deviceBackend() === "native-serial") {
+    const owned = await packagedSerialTransport();
+    return { ...owned, transport: { hid: undefined, serial: owned.transport } };
+  }
+  const owned = await packagedHidTransport();
+  return { ...owned, transport: { hid: owned.transport, serial: undefined } };
+});
+export const candidateHidTransport = async (): Promise<HidTransport> => {
+  if (deviceBackend() !== "native" && deviceBackend() !== "native-hid") throw new HidError("the native HID backend is not selected");
+  const transport = (await parent.transport()).hid;
+  if (!transport) throw new HidError("the native HID backend is not selected");
+  return transport;
 };
-export const candidateSerialTransport = (): Promise<SerialTransport> => {
-  if (deviceBackend() !== "native-serial" || parent.backend !== "native-serial") return Promise.reject(new SerialError("the native serial candidate is not selected"));
-  return parent.owner.transport();
+export const candidateSerialTransport = async (): Promise<SerialTransport> => {
+  if (deviceBackend() !== "native" && deviceBackend() !== "native-serial") throw new SerialError("the native serial backend is not selected");
+  const transport = (await parent.transport()).serial;
+  if (!transport) throw new SerialError("the native serial backend is not selected");
+  return transport;
 };
-export const shutdownCandidateDevice = (): Promise<void> => parent.owner.shutdown();
+export const shutdownCandidateDevice = (): Promise<void> => parent.shutdown();
 export const shutdownCandidateHid = shutdownCandidateDevice;

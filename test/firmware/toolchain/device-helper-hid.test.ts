@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { DeviceTransportClient, DeviceTransportError } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
 import { helperHidTransport } from "../../../src/firmware/toolchain/device-helper/hid.ts";
 import { manifestSchema, type HelperManifest } from "../../../src/firmware/toolchain/device-helper/extract.ts";
-import { closedSchema, hidDevicesSchema, operationSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, serialDevicesSchema, serialWrittenSchema, writtenSchema } from "../../../src/firmware/toolchain/device-helper/transport-protocol.ts";
+import { closedSchema, hidDevicesSchema, operationSchema, transportEventSchema, transportIdentitySchema, transportResponseSchema, serialDevicesSchema, serialWrittenSchema, touchedSchema, writtenSchema } from "../../../src/firmware/toolchain/device-helper/transport-protocol.ts";
 import { startQmkCapture } from "../../../src/firmware/qmk/typing-capture.ts";
 import { encodeEventsReport } from "../../../src/firmware/qmk/typing-stream.ts";
 import pkg from "../../../package.json" with { type: "json" };
@@ -15,7 +15,7 @@ import { decodeTypingReport } from "../../../src/firmware/qmk/typing-stream.ts";
 
 export function transportContract() {
   const schema = (v: z.ZodType) => z.toJSONSchema(v, { unrepresentable: "any" });
-  return { ...schema(z.union([operationSchema, transportResponseSchema, transportEventSchema])), $defs: { identity: schema(transportIdentitySchema), devices: schema(hidDevicesSchema), written: schema(writtenSchema), serialDevices: schema(serialDevicesSchema), serialWritten: schema(serialWrittenSchema), closed: schema(closedSchema) }, "x-maxFrameBytes": 65536, "x-maxSessions": 8, "x-maxPending": 32, "x-maxDataEvents": 1024, "x-maxSerialOutputChunks": 16, "x-maxSerialChunkBytes": 4096 };
+  return { ...schema(z.union([operationSchema, transportResponseSchema, transportEventSchema])), $defs: { identity: schema(transportIdentitySchema), devices: schema(hidDevicesSchema), written: schema(writtenSchema), serialDevices: schema(serialDevicesSchema), serialWritten: schema(serialWrittenSchema), touched: schema(touchedSchema), closed: schema(closedSchema) }, "x-maxFrameBytes": 65536, "x-maxSessions": 8, "x-maxPending": 32, "x-maxDataEvents": 1024, "x-maxSerialOutputChunks": 16, "x-maxSerialChunkBytes": 4096 };
 }
 test("native transport canonical schema and shared adversarial requests", () => {
   expect(JSON.stringify(transportContract())).toBe(JSON.stringify(canonical));
@@ -47,6 +47,10 @@ test("one-shot HID write allows for lease, rediscovery, open, write and close", 
       deadlines.push([method, timeout]);
       if (method === "list") return { devices: [{ deviceRef: "d1", transport: "hid", vendorId: 1, productId: 2, usagePage: 0xff60, usage: 0x61 }] };
       return { acceptedBytes: 32 };
+    },
+    list: async (_transport: string, _schema: unknown, timeout: number) => {
+      deadlines.push(["list", timeout]);
+      return { devices: [{ deviceRef: "d1", transport: "hid", vendorId: 1, productId: 2, usagePage: 0xff60, usage: 0x61 }] };
     },
     open: async () => "s1",
   } as unknown as DeviceTransportClient;
@@ -84,8 +88,12 @@ describe.skipIf(!binary)("native synthetic-only HID through real TS client", () 
     const client = await connect();
     try {
       const first = (await devices(client)).devices[0]!;
-      await devices(client);
-      expectTransportError(await rejectedResult(client.open(first.deviceRef, () => {}, () => {})), "stale_device", "none");
+      // An unchanged endpoint keeps its reference across a relist (D-433); a reference from another helper lifetime never resolves.
+      expect((await devices(client)).devices[0]!.deviceRef).toBe(first.deviceRef);
+      const other = await connect();
+      let foreign: string;
+      try { foreign = (await devices(other)).devices[0]!.deviceRef; } finally { await other.shutdown(); }
+      expectTransportError(await rejectedResult(client.open(foreign, () => {}, () => {})), "stale_device", "none");
       for (const item of corpus.filter((c) => !c.valid)) {
         const error = await rejectedResult(client.request(item.request.method, item.request.params, z.unknown(), 500));
         expectTransportError(error, "invalid_request", "none");
