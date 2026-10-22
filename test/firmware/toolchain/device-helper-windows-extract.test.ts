@@ -6,6 +6,8 @@ import { extractWindowsHelper } from "../../../src/firmware/toolchain/device-hel
 import { currentTarget } from "../../../src/firmware/toolchain/device-helper/extract.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
+// Windows PowerShell launched from PowerShell 7 can't load its own modules with 7's PSModulePath.
+const withoutPsModulePath = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH"));
 const bytes = Buffer.from("synthetic diagnostics executable");
 const manifest = { release: "0.49.0", target: "x86_64-pc-windows-msvc", sha256: createHash("sha256").update(bytes).digest("hex") };
 
@@ -97,8 +99,8 @@ test.skipIf(process.platform !== "win32")("native Windows refuses directory junc
 
 test.skipIf(process.platform !== "win32")("native Windows refuses a cache writable by Everyone", () => {
   const base = tempDir();
-  const script = `$acl = Get-Acl -LiteralPath $env:KEYLOOM_TEST_ACL; $sid = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0'); $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $env:KEYLOOM_TEST_ACL -AclObject $acl`;
-  const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { env: { ...process.env, KEYLOOM_TEST_ACL: base } });
+  const script = `$dir = [System.IO.DirectoryInfo]::new($env:KEYLOOM_TEST_ACL); $acl = $dir.GetAccessControl(); $sid = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0'); $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow'); $acl.AddAccessRule($rule); $dir.SetAccessControl($acl)`;
+  const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { env: { ...withoutPsModulePath(), KEYLOOM_TEST_ACL: base } });
   expect(result.exitCode).toBe(0);
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("unsafe_cache");
   expect(fs.readdirSync(base)).toEqual([]);
@@ -120,8 +122,8 @@ test.skipIf(process.platform !== "win32")("native Windows refuses a cache whose 
   const base = join(parent, "Local");
   fs.mkdirSync(base);
   // Delete on the parent itself (no inheritance), so the cache directory's own ACL stays clean.
-  const script = `$acl = Get-Acl -LiteralPath $env:KEYLOOM_TEST_ACL; $sid = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0'); $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'Delete', 'None', 'None', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $env:KEYLOOM_TEST_ACL -AclObject $acl`;
-  const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { env: { ...process.env, KEYLOOM_TEST_ACL: parent } });
+  const script = `$dir = [System.IO.DirectoryInfo]::new($env:KEYLOOM_TEST_ACL); $acl = $dir.GetAccessControl(); $sid = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0'); $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'Delete', 'None', 'None', 'Allow'); $acl.AddAccessRule($rule); $dir.SetAccessControl($acl)`;
+  const result = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { env: { ...withoutPsModulePath(), KEYLOOM_TEST_ACL: parent } });
   expect(result.exitCode).toBe(0);
   expect(() => extractWindowsHelper(bytes, manifest, base)).toThrow("writable by S-1-1-0");
   expect(fs.readdirSync(base)).toEqual([]);
