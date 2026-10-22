@@ -1938,7 +1938,7 @@ The shell now runs `$SHELL -ilc` with `/usr/bin/printenv PATH` between unique ma
 
 Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
 
-### D-4xx: Shutdown closes manual flash admission before draining accepted starts. (2026-10-22, Stage 11)
+### D-445: Shutdown closes manual flash admission before draining accepted starts. (2026-10-22, Stage 11)
 
 Refines D-421/D-422's consumer-before-helper lifetime. Register a manual flash start before checking its artifact asynchronously. Once shutdown begins, refuse new starts with `UsageError` (the editor's existing HTTP 400 `usage` code), wait for every accepted start to register its task or fail, then wait for running tasks before closing the helper. Always release pending starts, including when the artifact check throws. Admission closes for the App being shut down, not the whole process, so other Apps in the same process (a test run's) are unaffected.
 
