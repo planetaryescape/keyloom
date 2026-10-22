@@ -1921,3 +1921,9 @@ Evidence: `test/firmware/zmk/mount-binding.test.ts`, `test/app/sync-state.test.t
 Refines D-438. Volume discovery under a mount root counts a label's directory only when it is on a different device from the root. macOS creates `/Volumes/<label>` on the system volume about 350 ms before it mounts the drive over it. Taking that bare directory made the first write fail with EACCES, and under D-438 it bound the flash to an identity the mount then replaced, so v0.53.0 refused every hands-free Glove80 flash before writing. The D-438 binding stays as it is; it now binds the mounted drive. The EACCES/EPERM retry stays for drives that really refuse a write. Test roots are plain folders, so the test preload turns the device check off unless a test asks for it.
 
 Evidence: `docs/issues/uf2-mount-point-taken-before-mount.md` (hardware observation and failed flash `fl_01M5HZ4V726WBAZXY47PYD9C16`) and `test/firmware/zmk/mount-binding.test.ts`.
+
+### D-440: The macOS touch sets its rate with IOSSIOSPEED. (2026-10-22, BK's Glove80 under v0.53.1)
+
+Refines D-433's touch sequence on macOS. `tcsetattr` refuses a non-standard rate such as the 1201 relay with EINVAL, so v0.53.1's `serial.touch` at 1201 failed with `io_failed` and the relay never reached the firmware. The touch now sets the speed with the `IOSSIOSPEED` ioctl (`_IOW('T', 2, speed_t)`, IOKit/serial/ioss.h), then verifies both speeds with `tcgetattr` as before, for 1200 and 1201 alike. Linux already uses `termios2` with `BOTHER`, and Windows sets the DCB rate, so neither changes. Intel Macs still touch through `stty`, which has no way to set a non-standard rate on macOS. Their relay stays broken until Intel moves to the native helper.
+
+Evidence: `docs/issues/macos-1201-relay-rejected-by-tcsetattr.md` and [the native-default spike record](../research/spikes/device-helper-native-default.md).

@@ -1,9 +1,12 @@
 //! One-shot restart: set and verify the requested baud before lowering DTR.
 use super::*;
 
+/// `_IOW('T', 2, speed_t)` from IOKit/serial/ioss.h; libc doesn't define it.
+const IOSSIOSPEED: c_ulong = 0x8008_5402;
+
 trait TouchIo {
     fn get(&mut self) -> Result<termios, &'static str>;
-    fn set(&mut self, value: &termios) -> Result<(), &'static str>;
+    fn set_speed(&mut self, baud: speed_t) -> Result<(), &'static str>;
     fn clear_dtr(&mut self) -> Result<(), c_int>;
     fn close(&mut self) -> Result<(), &'static str>;
 }
@@ -14,14 +17,8 @@ fn sequence(
 ) -> Result<(), OpenError> {
     let configured = (|| {
         recheck()?;
-        let mut value = io.get()?;
-        // SAFETY: initialized writable termios; the caller admits only 1200 and 1201.
-        if unsafe { cfsetispeed(&mut value, baud) } != 0
-            || unsafe { cfsetospeed(&mut value, baud) } != 0
-        {
-            return Err("io_failed");
-        }
-        io.set(&value)?;
+        // macOS's tcsetattr refuses a non-standard rate such as the 1201 relay with EINVAL (D-440).
+        io.set_speed(baud)?;
         let actual = io.get()?;
         // SAFETY: actual was initialized by a successful tcgetattr.
         if unsafe { cfgetispeed(&actual) } != baud || unsafe { cfgetospeed(&actual) } != baud {
@@ -45,8 +42,13 @@ impl TouchIo for TouchPort {
     fn get(&mut self) -> Result<termios, &'static str> {
         FdConfig(self.0.fd.unwrap()).get()
     }
-    fn set(&mut self, value: &termios) -> Result<(), &'static str> {
-        FdConfig(self.0.fd.unwrap()).set(value)
+    fn set_speed(&mut self, baud: speed_t) -> Result<(), &'static str> {
+        // SAFETY: live fd and readable speed_t storage, the argument IOSSIOSPEED reads.
+        if unsafe { ioctl(self.0.fd.unwrap(), IOSSIOSPEED, &baud) } == 0 {
+            Ok(())
+        } else {
+            Err("io_failed")
+        }
     }
     fn clear_dtr(&mut self) -> Result<(), c_int> {
         control(self.0.fd.unwrap(), TIOCCDTR).map_err(|_| errno())
@@ -107,13 +109,13 @@ mod tests {
             }
             Ok(value)
         }
-        fn set(&mut self, value: &termios) -> Result<(), &'static str> {
-            self.steps.push("set");
-            if self.fail == Some("set") {
+        fn set_speed(&mut self, baud: speed_t) -> Result<(), &'static str> {
+            self.steps.push("speed");
+            if self.fail == Some("speed") {
                 return Err("io_failed");
             }
             if self.fail != Some("verify") {
-                self.speed = unsafe { cfgetospeed(value) };
+                self.speed = baud;
             }
             Ok(())
         }
@@ -144,12 +146,12 @@ mod tests {
             let mut io = fake(None);
             assert_eq!(sequence(&mut io, baud, || Ok(())), Ok(()));
             assert_eq!(io.speed, baud);
-            assert_eq!(io.steps, ["get", "set", "get", "dtr", "close"]);
+            assert_eq!(io.steps, ["speed", "get", "dtr", "close"]);
         }
     }
     #[test]
     fn failures_after_open_are_possible_and_always_close_once() {
-        for failure in ["get", "set", "verify", "close"] {
+        for failure in ["speed", "get", "verify", "close"] {
             let mut io = fake(Some(failure));
             assert!(sequence(&mut io, 1200, || Ok(())).unwrap_err().possible);
             assert_eq!(io.steps.iter().filter(|s| **s == "close").count(), 1);
