@@ -48,7 +48,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $repo 'test\fixtures\oryx\synchronized') -Destination (Join-Path $scratch 'layout') -Recurse
     Copy-Item -LiteralPath (Join-Path $repo 'test\fixtures\windows\set-key-6-f17.json') -Destination (Join-Path $scratch 'set-key-6-f17.json')
     Push-Location -LiteralPath $scratch
-    if ((Invoke-Keyloom @('--version')).Trim() -ne $version) { throw 'wrong version' }
+    # stdout only: anything on stderr is reported, not compared.
+    $versionErr = Join-Path $scratch 'version.err'
+    $printed = (& $script:installed --version 2> $versionErr | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $printed -ne $version) { throw "wrong version: stdout '$printed', stderr '$((Get-Content -LiteralPath $versionErr -Raw))', exit $LASTEXITCODE" }
     $data = Join-Path $scratch 'data'
     for ($i = 0; $i -lt 8; $i++) {
         $stdout = Join-Path $scratch "cold-$i.json"
