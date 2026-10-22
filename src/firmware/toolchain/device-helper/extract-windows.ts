@@ -30,7 +30,9 @@ $writes = [System.Security.AccessControl.FileSystemRights]::Write -bor [System.S
 foreach ($entry in $paths) {
   if (([System.IO.File]::GetAttributes($entry.path) -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { throw "reparse point: $($entry.path)" }
   if ($entry.acl) {
-    $acl = Get-Acl -LiteralPath $entry.path
+    # .NET directly: Get-Acl needs a module, which fails to load when PowerShell 7 launched us.
+    $sections = [System.Security.AccessControl.AccessControlSections]'Access,Owner'
+    $acl = if ([System.IO.Directory]::Exists($entry.path)) { [System.IO.DirectoryInfo]::new($entry.path).GetAccessControl($sections) } else { [System.IO.FileInfo]::new($entry.path).GetAccessControl($sections) }
     $owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
     $owners = if ($entry.ancestor) { $trusted + $trustedInstaller } else { $trusted }
     if ($owners -notcontains $owner) { throw "untrusted owner $owner of $($entry.path)" }
@@ -52,7 +54,8 @@ foreach ($entry in $paths) {
   const result = spawnSync(win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), [
     "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
   ], {
-    env: { ...process.env, KEYLOOM_CACHE_INSPECT: JSON.stringify([
+    // PowerShell 7's PSModulePath breaks Windows PowerShell 5.1's module loading.
+    env: { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH")), KEYLOOM_CACHE_INSPECT: JSON.stringify([
       ...ancestors.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: true })),
       ...paths.map((path) => ({ path, acl: !aclChecked.has(path), ancestor: false })),
     ]) },
