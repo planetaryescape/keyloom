@@ -10,6 +10,8 @@ export type SerialPort = {
   productId: number;
   /** The USB serial number of the device that owns the port, which for a keyloom build carries the build marker. */
   serial?: string;
+  /** Read-only Linux access check; a later open is still authoritative. */
+  permissionDenied?: true;
   /** Candidate helper builds carry an opaque device reference here; callers must not parse it.
    * Legacy transports use the node to touch: `/dev/cu.usbmodemN` on macOS (the IOCalloutDevice), a `/dev/serial/by-id` link or `/dev/ttyACMn` on Linux. */
   path: string;

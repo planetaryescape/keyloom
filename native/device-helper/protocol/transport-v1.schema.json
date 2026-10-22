@@ -739,6 +739,10 @@
                 "minimum": 0,
                 "maximum": 65535
               },
+              "permissionDenied": {
+                "type": "boolean",
+                "const": true
+              },
               "serial": {
                 "type": "string"
               },
@@ -810,6 +814,10 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 65535
+              },
+              "permissionDenied": {
+                "type": "boolean",
+                "const": true
               },
               "serial": {
                 "type": "string"

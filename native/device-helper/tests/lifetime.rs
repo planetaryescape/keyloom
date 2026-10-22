@@ -1,4 +1,5 @@
 #![cfg(not(any(
+    feature = "native-linux",
     feature = "native-hid",
     feature = "synthetic-hid",
     feature = "synthetic-serial",

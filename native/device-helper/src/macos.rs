@@ -68,10 +68,12 @@ fn endpoint(entry: u32) -> Option<Endpoint> {
     }
     Some(Endpoint {
         key: id.to_string(),
+        permission_denied: false,
         vendor: number(entry, "VendorID")?,
         product: number(entry, "ProductID")?,
         serial,
         descriptor,
+        interface_number: None,
     })
 }
 pub struct Macos;

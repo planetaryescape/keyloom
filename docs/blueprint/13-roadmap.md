@@ -552,7 +552,7 @@ Only BK can do these:
 
 ## Device-helper extension (planned 2026-10-20)
 
-Status: 24b diagnostics shipped in v0.46.1. Stage 5 implements the 24c/24d combined default for Apple Silicon under D-433; Intel and Linux stay legacy. Physical touch/reset and installed desktop acceptance remain with the orchestrator; [evidence](../research/spikes/device-helper-native-default.md). Rungs 24e and 24f remain proposed.
+Status: 24b diagnostics shipped in v0.46.1. Stage 5 implements the 24c/24d combined default for Apple Silicon under D-433; Intel and Linux stay legacy. Physical touch/reset and installed desktop acceptance remain with the orchestrator; [evidence](../research/spikes/device-helper-native-default.md). Rung 24e has an explicit Linux candidate; S60 and native installed evidence remain open. Rung 24f remains proposed.
 
 **Build philosophy:** reuse the transport contracts and firmware fakes, ship one usable capability at a time, and keep the previous product working after every rung. At most two new unknowns per rung. If a gate reveals more, split the rung with a letter rather than claiming completion from unit tests.
 
@@ -631,9 +631,9 @@ Status: Stage 5 selects native serial together with HID for Apple Silicon releas
 
 ## Rung 24e: I can use the device helper on native Linux
 
-Status: not built; depends on 24b's contract/package work and applicable 24c/24d adapter work. It need not wait for unrelated macOS-only desktop credentials.
+Status: candidate implemented under D-434. Explicit `--device-backend native --target bun-linux-x64 --out-dir <separate-dir>` selects sysfs/libc HID and CDC ACM. Ordinary Linux releases retain diagnostics-only helpers and legacy transports. [24e evidence](../research/spikes/device-helper-24e.md) distinguishes local synthetic/provisional compile checks from pending Linux CI and S60 hardware acceptance.
 
-**Previously:** Linux transport code exists but hardware evidence is limited. **Now:** a named Linux runtime/board matrix has an installed, verified HID/CDC backend.
+**Previously:** Linux transport code exists but hardware evidence is limited. **Now:** Linux x64 has an explicit native candidate; the installed/runtime and board matrix still needs CI/S60 evidence.
 
 **Promise:** "On Linux I can connect and record my keyboard, and keyloom tells me exactly which permission is missing."
 

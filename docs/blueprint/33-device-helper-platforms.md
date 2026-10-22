@@ -1,6 +1,6 @@
 # 33: Prove the helper on macOS, Linux and Windows
 
-Status: D-433 selects `native-macos` for Apple Silicon CLI releases and their desktop sidecars. Intel Macs and Linux keep legacy transports and diagnostics-only helpers until their own hardware evidence. [S59](../research/spikes/S59.md) proves arm64 capture, failure and reopen behavior on the Moonlander and Glove80; [Stage 5](../research/spikes/device-helper-native-default.md) records the combined build and explicit touch implementation. Physical touch/reset and release desktop acceptance remain the orchestrator's checks. Windows production extraction and CLI support remain unimplemented.
+Status: D-433 selects `native-macos` for Apple Silicon CLI releases and their desktop sidecars. Intel Macs and Linux keep legacy transports and diagnostics-only helpers until their own hardware evidence. [S59](../research/spikes/S59.md) proves arm64 capture, failure and reopen behavior on the Moonlander and Glove80; [Stage 5](../research/spikes/device-helper-native-default.md) records the combined build and explicit touch implementation. Physical touch/reset and release desktop acceptance remain the orchestrator's checks. An explicit Linux `native-linux` candidate is implemented under D-434; [24e](../research/spikes/device-helper-24e.md) records the software checks and pending S60 gate. Windows production extraction and CLI support remain unimplemented.
 
 ## Support is a capability claim, not a cross-compile
 
@@ -9,7 +9,7 @@ The required end state is the [version-1 transport contract](32-device-helper-pr
 | Target | Initial architecture assumption | Required evidence | Not implied |
 |---|---|---|---|
 | macOS | arm64 and x64 | Installed CLI, applicable Tauri bundle, HID and CDC; permission refusal, kill/stop/reopen; preserve current macOS minimum | Testing arm64 proves neither Intel nor the minimum OS version |
-| Linux | x64 GNU Bun host, static musl diagnostics helper | Installed CLI on declared distro/runtime floor, hidraw and CDC, least-privilege permissions, native process cleanup | ARM, musl/static distribution, every distro or a Linux desktop shell |
+| Linux | x64 GNU Bun host, static musl helper; native transport candidate is explicit | Installed CLI on declared distro/runtime floor, hidraw and CDC, least-privilege permissions, native process cleanup | ARM, musl/static distribution, every distro or a Linux desktop shell |
 | Windows | x64, MSVC target | Native installed `keyloom.exe` plus helper, HID/CDC identity and capture, Ctrl-C/parent death, explicit unsupported capabilities | WSL passthrough, Windows ARM, Docker/build/flash parity, kanata or Tauri packaging |
 
 Q37 still gates minimum-OS certification. The inherited Tauri config says macOS 12.0, but [pinned Bun 1.3.14 requires macOS 13+](https://github.com/oven-sh/bun/blob/0d9b296af33f2b851fcbf4df3e9ec89751734ba4/docs/installation.mdx#L335-L337). The helper's 12.0 deployment setting cannot lower Bun's requirement; neither minimum was physically tested in 24b. Linux uses a static `x86_64-unknown-linux-musl` helper without libudev to avoid raising the existing GNU Bun host's libc requirement. Native runner success proves that runner, not every older OS. Windows has no public CLI asset in this rung.
@@ -29,18 +29,36 @@ Run S59 against both HID and serial, with real device access authorized for that
 
 Hardware checks include ordinary typing before/during/after capture, stop while idle, unplug mid-report, helper kill, parent kill and a fresh explicit start. QMK firmware timeout and ZMK DTR cleanup are part of the observation. Initial hardware uses a board already carrying the needed firmware; if reflashing is necessary, stop and ask separately.
 
-## Linux: preserve permissions and fix framing from the OS contract
+## Linux has an explicit sysfs/libc candidate; S60 remains open
 
-Run S60; extend the unanswered S17 evidence.
+```sh
+bun scripts/build-binaries.ts --device-backend native --target bun-linux-x64 \
+  --out-dir dist/native-linux-candidate
+dist/native-linux-candidate/keyloom-linux-x64 --data-dir /tmp/keyloom-linux-doctor \
+  doctor --device-helper-only
+```
 
-- Prefer a hidraw-based backend rather than detaching the kernel keyboard driver through libusb. Pin hidapi backend features and runtime libraries explicitly. Hidraw writes include the zero report-ID prefix; see the [source discrepancy](../research/rust-device-helper.md#the-linux-report-id-mismatch-needs-a-regression-test).
-- Discovery reads metadata without opening an operational device handle. Test missing `/dev/serial/by-id`, symlink changes, ttyACM renumbering, permission-denied descriptors and duplicate USB serials. Never treat a reused path as proof of the same keyboard.
-- Use distro-appropriate udev permissions scoped to supported endpoints. Diagnose missing access; do not run the app as root, chmod every device to world-writable, or install a global rule without user approval.
-- Test with ModemManager present. If interference is observed, document a narrowly scoped rule; do not disable the service globally or claim it interferes without evidence.
-- Pin whether enumeration links libudev. Test the release on a host without development headers/Rust; if a runtime library is required, declare it in doctor and installation docs. A Rust binary is not automatically static.
-- Verify 1200/1201 baud, DTR transitions and close behavior on the actual CDC driver. Cover removal during read/write and busy-port handling; pseudo-terminals alone cannot prove USB line-state behavior.
+Run the build on Linux x64, or supply a prebuilt target `--helper` when cross-building. The candidate advertises all seven HID/serial capabilities and doctor calls it a Linux candidate with hardware acceptance pending. Default Linux releases still pair a diagnostics-only helper with legacy TypeScript transports (D-433). No hardware was accessed during implementation; [24e evidence](../research/spikes/device-helper-24e.md) records local checks and Linux CI commands separately.
 
-Linux adoption needs an installed release and authorized physical HID/CDC checks. A fake sysfs tree or a cross-compiled artifact remains useful but incomplete evidence.
+`native-linux` is Linux-only and cannot combine with macOS or synthetic features. It uses sysfs and the pinned libc ABI directly, with no libudev, hidapi or basic-udev. The helper remains static musl; the Bun host retains its existing GNU runtime requirement. CI checks both the absence of an ELF interpreter and dynamic dependencies.
+
+HID discovery reads `report_descriptor` and `uevent` under each `/sys/class/hidraw/*/device`, admits the unnumbered QMK raw interface (page `0xff60`, usage `0x61`, 32-byte input/output), then walks to the nearest USB device's `idVendor`/`idProduct` attributes. Missing serial stays missing; a hub cannot supply it. Interface metadata comes from `bInterfaceNumber` below that owner. Serial uses `/sys/class/tty/ttyACM*` with the same ancestry. Neither backend depends on `/dev/serial/by-id`. Keys combine the resolved sysfs device path and dev node; duplicate serials remain separate endpoints.
+
+Open uses `O_RDWR | O_NONBLOCK | O_CLOEXEC` (also `O_NOCTTY`), then compares the dev node's character-device identity against the fd and repeats metadata discovery. A mismatch is `stale_device`. Identical metadata after an indistinguishable reconnect remains the S57 limitation. Hidraw writes add a zero report-ID byte to the 32-byte payload; unnumbered reads preserve all 32 bytes without stripping a prefix. Reads target 50-ms polling and pending reads do not wait. Short HID writes fail rather than sending the tail as another report.
+
+CDC capture shares macOS's raw 115200/8N1/no-flow-control/HUPCL-clear builder and verifier. Linux owns `TIOCEXCL`, DTR-high via `TIOCMBIS` and `TIOCMGET` readback. Touch uses Linux `TCGETS2`/`TCSETS2` with `BOTHER` to set and read back exact 1200/1201 rates before DTR-low (`TIOCMBIC`) and one close. Both capture and touch clear exclusivity before releasing the fd. `TIOCEXCL` blocks later opens; it cannot evict a process already holding the tty. Read/write `ENODEV`, `ENXIO`, `EIO` or `POLLHUP` means `disconnected`. Only `ENODEV`/`ENXIO` prove removal during line cleanup; EIO/ENOTTY and other failures remain errors. Failed checked cleanup exits while the lease is held.
+
+Metadata listing can report optional `permissionDenied: true` from a read-only access check. Normal doctor names hidraw read/write access plus a udev rule scoped to the observed VID/PID, or ttyACM access plus the port's owning `dialout`/`uucp` group. Open EACCES remains authoritative and returns `permission_denied`, `retry: after_user_action`; lab gives the transport-specific remedy. No rule is installed and no root/world-writable remedy is suggested. `doctor --device-helper-only` performs no discovery and reports prerequisites only.
+
+S60 must still observe the following on an authorized Linux host:
+
+- Moonlander framing, capture/stop/reopen, ordinary typing, unplug and explicit HID reset.
+- Glove80 capture with no restart on open/close, exact firmware-observed 1200/1201 baud/DTR transitions and the intended half restarting.
+- Permission refusal and remediation on the declared distro, denied nodes, busy tty behavior, and ModemManager interaction. Do not disable ModemManager globally or infer interference without evidence.
+- Parent/helper death, removal during read/write/close, firmware timeout and DTR cleanup. PTYs cannot establish USB line-state behavior or OS-initiated DTR during open.
+- Installed candidate operation without Rust/development headers, runtime floor, CPU/RSS/start/stop costs and comparison against the legacy transports.
+
+Synthetic sysfs, injected ordering, PTYs and cross-compilation do not close S60 or enable the default.
 
 ## Windows: native HID and COM, not a Unix emulation layer
 

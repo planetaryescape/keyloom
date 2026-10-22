@@ -34,7 +34,7 @@ export async function attachedKeyboards(deps: HandsFreeDeps = realHandsFreeDeps(
   return found;
 }
 
-export type AttachedZmkHalf = { boardId: string; boardName: string; label: string; firmware: HalfFirmware };
+export type AttachedZmkHalf = { boardId: string; boardName: string; label: string; firmware: HalfFirmware; permissionDenied?: true };
 
 /**
  * Every half of a ZMK board with a hands-free recipe that is attached and shows itself: by keyloom's marker in its serial
@@ -50,7 +50,9 @@ export async function attachedZmkHalves(deps: ZmkHandsFreeDeps): Promise<Attache
       if (!rev.flash.handsFree) continue;
       for (const target of halfTargets(board.definition, rev.flash.handsFree, rev.flash.steps, portOfAnotherBoard(board.definition.id))) {
         const firmware = await readHalf(deps, target, ports);
-        if (firmware.state !== "absent") found.push({ boardId: board.definition.id, boardName: board.definition.name, label: target.step.label, firmware });
+        if (firmware.state !== "absent") found.push({ boardId: board.definition.id, boardName: board.definition.name, label: target.step.label, firmware,
+          ...(firmware.state === "keyloom" && ports.find((p) => p.path === firmware.path)?.permissionDenied ? { permissionDenied: true as const } : {}),
+        });
       }
     }
   }
@@ -67,7 +69,8 @@ export async function rawHidFinding(deps: HandsFreeDeps, keyboard: AttachedKeybo
   }
   try {
     const hex = (n: number) => `0x${n.toString(16).padStart(4, "0")}`;
-    const found = (await transport.list()).some((h) => hex(h.vendorId) === keyboard.identity.vendorId && hex(h.productId) === keyboard.identity.productId);
+    const found = (await transport.list()).find((h) => hex(h.vendorId) === keyboard.identity.vendorId && hex(h.productId) === keyboard.identity.productId);
+    if (found?.permissionDenied) return `hidraw read/write permission denied; add a udev rule scoped to VID ${hex(found.vendorId)} and PID ${hex(found.productId)} granting your user access, reload rules and reconnect`;
     return found ? "its raw HID interface is visible" : "its raw HID interface was not found";
   } catch (err) {
     return `couldn't list HID devices: ${(err as Error).message}`;

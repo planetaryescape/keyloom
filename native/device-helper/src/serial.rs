@@ -6,6 +6,7 @@ use serde_json::json;
 #[derive(Clone, Debug, PartialEq)]
 pub struct SerialEndpoint {
     pub key: String,
+    pub permission_denied: bool,
     pub vendor: u16,
     pub product: u16,
     pub serial: Option<String>,
@@ -59,6 +60,7 @@ pub mod serial_synthetic {
         fn list(&self) -> Result<Vec<SerialEndpoint>, &'static str> {
             Ok(vec![SerialEndpoint {
                 key: "synthetic-glove80-left".into(),
+                permission_denied: false,
                 vendor: 0x16c0,
                 product: 0x27db,
                 serial: Some("keyloom/NPQRSTVWXYZ0-L".into()),

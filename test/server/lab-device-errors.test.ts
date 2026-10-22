@@ -58,7 +58,7 @@ test("a busy keyboard connection returns an actionable conflict without retrying
   } finally { log.mockRestore(); }
 });
 
-test("denied keyboard access returns an actionable conflict without claiming a specific permission fixes it", async () => {
+test("denied keyboard access returns the platform remedy without retrying", async () => {
   const error = new DeviceTransportError({ code: "permission_denied", effect: "none", retry: "after_user_action" });
   const log = spyOn(console, "error").mockImplementation(() => {});
   try {
@@ -67,7 +67,9 @@ test("denied keyboard access returns an actionable conflict without claiming a s
     expect(await result.response.json()).toEqual({
       error: {
         code: "permission_denied",
-        message: "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.",
+        message: process.platform === "linux"
+          ? "Keyboard hidraw access was denied. Add a udev rule scoped to this keyboard's VID/PID that grants your user read/write access, reload the rules and reconnect, then try again."
+          : "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.",
       },
     });
     expect(result.opens()).toBe(1);

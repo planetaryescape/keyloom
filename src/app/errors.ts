@@ -42,14 +42,21 @@ export class BusyError extends Error {
   override name = "BusyError";
 }
 
+export function linuxDevicePermissionRemedy(transport: "hid" | "serial", platform: NodeJS.Platform = process.platform): string | undefined {
+  if (platform !== "linux") return undefined;
+  return transport === "hid"
+    ? "Keyboard hidraw access was denied. Add a udev rule scoped to this keyboard's VID/PID that grants your user read/write access, reload the rules and reconnect, then try again."
+    : "Keyboard ttyACM access was denied. Join the group owning the port (usually dialout or uucp), log out and back in, then try again.";
+}
+
 /** A capture could not begin because the operating system or another client refused keyboard access. */
 export class LabCaptureError extends Error {
   override name = "LabCaptureError";
-  constructor(readonly code: "busy" | "permission_denied" | "restart_required") {
+  constructor(readonly code: "busy" | "permission_denied" | "restart_required", remedy?: string) {
     super(code === "busy"
       ? "Another application or keyloom instance is using this keyboard. Stop the other client, then try again."
       : code === "permission_denied"
-        ? "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again."
+        ? (remedy ?? "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.")
         : "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.");
   }
 }

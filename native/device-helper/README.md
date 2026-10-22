@@ -53,6 +53,24 @@ dist/native-serial-source-test/keyloom-darwin-arm64 --version
 
 Use the pinned Rust/Bun toolchains and `CARGO_NET_OFFLINE=true`. Direct optional `libc =0.2.191` reuses the locked ABI definitions for termios, polling and syscalls; its MIT notice is already included. Pure/injected tests and anonymous `openpty` tests perform no registry enumeration or real-port access. They cannot establish USB DTR behavior or prevent an OS-initiated DTR transition during open; see [the exact sequence and limitations](../../docs/research/spikes/device-helper-24d.md#slice-2-owns-the-macos-port-with-checked-transitions). Cargo without features enables no backend; Apple Silicon release builds enable `native-macos`. On Intel use `bun-darwin-x64`; CI builds the source candidate on each native Mac runner.
 
+## Build the explicit Linux candidate without discovering devices
+
+```sh
+# On Linux x64, from the repository root:
+bun scripts/build-binaries.ts --device-backend native --target bun-linux-x64 \
+  --out-dir dist/native-linux-candidate
+dist/native-linux-candidate/keyloom-linux-x64 --data-dir /tmp/keyloom-linux-doctor \
+  doctor --device-helper-only
+
+cd native/device-helper
+cargo clippy --locked --all-targets --target x86_64-unknown-linux-musl --features native-linux -- -D warnings
+cargo test --locked --target x86_64-unknown-linux-musl --features native-linux
+```
+
+`native-linux` uses sysfs plus libc and is exclusive with macOS/synthetic features. It adds no libudev/hidapi dependency and retains the static musl helper. The candidate advertises all seven capabilities and doctor labels hardware acceptance pending. Ordinary Linux releases still select diagnostics/legacy (D-433/D-434). A cross build needs a prebuilt target `--helper`; the macOS host can check/clippy the musl target but cannot execute Linux tests or the candidate.
+
+The tests use temporary sysfs trees, injected touch I/O and anonymous PTYs. They cover missing/duplicate serials, hub ancestry, tty renumbering, dangling links, denied nodes, zero-ID write framing, unprefixed reads, termios2 exact rates, exclusive mode and removal. PTYs intentionally reject unsupported modem ioctls; they do not prove CDC DTR or keyboard restart behavior. Normal doctor uses optional read-only access hints to identify a VID/PID-scoped hidraw udev rule or ttyACM dialout/uucp group access. Helper-only doctor performs no discovery. No rule is installed. [24e evidence and pending S60 checks](../../docs/research/spikes/device-helper-24e.md).
+
 ## Test the synthetic serial candidate
 
 ```sh
@@ -107,7 +125,7 @@ For a signed/prebuilt helper, pass `--helper <absolute-file>` with exactly one `
 keyloom --data-dir /tmp/keyloom-doctor-scratch doctor --device-helper-only
 ```
 
-An Apple Silicon release pair reports its release, protocol, target, helper SHA-256, all seven capabilities and "native backend in use". Intel and Linux pairs report empty capabilities and "diagnostics only". An explicit native candidate reports its selected HID or serial capabilities and says hardware acceptance is pending; doctor still performs no discovery. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
+An Apple Silicon release pair reports its release, protocol, target, helper SHA-256, all seven capabilities and "native backend in use". Ordinary Intel and Linux pairs report empty capabilities and "diagnostics only". An explicit Linux native candidate reports all seven capabilities with hardware acceptance pending. Other explicit native candidates report their selected HID or serial capabilities and says hardware acceptance is pending; doctor still performs no discovery. Source invocation reports `not_bundled` as a warning and never looks up a helper. The installed smoke uses the real installer against a local release mirror, tests eight concurrent cold starts, corruption refusal, and import after failure. It removes only the scratch directory it creates.
 
 The Unix extractor rejects symlinks in managed paths, unexpected owners, unsafe modes and wrong hashes. It publishes without replacing an existing executable. Old releases coexist until explicitly removed; no automatic cleanup or downloads occur. A same-user malicious process is outside this integrity boundary. Windows currently runs native Cargo/Bun child-contract checks only: production extraction refuses Windows until private ACL/reparse checks are implemented.
 
@@ -121,6 +139,6 @@ cargo metadata --locked --format-version 1
 
 Direct normal/build dependency: `serde_json =1.0.154`, default `std` feature. The compiled tree contains `itoa 1.0.18` (MIT OR Apache-2.0), `memchr 2.8.3` (Unlicense OR MIT), `serde_core 1.0.229` (MIT OR Apache-2.0), `serde_json 1.0.154` (MIT OR Apache-2.0), and `zmij 1.0.23` (MIT). MIT notices are [included](THIRD-PARTY-NOTICES.txt) and embedded in the helper's `--version` output.
 
-The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for device-enabled builds and, on macOS only, `core-foundation =0.10.1` with `core-foundation-sys 0.8.7` and `libc 0.2.191`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in device-enabled features; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; D-431 replaces the serialport candidate with direct macOS ownership. The combined direct macOS backend is the Apple Silicon release default; Intel keeps legacy macOS FFI (D-433).
+The lock also contains optional, uncompiled `serde/serde_derive 1.0.229`, `proc-macro2 1.0.107`, `quote 1.0.47`, `syn 3.0.9` (all MIT OR Apache-2.0) and `unicode-ident 1.0.27` ((MIT OR Apache-2.0) AND Unicode-3.0). Feature-only dependencies are `base64 =0.22.1` for device-enabled builds, `libc =0.2.191` for native serial/Linux, and macOS-only `core-foundation =0.10.1` with `core-foundation-sys 0.8.7`. Each declares MIT OR Apache-2.0; the MIT texts/copyrights are included in the notices. The default diagnostics build compiles none of these optional dependencies. `getrandom =0.3.4` and `cfg-if 1.0.5` (MIT OR Apache-2.0) add a 128-bit lifetime nonce in device-enabled features; macOS uses getentropy from 10.12. Their MIT notices are included. Optional uncompiled lock entries include r-efi/wasip2/wit-bindgen, not current release-target dependencies. HIDAPI was inspected but not adopted; D-431 replaces the serialport candidate with direct macOS ownership. The combined direct macOS backend is the Apple Silicon release default; Intel keeps legacy macOS FFI (D-433).
 
 See [S58/S62 evidence](../../docs/research/spikes/device-helper-24b.md) for observed results and unverified release/signing/platform gates.

@@ -838,6 +838,7 @@ mod frame_tests {
         ] {
             let endpoint = crate::serial::SerialEndpoint {
                 key: format!("synthetic-owner-error-{}-{possible}", std::process::id()),
+                permission_denied: false,
                 vendor: 1,
                 product: 2,
                 serial: None,
@@ -882,6 +883,7 @@ mod frame_tests {
         let serial = |key: &str, number: &str| {
             ConnectionEndpoint::Serial(crate::serial::SerialEndpoint {
                 key: key.into(),
+                permission_denied: false,
                 vendor: 0x16c0,
                 product: 0x27db,
                 serial: Some(number.into()),
@@ -891,10 +893,12 @@ mod frame_tests {
         };
         let hid = ConnectionEndpoint::Hid(crate::backend::Endpoint {
             key: "h".into(),
+            permission_denied: false,
             vendor: 1,
             product: 2,
             serial: None,
             descriptor: vec![],
+            interface_number: None,
         });
         let mut state = State {
             refs: HashMap::from([("hid-ref".into(), hid.clone())]),
@@ -944,13 +948,16 @@ mod frame_tests {
     fn reference_invalidation_is_scoped_to_one_transport() {
         let hid = ConnectionEndpoint::Hid(crate::backend::Endpoint {
             key: "same".into(),
+            permission_denied: false,
             vendor: 1,
             product: 2,
             serial: None,
             descriptor: vec![],
+            interface_number: None,
         });
         let serial = ConnectionEndpoint::Serial(crate::serial::SerialEndpoint {
             key: "same".into(),
+            permission_denied: false,
             vendor: 1,
             product: 2,
             serial: None,
@@ -976,10 +983,12 @@ mod frame_tests {
     fn maximum_metadata_cannot_create_an_oversized_wire_frame() {
         let endpoint = crate::backend::Endpoint {
             key: "not-a-path".into(),
+            permission_denied: false,
             vendor: 0x3297,
             product: 0x1969,
             serial: Some("s".repeat(256)),
             descriptor: vec![],
+            interface_number: None,
         };
         let devices = (0..256)
             .map(|index| endpoint.record(&format!("d{}-1-{index}", "n".repeat(32))))

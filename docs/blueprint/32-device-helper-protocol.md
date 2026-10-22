@@ -1,6 +1,6 @@
 # 32: A bounded device protocol with explicit failure
 
-Status: diagnostics-v1 shipped in v0.46.1. D-433 selects the combined HID/serial protocol below for Apple Silicon releases; Intel and Linux retain diagnostics only. Native serial now implements `serial.touch` at 1200 and 1201 baud. [S59](../research/spikes/S59.md) records capture evidence; [Stage 5](../research/spikes/device-helper-native-default.md) separates software verification from the orchestrator's pending physical touch/reset and desktop acceptance.
+Status: diagnostics-v1 shipped in v0.46.1. D-433 selects the combined HID/serial protocol below for Apple Silicon releases; Intel and Linux retain diagnostics only. D-434 adds an explicit Linux candidate with the same seven capabilities; ordinary Linux releases retain diagnostics only until S60. Native serial now implements `serial.touch` at 1200 and 1201 baud. [S59](../research/spikes/S59.md) records capture evidence; [Stage 5](../research/spikes/device-helper-native-default.md) separates software verification from the orchestrator's pending physical touch/reset and desktop acceptance.
 
 Native serial setup failures after the OS open report `effect: possible`; the OS may assert DTR before configuration. Failures before open keep `effect: none`. The checked close receipt and no-replay contract remain unchanged. `serial.touch` follows the same effect boundary; success returns `{ lineStateApplied: true }`, not proof of firmware restart.
 
@@ -14,7 +14,7 @@ The frame limit is 65,536 bytes **including newline**. The Rust reader admits on
 
 Doctor admits one sequential hello/ping/shutdown exchange per child, with a two-second overall deadline. It requires matching response IDs, exact paired identity and the selected build's exact capabilities, then waits for stdout EOF and exit 0. Failure closes stdin, terminates a still-running child and bounds exit/pipe cleanup waits. It never retries. Multiple doctor calls own independent children.
 
-The transport supplement, `transport-v1.schema.json`, is generated alongside the frozen diagnostics schema by `bun scripts/gen-device-helper-schema.ts`. `native-macos` combines the native HID and serial features; `synthetic-macos` combines both scripted captures and touch without OS-device code. Native and synthetic features cannot mix. Single-transport features remain available.
+The transport supplement, `transport-v1.schema.json`, is generated alongside the frozen diagnostics schema by `bun scripts/gen-device-helper-schema.ts`. `native-macos` combines the native HID and serial features; `synthetic-macos` combines both scripted captures and touch without OS-device code. Native and synthetic features cannot mix. Single-transport features remain available. Linux-only `native-linux` implements the combined candidate and cannot coexist with macOS or synthetic features.
 
 One helper shares the reference registry, eight-operation/session admission bound, lease acquisition and close receipts across both backends. References include a random helper nonce, transport and the list generation that first saw the endpoint. Relisting serial leaves HID references valid. HID callbacks and the shared output retain at most 510 events each; serial admission to that shared queue is separately capped at 16 chunks. The independent stdout-progress watchdog remains active even while pings arrive.
 
@@ -50,7 +50,7 @@ The data example illustrates the envelope, not a valid 32-byte QMK report. Exact
 | `list` | `transport: hid \| serial` | `devices: Device[]`; metadata only, no operational session or line-state change |
 | `hid.open` | `deviceRef` | `sessionId`; acquires lease and exact endpoint, begins receiving reports, writes none |
 | `hid.write` | `deviceRef`, `reportId: 0`, `bytes` | `acceptedBytes: 32`; one-shot open/write/close with lease, no stream |
-| `serial.open` | `deviceRef` | `sessionId`; synthetic backend or D-431 direct macOS raw 115200/8N1/no-flow-control/checked-DTR setup; no firmware command. Physical behavior remains a platform gate |
+| `serial.open` | `deviceRef` | `sessionId`; synthetic backend, D-431 direct macOS, or D-434 Linux raw 115200/8N1/no-flow-control/checked-DTR setup; no firmware command. Physical behavior remains a platform gate |
 | `serial.touch` | `deviceRef`, `baud: 1200 \| 1201` | `{ lineStateApplied: true }`; leased one-shot open, identity recheck, set/read back both speeds, clear DTR and checked close. Errors before open have `effect: none`; post-open failures have `effect: possible`. Never replay |
 | `session.write` | `sessionId`, strict-base64 `bytes`; HID requires `reportId: 0` and exactly 32 decoded bytes; serial omits `reportId` and accepts 1–4096 bytes | `{ acceptedBytes: n }`, exactly the decoded payload length; serialized native write, not proof that firmware acted |
 | `session.close` | `sessionId` | `finalSeq`; closes resources with the ordering below |
@@ -60,7 +60,7 @@ Apple Silicon release capabilities are operation-specific: `hid.list`, `hid.open
 
 ### Device records are endpoint references, not keyboard identities
 
-`Device = { deviceRef, transport, vendorId, productId, serial?, product?, interfaceNumber?, usagePage?, usage? }`. HID requires page/usage fields; serial omits them. IDs are 16-bit integers; metadata strings are bounded to 256 UTF-8 bytes and escaped for display. Missing identity is absent, not invented from a COM number. A raw serial string stays local and is not logged.
+`Device = { deviceRef, transport, vendorId, productId, serial?, product?, interfaceNumber?, usagePage?, usage?, permissionDenied? }`. HID requires page/usage fields; serial omits them. IDs are 16-bit integers; metadata strings are bounded to 256 UTF-8 bytes and escaped for display. Missing identity is absent, not invented from a COM number. A raw serial string stays local and is not logged. Linux candidates can add `permissionDenied: true` after a metadata-only read/write access check on the node. It is an advisory snapshot for doctor, not proof that a future open will succeed. Missing hints mean no refusal was observed; open EACCES still returns `permission_denied` with `retry: after_user_action`.
 
 HID discovery admits only the QMK vendor-defined usage page `0xff60`, usage `0x61`, with the expected unnumbered 32-byte report shape. Do not open the normal keyboard collection. Serial discovery admits USB-owned CDC endpoints, not arbitrary host serial files or Bluetooth modems. The application still selects the board and correct half using existing matching rules.
 
