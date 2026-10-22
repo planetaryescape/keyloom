@@ -47,6 +47,8 @@ export type SyncFacts = {
   /** The board's latest sync also carries recovery errors across later edits. */
   latestSync?: SyncRow | undefined;
   split?: boolean;
+  /** The oldest successful flash time among every currently visible half's build; absent if any half is missing or unflashed. */
+  runningFlashedAt?: number;
   auto: { on: boolean; paused: boolean; proven: boolean };
   /** Whether the quiet time since the last Apply has passed, so auto-sync is due. */
   quiet: boolean;
@@ -65,8 +67,12 @@ export function deriveState(f: SyncFacts): SyncState {
     if (a.step === "needs_hand") return { kind: "needs_hand", instruction: a.instruction ?? "", reason: NEEDS_HAND_REASON };
     return { kind: "syncing", step: a.step === "done" ? "building" : a.step, syncId: a.id, startedAt: a.startedAt, trigger: a.trigger };
   }
-  const h = f.headSync;
-  const latest = f.latestSync ?? h;
+  // Preserve failed history, but a later successful flash corroborated by every visible half supersedes it.
+  const unsuperseded = (sync: SyncRow | undefined): SyncRow | undefined =>
+    sync?.status === "failed" && f.reading.state === "keyloom" && !f.reading.missingHalves?.length &&
+    f.runningFlashedAt !== undefined && f.runningFlashedAt > (sync.finishedAt ?? sync.startedAt) ? undefined : sync;
+  const h = unsuperseded(f.headSync);
+  const latest = unsuperseded(f.latestSync ?? f.headSync);
   if (f.split && latest?.status === "failed" && (latest.failure === "flash" || latest.failure === "verify" || latest.failure === "needs_hand") && f.reading.state !== "keyloom") {
     return { kind: "needs_hand", instruction: latest.error ?? latest.instruction ?? "Connect every half, then press Sync now.", reason: "" };
   }

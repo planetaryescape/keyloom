@@ -10,7 +10,7 @@ import type { SerialPort, SerialTransport } from "../toolchain/serial.ts";
 import { uf2Problem } from "../toolchain/uf2.ts";
 import { type UsbDevice, listUsbDevices } from "../toolchain/usb.ts";
 import type { EnterResult, FlashStep, StepHooks, VerifyResult } from "./flash.ts";
-import { sharedDriveRemedy } from "./flash.ts";
+import { retryRemedy, sharedDriveRemedy } from "./flash.ts";
 import { type HalfLetter, LOCAL_BAUD, RELAY_BAUD, buildKey, halfMarker, keyInArtifact, keyInFirmware, parseSerial } from "./handsfree.ts";
 import type { VolumeFinder } from "./volumes.ts";
 
@@ -127,7 +127,7 @@ export async function restartHalf(opts: {
     const transport = await deps.serial();
     const ports = await transport.list();
     const peers = opts.targets.filter((other) => other !== t && other.step.volume === t.step.volume);
-    if (peers.some((other) => portsOfHalf(ports, other).keyloom.length !== 1)) {
+    if (opts.waitForVolume !== false && peers.some((other) => portsOfHalf(ports, other).keyloom.length !== 1)) {
       return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware` };
     }
     const own = portsOfHalf(ports, t);
@@ -212,6 +212,7 @@ export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTar
     // comes back on USB (BK's Glove80 left half, 2026-10-22: the rewrite from its bootloader then verified). Lead with that remedy.
     const remedy = opts.steps?.some((step) => step !== t.step && step.volume === t.step.volume)
       ? sharedDriveRemedy(t.step, opts.steps)
+      : opts.steps ? `${retryRemedy(opts.steps)} To recover the ${label} on its own, connect only that half and put it in its bootloader: ${t.step.enter}`
       : `Put it in its bootloader and flash again: ${t.step.enter}`;
     return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. ${remedy} If it doesn't appear even then, check its USB cable and run \`keyloom doctor\`.` };
   }
@@ -242,6 +243,18 @@ export function zmkHandsFreeHooks(input: {
   const forStep = (step: FlashStep): HalfTarget | undefined => targets.find((t) => t.step === step);
   const before = new Map<HalfTarget, HalfFirmware>();
   const hooks: StepHooks = {
+    peersRunning: async (step) => {
+      const peers = input.steps.filter((other) => other !== step && other.volume === step.volume);
+      try {
+        const states = await Promise.all(peers.map(async (peer) => {
+          const target = forStep(peer);
+          return target ? readHalf(input.deps, target) : { state: "absent" as const };
+        }));
+        return states.every((state) => state.state !== "absent");
+      } catch {
+        return false;
+      }
+    },
     enterBootloader: async (step, _index, announce) => {
       const target = forStep(step);
       if (target) {
@@ -297,7 +310,7 @@ export function zmkHandsFreeHooks(input: {
         return `${states.join(", and ")}.`;
       };
       const shared = targets.some((t) => t !== failed && t.step.volume === failed.step.volume);
-      const remedy = shared ? sharedDriveRemedy(failed.step, input.steps) : `To finish the new build, put the ${failed.step.label} in its bootloader and flash again: ${failed.step.enter}`;
+      const remedy = shared ? sharedDriveRemedy(failed.step, input.steps) : retryRemedy(input.steps);
       const stopped = async (reason: string, includeRemedy = true) => `${error} ${reason} ${await summary()}${includeRemedy ? ` ${remedy}` : ""}`;
       // Read before touching a rollback target: the failed half may still run its previous build.
       const failedState = await current(failed);

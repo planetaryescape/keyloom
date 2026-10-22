@@ -147,3 +147,9 @@ export function findBuildByKey(db: Database, key: string): BuildRow | undefined 
   const rows = db.query("SELECT b.*, r.layout_id FROM builds b JOIN revisions r ON r.id = b.revision_id WHERE substr(b.id, -12) = ? LIMIT 2").all(key) as BuildDb[];
   return rows.length === 1 ? toBuild(rows[0] as BuildDb) : undefined;
 }
+
+/** A later successful flash can supersede a sync failure when the whole keyboard is observed running this build. */
+export function lastSuccessfulFlashAt(db: Database, buildId: string): number | undefined {
+  const row = db.query("SELECT MAX(finished_at) AS at FROM flashes WHERE build_id = ? AND status = 'succeeded'").get(buildId) as { at: number | null };
+  return row.at ?? undefined;
+}

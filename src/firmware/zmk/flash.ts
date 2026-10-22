@@ -39,6 +39,8 @@ export type StepHooks = {
    * A failure is a reason, and the flash goes on by asking for the key combo.
    */
   enterBootloader?: (step: FlashStep, index: number, announce: (instruction: string) => void) => Promise<EnterResult>;
+  /** Confirm every peer sharing this boot-drive label is visibly running firmware before a write. */
+  peersRunning?: (step: FlashStep) => Promise<boolean>;
   /** Called with the image just written, after the drive has unmounted: did the half come back running it? A failure stops the flash. */
   verify?: (step: FlashStep, index: number, image: Uint8Array) => Promise<VerifyResult>;
   /** Promote verified images only once the entire flash has passed. */
@@ -119,9 +121,12 @@ async function payloads(input: Uf2FlashInput, say: (line: string) => void): Prom
 export const instructionFor = (step: FlashStep, index: number, total: number, waitMs: number): string =>
   `Flash the ${step.label} (${index + 1} of ${total}). ${step.enter} keyloom waits ${Math.round(waitMs / 60_000) >= 1 ? `${Math.round(waitMs / 60_000)} minutes` : `${Math.round(waitMs / 1000)} seconds`}.`;
 
+export const retryRemedy = (steps: readonly FlashStep[]): string =>
+  `Retry starts with the ${steps[0]!.label}. Wait for keyloom to ask for each half before putting it in its bootloader.`;
+
 export function sharedDriveRemedy(step: FlashStep, steps: readonly FlashStep[]): string {
   const others = steps.filter((s) => s !== step && s.volume === step.volume).map((s) => s.label).join(" and ");
-  return `For manual recovery, put only the ${step.label} in its bootloader: ${step.enter} The ${others} must not be in its bootloader. Before retrying in keyloom, return both halves to running firmware; keyloom must restart each target itself and observe its drive appear. Retry starts with the ${steps[0]!.label}.`;
+  return `keyloom can't tell which half this drive belongs to. The ${others} must be running firmware on USB, either keyloom's or other firmware. If it isn't, recover it on its own with only that half connected first. Before retrying in keyloom, return both halves to running firmware. ${retryRemedy(steps)} For recovery through keyloom, keyloom must restart the target itself and observe its drive appear while the other half stays running.`;
 }
 
 export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult> {
@@ -165,7 +170,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       byKeyloom = entered.ok && entered.alreadyThere !== true;
     }
     // A label shared by both halves names no half. It is safe after keyloom restarted this target itself, or, outside
-    // recovery, when the drive appears only after the person was asked for this half (a normal first flash). A drive
+    // recovery, when the drive appears after the prompt and the peers are visibly running firmware at write time. A drive
     // already mounted before the prompt could be the other half, as after a failed split flash, so it is refused.
     if (shared && !byKeyloom && (recovery !== undefined || (await input.findVolume(step.volume)) !== null)) {
       const remedy = sharedDriveRemedy(step, input.steps);
@@ -189,8 +194,14 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     }
     if (!mount) {
       return failed(
-        `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} Put the ${step.label} in bootloader mode and flash again.`,
+        `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? sharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
       );
+    }
+
+    if (shared && input.hooks?.peersRunning && !(await input.hooks.peersRunning(step))) {
+      const error = `Not writing to ${step.volume}: the other half is not confirmed running firmware. ${sharedDriveRemedy(step, input.steps)}`;
+      input.onState("waiting_for_bootloader", error, { needsHand: true });
+      return failed(error);
     }
 
     say(`keyloom: ${step.volume} is mounted at ${mount}; writing`);

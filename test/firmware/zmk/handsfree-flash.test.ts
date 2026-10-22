@@ -192,7 +192,8 @@ describe("a Glove80 whose halves run keyloom's firmware", () => {
     expect(r.result.state).toBe("failed");
     expect(r.result.error).toContain("didn't come back");
     // A truncated copy leaves a half that can't start; its own bootloader instruction is the fix, so it leads.
-    expect(r.result.error).toContain("Its firmware may be incomplete. Put it in its bootloader and flash again:");
+    expect(r.result.error).toContain("Its firmware may be incomplete. Retry starts with the right half.");
+    expect(r.result.error).toContain("To recover the right half on its own");
     expect(r.result.error).toMatch(/hold (I \+ PgDn|Magic \+ E) and switch it on/);
     const error = r.result.error ?? "";
     expect(error.indexOf("bootloader")).toBeLessThan(error.indexOf("USB cable"));
@@ -326,7 +327,7 @@ describe("the Corne: two halves under one volume name", () => {
     const r = await run(CORNE, bundle(), (root) => fakeWorld({ root, halves: [half("L"), { letter: "R", volume: "NICENANO", vendorId: 0x1d50, productId: 0x615e }] }));
     expect(r.result.state).toBe("failed");
     // No drive appeared after the prompt, so nothing was written to either half.
-    expect(r.result.error).toContain("Put the left half in bootloader mode");
+    expect(r.result.error).toContain("Retry starts with the left half");
     expect(r.w.touches).toEqual([]);
     expect(r.w.flashed).toEqual([]);
   });

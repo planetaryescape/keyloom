@@ -124,6 +124,8 @@ test("second half never returns: restore the first, request the second bootloade
     instruction: (w, i) => { if (i.startsWith("Restore the left half")) w.press("L"); },
   });
   expectOld(r);
+  expect(r.result.error).not.toContain("Put it in its bootloader and flash again");
+  expect(r.result.error).toContain("Retry starts with the right half");
   expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }, { letter: "L", key: KEY }, { letter: "R", key: OLD_KEY }, { letter: "L", key: OLD_KEY }]);
   expect(r.states.some(([s, i]) => s === "waiting_for_bootloader" && i?.startsWith("Restore the left half") && i.includes("Magic + E"))).toBe(true);
   expect(r.lines.join("\n")).toContain("injected ENXIO mid-copy");
@@ -142,7 +144,7 @@ test("no last-good image: nothing is written for rollback and the failure names 
   expect(r.result.error).toContain("no verified last-good image for the right half");
   expect(r.result.error).toContain(`right half is running build ${KEY}`);
   expect(r.result.error).toContain(`left half is running build ${OLD_KEY}`);
-  expect(r.result.error).toContain("To finish the new build, put the left half in its bootloader and flash again");
+  expect(r.result.error).toContain("Retry starts with the right half");
   expect(r.saved).toEqual([]);
 });
 
@@ -263,15 +265,15 @@ test("Flash again refuses a failed right half's shared drive when its first step
   const r = await flash({ ...await corneInput(), prepare: async (w) => { w.press("R"); await Bun.sleep(50); } });
   expect(r.w.flashed).toEqual([]);
   expect(r.result.error).toContain("left half");
-  expect(r.result.error).toContain("right half must not be in its bootloader");
+  expect(r.result.error).toContain("right half must be running firmware on USB");
 });
 
 test("an absent shared-drive half's remedy distinguishes manual recovery from the retry's first step", async () => {
   const input = await corneInput();
   const r = await flash({ ...input, world: { ...input.world, after: (h, key) => h.letter === "R" && key === KEY ? undefined : serialOf(key!, h.letter) } });
   expect(r.result.error).not.toContain("Put it in its bootloader and flash again");
-  expect(r.result.error).toContain("For manual recovery, put only the right half in its bootloader");
-  expect(r.result.error).toContain("The left half must not be in its bootloader");
+  expect(r.result.error).toContain("recover it on its own with only that half connected");
+  expect(r.result.error).toContain("The left half must be running firmware on USB");
   expect(r.result.error).toContain("Before retrying in keyloom, return both halves to running firmware");
   expect(r.result.error).toContain("Retry starts with the left half");
   expect(r.w.flashed).toEqual([{ letter: "L", key: KEY }, { letter: "R", key: KEY }]);
@@ -286,4 +288,61 @@ test.each(["bootloader block", "truncated", "count", "gap"])("an unsafe saved UF
   const r = await flash({ world: restartFails, previous: () => damage === "truncated" ? image.subarray(0, image.length - 512) : image });
   expect(r.result.error).toContain("last-good image is unsafe");
   expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }]);
+});
+
+test("a delayed peer boot drive after the retry's pre-prompt check is refused without writing", async () => {
+  let writes = 0;
+  const r = await flash({ ...await corneInput(),
+    // The peer has left firmware, but its delayed mount arrives only after the manual prompt.
+    prepare: async (w) => { w.halves.find((h) => h.letter === "R")!.mode = "boot"; },
+    instruction: (w, i) => { if (i.includes("Flash the left half")) w.press("R"); },
+    write: async (path, image) => { writes++; await writeFile(path, image); },
+  });
+  expect(writes).toBe(0);
+  expect(r.w.flashed).toEqual([]);
+  expect(r.result.error).toContain("keyloom can't tell which half this drive belongs to");
+  expect(r.result.error).toContain("must be running firmware on USB");
+});
+
+test("a manually opened shared drive is refused when its peer is absent", async () => {
+  const input = await corneInput();
+  let writes = 0;
+  const r = await flash({ ...input, world: { halves: [input.world.halves[0]!] },
+    instruction: (w, i) => { if (i.includes("Flash the left half")) w.press("L"); },
+    write: async (path, image) => { writes++; await writeFile(path, image); },
+  });
+  expect(writes).toBe(0);
+  expect(r.result.error).toContain("recover it on its own with only that half connected");
+});
+
+test("a first manual shared-drive flash accepts peers visibly running other firmware", async () => {
+  const input = await corneInput();
+  // A board whose running USB product IDs identify each half can recognise firmware without keyloom markers.
+  const identified = structuredClone(input.board);
+  const handsFree = zmkRevision(identified.definition).flash.handsFree!;
+  handsFree.usbVendorId = "0x1d50";
+  handsFree.halves[0]!.usbProductId = "0x615e";
+  handsFree.halves[1]!.usbProductId = "0x615f";
+  const prompted = new Set<string>();
+  const r = await flash({ ...input, board: identified,
+    world: { halves: input.world.halves.map((h, i) => ({ ...h, productId: i === 0 ? 0x615e : 0x615f, serial: "other-firmware" })) },
+    instruction: (w, i) => {
+      for (const letter of ["L", "R"] as const) {
+        if (i.includes(`Flash the ${letter === "L" ? "left" : "right"} half`) && !prompted.has(letter)) {
+          prompted.add(letter);
+          w.press(letter);
+        }
+      }
+    },
+  });
+  expect(r.result.state).toBe("succeeded");
+  expect(r.w.flashed).toEqual([{ letter: "L", key: KEY }, { letter: "R", key: KEY }]);
+});
+
+test("a missing second drive gives the retry's first step before any bootloader instruction", async () => {
+  const r = await flash({ world: restartFails, missing: ["R", "L"] });
+  expect(r.result.error).not.toContain("Put the left half in bootloader mode and flash again");
+  expect(r.result.error).not.toContain("put the left half in its bootloader and flash again");
+  expect(r.result.error).toContain("Retry starts with the right half");
+  expect(r.result.error).toContain("Wait for keyloom to ask for each half before putting it in its bootloader");
 });

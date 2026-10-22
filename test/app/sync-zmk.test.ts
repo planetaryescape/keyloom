@@ -167,6 +167,9 @@ describe("Apply to both halves of a Glove80", () => {
           const retried = await flashAndWait(s.e.app, { buildId: row.buildId!, volumesRoot: s.e.volumes, handsFree: s.handsFree });
           expect(retried.status).toBe("succeeded");
           expect(s.world.halves.map((h) => h.serial)).toEqual([serialOf(buildKey(row.buildId!), "L"), serialOf(buildKey(row.buildId!), "R")]);
+          await waitFor(() => engine.views()[0]?.state.kind === "in_sync", "Flash again clears the failed sync", 2000);
+          s.apply();
+          await waitFor(() => lastSyncOfBoard(s.e.app.db, BOARD)?.status === "succeeded", "auto-sync after Flash again", 8000);
         } finally { await engine.stop(); }
       });
     } finally { s.world.stop(); }

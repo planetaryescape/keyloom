@@ -12,7 +12,7 @@ import { processAlive } from "../firmware/toolchain/lock.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { sameBuild } from "../layout/conditional-backfill.ts";
 import { withoutLayerNumbers } from "../layout/layer-refs.ts";
-import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash } from "../persistence/builds.ts";
+import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash, lastSuccessfulFlashAt } from "../persistence/builds.ts";
 import { getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
@@ -354,7 +354,12 @@ export class SyncEngine {
     const proven = bs.provenAt !== null;
     const active = activeSyncs(db).find((s) => s.boardId === boardId);
     const definition = showBoard(boardId).definition;
+    // Every expected half must be visible; one head marker cannot supersede a failed partial flash.
+    const flashed = known && reading.state === "keyloom" && !reading.missingHalves?.length && running.kind !== "other_config"
+      ? builds.map((build) => lastSuccessfulFlashAt(db, build!.id)) : [];
+    const runningFlashedAt = flashed.length > 0 && flashed.every((at): at is number => at !== undefined) ? Math.min(...flashed) : undefined;
     const facts: SyncFacts = {
+      ...(runningFlashedAt === undefined ? {} : { runningFlashedAt }),
       reading, running, active, headSync: lastSyncOfRevision(db, boardId, layout.headRevisionId), latestSync: lastSyncOfBoard(db, boardId),
       split: definition.firmware === "zmk" && zmkRevision(definition).flash.steps.length > 1,
       auto: { on: proven && (bs.autoSync ?? true), paused: bs.paused, proven },

@@ -148,3 +148,27 @@ describe("a keyboard unplugged between the build and the flash", () => {
     });
   });
 });
+
+test("a verified Moonlander Flash again supersedes a failed sync and permits the next edit", async () => {
+  const s = await setup();
+  await s.run(async () => {
+    const first = await buildAndWait(s.e.app, "synchronized", { boardRevision: "reva" });
+    await s.stamp(first.id);
+    await flashAndWait(s.e.app, { buildId: first.id, handsFree: s.kb.deps });
+    let fail = true;
+    const engine = new SyncEngine(s.e.app, { ...s.deps, flash: async (input) => fail ? { ok: false, error: "injected flash failure" } : s.deps.flash(input) }, { quietMs: 30, tickMs: 10, pollMs: 20 });
+    await engine.start();
+    try {
+      const apply = (code: string) => applyOps(s.e.app, "synchronized", { baseRevisionId: getLayout(s.e.app, "synchronized").revision.id, ops: setKey(6, code), summary: code });
+      apply("F17");
+      await waitFor(() => lastSyncOfBoard(s.e.app.db, BOARD)?.status === "failed", "failed sync", 8000);
+      const failed = lastSyncOfBoard(s.e.app.db, BOARD)!;
+      expect(engine.views()[0]?.state).toMatchObject({ kind: "behind", why: "failed" });
+      fail = false;
+      await flashAndWait(s.e.app, { buildId: failed.buildId!, handsFree: s.kb.deps });
+      await waitFor(() => engine.views()[0]?.state.kind === "in_sync", "verified Flash again clears the failure", 2000);
+      apply("F18");
+      await waitFor(() => lastSyncOfBoard(s.e.app.db, BOARD)?.status === "succeeded", "next edit auto-syncs", 8000);
+    } finally { await engine.stop(); }
+  });
+});

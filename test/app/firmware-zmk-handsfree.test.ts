@@ -89,7 +89,8 @@ describe("a Glove80 flash", () => {
       expect(failed.status).toBe("failed");
       expect(failed.note).toBeNull();
       expect(failed.error).toContain("no verified last-good image for the right half");
-      expect(failed.error).toContain("To finish the new build, put the left half in its bootloader and flash again");
+      expect(failed.error).toContain("Retry starts with the right half");
+      expect(failed.error).not.toContain("Put it in its bootloader and flash again");
       for (const letter of ["L", "R"]) expect(await Bun.file(join(e.dataDir, "firmware", "last-good", "moergo-glove80", `${letter}.uf2`)).exists()).toBe(false);
       failLeft = false;
       world.press("L");

@@ -112,3 +112,13 @@ describe("autoSyncDue", () => {
     expect(autoSyncDue(base({ headSync: row({ status: "failed", failure: "disconnected", error: "x" }) }))).toBe(true);
   });
 });
+
+test.each([false, true])("a later successful flash of all observed halves supersedes failure (split=%s)", (split) => {
+  const failed = row({ status: "failed", failure: "flash", error: "failed recovery", finishedAt: 100 });
+  const facts = base({ split, running: { kind: "same" }, headSync: failed, latestSync: failed, runningFlashedAt: 101 });
+  expect(deriveState(facts)).toEqual({ kind: "in_sync" });
+  expect(deriveState({ ...facts, runningFlashedAt: 99 })).toMatchObject({ kind: "behind", why: "failed" });
+  expect(deriveState({ ...facts, runningFlashedAt: 100 })).toMatchObject({ kind: "behind", why: "failed" });
+  expect(deriveState({ ...facts, reading: { ...keyloom, missingHalves: ["left half"] } }).kind).toBe("needs_hand");
+  expect(deriveState({ ...facts, running: { kind: "behind", changes: 1 }, headSync: undefined })).toMatchObject({ kind: "behind", why: "waiting" });
+});
