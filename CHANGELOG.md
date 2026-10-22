@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.53.1](https://github.com/planetaryescape/keyloom/compare/v0.53.0...v0.53.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* wait for a UF2 boot drive to be mounted before writing to it ([#161](https://github.com/planetaryescape/keyloom/issues/161)) ([3e3ec42](https://github.com/planetaryescape/keyloom/commit/3e3ec42b574bddc6c7934a71f1ab122658f53df7))
+
 ## [0.53.0](https://github.com/planetaryescape/keyloom/compare/v0.52.0...v0.53.0) (2026-10-22)
 
 
