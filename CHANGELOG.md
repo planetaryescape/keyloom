@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.51.0](https://github.com/planetaryescape/keyloom/compare/v0.50.0...v0.51.0) (2026-10-22)
+
+
+### Features
+
+* publish a Windows x64 release with a PowerShell installer ([8b030a9](https://github.com/planetaryescape/keyloom/commit/8b030a91b95331a8512f2eb78d1e3cbd47396508))
+
+
+### Bug Fixes
+
+* tell a Glove80 half that didn't come back to rewrite it from its bootloader ([0f98a9b](https://github.com/planetaryescape/keyloom/commit/0f98a9b6702fbfbf6a3ec207556adf844020c605))
+
 ## [0.50.0](https://github.com/planetaryescape/keyloom/compare/v0.49.0...v0.50.0) (2026-10-22)
 
 
