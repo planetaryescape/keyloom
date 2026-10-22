@@ -13,9 +13,11 @@ on:
         description: An existing release tag with no assets yet, such as v0.53.1
         required: true
 
-# A second build of the same tag waits for the first, then finds its assets and stops, so two runs never upload at once.
+# Release runs take turns, so a rebuild of a tag can't upload alongside the push run that is still building it; the
+# rebuild then finds the assets and stops. A newer push may replace a waiting push run, which is safe because
+# release-please works from main's current state and still releases any merged PR left pending.
 concurrency:
-  group: release-${{ inputs.tag || github.sha }}
+  group: release
   cancel-in-progress: false
 
 permissions:
