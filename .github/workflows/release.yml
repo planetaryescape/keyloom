@@ -51,6 +51,7 @@ jobs:
           - { os: macos-15, rust: aarch64-apple-darwin, bun: bun-darwin-arm64, asset: keyloom-darwin-arm64 }
           - { os: macos-15-intel, rust: x86_64-apple-darwin, bun: bun-darwin-x64, asset: keyloom-darwin-x64 }
           - { os: ubuntu-22.04, rust: x86_64-unknown-linux-musl, bun: bun-linux-x64, asset: keyloom-linux-x64 }
+          - { os: windows-2022, rust: x86_64-pc-windows-msvc, bun: bun-windows-x64, asset: keyloom-windows-x64.exe }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
@@ -64,6 +65,7 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - name: Build native locked helper
+        shell: bash
         working-directory: native/device-helper
         run: |
           rustup show
@@ -91,9 +93,17 @@ jobs:
           file native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
           if readelf -l native/device-helper/target/${{ matrix.rust }}/release/keyloom-device | grep -q INTERP; then exit 1; fi
       - name: Build the paired CLI and run the real installer smoke
+        if: runner.os != 'Windows'
         run: |
           bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --helper native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
           bun scripts/smoke-device-helper.ts dist/${{ matrix.asset }}
+      - name: Build and install the unsigned Windows pair (no devices)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          bun scripts/build-binaries.ts --target bun-windows-x64 --helper native/device-helper/target/x86_64-pc-windows-msvc/release/keyloom-device.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/smoke-windows-install.ps1 -Binary dist/keyloom-windows-x64.exe
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: keyloom-cli-${{ matrix.asset }}
@@ -101,7 +111,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  # Fan in exactly three verified binaries. Per-target builders must not overwrite the published checksum list.
+  # Fan in exactly four verified binaries. Per-target builders must not overwrite the published checksum list.
   build-binaries:
     needs: [release-please, build-native]
     if: needs.release-please.outputs.release_created == 'true'
@@ -118,14 +128,23 @@ jobs:
         run: |
           set -eu
           cd dist
-          test "$(find . -maxdepth 1 -type f -name 'keyloom-*' | wc -l)" -eq 3
-          for asset in keyloom-darwin-arm64 keyloom-darwin-x64 keyloom-linux-x64; do test -s "$asset"; done
-          sha256sum keyloom-darwin-arm64 keyloom-darwin-x64 keyloom-linux-x64 > SHA256SUMS
+          test "$(find . -maxdepth 1 -type f -name 'keyloom-*' | wc -l)" -eq 4
+          for asset in keyloom-darwin-arm64 keyloom-darwin-x64 keyloom-linux-x64 keyloom-windows-x64.exe; do test -s "$asset"; done
+          sha256sum keyloom-darwin-arm64 keyloom-darwin-x64 keyloom-linux-x64 keyloom-windows-x64.exe > SHA256SUMS
       - name: Attach binaries to the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "$TAG" dist/keyloom-* dist/SHA256SUMS --repo "$GITHUB_REPOSITORY"
+
+      - name: Record Windows signing limitation in release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body > "$RUNNER_TEMP/windows-notes.md"
+          printf '\nWindows x64: the CLI and embedded diagnostics-only helper are unsigned because no Windows code-signing credential is configured. SmartScreen or antivirus may warn or block execution; keep OS protections enabled. HID/COM, lab, build, flash, sync, kanata and serve are not available on Windows yet (rung 24f).\n' >> "$RUNNER_TEMP/windows-notes.md"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/windows-notes.md"
 
   # The desktop app (26-desktop-app.md). It wraps the binary build-binaries just attached, so it needs that job. Signing, notarising and the
   # updater each switch on when their secrets exist; without them the job still builds and uploads the app, and says what is missing.

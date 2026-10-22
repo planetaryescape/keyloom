@@ -1,3 +1,4 @@
+import { windowsUnavailable } from "../firmware/toolchain/platform-support.ts";
 // `keyloom doctor` (10): the database, the model credential, then the firmware toolchain.
 import { existsSync } from "node:fs";
 import { deviceHelperDiagnostic, type HelperDiagnostic } from "../firmware/toolchain/device-helper/diagnostics.ts";
@@ -35,7 +36,7 @@ export async function runDeviceHelperCheck(): Promise<DoctorCheck> {
       ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [${deviceHelper.capabilities.join(", ")}] (${deviceHelper.capabilities.length === 0 ? "diagnostics only" : deviceHelper.capabilities.includes("hid.open") && deviceHelper.capabilities.includes("serial.open") ? (deviceHelper.target.includes("linux") ? "native Linux candidate; hardware acceptance pending; hidraw needs a udev rule scoped to the keyboard VID/PID; ttyACM needs dialout/uucp group access" : "native backend in use") : deviceHelper.capabilities.includes("serial.open") ? "native serial candidate; hardware acceptance pending" : "native HID candidate; hardware acceptance pending"})`
       : source
         ? "not bundled in source/dev invocation; build with scripts/build-binaries.ts or install a release"
-        : `${deviceHelper.code}; reinstall this keyloom release; if the private helper cache was changed, remove that release from $XDG_CACHE_HOME/keyloom/device-helper and retry`,
+        : `${deviceHelper.code}; reinstall this keyloom release; if the private helper cache was changed, remove that release from ${windowsUnavailable() ? "%LOCALAPPDATA%\\keyloom\\device-helper" : "$XDG_CACHE_HOME/keyloom/device-helper"} and retry`,
   };
 }
 

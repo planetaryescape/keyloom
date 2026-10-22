@@ -1,3 +1,4 @@
+import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 // Use cases for a software-remapper board, the MacBook's built-in keyboard (21): apply a layout by writing kanata's file and
 // reloading it, read back what kanata runs, switch remapping off and on, and the setup doctor. No build, no flash, no sudo.
 // Tests and demos pass overrides so a temporary folder and a fake kanata stand in for the real ones.
@@ -35,6 +36,7 @@ export type RemapperOverrides = {
 export type RemapperEnv = { board: Board; rev: KanataBoardRevision; paths: RemapperPaths; deps: ApplyDeps };
 
 export function remapperEnv(boardId: string, over: RemapperOverrides = {}): RemapperEnv {
+  requirePlatformSupport("keyloom remap");
   const board = showBoard(boardId);
   if (board.definition.firmware !== "kanata") throw new UsageError(`${board.definition.name} isn't a software-remapper board`);
   const rev = kanataRevision(board.definition);

@@ -29,7 +29,7 @@ jobs:
             echo "No depcruise script yet, skipping."
           fi
 
-  # Diagnostics has no native device backend. Windows is a private child-contract check, not a release.
+  # Diagnostics has no native device backend; Windows also exercises the installed CLI.
   device-helper:
     strategy:
       fail-fast: false
@@ -38,7 +38,7 @@ jobs:
           - { os: macos-15, rust: aarch64-apple-darwin, bun: bun-darwin-arm64, exe: "" }
           - { os: macos-15-intel, rust: x86_64-apple-darwin, bun: bun-darwin-x64, exe: "" }
           - { os: ubuntu-22.04, rust: x86_64-unknown-linux-musl, bun: bun-linux-x64, exe: "" }
-          - { os: windows-2022, rust: x86_64-pc-windows-msvc, bun: "", exe: ".exe" }
+          - { os: windows-2022, rust: x86_64-pc-windows-msvc, bun: bun-windows-x64, exe: ".exe" }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
@@ -202,6 +202,17 @@ jobs:
         run: |
           bun scripts/build-binaries.ts --target "${{ matrix.bun }}" --helper native/device-helper/target/${{ matrix.rust }}/release/keyloom-device
           bun scripts/smoke-device-helper.ts dist/keyloom-${{ runner.os == 'macOS' && 'darwin' || 'linux' }}-${{ matrix.rust == 'aarch64-apple-darwin' && 'arm64' || 'x64' }}
+
+      - name: Windows extraction and workflow policy tests (no devices)
+        if: runner.os == 'Windows'
+        run: bun test test/firmware/toolchain/device-helper-windows-extract.test.ts test/cli/windows-support.test.ts
+      - name: Compile and install Windows pair outside the repo (no devices)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          bun scripts/build-binaries.ts --target bun-windows-x64 --helper native/device-helper/target/x86_64-pc-windows-msvc/release/keyloom-device.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/smoke-windows-install.ps1 -Binary dist/keyloom-windows-x64.exe
 
   # The desktop shell (26-desktop-app.md): Rust checks only; the .app itself is built by the release workflow.
   desktop:

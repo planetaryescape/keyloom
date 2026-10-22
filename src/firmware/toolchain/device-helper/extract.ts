@@ -1,3 +1,4 @@
+import { extractWindowsHelper } from "./extract-windows.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, constants, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, unlinkSync, writeFileSync, fchmodSync } from "node:fs";
 import { homedir } from "node:os";
@@ -13,10 +14,11 @@ export const manifestSchema = z.strictObject({
 });
 export type HelperManifest = z.infer<typeof manifestSchema>;
 
-export function currentTarget(): string {
-  if (process.platform === "darwin" && process.arch === "arm64") return "aarch64-apple-darwin";
-  if (process.platform === "darwin" && process.arch === "x64") return "x86_64-apple-darwin";
-  if (process.platform === "linux" && process.arch === "x64") return "x86_64-unknown-linux-musl";
+export function currentTarget(platform: NodeJS.Platform = process.platform, arch: string = process.arch): string {
+  if (platform === "darwin" && arch === "arm64") return "aarch64-apple-darwin";
+  if (platform === "darwin" && arch === "x64") return "x86_64-apple-darwin";
+  if (platform === "linux" && arch === "x64") return "x86_64-unknown-linux-musl";
+  if (platform === "win32" && arch === "x64") return "x86_64-pc-windows-msvc";
   throw new HelperFailure("helper_unavailable");
 }
 
@@ -83,6 +85,9 @@ export function extractHelper(bytes: Uint8Array, rawManifest: unknown, release: 
   const manifest = parsed.data;
   if (manifest.release !== release || manifest.target !== currentTarget()) throw new HelperFailure("version_mismatch");
   if (digest(bytes) !== manifest.sha256) throw new HelperFailure("integrity_error");
+  if (process.platform === "win32") {
+    return { path: extractWindowsHelper(bytes, manifest, base ?? process.env.LOCALAPPDATA), manifest };
+  }
   let dir = cacheBase(base ?? (process.env.XDG_CACHE_HOME || join(homedir(), ".cache")));
   dir = join(dir, "keyloom");
   directory(dir, false); // Existing general keyloom cache can be 0755.
