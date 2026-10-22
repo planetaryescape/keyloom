@@ -20,7 +20,7 @@ const isBunTarget = (value: string): value is BunTarget => Object.hasOwn(RELEASE
 
 function options(argv: string[]) {
   const targets: BunTarget[] = [];
-  let entry = "src/cli/main.ts";
+  let entry = "src/cli/compiled.ts";
   let helper: string | undefined;
   let helperDir: string | undefined;
   let outDir = "dist";

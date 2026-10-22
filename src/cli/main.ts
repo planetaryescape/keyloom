@@ -376,7 +376,8 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
   return commandResult;
 }
 
-if (import.meta.main) {
+/** Runs the CLI for this process's arguments and exits with its code. */
+export async function main(): Promise<never> {
   const code = await runCli(process.argv.slice(2));
   // On Windows a piped stdout is written asynchronously, and exiting at once loses it (seen as an
   // empty `keyloom --version`). A zero-length write's callback runs after everything queued before it.
@@ -384,3 +385,5 @@ if (import.meta.main) {
   await Promise.all([flushed(process.stdout), flushed(process.stderr)]);
   process.exit(code);
 }
+
+if (import.meta.main) await main();
