@@ -1915,3 +1915,9 @@ A later successful flash supersedes a failed sync only when every expected half 
 Kanata has loaded revisions rather than firmware builds. Its readback of the head revision supersedes a failed remapper sync, including recovery through `keyloom remap apply`. Keep this in the existing running-revision model instead of inventing build and flash rows for a remap. An older loaded revision still leaves the head failure in place.
 
 Evidence: `test/firmware/zmk/mount-binding.test.ts`, `test/app/sync-state.test.ts`, `test/app/sync-zmk.test.ts` and `test/app/remapper-sync.test.ts`. These use synthetic mounts, transports and kanata; no hardware verification is claimed.
+
+### D-439: A UF2 drive is found only once it is mounted. (2026-10-22, BK's Glove80 under v0.53.0)
+
+Refines D-438. Volume discovery under a mount root counts a label's directory only when it is on a different device from the root. macOS creates `/Volumes/<label>` on the system volume about 350 ms before it mounts the drive over it. Taking that bare directory made the first write fail with EACCES, and under D-438 it bound the flash to an identity the mount then replaced, so v0.53.0 refused every hands-free Glove80 flash before writing. The D-438 binding stays as it is; it now binds the mounted drive. The EACCES/EPERM retry stays for drives that really refuse a write. Test roots are plain folders, so the test preload turns the device check off unless a test asks for it.
+
+Evidence: `docs/issues/uf2-mount-point-taken-before-mount.md` (hardware observation and failed flash `fl_01M5HZ4V726WBAZXY47PYD9C16`) and `test/firmware/zmk/mount-binding.test.ts`.

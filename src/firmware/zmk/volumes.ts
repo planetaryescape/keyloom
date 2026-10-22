@@ -14,18 +14,35 @@ export function defaultVolumesRoot(): string {
   return process.platform === "darwin" ? "/Volumes" : `/run/media/${process.env.USER ?? ""}`;
 }
 
-async function isDir(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory();
-  } catch {
-    return false;
-  }
-}
+export type VolumeFinderOptions = {
+  /** Only count a directory on a different device from `root`, so a mount point is a volume once it is mounted. Default true. */
+  mountedOnly?: boolean;
+};
 
 /** Volumes are directories named by label under `root`. */
-export function volumeFinderAt(root: string): VolumeFinder {
+export function volumeFinderAt(root: string, opts: VolumeFinderOptions = {}): VolumeFinder {
   const base = resolve(root);
+  const mountedOnly = opts.mountedOnly ?? true;
+  // macOS creates /Volumes/<label> on the system volume about 350 ms before the drive is mounted over it. Taking the bare
+  // directory meant writing into it (EACCES) and binding the flash to an identity the mount then replaced (BK's Glove80,
+  // 2026-10-22, docs/issues/uf2-mount-point-taken-before-mount.md).
+  const isVolume = async (path: string, rootDev: number | undefined): Promise<boolean> => {
+    try {
+      const st = await stat(path);
+      return st.isDirectory() && (!mountedOnly || st.dev !== rootDev);
+    } catch {
+      return false;
+    }
+  };
   return async (label) => {
+    const rootDev = mountedOnly
+      ? (await stat(base).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT" || err.code === "ENOTDIR") return undefined;
+        throw err;
+      }))?.dev
+      : undefined;
+    // Without the root's device nothing can be told apart from a bare mount point, so nothing is mounted yet.
+    if (mountedOnly && rootDev === undefined) return null;
     const names = await readdir(base).catch((err: NodeJS.ErrnoException) => {
       if (err.code === "ENOENT") return [];
       throw err;
@@ -35,7 +52,7 @@ export function volumeFinderAt(root: string): VolumeFinder {
       // macOS appends a number when another drive with the same label is mounted.
       if (name !== label && !(name.startsWith(`${label} `) && /^\d+$/.test(name.slice(label.length + 1)))) continue;
       const path = join(base, name);
-      if (await isDir(path)) matches.push(path);
+      if (await isVolume(path, rootDev)) matches.push(path);
     }
     if (matches.length > 1) throw new Error(`Ambiguous boot drive ${label}: multiple mounts (${matches.join(", ")}). Disconnect the extra drive before retrying.`);
     return matches[0] ?? null;
