@@ -274,7 +274,8 @@ export function zmkHandsFreeHooks(input: {
     const images = new Map<HalfTarget, Uint8Array>();
     hooks.verify = async (step, _index, image) => {
       const target = forStep(step);
-      if (!target) return { ok: true, message: `the ${step.label} was written` };
+      // The recipe schema requires every step to map to a half; never report an unmapped one as verified.
+      if (!target) return { ok: false, error: `the ${step.label} was written, but its recipe has no hands-free half to verify it against` };
       const result = await verifyHalf({ deps: input.deps, target, steps: input.steps, buildId: input.buildId, log: input.log });
       if (result.ok) images.set(target, image);
       return result;

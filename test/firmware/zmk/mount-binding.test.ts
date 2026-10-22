@@ -125,7 +125,11 @@ test("a drive the bootloader takes away after a complete write goes on to verifi
   const s = await setup();
   const lines: string[] = [];
   let writes = 0;
-  const result = await s.flash({ onLine: (line) => lines.push(line), writeImage: async (path, bytes) => {
+  let verified = 0;
+  const result = await s.flash({ onLine: (line) => lines.push(line), hooks: {
+    enterBootloader: async () => ({ ok: true }), peersRunning: async () => true,
+    verify: async (step) => { verified++; return { ok: true, message: `the ${step.label} is running the new build` }; },
+  }, writeImage: async (path, bytes) => {
     writes++;
     await writeFile(path, bytes);
     // The bootloader takes the drive as soon as the image is in; the next half's drive appears a moment later.
@@ -133,13 +137,21 @@ test("a drive the bootloader takes away after a complete write goes on to verifi
     if (writes === 1) setTimeout(() => mkdirSync(s.mount), 30);
   } });
   expect(writes).toBe(2);
+  // Each half reached its verification hook after its drive went away.
+  expect(verified).toBe(2);
   expect(result.state).toBe("succeeded");
   expect(lines.join("\n")).toContain("verifying instead of syncing it");
 });
 
 test("a replacement mount after a complete write is never opened or synced", async () => {
   const s = await setup();
-  const result = await s.flash({ writeImage: async (path, bytes) => { await writeFile(path, bytes); s.swap(); } });
+  let verified = 0;
+  const result = await s.flash({ hooks: {
+    enterBootloader: async () => ({ ok: true }), peersRunning: async () => true,
+    verify: async () => { verified++; return { ok: true, message: "verified" }; },
+  }, writeImage: async (path, bytes) => { await writeFile(path, bytes); s.swap(); } });
+  // A replacement that stays mounted never took a file, so nothing reaches verification as written.
+  expect(verified).toBe(0);
   // The replacement stays mounted, so the bootloader never took a file there and the flash fails instead of succeeding.
   expect(result.state).toBe("failed");
   expect(existsSync(join(s.mount, "glove80.uf2"))).toBe(false);

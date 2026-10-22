@@ -148,3 +148,16 @@ describe("geometry follows the recipe", () => {
     expect(asked).toContain("/app/dts/layouts/vendor/board/layout.dtsi");
   });
 });
+
+describe("hands-free recipes map every flash step", () => {
+  test("a hands-free half missing for one step is an error, so no step goes unverified", async () => {
+    const { Uf2DrivesFlashSchema } = await import("../../src/boards/recipes.ts");
+    const board = await Bun.file(`${import.meta.dir}/../../boards/moergo/glove80/board.json`).json();
+    const flash = board.revisions[0].flash;
+    expect(Uf2DrivesFlashSchema.safeParse(flash).success).toBe(true);
+    const partial = { ...flash, handsFree: { ...flash.handsFree, halves: flash.handsFree.halves.slice(0, 1) } };
+    const parsed = Uf2DrivesFlashSchema.safeParse(partial);
+    expect(parsed.success).toBe(false);
+    expect(JSON.stringify(parsed.error?.issues)).toContain("every flash step must have a handsFree half");
+  });
+});
