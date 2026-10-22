@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { runKeyboardChecks } from "../../src/app/doctor.ts";
+import { rawHidFinding, type AttachedKeyboard } from "../../src/app/keyboard.ts";
 import { runningKeyboard } from "../helpers/fake-hid.ts";
 import type { HidTransport } from "../../src/firmware/toolchain/hid.ts";
 import type { SerialTransport } from "../../src/firmware/toolchain/serial.ts";
@@ -16,6 +17,64 @@ test("doctor names denied hidraw access and scopes its remedy without opening th
   expect(check?.detail).toContain("hidraw read/write permission denied");
   expect(check?.detail).toContain("VID 0x3297 and PID 0x1969");
   expect(check?.detail).toContain("udev rule");
+});
+
+const moonlander = (firmware: AttachedKeyboard["firmware"]): AttachedKeyboard => ({
+  boardId: "zsa/moonlander", boardName: "Moonlander", revisionId: "reva",
+  identity: { vendorId: "0x3297", productId: "0x1969", name: "Moonlander" }, target: undefined, firmware,
+});
+
+test("doctor uses the matching USB serial when identical raw HID endpoints disagree", async () => {
+  const result = await rawHidFinding({
+    usb: async () => [],
+    hid: async () => ({
+      list: async () => [
+        { vendorId: 0x3297, productId: 0x1969, serial: "another-board", handle: "denied", permissionDenied: true },
+        { vendorId: 0x3297, productId: 0x1969, serial: "keyloom/AAAAAAAAAAAA", handle: "readable" },
+      ],
+      write: async () => {}, openSession: async () => ({ write: () => {}, close: () => {} }),
+    }),
+  }, moonlander({ state: "keyloom", serial: "keyloom/AAAAAAAAAAAA" }));
+  expect(result).toBe("its raw HID interface is visible");
+});
+
+test("doctor falls back to VID/PID when the keyboard has no serial", async () => {
+  const result = await rawHidFinding({
+    usb: async () => [],
+    hid: async () => ({
+      list: async () => [
+        { vendorId: 0x3297, productId: 0x1969, handle: "first", permissionDenied: true },
+        { vendorId: 0x3297, productId: 0x1969, handle: "second", permissionDenied: true },
+      ],
+      write: async () => {}, openSession: async () => ({ write: () => {}, close: () => {} }),
+    }),
+  }, moonlander({ state: "other", serial: undefined }));
+  expect(result).toContain("hidraw read/write permission denied");
+});
+
+test("doctor reports disagreement when VID/PID fallback endpoints have different permissions", async () => {
+  const endpoints = [
+    { vendorId: 0x3297, productId: 0x1969, serial: "different-board", handle: "denied", permissionDenied: true as const },
+    { vendorId: 0x3297, productId: 0x1969, serial: "other-board", handle: "readable" },
+  ];
+  const result = await rawHidFinding({
+    usb: async () => [],
+    hid: async () => ({
+      list: async () => endpoints,
+      write: async () => {}, openSession: async () => ({ write: () => {}, close: () => {} }),
+    }),
+  }, moonlander({ state: "keyloom", serial: "keyloom/AAAAAAAAAAAA" }));
+  expect(result).toContain("one of the identical boards isn't readable");
+  expect(result).toContain("hidraw read/write permission denied");
+
+  const reversed = await rawHidFinding({
+    usb: async () => [],
+    hid: async () => ({
+      list: async () => [...endpoints].reverse(),
+      write: async () => {}, openSession: async () => ({ write: () => {}, close: () => {} }),
+    }),
+  }, moonlander({ state: "keyloom", serial: "keyloom/AAAAAAAAAAAA" }));
+  expect(reversed).toBe(result);
 });
 
 test("doctor names denied ttyACM access and the distro group remedy without opening or touching", async () => {

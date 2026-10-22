@@ -169,7 +169,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
     ...(files.keymapJson === undefined ? [] : [wholeFile("keymap.json", files.keymapJson)]),
   ];
 
-  const numbered = await annotateQmkLayerRefs({ layers, combos, passthrough: kept }, layerIds);
+  const numbered = await annotateQmkLayerRefs({ layers, combos, passthrough: kept }, layerIds, new Set(parsed.layerNames));
   const passthrough = numbered.passthrough;
 
   const layout = LayoutSchema.parse({

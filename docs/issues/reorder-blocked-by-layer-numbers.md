@@ -7,4 +7,7 @@ Deleting a layer the code or a kept key names is still refused, now naming that 
 What is left:
 
 - Layouts stored before the numbers were read are read at startup (D-378, `src/app/layer-ref-backfill.ts`), as one revision each. A define that only the modelled keys use (the template's `DEFAULT`, `FACTORY_TEST`) has no kept code to renumber, so it is left as written; the keys are written by number and nothing reads it. A layout whose board is missing or whose head moved during the read is left alone and tried at the next start.
-- Only the positions listed in [07](../blueprint/07-change-validation.md#layer-numbers-in-kept-code) are read. A layer behaviour that is not in the lists and not a kept hold-tap holding with `&mo`-style behaviours is not seen, and its number is left alone. That is a silent miss; adding the name to the table in `src/firmware/zmk/layer-refs.ts` or `src/firmware/qmk/layer-refs.ts` fixes it.
+
+Status: fixed on branch fix/layer-ref-coverage.
+
+The importer now tracks QMK `PDF` and `set_single_default_layer`, ZMK custom layer behaviours, sticky-key bindings to layer behaviours, and layer calls inside macro bindings. Unknown QMK calls that receive a layer enum name are recorded as line-specific refusals. `test/firmware/qmk/layer-refs.test.ts` and `test/firmware/zmk/layer-refs.test.ts` cover the source cases; the D-378 backfill limitation above remains.
