@@ -77,7 +77,7 @@ release-please owns versions, tags and `CHANGELOG.md`. Never push a tag by hand.
 2. release-please opens or updates a release PR. The default token starts no `pull_request` run for it, so `release.yml`'s `ci-on-release-pr` job dispatches `ci.yml` on the PR branch. The merge gate is that dispatched run's success on the PR head.
 3. Merging the PR tags the release. `build-binaries` builds `darwin-arm64`, `darwin-x64` and `linux-x64`, writes `SHA256SUMS` and attaches them.
    If release-please creates the release but its job then fails, the builds are skipped and the release has no assets. Build it with `gh workflow run release.yml --ref main -f tag=vX.Y.Z`; a release that already has assets is refused.
-   Only BK can write to the repo, so the publishing jobs have no approval gate. Before anyone else gets write access, put `build-binaries` and `build-desktop` behind a protected environment: a branch can carry an edited copy of `release.yml` that skips the main-only check.
+   Only BK can write to the repo, so the publishing jobs have no approval gate. A branch can carry an edited copy of `release.yml` that drops the main-only check, and any `environment:` key along with it. Before anyone else gets write access, move the signing secrets from repository secrets into a `release` environment whose deployment branches are limited to main, so a branch copy runs without them. Also require approval on that environment.
 4. `install.sh` installs the latest release, or `--version vX.Y.Z`, and checks the checksum. Verify a release by installing it and running `keyloom --version`.
 
 ## Issues
