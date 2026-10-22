@@ -15,8 +15,17 @@ export type CapturedTrace = {
   endedBy: string;
 };
 
+// QMK's legacy warnings are from 994911d; ZMK's unprefixed drop and early-end warnings are from b475178^ (also 3bf16e4^).
+const LEGACY_INCOMPLETE_WARNINGS = [
+  /^\d+ report\(s\) from the keyboard never arrived(?:,|$)/,
+  /^the keyboard dropped \d+ event\(s\)(?: |$)/,
+  /^the keyboard ended the stream early:/,
+];
+
 /** Persisted warning marker, shared by analysis refusal and CLI summaries. */
-export const incompleteRecording = (warnings: readonly string[]): boolean => warnings.some((warning) => warning.startsWith("Recording incomplete:"));
+export const incompleteRecording = (warnings: readonly string[]): boolean => warnings.some((warning) =>
+  warning.startsWith("Recording incomplete:") || LEGACY_INCOMPLETE_WARNINGS.some((pattern) => pattern.test(warning)),
+);
 
 export type KeyCapture = {
   /** The events so far, in order. */

@@ -14,9 +14,15 @@ async function read(source: string, kind: QmkSite["kind"] = "code") {
 
 describe("QMK layer numbers in kept C", () => {
   test("the layer argument of layer keycodes and layer functions is renumbered, and the key argument is not", async () => {
-    const r = await read("x = LT(2, KC_1); y = MO(1); z = TO(4); w = OSL(3); layer_move(5); layer_on(0); IS_LAYER_ON(2);");
-    expect(r.out).toBe("x = LT(3, KC_1); y = MO(4); z = TO(1); w = OSL(2); layer_move(0); layer_on(5); IS_LAYER_ON(3);");
+    const r = await read("x = LT(2, KC_1); y = MO(1); z = TO(4); w = OSL(3); layer_move(5); layer_on(0); IS_LAYER_ON(2); PDF(1); set_single_default_layer(4);");
+    expect(r.out).toBe("x = LT(3, KC_1); y = MO(4); z = TO(1); w = OSL(2); layer_move(0); layer_on(5); IS_LAYER_ON(3); PDF(4); set_single_default_layer(1);");
     expect(r.unprovable).toEqual([]);
+  });
+
+  test("an unknown function receiving a resolved enum layer name refuses a reorder on its line", async () => {
+    const source = "void f(void) {\n  my_fn(_NAV);\n  toString(_NAV);\n}";
+    const found = (await readQmkLayerRefs([{ site: "s", source, kind: "code" }], ids, new Set(["NAV"]))).get("s");
+    expect(found?.unprovable).toEqual([{ line: 2, text: "my_fn(_NAV);" }, { line: 3, text: "toString(_NAV);" }]);
   });
 
   test("a layer after a state argument, and the layers of a tri-layer, are renumbered", async () => {

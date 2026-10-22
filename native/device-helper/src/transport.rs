@@ -455,11 +455,19 @@ impl Transport {
                 };
                 let close = method == "session.close";
                 let mut state = self.state.lock().unwrap();
-                let transport = state
-                    .sessions
-                    .get(session)
-                    .map(|c| c.transport)
-                    .unwrap_or("hid");
+                let known_transport = state.sessions.get(session).map(|c| c.transport);
+                if !close && known_transport.is_none() {
+                    let valid_shape = match params.as_object().map(|p| p.len()) {
+                        Some(2) => payload(params, "serial").is_some(),
+                        Some(3) => payload(params, "hid").is_some(),
+                        _ => false,
+                    };
+                    if valid_shape {
+                        self.output.reply(fail(&id, "invalid_session", "none"));
+                        return;
+                    }
+                }
+                let transport = known_transport.unwrap_or("hid");
                 if params.as_object().is_none_or(|p| {
                     p.len()
                         != if close {
@@ -807,6 +815,40 @@ fn lease(key: &str) -> Result<crate::windows_io::Lease, &'static str> {
 #[cfg(test)]
 mod frame_tests {
     use super::*;
+    #[test]
+    fn unknown_session_write_shapes_and_malformed_payloads_keep_their_errors() {
+        let (control, replies) = mpsc::sync_channel(8);
+        let (data, _events) = mpsc::sync_channel(8);
+        let output = Output {
+            control,
+            data,
+            serial_queued: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            pending: Arc::new(Mutex::new(HashSet::new())),
+            control_frames: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        };
+        let transport = Transport::new(vec![], output);
+        let cases = [
+            (
+                json!({"sessionId":"expired", "bytes":STANDARD.encode([1u8])}),
+                "invalid_session",
+            ),
+            (
+                json!({"sessionId":"expired", "bytes":STANDARD.encode([0u8; 32]), "reportId":0}),
+                "invalid_session",
+            ),
+            (
+                json!({"sessionId":"expired", "bytes":"not-base64"}),
+                "invalid_request",
+            ),
+            (json!({"sessionId":"expired", "bytes":1}), "invalid_request"),
+        ];
+        for (params, expected_code) in cases {
+            transport.handle("write".into(), "session.write", &params);
+            let reply = replies.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert_eq!(reply.values[0]["error"]["code"], expected_code);
+            assert_eq!(reply.values[0]["error"]["effect"], "none");
+        }
+    }
     #[test]
     fn open_and_touch_failure_preserve_native_effect_on_the_wire() {
         struct FailedOpen(crate::serial::SerialEndpoint, bool);
