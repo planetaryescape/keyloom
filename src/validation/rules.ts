@@ -4,10 +4,12 @@
 import { lightingRefusal } from "../boards/capabilities.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
+import { keptDefinitions } from "../layout/kept-behaviours.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
+import { readNative } from "../layout/native-read.ts";
 import type { Issue } from "./result.ts";
 import { conditionalLayerRules } from "./conditional-layer-rules.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
@@ -273,13 +275,18 @@ const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b
  * key", which is a replacement by a different native binding. No op edits `passthrough`, so a
  * difference there can only be a bug; it is checked anyway because the cost of missing it is a
  * keymap that silently stops matching its custom C.
+ *
+ * A new native is allowed when it is the layout's own firmware and keyloom reads its meaning (native-read.ts): a shift, a
+ * caps word or a lighting key that a copy translated (D-443), or one an agent asks for. Source keyloom can't read stays refused.
  */
 export function nativeEdit(before: Layout, after: Layout): Issue[] {
   const known = new Set<string>();
   for (const { binding: b } of bindingsOf(before)) if (b.kind === "native") known.add(nativeKey(b));
+  const kept = keptDefinitions(after.passthrough);
+  const understood = (b: Extract<Binding, { kind: "native" }>) => b.firmware === after.firmware && readNative(b, kept).kind !== "unknown";
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
-    if (b.kind === "native" && !known.has(nativeKey(b))) {
+    if (b.kind === "native" && !known.has(nativeKey(b)) && !understood(b)) {
       out.push(issue("native_edit", `${where}: ${b.source} is firmware source keyloom did not import; replace the key with a modelled binding instead`,
         `${slot ? keyOn(after, slot) : "A key"} would get custom behaviour keyloom didn't import and can't write. Use a regular key instead.`, slotOf(slot)));
     }

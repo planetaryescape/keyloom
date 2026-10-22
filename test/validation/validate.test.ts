@@ -353,7 +353,13 @@ describe("validate: native_edit", () => {
   test("it can't be replaced by native source keyloom never imported, even at the same slot", () => {
     const [e] = errorsOf([set("base", 3, native("TD(DANCE_9)"))], withNative());
     expect(e).toMatchObject({ code: "native_edit", slots: [at("base", 3)] });
-    expect(codes(errorsOf([set("base", 0, native("RGB_TOG"))], withNative()))).toEqual(["native_edit"]);
+    expect(codes(errorsOf([set("base", 0, native("DUAL_FUNC_9"))], withNative()))).toEqual(["native_edit"]);
+  });
+
+  test("a native keyloom reads on the layout's own firmware can be added, as a copy translates one (D-443)", () => {
+    expect(errorsOf([set("base", 0, native("RGB_TOG"))], withNative())).toEqual([]);
+    // Another firmware's native is still refused as an edit (and as an unsupported firmware).
+    expect(codes(errorsOf([set("base", 0, { kind: "native", firmware: "zmk", source: "&caps_word", label: "CapsW" })], withNative()))).toContain("native_edit");
   });
 
   test("writing the same native binding back is not an edit", () => {
@@ -367,7 +373,7 @@ describe("validate: native_edit", () => {
   });
 
   test("a combo can't output new native source", () => {
-    const combo = { id: "c", name: "C", positions: [2, 3], layerIds: "all" as const, output: native("RGB_TOG") };
+    const combo = { id: "c", name: "C", positions: [2, 3], layerIds: "all" as const, output: native("DUAL_FUNC_9") };
     expect(codes(errorsOf([{ op: "upsertCombo", combo }]))).toEqual(["native_edit"]);
   });
 });

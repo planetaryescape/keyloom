@@ -10,6 +10,7 @@ import { markerName, withHeader } from "./header.ts";
 import { chord, keyName, modAction, safeName, textMacroItems } from "../../layout/kanata/names.ts";
 import { ONE_SHOT_MS, nativeAction } from "../../layout/kanata/natives.ts";
 import { isOppositeHand, readKanataProfile, tapHoldAction } from "../../layout/kanata/profiles.ts";
+import { keptDefinitions } from "../../layout/kept-behaviours.ts";
 
 export { GenerateError } from "../../layout/kanata/generate-error.ts";
 
@@ -67,12 +68,16 @@ class Emitter {
   usesSameHand = false;
   usesHands = false;
   private counter = 0;
+  /** The layout's kept ZMK behaviours, read once for every native key the generator writes. */
+  private readonly kept: ReturnType<typeof keptDefinitions>;
 
   constructor(
     readonly layout: Layout,
     readonly board: BoardDefinition,
     readonly phys: PhysicalKey[],
-  ) {}
+  ) {
+    this.kept = keptDefinitions(layout.passthrough);
+  }
 
   private alias(text: string, comment: string): string {
     const found = this.aliases.get(text);
@@ -147,7 +152,7 @@ class Emitter {
       case "tapDance": return `@td-${safeName(this.dance(b.tapDanceId, where).id)}`;
       case "transparent": return wayBack ?? "_";
       case "none": return "XX";
-      case "native": return nativeAction(b.firmware, b.source, where);
+      case "native": return nativeAction(b.firmware, b.source, where, this.kept);
     }
   }
 
