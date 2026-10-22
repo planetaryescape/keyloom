@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.50.0](https://github.com/planetaryescape/keyloom/compare/v0.49.0...v0.50.0) (2026-10-22)
+
+
+### Features
+
+* add a native Linux device helper candidate ([a050189](https://github.com/planetaryescape/keyloom/commit/a050189f6695ba923339db8fb7b99a2ec649fd55))
+
 ## [0.49.0](https://github.com/planetaryescape/keyloom/compare/v0.48.1...v0.49.0) (2026-10-22)
 
 
