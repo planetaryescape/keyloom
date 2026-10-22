@@ -62,7 +62,7 @@ try {
     foreach ($parent in $parents) {
         if (-not $parent.child.WaitForExit(60000)) { $parent.child.Kill(); throw 'concurrent doctor timed out' }
         $cold = Get-Content -LiteralPath $parent.stdout -Raw | ConvertFrom-Json
-        if ($parent.child.ExitCode -ne 0 -or -not $cold.ok -or $cold.checks[0].deviceHelper.capabilities.Count -ne 0) { throw "concurrent extraction failed: $(Get-Content -LiteralPath $parent.stderr -Raw)" }
+        if ($parent.child.ExitCode -ne 0 -or -not $cold.ok -or $cold.checks[0].deviceHelper.capabilities.Count -ne 0) { throw "concurrent extraction failed: exit $($parent.child.ExitCode) stdout $(Get-Content -LiteralPath $parent.stdout -Raw) stderr $(Get-Content -LiteralPath $parent.stderr -Raw)" }
     }
     $doctor = Invoke-Keyloom @('--data-dir', $data, 'doctor', '--device-helper-only', '--format', 'json') | ConvertFrom-Json
     $info = $doctor.checks[0].deviceHelper
