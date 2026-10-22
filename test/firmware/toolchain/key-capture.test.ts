@@ -137,6 +137,13 @@ describe("recording from a Moonlander", () => {
     await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [moonlanderInterface(), moonlanderInterface("keyloom/ABCDEFGHJKMN")] }).transport)).rejects.toThrow("more than one");
     await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [{ ...moonlanderInterface(), vendorId: 0x1234 }] }).transport)).rejects.toThrow(CaptureError);
   });
+
+  test("a second ZSA device with a failed raw-HID driver doesn't block the healthy keyloom Moonlander", async () => {
+    const failed = { ...moonlanderInterface("QxKPz/zLQ3Md"), handle: "", driverMissing: true as const };
+    expect((await findQmkStreamDevice(fakeMoonlander({ interfaces: [failed, moonlanderInterface()] }).transport)).handle).toBe("fake-hid-1");
+    // With only the failed one attached, the driver is the answer.
+    await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [failed] }).transport)).rejects.toThrow(CaptureError);
+  });
 });
 
 describe("recording from a Glove80", () => {

@@ -89,7 +89,7 @@ Still open:
 
 ## Slice 2 implements the native candidate without hardware evidence
 
-Status: implemented, uncommitted worker changes on `feat/device-helper-windows`, based on `8b030a91b95331a8512f2eb78d1e3cbd47396508` (PR 154), macOS arm64, 2026-10-22. D-436 records the design. The separate `windows-2022` candidate job has not run for these changes. No Windows runtime or physical device result is claimed.
+Status: slice 2 is PR 157 on `feat/device-helper-windows`, on top of v0.51.0 (`583e39b`). D-436 records the design. The windows-2022 candidate CI job passes: Windows-target clippy and tests, an installed candidate doctor with all seven capabilities, and a synthetic installed HID and COM lab journey with four saved sessions, 1200/1201 touch and reboot-only (run 39768218181, before the round-1 fixes; the merged head's run is the evidence of record). No Windows hardware has been observed; S61 is open.
 
 ### The explicit build keeps ordinary releases diagnostics-only
 
@@ -141,7 +141,7 @@ The isolated manifest lives at `/tmp/keyloom-stage8-check/native/device-helper/C
 
 Not observed: Windows linking or test execution, PowerShell smoke execution, a built/installed candidate's doctor, the installed synthetic lab journey, Windows named-mutex behavior, actual SetupAPI/CfgMgr/registry results, HID caps/serial correctness, COM driver binding/occupancy, overlapped completion/cancellation on Windows, DCB/DTR behavior, executable/pipe cleanup or resource measurements. All Windows source paths and unit-test bodies cross-compiled under the provisional graph; the complete repository-locked Windows build did not compile locally. No Windows transport path ran. No Ctrl-C, ConPTY, helper/parent death, suspend/resume or physical firmware effect was tested by this slice's installed journey.
 
-Next action for the orchestrator: inspect the uncommitted diff and `/tmp/keyloom-stage8-worker-report.md`, commit under BK's authorship, refresh/rebase the release-only main change, then push and iterate on the `device-helper-windows-candidate` CI job. Keep ordinary Windows releases diagnostics-only. After native CI passes, arrange a separately authorized S61 Windows run covering collection/USB identity, COM10+/renumbering, missing drivers and busy ports, capture/stop/reopen, unplug/kill and firmware-observed 1200/1201 effects. A scripted terminal or successful setter does not close S61.
+Codex review rounds 1 and 2 found three driver-diagnostic cases where a failed driver hid a usable keyboard or a missing raw-HID interface. Each is fixed with a regression test: admitted raw-HID collections only, ZMK central selection, and QMK selection. A diagnostic record is never a touch target.
 
 
 ### Round 1 keeps diagnostics out of endpoint selection
@@ -150,4 +150,4 @@ Uncommitted fixes over PR 157 candidate HEAD `4cee1d6ca18e432d083bef7286aa2528b6
 
 Local macOS arm64 verification passed against the unchanged repository lock: Windows native check; all-target clippy with `-D warnings` for Windows native/synthetic, Linux musl native and macOS native; 42 native-macos unit tests; 98 focused Bun tests; TypeScript; Cargo fmt. Pueue and sccache sockets were sandbox-blocked; checks used the original isolated Cargo cache with five workers and sccache disabled. Exact commands, red/green logs and message quotes are in `/tmp/keyloom-stage8-fix-report.md`. No physical devices or installed Windows binaries were exercised.
 
-Next action: review the uncommitted round-1 diff and report, then have the orchestrator commit and run PR 157's Windows candidate CI. Remote refresh remains blocked here by shared Git metadata permissions and GitHub DNS resolution. The pinned source checks do not establish Windows runtime or S61 hardware acceptance. No local validation failure remains.
+Next action: S61 on a Windows x64 machine with a Moonlander and a Glove80. Run the candidate's doctor, lab capture, stop and reopen, unplug, helper death, and a busy COM port, then `flash --reboot-only` with a separate permission. Only after that does the candidate become the Windows default.
