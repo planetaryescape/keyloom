@@ -377,5 +377,10 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
 }
 
 if (import.meta.main) {
-  process.exit(await runCli(process.argv.slice(2)));
+  const code = await runCli(process.argv.slice(2));
+  // On Windows a piped stdout is written asynchronously, and exiting at once loses it (seen as an
+  // empty `keyloom --version`). A zero-length write's callback runs after everything queued before it.
+  const flushed = (stream: NodeJS.WriteStream) => new Promise<void>((resolve) => stream.write("", () => resolve()));
+  await Promise.all([flushed(process.stdout), flushed(process.stderr)]);
+  process.exit(code);
 }
