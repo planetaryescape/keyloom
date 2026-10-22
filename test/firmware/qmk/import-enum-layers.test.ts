@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { loadBoardDir } from "../../../src/boards/load.ts";
 import { ImportError, importOryxSource, importQmkSource } from "../../../src/firmware/qmk/import.ts";
+import { validate } from "../../../src/validation/validate.ts";
 import { MOONLANDER_DIR } from "../../helpers/board.ts";
 import { templateCopy } from "../../helpers/board-recipes.ts";
 
@@ -47,6 +48,15 @@ describe("enum layer names", () => {
     expect(layout.layers.map((l) => l.name)).toEqual(["BASE", "FN", "SYM", "NAV"]);
     expect(JSON.stringify(layout.layers[0]?.bindings)).toContain("layer-2");
     expect(JSON.stringify(layout.layers[2]?.bindings)).toContain("layer-3");
+  });
+
+  test("a kept call receiving an enum layer name refuses a reorder and names its line", async () => {
+    const src = `${keymap("enum layers { _BASE, _NAV, _FN };", [layer("_BASE", "KC_A", "KC_B"), layer("_NAV", "KC_C", "KC_D"), layer("_FN", "KC_E", "KC_F")].join("\n"))}\nvoid f(void) {\n  my_fn(_NAV);\n}`;
+    const { layout } = await importQmkSource({ name: "t", keymapC: src }, await template());
+    const result = validate(await template(), layout, [{ op: "moveLayer", layerId: "layer-2", afterLayerId: "layer-0" }]);
+    const issue = result.errors.find((e) => e.code === "passthrough_layer_index");
+    expect(layout.passthrough.filter((p) => p.source.includes("my_fn"))).toHaveLength(1);
+    expect(issue?.message ?? "").toContain("line 2 (my_fn(_NAV);)");
   });
 
   test("numbers keep working, and a mix of numbers and names names no layers", async () => {
