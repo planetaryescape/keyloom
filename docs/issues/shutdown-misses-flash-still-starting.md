@@ -8,4 +8,6 @@ The window is a few milliseconds, and `serve.ts` stops accepting HTTP requests b
 
 Register the start before `startFlash`'s first await, for example as a pending entry that the drain also waits for, and refuse new manual flashes once shutdown has begun. The test should call `startFlash` without awaiting it, start the drain, and then let the artifact check resolve. The existing test in `test/app/firmware.test.ts` awaits `startFlash` first, so it can't see this window.
 
-Not fixed: raised by the third independent Codex review of PR 141 on 2026-10-21. Triaged as should-fix: the window is narrow, the gap predates the PR, and the review rounds were finding progressively narrower cases.
+Status: fixed on branch fix/shutdown-flash-drain. Starts register before the artifact check, and shutdown closes admission before waiting for pending starts and running flash tasks. `test/app/firmware-shutdown.test.ts` covers the pending-start window, final callback completion, refused late requests and failed artifact checks.
+
+Raised by the third independent Codex review of PR 141 on 2026-10-21. Triaged as should-fix: the window is narrow, the gap predates the PR, and the review rounds were finding progressively narrower cases.

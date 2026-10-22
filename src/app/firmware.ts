@@ -71,6 +71,9 @@ const flashInstructions = new Map<string, string | null>();
 
 const buildTasks = new Map<string, Promise<void>>();
 const flashTasks = new Map<string, Promise<void>>();
+// Shutdown belongs to one App: serve's stop must not refuse flashes for another App in the same process, such as a test run's.
+const pendingFlashStarts = new WeakMap<App, Set<Promise<void>>>();
+const drainingApps = new WeakSet<App>();
 
 const absolute = (app: App, rel: string): string => join(app.dataDir, rel);
 
@@ -349,32 +352,45 @@ function chooseBuild(app: App, opts: FlashOptions): BuildRow {
 
 /** Starts flashing a successful build and returns the flash at once, waiting for the bootloader. */
 export async function startFlash(app: App, opts: FlashOptions): Promise<FlashView> {
-  requirePlatformSupport("keyloom flash");
-  const build = chooseBuild(app, opts);
-  if (build.status !== "succeeded" || build.artifactPath === null) {
-    throw new UsageError(`build ${build.id} is ${build.status}${build.error ? ` (${build.error})` : ""}; only a successful build can be flashed`);
+  if (drainingApps.has(app)) throw new UsageError("keyloom is shutting down; no new flashes can start");
+  const pending = Promise.withResolvers<void>();
+  const starts = pendingFlashStarts.get(app) ?? new Set<Promise<void>>();
+  pendingFlashStarts.set(app, starts);
+  starts.add(pending.promise);
+  try {
+    requirePlatformSupport("keyloom flash");
+    const build = chooseBuild(app, opts);
+    if (build.status !== "succeeded" || build.artifactPath === null) {
+      throw new UsageError(`build ${build.id} is ${build.status}${build.error ? ` (${build.error})` : ""}; only a successful build can be flashed`);
+    }
+    const artifact = absolute(app, build.artifactPath);
+    if (!(await Bun.file(artifact).exists())) throw new UsageError(`build ${build.id}'s file ${artifact} is gone; build it again`);
+
+    const busy = activeFlashes(app.db).map((f) => reapFlash(app, f)).find((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
+    if (busy) throw new UsageError(`flash ${busy.id} is already in progress; wait for it to finish`);
+
+    const layout = findLayoutRow(app.db, build.layoutId);
+    const board = showBoard(layout?.boardId ?? "");
+
+    const id = newFlashId();
+    const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });
+    // A longer wait was asked for, so the first instruction says so rather than the default.
+    if (opts.bootloaderWaitMs !== undefined && board) flashInstructions.set(id, driverFor(board).waitingInstruction(board, opts.bootloaderWaitMs));
+    const task = runFlash(app, row, board, build.boardRevision, artifact, opts);
+    flashTasks.set(id, task);
+    void task.finally(() => flashTasks.delete(id));
+    return toFlashView(app, row);
+  } finally {
+    starts.delete(pending.promise);
+    pending.resolve();
   }
-  const artifact = absolute(app, build.artifactPath);
-  if (!(await Bun.file(artifact).exists())) throw new UsageError(`build ${build.id}'s file ${artifact} is gone; build it again`);
-
-  const busy = activeFlashes(app.db).map((f) => reapFlash(app, f)).find((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
-  if (busy) throw new UsageError(`flash ${busy.id} is already in progress; wait for it to finish`);
-
-  const layout = findLayoutRow(app.db, build.layoutId);
-  const board = showBoard(layout?.boardId ?? "");
-
-  const id = newFlashId();
-  const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });
-  // A longer wait was asked for, so the first instruction says so rather than the default.
-  if (opts.bootloaderWaitMs !== undefined && board) flashInstructions.set(id, driverFor(board).waitingInstruction(board, opts.bootloaderWaitMs));
-  const task = runFlash(app, row, board, build.boardRevision, artifact, opts);
-  flashTasks.set(id, task);
-  void task.finally(() => flashTasks.delete(id));
-  return toFlashView(app, row);
 }
 
-/** Waits for every flash currently running in this process to finish, without surfacing task failures. */
-export async function drainManualFlashTasks(): Promise<void> {
+/** Refuses new flashes and waits for accepted starts and running flashes, without surfacing task failures. */
+export async function drainManualFlashTasks(app: App): Promise<void> {
+  drainingApps.add(app);
+  // Accepted starts can register tasks after their artifact check; settle them before taking the task snapshot.
+  await Promise.allSettled([...(pendingFlashStarts.get(app) ?? [])]);
   await Promise.allSettled([...flashTasks.values()]);
 }
 

@@ -85,7 +85,8 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   const { model, ...reviewOptions } = opts.review ?? {};
   const reviews = new ReviewEngine(app, { model: model ?? (() => defaultAgentModel(app.dataDir, opts.provider ? { provider: opts.provider } : {})) }, reviewOptions);
   reviews.start(engine);
-  const started = engine.start().catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
+  const started = engine.start();
+  void started.catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const watcher = createDataVersionWatcher(app.db);
   const lab = appLabBackend(app, opts.lab ?? realLabDeps());
   const running = startServer({
@@ -100,7 +101,9 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
       running.stop();
       // A build is stopped; manual and sync flashes are let finish so the keyboard isn't left half written.
       drained ??= drainDeviceConsumers(
-        [lab.cancel(), drainAgentRuns(app), started.then(() => engine.stop()), started.then(() => reviews.stop()), drainManualFlashTasks()],
+        [lab.cancel(), drainAgentRuns(app), drainDeviceConsumers(
+          [started], () => drainDeviceConsumers([engine.stop(), reviews.stop()], async () => {}),
+        ), drainManualFlashTasks(app)],
         shutdownDeviceConnections,
       );
     },
