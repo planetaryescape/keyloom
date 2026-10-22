@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.0](https://github.com/planetaryescape/keyloom/compare/v0.51.0...v0.52.0) (2026-10-22)
+
+
+### Features
+
+* add a native Windows device helper candidate ([ca0f279](https://github.com/planetaryescape/keyloom/commit/ca0f279d603ba8dbef8be4f60239ec8c0740e004))
+
 ## [0.51.0](https://github.com/planetaryescape/keyloom/compare/v0.50.0...v0.51.0) (2026-10-22)
 
 
