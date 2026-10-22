@@ -1,6 +1,7 @@
 // The typing lab's host readers (D-281) against fake keyboards that speak the firmware's protocol: the handshake, decoding, repairs and
 // the ways a stream ends. The transports' own reading (a FIFO standing in for a device node) is at the end.
 import { describe, expect, test } from "bun:test";
+import { WINDOWS_HID_DRIVER_HINT } from "../../../src/firmware/toolchain/platform-support.ts";
 import { join } from "node:path";
 import { CaptureError, TraceBuilder } from "../../../src/firmware/emulate/trace.ts";
 import { findQmkStreamDevice, startQmkCapture } from "../../../src/firmware/qmk/typing-capture.ts";
@@ -142,7 +143,7 @@ describe("recording from a Moonlander", () => {
     const failed = { ...moonlanderInterface("QxKPz/zLQ3Md"), handle: "", driverMissing: true as const };
     expect((await findQmkStreamDevice(fakeMoonlander({ interfaces: [failed, moonlanderInterface()] }).transport)).handle).toBe("fake-hid-1");
     // With only the failed one attached, the driver is the answer.
-    await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [failed] }).transport)).rejects.toThrow(CaptureError);
+    await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [failed] }).transport)).rejects.toThrow(WINDOWS_HID_DRIVER_HINT);
   });
 });
 
