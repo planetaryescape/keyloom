@@ -245,13 +245,11 @@ fn chunks_preserve_bytes_limits_and_close_drains_before_receipt() {
 fn refs_relist_by_transport_and_new_writes_are_refused_during_close() {
     let _guard = LEASE_TEST.lock().unwrap();
     let mut peer = Peer::new();
+    // A relist that finds the same endpoint keeps its reference, so another caller's list
+    // between this caller's list and open does not invalidate it.
     let old = peer.reference();
     let new = peer.reference();
-    assert_ne!(old, new);
-    assert_eq!(
-        peer.call("serial.open", json!({"deviceRef":old}))["error"]["code"],
-        "stale_device"
-    );
+    assert_eq!(old, new);
     let hid = peer.call("list", json!({"transport":"hid"}));
     if cfg!(feature = "synthetic-hid") {
         assert_eq!(hid["ok"], true);
@@ -450,10 +448,11 @@ fn touch_is_leased_rechecks_refs_and_never_opens_when_busy() {
         "busy"
     );
     peer.call("session.close", json!({"sessionId":session}));
-    peer.reference();
+    // The relist finds the same endpoint, so the caller's reference stays valid (D-433).
+    assert_eq!(peer.reference(), reference);
     assert_eq!(
-        peer.call("serial.touch", json!({"deviceRef":reference,"baud":1200}))["error"]["code"],
-        "stale_device"
+        peer.call("serial.touch", json!({"deviceRef":reference,"baud":1200}))["result"],
+        json!({"lineStateApplied":true})
     );
     assert_eq!(
         peer.call("serial.touch", json!({"deviceRef":other_ref,"baud":1200}))["error"]["code"],

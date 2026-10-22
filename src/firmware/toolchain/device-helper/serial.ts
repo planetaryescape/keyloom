@@ -7,7 +7,7 @@ import { SERIAL_CAPABILITIES, serialDevicesSchema, serialWrittenSchema, touchedS
 export function helperSerialTransport(client: DeviceTransportClient): SerialTransport {
   return {
     async list() {
-      const { devices } = await client.request("list", { transport: "serial" }, serialDevicesSchema, 5_000);
+      const { devices } = await client.list("serial", serialDevicesSchema, 5_000);
       return devices.map((device) => ({ vendorId: device.vendorId, productId: device.productId, path: device.deviceRef, ...(device.serial === undefined ? {} : { serial: device.serial }) }));
     },
     async touch(path, baud) { await client.request("serial.touch", { deviceRef: path, baud }, touchedSchema, 3_500); },

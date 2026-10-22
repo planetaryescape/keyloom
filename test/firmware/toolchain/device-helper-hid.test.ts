@@ -48,6 +48,10 @@ test("one-shot HID write allows for lease, rediscovery, open, write and close", 
       if (method === "list") return { devices: [{ deviceRef: "d1", transport: "hid", vendorId: 1, productId: 2, usagePage: 0xff60, usage: 0x61 }] };
       return { acceptedBytes: 32 };
     },
+    list: async (_transport: string, _schema: unknown, timeout: number) => {
+      deadlines.push(["list", timeout]);
+      return { devices: [{ deviceRef: "d1", transport: "hid", vendorId: 1, productId: 2, usagePage: 0xff60, usage: 0x61 }] };
+    },
     open: async () => "s1",
   } as unknown as DeviceTransportClient;
   const transport = helperHidTransport(fake);

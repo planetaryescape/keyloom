@@ -41,7 +41,7 @@ The run found three bugs, all fixed:
 - A CDC unplug was reported as `helper_exited`.
 - An HID unplug was reported as `helper_exited`.
 
-Still open: Intel, minimum macOS, the web and desktop paths, the notarised release helper, `serial.touch`, parent death, stuck reads, permission refusal, and a resource comparison. Defaults stay legacy until those pass. [Record](../research/spikes/S59.md)
+Still open: Intel, minimum macOS, the web and desktop paths, the notarised release helper, `serial.touch`, parent death, stuck reads, permission refusal, and a resource comparison. D-433 later made the native helper the default on Apple Silicon; Intel and Linux stay legacy until their own evidence. [Record](../research/spikes/S59.md)
 
 ## Spikes (phase 0 and per rung; run against BK's real boards and exports)
 

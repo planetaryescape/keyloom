@@ -28,13 +28,13 @@ The worktree's pinned diagnostics Rust build/tests pass. The first native attemp
 
 The release-mapping arm64 builder embedded the locked combined synthetic helper without an explicit backend override. The real installer smoke passed eight cold/concurrent doctors, all seven capabilities, signature/hash verification, corrupt-cache refusal and import after failure. A separately installed test-only entry passed both touch rates through the production default selectors and shared owner, after independently verifying the paired executable's synthetic identity. The test entry is never used by a release.
 
-The installed production CLI/PTY lab smokes for HID and serial each stopped at the child-process assertion. `/usr/bin/pgrep -P <parent>` reports `sysmond service not found` and `Cannot get process list` in this sandbox. Neither complete lab smoke nor helper-exit observation is claimed. Rerun outside the sandbox with a freshly built locked synthetic pair:
+In the worker's sandbox the installed CLI/PTY lab smokes stopped at the child-process assertion, because `pgrep` could not list processes there. The orchestrator reran `scripts/smoke-native-combined.ts` outside the sandbox and it passed. On both synthetic transports it covered capture, stop and reopen, helper death saved as incomplete and refused by analysis, and an observed helper exit; touch passed at 1200 and 1201.
 
 ```sh
 bun scripts/smoke-native-combined.ts <compiled-native-cli> <synthetic-macos-helper>
 ```
 
-TypeScript and dependency-cruiser passed. The focused helper/lifecycle suite passed 53 tests, with 18 gated checks skipped. The final full Bun run had 2636 passes, 225 skips and 165 failures across socket-dependent server, kanata and Codex groups. It needs an unrestricted rerun; the worker report records the failure groups and logs.
+TypeScript and dependency-cruiser passed. The focused helper/lifecycle suite passed 53 tests, with 18 gated checks skipped. The worker's sandboxed full run failed in socket-dependent groups. The orchestrator's unrestricted full run had 2797 passes and 5 failures, all known load-related timeouts (property, `ensureCheckout`, `mountedFiles`; `docs/issues/toolchain-tests-flaky-under-queue-load.md`). CI's full suite is the gate.
 
 ## The orchestrator owns physical and desktop acceptance
 

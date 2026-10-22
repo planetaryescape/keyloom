@@ -280,7 +280,6 @@ impl Transport {
                 }
                 let transport = backend.transport();
                 state.listing.insert(transport.to_owned());
-                state.invalidate_refs(transport);
                 *state.generation.entry(transport.to_owned()).or_default() += 1;
                 drop(state);
                 let this = self.clone();
@@ -290,14 +289,30 @@ impl Transport {
                     state.listing.remove(backend.transport());
                     match result {
                         Ok(endpoints) if endpoints.len() <= 256 => {
+                            // An endpoint whose full snapshot is unchanged keeps its reference, so a caller
+                            // between its own list and open is not invalidated by another caller's list.
+                            // Open still re-checks identity; only vanished or changed endpoints lose refs.
+                            let previous: Vec<(String, ConnectionEndpoint)> = state
+                                .refs
+                                .iter()
+                                .filter(|(_, e)| e.transport() == backend.transport())
+                                .map(|(r, e)| (r.clone(), e.clone()))
+                                .collect();
+                            state.invalidate_refs(backend.transport());
                             let mut devices = Vec::new();
                             for (index, endpoint) in endpoints.into_iter().enumerate() {
-                                let reference = format!(
-                                    "d{}-{}-{}-{index}",
-                                    this.nonce,
-                                    backend.transport(),
-                                    state.generation[backend.transport()]
-                                );
+                                let reference = previous
+                                    .iter()
+                                    .find(|(_, e)| *e == endpoint)
+                                    .map(|(r, _)| r.clone())
+                                    .unwrap_or_else(|| {
+                                        format!(
+                                            "d{}-{}-{}-{index}",
+                                            this.nonce,
+                                            backend.transport(),
+                                            state.generation[backend.transport()]
+                                        )
+                                    });
                                 match endpoint.record(&reference) {
                                     Ok(record) => devices.push(record),
                                     Err(code) => {
@@ -316,8 +331,14 @@ impl Transport {
                                 }
                             }
                         }
-                        Ok(_) => this.output.reply(fail(&id, "capacity", "none")),
-                        Err(code) => this.output.reply(fail(&id, code, "none")),
+                        Ok(_) => {
+                            state.invalidate_refs(backend.transport());
+                            this.output.reply(fail(&id, "capacity", "none"))
+                        }
+                        Err(code) => {
+                            state.invalidate_refs(backend.transport());
+                            this.output.reply(fail(&id, code, "none"))
+                        }
                     }
                 });
             }
