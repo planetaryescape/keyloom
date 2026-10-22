@@ -109,6 +109,77 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(s.states.map(([st]) => st)).toEqual(["waiting_for_bootloader", "failed"]);
   });
 
+  test("a locked Mac refuses before restarting a half or writing a drive", async () => {
+    const s = await setup();
+    let restarts = 0;
+    const r = await s.flash({
+      screenLocked: async () => true,
+      hooks: { enterBootloader: async () => { restarts++; return { ok: true }; } },
+      writeImage: async () => { throw new Error("must not write"); },
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toBe("Unlock your Mac first: macOS doesn't mount the keyboard's boot drive while the screen is locked.");
+    expect(restarts).toBe(0);
+    expect(readdirSync(s.root)).toEqual([]);
+  });
+
+  test("a drive mounted while the lock probe is pending can still be written", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    let checks = 0;
+    const locked = async () => {
+      if (++checks === 1) mkdirSync(join(s.root, RIGHT));
+      if (checks === 2) mkdirSync(join(s.root, LEFT));
+      return true;
+    };
+    const r = await s.flash({ screenLocked: locked });
+    boot.stop();
+    expect(r.state).toBe("succeeded");
+    expect(boot.written).toEqual([RIGHT, LEFT]);
+  });
+
+  test("a drive already mounted while locked is written without probing the screen state", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    mkdirSync(join(s.root, RIGHT));
+    let checks = 0;
+    const r = await s.flash({ steps: [steps[0]!], screenLocked: async () => { checks++; return true; } });
+    boot.stop();
+    expect(r.state).toBe("succeeded");
+    expect(checks).toBe(0);
+    expect(boot.written).toEqual([RIGHT]);
+  });
+
+  test("a lock during the wait changes the instruction and a later unlock lets the flash continue", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    let checks = 0;
+    const locked = async () => ++checks >= 3 && checks < 8;
+    mount(s.root, RIGHT, 100);
+    mount(s.root, LEFT, 180);
+    const r = await s.flash({ screenLocked: locked, bootloaderWaitMs: 800 });
+    boot.stop();
+    expect(r.state).toBe("succeeded");
+    expect(s.states.some(([, instruction]) => instruction?.startsWith("Unlock your Mac first:"))).toBe(true);
+    expect(s.states.at(-1)?.[0]).toBe("succeeded");
+  });
+
+  test("a wait that expires while locked reports the unlock instruction", async () => {
+    const s = await setup();
+    const r = await s.flash({ screenLocked: async () => true, bootloaderWaitMs: 100 });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("Unlock your Mac first: macOS doesn't mount the keyboard's boot drive while the screen is locked.");
+    expect(r.error).not.toContain("didn't appear");
+  });
+
+  test("a throwing lock probe fails open", async () => {
+    const s = await setup();
+    const r = await s.flash({ screenLocked: async () => { throw new Error("probe failed"); }, bootloaderWaitMs: 100 });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("didn't appear");
+    expect(r.output.join("\n")).toContain("couldn't read the macOS screen-lock state; continuing");
+  });
+
   test("the right half flashed and the left never appearing says which half is on the new firmware", async () => {
     const s = await setup();
     const boot = fakeBootloader(s.root);

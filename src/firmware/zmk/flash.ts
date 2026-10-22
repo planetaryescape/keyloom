@@ -12,6 +12,7 @@ import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-stat
 import type { LogSink } from "../toolchain/run.ts";
 import { type Uf2Shape, describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import type { VolumeFinder } from "./volumes.ts";
+import { SCREEN_LOCK_MESSAGE } from "../toolchain/screen-lock.ts";
 
 export const BOOTLOADER_WAIT_MS = 120_000;
 export const UNMOUNT_WAIT_MS = 30_000;
@@ -59,6 +60,8 @@ export type Uf2FlashInput = {
   driveFileName?: string;
   /** Always passed in: tests give a finder over a temporary directory, so nothing here can reach a real keyboard by default. */
   findVolume: VolumeFinder;
+  /** macOS screen-lock probe. Missing probes leave non-macOS and isolated callers unchanged. */
+  screenLocked?: (() => Promise<boolean>) | undefined;
   hooks?: StepHooks;
   log: LogSink;
   /** Called on every state change; `instruction` is what the person must do now. */
@@ -144,6 +147,14 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
   };
   const poll = input.pollMs ?? POLL_MS;
   const waitMs = input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS;
+  const screenLocked = async (): Promise<boolean> => {
+    if (!input.screenLocked) return false;
+    try { return await input.screenLocked(); }
+    catch (error) {
+      say(`keyloom: couldn't read the macOS screen-lock state; continuing with the UF2 flash: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  };
 
   const files = await payloads(input, say);
   if ("error" in files) return fail(files.error);
@@ -160,6 +171,17 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let restarted = false;
     let byKeyloom = false;
     let restartReason: string | undefined;
+    // A mounted drive can be written while the Mac is locked. Otherwise refuse before any hands-free
+    // trigger, which would strand the half in its bootloader without a mountable drive.
+    let mount: string | null = await input.findVolume(step.volume);
+    if (!mount && input.screenLocked && await screenLocked()) {
+      // The probe is async; the bootloader may have mounted while it was running.
+      mount = await input.findVolume(step.volume);
+      if (!mount) {
+        input.onState("waiting_for_bootloader", SCREEN_LOCK_MESSAGE, { needsHand: true });
+        return failed(SCREEN_LOCK_MESSAGE);
+      }
+    }
     if (input.hooks?.enterBootloader && (recovery?.instruction === undefined || shared)) {
       const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text));
       if (!entered.ok) {
@@ -185,8 +207,8 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     if (!restarted) input.onState("waiting_for_bootloader", instruction, { needsHand: true });
     allRestarted &&= byKeyloom;
 
-    let mount: string | null = null;
     let identity: { dev: number; ino: number } | undefined;
+    let lockWasReported = false;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
       if (signal?.aborted) {
         return failed(i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
@@ -196,9 +218,15 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
         identity = statSync(mount);
         break;
       }
+      const locked = await screenLocked();
+      if (locked !== lockWasReported) {
+        lockWasReported = locked;
+        input.onState("waiting_for_bootloader", locked ? SCREEN_LOCK_MESSAGE : instruction, { needsHand: true });
+      }
       await sleep(poll, signal);
     }
     if (!mount || !identity) {
+      if (lockWasReported) return failed(`${SCREEN_LOCK_MESSAGE} ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`}`);
       return failed(
         `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? sharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
       );
