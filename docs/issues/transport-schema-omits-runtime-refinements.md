@@ -11,3 +11,5 @@ Express the refinements in the schema (`minimum: 1` for `seq`, `uniqueItems: tru
 Status: fixed on branch fix/transport-schema-refinements.
 
 The generated transport schema now states the positive sequence minimum, unique capabilities, and base64/length constraints where JSON Schema can express them; the generator rejects undocumented custom refinements. Shared refinement fixtures are rejected by the Zod schemas, and the schema test checks the corresponding JSON Schema keywords.
+
+Left as documented runtime-only rules (Codex review of the fix, 2026-10-22): at 5,464 characters the schema can't tell 4,096 decoded serial bytes from 4,097 or 4,098, so the 1–4,096-byte limit stays a Zod and Rust check marked `x-runtime-refinement`. The generator's guard accepts one allowance per schema, so a second refinement added to an already-allowed schema would pass unnoticed; tightening it to one allowance per refinement is still open.
