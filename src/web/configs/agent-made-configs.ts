@@ -3,7 +3,8 @@
 // a reply opens a config can be tested without React.
 import type { ChatPresentation } from "../../api/http.ts";
 
-const MAKERS = new Set(["put_config", "create_config"]);
+/** The tools whose result is a new config; the CLI reads the same set (src/app/made-configs.ts). */
+export const MAKERS: ReadonlySet<string> = new Set(["put_config", "create_config"]);
 
 export type MadeConfig = { id: string; succeeded: boolean };
 

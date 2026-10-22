@@ -1538,6 +1538,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 }}
                 onReplyCompleted={onReplyCompleted}
                 onOpenConfig={switchLayout}
+                onReviewProposals={() => { setReviewOpen(false); setProposalsOpen(true); }}
               />
             </>
   );

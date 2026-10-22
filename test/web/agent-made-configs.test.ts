@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { ChatPresentation } from "../../src/api/http.ts";
 import type { ApiConfig } from "../../src/api/configs.ts";
 import { autoOpenTarget, configToOpen, madeConfigs } from "../../src/web/configs/agent-made-configs.ts";
+import { MAKERS as APP_MAKERS } from "../../src/app/made-configs.ts";
+import { MAKERS as WEB_MAKERS } from "../../src/web/configs/agent-made-configs.ts";
 import { configCardView, type ConfigCardData } from "../../src/web/configs/config-card.ts";
 
 type Op = ChatPresentation["operations"][number];
@@ -58,12 +60,17 @@ describe("when the page opens it by itself", () => {
   test("does not for the config already on screen", () => expect(autoOpenTarget(made, { ...ctx, currentId: "c1" })).toBeNull());
 });
 
+test("the CLI and the web read the same making tools", () => {
+  expect([...APP_MAKERS].sort()).toEqual([...WEB_MAKERS].sort());
+  expect([...WEB_MAKERS].sort()).toEqual(["create_config", "put_config"]);
+});
+
 describe("the config card", () => {
   const api = (over: Partial<ApiConfig> = {}): ApiConfig => ({
     id: "c1", name: "Glove80 on Corne", boardId: "foostan/corne", boardName: "Corne", headRevisionId: "r", createdAt: 1, updatedAt: 1,
     onKeyboard: false, archivedAt: null, copiedFrom: { layoutId: "g", layoutName: "My Glove80", revisionId: "r" }, ...over,
   });
-  const ready = (over: Partial<ApiConfig> = {}, waiting = 3): ConfigCardData => ({ state: "ready", config: api(over), waiting });
+  const ready = (over: Partial<ApiConfig> = {}, waiting: number | null = 3): ConfigCardData => ({ state: "ready", config: api(over), waiting });
 
   test("offers Open from another config and names the board, the source and the waiting proposals", () => {
     const view = configCardView(ready(), "x", null, "c1");
@@ -71,15 +78,36 @@ describe("the config card", () => {
   });
 
   test("offers the way back from the new config when the thread knows where it came from", () => {
-    expect(configCardView(ready(), "c1", { id: "x", name: "Daily" }, "c1").action).toEqual({ kind: "back", id: "x", label: "Back to Daily" });
-    expect(configCardView(ready(), "c1", null, "c1").action).toBeNull();
-    expect(configCardView(ready(), "c1", { id: "c1", name: "Glove80 on Corne" }, "c1").action).toBeNull();
+    expect(configCardView(ready({}, 0), "c1", { id: "x", name: "Daily" }, "c1").action).toEqual({ kind: "back", id: "x", label: "Back to Daily" });
+    expect(configCardView(ready({}, 0), "c1", null, "c1").action).toBeNull();
+    expect(configCardView(ready({}, 0), "c1", { id: "c1", name: "Glove80 on Corne" }, "c1").action).toBeNull();
+  });
+
+  test("on the new config the main action reviews its waiting proposals and the way back is the second button", () => {
+    const view = configCardView(ready({}, 3), "c1", { id: "x", name: "Daily" }, "c1");
+    expect(view.action).toEqual({ kind: "review", id: "c1", label: "Review 3 proposals" });
+    expect(view.secondary).toEqual({ kind: "back", id: "x", label: "Back to Daily" });
+    expect(configCardView(ready({}, 1), "c1", null, "c1")).toMatchObject({ action: { label: "Review proposal" }, secondary: null });
+  });
+
+  test("from another config Open is the only action, whatever waits", () => {
+    expect(configCardView(ready({}, 3), "x", { id: "x", name: "Daily" }, "c1")).toMatchObject({ action: { kind: "open", label: "Open" }, secondary: null });
+  });
+
+  test("proposals that could not be read leave the count and the review out but keep the config and its actions", () => {
+    const view = configCardView(ready({}, null), "c1", { id: "x", name: "Daily" }, "c1");
+    expect(view.facts).toEqual(["Corne", "Copied from My Glove80"]);
+    expect(view).toMatchObject({ action: { kind: "back" }, secondary: null });
+    expect(configCardView(ready({}, null), "x", null, "c1").action).toMatchObject({ kind: "open" });
   });
 
   test("says so, with no button, for a config that is gone, archived or unreadable", () => {
     expect(configCardView({ state: "gone" }, "x", null, "c1")).toMatchObject({ note: "This config has since been deleted.", action: null });
     expect(configCardView(ready({ archivedAt: 5 }), "x", null, "c1")).toMatchObject({ action: null, note: expect.stringContaining("Archived") });
-    expect(configCardView({ state: "error" }, "x", null, "c1").action).toBeNull();
+    const failed = configCardView({ state: "error" }, "x", null, "c1");
+    expect(failed.action).toBeNull();
+    expect(failed.note).toBe("Couldn't load this config right now.");
+    expect(failed.note).not.toMatch(/menu/i);
     expect(configCardView({ state: "loading" }, "x", null, "c1").action).toBeNull();
   });
 

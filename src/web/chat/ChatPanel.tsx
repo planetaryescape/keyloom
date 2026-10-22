@@ -81,6 +81,8 @@ interface Props {
   onReplyCompleted?: (presentation: ChatPresentation, turns: readonly Turn[]) => void;
   /** Opens a config from its card in a reply, carrying this thread along (D-317). */
   onOpenConfig?: (id: string) => void;
+  /** Shows the proposals waiting on this config, from a config card's "Review". */
+  onReviewProposals?: () => void;
   /** Key changes kept on the board and not applied (D-317); sent with each message so the agent knows them. */
   drafts?: ChatDrafts;
   /** ⌘K commands (D-315): what the typed text can just do, offered above "Ask keyloom". */
@@ -91,7 +93,7 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
@@ -111,7 +113,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
     [carried, transcript.turns],
   );
   const cardData = useConfigCards(token, madeIds, `${layoutRef}:${revisionId}`);
-  const configCards: ConfigCards | undefined = onOpenConfig === undefined ? undefined : { data: cardData, currentId: layoutRef, origin: carried?.from ?? null, onOpen: onOpenConfig };
+  const configCards: ConfigCards | undefined = onOpenConfig === undefined ? undefined : { data: cardData, currentId: layoutRef, origin: carried?.from ?? null, onOpen: onOpenConfig, onReview: onReviewProposals ?? (() => {}) };
   const [draft, setDraft] = useState("");
   const [motionPaused, setMotionPaused] = useState(false);
   // The command rows for what's typed. Enter runs the highlighted one; a short text highlights the first command, a longer one (a

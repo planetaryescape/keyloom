@@ -5,7 +5,7 @@ import { listPresentations } from "../persistence/chat-presentations.ts";
 import type { App } from "./context.ts";
 import { listConfigs, type ConfigView } from "./configs.ts";
 
-const MAKERS = new Set(["put_config", "create_config"]);
+export const MAKERS: ReadonlySet<string> = new Set(["put_config", "create_config"]);
 
 /** The configs the turn that began at `userMessageId` made, in the order the agent called the tools, that still exist. */
 export function configsMadeInTurn(app: App, conversationId: string, userMessageId: string): ConfigView[] {

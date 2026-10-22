@@ -6,7 +6,7 @@ import type { ConfigCardData } from "./config-card.ts";
 /**
  * What the config cards in a thread show: each made config's name, board, source and open proposals. One list fetch serves every card,
  * and it runs again when `refreshKey` changes (a rename, an archive or an applied proposal changes what a card says). A config that is
- * not in the list is gone; an unreadable answer is an error, never "gone".
+ * not in the list is gone; an unreadable list is an error, never "gone"; unreadable proposals only drop the count.
  */
 export function useConfigCards(token: string, ids: readonly string[], refreshKey: string): ReadonlyMap<string, ConfigCardData> {
   const [cards, setCards] = useState<ReadonlyMap<string, ConfigCardData>>(new Map());
@@ -21,8 +21,9 @@ export function useConfigCards(token: string, ids: readonly string[], refreshKey
         await Promise.all(list.map(async (id) => {
           const config = configs.find((candidate) => candidate.id === id);
           if (config === undefined) return void next.set(id, { state: "gone" });
+          // Without its proposals the config is still known; the card leaves the count out.
           const waiting = await fetchOpenProposals(token, id, controller.signal).then((proposals) => proposals.filter((p) => p.status === "proposed").length, () => null);
-          next.set(id, waiting === null ? { state: "error" } : { state: "ready", config, waiting });
+          next.set(id, { state: "ready", config, waiting });
         }));
         if (!controller.signal.aborted) setCards((now) => new Map([...now, ...next]));
       },
