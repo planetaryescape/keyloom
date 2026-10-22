@@ -1,5 +1,6 @@
 // Native shell around the unchanged `keyloom serve`: runs (or attaches to) the server, shows its page in a window, and puts the
 // sync line in the menu bar. No product logic lives here (chapter 26); the server words every string the shell shows.
+mod login_path;
 mod menu_bar;
 mod sidecar;
 #[cfg(feature = "updater")]

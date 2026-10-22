@@ -1927,3 +1927,13 @@ Evidence: `docs/issues/uf2-mount-point-taken-before-mount.md` (hardware observat
 Refines D-433's touch sequence on macOS. `tcsetattr` refuses a non-standard rate such as the 1201 relay with EINVAL, so v0.53.1's `serial.touch` at 1201 failed with `io_failed` and the relay never reached the firmware. The touch now sets the speed with the `IOSSIOSPEED` ioctl (`_IOW('T', 2, speed_t)`, IOKit/serial/ioss.h), then verifies both speeds with `tcgetattr` as before, for 1200 and 1201 alike. Linux already uses `termios2` with `BOTHER`, and Windows sets the DCB rate, so neither changes. Intel Macs still touch through `stty`, which has no way to set a non-standard rate on macOS. Their relay stays broken until Intel moves to the native helper.
 
 Evidence: `docs/issues/macos-1201-relay-rejected-by-tcsetattr.md` and [the native-default spike record](../research/spikes/device-helper-native-default.md).
+
+### D-441: The desktop app starts keyloom with the login shell's PATH. (2026-10-22, BK's installed app)
+
+An app opened from Finder or the Dock inherits launchd's PATH, `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`. The bundled `keyloom serve` in BK's 0.53.1 app ran with exactly that, so it couldn't find `codex`, `docker` or `zapp` in `/opt/homebrew/bin`. Chat said it had no model, and builds and Moonlander flashing from the app would have failed the same way. kanata was unaffected because its lookup already checks Homebrew's folders directly.
+
+The shell now runs `$SHELL -ilc` with `/usr/bin/printenv PATH` between unique marks, once per server start. It uses external commands only, because nushell doesn't expand `"$PATH"`. It reads until the closing mark rather than end of file, because a profile's background process can keep the pipe open. The whole exchange has a 3-second deadline. The sidecar gets that PATH followed by any inherited folder it lacks. Without an answer in time, it gets the inherited PATH with `/opt/homebrew/bin` and `/usr/local/bin` added. Only PATH is taken: API keys exported in a shell profile still don't reach the app.
+
+`tauri-apps/fix-path-env-rs` does the same, but it isn't published on crates.io and waits on the shell with no deadline, so a slow shell profile would hang the app at launch.
+
+Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
