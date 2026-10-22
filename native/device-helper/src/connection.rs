@@ -44,6 +44,9 @@ impl ConnectionEndpoint {
                     return Err("capacity");
                 }
                 let mut value = json!({"deviceRef":reference,"transport":"serial","vendorId":e.vendor,"productId":e.product});
+                if e.driver_missing {
+                    value["driverMissing"] = json!(true);
+                }
                 if e.permission_denied {
                     value["permissionDenied"] = json!(true);
                 }

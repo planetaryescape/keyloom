@@ -49,7 +49,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   program.hook("preAction", (_program, action) => {
     const names: string[] = [];
     for (let cmd: Command | null = action; cmd?.parent; cmd = cmd.parent) names.unshift(cmd.name());
-    requireCommandSupport(names.join(" "), { offline: action.opts().offline === true });
+    requireCommandSupport(names.join(" "), { offline: action.opts().offline === true, rebootOnly: action.opts().rebootOnly === true });
     loadUserBoards(globals().dataDir);
   });
 

@@ -769,7 +769,7 @@ fn lease(key: &str) -> Result<std::fs::File, &'static str> {
     }
     Ok(file)
 }
-// Windows production is unavailable; this lock exercises only the compiled synthetic backend.
+// Synthetic Windows builds own no native handles; a file lock exercises cross-process leases.
 #[cfg(all(
     not(unix),
     any(feature = "synthetic-hid", feature = "synthetic-serial")
@@ -789,10 +789,19 @@ fn lease(key: &str) -> Result<std::fs::File, &'static str> {
 }
 #[cfg(all(
     not(unix),
-    not(any(feature = "synthetic-hid", feature = "synthetic-serial"))
+    not(any(
+        feature = "native-windows",
+        feature = "synthetic-hid",
+        feature = "synthetic-serial"
+    ))
 ))]
 fn lease(_key: &str) -> Result<std::fs::File, &'static str> {
     Err("unsupported")
+}
+
+#[cfg(all(feature = "native-windows", target_os = "windows"))]
+fn lease(key: &str) -> Result<crate::windows_io::Lease, &'static str> {
+    crate::windows_io::Lease::acquire(&lease_name(key.to_ascii_lowercase().as_str()))
 }
 
 #[cfg(test)]
@@ -839,6 +848,7 @@ mod frame_tests {
             let endpoint = crate::serial::SerialEndpoint {
                 key: format!("synthetic-owner-error-{}-{possible}", std::process::id()),
                 permission_denied: false,
+                driver_missing: false,
                 vendor: 1,
                 product: 2,
                 serial: None,
@@ -884,6 +894,7 @@ mod frame_tests {
             ConnectionEndpoint::Serial(crate::serial::SerialEndpoint {
                 key: key.into(),
                 permission_denied: false,
+                driver_missing: false,
                 vendor: 0x16c0,
                 product: 0x27db,
                 serial: Some(number.into()),
@@ -894,6 +905,7 @@ mod frame_tests {
         let hid = ConnectionEndpoint::Hid(crate::backend::Endpoint {
             key: "h".into(),
             permission_denied: false,
+            driver_missing: false,
             vendor: 1,
             product: 2,
             serial: None,
@@ -970,6 +982,7 @@ mod frame_tests {
         let hid = ConnectionEndpoint::Hid(crate::backend::Endpoint {
             key: "same".into(),
             permission_denied: false,
+            driver_missing: false,
             vendor: 1,
             product: 2,
             serial: None,
@@ -979,6 +992,7 @@ mod frame_tests {
         let serial = ConnectionEndpoint::Serial(crate::serial::SerialEndpoint {
             key: "same".into(),
             permission_denied: false,
+            driver_missing: false,
             vendor: 1,
             product: 2,
             serial: None,
@@ -1005,6 +1019,7 @@ mod frame_tests {
         let endpoint = crate::backend::Endpoint {
             key: "not-a-path".into(),
             permission_denied: false,
+            driver_missing: false,
             vendor: 0x3297,
             product: 0x1969,
             serial: Some("s".repeat(256)),

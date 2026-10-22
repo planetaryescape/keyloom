@@ -8,7 +8,7 @@ export function helperSerialTransport(client: DeviceTransportClient): SerialTran
   return {
     async list() {
       const { devices } = await client.list("serial", serialDevicesSchema, 5_000);
-      return devices.map((device) => ({ vendorId: device.vendorId, productId: device.productId, path: device.deviceRef, ...(device.serial === undefined ? {} : { serial: device.serial }), ...(device.permissionDenied ? { permissionDenied: true as const } : {}) }));
+      return devices.map((device) => ({ vendorId: device.vendorId, productId: device.productId, path: device.deviceRef, ...(device.serial === undefined ? {} : { serial: device.serial }), ...(device.driverMissing ? { driverMissing: true as const } : {}), ...(device.permissionDenied ? { permissionDenied: true as const } : {}) }));
     },
     async touch(path, baud) { await client.request("serial.touch", { deviceRef: path, baud }, touchedSchema, 3_500); },
     async open(path, onData, onError = () => {}) {

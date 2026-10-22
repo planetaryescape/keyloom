@@ -1,6 +1,6 @@
 # 33: Prove the helper on macOS, Linux and Windows
 
-Status: D-433 selects `native-macos` for Apple Silicon CLI releases and their desktop sidecars. Intel Macs and Linux keep legacy transports and diagnostics-only helpers until their own hardware evidence. [S59](../research/spikes/S59.md) proves arm64 capture, failure and reopen behavior on the Moonlander and Glove80; [Stage 5](../research/spikes/device-helper-native-default.md) records the combined build and explicit touch implementation. Physical touch/reset and release desktop acceptance remain the orchestrator's checks. An explicit Linux `native-linux` candidate is implemented under D-434; [24e](../research/spikes/device-helper-24e.md) records the software checks and pending S60 gate. Windows slice 1 implements the diagnostics/layout release and installer under D-435; native Windows CI, HID/COM and S61 remain pending.
+Status: D-433 selects `native-macos` for Apple Silicon CLI releases and their desktop sidecars. Intel Macs and Linux keep legacy transports and diagnostics-only helpers until their own hardware evidence. [S59](../research/spikes/S59.md) proves arm64 capture, failure and reopen behavior on the Moonlander and Glove80; [Stage 5](../research/spikes/device-helper-native-default.md) records the combined build and explicit touch implementation. Physical touch/reset and release desktop acceptance remain the orchestrator's checks. An explicit Linux `native-linux` candidate is implemented under D-434; [24e](../research/spikes/device-helper-24e.md) records the software checks and pending S60 gate. Windows slice 1 implements the diagnostics/layout release and installer under D-435. D-436 implements an explicit `native-windows` HID/COM candidate; native candidate CI and S61 remain pending.
 
 ## Support is a capability claim, not a cross-compile
 
@@ -60,7 +60,7 @@ S60 must still observe the following on an authorized Linux host:
 
 Synthetic sysfs, injected ordering, PTYs and cross-compilation do not close S60 or enable the default.
 
-## Windows installs diagnostics and layout editing; HID/COM still needs S61
+## Windows has an explicit HID/COM candidate; S61 still gates adoption
 
 ```powershell
 .\install.ps1 -Version vX.Y.Z -AddToPath
@@ -74,14 +74,30 @@ Version, doctor, import, layout, boards and change are the slice's installed jou
 
 `windows-2022` builds the pair and runs `scripts/smoke-windows-install.ps1` against a file mirror, with spaces/non-ASCII in the scratch install/cache path and no Rust/Bun/Docker on the runtime PATH. It checks eight concurrent cold launches, version, diagnostics `capabilities: []`, normal doctor, public import/layout/boards/change, typed build refusal, locked update refusal, opt-in PATH idempotence, installer checksum mismatch and cached-helper corruption. These CI checks are configured, not observed on the macOS implementation host; [24f evidence](../research/spikes/device-helper-24f.md) records that limit.
 
-S61 still requires native HID and COM implementation and separately authorized physical evidence. No discovery, capture, restart or flash was performed in slice 1. The remaining transport requirements are:
+Slice 2 (D-436) implements the explicit candidate:
 
-- Select the QMK vendor-defined top-level HID collection, not the ordinary keyboard collection. Normalize report ID and buffer lengths from the backend. Verify the correct collection on a composite device with several interfaces.
-- Resolve a COM endpoint to its owning USB VID/PID/serial/interface through the selected crate and, where required, SetupAPI/configuration-manager metadata. COM numbers are ephemeral; support values above COM9 without exposing path construction to TS. If serial identity is absent/ambiguous, refuse a state-changing selection.
-- Use the existing in-box HID/CDC drivers where the actual descriptors support them. Do not prescribe Zadig, replace the keyboard driver or install a privileged service. If the firmware does not bind to CDC correctly, report that as a separate firmware/driver finding.
-- `serialport` offers a Windows implementation, but neither its API nor a successful baud setter proves 1201 works on the driver/board. Test it explicitly; disable relay capability when it cannot be established.
-- Cancellation can race with completed writes. Windows documents that CancelIoEx is not a guarantee. Keep overlapped buffers alive until completion if using that API directly; otherwise establish what the crate guarantees. The parent watchdog isolates a stuck helper without claiming a write was undone.
-- Test another process holding the COM port, unplug while reading, suspend/resume, executable paths with spaces/non-ASCII characters, Ctrl-C, parent kill, and the absence of a flashing console window when launched by a UI host.
+```powershell
+bun scripts/build-binaries.ts --device-backend native --target bun-windows-x64 --out-dir dist/native-windows-candidate
+.\dist\native-windows-candidate\keyloom-windows-x64.exe --data-dir "$env:TEMP\keyloom-native-doctor" doctor --device-helper-only
+```
+
+Build on Windows x64, or supply a prebuilt target helper for a cross build. The candidate statically selects the combined native adapters and advertises seven capabilities. Default releases keep D-435's refusals. The candidate admits lab recording/listing and reboot-only; Docker/emulation, UF2 operations, kanata, sync, serve and general keyboard detection remain unavailable. Reboot-only for a ZMK half requires `--board moergo/glove80 --half left` or `--half right`; the same restart selector chooses a local 1200 touch or a 1201 relay via the central. Its response includes `transport_only: true`; no UF2 drive is probed and firmware restart is unverified. QMK keeps its existing HID-write/departure check, using the helper's identity view on Windows.
+
+`native-windows` uses SetupAPI/CfgMgr and exactly pinned `windows-sys 0.61.2`. HID caps admit only the vendor collection, 33-byte input/output reports and unnumbered 32-byte arrays. Zero desired access reads caps during discovery; streaming opens share read/write access with Windows. USB identity walks past composite interface nodes to the nearest USB device, without borrowing a hub serial. Unique instance serials retain the keyloom marker; restore only its prefix casing. The opened HID handle's attributes/serial/caps and a repeated COM mapping must match the listing. Instance ID plus interface/COM port is the endpoint key; COM10+ paths are constructed inside Rust.
+
+COM opens exclusively, sets/verifies raw 115200 8N1 with no flow control, sets nonblocking read timeouts, and checks DTR transitions and close. Both touch rates use the same exact-rate/readback/DTR-low/close sequence. HID reads wait 50 ms and allow another 500 ms to confirm targeted cancellation. Writes wait 500 ms and check cancellation immediately, exiting if it is unconfirmed. If a driver retains the operation, the helper exits without unwinding its live buffer/OVERLAPPED or releasing its lease first. Read/write removal errors become `disconnected`. Named mutexes hold endpoint leases across helper processes within the Windows session.
+
+Known keyboard USB devnodes with failed drivers and no usable collection/port yield `driverMissing` diagnostics, refused with `unsupported` on open. Doctor names the in-box HID or USB CDC `usbser.sys` binding. COM open access-denied/sharing-violation means `busy`, with a close-the-other-client remedy. Doctor does not open COM to discover occupancy; it gives the busy hint without pretending an idle listing proves availability. No Zadig, driver replacement or elevation remedy is prescribed.
+
+The separate `device-helper-windows-candidate` job uses `windows-2022` for native clippy/tests and a real installed candidate's discovery-free doctor. It then builds a helper with only `synthetic-windows`, pairs a test-only entry and runs installed CLI HID/serial capture, persistence, stop/reopen, local/relay touch and reboot-only. The entry independently checks the paired helper's synthetic identity before any device request. Only terminal text is scripted: this does not test a real Windows terminal or Ctrl-C. The native candidate never receives a list/open/touch request in CI. [24f slice-2 evidence](../research/spikes/device-helper-24f.md#slice-2-implements-the-native-candidate-without-hardware-evidence) records local compile checks separately from unobserved CI outcomes.
+
+S61 still needs separately authorized Windows hardware:
+
+- Correct Moonlander collection/report lengths, exact USB serial identity and ordinary typing during capture.
+- Glove80 in-box CDC binding, COM10+, port renumbering, duplicate/missing serials and a competing serial monitor. Missing/failed-driver findings must match Device Manager.
+- Capture, stop/reopen, idle stop, unplug during read/write/close, helper death, parent death, Ctrl-C and suspend/resume, with bounded cleanup and honest incomplete recordings.
+- Firmware-observed 1200/1201 baud, DTR order and the intended half restarting. Setter/readback success does not prove the relay reached firmware; open may assert DTR before configuration.
+- Runtime/extraction behavior on the supported Windows floor, paths with spaces/non-ASCII, handle/resource measurements and no console-window flash from a UI host.
 
 S61's remaining installed Windows demonstration imports a synthetic/public layout into scratch data, runs doctor, then uses `keyloom lab start <layout>` with explicit hardware permission. It stops and starts a new recording, and exposes interruption honestly after a forced helper exit. Lab replay/analysis may still need unsupported Docker/emulation infrastructure; do not fabricate a successful analysis to complete the demonstration.
 

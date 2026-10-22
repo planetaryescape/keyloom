@@ -91,6 +91,15 @@ export function linuxUsbDevices(root = "/sys/bus/usb/devices"): UsbDevice[] {
 }
 
 export async function listUsbDevices(): Promise<UsbDevice[]> {
+  if (process.platform === "win32") {
+    const { windowsDevicesUnavailable } = await import("./platform-support.ts");
+    if (windowsDevicesUnavailable()) return [];
+    const { defaultHidTransport } = await import("./hid-default.ts");
+    const { defaultSerialTransport } = await import("./serial-default.ts");
+    const records = [...await (await defaultHidTransport()).list(), ...await (await defaultSerialTransport()).list()];
+    const hex = (n: number) => `0x${n.toString(16).padStart(4, "0")}`;
+    return records.filter((r) => !r.driverMissing).map((r) => ({ vendorId: hex(r.vendorId), productId: hex(r.productId), name: "USB keyboard", maker: "", ...(r.serial === undefined ? {} : { serial: r.serial }) }));
+  }
   // system_profiler exists only on macOS, so finding it is the platform check; tests rely on that to
   // put a fake one on PATH on Linux CI. Without it, Linux reads sysfs.
   if (!which("system_profiler")) return process.platform === "linux" ? linuxUsbDevices() : [];

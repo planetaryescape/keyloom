@@ -7,6 +7,7 @@ use serde_json::json;
 pub struct SerialEndpoint {
     pub key: String,
     pub permission_denied: bool,
+    pub driver_missing: bool,
     pub vendor: u16,
     pub product: u16,
     pub serial: Option<String>,
@@ -81,6 +82,7 @@ pub mod serial_synthetic {
             Ok(vec![SerialEndpoint {
                 key: "synthetic-glove80-left".into(),
                 permission_denied: false,
+                driver_missing: false,
                 vendor: 0x16c0,
                 product: 0x27db,
                 serial: Some("keyloom/NPQRSTVWXYZ0-L".into()),

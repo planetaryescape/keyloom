@@ -13,6 +13,7 @@ fn endpoint(r: linux_sysfs::Record) -> SerialEndpoint {
     SerialEndpoint {
         key: r.key(),
         permission_denied: crate::linux_io::permission_denied(&r.node),
+        driver_missing: false,
         vendor: r.vendor,
         product: r.product,
         serial: r.serial,

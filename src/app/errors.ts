@@ -54,7 +54,7 @@ export class LabCaptureError extends Error {
   override name = "LabCaptureError";
   constructor(readonly code: "busy" | "permission_denied" | "restart_required", remedy?: string) {
     super(code === "busy"
-      ? "Another application or keyloom instance is using this keyboard. Stop the other client, then try again."
+      ? (remedy ?? "Another application or keyloom instance is using this keyboard. Stop the other client, then try again.")
       : code === "permission_denied"
         ? (remedy ?? "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.")
         : "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.");

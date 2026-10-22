@@ -65,3 +65,37 @@ test("app entry points refuse or report on Windows when called directly, without
     Object.defineProperty(process, "platform", original);
   }
 });
+
+test("only a compiled combined Windows candidate admits recording and explicit reboot", () => {
+  for (const command of ["lab start", "lab sessions", "lab show", "lab delete", "lab passages"]) {
+    expect(() => requireCommandSupport(command, {}, "win32", "native")).not.toThrow();
+  }
+  expect(() => requireCommandSupport("flash", { rebootOnly: true }, "win32", "native")).not.toThrow();
+  for (const backend of ["legacy", "native-hid", "native-serial"] as const) {
+    expect(() => requireCommandSupport("lab start", {}, "win32", backend)).toThrow(PlatformUnavailableError);
+    expect(() => requireCommandSupport("flash", { rebootOnly: true }, "win32", backend)).toThrow(PlatformUnavailableError);
+  }
+  for (const command of ["flash", "build", "sync run", "autosync on", "remap start", "serve", "emulate", "keyboard put", "config use"]) {
+    expect(() => requireCommandSupport(command, {}, "win32", "native")).toThrow(PlatformUnavailableError);
+  }
+});
+
+test("Windows doctor distinguishes missing drivers and a busy port without device I/O", async () => {
+  const { runWindowsDeviceChecks } = await import("../../src/app/doctor.ts");
+  const { DeviceTransportError } = await import("../../src/firmware/toolchain/device-helper/transport-client.ts");
+  let opened = false;
+  const forbidden = async () => { opened = true; throw new Error("no device I/O permitted"); };
+  const checks = await runWindowsDeviceChecks({
+    hid: async () => ({ list: async () => [{ vendorId: 0x3297, productId: 0x1969, handle: "synthetic-missing", driverMissing: true }], write: forbidden, openSession: forbidden }),
+    zmk: { serial: async () => ({ list: async () => [{ vendorId: 0x16c0, productId: 0x27db, path: "synthetic-missing", driverMissing: true }], touch: forbidden, open: forbidden }) },
+  });
+  expect(checks).toHaveLength(2);
+  expect(checks.every((c) => !c.ok && c.detail.startsWith("unsupported:"))).toBe(true);
+  expect(checks[0]!.detail).toContain("in-box HID");
+  expect(checks[1]!.detail).toContain("usbser.sys");
+  const busy = await runWindowsDeviceChecks({ hid: async () => ({ list: async () => [], write: forbidden }), zmk: { serial: async () => ({ list: async () => { throw new DeviceTransportError({ code: "busy", effect: "none", retry: "after_user_action" }); }, touch: forbidden }) } });
+  expect(busy[0]!.detail).toStartWith("busy:");
+  expect(busy[0]!.detail).toContain("Close the serial monitor");
+  expect(opened).toBe(false);
+  expect(JSON.stringify([...checks, ...busy])).not.toMatch(/Zadig|admin rights|elevat/i);
+});

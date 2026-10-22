@@ -552,7 +552,7 @@ Only BK can do these:
 
 ## Device-helper extension (planned 2026-10-20)
 
-Status: 24b diagnostics shipped in v0.46.1. Stage 5 implements the 24c/24d combined default for Apple Silicon under D-433; Intel and Linux stay legacy. Physical touch/reset and installed desktop acceptance remain with the orchestrator; [evidence](../research/spikes/device-helper-native-default.md). Rung 24e has an explicit Linux candidate; S60 and native installed evidence remain open. Rung 24f slice 1 implements a Windows diagnostics/layout release path; native Windows CI and HID/COM remain pending (D-435).
+Status: 24b diagnostics shipped in v0.46.1. Stage 5 implements the 24c/24d combined default for Apple Silicon under D-433; Intel and Linux stay legacy. Physical touch/reset and installed desktop acceptance remain with the orchestrator; [evidence](../research/spikes/device-helper-native-default.md). Rung 24e has an explicit Linux candidate; S60 and native installed evidence remain open. Rung 24f has a diagnostics/layout release path (D-435) and an explicit native HID/COM candidate (D-436); native candidate CI and S61 remain pending.
 
 **Build philosophy:** reuse the transport contracts and firmware fakes, ship one usable capability at a time, and keep the previous product working after every rung. At most two new unknowns per rung. If a gate reveals more, split the rung with a letter rather than claiming completion from unit tests.
 
@@ -651,7 +651,7 @@ Status: candidate implemented under D-434. Explicit `--device-backend native --t
 
 ## Rung 24f: I can use the device helper on native Windows
 
-Status: slice 1 implemented under D-435: Windows x64 CLI/diagnostics helper, checksum-verified per-user PowerShell installer, workflow guards and native-runner installed smoke. Native Windows CI is configured but unobserved locally. HID/COM, S61 and Windows S62 acceptance remain open. [24f evidence](../research/spikes/device-helper-24f.md).
+Status: slice 1 implements the Windows diagnostics/layout release (D-435). Slice 2 implements an explicit `native-windows` HID/COM candidate (D-436), with seven capabilities, lab recording and reboot-only paths. Ordinary releases stay diagnostics-only. Windows candidate CI and the installed synthetic journey are configured but unobserved on the macOS worker; S61 hardware and Windows S62 acceptance remain open. [24f evidence](../research/spikes/device-helper-24f.md).
 
 Slice 1 promise: "On Windows x64 I can install keyloom without admin rights, WSL or Docker, run version/doctor/import/layout/boards/change, and receive a clear not-available-on-Windows-yet error for unsupported workflows." Q38 retains the helper/CLI-device-journey assumption; the full promise below belongs to the next transport slice.
 
