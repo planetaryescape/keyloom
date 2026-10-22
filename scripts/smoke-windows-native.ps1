@@ -70,3 +70,6 @@ try {
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
     if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }
 }
+# Every check above passed. The last native command was the deliberate exit-6 refusal, and pwsh -Command would
+# otherwise report that as this script's failure.
+exit 0
