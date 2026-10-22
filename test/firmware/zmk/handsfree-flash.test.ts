@@ -155,11 +155,15 @@ describe("a Glove80 whose halves run keyloom's firmware", () => {
     expect(r.saved).toEqual([]);
   });
 
-  test("a half that never comes back fails with the cable advice, not a verified result", async () => {
+  test("a half that never comes back fails with the bootloader rewrite first, then the cable, not a verified result", async () => {
     const r = await run(GLOVE80, glove80Image(KEY), (root) => fakeWorld({ root, halves: [running("L"), running("R")], after: () => undefined }));
     expect(r.result.state).toBe("failed");
     expect(r.result.error).toContain("didn't come back");
-    expect(r.result.error).toContain("USB cable");
+    // A truncated copy leaves a half that can't start; its own bootloader instruction is the fix, so it leads.
+    expect(r.result.error).toContain("Its firmware may be incomplete. Put it in its bootloader and flash again:");
+    expect(r.result.error).toMatch(/hold (I \+ PgDn|Magic \+ E) and switch it on/);
+    const error = r.result.error ?? "";
+    expect(error.indexOf("bootloader")).toBeLessThan(error.indexOf("USB cable"));
   });
 
   test("a half that comes back with a serial that is not keyloom's is named in the error", async () => {
