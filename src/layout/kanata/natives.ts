@@ -43,7 +43,7 @@ export function kanataSource(steps: readonly Step[]): string | undefined {
 
 /**
  * Whether a kanata native is one kanataSource writes: a one-shot of key names or a `(multi …)` of them, or the caps word. The
- * validator admits these for a put's copy (D-443); any other kanata source is still refused.
+ * validator admits these for a put's copy (D-451); any other kanata source is still refused.
  */
 export function kanataWrittenByKeyloom(source: string): boolean {
   if (source === `(caps-word-toggle ${CAPS_WORD_MS})`) return true;

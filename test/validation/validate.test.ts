@@ -305,6 +305,46 @@ describe("validate: passthrough_layer_index with the layer numbers read (D-360)"
   });
 });
 
+describe("validate: risky_native (warning, D-451)", () => {
+  const risky = (ops: ChangeOp[], before = tiny()) => validate(tinyBoard, before, ops).warnings.filter((w) => w.code === "risky_native");
+
+  test("a new bootloader key warns in words that follow its place, and does not block the change", () => {
+    const r = validate(tinyBoard, tiny(), [set("base", 0, native("QK_BOOT"))]);
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.filter((x) => x.code === "risky_native")).toEqual([{
+      code: "risky_native",
+      message: 'layer "base", position 0: QK_BOOT would put the keyboard into its bootloader when pressed',
+      plain: "Left pinky, number row would put the keyboard into its bootloader when pressed",
+      slots: [at("base", 0)],
+    }]);
+  });
+
+  test("a new reset key and a new unpair-all key warn with their own effect", () => {
+    expect(risky([set("base", 0, native("QK_REBOOT"))]).map((w) => w.plain)).toEqual([expect.stringContaining("would restart the keyboard when pressed")]);
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&bt BT_CLR_ALL", label: "CLR_ALL" })]).map((w) => w.plain)).toEqual([expect.stringContaining("would forget every paired Bluetooth device")]);
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&bt BT_CLR", label: "CLR" })]).map((w) => w.plain)).toEqual([expect.stringContaining("would forget the Bluetooth device paired on the current profile")]);
+  });
+
+  test("a key already in the layout does not warn again when another key is edited", () => {
+    const before = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [native("QK_BOOT"), ...l.bindings.slice(1)] } : l)) });
+    expect(risky([set("base", 1, key("B"))], before)).toEqual([]);
+    expect(risky([{ op: "swapBindings", a: at("base", 0), b: at("base", 2) }], before)).toEqual([]);
+  });
+
+  test("one-shots, caps word and lighting keys never warn", () => {
+    expect(risky([set("base", 0, native("OSM(MOD_LSFT)"))])).toEqual([]);
+    expect(risky([set("base", 0, native("CW_TOGG"))])).toEqual([]);
+    expect(risky([set("base", 0, native("RGB_TOG"))])).toEqual([]);
+    expect(risky([set("base", 0, native("RGB_MODE_REVERSE"))])).toEqual([]);
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&sk LSHFT", label: "OS" })])).toEqual([]);
+  });
+
+  test("a Bluetooth select or next key does not warn, since it forgets nothing", () => {
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&bt BT_SEL 2", label: "BT2" })])).toEqual([]);
+  });
+});
+
 describe("validate: layer_limit", () => {
   test("32 layers on QMK", () => {
     expect(errorsOf([{ op: "renameLayer", layerId: "l0", name: "x" }], withLayers(32))).toEqual([]);
@@ -356,7 +396,7 @@ describe("validate: native_edit", () => {
     expect(codes(errorsOf([set("base", 0, native("DUAL_FUNC_9"))], withNative()))).toEqual(["native_edit"]);
   });
 
-  test("a native keyloom reads on the layout's own firmware can be added, as a copy translates one (D-443)", () => {
+  test("a native keyloom reads on the layout's own firmware can be added, as a copy translates one (D-451)", () => {
     expect(errorsOf([set("base", 0, native("RGB_TOG"))], withNative())).toEqual([]);
     // Another firmware's native is still refused as an edit (and as an unsupported firmware).
     expect(codes(errorsOf([set("base", 0, { kind: "native", firmware: "zmk", source: "&caps_word", label: "CapsW" })], withNative()))).toContain("native_edit");

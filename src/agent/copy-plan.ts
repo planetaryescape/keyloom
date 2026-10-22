@@ -60,7 +60,7 @@ export function transferEnv(from: LayoutSnapshot, to: LayoutSnapshot, layers: re
       return positions.length > 0 && positions.every((p) => other.includes(p) || thumbs.has(p));
     },
     triggerPositions: (hand) => [...new Set([...def.hands[hand === "left" ? "right" : "left"], ...(def.rows.thumb ?? [])])].sort((a, b) => a - b),
-    // ZMK boards are wireless, so a ZMK target has Bluetooth; the board definitions don't say otherwise.
+    // Assumed: every ZMK board here is wireless. No board definition or capability records Bluetooth, so this is the one place it's decided.
     targetFacts: { board: def.name, lighting: boardCapabilities(def).lighting, bluetooth: to.document.firmware === "zmk" },
   };
 }

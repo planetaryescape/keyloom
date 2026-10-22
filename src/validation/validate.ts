@@ -13,7 +13,7 @@ import type { Issue, ValidationResult } from "./result.ts";
 import { type PinnedPriority, largeRelearn, movedPinned } from "./priority-rules.ts";
 import { displacedFunctions, functionHomes, reachableLayers, relearned } from "./reachability.ts";
 import { macroSecrets, tapDanceWarnings } from "./tap-dance-rules.ts";
-import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex } from "./rules.ts";
+import { documentRules, doubledLetterTapdance, functionLost, nativeEdit, passthroughLayerIndex, riskyNatives } from "./rules.ts";
 import { type SelectionScope, outsideSelection } from "./selection-rules.ts";
 
 const NO_DIFF: ValidationResult["diff"] = { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] };
@@ -97,6 +97,7 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
     } else errors.push(i);
   }
   errors.push(...nativeEdit(before, after), ...passthroughLayerIndex(before, after));
+  warnings.push(...riskyNatives(board, before, after));
 
   const lost = functionLost(before, after, clean);
   errors.push(...lost.errors);

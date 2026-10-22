@@ -2,6 +2,7 @@
 // the layout before and after a change; validate.ts reports only what the change made worse.
 // Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
 import { lightingRefusal } from "../boards/capabilities.ts";
+import { keyPlace } from "../boards/key-names.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { keptDefinitions } from "../layout/kept-behaviours.ts";
@@ -11,6 +12,7 @@ import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts"
 import type { ChangeOp } from "../layout/change.ts";
 import { readNative } from "../layout/native-read.ts";
 import { kanataWrittenByKeyloom } from "../layout/kanata/natives.ts";
+import type { Step } from "../layout/native-meaning.ts";
 import type { Issue } from "./result.ts";
 import { conditionalLayerRules } from "./conditional-layer-rules.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
@@ -278,7 +280,7 @@ const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b
  * keymap that silently stops matching its custom C.
  *
  * A new native is allowed when it is the layout's own firmware and keyloom reads its meaning (native-read.ts): a shift, a
- * caps word or a lighting key that a copy translated (D-443), or one an agent asks for. Source keyloom can't read stays refused.
+ * caps word or a lighting key that a copy translated (D-451), or one an agent asks for. Source keyloom can't read stays refused.
  */
 export function nativeEdit(before: Layout, after: Layout): Issue[] {
   const known = new Set<string>();
@@ -295,6 +297,42 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   }
   if (!deepEqual(before.passthrough, after.passthrough)) out.push(issue("native_edit", "a change touched a passthrough block; keyloom keeps those verbatim", "This change touches custom code that keyloom keeps exactly as it is."));
   return out;
+}
+
+/**
+ * `risky_native` (warning, D-451): a new or changed native that resets the keyboard or forgets Bluetooth pairings. BK's decision:
+ * "allow understood raw codes, warn on risky ones". A warning never blocks a change or a put, and a key already in `before` (an
+ * imported Boot key, say) does not warn again on every edit. Only these steps warn; one-shots, lighting and caps word never do.
+ */
+export function riskyNatives(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
+  const known = new Set<string>();
+  for (const { binding: b } of bindingsOf(before)) if (b.kind === "native") known.add(nativeKey(b));
+  const kept = keptDefinitions(after.passthrough);
+  const out: Issue[] = [];
+  for (const { binding: b, slot, where } of bindingsOf(after)) {
+    if (b.kind !== "native" || known.has(nativeKey(b))) continue;
+    const reading = readNative(b, kept);
+    if (reading.kind !== "steps") continue;
+    const effect = reading.steps.map(riskEffect).find((e) => e !== undefined);
+    if (effect === undefined) continue;
+    const place = slot ? keyPlace(board, slot.position) : "a combo";
+    const sentence = `${place.charAt(0).toUpperCase()}${place.slice(1)} ${effect}`;
+    out.push(issue("risky_native", `${where}: ${b.source} ${effect}`, sentence, slot ? [slot] : undefined));
+  }
+  return out;
+}
+
+/** What a risky step does to the keyboard, in words that follow the key's place; undefined for a step that is not risky. */
+function riskEffect(step: Step): string | undefined {
+  switch (step.kind) {
+    case "bootloader": return "would put the keyboard into its bootloader when pressed";
+    case "reset": return "would restart the keyboard when pressed";
+    case "bluetooth":
+      if (step.op === "clearAll") return "would forget every paired Bluetooth device";
+      if (step.op === "clear") return "would forget the Bluetooth device paired on the current profile";
+      return undefined;
+    default: return undefined;
+  }
 }
 
 /**
