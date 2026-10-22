@@ -18,6 +18,7 @@ fn record(id: u64, path: &str, serial: &str) -> Record {
                 product: Some(0x27db),
                 serial: Some(serial.into()),
                 product_name: Some("Synthetic USB".into()),
+                usb_device: true,
                 ..Properties::default()
             },
         ],
@@ -56,12 +57,53 @@ fn identity_metadata_comes_from_the_owning_usb_device_not_a_hub_above_it() {
         serial: Some("hub-serial".into()),
         product_name: Some("Synthetic Hub".into()),
         interface: Some(9),
+        usb_device: true,
     });
     let endpoint = endpoint(hub).unwrap();
     assert_eq!((endpoint.vendor, endpoint.product), (0x16c0, 0x27db));
     assert_eq!(endpoint.serial, None);
     assert_eq!(endpoint.product_name, None);
     assert_eq!(endpoint.interface_number, Some(3));
+}
+#[test]
+fn identity_skips_cdc_nodes_that_copy_the_usb_ids_without_the_strings() {
+    // Shape of a real Glove80 half on macOS 27: AppleUSBACMData and IOUSBHostInterface carry idVendor/idProduct,
+    // and only the IOUSBHostDevice is trusted for the serial string.
+    let ids = |interface, serial: Option<&str>, usb_device: bool| Properties {
+        vendor: Some(0x16c0),
+        product: Some(0x27db),
+        serial: serial.map(Into::into),
+        product_name: usb_device.then(|| "Glove80 Left".into()),
+        interface,
+        usb_device,
+    };
+    let glove = Record {
+        id: 40,
+        path: Some("/dev/cu.usbmodem1".into()),
+        parents: vec![
+            ids(None, None, false),
+            ids(Some(1), Some("interface-copy"), false),
+            ids(None, Some("keyloom/NPQRSTVWXYZ0-L:GLV80-0"), true),
+            Properties {
+                vendor: Some(0x2109),
+                product: Some(0x2817),
+                serial: Some("hub-serial".into()),
+                usb_device: true,
+                ..Properties::default()
+            },
+        ],
+    };
+    let found = endpoint(glove).unwrap();
+    assert_eq!((found.vendor, found.product), (0x16c0, 0x27db));
+    assert_eq!(
+        found.serial.as_deref(),
+        Some("keyloom/NPQRSTVWXYZ0-L:GLV80-0")
+    );
+    assert_eq!(found.product_name.as_deref(), Some("Glove80 Left"));
+    assert_eq!(found.interface_number, Some(1));
+    let mut no_device = record(41, "/dev/cu.synthetic", "s");
+    no_device.parents[1].usb_device = false;
+    assert!(endpoint(no_device).is_none());
 }
 #[test]
 fn readback_rejects_each_configuration_mismatch() {
@@ -390,7 +432,7 @@ fn close_attempts_dtr_exclusion_and_fd_release_even_after_failure() {
             |request| {
                 calls.borrow_mut().push(request);
                 if failure == Some(request) {
-                    Err("io_failed")
+                    Err(EIO)
                 } else {
                     Ok(())
                 }
@@ -410,6 +452,25 @@ fn close_attempts_dtr_exclusion_and_fd_release_even_after_failure() {
         );
         assert_eq!(*calls.borrow(), [TIOCCDTR, TIOCNXCL, -1]);
     }
+}
+
+#[test]
+fn close_after_unplug_succeeds_when_only_the_vanished_device_refuses_line_control() {
+    for gone in [ENXIO, ENODEV] {
+        assert_eq!(close_steps(|_| Err(gone), || true), Ok(()));
+        assert_eq!(close_steps(|_| Err(gone), || false), Err("io_failed"));
+    }
+    assert_eq!(
+        close_steps(
+            |request| if request == TIOCNXCL {
+                Err(EIO)
+            } else {
+                Err(ENXIO)
+            },
+            || true
+        ),
+        Err("io_failed")
+    );
 }
 
 #[test]

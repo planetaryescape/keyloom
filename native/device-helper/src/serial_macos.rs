@@ -17,6 +17,7 @@ struct Properties {
     serial: Option<String>,
     product_name: Option<String>,
     interface: Option<u8>,
+    usb_device: bool,
 }
 struct Record {
     id: u64,
@@ -27,10 +28,9 @@ fn endpoint(record: Record) -> Option<SerialEndpoint> {
     let path = record
         .path
         .filter(|s| s.starts_with("/dev/cu.") && !s.contains('\0'))?;
-    let owner = record
-        .parents
-        .iter()
-        .position(|p| p.vendor.is_some() && p.product.is_some())?;
+    // macOS copies idVendor/idProduct onto the CDC data and interface nodes too, and only the device node is
+    // guaranteed to carry the string descriptors, so the owner is the nearest USB device by class, not by IDs.
+    let owner = record.parents.iter().position(|p| p.usb_device)?;
     let usb = &record.parents[owner];
     // Identity comes from the owning USB device only: a hub further up must never lend its serial.
     let present = |value: &Option<String>| value.as_ref().filter(|s| !s.is_empty()).cloned();
@@ -72,6 +72,8 @@ fn registry_endpoint(entry: u32) -> Result<Option<SerialEndpoint>, &'static str>
             serial: string(entry.0, "USB Serial Number"),
             product_name: string(entry.0, "USB Product Name"),
             interface: number(entry.0, "bInterfaceNumber").and_then(|n| u8::try_from(n).ok()),
+            usb_device: conforms_to(entry.0, c"IOUSBHostDevice")
+                || conforms_to(entry.0, c"IOUSBDevice"),
         });
         current = parent(entry.0);
     }
@@ -362,13 +364,16 @@ fn read_ready(
     }
 }
 fn close_steps(
-    mut line: impl FnMut(c_int) -> Result<(), &'static str>,
+    mut line: impl FnMut(c_int) -> Result<(), c_int>,
     release: impl FnOnce() -> bool,
 ) -> Result<(), &'static str> {
-    let dtr = line(TIOCCDTR);
-    let exclusive = line(TIOCNXCL);
+    // An unplugged port refuses line ioctls with ENXIO/ENODEV while close still succeeds (observed on a Glove80
+    // half). With no device left there is no DTR or exclusive state to clear, so only the fd release decides.
+    let cleared = |result: Result<(), c_int>| matches!(result, Ok(()) | Err(ENXIO | ENODEV));
+    let dtr = cleared(line(TIOCCDTR));
+    let exclusive = cleared(line(TIOCNXCL));
     let closed = release();
-    if dtr.is_err() || exclusive.is_err() || !closed {
+    if !dtr || !exclusive || !closed {
         Err("io_failed")
     } else {
         Ok(())
@@ -392,7 +397,10 @@ impl Port {
         let Some(fd) = self.fd.take() else {
             return Ok(());
         };
-        close_steps(|request| control(fd, request), || release(fd))
+        close_steps(
+            |request| control(fd, request).map_err(|_| errno()),
+            || release(fd),
+        )
     }
     fn receive(&mut self, timeout: c_int) -> Result<Option<Vec<u8>>, &'static str> {
         let fd = self.fd.ok_or("disconnected")?;

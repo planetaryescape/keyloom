@@ -25,6 +25,8 @@ unsafe extern "C" {
     pub fn IOServiceGetMatchingService(port: u32, matching: *mut c_void) -> u32;
     #[cfg(feature = "native-serial")]
     fn IORegistryEntryGetParentEntry(entry: u32, plane: *const c_char, parent: *mut u32) -> i32;
+    #[cfg(feature = "native-serial")]
+    fn IOObjectConformsTo(object: u32, class_name: *const c_char) -> u32;
 }
 pub struct Registry(pub u32);
 impl Drop for Registry {
@@ -57,6 +59,11 @@ pub fn string(entry: u32, key: &str) -> Option<String> {
         .downcast::<CFString>()
         .map(|s| s.to_string())
         .filter(|s| !s.is_empty())
+}
+#[cfg(feature = "native-serial")]
+pub fn conforms_to(entry: u32, class_name: &std::ffi::CStr) -> bool {
+    // SAFETY: entry is retained by the caller; class_name is NUL terminated and outlives the call.
+    unsafe { IOObjectConformsTo(entry, class_name.as_ptr()) != 0 }
 }
 #[cfg(feature = "native-serial")]
 pub fn parent(entry: u32) -> Option<Registry> {
