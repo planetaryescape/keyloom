@@ -135,9 +135,10 @@ describe("BK's Glove80 setup on the derived Corne", () => {
     expect(base.carried).toBe(42);
     expect(base.notCarried).toBe(38);
     expect(out.notCarried.find((n) => n.sourceName.startsWith("F1 "))?.why).toBe("the new board has no key in this place");
-    expect(out.combos.copied).toEqual([]);
-    expect(out.combos.skipped.map((c) => c.id)).toEqual(["combo-esc", "combo-caps"]);
-    expect(out.combos.skipped[1]?.why).toContain("only works on its own keyboard");
+    // combo-caps outputs a ZMK caps word, which the Corne has as a builtin, so it carries (D-443); combo-esc's output has no counterpart.
+    expect(out.combos.copied).toEqual(["combo-caps"]);
+    expect(out.combos.skipped.map((c) => c.id)).toEqual(["combo-esc"]);
+    expect(out.combos.skipped[0]?.why).toContain("has no confident counterpart on the target");
   });
 
   test("a layer key with no counterpart is offered free thumb keys first, then keys held by a guess, and applying the placement retires the other proposal", async () => {

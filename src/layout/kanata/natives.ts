@@ -41,6 +41,15 @@ export function kanataSource(steps: readonly Step[]): string | undefined {
   return undefined;
 }
 
+/**
+ * Whether a kanata native is one kanataSource writes: a one-shot of key names or a `(multi …)` of them, or the caps word. The
+ * validator admits these for a put's copy (D-443); any other kanata source is still refused.
+ */
+export function kanataWrittenByKeyloom(source: string): boolean {
+  if (source === `(caps-word-toggle ${CAPS_WORD_MS})`) return true;
+  return new RegExp(`^\\(one-shot ${ONE_SHOT_MS} (?:[a-z0-9-]+|\\(multi [a-z0-9- ]+\\))\\)$`).test(source);
+}
+
 /** What a native binding of any firmware becomes on kanata; throws when it can't be written. `kept` is the layout's kept ZMK behaviours. */
 export function nativeAction(firmware: "qmk" | "zmk" | "kanata", source: string, where: string, kept: KeptMap = new Map()): string {
   const src = source.trim();

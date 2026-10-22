@@ -4,7 +4,7 @@ import { type KeptMap, readNative } from "../../src/layout/native-read.ts";
 import { keptDefinitions } from "../../src/layout/kept-behaviours.ts";
 import { type Step } from "../../src/layout/native-meaning.ts";
 import { type TargetFacts, writeSteps } from "../../src/layout/native-write.ts";
-import { nativeAction } from "../../src/layout/kanata/natives.ts";
+import { kanataWrittenByKeyloom, nativeAction } from "../../src/layout/kanata/natives.ts";
 import { BindingTransfer, type TransferEnv } from "../../src/layout/transfer.ts";
 import type { Binding, Layout, Mod, Passthrough } from "../../src/layout/schema.ts";
 
@@ -175,6 +175,18 @@ describe("writing a meaning for a target", () => {
       const again = readNative(qmk(written.source), kept());
       expect(again).toEqual(read);
     }));
+  });
+});
+
+describe("kanata natives the validator admits", () => {
+  test("the kanata forms kanataSource writes are admitted, and nothing else", () => {
+    expect(kanataWrittenByKeyloom("(one-shot 2000 lshift)")).toBe(true);
+    expect(kanataWrittenByKeyloom("(one-shot 2000 (multi lshift rctl))")).toBe(true);
+    expect(kanataWrittenByKeyloom("(caps-word-toggle 2000)")).toBe(true);
+    expect(kanataWrittenByKeyloom("(caps-word-toggle 9999)")).toBe(false);
+    expect(kanataWrittenByKeyloom("(one-shot 2000 (cmd rm -rf /))")).toBe(false);
+    expect(kanataWrittenByKeyloom("(one-shot 2000 lshift) (cmd x)")).toBe(false);
+    expect(kanataWrittenByKeyloom("(cmd rm)")).toBe(false);
   });
 });
 

@@ -10,6 +10,7 @@ import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import { readNative } from "../layout/native-read.ts";
+import { kanataWrittenByKeyloom } from "../layout/kanata/natives.ts";
 import type { Issue } from "./result.ts";
 import { conditionalLayerRules } from "./conditional-layer-rules.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
@@ -283,7 +284,8 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   const known = new Set<string>();
   for (const { binding: b } of bindingsOf(before)) if (b.kind === "native") known.add(nativeKey(b));
   const kept = keptDefinitions(after.passthrough);
-  const understood = (b: Extract<Binding, { kind: "native" }>) => b.firmware === after.firmware && readNative(b, kept).kind !== "unknown";
+  const understood = (b: Extract<Binding, { kind: "native" }>) =>
+    b.firmware === after.firmware && (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) : readNative(b, kept).kind !== "unknown");
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
     if (b.kind === "native" && !known.has(nativeKey(b)) && !understood(b)) {
