@@ -1,7 +1,7 @@
 // Builds against a fake `docker` and a local git repo standing in for MoErgo's template: everything keyloom
 // does around the Nix build (checkout, image, config files, artifact, failure messages) without a real
 // compile. The real Docker build is the gated test in docker.test.ts.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BuildFailure, buildZmk } from "../../../src/firmware/zmk/build.ts";
@@ -19,6 +19,10 @@ import { FAKE_DOCKER_ZMK, TEMPLATE_FIXTURE, boardWithTemplate, combinedUf2, glov
 const real = await glove80();
 const { layout } = await importZmkSource(TEMPLATE_FIXTURE, real.definition);
 const ZMK_SHA = real.definition.revisions[0]?.source.sha as string;
+
+// These tests spawn git and many hashing processes; loaded full runs have exceeded 12 s without a firmware compile.
+// The build timeout and cancellation assertions below keep their own, shorter bounds.
+setDefaultTimeout(30_000);
 
 async function setup() {
   const origin = templateRepo();
