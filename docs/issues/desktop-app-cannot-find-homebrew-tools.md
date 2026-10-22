@@ -11,9 +11,11 @@ BK's installed 0.53.1 app showed "Chat needs a model" when he pressed Cmd+K, alt
 
 Fix (D-441): the app asks the login shell for its PATH, with a 3-second deadline over the whole exchange, and starts `keyloom serve` with it. The chat panel now says that a Codex sign-in is picked up by checking again, and that an API key needs keyloom started again. Run under the app's minimal environment, the first version of the lookup returned BK's full PATH in 364 ms, and codex, docker and zapp all resolved on it.
 
-Not fixed: an API key exported in a shell profile still doesn't reach the app, because only PATH is taken.
+Status: fixed on branch fix/desktop-provider-keys.
 
-Status: fixed in d5ac21f (PR 167), released in v0.53.2. Checked on BK's Mac on 2026-10-22, with the installed v0.53.2 app opened from a stripped environment (`env -i … PATH=/usr/bin:/bin:/usr/sbin:/sbin open -a`):
+The desktop shell now passes non-empty allowlisted provider settings from the same bounded login-shell exchange as PATH, while preserving values already set in the app environment. The desktop crate tests cover the allowlist, unset and repeated values, values containing `=`, the deadline and a pipe held open by a background process (D-443).
+
+Earlier release: d5ac21f (PR 167), v0.53.2. Checked on BK's Mac on 2026-10-22, with the installed v0.53.2 app opened from a stripped environment (`env -i … PATH=/usr/bin:/bin:/usr/sbin:/sbin open -a`):
 - `ps eww` showed `keyloom-desktop` with that minimal PATH, and its `keyloom serve` with BK's full shell PATH.
 - codex, docker and zapp resolved on the sidecar's PATH.
 - Cmd+K opened chat ready for a message ("Tell keyloom what's getting in your way"), not "Chat needs a model". This was read through Codex Computer Use's accessibility output, because its screenshot came out blank.
