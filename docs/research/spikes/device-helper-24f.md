@@ -22,7 +22,7 @@ ACL inspection is cached per path in the process; reparse attributes and final f
 
 Q38 is assumed as directed by the Stage 7 brief: helper/CLI device journey first, full product parity separately. HID/COM and lab capture are the next slice. No device capability is advertised by this slice.
 
-## Local checks passed within the sandbox's limits
+## Local checks ran on macOS; Windows behaviour comes from CI
 
 Commands used `/opt/homebrew/Cellar/bun/1.3.14/bin/bun`.
 

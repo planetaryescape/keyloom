@@ -186,8 +186,9 @@ export function extractWindowsHelper(bytes: Uint8Array, manifest: Manifest, base
         verify(path);
       }
     } finally {
-      try { io.unlinkSync(temporary); }
-      catch (error) { if (!errno(error, "ENOENT")) throw new HelperFailure("unsafe_cache"); }
+      // Best effort: a leftover temp name in the private directory is harmless, and an unlink error must not
+      // replace the publish or verification result.
+      try { io.unlinkSync(temporary); } catch { /* left for a later run to overwrite under a new name */ }
     }
   }
   verify(path);
