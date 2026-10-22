@@ -52,7 +52,7 @@ export type LabCommandDeps = { io: Io; format: () => Format; quiet: () => boolea
 
 const NOTICE = [
   "keyloom is recording this keyboard's key presses (which key, and when) and what you type here, until you press Ctrl-C.",
-  "They stay on this Mac, in keyloom's database. Nothing is sent anywhere. Don't type passwords. Delete the recording any time with: keyloom lab delete <session>",
+  "They stay on this computer, in keyloom's database. Nothing is sent anywhere. Don't type passwords. Delete the recording any time with: keyloom lab delete <session>",
 ].join("\n");
 
 function wrap(text: string, width: number): string[] {

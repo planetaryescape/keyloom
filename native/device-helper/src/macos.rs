@@ -69,6 +69,7 @@ fn endpoint(entry: u32) -> Option<Endpoint> {
     Some(Endpoint {
         key: id.to_string(),
         permission_denied: false,
+        driver_missing: false,
         vendor: number(entry, "VendorID")?,
         product: number(entry, "ProductID")?,
         serial,

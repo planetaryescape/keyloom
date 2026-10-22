@@ -13,6 +13,8 @@ export type RawHidInterface = {
   serial?: string;
   /** Read-only Linux access check; a later open is still authoritative. */
   permissionDenied?: true;
+  /** Windows found the USB device but its in-box driver supplied no usable interface. */
+  driverMissing?: true;
   /** What the platform needs to open it again: a registry entry ID on macOS, a /dev/hidrawN path on Linux. */
   handle: string;
 };
@@ -24,7 +26,7 @@ export type HidSession = {
 };
 
 export type HidTransport = {
-  /** Every raw-HID interface attached, for any vendor. Reading this never opens a device. */
+  /** Every raw-HID interface attached, for any vendor. Windows reads HID caps through a metadata-only handle; no streaming handle is opened. */
   list(): Promise<RawHidInterface[]>;
   /** Sends one output report (no report ID). Opens the device for as long as the write takes. */
   write(target: RawHidInterface, report: Uint8Array): Promise<void>;

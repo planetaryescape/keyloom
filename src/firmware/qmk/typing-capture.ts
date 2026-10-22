@@ -1,5 +1,6 @@
 // The host half of the Moonlander's key stream (D-281): start it over raw HID, keep it alive, decode the 32-byte reports into a
 // trace and stop it. The transport is a parameter, so tests use a fake keyboard and nothing here can reach a real one.
+import { WINDOWS_HID_DRIVER_HINT } from "../toolchain/platform-support.ts";
 import { type CaptureHooks, CaptureError, type CapturedTrace, type KeyCapture, TraceBuilder } from "../emulate/trace.ts";
 import type { HidTransport, RawHidInterface } from "../toolchain/hid.ts";
 import { ZSA_VENDOR_ID, markerOf } from "./handsfree.ts";
@@ -11,7 +12,10 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export async function findQmkStreamDevice(transport: HidTransport): Promise<RawHidInterface> {
   const zsa = (await transport.list()).filter((i) => i.vendorId === ZSA_VENDOR_ID);
   if (zsa.length === 0) throw new CaptureError("no ZSA keyboard is connected");
-  const ours = zsa.filter((i) => markerOf(i.serial) !== undefined);
+  // A usable keyloom keyboard wins over another ZSA device whose raw-HID driver failed; the driver hint is only
+  // the answer when no usable keyloom keyboard is attached.
+  const ours = zsa.filter((i) => !i.driverMissing && markerOf(i.serial) !== undefined);
+  if (ours.length === 0 && zsa.some((i) => i.driverMissing)) throw new CaptureError(WINDOWS_HID_DRIVER_HINT);
   if (ours.length === 0) {
     throw new CaptureError("the connected ZSA keyboard isn't running a keyloom build, so it can't stream its keys. Apply a change and sync once from keyloom, then try again");
   }

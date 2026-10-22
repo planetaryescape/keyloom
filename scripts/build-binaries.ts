@@ -42,8 +42,8 @@ function options(argv: string[]) {
   if (backend !== undefined && resolve(outDir) === resolve("dist")) {
     throw new Error("an explicit --device-backend requires a separate --out-dir");
   }
-  if (backend !== undefined && backend !== "legacy" && selected.some((target) => RELEASE_TARGETS[target].platform !== "darwin" && !(target === "bun-linux-x64" && backend === "native"))) {
-    throw new Error(`${backend} requires a Mac target (or bun-linux-x64 with native)`);
+  if (backend !== undefined && backend !== "legacy" && selected.some((target) => RELEASE_TARGETS[target].platform !== "darwin" && !(["bun-linux-x64", "bun-windows-x64"].includes(target) && backend === "native"))) {
+    throw new Error(`${backend} requires a Mac target (or bun-linux-x64/bun-windows-x64 with native)`);
   }
   return { targets: selected, entry, helper, helperDir, outDir, backend };
 }
@@ -55,7 +55,7 @@ async function helperPath(target: BunTarget, backend: "legacy" | "native" | "nat
   if (process.platform !== spec.platform || process.arch !== spec.arch)
     throw new Error(`cross build ${target} needs --helper-dir with native built/signed helpers, or --helper with one target`);
   const args = ["cargo", "build", "--locked", "--release", "--target", spec.rust];
-  if (backend !== "legacy") args.push("--features", backend === "native" ? (spec.platform === "linux" ? "native-linux" : "native-macos") : backend);
+  if (backend !== "legacy") args.push("--features", backend === "native" ? (spec.platform === "linux" ? "native-linux" : spec.platform === "win32" ? "native-windows" : "native-macos") : backend);
   const build = Bun.spawn(args, {
     cwd: "native/device-helper", stdout: "inherit", stderr: "inherit",
   });
@@ -84,7 +84,7 @@ async function checkCapabilities(target: BunTarget, backend: Backend, helper: st
   const advertised = [...(JSON.parse(output) as { capabilities: string[] }).capabilities].sort();
   const expected = [...EXPECTED_CAPABILITIES[backend]].sort();
   if (advertised.join() !== expected.join()) {
-    throw new Error(`${target} selects the ${backend} backend, which needs helper capabilities [${expected.join(", ")}], but ${helper} advertises [${advertised.join(", ")}]${backend === "native" ? `; build the helper with --features ${spec.platform === "linux" ? "native-linux" : "native-macos"}` : ""}`);
+    throw new Error(`${target} selects the ${backend} backend, which needs helper capabilities [${expected.join(", ")}], but ${helper} advertises [${advertised.join(", ")}]${backend === "native" ? `; build the helper with --features ${spec.platform === "linux" ? "native-linux" : spec.platform === "win32" ? "native-windows" : "native-macos"}` : ""}`);
   }
 }
 

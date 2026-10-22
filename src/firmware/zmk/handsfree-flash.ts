@@ -50,7 +50,7 @@ export function halfTargets(board: BoardDefinition, handsFree: HandsFree, steps:
   });
 }
 
-const isOurs = (p: SerialPort, t: HalfTarget): boolean =>
+export const matchesHalfIds = (p: SerialPort, t: HalfTarget): boolean =>
   t.foreign?.(p) !== true &&
   (t.vendorId === undefined || hexId(p.vendorId) === t.vendorId.toLowerCase()) &&
   (t.half.usbProductId === undefined || hexId(p.productId) === t.half.usbProductId.toLowerCase());
@@ -64,7 +64,7 @@ export function portsOfHalf(ports: SerialPort[], t: HalfTarget): { keyloom: Arra
   const keyloom: Array<{ port: SerialPort; key: string }> = [];
   const other: SerialPort[] = [];
   for (const port of ports) {
-    if (!isOurs(port, t)) continue;
+    if (port.driverMissing || !matchesHalfIds(port, t)) continue;
     const parsed = parseSerial(port.serial);
     if (parsed) {
       if (parsed.half === t.half.marker) keyloom.push({ port, key: parsed.key });
@@ -102,6 +102,8 @@ export async function restartHalf(opts: {
   targets: readonly HalfTarget[];
   target: HalfTarget;
   findVolume: VolumeFinder;
+  /** Reboot-only can report transport acceptance without probing/copying to a UF2 drive. */
+  waitForVolume?: boolean;
   log: (line: string) => void;
   announce?: (instruction: string) => void;
 }): Promise<EnterResult> {
@@ -112,7 +114,7 @@ export async function restartHalf(opts: {
 
   try {
     // A drive that is already there is a half already in its bootloader, which is where this is trying to get it.
-    if (await opts.findVolume(t.step.volume)) {
+    if (opts.waitForVolume !== false && await opts.findVolume(t.step.volume)) {
       log(`keyloom: ${t.step.volume} is already mounted, so the ${label} is already in its bootloader`);
       return { ok: true, alreadyThere: true };
     }
@@ -144,6 +146,7 @@ export async function restartHalf(opts: {
 
     opts.announce?.(`keyloom is restarting the ${label} into its bootloader. Don't touch the keyboard.`);
     await transport.touch(touched.path, touched.baud);
+    if (opts.waitForVolume === false) return { ok: true };
 
     const deadline = Date.now() + waitMs;
     for (;;) {

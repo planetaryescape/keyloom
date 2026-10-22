@@ -12,6 +12,8 @@ export type SerialPort = {
   serial?: string;
   /** Read-only Linux access check; a later open is still authoritative. */
   permissionDenied?: true;
+  /** Windows found the USB device but its in-box driver supplied no usable interface. */
+  driverMissing?: true;
   /** Candidate helper builds carry an opaque device reference here; callers must not parse it.
    * Legacy transports use the node to touch: `/dev/cu.usbmodemN` on macOS (the IOCalloutDevice), a `/dev/serial/by-id` link or `/dev/ttyACMn` on Linux. */
   path: string;
@@ -24,7 +26,7 @@ export type SerialSession = {
 };
 
 export type SerialTransport = {
-  /** Every USB serial port attached, for any vendor. Reading this never opens a device. */
+  /** Every USB serial port attached, for any vendor. Windows reads HID caps through a metadata-only handle; no streaming handle is opened. */
   list(): Promise<SerialPort[]>;
   /** Sets the port's baud rate and closes it. */
   touch(path: string, baud: number): Promise<void>;

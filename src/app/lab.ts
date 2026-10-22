@@ -1,4 +1,4 @@
-import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
+import { requirePlatformSupport, WINDOWS_BUSY_HINT } from "../firmware/toolchain/platform-support.ts";
 // Use cases for the typing lab (D-280 to D-283, 24-typing-lab.md): record a session from the connected keyboard, keep it, analyse it by
 // replaying it through the real firmware logic, propose what that proves as ordinary change sets, and delete it.
 // Hardware and the emulator are parameters (LabDeps), so the CLI's end-to-end test runs on a fake keyboard and a model.
@@ -117,7 +117,7 @@ export async function beginRecording(
     if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
       const remedy = err.detail.code === "permission_denied"
         ? linuxDevicePermissionRemedy(view.board.definition.firmware === "qmk" ? "hid" : "serial")
-        : undefined;
+        : process.platform === "win32" && view.board.definition.firmware !== "qmk" ? WINDOWS_BUSY_HINT : undefined;
       throw new LabCaptureError(err.detail.code, remedy);
     }
     if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {

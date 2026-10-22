@@ -4,10 +4,11 @@ import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { portOfAnotherBoard } from "./zmk-ports.ts";
-import { type HalfFirmware, type ZmkHandsFreeDeps, halfTargets, readHalf } from "../firmware/zmk/handsfree-flash.ts";
+import { type HalfFirmware, type ZmkHandsFreeDeps, halfTargets, readHalf, restartHalf, realZmkHandsFreeDeps } from "../firmware/zmk/handsfree-flash.ts";
 import { type HandsFreeDeps, type KeyboardIdentity, type KeyboardTarget, type RunningFirmware, keyboardIdentity, keyboardTarget, readRunningFirmware, realHandsFreeDeps, rebootToBootloader } from "../firmware/qmk/handsfree-flash.ts";
+import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import type { HidTransport } from "../firmware/toolchain/hid.ts";
-import { listBoardDefinitions } from "./boards.ts";
+import { listBoardDefinitions, showBoard } from "./boards.ts";
 import { UsageError } from "./errors.ts";
 import { RebootFailedError } from "./firmware-errors.ts";
 
@@ -78,14 +79,29 @@ export async function rawHidFinding(deps: HandsFreeDeps, keyboard: AttachedKeybo
   }
 }
 
-export type RebootOutcome = { board: string; revision: string; previousFirmware: string; bootloader: string };
+export type RebootOutcome = { board: string; revision: string; previousFirmware: string; bootloader: string; transportOnly?: true };
 
 /**
  * Restarts the attached keyboard into its bootloader and stops there; nothing is flashed, and the keyboard
  * stays in the bootloader until it is flashed or unplugged. Only a keyboard running keyloom's firmware can be restarted.
  */
-export async function rebootKeyboard(opts: { board?: string; handsFree?: Partial<HandsFreeDeps>; onLine?: (line: string) => void } = {}): Promise<RebootOutcome> {
+export async function rebootKeyboard(opts: { board?: string; half?: string; handsFree?: HandsFreeOverrides; onLine?: (line: string) => void } = {}): Promise<RebootOutcome> {
   requirePlatformSupport("keyloom flash --reboot-only");
+  if (opts.board) {
+    const board = showBoard(opts.board);
+    if (board.definition.firmware === "zmk") {
+      const revision = zmkRevision(board.definition);
+      if (!revision.flash.handsFree) throw new UsageError(`${board.definition.name} has no hands-free restart recipe`);
+      const targets = halfTargets(board.definition, revision.flash.handsFree, revision.flash.steps, portOfAnotherBoard(board.definition.id));
+      const target = targets.find((t) => t.half.marker.toLowerCase() === opts.half?.toLowerCase() || t.step.label === `${opts.half} half`);
+      if (!target) throw new UsageError("with a ZMK board, choose --half left or --half right");
+      const result = await restartHalf({ deps: realZmkHandsFreeDeps(opts.handsFree?.zmk), targets, target,
+        findVolume: async () => null, waitForVolume: false, log: (line) => opts.onLine?.(line) });
+      if (!result.ok) throw new RebootFailedError(`couldn't request restart of ${board.definition.name} ${target.step.label}: ${result.reason}`);
+      return { board: board.definition.id, revision: revision.id, previousFirmware: "keyloom firmware", bootloader: target.step.volume, transportOnly: true };
+    }
+  }
+  if (opts.half !== undefined) throw new UsageError("--half needs --board naming a ZMK board");
   const deps = realHandsFreeDeps(opts.handsFree);
   const seen = (await attachedKeyboards(deps)).filter((k) => opts.board === undefined || k.boardId === opts.board);
   const attached = seen.filter((k) => k.target !== undefined);

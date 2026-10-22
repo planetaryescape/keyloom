@@ -86,3 +86,68 @@ Still open:
 - S61 on Windows hardware.
 - Code signing, and SmartScreen/antivirus behaviour on a downloaded release.
 - Process-level tests for a closed or stalled stdout. The exit flush is bounded at 5 s.
+
+## Slice 2 implements the native candidate without hardware evidence
+
+Status: slice 2 is PR 157 on `feat/device-helper-windows`, on top of v0.51.0 (`583e39b`). D-436 records the design. The windows-2022 candidate CI job passes: Windows-target clippy and tests, an installed candidate doctor with all seven capabilities, and a synthetic installed HID and COM lab journey with four saved sessions, 1200/1201 touch and reboot-only (run 39768218181, before the round-1 fixes; the merged head's run is the evidence of record). No Windows hardware has been observed; S61 is open.
+
+### The explicit build keeps ordinary releases diagnostics-only
+
+```powershell
+bun scripts/build-binaries.ts --device-backend native --target bun-windows-x64 --out-dir dist/native-windows-candidate
+.\dist\native-windows-candidate\keyloom-windows-x64.exe --data-dir "$env:TEMP\keyloom-native-doctor" doctor --device-helper-only
+```
+
+The builder selects `native-windows`, statically selects both native host adapters, and pairs the helper hash/version as before. Doctor expects `hid.list`, `hid.open`, `hid.write`, `serial.list`, `serial.open`, `serial.touch.1200`, `serial.touch.1201`, with “native Windows candidate; hardware acceptance pending”. Without the explicit backend, Windows still embeds a diagnostics-only helper and refuses device commands under D-435. A separate output directory and native runner are required.
+
+`windows_registry.rs` enumerates SetupAPI HID/COM interfaces, reads the COM `PortName`, and uses the injected CfgMgr USB-owner walk in `windows_contract.rs`. It stops at the first USB device, skips `MI_` composite-interface nodes, retains absent serials and distinguishes instance-plus-port keys. `hid_windows.rs` checks collection caps and zero report IDs, opens with sharing, and rechecks the opened attributes/serial plus metadata. `serial_windows.rs` opens exclusively, verifies raw DCB state, owns DTR and checks close. Both touch rates use the same verified sequence. `windows_io.rs` retains overlapped storage through completion/cancellation, exits on unconfirmed cancellation, and owns named-mutex leases. The lock adds only `windows-sys 0.61.2` and `windows-link 0.2.1`; both MIT notices are embedded.
+
+Known keyboard driver-failure devnodes without a usable interface become `driverMissing` records. Doctor gives an in-box HID/`usbser.sys` remedy; open/touch returns `unsupported`. COM access-denied/sharing-violation opens become `busy`. Doctor does not open COM to measure occupancy: its conditional busy hint and explicit-open error remain distinct from the missing-driver finding and workflow refusal.
+
+The candidate admits lab and reboot-only, preserving Docker, full flash/UF2, kanata, sync, serve and general-discovery refusals. Reboot-only now accepts an explicit ZMK board/half and reuses the existing local/relay selector. Its `transport_only: true` response does not claim firmware restart or a mounted bootloader. On Windows the QMK restart's existing departure check reads the HID/COM identity view, not general USB discovery.
+
+### Local verification used the pinned source and provisional transitive dependencies
+
+Bun was `/opt/homebrew/Cellar/bun/1.3.14/bin/bun`; Rust commands selected `/Users/bhekanik/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin` and `RUSTC_WRAPPER=`. No device was discovered, opened, recorded, touched, restarted or flashed. Anonymous PTYs and synthetic fixtures were used only.
+
+| Check | Observed result |
+|---|---|
+| `git fetch origin main` | Sandbox refused writing the shared worktree's `FETCH_HEAD`; initial HEAD and `origin/main` both resolved to the base SHA above |
+| Later `git rev-parse HEAD origin/main` / `git diff --stat HEAD..origin/main` | Another process advanced `origin/main` to `583e39b3474ca3eb3b702f10583bb2e437eedce5` (release 0.51.0); only package version, release manifest and changelog differed. Worker HEAD stayed on the supplied base |
+| `cargo update --offline -p windows-sys --precise 0.61.2` | Passed after introducing the dependency. Final lock diff contains only the helper dependency edge and the two Windows packages; existing versions/checksums are unchanged |
+| `agent-work run -- … cargo check … --target x86_64-pc-windows-msvc --features native-windows` | Blocked at Pueue's Unix socket by sandbox `Operation not permitted` |
+| Repository `cargo check --locked --offline --all-targets --target x86_64-pc-windows-msvc --features native-windows` | Stopped before compilation: cached `cfg-if 1.0.5` unavailable. A non-offline attempt also could not unpack windows-link into the read-only Cargo home |
+| `cargo fmt --check` | Passed against the repository manifest |
+| Isolated Windows `cargo check` and all-target clippy `-D warnings`, `native-windows` | Passed, including every new Windows adapter and Windows unit-test source; no linking or execution |
+| Isolated Windows all-target clippy `-D warnings`, `synthetic-windows` | Passed; no native device code compiled in that feature |
+| Isolated Linux musl check and all-target clippy `-D warnings`, `native-linux` | Passed; no Linux binary executed |
+| Isolated macOS all-target clippy `-D warnings`, `native-macos` | Passed |
+| Isolated macOS `cargo test --features native-macos` | 41 unit tests passed, including existing raw-termios/anonymous-PTY, checked-close and portable Windows contract tests |
+| Isolated diagnostics clippy and tests | Clippy passed; 17 unit tests and 3 real OS-pipe lifetime tests passed |
+| Isolated `cargo test --features synthetic-windows` on macOS | 22 unit tests passed; synthetic endpoints only, not Windows API execution |
+| Focused Bun policy, reboot, interrupted-lab and Windows extraction run (8 files) | 77 passed, 5 Windows-native extraction checks skipped, zero failures |
+| Final Bun policy, reboot, transport, owner and USB metadata run (6 files) | 50 passed, 12 compiled-helper/soak checks skipped, zero failures |
+| `bun node_modules/typescript/bin/tsc --noEmit` | Passed |
+| `bun run depcruise` | Passed: 668 modules, no violations. Existing warning: dependency-cruiser's compatible transpiler range excludes TypeScript 7 |
+| `bun scripts/gen-device-helper-schema.ts` | Regenerated the transport supplement with `driverMissing`; frozen diagnostics schema unchanged |
+| Builder guard commands | Explicit Windows native reaches the expected cross-build/prebuilt-helper refusal on macOS; shared `dist` is refused |
+| Ruby YAML parse of `.github/workflows/ci.yml`; `git diff --check` | Passed after removing an extra notice-file trailing blank |
+
+The isolated manifest lives at `/tmp/keyloom-stage8-check/native/device-helper/Cargo.toml` and points at the actual worktree source. It uses the repository's exact direct dependency versions, including `windows-sys 0.61.2`, `windows-link 0.2.1` and libc 0.2.191, but resolves cached transitive `cfg-if 1.0.4`, `memchr 2.8.1` and `zmij 1.0.21` instead of the repository lock's 1.0.5/2.8.3/1.0.23. Its optional, uncompiled proc-macro/WASI lock entries also resolve from the cache. Cargo storage stays under `/tmp`; repository pins and lock entries were preserved. These checks establish source/API compatibility with the provisional graph, not a successful pinned build.
+
+### CI must establish the installed Windows result
+
+`device-helper-windows-candidate` runs clippy `-D warnings` and tests with `native-windows`, builds the explicit candidate, installs it through `install.ps1` into scratch LocalAppData with spaces/non-ASCII, and checks its seven-capability doctor without listing devices. It separately builds `synthetic-windows`, pairs the test-only `smoke-windows-native-entry.ts`, and uses fresh installed processes for imports, two recordings per transport, persisted sessions, stop/reopen, local/relay touch and reboot-only. The entry checks the embedded helper's synthetic identity before every synthetic command. Terminal text is scripted; capture, selectors, IPC and persistence are production paths. Runtime PATH excludes Bun/Rust/Docker. The ordinary diagnostics Windows job remains separate.
+
+Not observed: Windows linking or test execution, PowerShell smoke execution, a built/installed candidate's doctor, the installed synthetic lab journey, Windows named-mutex behavior, actual SetupAPI/CfgMgr/registry results, HID caps/serial correctness, COM driver binding/occupancy, overlapped completion/cancellation on Windows, DCB/DTR behavior, executable/pipe cleanup or resource measurements. All Windows source paths and unit-test bodies cross-compiled under the provisional graph; the complete repository-locked Windows build did not compile locally. No Windows transport path ran. No Ctrl-C, ConPTY, helper/parent death, suspend/resume or physical firmware effect was tested by this slice's installed journey.
+
+Codex review rounds 1 and 2 found three driver-diagnostic cases where a failed driver hid a usable keyboard or a missing raw-HID interface. Each is fixed with a regression test: admitted raw-HID collections only, ZMK central selection, and QMK selection. A diagnostic record is never a touch target.
+
+
+### Round 1 keeps diagnostics out of endpoint selection
+
+Uncommitted fixes over PR 157 candidate HEAD `4cee1d6ca18e432d083bef7286aa2528b6df90b2` (2026-10-22) address all four round-1 findings. Windows HID suppression counts only collections admitted by the existing raw-HID caps check. ZMK capture selects usable central ports before diagnosing a central driver failure, and port selection excludes `driverMissing` records so a failed peripheral can use the healthy central's 1201 relay. The lab notice says “They stay on this computer, in keyloom's database.” Each finding has a regression observed failing before its fix.
+
+Local macOS arm64 verification passed against the unchanged repository lock: Windows native check; all-target clippy with `-D warnings` for Windows native/synthetic, Linux musl native and macOS native; 42 native-macos unit tests; 98 focused Bun tests; TypeScript; Cargo fmt. Pueue and sccache sockets were sandbox-blocked; checks used the original isolated Cargo cache with five workers and sccache disabled. Exact commands, red/green logs and message quotes are in `/tmp/keyloom-stage8-fix-report.md`. No physical devices or installed Windows binaries were exercised.
+
+Next action: S61 on a Windows x64 machine with a Moonlander and a Glove80. Run the candidate's doctor, lab capture, stop and reopen, unplug, helper death, and a busy COM port, then `flash --reboot-only` with a separate permission. Only after that does the candidate become the Windows default.

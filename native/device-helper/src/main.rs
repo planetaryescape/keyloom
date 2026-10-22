@@ -1,3 +1,26 @@
+#[cfg(all(feature = "native-windows", not(target_os = "windows")))]
+compile_error!("native-windows is Windows-only");
+#[cfg(all(
+    feature = "native-windows",
+    any(
+        feature = "native-linux",
+        feature = "native-hid",
+        feature = "native-serial",
+        feature = "synthetic-hid",
+        feature = "synthetic-serial"
+    )
+))]
+compile_error!("native-windows cannot combine with other backends");
+#[cfg(all(feature = "native-windows", target_os = "windows"))]
+mod hid_windows;
+#[cfg(all(feature = "native-windows", target_os = "windows"))]
+mod serial_windows;
+#[cfg(any(feature = "native-windows", test))]
+mod windows_contract;
+#[cfg(all(feature = "native-windows", target_os = "windows"))]
+mod windows_io;
+#[cfg(all(feature = "native-windows", target_os = "windows"))]
+mod windows_registry;
 #[cfg(all(feature = "native-linux", not(target_os = "linux")))]
 compile_error!("native-linux is Linux-only");
 #[cfg(all(
@@ -41,6 +64,7 @@ mod registry;
 mod serial_macos;
 // Cargo without features remains diagnostics; releases select native-macos on Apple Silicon.
 #[cfg(any(
+    feature = "native-windows",
     feature = "native-linux",
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -49,6 +73,7 @@ mod serial_macos;
 ))]
 mod backend;
 #[cfg(any(
+    feature = "native-windows",
     feature = "native-linux",
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -59,6 +84,7 @@ mod connection;
 #[cfg(all(feature = "native-hid", target_os = "macos"))]
 mod macos;
 #[cfg(any(
+    feature = "native-windows",
     feature = "native-linux",
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -67,6 +93,7 @@ mod macos;
 ))]
 mod serial;
 #[cfg(any(
+    feature = "native-windows",
     feature = "native-linux",
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -77,13 +104,15 @@ mod transport;
 
 fn capabilities() -> Vec<&'static str> {
     let mut result = Vec::new();
-    if cfg!(feature = "native-linux")
+    if cfg!(feature = "native-windows")
+        || cfg!(feature = "native-linux")
         || cfg!(feature = "synthetic-hid")
         || cfg!(all(feature = "native-hid", target_os = "macos"))
     {
         result.extend(["hid.list", "hid.open", "hid.write"]);
     }
-    if cfg!(feature = "native-linux")
+    if cfg!(feature = "native-windows")
+        || cfg!(feature = "native-linux")
         || cfg!(feature = "synthetic-serial")
         || cfg!(all(feature = "native-serial", target_os = "macos"))
     {
@@ -98,6 +127,7 @@ fn capabilities() -> Vec<&'static str> {
 }
 use serde_json::{Value, json};
 #[cfg(not(any(
+    feature = "native-windows",
     feature = "native-linux",
     feature = "native-hid",
     feature = "synthetic-hid",
@@ -233,6 +263,7 @@ fn serve() -> i32 {
     });
     let mut protocol = Protocol::default();
     #[cfg(any(
+        feature = "native-windows",
         feature = "native-linux",
         feature = "native-hid",
         feature = "synthetic-hid",
@@ -241,6 +272,7 @@ fn serve() -> i32 {
     ))]
     let native_output = transport::Output::start();
     #[cfg(any(
+        feature = "native-windows",
         feature = "native-linux",
         feature = "native-hid",
         feature = "native-serial",
@@ -249,6 +281,10 @@ fn serve() -> i32 {
     ))]
     let native = {
         let backends = vec![
+            #[cfg(all(feature = "native-windows", target_os = "windows"))]
+            connection::ConnectionBackend::Hid(Arc::new(hid_windows::Windows)),
+            #[cfg(all(feature = "native-windows", target_os = "windows"))]
+            connection::ConnectionBackend::Serial(Arc::new(serial_windows::Windows)),
             #[cfg(all(feature = "native-linux", target_os = "linux"))]
             connection::ConnectionBackend::Hid(Arc::new(hid_linux::Linux)),
             #[cfg(all(feature = "native-linux", target_os = "linux"))]
@@ -267,6 +303,7 @@ fn serve() -> i32 {
         Some(transport::Transport::new(backends, native_output.clone()))
     };
     #[cfg(not(any(
+        feature = "native-windows",
         feature = "native-linux",
         feature = "native-hid",
         feature = "synthetic-hid",
@@ -281,6 +318,7 @@ fn serve() -> i32 {
             _ => return 1,
         };
         #[cfg(any(
+            feature = "native-windows",
             feature = "native-linux",
             feature = "native-hid",
             feature = "synthetic-hid",
@@ -293,6 +331,7 @@ fn serve() -> i32 {
             Err(()) => return 1,
         };
         #[cfg(not(any(
+            feature = "native-windows",
             feature = "native-linux",
             feature = "native-hid",
             feature = "synthetic-hid",
@@ -303,6 +342,7 @@ fn serve() -> i32 {
             *alive.lock().unwrap() = Instant::now();
         }
         #[cfg(any(
+            feature = "native-windows",
             feature = "native-linux",
             feature = "native-hid",
             feature = "synthetic-hid",
@@ -319,6 +359,7 @@ fn serve() -> i32 {
             let _ = std::io::stderr().write_all(b"synthetic-ping-observed\n");
         }
         #[cfg(any(
+            feature = "native-windows",
             feature = "native-linux",
             feature = "native-hid",
             feature = "synthetic-hid",
@@ -351,6 +392,7 @@ fn serve() -> i32 {
             continue;
         }
         #[cfg(not(any(
+            feature = "native-windows",
             feature = "native-linux",
             feature = "native-hid",
             feature = "synthetic-hid",
@@ -364,6 +406,7 @@ fn serve() -> i32 {
             return 1;
         }
         #[cfg(not(any(
+            feature = "native-windows",
             feature = "native-linux",
             feature = "native-hid",
             feature = "synthetic-hid",
@@ -408,14 +451,16 @@ mod tests {
         let caps = capabilities();
         assert_eq!(
             caps.contains(&"hid.open"),
-            cfg!(feature = "native-linux")
+            cfg!(feature = "native-windows")
+                || cfg!(feature = "native-linux")
                 || cfg!(feature = "synthetic-hid")
                 || cfg!(all(feature = "native-hid", target_os = "macos"))
         );
         for cap in ["serial.open", "serial.touch.1200", "serial.touch.1201"] {
             assert_eq!(
                 caps.contains(&cap),
-                cfg!(feature = "native-linux")
+                cfg!(feature = "native-windows")
+                    || cfg!(feature = "native-linux")
                     || cfg!(feature = "synthetic-serial")
                     || cfg!(all(feature = "native-serial", target_os = "macos"))
             );

@@ -115,19 +115,21 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .option("--volumes-root <dir>", "the folder UF2 boot drives appear in (default: /Volumes on macOS, found with lsblk on Linux); boards that flash to UF2 drives only")
     .option("--reboot-only", "only restart the attached keyboard into its bootloader (it must be running a keyloom build); flashes nothing, and the keyboard stays in the bootloader until it is flashed or unplugged")
     .option("--board <board>", "with --reboot-only: which board, when more than one is attached")
+    .option("--half <half>", "with --reboot-only and a ZMK --board: left or right; sends a restart request without checking a UF2 drive")
     .option("--wait <minutes>", "how long to wait for the keyboard to enter its bootloader, 1 to 60 (default 2); for a flash that needs a key or button pressed")
-    .action(async (opts: { build?: string; layout?: string; volumesRoot?: string; rebootOnly?: boolean; board?: string; wait?: string }) => {
+    .action(async (opts: { build?: string; layout?: string; volumesRoot?: string; rebootOnly?: boolean; board?: string; half?: string; wait?: string }) => {
       if (opts.build !== undefined && opts.layout !== undefined) throw new UsageError("pass --build or --layout, not both");
       const waitMinutes = opts.wait === undefined ? undefined : Number(opts.wait);
       if (waitMinutes !== undefined && !(Number.isFinite(waitMinutes) && waitMinutes >= 1 && waitMinutes <= 60)) {
         throw new UsageError(`--wait takes minutes from 1 to 60, not "${opts.wait}"`);
       }
+      if (opts.half !== undefined && !opts.rebootOnly) throw new UsageError("--half is only for --reboot-only");
       if (opts.rebootOnly) {
         if (opts.build !== undefined || opts.layout !== undefined) throw new UsageError("--reboot-only flashes nothing; leave out --build and --layout");
-        const r = await rebootKeyboard({ ...(opts.board ? { board: opts.board } : {}), ...(handsFree ? { handsFree } : {}), onLine: (line) => io.err(`${line}\n`) });
+        const r = await rebootKeyboard({ ...(opts.board ? { board: opts.board } : {}), ...(opts.half ? { half: opts.half } : {}), ...(handsFree ? { handsFree } : {}), onLine: (line) => io.err(`${line}\n`) });
         print(io, format(), {
-          json: { board: r.board, board_revision: r.revision, previous_firmware: r.previousFirmware, bootloader: r.bootloader },
-          table: quiet() ? r.board : `${r.board} ${r.revision} is in its bootloader (${r.bootloader}); it was running ${r.previousFirmware}. Flash it, or unplug it and plug it in again to leave the bootloader.`,
+          json: { board: r.board, board_revision: r.revision, previous_firmware: r.previousFirmware, bootloader: r.bootloader, ...(r.transportOnly ? { transport_only: true } : {}) },
+          table: quiet() ? r.board : r.transportOnly ? `Restart request accepted for ${r.board}; the bootloader (${r.bootloader}) has not been verified.` : `${r.board} ${r.revision} is in its bootloader (${r.bootloader}); it was running ${r.previousFirmware}. Flash it, or unplug it and plug it in again to leave the bootloader.`,
           ids: [r.board],
         });
         return;

@@ -81,3 +81,19 @@ describe("keyloom doctor, ZMK halves", () => {
     });
   });
 });
+
+test("reboot-only requests one ZMK half through 1200 or the existing 1201 relay without a UF2 probe", async () => {
+  const touches: Array<[string, number]> = [];
+  const port = { vendorId: 0x16c0, productId: 0x27db, serial: serialOf(OLD_KEY, "L"), path: "synthetic-left" };
+  const handsFree: HandsFreeOverrides = { zmk: { serial: async () => ({ list: async () => [port], touch: async (path, baud) => { touches.push([path, baud]); } }), usb: async () => { throw new Error("no USB or volume discovery permitted"); } } };
+  for (const half of ["left", "right"]) {
+    const result = await cli(["flash", "--reboot-only", "--board", "moergo/glove80", "--half", half], handsFree);
+    expect(result.code).toBe(0);
+    expect(json(result).transport_only).toBe(true);
+  }
+  expect(touches).toEqual([["synthetic-left", 1200], ["synthetic-left", 1201]]);
+  const missing = await cli(["flash", "--reboot-only", "--board", "moergo/glove80"], handsFree);
+  expect(missing.code).toBe(2);
+  expect(missing.err).toContain("choose --half");
+  expect(touches).toHaveLength(2);
+});

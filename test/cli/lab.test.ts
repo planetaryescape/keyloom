@@ -85,6 +85,8 @@ describe("keyloom lab, end to end", () => {
     expect(started.code).toBe(0);
     // The notice came first, and it names what is recorded and how to delete it.
     expect(started.err).toContain("keyloom is recording this keyboard's key presses");
+    expect(started.err).toContain("They stay on this computer, in keyloom's database.");
+    expect(started.err).not.toContain("on this Mac");
     expect(started.err).toContain("Nothing is sent anywhere");
     expect(started.err).toContain("keyloom lab delete");
     expect(started.out).toContain("typed:");

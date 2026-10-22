@@ -743,6 +743,10 @@
                 "type": "boolean",
                 "const": true
               },
+              "driverMissing": {
+                "type": "boolean",
+                "const": true
+              },
               "serial": {
                 "type": "string"
               },
@@ -816,6 +820,10 @@
                 "maximum": 65535
               },
               "permissionDenied": {
+                "type": "boolean",
+                "const": true
+              },
+              "driverMissing": {
                 "type": "boolean",
                 "const": true
               },

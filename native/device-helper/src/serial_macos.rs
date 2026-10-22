@@ -37,6 +37,7 @@ fn endpoint(record: Record) -> Option<SerialEndpoint> {
     Some(SerialEndpoint {
         key: format!("{}:{path}", record.id),
         permission_denied: false,
+        driver_missing: false,
         vendor: usb.vendor?,
         product: usb.product?,
         serial: present(&usb.serial),

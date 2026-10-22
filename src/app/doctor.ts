@@ -1,7 +1,8 @@
-import { WINDOWS_ROADMAP, windowsUnavailable } from "../firmware/toolchain/platform-support.ts";
+import { WINDOWS_ROADMAP, windowsUnavailable, windowsDevicesUnavailable, WINDOWS_HID_DRIVER_HINT, WINDOWS_COM_DRIVER_HINT, WINDOWS_BUSY_HINT } from "../firmware/toolchain/platform-support.ts";
 // `keyloom doctor` (10): the database, the model credential, then the firmware toolchain.
 import { existsSync } from "node:fs";
 import { deviceHelperDiagnostic, type HelperDiagnostic } from "../firmware/toolchain/device-helper/diagnostics.ts";
+import { DeviceTransportError } from "../firmware/toolchain/device-helper/transport-client.ts";
 import { Database } from "bun:sqlite";
 import { classifyModelError, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
 import { DEFAULT_MODELS } from "../agent/provider.ts";
@@ -33,7 +34,7 @@ export async function runDeviceHelperCheck(): Promise<DoctorCheck> {
   return {
     name: "device helper", ok: deviceHelper.available || source, ...(source ? { warn: true } : {}), deviceHelper,
     detail: deviceHelper.available
-      ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [${deviceHelper.capabilities.join(", ")}] (${deviceHelper.capabilities.length === 0 ? "diagnostics only" : deviceHelper.capabilities.includes("hid.open") && deviceHelper.capabilities.includes("serial.open") ? (deviceHelper.target.includes("linux") ? "native Linux candidate; hardware acceptance pending; hidraw needs a udev rule scoped to the keyboard VID/PID; ttyACM needs dialout/uucp group access" : "native backend in use") : deviceHelper.capabilities.includes("serial.open") ? "native serial candidate; hardware acceptance pending" : "native HID candidate; hardware acceptance pending"})`
+      ? `host/helper ${deviceHelper.hostVersion}; protocol ${deviceHelper.protocol}; ${deviceHelper.target}; capabilities [${deviceHelper.capabilities.join(", ")}] (${deviceHelper.capabilities.length === 0 ? "diagnostics only" : deviceHelper.capabilities.includes("hid.open") && deviceHelper.capabilities.includes("serial.open") ? (deviceHelper.target.includes("linux") ? "native Linux candidate; hardware acceptance pending; hidraw needs a udev rule scoped to the keyboard VID/PID; ttyACM needs dialout/uucp group access" : deviceHelper.target.includes("windows") ? "native Windows candidate; hardware acceptance pending; in-box HID/usbser.sys drivers required; busy COM port: close the other serial client" : "native backend in use") : deviceHelper.capabilities.includes("serial.open") ? "native serial candidate; hardware acceptance pending" : "native HID candidate; hardware acceptance pending"})`
       : source
         ? "not bundled in source/dev invocation; build with scripts/build-binaries.ts or install a release"
         : `${deviceHelper.code}${deviceHelper.detail ? ` (${deviceHelper.detail})` : ""}; reinstall this keyloom release; if the private helper cache was changed, remove that release from ${windowsUnavailable() ? "%LOCALAPPDATA%\\keyloom\\device-helper" : "$XDG_CACHE_HOME/keyloom/device-helper"} and retry`,
@@ -261,7 +262,8 @@ export async function runRemapperChecks(over: RemapperOverrides = {}): Promise<D
 
 /** Which keyboards are attached and whether keyloom's own firmware is on them, which decides if a flash needs a keypress. */
 export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<DoctorCheck[]> {
-  if (windowsUnavailable()) return [unavailableOnWindows("keyboards over USB, raw HID and serial")];
+  if (windowsDevicesUnavailable()) return [unavailableOnWindows("keyboards over USB, raw HID and serial")];
+  if (windowsUnavailable()) return runWindowsDeviceChecks(over);
   const deps = realHandsFreeDeps(over);
   let attached: Awaited<ReturnType<typeof attachedKeyboards>>;
   try {
@@ -304,4 +306,27 @@ export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<
   }
   if (checks.length === 0) return [{ name: "keyboard", ok: true, detail: "no keyboard keyloom can flash is attached" }];
   return checks;
+}
+
+/** Metadata/caps only. A busy open is authoritative; doctor never opens a COM port to test it. */
+export async function runWindowsDeviceChecks(over: HandsFreeOverrides = {}): Promise<DoctorCheck[]> {
+  const hid = realHandsFreeDeps(over).hid;
+  const serial = realZmkHandsFreeDeps(over.zmk).serial;
+  const checks: DoctorCheck[] = [];
+  for (const [transport, list] of [
+    ["HID", async () => (await hid()).list()],
+    ["COM", async () => (await serial()).list()],
+  ] as const) {
+    try {
+      const records = await list();
+      for (const record of records) {
+        checks.push({ name: `keyboard ${transport} ${record.vendorId.toString(16)}:${record.productId.toString(16)}`, ok: !record.driverMissing,
+          detail: record.driverMissing ? (transport === "HID" ? WINDOWS_HID_DRIVER_HINT : WINDOWS_COM_DRIVER_HINT)
+            : `${transport} interface visible; hardware acceptance pending${transport === "COM" ? `; If opening reports busy, close the serial monitor or other client. Port availability is checked only when you explicitly open it.` : ""}` });
+      }
+    } catch (error) {
+      checks.push({ name: `keyboard ${transport}`, ok: false, detail: error instanceof DeviceTransportError && error.detail.code === "busy" ? (transport === "COM" ? WINDOWS_BUSY_HINT : "busy: another keyloom instance holds this HID endpoint; stop it and try again") : `couldn't list ${transport} interfaces: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  }
+  return checks.length ? checks : [{ name: "keyboard", ok: true, detail: "no supported HID or COM keyboard interface found; hardware acceptance pending" }];
 }

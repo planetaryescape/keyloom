@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 pub struct Endpoint {
     pub key: String,
     pub permission_denied: bool,
+    pub driver_missing: bool,
     pub vendor: u16,
     pub product: u16,
     pub serial: Option<String>,
@@ -35,6 +36,9 @@ impl Endpoint {
     pub fn record(&self, reference: &str) -> Value {
         let mut value = json!({"deviceRef":reference,"transport":"hid","vendorId":self.vendor,
             "productId":self.product,"usagePage":0xff60,"usage":0x61});
+        if self.driver_missing {
+            value["driverMissing"] = json!(true);
+        }
         if self.permission_denied {
             value["permissionDenied"] = json!(true);
         }
@@ -136,6 +140,8 @@ pub mod synthetic {
     ];
     #[derive(Default)]
     pub struct Synthetic {
+        #[cfg(feature = "synthetic-windows")]
+        reset: Arc<std::sync::atomic::AtomicBool>,
         pub opens: Arc<AtomicUsize>,
         pub writes: Arc<AtomicUsize>,
     }
@@ -144,10 +150,15 @@ pub mod synthetic {
             json!({"opens":self.opens.load(Ordering::SeqCst),"writes":self.writes.load(Ordering::SeqCst)})
         }
         fn list(&self) -> Result<Vec<Endpoint>, &'static str> {
+            #[cfg(feature = "synthetic-windows")]
+            if self.reset.load(Ordering::SeqCst) {
+                return Ok(vec![]);
+            }
             assert!(raw_descriptor(DESCRIPTOR));
             Ok(vec![Endpoint {
                 key: "synthetic-moonlander".into(),
                 permission_denied: false,
+                driver_missing: false,
                 vendor: 0x3297,
                 product: 0x1969,
                 serial: Some("keyloom/NPQRSTVWXYZ0".into()),
@@ -158,6 +169,8 @@ pub mod synthetic {
         fn open(&self, _: &Endpoint) -> Result<Box<dyn Device>, &'static str> {
             self.opens.fetch_add(1, Ordering::SeqCst);
             Ok(Box::new(Fake {
+                #[cfg(feature = "synthetic-windows")]
+                reset: self.reset.clone(),
                 writes: self.writes.clone(),
                 queue: std::collections::VecDeque::new(),
                 seq: 0,
@@ -166,6 +179,8 @@ pub mod synthetic {
         }
     }
     struct Fake {
+        #[cfg(feature = "synthetic-windows")]
+        reset: Arc<std::sync::atomic::AtomicBool>,
         writes: Arc<AtomicUsize>,
         queue: std::collections::VecDeque<[u8; 32]>,
         seq: u8,
@@ -174,6 +189,11 @@ pub mod synthetic {
     impl Device for Fake {
         fn write(&mut self, bytes: &[u8; 32]) -> Result<(), &'static str> {
             self.writes.fetch_add(1, Ordering::SeqCst);
+            #[cfg(feature = "synthetic-windows")]
+            if bytes[0] == 0xe7 && &bytes[1..9] == b"KLBOOTLD" {
+                self.reset.store(true, Ordering::SeqCst);
+                return Ok(());
+            }
             if bytes[0] == 0xe8 && &bytes[1..9] == b"KLTYPING" {
                 if bytes[9] == 2 {
                     return Ok(());
