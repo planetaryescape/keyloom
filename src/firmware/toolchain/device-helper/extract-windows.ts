@@ -22,13 +22,14 @@ $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
 $writes = [System.Security.AccessControl.FileSystemRights]::Write -bor [System.Security.AccessControl.FileSystemRights]::Delete -bor [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [System.Security.AccessControl.FileSystemRights]::ChangePermissions -bor [System.Security.AccessControl.FileSystemRights]::TakeOwnership
 foreach ($entry in $paths) {
-  if (([System.IO.File]::GetAttributes($entry.path) -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'reparse point' }
+  if (([System.IO.File]::GetAttributes($entry.path) -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { throw "reparse point: $($entry.path)" }
   if ($entry.acl) {
     $acl = Get-Acl -LiteralPath $entry.path
-    if ($trusted -notcontains $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value) { throw 'untrusted owner' }
+    $owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+    if ($trusted -notcontains $owner) { throw "untrusted owner $owner of $($entry.path)" }
     foreach ($rule in $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
       if (($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
-      if ($rule.AccessControlType -eq 'Allow' -and ($rule.FileSystemRights -band $writes) -ne 0 -and $trusted -notcontains $rule.IdentityReference.Value) { throw 'writable by another principal' }
+      if ($rule.AccessControlType -eq 'Allow' -and ($rule.FileSystemRights -band $writes) -ne 0 -and $trusted -notcontains $rule.IdentityReference.Value) { throw "writable by $($rule.IdentityReference.Value) ($($rule.FileSystemRights)): $($entry.path)" }
     }
   }
 }
@@ -41,7 +42,10 @@ foreach ($entry in $paths) {
     env: { ...process.env, KEYLOOM_CACHE_INSPECT: JSON.stringify(paths.map((path) => ({ path, acl: !aclChecked.has(path) }))) },
     windowsHide: true, timeout: 10_000, stdio: "pipe",
   });
-  if (result.error || result.status !== 0) throw new HelperFailure("unsafe_cache");
+  if (result.error || result.status !== 0) {
+    const said = result.error?.message ?? result.stderr?.toString("utf8").split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
+    throw new HelperFailure("unsafe_cache", said?.slice(0, 300));
+  }
   for (const path of paths) if (!win32.basename(path).startsWith(".publish-")) aclChecked.add(path);
 }
 
