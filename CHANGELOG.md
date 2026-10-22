@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.49.0](https://github.com/planetaryescape/keyloom/compare/v0.48.1...v0.49.0) (2026-10-22)
+
+
+### Features
+
+* make the Rust device helper the default on Apple Silicon Macs ([131e496](https://github.com/planetaryescape/keyloom/commit/131e496866dde346396cb62cf6bf5af37b4f9128))
+
 ## [0.48.1](https://github.com/planetaryescape/keyloom/compare/v0.48.0...v0.48.1) (2026-10-22)
 
 
