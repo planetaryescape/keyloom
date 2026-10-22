@@ -10,7 +10,7 @@ export function helperSerialTransport(client: DeviceTransportClient): SerialTran
       const { devices } = await client.request("list", { transport: "serial" }, serialDevicesSchema, 5_000);
       return devices.map((device) => ({ vendorId: device.vendorId, productId: device.productId, path: device.deviceRef, ...(device.serial === undefined ? {} : { serial: device.serial }) }));
     },
-    async touch(path, baud) { await client.request("serial.touch", { deviceRef: path, baud }, touchedSchema, 5_000); },
+    async touch(path, baud) { await client.request("serial.touch", { deviceRef: path, baud }, touchedSchema, 3_500); },
     async open(path, onData, onError = () => {}) {
       const sessionId = await client.open(path, onData, onError, "serial");
       let close: Promise<void> | undefined;

@@ -112,9 +112,9 @@ Initial budgets are proposal defaults under Q40, not measured performance claims
 | Buffered data per session | Ceiling: 256 KiB or 1024 events. HID: 510 native + 510 shared output reports. Serial: at most 16 native chunks + 16 shared output chunks, each ≤4096 decoded bytes | Fail session with detected loss; never silently drop and continue |
 | Control/response queue | 64 entries, separate from data | Fatal supervisor failure rather than starving close indefinitely |
 | Native read timeout target | 50 ms | Wake owner to process control; S59–S61 must verify actual behavior |
-| Hello / list / open / touch deadline | 2 s / 5 s / 2 s / 2 s | Fail or mark uncertain effect as appropriate; no implicit retry |
+| Hello / list / open deadline | 2 s / 5 s / 2 s | Fail or mark uncertain effect as appropriate; no implicit retry |
 | Write / orderly close deadline | 500 ms / 1 s | Supervise cancellation; terminate helper if safe completion cannot be established |
-| One-shot `hid.write` deadline | 3.5 s (2 s open + 500 ms write + 1 s close) | Allow the helper's full lease/open/write/close lifecycle to finish |
+| One-shot `hid.write` and `serial.touch` deadline | 3.5 s (2 s open + 500 ms write or configure + 1 s close) | Allow the helper's full lease/open/write-or-configure/close lifecycle to finish |
 | Parent fallback termination wait | 2 s | Report cleanup unconfirmed, refuse new device operations |
 | Parent ping / helper liveness timeout | Every 1 s / 5 s without a ping | Close sessions and exit; stalled application must not record indefinitely |
 | stderr buffer retained by parent | 64 KiB | Keep bounded sanitized diagnostics, never data payloads |
