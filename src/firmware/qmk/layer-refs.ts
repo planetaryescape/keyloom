@@ -12,7 +12,7 @@ import { withTree } from "./c-parse.ts";
 const LAYER_CALLS: Readonly<Record<string, readonly number[]>> = {
   LT: [0], MO: [0], TG: [0], TO: [0], OSL: [0], TT: [0], DF: [0], LM: [0],
   layer_move: [0], layer_on: [0], layer_off: [0], layer_invert: [0], layer_state_is: [0],
-  IS_LAYER_ON: [0], IS_LAYER_OFF: [0], set_single_persistent_default_layer: [0],
+  IS_LAYER_ON: [0], IS_LAYER_OFF: [0], set_single_default_layer: [0], set_single_persistent_default_layer: [0], PDF: [0],
   layer_state_cmp: [1], IS_LAYER_ON_STATE: [1], IS_LAYER_OFF_STATE: [1],
   update_tri_layer: [0, 1, 2], update_tri_layer_state: [1, 2, 3],
 };
@@ -33,7 +33,7 @@ export type QmkSite = {
 type Fn = { name: string; params: string[] };
 /** An argument read off the tree while it is alive. */
 type Arg = Omit<LayerArg, "site">;
-type CallSite = { callee: string; args: Arg[]; site: string; fn: Fn | undefined };
+type CallSite = { callee: string; args: Arg[]; site: string; line: number; fn: Fn | undefined };
 type Mapper = { site: string; shift: number; baseOffset: number; baseRow: number };
 type Sub = { site: string; text: string; baseOffset: number; baseRow: number };
 
@@ -129,12 +129,13 @@ function read(root: Node, map: Mapper, c: Collector): void {
         if (name?.type !== "identifier") break;
         const nodes = argNodes(n);
         const args = nodes.map((a) => c.describe(map, a));
-        for (const k of LAYER_CALLS[name.text] ?? []) {
+        const layerPositions = Object.hasOwn(LAYER_CALLS, name.text) ? LAYER_CALLS[name.text] ?? [] : [];
+        for (const k of layerPositions) {
           const a = args[k];
           if (a) c.layerArg(map.site, a, fn);
         }
         if (MASK_CALLS.has(name.text) && nodes.some(bareNumber)) c.refuse(map, n);
-        c.calls.push({ callee: name.text, args, site: map.site, fn });
+        c.calls.push({ callee: name.text, args, site: map.site, line: c.pos(map, n).line, fn });
         break;
       }
       case "case_statement": {
@@ -206,7 +207,7 @@ async function collect(sites: readonly QmkSite[]): Promise<Collector> {
  * The layer numbers in each site: the literals to renumber when layers move, and the lines that name a layer in a way keyloom
  * can't rewrite. A call to a function whose parameter indexes a layer array (Oryx's `set_layer_color(2)`) counts as naming a layer.
  */
-export async function readQmkLayerRefs(sites: readonly QmkSite[], layerIds: readonly string[]): Promise<Map<string, Resolved>> {
+export async function readQmkLayerRefs(sites: readonly QmkSite[], layerIds: readonly string[], layerNames: ReadonlySet<string> = new Set()): Promise<Map<string, Resolved>> {
   const c = await collect(sites);
   // A function that passes its own layer parameter on makes its callers' arguments layer numbers too.
   for (let changed = true; changed; ) {
@@ -217,6 +218,11 @@ export async function readQmkLayerRefs(sites: readonly QmkSite[], layerIds: read
         if (a && c.layerArg(call.site, a, call.fn)) changed = true;
       }
     }
+  }
+  const knownLayerNames = new Set([...layerNames, ...c.args.filter((a) => a.kind === "name").map((a) => a.text)].map((name) => name.replace(/^_+/, "")));
+  for (const call of c.calls) {
+    if (Object.hasOwn(LAYER_CALLS, call.callee) || MASK_CALLS.has(call.callee) || LAYER_GETTERS.has(call.callee) || c.layerParams.has(call.callee)) continue;
+    if (call.args.some((a) => a.kind === "name" && knownLayerNames.has(a.text.replace(/^_+/, "")))) c.unprovable.push({ site: call.site, line: call.line });
   }
   return resolveLayerRefs({
     layerIds, args: dedupe(c.args), unprovable: c.unprovable, defines: c.defines, uses: c.uses,
@@ -241,7 +247,7 @@ type Parts = Pick<Layout, "layers" | "combos" | "passthrough">;
 export const isReadableQmk = (p: Passthrough): boolean => p.firmware === "qmk" && (p.file === "keymap.c" || p.file === "config.h");
 
 /** Writes what `readQmkLayerRefs` found onto the kept source and kept keys of a layout being imported. */
-export async function annotateQmkLayerRefs(parts: Parts, layerIds: readonly string[]): Promise<Parts> {
+export async function annotateQmkLayerRefs(parts: Parts, layerIds: readonly string[], layerNames?: ReadonlySet<string>): Promise<Parts> {
   const sites: QmkSite[] = [];
   parts.passthrough.forEach((p, i) => {
     if (isReadableQmk(p)) sites.push({ site: `p${i}`, source: p.source, kind: p.anchor.startsWith("process_record_user:") ? "cases" : "code" });
@@ -252,7 +258,8 @@ export async function annotateQmkLayerRefs(parts: Parts, layerIds: readonly stri
   parts.layers.forEach((l, li) => l.bindings.forEach((b, i) => nativeAt(b, `k${li}.${i}`)));
   parts.combos.forEach((c, i) => nativeAt(c.output, `c${i}`));
 
-  const found = await readQmkLayerRefs(sites, layerIds);
+  const names = layerNames ?? new Set(parts.layers.map((layer) => layer.name.replace(/^_+/, "")));
+  const found = await readQmkLayerRefs(sites, layerIds, names);
   const read = new Set(sites.map((s) => s.site));
   const withRefs = <T extends Binding>(b: T, site: string): T => {
     if (!read.has(site)) return b;

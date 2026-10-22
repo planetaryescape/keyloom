@@ -1937,3 +1937,6 @@ The shell now runs `$SHELL -ilc` with `/usr/bin/printenv PATH` between unique ma
 `tauri-apps/fix-path-env-rs` does the same, but it isn't published on crates.io and waits on the shell with no deadline, so a slow shell profile would hang the app at launch.
 
 Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
+
+### D-444: Refuse unknown QMK calls that receive a known layer name. (2026-10-22, stage 11 C3)
+- If kept QMK code passes a layer enum name to a function whose layer semantics keyloom does not know, a layer reorder is refused and the call's line is named. The importer cannot prove how that function uses the layer value.
