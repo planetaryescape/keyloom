@@ -6,4 +6,4 @@ Re-running the job doesn't help. With the PR already tagged, release-please crea
 
 Fix: `release.yml` accepts a `workflow_dispatch` with a `tag` input. It skips release-please, refuses a release that already has assets, and runs the normal build jobs against that tag.
 
-Status: fixed on branch `ci/release-existing-tag`; v0.53.1 to be built through it.
+Status: fixed by PR 163. v0.53.1 was built through it by run 39807239192, dispatched from the reviewed PR head before the merge, and all ten assets were verified against `SHA256SUMS`. The workflow refuses any ref other than main; it can't defend against an edited copy of itself on another branch, which would need a protected environment for the publishing jobs.

@@ -49,6 +49,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -eu
+          if [ "$GITHUB_REF" != refs/heads/main ]; then echo "::error::Build releases from main (--ref main), not $GITHUB_REF."; exit 1; fi
           assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
           if [ "$assets" != 0 ]; then echo "::error::$TAG already has $assets assets; build a new release instead."; exit 1; fi
           echo "release_created=true" >> "$GITHUB_OUTPUT"
