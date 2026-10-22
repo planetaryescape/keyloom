@@ -1,6 +1,6 @@
 # 24: Typing lab: keyloom watches you type and tunes the board to your hands
 
-Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens and `/api/lab` routes built on a scripted fake keyboard (D-314), 2026-10-16. ZMK capture now persists serial interruption warnings and refuses analysis on the legacy stty/polling transport (24d TS half). The native Rust serial backend and physical S59 serial evidence remain pending; S50/S51 remain unrun hardware runbooks.
+Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens and `/api/lab` routes built on a scripted fake keyboard (D-314), 2026-10-16. QMK and ZMK capture own bounded write/close waits (D-4xx). ZMK capture now persists serial interruption warnings and refuses analysis on the legacy stty/polling transport (24d TS half). The native Rust serial backend and physical S59 serial evidence remain pending; S50/S51 remain unrun hardware runbooks.
 
 BK: "timings are quite tricky for home row mods and stuff. I'd love a feature where I can set up a key config, then tell the software to listen/watch me type for a bit (you can make a quick typing test or something) and then notice things that go wrong like rolls, typos and timings and stuff and then use that knowledge to make suggestions about what to improve … Maybe we could even create a test that checks how fast each of my fingers is so instead of saying this is your typing speed it can say your typing slows down on keys that you need to press with your index finger or something or most typos come from your pinky."
 
@@ -47,6 +47,10 @@ A browser typing test only sees what the firmware sends after it decided tap or 
 - **ZMK (Glove80, Corne).** The `keyloom-zmk` module's USB serial port (D-095) streams `zmk_position_state_changed` events from the central, which sees both halves, with `k_uptime_get()` timestamps. It is off unless the host asks. S51 decides the split latency and ordering. The TypeScript capture lifecycle on the legacy stty/polling transport now classifies serial errors, malformed or incomplete lines, DROP reports, missing OFF replies, and write/close failures as incomplete. Native Rust serial transport and physical S59 serial evidence remain pending.
 - **MacBook (kanata).** Out of scope for the first rung. kanata exposes no raw event stream. The lab says so for that board (S52 checks `kanata --debug` parsing as a later route).
 - **Text.** Alongside the events, the browser records what came out. Comparing the two is what separates a typo (the wrong key pressed) from a misfire (the right keys pressed, the firmware's decision wrong).
+
+QMK and ZMK capture each bound START, keepalive and STOP writes to 750 ms and close to 1250 ms (D-4xx). These waits sit above the helper's 500 ms write and 1 s close deadlines so its own error can arrive first. Keepalives begin as soon as START is written, because the firmware ends the stream after 3 s without one; finish waits for the single pending keepalive before cleanup, and concurrent finish calls share cleanup, with at most one STOP and one close. A deadline failure makes the recording incomplete. A timeout bounds the host's wait; it does not prove that the underlying operation was cancelled or the connection closed.
+
+A failed start reports its original error first and appends cleanup uncertainty if STOP or close fails or times out. Invalid UTF-8 or an overlong serial line triggers a best-effort STOP before close, while preserving the framing error as the reason the recording ended. The existing ON and OFF reply waits remain two seconds and 500 ms respectively, after their writes settle.
 
 ## Analysis
 
