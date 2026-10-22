@@ -6,6 +6,12 @@ name: release
 on:
   push:
     branches: [main]
+  # Builds an existing release whose run failed after release-please created it (docs/issues/release-built-nothing-after-release-please-error.md).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing release tag with no assets yet, such as v0.53.1
+        required: true
 
 permissions:
   contents: read
@@ -17,15 +23,28 @@ jobs:
       contents: write
       pull-requests: write
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.release.outputs.release_created || steps.existing.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name || steps.existing.outputs.tag_name }}
       pr: ${{ steps.release.outputs.pr }}
     steps:
       - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        if: github.event_name == 'push'
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      # A release that already has assets is never rebuilt: its published binaries and checksums stay as they are.
+      - if: github.event_name == 'workflow_dispatch'
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -eu
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
+          if [ "$assets" != 0 ]; then echo "::error::$TAG already has $assets assets; build a new release instead."; exit 1; fi
+          echo "release_created=true" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
 
   # The release PR is opened with the default token, so GitHub starts no pull_request run for it.
   # A workflow_dispatch from that token does run, on the PR's head commit, so its checks show on the PR.
