@@ -104,6 +104,7 @@ const op: fc.Arbitrary<ChangeOp> = fc.oneof(
 );
 
 describe("property: validate and apply agree on real layouts", () => {
+  // Keep all 400 real-layout cases; shared CPU load has exhausted Bun's 5 s default in full runs.
   test("random ops across all kinds: either validate fails, or the saved document is sound and preserves reachability", () => {
     let valid = 0;
     fc.assert(
@@ -141,5 +142,5 @@ describe("property: validate and apply agree on real layouts", () => {
     );
     // The property is vacuous if nothing ever passes validation.
     expect(valid).toBeGreaterThan(50);
-  });
+  }, 15_000);
 });

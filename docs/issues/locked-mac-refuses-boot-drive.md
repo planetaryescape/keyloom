@@ -17,4 +17,5 @@ Proposed fix:
 - Before restarting a half on macOS, check the session's screen-lock state and refuse with "Unlock your Mac first: macOS doesn't mount the keyboard's boot drive while the screen is locked."
 - If the Mac locks during the wait, say the same instead of "didn't appear".
 
-Status: open.
+Status: fixed on branch fix/locked-mac-flash.
+The macOS UF2 path now checks the current console user's lock state before waiting or restarting, and switches its waiting/timeout guidance if the Mac locks. `bun test test/firmware/zmk/flash.test.ts test/firmware/toolchain/screen-lock.test.ts` covers injected lock transitions and plist parsing.

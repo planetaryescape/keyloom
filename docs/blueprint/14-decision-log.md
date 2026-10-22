@@ -1938,6 +1938,12 @@ The shell now runs `$SHELL -ilc` with `/usr/bin/printenv PATH` between unique ma
 
 Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
 
+### D-442: Refuse a UF2 restart while the macOS screen is locked. (2026-10-22, Stage 11)
+
+Before a macOS UF2 flash restarts a ZMK half or waits for its boot drive, keyloom reads `IOConsoleUsers` from `ioreg -n Root -d1 -a` through `plutil -extract IOConsoleUsers json` (the full IORegistry plist has `<data>` values plutil can't write as JSON) and matches `kCGSSessionUserIDKey` to the current process uid. A true `CGSSessionScreenIsLocked` refuses before the restart; if the screen locks during the drive wait, the instruction and timeout explain that macOS will not mount the drive until unlock. A drive already mounted needs no check. Missing lock keys mean unlocked. If the probe fails or its output cannot be read, log the failure and continue so a broken probe cannot block a flash. The check is macOS-only; QMK's DFU path is unchanged.
+
+Evidence: `test/firmware/toolchain/screen-lock.test.ts` and `test/firmware/zmk/flash.test.ts`. The lock probe is tested with the JSON shape plutil prints and flash behaviour with injected functions. The live probe on BK's unlocked Mac returned false; no hardware flash was run.
+
 ### D-443: The desktop sidecar inherits allowlisted provider settings from the login shell. (2026-10-22, Stage 11)
 
 Refines D-441. Read `PATH`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CODEX_API_KEY`, `CODEX_HOME`, `KEYLOOM_CODEX_BIN`, `KEYLOOM_CODEX_TRACE` and `KEYLOOM_PROVIDER` in the same bounded login-shell exchange: one `/usr/bin/env -0` between unique marks, parsed in the app, which keeps only those names and drops every other variable. NUL-separated records stop a multi-line value of another variable from passing for an allowlisted one, and the marks are anchored (the opening one starts a line, the closing one follows a NUL) so a printed command or a value containing the mark can't move them. A single external command keeps it working in nushell, which has no `||` for a `printenv` of an unset name. Pass non-empty allowlisted values to the sidecar only when the desktop app did not already set that variable; never log their values. If the shell misses the three-second deadline, keep D-441's PATH fallback and pass no shell provider values.
@@ -1948,3 +1954,11 @@ Evidence: desktop `login_path` parser, allowlist and deadline tests. A probe und
 
 ### D-444: Refuse unknown QMK calls that receive a known layer name. (2026-10-22, stage 11 C3)
 - If kept QMK code passes a layer enum name to a function whose layer semantics keyloom does not know, a layer reorder is refused and the call's line is named. The importer cannot prove how that function uses the layer value.
+
+### D-445: Shutdown closes manual flash admission before draining accepted starts. (2026-10-22, Stage 11)
+
+Refines D-421/D-422's consumer-before-helper lifetime. Register a manual flash start before checking its artifact asynchronously. Once shutdown begins, refuse new starts with `UsageError` (the editor's existing HTTP 400 `usage` code), wait for every accepted start to register its task or fail, then wait for running tasks before closing the helper. Always release pending starts, including when the artifact check throws. Admission closes for the App being shut down, not the whole process, so other Apps in the same process (a test run's) are unaffected.
+
+Await sync startup once before stopping the sync and review engines, including when startup fails. Log startup rejection without swallowing it: shutdown reports that reason once, alongside any helper cleanup failure. Settle both stops independently so one failure cannot hide the other or close the helper before the remaining stop finishes.
+
+Evidence: `test/app/firmware-shutdown.test.ts` gates artifact checks and checks another App still admits flashes; and final flash callbacks against fake toolchains; `test/cli/serve-shutdown.test.ts` exercises the serve stop hook with deferred startup and stop failures. No real keyboard was flashed.

@@ -1,0 +1,22 @@
+[
+  {
+    "schema": "event",
+    "value": {
+      "v": 1,
+      "type": "event",
+      "sessionId": "s1",
+      "seq": 0,
+      "event": "closed",
+      "reason": "requested"
+    }
+  },
+  {
+    "schema": "identity",
+    "value": {
+      "protocol": 1,
+      "helperVersion": "0.53.2",
+      "target": "aarch64-apple-darwin",
+      "capabilities": ["hid.list", "hid.list"]
+    }
+  }
+]
