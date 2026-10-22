@@ -17,4 +17,4 @@ Closing the left half's port after `IOSSIOSPEED` 1201 restarted the right half i
 
 Fix (D-440): the native macOS touch sets the speed with `IOSSIOSPEED`, then verifies both speeds with `tcgetattr` as before.
 
-Status: fixed on branch `fix/macos-1201-baud` for the native helper (Apple Silicon releases). Intel Macs still touch through `stty` and keep the bug until they move to the native helper.
+Status: fixed in d9d7f81 (PR 165), released in v0.53.2, for the native helper on Apple Silicon. Intel Macs still touch through `stty` and keep the bug until they move to the native helper. Not yet observed: the relay through the installed v0.53.2 with the right half on battery.
