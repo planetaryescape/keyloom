@@ -74,6 +74,15 @@ The ancestor check (delete, delete-child, change-permissions and take-ownership 
 
 Still not observed: SmartScreen and antivirus behaviour on a downloaded unsigned exe, and a published Windows release download.
 
-## The orchestrator owns the next checks
+## Remaining after slice 1
 
-Account for the release-only main advance when committing/rebasing. From this worktree, in an environment allowed to use the shared build queue, run `agent-work run -- bunx tsc --noEmit`, `agent-work run -- bun run depcruise`, and the regression suite (including remap with loopback available). Review the uncommitted diff and commit it as the orchestrator. Then let the branch's `windows-2022` job build and run the installed smoke; attach its run URL and result here before claiming native Windows support. A native build failure must be investigated on that runner rather than inferred from macOS. No hardware action is authorized by this handover.
+The installed Windows journey is covered by the `windows-2022` CI job on this PR's final head. Review rounds with Codex (gpt-6.1-sol) closed three Windows cache-safety holes, each now covered by a native test:
+- ancestor folders that another account could rename;
+- inheritable untrusted grants on the cache root;
+- objects created without an explicit descriptor. Folders and the temp exe are now created with a protected DACL.
+
+Still open:
+- Native HID/COM (slice 2, D-436).
+- S61 on Windows hardware.
+- Code signing, and SmartScreen/antivirus behaviour on a downloaded release.
+- Process-level tests for a closed or stalled stdout. The exit flush is bounded at 5 s.
