@@ -50,10 +50,6 @@ try {
     Push-Location -LiteralPath $scratch
     # stdout only: anything on stderr is reported, not compared.
     $versionErr = Join-Path $scratch 'version.err'
-    $versionOut = Join-Path $scratch 'version.out'
-    $viaFile = Start-Process -FilePath $script:installed -ArgumentList '--version' -NoNewWindow -Wait -PassThru -RedirectStandardOutput $versionOut -RedirectStandardError $versionErr
-    $viaCmd = (& cmd.exe /d /c "`"$script:installed`" --version" 2>&1 | Out-String).Trim()
-    Write-Output "version via file: exit $($viaFile.ExitCode) stdout '$((Get-Content -LiteralPath $versionOut -Raw))' stderr '$((Get-Content -LiteralPath $versionErr -Raw))'; via cmd: '$viaCmd'"
     $printed = (& $script:installed --version 2> $versionErr | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $printed -ne $version) { throw "wrong version: stdout '$printed', stderr '$((Get-Content -LiteralPath $versionErr -Raw))', exit $LASTEXITCODE" }
     $data = Join-Path $scratch 'data'

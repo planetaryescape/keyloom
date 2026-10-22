@@ -1,6 +1,6 @@
 # Windows slice 1 has an implemented release path; native evidence is pending
 
-Status: D-435 implementation, uncommitted on `feat/windows-release-target`, based on `a050189f6695ba923339db8fb7b99a2ec649fd55` (`origin/main` snapshot). At handover the shared local `origin/main` ref had advanced to `020cf0f09fa8cc533d45384bb688948b7c29cf6a` (release 0.50.0), differing only in release metadata; this worker leaves HEAD and the uncommitted work on the requested base for the orchestrator. No native Windows runner result or release artifact was observed in this session. The implementation host is macOS arm64 with Bun 1.3.14. No device discovery, open, capture, touch, reset or flash was performed.
+Status: D-435 slice 1, PR 154 on `feat/windows-release-target`. The native `windows-2022` CI job passes the full installed journey (2026-10-22, run on head `13aee17`). Native Windows device support and S61 hardware evidence remain open.
 
 ## The paired Windows release is diagnostics only
 
@@ -48,6 +48,31 @@ Injected filesystem tests cover Unicode/spaces, version coexistence, final hash 
 None of those Windows-native outcomes was observed locally. Neither Windows compilation nor execution, installer PowerShell parsing, real ACL/reparse behavior, exe locking, PATH registry behavior, compiled Bun SQLite/WASM import portability, SmartScreen/antivirus, nor published download checksums are certified by the local injected tests. The existing source paths embed WASM bytes without POSIX shelling, but only CI can establish their Windows runtime behavior. Windows minimum-version claims remain open under Q37.
 
 S61 still needs HID collection/COM ancestry, bounded I/O/cancellation, leases, capture/stop/reopen, Ctrl-C/parent death, unplug/busy-port behavior, framing and exact 1200/1201-baud effects on separately authorized hardware. Windows S62 still needs native installed evidence and release-policy measurements. No physical evidence or Windows transport support is claimed.
+
+## Native Windows CI found four problems the local tests couldn't
+
+The `windows-2022` job ran the real MSVC helper and the compiled CLI. It found four problems, each now fixed on this branch:
+
+- **Windows PowerShell 5.1 couldn't load `Get-Acl`.** It was launched from PowerShell 7 and inherited 7's `PSModulePath`, so every extraction refused the cache. The inspection now reads ACLs through .NET (`DirectoryInfo`/`FileInfo.GetAccessControl`), and the child process gets no `PSModulePath`. The test fixtures set ACLs the same way.
+- **The refusal reason was unreadable.** Redirected PowerShell stderr is CLIXML. The script now prints its reason on stdout and exits 1, and `HelperFailure` carries the detail in its message (`unsafe_cache: …`).
+- **A cold Windows PowerShell start took several seconds on the runner.** The inspection allows 30 s, and runs once per process.
+- **`keyloom.exe` ran nothing and exited 0.** `import.meta.main` in `src/cli/main.ts` is false in the compiled Windows executable, so `--version` printed nothing through a pipe, a file and `cmd`. Compiled builds now start from `src/cli/compiled.ts`, which always runs the CLI. The CLI also flushes stdout and stderr before it exits.
+
+On the final head the installed smoke passes everything it was written to check:
+- checksum-verified install into a path with a space and `é`;
+- a locked-exe refusal, then the update;
+- PATH changes only with `-AddToPath`;
+- `--version`;
+- eight concurrent cold doctors;
+- `import`, `layout`, `boards`;
+- `change check`/`propose`/`apply` with F17 read back on key 6;
+- `keyloom build` refused with exit 6 and the roadmap link;
+- a checksum mismatch refused with the installed exe preserved;
+- a corrupted cached helper refused while layout editing still works.
+
+The ancestor check (delete, delete-child, change-permissions and take-ownership rights held by another account on any folder above the cache) and the junction and Everyone-writable refusals pass as native tests.
+
+Still not observed: SmartScreen and antivirus behaviour on a downloaded unsigned exe, and a published Windows release download.
 
 ## The orchestrator owns the next checks
 
