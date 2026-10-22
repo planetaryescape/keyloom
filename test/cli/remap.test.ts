@@ -69,6 +69,7 @@ describe("keyloom remap", () => {
     expect(plist).toContain("--release-grab-on-lock");
     // Stopped by the exit chord stays stopped: launchd restarts only after a crash.
     expect(plist).toMatch(/<key>SuccessfulExit<\/key>\s*<false\/>/);
+    expect(plist).toMatch(/<key>SoftResourceLimits<\/key>\s*<dict>\s*<key>NumberOfFiles<\/key>\s*<integer>4096<\/integer>/);
     expect(plist).not.toMatch(/cmd|danger-enable/);
   });
 

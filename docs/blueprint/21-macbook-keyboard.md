@@ -50,6 +50,7 @@ Space stays a hold-layer key on the MacBook (D-234). When BK's thumb-layer keys 
   - `--release-grab-on-lock` gives the lock screen a plain keyboard.
   - keyloom never emits kanata's `cmd` action or `danger-enable-cmd`, because the daemon runs as root.
 - **Setup doctor.** `keyloom doctor` reads the kanata and driver versions, the Input Monitoring and Accessibility state, the daemon and the port, and prints the one root command when one is needed. Upgrading Karabiner-Elements to 16.x replaces the driver with one kanata 1.12 can't use. The doctor says so before it happens.
+- **Open-file limit.** The plist raises the daemon's soft open-file limit from launchd's 256 to 4096. kanata 1.12.0 keeps a file descriptor for every TCP client that disconnects, and when it runs out its TCP thread panics and the whole process aborts until launchd restarts it ([issue](../issues/kanata-tcp-leaks-file-handles.md)). A daemon installed earlier keeps the old limit until it is reinstalled.
 
 ## Copying the other boards' setup onto it
 
