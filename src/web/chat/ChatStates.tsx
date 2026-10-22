@@ -62,7 +62,7 @@ export function MissingKey({ providers, onRetry, retryLabel = "Try again" }: { p
         <KeyRound size={22} />
       </span>
       <h3>Chat needs a model</h3>
-      <p>keyloom reads its credentials when it starts, so one set up now won't be seen. Pick one, then restart keyloom: quit the app and open it again, or stop <code>keyloom serve</code> and start it again.</p>
+      <p>Pick one. A Codex sign-in is picked up when you check again. An API key is read only when keyloom starts, so start <code>keyloom serve</code> again with it set.</p>
       <ul className="provider-options" aria-label="Ways to set up a model">
         {providers.map((p) => (
           <li key={p.id}>

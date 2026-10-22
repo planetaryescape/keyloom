@@ -59,7 +59,7 @@ async fn launch(app: &AppHandle, port: u16, path: &str) -> Result<Server, Failur
         // --reuse: a server already on this data directory (BK's browser one) is attached to, not doubled (it would run a second sync engine).
         // --exit-on-stdin-close: the pipe the shell holds closes when the shell dies, however it dies.
         .args(["serve", "--port", &port.to_string(), "--no-open", "--exit-on-stdin-close", "--reuse"])
-        // So codex, docker, zapp and kanata are found where the person's terminal finds them.
+        // So codex, docker and zapp are found where the person's terminal finds them (D-441).
         .env("PATH", path)
         .spawn()
         .map_err(|e| other(&e))?;
