@@ -1908,7 +1908,7 @@ Evidence is synthetic: `test/firmware/zmk/split-rollback.test.ts`, `test/app/fir
 
 ### D-438: Bind UF2 attempts to one mount and qualify sync recovery by revision. (2026-10-22, Stage 9 round 3)
 
-Refines D-437. Record the selected mount path, device and inode when the drive appears. Revalidate them before every write attempt, including EACCES/EPERM retries, and before the final sync. Recheck shared-label peers each time hooks are available. Refuse duplicate label mounts, including macOS numbered mount names and multiple Linux matches. Boards without hooks also refuse pre-mounted shared drives; their manually opened shared drive must appear after the prompt.
+Refines D-437. Record the selected mount path, device and inode when the drive appears. Revalidate them before every write attempt, including EACCES/EPERM retries, and before the final sync. Recheck shared-label peers each time hooks are available. Refuse duplicate label mounts, including macOS numbered mount names and multiple Linux matches. Boards without hands-free hooks keep their existing manual flow, including an already mounted shared drive, because they have no rollback or verification to protect. Once a complete image is written, a drive that goes away or changes is left to verification and the unmount check rather than failing the half.
 
 A later successful flash supersedes a failed sync only when every expected half is visible on a successfully flashed build of the failed revision or a descendant in the same config. A successful flash of an older revision preserves the failure and automatic retry block. Failed rows remain in history.
 

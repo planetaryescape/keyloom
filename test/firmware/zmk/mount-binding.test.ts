@@ -103,7 +103,7 @@ test("a failed peer probe on retry stops without another write", async () => {
   expect(result.error).toContain("peer enumeration failed");
 });
 
-test.each(["retry", "sync"])("a drive disappearing before %s cannot be taken as a completed write", async (phase) => {
+test.each(["retry"])("a drive disappearing before %s cannot be taken as a completed write", async (phase) => {
   const s = await setup();
   let writes = 0;
   const disappear = () => renameSync(s.mount, join(s.dir, "departed"));
@@ -121,21 +121,41 @@ test.each(["retry", "sync"])("a drive disappearing before %s cannot be taken as 
   expect(result.error).toContain("no longer mounted at that path");
 });
 
-test("the final sync refuses a replacement mount", async () => {
+test("a drive the bootloader takes away after a complete write goes on to verification, not a failure", async () => {
+  const s = await setup();
+  const lines: string[] = [];
+  let writes = 0;
+  const result = await s.flash({ onLine: (line) => lines.push(line), writeImage: async (path, bytes) => {
+    writes++;
+    await writeFile(path, bytes);
+    // The bootloader takes the drive as soon as the image is in; the next half's drive appears a moment later.
+    renameSync(s.mount, join(s.dir, `departed-${writes}`));
+    if (writes === 1) setTimeout(() => mkdirSync(s.mount), 30);
+  } });
+  expect(writes).toBe(2);
+  expect(result.state).toBe("succeeded");
+  expect(lines.join("\n")).toContain("verifying instead of syncing it");
+});
+
+test("a replacement mount after a complete write is never opened or synced", async () => {
   const s = await setup();
   const result = await s.flash({ writeImage: async (path, bytes) => { await writeFile(path, bytes); s.swap(); } });
-  expect(result.error).toContain("mount identity changed");
+  // The replacement stays mounted, so the bootloader never took a file there and the flash fails instead of succeeding.
+  expect(result.state).toBe("failed");
   expect(existsSync(join(s.mount, "glove80.uf2"))).toBe(false);
 });
 
-test("the final sync rechecks shared-label peers", async () => {
+test("a shared-label peer that stops running after a complete write leaves the flash to verification and the unmount check", async () => {
   const s = await setup();
   let running = true;
+  let peerChecks = 0;
   const result = await s.flash({
-    hooks: { enterBootloader: async () => ({ ok: true }), peersRunning: async () => running },
+    hooks: { enterBootloader: async () => ({ ok: true }), peersRunning: async () => { peerChecks++; return running; } },
     writeImage: async (path, bytes) => { await writeFile(path, bytes); running = false; },
   });
-  expect(result.error).toContain("other half is not confirmed running firmware");
+  // The write already went to the bound drive; the peer check now only stops keyloom touching it again.
+  expect(peerChecks).toBeGreaterThanOrEqual(2);
+  expect(result.state).toBe("failed");
 });
 
 test.each([false, true])("duplicate macOS label mounts are ambiguous (canonical=%s)", async (canonical) => {

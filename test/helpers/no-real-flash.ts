@@ -46,9 +46,18 @@ mock.module("../../src/firmware/zmk/volumes.ts", () => ({
   ...volumes,
   defaultVolumesRoot: () => refuse("defaultVolumesRoot()"),
   defaultVolumeFinder: () => refuse("defaultVolumeFinder()"),
+  // Checked on every call, not only when the finder is made: the real finder resolves lsblk each time it runs.
   lsblkFinder: () => {
-    const bin = Bun.which("lsblk", { PATH: process.env.PATH ?? "" });
-    return bin && isSyntheticExecutable(bin) ? realLsblkFinder() : refuse("lsblkFinder()");
+    const synthetic = () => {
+      const bin = Bun.which("lsblk", { PATH: process.env.PATH ?? "" });
+      return Boolean(bin && isSyntheticExecutable(bin));
+    };
+    if (!synthetic()) refuse("lsblkFinder()");
+    const real = realLsblkFinder();
+    return async (label: string) => {
+      if (!synthetic()) refuse("lsblkFinder()");
+      return real(label);
+    };
   },
   volumeFinderAt: (root: string) => {
     const r = resolve(root);

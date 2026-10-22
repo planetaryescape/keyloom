@@ -249,19 +249,18 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
           await sleep(poll, signal);
         }
       }
-      // The write has to reach the drive before the bootloader looks at it.
-      const unsafe = await checkMount();
-      if (unsafe) return refuseMount(unsafe);
-      const handle = await open(target, "r+");
-      const unsafeSync = await checkMount();
-      if (unsafeSync) {
-        await handle.close().catch(() => undefined);
-        return refuseMount(unsafeSync);
-      }
-      try {
-        await handle.sync();
-      } finally {
-        await handle.close();
+      // The write has to reach the drive before the bootloader looks at it. Once the whole image is written, a drive that
+      // has gone is the bootloader taking it (the normal end of a flash), and one that changed is not ours to open: skip
+      // the sync either way and let verification decide, instead of failing a half that may already run the new build.
+      if ((await checkMount()) === undefined) {
+        const handle = await open(target, "r+");
+        try {
+          if ((await checkMount()) === undefined) await handle.sync();
+        } finally {
+          await handle.close().catch(() => undefined);
+        }
+      } else {
+        say(`keyloom: ${step.volume} changed or went away after the write; verifying instead of syncing it`);
       }
     } catch (err) {
       // A bootloader that reboots as soon as the last block lands can take the drive away mid-close, which
