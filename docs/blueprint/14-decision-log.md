@@ -1937,3 +1937,19 @@ The shell now runs `$SHELL -ilc` with `/usr/bin/printenv PATH` between unique ma
 `tauri-apps/fix-path-env-rs` does the same, but it isn't published on crates.io and waits on the shell with no deadline, so a slow shell profile would hang the app at launch.
 
 Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
+
+### D-442: Agent-made configs open themselves unless BK is editing or has moved on, and the reply carries a config card instead of directions. (2026-10-22, BK's v0.53.2)
+
+When BK asked the agent to copy a setup to another keyboard or to make a new config, the agent made the config and told him to "switch to it from the config menu", and the menu didn't list it until a reload (`docs/issues/config-menu-misses-agent-config.md`). The agent now says nothing about where it is. keyloom does the navigation.
+
+When BK watched a reply finish, the run completed and a `put_config` or `create_config` operation in it succeeded with a config reference, the page opens the last config made, through the same switch a menu pick uses. The chat thread travels with it (D-317) and the new config's proposals show as "N proposals waiting" beside the board (D-336). A config on another board opens on its own board.
+
+It does not open when BK has a key card, a combo draft, a key being placed, a swap, a quick-assign run, an unapplied or parked draft, a dialog or a staged colour change open (28: "Do not steal focus from someone typing or editing elsewhere"), when he has gone to another config while the run worked, or when the run was stopped, failed or ended incomplete. It opens a config at most once per page, and never for a reply the chat did not send in this page: history, a run found again after a reload and a thread carried in from another config are all read-only replays. Gating on "sent and watched here" is the only reliable signal, because a replay and a live reply look the same in the data once they are on screen.
+
+Every reply that made a config shows a card for each, from the operation references and `GET /api/configs`: name, board, source, open proposals, and "Open" or "Back to <config>". The card is not stored on the turn; the typed `config_result` artifact stays unwired because nothing but the client needs this. The presentation keeps two references per operation (`chat-presentation.ts`), enough here because `put_config` records the config first.
+
+The menu and ⌘K reload their list when a turn names a config the list lacks. A card's "Open" for a config the page's list doesn't have yet reloads the list too, because selecting an unknown config left the page on its loading skeleton.
+
+Refines D-317 (the thread carried across a switch) and D-336 (a new config opens with its proposals).
+
+Evidence: `docs/issues/config-menu-misses-agent-config.md`, `docs/research/ui-audit/agent-opens-config/`.

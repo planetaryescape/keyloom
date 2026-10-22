@@ -1,6 +1,6 @@
 # 28: The agent works beside the keyboard
 
-Status: partly implemented, 2026-10-20. Rung 26a shipped in v0.42.0. Rung 27 interactive question kinds (single/multiple choice, short text, layer, key, keyboard_or_config), explicit recommendation, reopened selection actions, typed artifacts, and confirmation/outcome cards are built on feat/rung27-interactive-questions. Cross-keyboard target plans below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
+Status: partly implemented, 2026-10-20. Rung 26a shipped in v0.42.0. Rung 27 interactive question kinds (single/multiple choice, short text, layer, key, keyboard_or_config), explicit recommendation, reopened selection actions, typed artifacts, and confirmation/outcome cards are built on feat/rung27-interactive-questions. Agent-made configs open themselves and the reply carries a config card (D-442, 2026-10-22). Cross-keyboard target plans below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
 
 Reconciled with origin/main at `72370d0494497ae4bdd6036106fcec9d3f6c1aab`: inherit the no-accent-stripe/no-sparkle rule in [18](18-visual-design.md#patterns-keyloom-doesnt-use) and separate case/keycap controls (D-319).
 
@@ -147,6 +147,8 @@ Options have proper labels and focus states. Recommendation is an explicit field
 | Build or sync | Current step, device target and verification result | The existing sync engine, not invented percentages |
 | Import or diagnostics | File/board summary, preserved/unsupported features, actionable findings | Existing importer and doctor results |
 | Safe explanation | Markdown with restrained formatting | No card needed for an answer with no structured result |
+
+A config the agent makes (`put_config`, `create_config`) is the one result built end to end so far. The reply ends with a config card that the client builds from the turn's operation references and the config list: the config's name, its board, where it was copied from, how many proposals wait on it, and one button, "Open" or, once BK is on the new config, "Back to" the config he asked from. A config deleted since shows a sentence and no button. When BK watched the reply finish and is not in the middle of anything, keyloom also opens the config itself, carrying the chat thread with it (D-317) and leaving its proposals one click away (D-336). It stays put while a key card, combo, placed key or unapplied draft is open, once BK has gone to another config, and for any reply replayed from history, a reload or a carried thread; then the card is the offer. The agent no longer tells BK where to find the config (D-442). The typed `config_result` artifact stays unwired: the card needs no server field, and what did not carry across is the server-built `transfer` artifact's job.
 
 The model supplies content and references, not HTML, JSX, CSS or runnable components. Large results show a summary and an inspectable list with counts. Unsupported features remain visible even if some keys transferred successfully (D-404).
 

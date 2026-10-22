@@ -761,7 +761,7 @@ Previously, completed activity is inspectable but a stream interruption may stil
 
 ## Rung 27: I answer on the keyboard and inspect real results
 
-Status: Built on feat/rung27-interactive-questions. Interactive question kinds, typed artifact union, native renderers, selection reopening, confirmation and outcome cards.
+Status: Partly wired. Interactive question kinds, selection reopening and the typed artifact union are built, and the web renders `transfer`, `key_locations` and `keyboard_list` artifacts, but no server or client code produces `turn.artifacts` yet, so none of those three ever shows. The one result that does show is the config card under a reply that made a config (D-442, 2026-10-22), built on the client from operation references. The `transfer` report with the items that did not carry needs a server-built artifact and is not built.
 
 Previously, questions have a few buttons and free text. Now a key/layer/config/keyboard choice uses the corresponding app control, and tool results use typed cards and existing previews.
 
