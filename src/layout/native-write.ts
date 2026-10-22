@@ -13,17 +13,17 @@ export type Written = { source: string; label: string } | { why: string };
 const QMK_MOD = new Map<Mod, string>([["LCTL", "MOD_LCTL"], ["LSFT", "MOD_LSFT"], ["LALT", "MOD_LALT"], ["LGUI", "MOD_LGUI"], ["RCTL", "MOD_RCTL"], ["RSFT", "MOD_RSFT"], ["RALT", "MOD_RALT"], ["RGUI", "MOD_RGUI"]]);
 const ZMK_MOD = new Map<Mod, string>([["LCTL", "LCTRL"], ["LSFT", "LSHFT"], ["LALT", "LALT"], ["LGUI", "LGUI"], ["RCTL", "RCTRL"], ["RSFT", "RSHFT"], ["RALT", "RALT"], ["RGUI", "RGUI"]]);
 
-const QMK_RGB: Record<LightingOp, string> = {
+const QMK_RGB = {
   toggle: "RGB_TOG", hueUp: "RGB_HUI", hueDown: "RGB_HUD", satUp: "RGB_SAI", satDown: "RGB_SAD",
   briUp: "RGB_VAI", briDown: "RGB_VAD", speedUp: "RGB_SPI", speedDown: "RGB_SPD", effectNext: "RGB_MODE_FORWARD", effectPrev: "RGB_MODE_REVERSE",
-};
-const ZMK_RGB: Record<LightingOp, string> = {
+} satisfies Record<LightingOp, string>;
+const ZMK_RGB = {
   toggle: "RGB_TOG", hueUp: "RGB_HUI", hueDown: "RGB_HUD", satUp: "RGB_SAI", satDown: "RGB_SAD",
   briUp: "RGB_BRI", briDown: "RGB_BRD", speedUp: "RGB_SPI", speedDown: "RGB_SPD", effectNext: "RGB_EFF", effectPrev: "RGB_EFR",
-};
-const LIGHT_LABEL: Record<LightingOp, string> = {
+} satisfies Record<LightingOp, string>;
+const LIGHT_LABEL = {
   toggle: "RGB", hueUp: "Hue+", hueDown: "Hue-", satUp: "Sat+", satDown: "Sat-", briUp: "Bri+", briDown: "Bri-", speedUp: "Spd+", speedDown: "Spd-", effectNext: "RGB»", effectPrev: "RGB«",
-};
+} satisfies Record<LightingOp, string>;
 
 /** The source for a key with these steps on `firmware`, or the reason the target can't carry it. A key carries one step. */
 export function writeSteps(steps: readonly Step[], firmware: "qmk" | "zmk" | "kanata", facts: TargetFacts): Written {
@@ -40,7 +40,8 @@ export function writeSteps(steps: readonly Step[], firmware: "qmk" | "zmk" | "ka
     written.push(w);
   }
   if (written.length !== 1) return { why: "it does more than one thing at once, and a key carries one" };
-  return written[0] as Written;
+  const [only] = written;
+  return only ?? { why: "it has no step keyloom can write" };
 }
 
 const orderedMods = (mods: readonly Mod[]): Mod[] => MOD_ORDER.filter((m) => mods.includes(m));

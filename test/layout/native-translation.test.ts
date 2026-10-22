@@ -220,7 +220,10 @@ describe("transfer of natives", () => {
     triggerPositions: () => [], targetFacts: facts,
   });
   const source = doc("zmk", { passthrough: KEPT });
-  const native = (src: string, layerRefs?: Array<{ start: number; end: number; layerId: string }>): Binding => ({ kind: "native", firmware: "zmk", source: src, label: "x", ...(layerRefs ? { layerRefs } : {}) });
+  const native = (src: string, layerRefs?: Array<{ start: number; end: number; layerId: string }>): Binding => {
+    const binding: Binding = { kind: "native", firmware: "zmk", source: src, label: "x" };
+    return layerRefs ? { ...binding, layerRefs } : binding;
+  };
 
   test("the one-shot shift of a ZMK layout comes across on a QMK board as its QMK one-shot, and a combo's output too", () => {
     const t = new BindingTransfer(env(source, doc("qmk"), MOONLANDER));

@@ -283,8 +283,7 @@ const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b
  * caps word or a lighting key that a copy translated (D-451), or one an agent asks for. Source keyloom can't read stays refused.
  */
 export function nativeEdit(before: Layout, after: Layout): Issue[] {
-  const known = new Set<string>();
-  for (const { binding: b } of bindingsOf(before)) if (b.kind === "native") known.add(nativeKey(b));
+  const known = knownNatives(before);
   const kept = keptDefinitions(after.passthrough);
   const understood = (b: Extract<Binding, { kind: "native" }>) =>
     b.firmware === after.firmware && (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) : readNative(b, kept).kind !== "unknown");
@@ -299,14 +298,16 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   return out;
 }
 
+/** The native bindings a layout already has, by key, so a change that keeps one is not a new native. */
+const knownNatives = (before: Layout): Set<string> => new Set([...bindingsOf(before)].flatMap(({ binding: b }) => (b.kind === "native" ? [nativeKey(b)] : [])));
+
 /**
  * `risky_native` (warning, D-451): a new or changed native that resets the keyboard or forgets Bluetooth pairings. BK's decision:
  * "allow understood raw codes, warn on risky ones". A warning never blocks a change or a put, and a key already in `before` (an
  * imported Boot key, say) does not warn again on every edit. Only these steps warn; one-shots, lighting and caps word never do.
  */
 export function riskyNatives(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
-  const known = new Set<string>();
-  for (const { binding: b } of bindingsOf(before)) if (b.kind === "native") known.add(nativeKey(b));
+  const known = knownNatives(before);
   const kept = keptDefinitions(after.passthrough);
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
