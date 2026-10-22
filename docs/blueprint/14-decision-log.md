@@ -1830,7 +1830,7 @@ BK replaced the proposed `serialport` macOS candidate with a direct IORegistry/P
 
 On BK's Glove80 and Moonlander (S59), every unplug made the helper exit, so the recording blamed `helper_exited` instead of `disconnected`. After a CDC unplug, `TIOCCDTR` and `TIOCNXCL` fail with `ENXIO` while `close()` succeeds. After an HID removal callback, `IOHIDDeviceClose` returns `kIOReturnBadArgument`. D-431's checked close counted either as unconfirmed cleanup and exited to keep the lease.
 
-- Serial: `ENXIO`/`ENODEV` from line control mean there is no device left to hold DTR or exclusive state. The fd close alone confirms release. Any other line-control error still fails the close.
+- Serial: `ENXIO` ("device not configured") from line control means there is no device left to hold DTR or exclusive state. Darwin's `ENODEV` means "operation not supported" and still fails the close. The fd close alone confirms release. Any other line-control error still fails the close.
 - HID: after the removal callback, `kIOReturnBadArgument`, `kIOReturnNoDevice` or `kIOReturnNotAttached` from `IOHIDDeviceClose` is a clean close. Without that callback, any non-zero result still fails it.
 - The session still ends `failed` with `disconnected`, and loss stays unknown. Unconfirmed cleanup on a present device still exits the helper. [Evidence](../research/spikes/S59.md)
 - Serial identity also comes from the nearest `IOUSBHostDevice`/`IOUSBDevice`, not the first node with USB IDs, because macOS copies the IDs onto CDC data and interface nodes that carry no string descriptors.

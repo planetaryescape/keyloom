@@ -367,9 +367,10 @@ fn close_steps(
     mut line: impl FnMut(c_int) -> Result<(), c_int>,
     release: impl FnOnce() -> bool,
 ) -> Result<(), &'static str> {
-    // An unplugged port refuses line ioctls with ENXIO/ENODEV while close still succeeds (observed on a Glove80
-    // half). With no device left there is no DTR or exclusive state to clear, so only the fd release decides.
-    let cleared = |result: Result<(), c_int>| matches!(result, Ok(()) | Err(ENXIO | ENODEV));
+    // An unplugged port refuses line ioctls with ENXIO ("device not configured") while close still succeeds
+    // (observed on a Glove80 half). With no device left there is no DTR or exclusive state to clear, so only the fd
+    // release decides. Darwin's ENODEV means "operation not supported", which proves nothing about removal.
+    let cleared = |result: Result<(), c_int>| matches!(result, Ok(()) | Err(ENXIO));
     let dtr = cleared(line(TIOCCDTR));
     let exclusive = cleared(line(TIOCNXCL));
     let closed = release();

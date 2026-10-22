@@ -456,10 +456,9 @@ fn close_attempts_dtr_exclusion_and_fd_release_even_after_failure() {
 
 #[test]
 fn close_after_unplug_succeeds_when_only_the_vanished_device_refuses_line_control() {
-    for gone in [ENXIO, ENODEV] {
-        assert_eq!(close_steps(|_| Err(gone), || true), Ok(()));
-        assert_eq!(close_steps(|_| Err(gone), || false), Err("io_failed"));
-    }
+    assert_eq!(close_steps(|_| Err(ENXIO), || true), Ok(()));
+    assert_eq!(close_steps(|_| Err(ENXIO), || false), Err("io_failed"));
+    assert_eq!(close_steps(|_| Err(ENODEV), || true), Err("io_failed"));
     assert_eq!(
         close_steps(
             |request| if request == TIOCNXCL {
