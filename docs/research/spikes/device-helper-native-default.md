@@ -1,6 +1,6 @@
 # Apple Silicon releases select one native HID and serial helper
 
-Status: implemented on `feat/native-default-apple-silicon`, based on `bf857e33ce926e332d3a1d9008a4d19fed835607` (v0.48.1). The worker left changes uncommitted. D-433 selects the new default; this record does not claim a published release or new physical evidence. [S59](S59.md) remains the source for the preceding arm64 capture, unplug and reopen observations.
+Status: built on `feat/native-default-apple-silicon` over `bf857e33ce926e332d3a1d9008a4d19fed835607` (v0.48.1). D-433 selects the new default. The orchestrator reran the locked Rust matrix for all eight feature sets, the combined installed smoke and the full suite, and observed a hands-free Glove80 reflash through the native touch (below). [S59](S59.md) remains the source for the arm64 capture, unplug and reopen observations.
 
 ## The build target selects the backend
 
@@ -38,6 +38,6 @@ TypeScript and dependency-cruiser passed. The focused helper/lifecycle suite pas
 
 ## The orchestrator owns physical and desktop acceptance
 
-Physical touch/reset evidence comes from the orchestrator's run, not the implementation worker. [TK: orchestrator to record Moonlander raw-HID reset, Glove80 1200 local and 1201 relay results, ordinary typing afterwards, and installed CLI/desktop pair hashes here.]
+Physical touch/reset evidence comes from the orchestrator's run, not the implementation worker. On 2026-10-22, 06:11 BST, the release-mapped arm64 build (helper sha256 `0ce6774f…`, seven capabilities, "native backend in use") did the following on BK's Glove80. First, a capture started and stopped cleanly. Second, it reflashed the build both halves were already running (`flash --build bld_01M53EDCCAK3RHBAFNJPGEVV5Y`) hands-free. Each half restarted from its own native 1200-baud touch, took the UF2, and was verified running that build in 22 s (`fl_01M5H0ADAT3TRZ8KB1YNM0K9FJ`). The 1201 relay was not exercised, because both halves were on USB. The Moonlander raw-HID reset through the combined helper was not exercised, because the board was unplugged; S59's HID capture evidence covers the same HID code, which only moved behind the shared owner.
 
-Next action: obtain the exact locked dependencies, rerun all feature checks and the combined installed smoke, review the uncommitted diff, then perform the separately authorized physical and desktop checks. Do not publish the supplemental synthetic CLI as a release artifact. No hardware discovery, open, touch or flash was performed by this worker.
+Remaining after this record: the Moonlander raw-HID reset and the 1201 relay through the combined helper, and the installed desktop app path. The supplemental synthetic CLI is a test artifact and is never published.
