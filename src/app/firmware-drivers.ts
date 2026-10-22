@@ -21,7 +21,8 @@ import { portOfAnotherBoard } from "./zmk-ports.ts";
 import type { RemapperOverrides } from "./remapper.ts";
 import { GenerateError as KanataGenerateError, generateKanataSource } from "../firmware/kanata/generate.ts";
 import type { LayoutView } from "./layouts.ts";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 export type GeneratedSource = { keymapName: string; files: Array<{ path: string; content: string }> };
@@ -217,11 +218,10 @@ const zmk: FirmwareDriver = {
       ? zmkHandsFreeHooks({
           deps: realZmkHandsFreeDeps(a.handsFree?.zmk), board: a.board.definition, handsFree, steps: rev.flash.steps, buildId: a.buildId, findVolume, foreign: portOfAnotherBoard(a.board.definition.id),
           artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))), log: (line) => a.log.line(line),
-          ...(a.lastGoodDir === undefined ? {} : { loadLastGood: (half) => restoreLastGoodUf2(a.lastGoodDir as string, a.board.definition.id, half), saveLastGood: async (half, image) => {
-            const dir = join(a.lastGoodDir as string, a.board.definition.id.replace("/", "-"));
-            await mkdir(dir, { recursive: true });
-            await Bun.write(join(dir, `${half}.uf2`), image);
-          } }),
+          ...(a.lastGoodDir === undefined ? {} : {
+            loadLastGood: (half) => restoreLastGoodUf2(a.lastGoodDir as string, a.board.definition.id, half),
+            saveLastGood: (images) => promoteLastGood(join(a.lastGoodDir as string, a.board.definition.id.replace("/", "-")), images),
+          }),
         })
       : undefined;
     const result = await flashUf2Drives({
@@ -235,6 +235,42 @@ const zmk: FirmwareDriver = {
     return result;
   },
 };
+
+/**
+ * Replaces a board's last-good images as one set: every half is written to a staging directory first, and the old set is
+ * swapped out only once all of them are written. Any failure leaves the previous set in place, so a later rollback never
+ * sees halves from two different builds.
+ */
+export async function promoteLastGood(dir: string, images: ReadonlyMap<string, Uint8Array>, write: (path: string, bytes: Uint8Array) => Promise<unknown> = (path, bytes) => Bun.write(path, bytes)): Promise<void> {
+  const id = randomUUID();
+  const staging = `${dir}.staging-${id}`;
+  const old = `${dir}.old-${id}`;
+  await mkdir(staging, { recursive: true });
+  try {
+    for (const [half, image] of images) await write(join(staging, `${half}.uf2`), image);
+  } catch (err) {
+    await rm(staging, { recursive: true, force: true });
+    throw err;
+  }
+  let moved = false;
+  try {
+    await rename(dir, old);
+    moved = true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      await rm(staging, { recursive: true, force: true });
+      throw err;
+    }
+  }
+  try {
+    await rename(staging, dir);
+  } catch (err) {
+    if (moved) await rename(old, dir).catch(() => undefined);
+    await rm(staging, { recursive: true, force: true });
+    throw err;
+  }
+  if (moved) await rm(old, { recursive: true, force: true }).catch(() => undefined);
+}
 
 /** Restores a previously verified last-good UF2 image for a board half, if kept. */
 export async function restoreLastGoodUf2(lastGoodDir: string, boardId: string, half: string): Promise<Uint8Array | null> {

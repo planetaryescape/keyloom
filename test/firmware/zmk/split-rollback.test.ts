@@ -69,7 +69,7 @@ async function flash(opts: Options = {}) {
     deps: w.deps, board: selected.definition, handsFree: recipe.handsFree!, steps: recipe.steps,
     artifact, buildId: BUILD, findVolume, log: (l) => lines.push(l),
     loadLastGood: async (letter) => opts.previous ? opts.previous(letter) : opts.missing?.includes(letter) ? null : glove80Image(OLD_KEY),
-    saveLastGood: async (letter, image) => { saved.push({ half: letter, key: keyInFirmware(image), flashed: w.flashed.length }); },
+    saveLastGood: async (images) => { for (const [letter, image] of images) saved.push({ half: letter, key: keyInFirmware(image), flashed: w.flashed.length }); },
   });
   try {
     const result = await flashUf2Drives({

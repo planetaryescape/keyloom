@@ -34,7 +34,7 @@ async function run(board: typeof GLOVE80, artifact: Uint8Array, world: (root: st
   const findVolume = volumes.volumeFinderAt(root);
   const hooks = zmkHandsFreeHooks({
     deps: w.deps, board: board.definition, handsFree: rev.flash.handsFree as never, steps: rev.flash.steps, artifact, buildId: over.buildId ?? BUILD, findVolume,
-    log: (l) => lines.push(l), ...(over.foreign ? { foreign: portOfAnotherBoard(board.definition.id) } : {}), saveLastGood: async (half, image) => void saved.push([half, image.length]),
+    log: (l) => lines.push(l), ...(over.foreign ? { foreign: portOfAnotherBoard(board.definition.id) } : {}), saveLastGood: async (images) => { for (const [half, image] of images) saved.push([half, image.length]); },
   });
   const result = await flashUf2Drives({
     artifactPath: file, steps: rev.flash.steps, hooks, findVolume, log: new LogSink(join(dir, "f.log")), onState: (s, i) => states.push([s, i]),

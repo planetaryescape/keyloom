@@ -236,7 +236,8 @@ export function zmkHandsFreeHooks(input: {
   findVolume: VolumeFinder;
   log: (line: string) => void;
   foreign?: (port: SerialPort) => boolean;
-  saveLastGood?: (half: HalfLetter, image: Uint8Array) => Promise<void>;
+  /** Promotes every half's verified image as one set; the previous set must survive any failure (D-437). */
+  saveLastGood?: (images: ReadonlyMap<HalfLetter, Uint8Array>) => Promise<void>;
   loadLastGood?: (half: HalfLetter) => Promise<Uint8Array | null>;
 }): StepHooks {
   const targets = halfTargets(input.board, input.handsFree, input.steps, input.foreign);
@@ -282,12 +283,11 @@ export function zmkHandsFreeHooks(input: {
     };
     hooks.complete = async () => {
       if (images.size !== input.steps.length) return;
-      for (const [target, image] of images) {
-        try {
-          await input.saveLastGood?.(target.half.marker, image);
-        } catch (err) {
-          input.log(`keyloom: couldn't keep the ${target.step.label}'s image as the last good one: ${(err as Error).message}`);
-        }
+      try {
+        await input.saveLastGood?.(new Map([...images].map(([target, image]) => [target.half.marker, image])));
+      } catch (err) {
+        // The keyboard runs the new build either way; only a later rollback is affected, and it keeps the previous set.
+        input.log(`keyloom: couldn't keep this build as the last good one, so the previous last-good images stay: ${(err as Error).message}`);
       }
     };
     hooks.recover = async (index, error, restore, say) => {
