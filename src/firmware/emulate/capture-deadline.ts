@@ -1,7 +1,7 @@
 import { CaptureError } from "./trace.ts";
 
 // Leave the helper's 500 ms write / 1 s close deadlines time to report their own error;
-// capture still has a backstop when a transport never settles (D-4xx).
+// capture still has a backstop when a transport never settles (D-446).
 export const CAPTURE_WRITE_TIMEOUT_MS = 750;
 export const CAPTURE_CLOSE_TIMEOUT_MS = 1250;
 

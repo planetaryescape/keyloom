@@ -1941,7 +1941,8 @@ Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
 ### D-444: Refuse unknown QMK calls that receive a known layer name. (2026-10-22, stage 11 C3)
 - If kept QMK code passes a layer enum name to a function whose layer semantics keyloom does not know, a layer reorder is refused and the call's line is named. The importer cannot prove how that function uses the layer value.
 
-### D-4xx: Capture owns write and close deadlines. (2026-10-22, stage 11 A3)
+
+### D-446: Capture owns write and close deadlines. (2026-10-22, stage 11 A3)
 
 Refines D-429: both QMK and ZMK capture put a 750 ms bound on each START, keepalive and STOP write, and 1250 ms on their single close. These backstops leave the helper's 500 ms write and 1 s close deadlines time to report first. A timeout reports incomplete capture or cleanup uncertainty; it does not claim cancellation, retry a write or call close again. Keepalives start as soon as START is written, because the firmware ends the stream after 3 s without one; finish awaits the bounded in-flight keepalive before cleanup. Failed-start errors remain primary, with STOP/close failures appended and the original error retained as the cause. A ZMK framing failure attempts STOP before close and keeps its framing error primary.
 
