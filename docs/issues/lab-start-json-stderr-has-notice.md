@@ -10,4 +10,4 @@ When `keyloom lab start --format json` fails to begin capture (busy, permission 
 
 Keep the notice before capture, but in JSON mode emit it as part of the structured output (or on stdout as its own JSON line) instead of as plain text on stderr. Then stderr carries only the error object. `lab start` needs an interactive terminal anyway, so this mainly matters for wrappers that capture stderr.
 
-Status: fixed on branch fix/lab-json-notice. JSON and JSONL now emit the notice as a stdout JSON record before capture starts, leaving stderr as the structured error document; table mode keeps its stderr notice. `bun test test/cli/lab-device-errors.test.ts test/cli/lab.test.ts test/cli/cleanup-json.test.ts` covers both formats, pre-capture ordering, table output and successful recordings.
+Status: fixed on branch fix/lab-json-notice. In JSON and JSONL the notice is printed as text on stdout with the passage before capture starts, so stderr holds only the error document and the result stays the one JSON document at the end of stdout. A first version emitted the notice as its own JSON record on stdout, which broke the Windows smoke script's parse of the result (PR 172 CI).

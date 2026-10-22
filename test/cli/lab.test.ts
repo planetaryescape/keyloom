@@ -84,8 +84,8 @@ describe("keyloom lab, end to end", () => {
 
     const started = await cli(w, ["lab", "start", w.layoutId, "--text", "sdsdsdsdsdsd", "--format", "json"]);
     expect(started.code).toBe(0);
-    // The notice is its own structured stdout record before capture output.
-    expect(started.out).toContain('"notice"');
+    // The notice is plain text on stdout ahead of the passage; the result is the only JSON document, after the last "{" line.
+    expect(JSON.parse(started.out.slice(started.out.indexOf("{")))).toMatchObject({ schema_version: 1 });
     expect(started.out).toContain("They stay on this computer, in keyloom's database.");
     expect(started.out).not.toContain("on this Mac");
     expect(started.out).toContain("Nothing is sent anywhere");

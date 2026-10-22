@@ -22,7 +22,7 @@ test("CLI keeps the JSON error parseable and announces before capture", async ()
         terminal: { isInteractive: true, typing: async () => "" },
         lab: {
           startCapture: async () => {
-            expect(out).toContain('"notice"');
+            expect(out).toContain("keyloom is recording this keyboard's key presses");
             events.push("capture");
             throw new DeviceTransportError({ code: "helper_exited", effect: "possible", retry: "never" });
           },
@@ -31,7 +31,7 @@ test("CLI keeps the JSON error parseable and announces before capture", async ()
       };
       const code = await runCli(["--data-dir", app.dataDir, "--format", format, "lab", "start", layoutId, "--text", "hello"], io, {}, undefined, undefined, lab);
       expect(code).toBe(2);
-      expect(JSON.parse(out.trim())).toMatchObject({ schema_version: 1, notice: expect.stringContaining("keyloom is recording this keyboard's key presses") });
+      expect(out).toContain("keyloom is recording this keyboard's key presses");
       expect(JSON.parse(err.trim())).toEqual({
         schema_version: 1,
         error: {
