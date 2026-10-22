@@ -1312,7 +1312,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     };
   }
 
-  // A config the agent made opens by itself when BK watched the reply finish and is not in the middle of anything here (D-442). It
+  // A config the agent made opens by itself when BK watched the reply finish and is not in the middle of anything here (D-450). It
   // opens with the chat carried (D-317) and its proposals one click away (D-336); a reply loaded from history, found again after a
   // reload or carried in from another page never gets here, because the chat only announces replies it sent.
   const openedForAgent = useRef(new Set<string>());

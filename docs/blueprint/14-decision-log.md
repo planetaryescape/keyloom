@@ -1941,7 +1941,7 @@ Evidence: `docs/issues/desktop-app-cannot-find-homebrew-tools.md`.
 ### D-444: Refuse unknown QMK calls that receive a known layer name. (2026-10-22, stage 11 C3)
 - If kept QMK code passes a layer enum name to a function whose layer semantics keyloom does not know, a layer reorder is refused and the call's line is named. The importer cannot prove how that function uses the layer value.
 
-### D-442: Agent-made configs open themselves unless BK is editing or has moved on, and the reply carries a config card instead of directions. (2026-10-22, BK's v0.53.2)
+### D-450: Agent-made configs open themselves unless BK is editing or has moved on, and the reply carries a config card instead of directions. (2026-10-22, BK's v0.53.2)
 
 When BK asked the agent to copy a setup to another keyboard or to make a new config, the agent made the config and told him to "switch to it from the config menu", and the menu didn't list it until a reload (`docs/issues/config-menu-misses-agent-config.md`). The agent now says nothing about where it is. keyloom does the navigation.
 
