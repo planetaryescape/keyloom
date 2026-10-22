@@ -278,3 +278,13 @@ for (const kind of ["QMK", "ZMK"] as const) {
     expect(((err as Error).cause as Error | undefined)?.message).toContain("START write timed out");
   });
 }
+
+for (const kind of ["QMK", "ZMK"] as const) {
+  test(`${kind} keeps a helper failure during START as a transport error when cleanup also fails`, async () => {
+    const { DeviceTransportError } = await import("../../../src/firmware/toolchain/device-helper/transport-client.ts");
+    const died = () => new DeviceTransportError({ code: "helper_exited", effect: "possible", retry: "never" });
+    const kb = keyboard(kind, { write: () => { throw died(); }, close: () => { throw died(); } });
+    const err = await kb.start().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DeviceTransportError);
+  });
+}

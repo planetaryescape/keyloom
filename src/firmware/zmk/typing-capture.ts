@@ -132,7 +132,9 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
     catch (stopError) { cleanupErrors.push(`STOP failed: ${message(stopError)}`); }
     try { await close(); }
     catch (closeError) { cleanupErrors.push(`the keyboard connection did not close: ${message(closeError)}`); }
-    if (cleanupErrors.length > 0) {
+    // A transport error (the helper died or timed out) keeps its own type, so the app can still say a restart is needed; it
+    // already explains why cleanup could not finish.
+    if (cleanupErrors.length > 0 && error instanceof CaptureError) {
       throw new CaptureError(`${message(error)}; cleanup uncertain: ${cleanupErrors.join("; ")}`, { cause: error });
     }
     throw error;
