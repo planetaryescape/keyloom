@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.53.2](https://github.com/planetaryescape/keyloom/compare/v0.53.1...v0.53.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* set the macOS touch rate with IOSSIOSPEED so the 1201 relay works ([#165](https://github.com/planetaryescape/keyloom/issues/165)) ([d9d7f81](https://github.com/planetaryescape/keyloom/commit/d9d7f81f792038c338c54d919a45f2142fca49c1))
+* start the desktop app's keyloom with the login shell's PATH ([#167](https://github.com/planetaryescape/keyloom/issues/167)) ([d5ac21f](https://github.com/planetaryescape/keyloom/commit/d5ac21f0a4f61bf55794474439d10b0b48420a92))
+
 ## [0.53.1](https://github.com/planetaryescape/keyloom/compare/v0.53.0...v0.53.1) (2026-10-22)
 
 
