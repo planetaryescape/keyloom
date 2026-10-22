@@ -47,6 +47,10 @@ export type SyncFacts = {
   /** The board's latest sync also carries recovery errors across later edits. */
   latestSync?: SyncRow | undefined;
   split?: boolean;
+  /** Kanata readback reports the exact selected head revision, rather than an equivalent older document. */
+  remapperHeadRunning?: boolean;
+  /** Revisions shared by the ancestry of every currently running build, from the selected config. */
+  runningRevisionLine?: string[];
   /** The oldest successful flash time among every currently visible half's build; absent if any half is missing or unflashed. */
   runningFlashedAt?: number;
   auto: { on: boolean; paused: boolean; proven: boolean };
@@ -67,10 +71,12 @@ export function deriveState(f: SyncFacts): SyncState {
     if (a.step === "needs_hand") return { kind: "needs_hand", instruction: a.instruction ?? "", reason: NEEDS_HAND_REASON };
     return { kind: "syncing", step: a.step === "done" ? "building" : a.step, syncId: a.id, startedAt: a.startedAt, trigger: a.trigger };
   }
-  // Preserve failed history, but a later successful flash corroborated by every visible half supersedes it.
+  // Kanata reports the loaded revision directly. Firmware needs a later successful flash of the failed revision or a descendant.
   const unsuperseded = (sync: SyncRow | undefined): SyncRow | undefined =>
     sync?.status === "failed" && f.reading.state === "keyloom" && !f.reading.missingHalves?.length &&
-    f.runningFlashedAt !== undefined && f.runningFlashedAt > (sync.finishedAt ?? sync.startedAt) ? undefined : sync;
+    ((f.remapperHeadRunning && f.running.kind === "same") ||
+      (f.runningRevisionLine?.includes(sync.revisionId) && f.runningFlashedAt !== undefined &&
+        f.runningFlashedAt > (sync.finishedAt ?? sync.startedAt))) ? undefined : sync;
   const h = unsuperseded(f.headSync);
   const latest = unsuperseded(f.latestSync ?? f.headSync);
   if (f.split && latest?.status === "failed" && (latest.failure === "flash" || latest.failure === "verify" || latest.failure === "needs_hand") && f.reading.state !== "keyloom") {

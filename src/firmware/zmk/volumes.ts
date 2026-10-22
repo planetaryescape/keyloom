@@ -2,11 +2,11 @@
 // flash writes to whatever volume these return, so the root is a parameter everywhere else and tests
 // pass a temporary directory. test/helpers/no-real-flash.ts replaces defaultVolumesRoot so that a test
 // which forgets to do that fails instead of copying onto a keyboard.
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { capture, which } from "../toolchain/run.ts";
 
-/** Finds the mounted volume with this label, or null when it isn't mounted. */
+/** Finds the mounted volume with this label, or null when it isn't mounted. Throws if the label is ambiguous. */
 export type VolumeFinder = (label: string) => Promise<string | null>;
 
 /** macOS mounts removable volumes under /Volumes; Linux desktops under /run/media/<user>. */
@@ -26,8 +26,19 @@ async function isDir(path: string): Promise<boolean> {
 export function volumeFinderAt(root: string): VolumeFinder {
   const base = resolve(root);
   return async (label) => {
-    const path = join(base, label);
-    return (await isDir(path)) ? path : null;
+    const names = await readdir(base).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return [];
+      throw err;
+    });
+    const matches: string[] = [];
+    for (const name of names) {
+      // macOS appends a number when another drive with the same label is mounted.
+      if (name !== label && !(name.startsWith(`${label} `) && /^\d+$/.test(name.slice(label.length + 1)))) continue;
+      const path = join(base, name);
+      if (await isDir(path)) matches.push(path);
+    }
+    if (matches.length > 1) throw new Error(`Ambiguous boot drive ${label}: multiple mounts (${matches.join(", ")}). Disconnect the extra drive before retrying.`);
+    return matches[0] ?? null;
   };
 }
 
@@ -37,13 +48,15 @@ export function lsblkFinder(): VolumeFinder {
     if (!which("lsblk")) return null;
     const r = await capture(["lsblk", "-rno", "LABEL,MOUNTPOINT"], { timeoutMs: 10_000 });
     if (r.exitCode !== 0) return null;
+    const matches: string[] = [];
     for (const line of r.stdout.split("\n")) {
       const [name, ...rest] = line.split(" ");
       // -r escapes spaces in a mount point as \x20.
       const mount = rest.join(" ").replace(/\\x20/g, " ").trim();
-      if (name === label && mount !== "") return mount;
+      if (name === label && mount !== "") matches.push(mount);
     }
-    return null;
+    if (matches.length > 1) throw new Error(`Ambiguous boot drive ${label}: multiple mounts (${matches.join(", ")}). Disconnect the extra drive before retrying.`);
+    return matches[0] ?? null;
   };
 }
 

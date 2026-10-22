@@ -114,7 +114,7 @@ describe("ZMK driver", () => {
     expect(source.files.map((f) => f.path)).toEqual(["board.keymap", "board.conf"]);
   });
 
-  test("a west flash refuses an unidentified shared boot drive", async () => {
+  test("a west flash writes each half's UF2 from the bundle", async () => {
     const west = await load("zmk");
     const dir = tempDir();
     const root = join(dir, "Volumes");
@@ -139,9 +139,9 @@ describe("ZMK driver", () => {
       board: west, buildId: "bld_test", boardRevision: "default", artifactPath: artifact, log: new LogSink(join(dir, "f.log")), onState: () => {}, volumesRoot: root, bootloaderWaitMs: 3000,
     });
     clearInterval(timer);
-    expect(r.state).toBe("failed");
-    expect(r.error).toContain("could belong to either half");
-    expect(got).toEqual([]);
+    // A board without hands-free hooks keeps the manual flow: each drive is written as it appears.
+    expect(r.state).toBe("succeeded");
+    expect(got).toEqual([left, right]);
   }, 15_000);
 
   test("restoreLastGoodUf2 reads a saved half image or returns null", async () => {

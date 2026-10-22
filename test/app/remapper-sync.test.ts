@@ -2,7 +2,7 @@
 // the first-proof gate for auto-apply, and the apply timing the promise is about ("an Apply changes it in under a second").
 import { afterEach, describe, expect, test, setDefaultTimeout } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
-import { UsageError, applyOps } from "../../src/app/index.ts";
+import { UsageError, applyOps, applyToRemapper } from "../../src/app/index.ts";
 import { findLayoutRow } from "../../src/persistence/layouts.ts";
 import { lastSyncOfBoard } from "../../src/persistence/syncs.ts";
 import { macbook, at } from "../helpers/macbook.ts";
@@ -47,6 +47,25 @@ describe("the MacBook's sync state", () => {
     const last = lastSyncOfBoard(world.app.db, MAC)!;
     expect((last.finishedAt ?? 0) - last.appliedAt).toBeLessThan(1000);
     expect(readFileSync(world.paths.kbd, "utf8")).toContain(`keyloom-${findLayoutRow(world.app.db, world.layoutId)!.headRevisionId}`);
+  });
+
+  test("remap apply verifies the head and clears a failed kanata sync", async () => {
+    const world = make({ proven: true });
+    const apply = world.deps.remapper!.apply;
+    world.deps.remapper!.apply = async () => ({ ok: false, step: "reload", error: "injected reload failure" });
+    const e = world.engine();
+    await e.start();
+    const run = await e.syncNow(world.layoutId);
+    expect(run.kind).toBe("started");
+    if (run.kind !== "started") throw new Error("sync did not start");
+    expect((await run.done).status).toBe("failed");
+    expect(kind(e)).toMatchObject({ kind: "behind", why: "failed" });
+    world.deps.remapper!.apply = apply;
+    const recovered = await applyToRemapper(world.app, world.layoutId, undefined, world.over);
+    expect(recovered.ok).toBe(true);
+    await e.tick();
+    expect(kind(e)).toEqual({ kind: "in_sync" });
+    expect(lastSyncOfBoard(world.app.db, MAC)?.status).toBe("failed");
   });
 
   test("an edit makes it behind by one change, and the next sync catches up", async () => {

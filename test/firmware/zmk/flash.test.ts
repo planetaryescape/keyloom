@@ -2,7 +2,7 @@
 // is BK's done-check, never a test (and test/helpers/no-real-flash.ts makes sure of it).
 import { describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { FlashState } from "../../../src/firmware/toolchain/flash-state.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { zmkRevision } from "../../../src/firmware/zmk/board-config.ts";
@@ -176,16 +176,12 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
 
   test("a copy that errors because the bootloader took the drive away mid-write counts as written", async () => {
     const s = await setup();
-    // A directory where the file must go makes the copy fail; the finder then reports each drive gone, as a
-    // bootloader that reboots on the last block would leave it.
-    for (const label of [RIGHT, LEFT]) mkdirSync(join(s.root, label, "glove80.uf2"), { recursive: true });
-    const real = volumes.volumeFinderAt(s.root);
-    const seen = new Map<string, number>();
+    for (const label of [RIGHT, LEFT]) mkdirSync(join(s.root, label), { recursive: true });
     const r = await s.flash({
-      findVolume: async (label) => {
-        const n = (seen.get(label) ?? 0) + 1;
-        seen.set(label, n);
-        return n === 1 ? real(label) : null;
+      // Disappear during the write, rather than on the second finder call: safety probes must still see the drive.
+      writeImage: async (path) => {
+        rmSync(dirname(path), { recursive: true });
+        throw Object.assign(new Error("ENXIO: drive rebooted during write"), { code: "ENXIO" });
       },
     });
     expect(r.state).toBe("succeeded");

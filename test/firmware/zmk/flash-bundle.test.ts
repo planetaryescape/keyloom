@@ -73,15 +73,13 @@ describe("flashUf2Drives with a bundle", () => {
     expect(boot.names).toEqual(["firmware.uf2", "firmware.uf2"]);
   });
 
-  test("a manual shared drive without a target restart flashes nothing", async () => {
+  test("without hands-free hooks each half still receives its own UF2 through the manual flow", async () => {
     const s = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
     const boot = fakeNiceNano(s.root, 2);
-    try {
-      const r = await s.flash();
-      expect(r.state).toBe("failed");
-      expect(r.error).toContain("could belong to either half");
-      expect(boot.received).toEqual([]);
-    } finally { boot.stop(); }
+    const r = await s.flash();
+    boot.stop();
+    expect(r).toMatchObject({ state: "succeeded", error: null });
+    expect(boot.received).toEqual([left, right]);
   });
 
   test("a bundle missing a half's UF2 flashes nothing", async () => {
@@ -119,7 +117,7 @@ describe("flashUf2Drives with a bundle", () => {
     expect(r.error).toContain("one image per half");
   });
 
-  test("a shared drive that appears only after keyloom asks for a half is written; one already mounted is refused", async () => {
+  test("without hands-free hooks a shared drive is written whether it appears after the prompt or was already mounted", async () => {
     // A normal first flash: nothing mounted, keyloom asks for the left half, and only then does its drive appear.
     const s = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
     const drive = join(s.root, LABEL);
@@ -138,12 +136,13 @@ describe("flashUf2Drives with a bundle", () => {
     expect(r.state).toBe("succeeded");
     expect(prompts).toBeGreaterThanOrEqual(2);
     expect(received).toHaveLength(2);
-    // After a failed split flash the other half's drive may already be mounted: keyloom can't tell whose it is.
+    // Without hooks there is no rollback to protect, so an already mounted drive keeps the old manual behaviour
+    // (hook-enabled refusal is covered in mount-binding and split-rollback tests).
     const t = await setup(zipSync({ "left.uf2": left, "right.uf2": right }));
-    mkdirSync(join(t.root, LABEL), { recursive: true });
-    const refused = await t.flash({ bootloaderWaitMs: 500 });
-    expect(refused.state).toBe("failed");
-    expect(refused.error).toContain("could belong to either half");
-    expect(readdirNames(join(t.root, LABEL))).toEqual([]);
+    const boot = fakeNiceNano(t.root, 2);
+    const manual = await t.flash();
+    boot.stop();
+    expect(manual.state).toBe("succeeded");
+    expect(boot.received).toHaveLength(2);
   });
 });

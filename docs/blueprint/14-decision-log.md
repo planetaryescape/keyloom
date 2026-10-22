@@ -1904,3 +1904,14 @@ A later successful flash, corroborated by every expected half currently running 
 A completed rollback is still a failed flash and sync. Its error and log say the keyboard is back on the previous build and list each half's build key. Sync reads the old markers and shows the keyboard behind the applied revision. Incomplete recovery cannot become in sync from the visible halves alone: every expected half must be present and verified on the head. A missing half needs a hand and shows the stored recovery error; a failed split flash is considered before an apparent head match, including after a later edit or when all halves are absent. The header and toast must not claim success. Full success keeps the existing verified summary and promotes last-good only after all steps pass.
 
 Evidence is synthetic: `test/firmware/zmk/split-rollback.test.ts`, `test/app/firmware-zmk-handsfree.test.ts` and `test/app/sync-zmk.test.ts` use `test/helpers/fake-zmk-halves.ts`. No rollback on hardware has been observed. Recovery is bounded by the existing waits and requires a usable last-good image and, for an absent half with a distinct drive, the person's bootloader key; it cannot guarantee recovery from a disconnected cable, damaged hardware or interrupted process.
+
+
+### D-438: Bind UF2 attempts to one mount and qualify sync recovery by revision. (2026-10-22, Stage 9 round 3)
+
+Refines D-437. Record the selected mount path, device and inode when the drive appears. Revalidate them before every write attempt, including EACCES/EPERM retries, and before the final sync. Recheck shared-label peers each time hooks are available. Refuse duplicate label mounts, including macOS numbered mount names and multiple Linux matches. Boards without hooks also refuse pre-mounted shared drives; their manually opened shared drive must appear after the prompt.
+
+A later successful flash supersedes a failed sync only when every expected half is visible on a successfully flashed build of the failed revision or a descendant in the same config. A successful flash of an older revision preserves the failure and automatic retry block. Failed rows remain in history.
+
+Kanata has loaded revisions rather than firmware builds. Its readback of the head revision supersedes a failed remapper sync, including recovery through `keyloom remap apply`. Keep this in the existing running-revision model instead of inventing build and flash rows for a remap. An older loaded revision still leaves the head failure in place.
+
+Evidence: `test/firmware/zmk/mount-binding.test.ts`, `test/app/sync-state.test.ts`, `test/app/sync-zmk.test.ts` and `test/app/remapper-sync.test.ts`. These use synthetic mounts, transports and kanata; no hardware verification is claimed.

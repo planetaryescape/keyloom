@@ -358,7 +358,11 @@ export class SyncEngine {
     const flashed = known && reading.state === "keyloom" && !reading.missingHalves?.length && running.kind !== "other_config"
       ? builds.map((build) => lastSuccessfulFlashAt(db, build!.id)) : [];
     const runningFlashedAt = flashed.length > 0 && flashed.every((at): at is number => at !== undefined) ? Math.min(...flashed) : undefined;
+    const lines = known && builds.every((build) => build?.layoutId === layout.id)
+      ? builds.map((build) => revisionLine(db, layout.id, build!.revisionId)) : [];
+    const runningRevisionLine = lines[0]?.filter((revision) => lines.every((line) => line.includes(revision))) ?? [];
     const facts: SyncFacts = {
+      remapperHeadRunning: definition.firmware === "kanata" && loaded === layout.headRevisionId, runningRevisionLine,
       ...(runningFlashedAt === undefined ? {} : { runningFlashedAt }),
       reading, running, active, headSync: lastSyncOfRevision(db, boardId, layout.headRevisionId), latestSync: lastSyncOfBoard(db, boardId),
       split: definition.firmware === "zmk" && zmkRevision(definition).flash.steps.length > 1,

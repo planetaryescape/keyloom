@@ -162,6 +162,17 @@ describe("Apply to both halves of a Glove80", () => {
           await Bun.sleep(150);
           expect(s.world.flashed.length).toBe(count);
 
+          // An explicit successful flash of old A must not release failed head H for auto-sync.
+          refuse = false;
+          expect((await flashAndWait(s.e.app, { buildId: first.id, volumesRoot: s.e.volumes, handsFree: s.handsFree })).status).toBe("succeeded");
+          await engine.tick();
+          expect(engine.views()[0]?.auto.on).toBe(true);
+          expect(engine.views()[0]?.state).toMatchObject({ kind: "behind", why: "failed" });
+          const attempts = recentSyncs(s.e.app.db).length;
+          await Bun.sleep(150);
+          expect(recentSyncs(s.e.app.db)).toHaveLength(attempts);
+          expect(lastSyncOfBoard(s.e.app.db, BOARD)?.id).toBe(row.id);
+
           // Reuse the failed build, as the existing flash-again path does.
           refuse = false;
           const retried = await flashAndWait(s.e.app, { buildId: row.buildId!, volumesRoot: s.e.volumes, handsFree: s.handsFree });

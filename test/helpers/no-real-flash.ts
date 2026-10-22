@@ -41,11 +41,15 @@ const refuse = (what: string): never => {
 
 // Bun updates the real module's exports in place when it is mocked, so the real function is kept here first.
 const realVolumeFinderAt = volumes.volumeFinderAt;
+const realLsblkFinder = volumes.lsblkFinder;
 mock.module("../../src/firmware/zmk/volumes.ts", () => ({
   ...volumes,
   defaultVolumesRoot: () => refuse("defaultVolumesRoot()"),
   defaultVolumeFinder: () => refuse("defaultVolumeFinder()"),
-  lsblkFinder: () => refuse("lsblkFinder()"),
+  lsblkFinder: () => {
+    const bin = Bun.which("lsblk", { PATH: process.env.PATH ?? "" });
+    return bin && isSyntheticExecutable(bin) ? realLsblkFinder() : refuse("lsblkFinder()");
+  },
   volumeFinderAt: (root: string) => {
     const r = resolve(root);
     if (REAL_ROOTS.some((p) => r === p || r.startsWith(`${p}/`))) refuse(`volumeFinderAt(${root})`);

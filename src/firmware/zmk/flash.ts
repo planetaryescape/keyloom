@@ -4,6 +4,7 @@
 // success signal. Both halves take the same combined file; MoErgo says to do the right half first, and
 // the board definition lists the steps in the order to run them.
 import { open, writeFile } from "node:fs/promises";
+import { statSync } from "node:fs";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
 import type { FlashStep } from "../../boards/recipes.ts";
@@ -172,7 +173,8 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     // A label shared by both halves names no half. It is safe after keyloom restarted this target itself, or, outside
     // recovery, when the drive appears after the prompt and the peers are visibly running firmware at write time. A drive
     // already mounted before the prompt could be the other half, as after a failed split flash, so it is refused.
-    if (shared && !byKeyloom && (recovery !== undefined || (await input.findVolume(step.volume)) !== null)) {
+    // Boards without hands-free hooks have no rollback or verification, so they keep the manual flow they always had.
+    if (input.hooks !== undefined && shared && !byKeyloom && (recovery !== undefined || (await input.findVolume(step.volume)) !== null)) {
       const remedy = sharedDriveRemedy(step, input.steps);
       const error = `Not writing to ${step.volume}: its shared drive could belong to either half. ${restartReason ? `${restartReason}. ` : ""}${remedy}`;
       input.onState("waiting_for_bootloader", error, { needsHand: true });
@@ -184,25 +186,48 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     allRestarted &&= byKeyloom;
 
     let mount: string | null = null;
+    let identity: { dev: number; ino: number } | undefined;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
       if (signal?.aborted) {
         return failed(i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
       }
       mount = await input.findVolume(step.volume);
-      if (mount) break;
+      if (mount) {
+        identity = statSync(mount);
+        break;
+      }
       await sleep(poll, signal);
     }
-    if (!mount) {
+    if (!mount || !identity) {
       return failed(
         `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? sharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
       );
     }
 
-    if (shared && input.hooks?.peersRunning && !(await input.hooks.peersRunning(step))) {
-      const error = `Not writing to ${step.volume}: the other half is not confirmed running firmware. ${sharedDriveRemedy(step, input.steps)}`;
+    const selectedMount = mount;
+    const selectedIdentity = identity;
+    const checkMount = async (): Promise<string | undefined> => {
+      try {
+        if (await input.findVolume(step.volume) !== selectedMount) {
+          return `Not writing to ${step.volume}: the selected drive at ${selectedMount} is no longer mounted at that path. ${retryRemedy(input.steps)}`;
+        }
+        if (shared && input.hooks?.peersRunning && !(await input.hooks.peersRunning(step))) {
+          return `Not writing to ${step.volume}: the other half is not confirmed running firmware. ${sharedDriveRemedy(step, input.steps)}`;
+        }
+        // Check after the asynchronous probes, immediately before opening the selected path.
+        const current = statSync(selectedMount);
+        if (current.dev !== selectedIdentity.dev || current.ino !== selectedIdentity.ino) {
+          return `Not writing to ${step.volume}: the mount identity changed at ${selectedMount}. ${retryRemedy(input.steps)}`;
+        }
+      } catch (err) {
+        return `Not writing to ${step.volume}: could not revalidate the selected drive at ${selectedMount}: ${(err as Error).message}`;
+      }
+      return undefined;
+    };
+    const refuseMount = (error: string): VerifyResult => {
       input.onState("waiting_for_bootloader", error, { needsHand: true });
       return failed(error);
-    }
+    };
 
     say(`keyloom: ${step.volume} is mounted at ${mount}; writing`);
     input.onState("writing", WRITING_INSTRUCTION);
@@ -212,18 +237,27 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       // (BK's Glove80 left half, 2026-10-16). Retry a refused open while the drive stays mounted; a lasting refusal is still reported.
       const retryUntil = Date.now() + (recovery ? 0 : input.writeRetryMs ?? WRITE_RETRY_MS);
       for (;;) {
+        const unsafe = await checkMount();
+        if (unsafe) return refuseMount(unsafe);
         try {
           await (input.writeImage ?? writeFile)(target, image);
           break;
         } catch (err) {
           const code = (err as NodeJS.ErrnoException).code;
-          if ((code !== "EACCES" && code !== "EPERM") || Date.now() >= retryUntil || !(await input.findVolume(step.volume))) throw err;
+          if ((code !== "EACCES" && code !== "EPERM") || Date.now() >= retryUntil) throw err;
           say(`keyloom: ${step.volume} refused the write (${code}); trying again`);
           await sleep(poll, signal);
         }
       }
       // The write has to reach the drive before the bootloader looks at it.
+      const unsafe = await checkMount();
+      if (unsafe) return refuseMount(unsafe);
       const handle = await open(target, "r+");
+      const unsafeSync = await checkMount();
+      if (unsafeSync) {
+        await handle.close().catch(() => undefined);
+        return refuseMount(unsafeSync);
+      }
       try {
         await handle.sync();
       } finally {
