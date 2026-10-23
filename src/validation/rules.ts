@@ -302,38 +302,83 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
 const knownNatives = (before: Layout): Set<string> => new Set([...bindingsOf(before)].flatMap(({ binding: b }) => (b.kind === "native" ? [nativeKey(b)] : [])));
 
 /**
- * `risky_native` (warning, D-451): a new or changed native that resets the keyboard or forgets Bluetooth pairings. BK's decision:
- * "allow understood raw codes, warn on risky ones". A warning never blocks a change or a put, and a key already in `before` (an
- * imported Boot key, say) does not warn again on every edit. Only these steps warn; one-shots, lighting and caps word never do.
+ * The natives a layout holds, by where they are: a key by its layer and position, a combo output by the combo's id. A native that moves
+ * to a slot that didn't hold it is new there, so it is checked again at the new place.
  */
-export function riskyNatives(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
-  const known = knownNatives(before);
-  const kept = keptDefinitions(after.passthrough);
-  const out: Issue[] = [];
-  for (const { binding: b, slot, where } of bindingsOf(after)) {
-    if (b.kind !== "native" || known.has(nativeKey(b))) continue;
-    const reading = readNative(b, kept);
-    if (reading.kind !== "steps") continue;
-    const effect = reading.steps.map(riskEffect).find((e) => e !== undefined);
-    if (effect === undefined) continue;
-    const place = slot ? keyPlace(board, slot.position) : "a combo";
-    const sentence = `${place.charAt(0).toUpperCase()}${place.slice(1)} ${effect}`;
-    out.push(issue("risky_native", `${where}: ${b.source} ${effect}`, sentence, slot ? [slot] : undefined));
+function heldNatives(doc: Layout): Map<string, string> {
+  const held = new Map<string, string>();
+  for (const { binding, slot } of bindingsOf(doc)) if (binding.kind === "native" && slot !== undefined) held.set(`layer:${slot.layerId}:${slot.position}`, nativeKey(binding));
+  for (const combo of doc.combos) if (combo.output.kind === "native") held.set(`combo:${combo.id}`, nativeKey(combo.output));
+  return held;
+}
+
+/** The natives in `after` that aren't in the same slot of `before`, with where they are. */
+function newNatives(before: Layout, after: Layout): Array<{ native: Extract<Binding, { kind: "native" }>; slot?: Slot; where: string }> {
+  const held = heldNatives(before);
+  const out: ReturnType<typeof newNatives> = [];
+  for (const { binding, slot, where } of bindingsOf(after)) {
+    if (binding.kind !== "native" || slot === undefined) continue;
+    if (held.get(`layer:${slot.layerId}:${slot.position}`) !== nativeKey(binding)) out.push({ native: binding, slot, where });
+  }
+  for (const combo of after.combos) {
+    if (combo.output.kind !== "native") continue;
+    if (held.get(`combo:${combo.id}`) !== nativeKey(combo.output)) out.push({ native: combo.output, where: `combo "${combo.id}"` });
   }
   return out;
 }
 
-/** What a risky step does to the keyboard, in words that follow the key's place; undefined for a step that is not risky. */
+const capitalised = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
+/**
+ * `risky_native` (warning, D-451): a new native that resets the keyboard or forgets Bluetooth pairings. BK's decision: "allow understood
+ * raw codes, warn on risky ones". A warning never blocks a change or a put. A key warns unless its own slot held the same native in
+ * `before`, so an existing Boot key copied to a second position warns once, for the new position. A macro that does several risky
+ * things names each distinct effect. One-shots, caps word, lighting and a Bluetooth select never warn.
+ */
+export function riskyNatives(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
+  const kept = keptDefinitions(after.passthrough);
+  const out: Issue[] = [];
+  for (const { native, slot, where } of newNatives(before, after)) {
+    const reading = readNative(native, kept);
+    if (reading.kind !== "steps") continue;
+    const effects = [...new Set(reading.steps.flatMap((step) => riskEffect(step) ?? []))];
+    if (effects.length === 0) continue;
+    const verb = `would ${effects.join(" and ")}`;
+    const place = slot ? keyPlace(board, slot.position) : "a combo";
+    out.push(issue("risky_native", `${where}: ${native.source} ${verb}`, `${capitalised(place)} ${verb}`, slot ? [slot] : undefined));
+  }
+  return out;
+}
+
+/** What a risky step does, as the verb phrase after "would"; undefined for a step that is not risky. */
 function riskEffect(step: Step): string | undefined {
   switch (step.kind) {
-    case "bootloader": return "would put the keyboard into its bootloader when pressed";
-    case "reset": return "would restart the keyboard when pressed";
+    case "bootloader": return "put the keyboard into its bootloader when pressed";
+    case "reset": return "restart the keyboard when pressed";
     case "bluetooth":
-      if (step.op === "clearAll") return "would forget every paired Bluetooth device";
-      if (step.op === "clear") return "would forget the Bluetooth device paired on the current profile";
+      if (step.op === "clearAll") return "forget every paired Bluetooth device";
+      if (step.op === "clear") return "forget the Bluetooth device paired on the current profile";
       return undefined;
     default: return undefined;
   }
+}
+
+/**
+ * A new native that drives the lights, on a board with no per-key lighting keyloom writes, is an error in the same words a colour edit
+ * gets (`lightingRefusal`). copy-plan refuses these natives for the same reason, so a copy and an agent edit agree.
+ */
+export function nativeLighting(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
+  if (board.lighting !== undefined) return [];
+  const kept = keptDefinitions(after.passthrough);
+  const out: Issue[] = [];
+  for (const { native, slot, where } of newNatives(before, after)) {
+    const reading = readNative(native, kept);
+    if (reading.kind !== "steps" || !reading.steps.some((step) => step.kind === "lighting")) continue;
+    const place = slot ? keyPlace(board, slot.position) : "a combo";
+    out.push(issue("lighting_unsupported", `${where}: ${native.source} needs lighting, and ${board.id} has none keyloom writes`,
+      `${capitalised(place)} is a light key. ${lightingRefusal(board)}`, slot ? [slot] : undefined));
+  }
+  return out;
 }
 
 /**

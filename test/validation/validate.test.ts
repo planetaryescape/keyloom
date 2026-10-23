@@ -329,7 +329,43 @@ describe("validate: risky_native (warning, D-451)", () => {
   test("a key already in the layout does not warn again when another key is edited", () => {
     const before = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [native("QK_BOOT"), ...l.bindings.slice(1)] } : l)) });
     expect(risky([set("base", 1, key("B"))], before)).toEqual([]);
-    expect(risky([{ op: "swapBindings", a: at("base", 0), b: at("base", 2) }], before)).toEqual([]);
+  });
+
+  test("an existing Boot key copied to a second position warns once, for the new position only", () => {
+    const before = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [native("QK_BOOT"), ...l.bindings.slice(1)] } : l)) });
+    const found = risky([set("base", 2, native("QK_BOOT"))], before);
+    expect(found.map((w) => w.slots)).toEqual([[at("base", 2)]]);
+  });
+
+  test("a swap that moves a Boot key to a slot that didn't hold it warns at the new slot", () => {
+    const before = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [native("QK_BOOT"), ...l.bindings.slice(1)] } : l)) });
+    expect(risky([{ op: "swapBindings", a: at("base", 0), b: at("base", 2) }], before).map((w) => w.slots)).toEqual([[at("base", 2)]]);
+  });
+
+  test("a new combo whose output is Boot warns, and names the combo", () => {
+    const combo = { id: "boot-combo", name: "Boot", positions: [2, 3], layerIds: "all" as const, output: native("QK_BOOT") };
+    const found = risky([{ op: "upsertCombo", combo }]);
+    expect(found.map((w) => w.plain)).toEqual(["A combo would put the keyboard into its bootloader when pressed"]);
+  });
+
+  test("a macro that does two risky things names both effects, not the first", () => {
+    const macro = `bt_both: bt_both { compatible = "zmk,behavior-macro"; bindings = <&bt BT_CLR &bt BT_CLR_ALL>; };`;
+    const layout = tiny({ firmware: "zmk", passthrough: [{ firmware: "zmk", file: "keymap.keymap", anchor: "macro:bt_both", source: macro, refersToLayerIndices: false }] });
+    const board = { ...tinyBoard, firmware: "zmk" as const };
+    const found = validate(board, layout, [set("base", 0, { kind: "native", firmware: "zmk", source: "&bt_both", label: "both" })]).warnings.filter((w) => w.code === "risky_native");
+    expect(found.map((w) => w.plain)).toEqual(["Left pinky, number row would forget the Bluetooth device paired on the current profile and forget every paired Bluetooth device"]);
+  });
+
+  test("an agent-added RGB key on a board without lighting is an error, in the lighting refusal's words", () => {
+    const noLighting: BoardDefinition = { ...tinyBoard };
+    delete noLighting.lighting;
+    const r = validate(noLighting, tiny(), [set("base", 0, native("RGB_TOG"))]);
+    expect(r.ok).toBe(false);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual([expect.stringMatching(/^Left pinky, number row is a light key\. .*can't show per-key hardware LED colours/)]);
+  });
+
+  test("the same RGB key on a board with lighting is admitted without an error", () => {
+    expect(errorsOf([set("base", 0, native("RGB_TOG"))])).toEqual([]);
   });
 
   test("one-shots, caps word and lighting keys never warn", () => {

@@ -213,6 +213,14 @@ describe("combos", () => {
     expect(() => gen(withCombos([combo({ output: { kind: "holdTap", tap: { code: "A" }, hold: { mods: ["LALT"] }, profileId: "p" } })]))).toThrow(/hold-tap/);
   });
 
+  test("a Caps Word key turns CAPS_WORD_ENABLE on in rules.mk; a layout without one leaves the setting to the settings page", () => {
+    const capsKey = withKey(layout, 45, { kind: "native", firmware: "qmk", source: "CW_TOGG", label: "CapsW" });
+    expect(file(capsKey, "rules.mk").trimEnd().endsWith("CAPS_WORD_ENABLE = yes")).toBe(true);
+    expect(file(layout, "rules.mk")).not.toContain("CAPS_WORD_ENABLE");
+    // A one-shot or a boot key doesn't need the feature.
+    expect(file(withKey(layout, 45, { kind: "native", firmware: "qmk", source: "OSM(MOD_LSFT)", label: "OS" }), "rules.mk")).not.toContain("CAPS_WORD_ENABLE");
+  });
+
   test("COMBO_ENABLE follows the combos: added when missing, switched off when the last combo goes", () => {
     const noRules = { ...layout, passthrough: layout.passthrough.filter((p) => p.file !== "rules.mk") };
     expect(file(withCombos([combo({})], noRules), "rules.mk")).toBe("COMBO_ENABLE = yes\nTAP_DANCE_ENABLE = yes\n");
