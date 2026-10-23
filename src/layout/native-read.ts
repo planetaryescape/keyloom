@@ -148,7 +148,8 @@ function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: 
   if (depth > MAX_DEPTH) return undefined;
   if (def.compatible === STICKY_KEY) {
     const only = def.cells.length === 1 && def.cells[0]?.length === 1 ? def.cells[0][0] : undefined;
-    if (only?.name !== "sk" || only.params.length !== 0 || call.params.length !== 1) return undefined;
+    // ZMK's custom sticky key wraps `&kp` (or `&sk`) and passes its one parameter through, so both read as the one-shot of that modifier.
+    if ((only?.name !== "sk" && only?.name !== "kp") || only.params.length !== 0 || call.params.length !== 1) return undefined;
     return builtin("sk", call.params);
   }
   if (def.compatible === MACRO) {

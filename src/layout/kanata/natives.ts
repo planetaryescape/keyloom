@@ -36,7 +36,8 @@ function balanced(source: string): boolean {
 export function kanataSource(steps: readonly Step[]): string | undefined {
   const [step] = steps;
   if (steps.length !== 1 || step === undefined) return undefined;
-  if (step.kind === "oneShot") return `(one-shot ${ONE_SHOT_MS} ${modAction(step.mods)})`;
+  // kanata's one-shot takes one key, a layer or a chord, so a pair of modifiers has no one-shot form and is refused (native-write.ts).
+  if (step.kind === "oneShot" && step.mods.length === 1) return `(one-shot ${ONE_SHOT_MS} ${modAction(step.mods)})`;
   if (step.kind === "capsWord") return `(caps-word-toggle ${CAPS_WORD_MS})`;
   return undefined;
 }
@@ -50,9 +51,9 @@ export function kanataWrittenByKeyloom(source: string): boolean {
   return KANATA_ONE_SHOT.test(source);
 }
 
-// Only the modifier key names modAction writes, so `(one-shot 2000 nonexistent-key)` is not one of keyloom's.
+// Only the single modifier key names modAction writes, so `(one-shot 2000 nonexistent-key)` and `(one-shot 2000 (multi …))` are not keyloom's.
 const KANATA_MOD = MOD_ORDER.map((m) => modAction([m])).join("|");
-const KANATA_ONE_SHOT = new RegExp(`^\\(one-shot ${ONE_SHOT_MS} (?:(?:${KANATA_MOD})|\\(multi (?:${KANATA_MOD})(?: (?:${KANATA_MOD}))*\\))\\)$`);
+const KANATA_ONE_SHOT = new RegExp(`^\\(one-shot ${ONE_SHOT_MS} (?:${KANATA_MOD})\\)$`);
 
 /** What a native binding of any firmware becomes on kanata; throws when it can't be written. `kept` is the layout's kept ZMK behaviours. */
 export function nativeAction(firmware: "qmk" | "zmk" | "kanata", source: string, where: string, kept: KeptMap = new Map()): string {

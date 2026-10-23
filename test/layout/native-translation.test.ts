@@ -149,9 +149,11 @@ describe("reading a native binding", () => {
     expect(readNative(zmk("&sticky_key_quick_release RIGHT_SHIFT"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["RSFT"] }] });
   });
 
-  test("a kept sticky key whose binding is not a sticky key on `&sk` does not read, however its label reads", () => {
-    expect(readNative(zmk("&sticky_kp LEFT_SHIFT"), kept())).toEqual({ kind: "unknown" });
+  test("a kept sticky key wrapping `&kp` reads as the one-shot of its modifier, as ZMK's custom sticky key does (K1)", () => {
+    expect(readNative(zmk("&sticky_kp LEFT_SHIFT"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LSFT"] }] });
+    expect(readNative(zmk("&sticky_kp A"), kept())).toEqual({ kind: "unknown" });
   });
+
 
   test("a kept macro reads as all its steps, so the two-step Bluetooth profile macro is a select with an output", () => {
     expect(readNative(zmk("&bt_2"), kept())).toEqual({ kind: "steps", steps: [{ kind: "output", to: "ble" }, { kind: "bluetoothSelect", profile: 2 }] });
@@ -220,6 +222,12 @@ describe("writing a meaning for a target", () => {
     expect(writeSteps(steps, "zmk", CORNE)).toEqual({ why: "it does more than one thing at once, and a key carries one" });
   });
 
+  test("kanata refuses a pair of modifiers as one one-shot, since kanata's one-shot takes one key or a chord (K2)", () => {
+    expect(writeSteps([{ kind: "oneShot", mods: ["LCTL", "LALT"] }], "kanata", MOONLANDER)).toEqual({
+      why: "kanata's one-shot holds one key, a layer or a chord, and a pair of modifiers is none of those",
+    });
+  });
+
   test("kanata writes a one-shot and caps word, and nothing else", () => {
     expect(writeSteps([{ kind: "oneShot", mods: ["LSFT"] }], "kanata", MOONLANDER)).toMatchObject({ source: "(one-shot 2000 lshift)" });
     expect(writeSteps([{ kind: "capsWord" }], "kanata", MOONLANDER)).toMatchObject({ source: "(caps-word-toggle 2000)" });
@@ -267,7 +275,8 @@ describe("kanata natives the validator admits", () => {
   test("the kanata forms kanataSource writes are admitted, and nothing else", () => {
     expect(kanataWrittenByKeyloom("(one-shot 2000 lshift)")).toBe(true);
     expect(kanataWrittenByKeyloom("(one-shot 2000 lshift )")).toBe(false);
-    expect(kanataWrittenByKeyloom("(one-shot 2000 (multi lshift rctrl))")).toBe(true);
+    // kanata's one-shot takes one key, a layer or a chord; a modifier pair is none of those, so keyloom never writes one (K2).
+    expect(kanataWrittenByKeyloom("(one-shot 2000 (multi lshift rctrl))")).toBe(false);
     expect(kanataWrittenByKeyloom("(one-shot 2000 nonexistent-key)")).toBe(false);
     expect(kanataWrittenByKeyloom("(one-shot 2000 (multi lshift rctl))")).toBe(false);
     expect(kanataWrittenByKeyloom("(caps-word-toggle 2000)")).toBe(true);
@@ -333,6 +342,14 @@ describe("transfer of natives", () => {
     expect(t.bind(native("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }]), { kind: "none" }, 0)).toEqual({
       skip: "it switches to the Nav layer, and the target has no layer that does the same job",
     });
+  });
+
+  test("a ZMK custom sticky key on a Glove80 put: the key and the combo both come across to the Moonlander as QMK one-shots (K1)", () => {
+    const sticky = `skq: skq { compatible = "zmk,behavior-sticky-key"; #binding-cells = <1>; bindings = <&kp>; };`;
+    const glove = doc("zmk", { passthrough: [pass("behavior:skq", sticky)] });
+    const transfer = new BindingTransfer(env(glove, doc("qmk"), MOONLANDER));
+    expect(transfer.bind(native("&skq LSHFT"), { kind: "key", code: "A" }, 0)).toMatchObject({ binding: { kind: "native", firmware: "qmk", source: "OSM(MOD_LSFT)" } });
+    expect(transfer.bind(native("&skq RSHFT"), { kind: "none" }, -1)).toMatchObject({ binding: { kind: "native", firmware: "qmk", source: "OSM(MOD_RSFT)" } });
   });
 
   test("Bluetooth on a Moonlander is skipped with the Moonlander's reason, not the generic one", () => {

@@ -28,8 +28,9 @@ const LIGHT_LABEL = {
 /** The source for a key with these steps on `firmware`, or the reason the target can't carry it. A key carries one step. */
 export function writeSteps(steps: readonly Step[], firmware: "qmk" | "zmk" | "kanata", facts: TargetFacts): Written {
   if (firmware === "kanata") {
-    const source = kanataSource(steps);
     const [step] = steps;
+    if (step?.kind === "oneShot" && step.mods.length > 1) return { why: "kanata's one-shot holds one key, a layer or a chord, and a pair of modifiers is none of those" };
+    const source = kanataSource(steps);
     if (source === undefined || step === undefined) return { why: "kanata has no action for it" };
     return { source, label: step.kind === "oneShot" ? `OS${modsText(orderedMods(step.mods))}` : "CapsW" };
   }
