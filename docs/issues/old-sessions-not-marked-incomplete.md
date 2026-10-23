@@ -8,5 +8,5 @@ That's no worse than before: earlier releases had no guard at all. But a person 
 
 Also treat the older loss warnings as incomplete, matching their exact former texts (QMK and ZMK) in one list beside the prefix check, with tests built from those strings. Or migrate stored warnings once. Either way, a recording that is only partly recorded must not become a basis for confident timing advice.
 
-Status: fixed on branch fix/old-incomplete-recordings.
+Status: fixed in 3f797d8 (PR 173), released in v0.54.0.
 `incompleteRecording()` now recognizes the legacy QMK and ZMK loss-warning text. `bun test test/firmware/emulate/trace.test.ts test/app/lab-interrupted.test.ts` verifies the old messages and confirms an old session is refused before replay.

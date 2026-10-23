@@ -11,7 +11,7 @@ BK's installed 0.53.1 app showed "Chat needs a model" when he pressed Cmd+K, alt
 
 Fix (D-441): the app asks the login shell for its PATH, with a 3-second deadline over the whole exchange, and starts `keyloom serve` with it. The chat panel now says that a Codex sign-in is picked up by checking again, and that an API key needs keyloom started again. Run under the app's minimal environment, the first version of the lookup returned BK's full PATH in 364 ms, and codex, docker and zapp all resolved on it.
 
-Status: fixed on branch fix/desktop-provider-keys.
+Status: fixed in dc107c3 (PR 181), released in v0.54.0.
 
 The desktop shell now passes non-empty allowlisted provider settings from the same bounded login-shell exchange as PATH, while preserving values already set in the app environment. The desktop crate tests cover the allowlist, unset and repeated values, values containing `=`, the deadline and a pipe held open by a background process (D-443).
 

@@ -18,3 +18,9 @@ The pin hides most of it for now: a dark case on the light stage casts a softer 
 Give the shadow room inside the well instead of clipping it. One way is to pad the well's bottom by the shadow's reach. Another is to draw the contact shadow on the stage behind the well, outside the scrolling box. Either has to keep a board that is wider than the stage scrollable from its left edge (the `margin: auto` rule beside it), and keep the phone's one-half view (`.keyboard-well[data-half]`) working.
 
 Not fixed: the coordinator asked for this to be left alone for now, 2026-10-18.
+
+## A padded well trades the clip for an overflow
+
+Tried on 2026-10-23 (branch `fix/stage-shadow-clip`, not merged): pad the well's bottom by 72 px for the shadow, leave the board's fit size unchanged, and translate the board down by half that so it stays centred. In the dev editor at 1440×900 (Moonlander fixture) the board kept its place to 1 px, but the well's `scrollHeight` grew from 569 to 572 against a `clientHeight` of 569, a 3 px vertical overflow and so a scrollbar wherever scrollbars always show. In the default light and dark themes the shadow edge wasn't visible before or after.
+
+The choice left: make the board 72 px shorter, so the shadow fits inside the well, or draw the contact shadow outside the scrolling box, positioned from the board's measured size. That needs a ResizeObserver and scroll tracking.

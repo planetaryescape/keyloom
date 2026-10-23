@@ -6,7 +6,7 @@
 
 Pass one drain that awaits `started` once and then stops both, while keeping each stop's own failure separate.
 
-Status: fixed on branch fix/shutdown-flash-drain. Shutdown awaits startup once before draining both engine stops; startup rejection remains visible once, and each stop failure is preserved. `test/cli/serve-shutdown.test.ts` verifies rejected startup alongside helper failure and two independently failing stops.
+Status: fixed in ef2e8f0 (PR 177), released in v0.54.0. Shutdown awaits startup once before draining both engine stops; startup rejection remains visible once, and each stop failure is preserved. `test/cli/serve-shutdown.test.ts` verifies rejected startup alongside helper failure and two independently failing stops.
 
 Found in the 2026-10-21 review of the 24c failure-lifecycle delta. The spawn-classification problem that shared this file was fixed by PR 141 (`da99297` on main).
 

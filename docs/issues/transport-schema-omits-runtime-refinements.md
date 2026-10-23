@@ -8,7 +8,7 @@ Nothing accepts the bad values today: the TypeScript client rejects them at runt
 
 Express the refinements in the schema (`minimum: 1` for `seq`, `uniqueItems: true` for `capabilities`), or have the generator fail when a refinement has no schema equivalent. Add a shared fixture that both languages reject.
 
-Status: fixed on branch fix/transport-schema-refinements.
+Status: fixed in 0df6609 (PR 176), released in v0.54.0.
 
 The generated transport schema now states the positive sequence minimum, unique capabilities, and base64/length constraints where JSON Schema can express them; the generator rejects undocumented custom refinements. Shared refinement fixtures are rejected by the Zod schemas, and the schema test checks the corresponding JSON Schema keywords.
 

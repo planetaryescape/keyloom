@@ -21,7 +21,7 @@ Two smaller gaps in the same lifecycle:
 
 When the Rust serial adapter lands, test a never-settling write and close against the real adapter and confirm its deadline fires. Or add a bounded race in the capture as a backstop for both QMK and ZMK. Report cleanup uncertainty after a failed start alongside the primary error. Send a best-effort STOP before closing on a framing failure, while the port is still alive.
 
-Status: fixed on branch fix/capture-deadlines.
+Status: fixed in b0c3ca3 (PR 182), released in v0.54.0.
 
 Both capture readers bound START, keepalive and STOP writes to 750 ms and close to 1250 ms, preserve the start error ahead of cleanup uncertainty, and send a best-effort STOP after a ZMK framing failure. `test/firmware/toolchain/key-capture-deadlines.test.ts` covers never-settling operations, shared finish/close, late completions, helper error precedence and framing cleanup.
 

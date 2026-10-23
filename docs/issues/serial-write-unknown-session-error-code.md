@@ -4,6 +4,6 @@
 
 Both codes refuse the write with `effect: none`, so nothing is sent or replayed. The only cost is a less precise error. Raised by CodeRabbit on PR 150 against code that predates it.
 
-Status: fixed on branch fix/helper-invalid-session.
+Status: fixed in aea4a9a (PR 169), released in v0.54.0.
 
 Well-formed serial- and HID-shaped writes to unknown sessions now return `invalid_session` before transport-specific shape validation; malformed writes still return `invalid_request`. The Rust regression test covers both shapes and malformed payloads.
