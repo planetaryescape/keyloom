@@ -390,7 +390,7 @@ export function nativeLighting(board: BoardDefinition, before: Layout, after: La
     const steps = reading.kind === "steps" ? reading.steps : reading.tapSteps;
     if (!steps.some((step) => step.kind === "lighting")) continue;
     const place = slot ? keyPlace(board, slot.position) : "a combo";
-    out.push(issue("lighting_unsupported", `${where}: ${native.source} needs lighting controls, and ${board.id} has none in its firmware`,
+    out.push(issue("lighting_unsupported", `${where}: ${native.source} needs lighting controls, and nothing in this config shows that ${board.id}'s firmware has them`,
       `${capitalised(place)} is a light key. ${lightingControlsRefusal(board)}`, slot ? [slot] : undefined));
   }
   return out;
