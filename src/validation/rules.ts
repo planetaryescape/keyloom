@@ -10,7 +10,7 @@ import type { Slot } from "../layout/change.ts";
 import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
-import { readNative } from "../layout/native-read.ts";
+import { admittedLayerRefs, readNative } from "../layout/native-read.ts";
 import { kanataWrittenByKeyloom } from "../layout/kanata/natives.ts";
 import type { Step } from "../layout/native-meaning.ts";
 import type { Issue } from "./result.ts";
@@ -285,8 +285,10 @@ const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b
 export function nativeEdit(before: Layout, after: Layout): Issue[] {
   const known = knownNatives(before);
   const kept = keptDefinitions(after.passthrough);
+  // A kanata native is its own source, admitted only in the forms keyloom writes and with no layer refs to rewrite. A QMK or ZMK one is
+  // admitted when keyloom reads it and its layer refs are the ones its reading needs (admittedLayerRefs).
   const understood = (b: Extract<Binding, { kind: "native" }>) =>
-    b.firmware === after.firmware && (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) : readNative(b, kept).kind !== "unknown");
+    b.firmware === after.firmware && (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) && (b.layerRefs ?? []).length === 0 : admittedLayerRefs(b, kept));
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
     if (b.kind === "native" && !known.has(nativeKey(b)) && !understood(b)) {
@@ -343,8 +345,10 @@ export function riskyNatives(board: BoardDefinition, before: Layout, after: Layo
   const out: Issue[] = [];
   for (const { native, slot, where } of newNatives(before, after)) {
     const reading = readNative(native, kept);
-    if (reading.kind !== "steps") continue;
-    const effects = [...new Set(reading.steps.flatMap((step) => riskEffect(step) ?? []))];
+    // A layer hold is risky through its tap: `&magic 1 0` with a bootloader tap enters the bootloader when that tap is pressed.
+    if (reading.kind === "unknown") continue;
+    const steps = reading.kind === "steps" ? reading.steps : reading.tapSteps;
+    const effects = [...new Set(steps.flatMap((step) => riskEffect(step) ?? []))];
     if (effects.length === 0) continue;
     const verb = `would ${effects.join(" and ")}`;
     const place = slot ? keyPlace(board, slot.position) : "a combo";

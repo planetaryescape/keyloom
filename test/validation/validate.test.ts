@@ -349,7 +349,7 @@ describe("validate: risky_native (warning, D-451)", () => {
   });
 
   test("a macro that does two risky things names both effects, not the first", () => {
-    const macro = `bt_both: bt_both { compatible = "zmk,behavior-macro"; bindings = <&bt BT_CLR &bt BT_CLR_ALL>; };`;
+    const macro = `bt_both: bt_both { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&bt BT_CLR &bt BT_CLR_ALL>; };`;
     const layout = tiny({ firmware: "zmk", passthrough: [{ firmware: "zmk", file: "keymap.keymap", anchor: "macro:bt_both", source: macro, refersToLayerIndices: false }] });
     const board = { ...tinyBoard, firmware: "zmk" as const };
     const found = validate(board, layout, [set("base", 0, { kind: "native", firmware: "zmk", source: "&bt_both", label: "both" })]).warnings.filter((w) => w.code === "risky_native");
@@ -469,5 +469,46 @@ describe("validate: problems that were already there", () => {
     const broken = tiny();
     (broken.layers[0] as Layer).bindings[0] = { kind: "layer", action: "to", layerId: "ghost" };
     expect(codes(errorsOf([{ op: "swapBindings", a: at("base", 0), b: at("base", 1) }], broken))).toEqual(["unknown_ref"]);
+  });
+});
+
+describe("validate: a new native's layer refs and arguments (R2, R3, R4)", () => {
+  const magicKept = (tap: string) => ({
+    firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+    source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <${tap}>; };`,
+  });
+  const zmkLayout = (tap = "&rgb_ug_status_macro") => tiny({ firmware: "zmk", passthrough: [magicKept(tap)] });
+  const zmkBoard = { ...tinyBoard, firmware: "zmk" as const };
+  const zmkNative = (source: string, layerRefs?: Array<{ start: number; end: number; layerId: string }>): Binding =>
+    ({ kind: "native", firmware: "zmk", source, label: "x", ...(layerRefs ? { layerRefs } : {}) });
+  const nativeEdits = (ops: ChangeOp[], layout: Layout) => validate(zmkBoard, layout, ops).errors.filter((e) => e.code === "native_edit");
+  // "&magic " is 7 characters, so the layer parameter "1" sits at 7 to 8.
+  const hold = (source: string, refs: Array<{ start: number; end: number; layerId: string }>) => set("base", 0, zmkNative(source, refs));
+
+  test("a layer hold whose layer ref covers exactly its layer parameter is admitted (R2)", () => {
+    expect(nativeEdits([hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }])], zmkLayout())).toEqual([]);
+  });
+
+  test("a new native with layer refs that don't belong to a layer hold is a native_edit error, and the generator would rewrite nothing (R2)", () => {
+    // The CW_TOGG ref from the review: it would have emitted `0_TOGG`.
+    const cw: Binding = { kind: "native", firmware: "qmk", source: "CW_TOGG", label: "CapsW", layerRefs: [{ start: 0, end: 2, layerId: "base" }] };
+    expect(codes(validate(tinyBoard, tiny(), [set("base", 0, cw)]).errors)).toContain("native_edit");
+    // A hold with an extra ref on its tap digit is refused too: only the layer parameter's span may be rewritten.
+    expect(nativeEdits([hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }, { start: 9, end: 10, layerId: "nav" }])], zmkLayout())).toHaveLength(1);
+  });
+
+  test("a hold with more or fewer arguments than its kept node declares reads as unknown and is a native_edit error (R3)", () => {
+    expect(nativeEdits([hold("&magic 1", [{ start: 7, end: 8, layerId: "nav" }])], zmkLayout())).toHaveLength(1);
+    expect(nativeEdits([hold("&magic 1 0 JUNK", [{ start: 7, end: 8, layerId: "nav" }])], zmkLayout())).toHaveLength(1);
+  });
+
+  test("a layer hold whose tap is a bootloader warns for the tap's effect, not silently (R4)", () => {
+    const warnings = validate(zmkBoard, zmkLayout("&bootloader"), [hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }])]).warnings.filter((w) => w.code === "risky_native");
+    expect(warnings.map((w) => w.plain)).toEqual(["Left pinky, number row would put the keyboard into its bootloader when pressed"]);
+  });
+
+  test("the same hold with a harmless tap does not warn (R4)", () => {
+    const warnings = validate(zmkBoard, zmkLayout(), [hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }])]).warnings.filter((w) => w.code === "risky_native");
+    expect(warnings).toEqual([]);
   });
 });
