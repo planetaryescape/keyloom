@@ -22,7 +22,7 @@ export type Step =
  */
 export type Reading =
   | { kind: "steps"; steps: Step[] }
-  | { kind: "holdLayer"; layerId: string; tap: string }
+  | { kind: "holdLayer"; layerId: string; tap: string; tapSteps: readonly Step[] }
   | { kind: "unknown" };
 
 /** Mods in the order QMK, ZMK and kanata all list them, so a set of mods always reads and writes the same way. */

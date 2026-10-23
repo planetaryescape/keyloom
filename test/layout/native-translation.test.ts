@@ -24,6 +24,7 @@ const KEPT: Passthrough[] = [
     compatible = "zmk,behavior-hold-tap";
     label = "MAGIC_HOLD_TAP";
     flavor = "tap-preferred";
+    #binding-cells = <2>;
     bindings = <&mo>, <&rgb_ug_status_macro>;
   };`),
   pass("behavior:layer_on_hold", `layer_on_hold: layer_on_hold {
@@ -32,11 +33,13 @@ const KEPT: Passthrough[] = [
   };`),
   pass("behavior:sticky_kp", `sticky_kp: sticky_kp {
     compatible = "zmk,behavior-sticky-key";
+    #binding-cells = <1>;
     bindings = <&kp>;
   };`),
   pass("macro:bt_2", `bt_2: bt_profile_macro_2 {
     label = "BT_2";
     compatible = "zmk,behavior-macro";
+    #binding-cells = <0>;
     bindings = <&out OUT_BLE &bt BT_SEL 2>;
   };`),
 ];
@@ -48,6 +51,8 @@ const kept = (extra: Passthrough[] = []): KeptMap => keptDefinitions([...KEPT, .
 
 const zmk = (source: string, layerRefs?: Array<{ start: number; end: number; layerId: string }>) => ({ firmware: "zmk" as const, source, layerRefs });
 const qmk = (source: string) => ({ firmware: "qmk" as const, source });
+
+type NativeSourceFirmware = Parameters<typeof nativeAction>[0];
 
 describe("reading a native binding", () => {
   test("QMK one-shot modifiers read as QMK's five-bit one-shot holds them, one hand at a time", () => {
@@ -62,16 +67,44 @@ describe("reading a native binding", () => {
   test("a QMK source must be the whole canonical spelling: no spaces inside an identifier, no stray text", () => {
     expect(readNative(qmk("Q K_BOOT"), kept())).toEqual({ kind: "unknown" });
     expect(readNative(qmk("OSM(MOD_L SFT)"), kept())).toEqual({ kind: "unknown" });
-    expect(readNative(qmk("OSM( MOD_LSFT )"), kept())).toEqual({ kind: "unknown" });
     expect(readNative(qmk("OSM(MOD_FOO)"), kept())).toEqual({ kind: "unknown" });
     expect(readNative(qmk("KC_A CW_TOGG"), kept())).toEqual({ kind: "unknown" });
   });
 
-  test("a ZMK source must be one call from its ampersand, with single spaces between its words", () => {
+  test("a ZMK source must be one call from its ampersand; spaces between its words and at its ends do not change it", () => {
     expect(readNative(zmk("garbage &caps_word"), kept())).toEqual({ kind: "unknown" });
-    expect(readNative(zmk("&sk  LSHFT"), kept())).toEqual({ kind: "unknown" });
-    expect(readNative(zmk("&caps_word "), kept())).toEqual({ kind: "unknown" });
     expect(readNative(zmk("&caps_word"), kept())).toEqual({ kind: "steps", steps: [{ kind: "capsWord" }] });
+    expect(readNative(zmk("&caps_word "), kept())).toEqual({ kind: "steps", steps: [{ kind: "capsWord" }] });
+    expect(readNative(zmk("&sk  LSHFT"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LSFT"] }] });
+    expect(readNative(zmk("&sk\tRCTRL"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["RCTL"] }] });
+  });
+
+  test("spaces around QMK's parentheses and bar read as the spelling they stand for; spaces inside a name don't", () => {
+    expect(readNative(qmk("OSM( MOD_LSFT )"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LSFT"] }] });
+    expect(readNative(qmk("OSM(MOD_LCTL | MOD_LSFT)"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LCTL", "LSFT"] }] });
+    expect(readNative(qmk("OSM(MOD_L SFT)"), kept())).toEqual({ kind: "unknown" });
+  });
+
+  test("the base's kanata cases still translate, spaced ones included, through the reader and nativeAction (R1)", () => {
+    // d5b226c's src/layout/kanata/natives.ts translated these QMK and ZMK forms; the spaced ones are the three from review.
+    const cases: Array<[NativeSourceFirmware, string, string]> = [
+      ["qmk", "CW_TOGG", "(caps-word-toggle 2000)"],
+      ["qmk", "QK_CAPS_WORD_TOGGLE", "(caps-word-toggle 2000)"],
+      ["qmk", "OSM(MOD_LSFT)", "(one-shot 2000 lshift)"],
+      ["qmk", "OSM(MOD_RCTL)", "(one-shot 2000 rctrl)"],
+      ["qmk", "OSM( MOD_LSFT )", "(one-shot 2000 lshift)"],
+      ["zmk", "&caps_word", "(caps-word-toggle 2000)"],
+      ["zmk", "&sk LSHIFT", "(one-shot 2000 lshift)"],
+      ["zmk", "&sk RSHFT", "(one-shot 2000 rshift)"],
+      ["zmk", "&sk  LSHFT", "(one-shot 2000 lshift)"],
+      ["zmk", "&sk\tRCTRL", "(one-shot 2000 rctrl)"],
+    ];
+    for (const [firmware, source, action] of cases) expect(nativeAction(firmware, source, "here", kept())).toBe(action);
+    // The inputs admission still refuses: the reader reads them as unknown, and nativeAction throws for them.
+    for (const [firmware, source] of [["qmk", "Q K_BOOT"], ["qmk", "OSM(MOD_L SFT)"], ["zmk", "garbage &caps_word"]] as const) {
+      expect(readNative({ firmware, source }, kept())).toEqual({ kind: "unknown" });
+      expect(() => nativeAction(firmware, source, "here", kept())).toThrow("has no kanata equivalent");
+    }
   });
 
   test("a kept definition with text before its ampersand is not read through", () => {
@@ -131,7 +164,7 @@ describe("reading a native binding", () => {
   test("a hold-tap of a momentary layer reads as that layer, identified by its layerRefs, with its tap named", () => {
     // `&magic 5 0`: the layer number is 5, and layerRefs says which layer it is (the document, not the number, decides).
     const r = readNative(zmk("&magic 5 0", [{ start: 7, end: 8, layerId: "factory-test" }]), kept());
-    expect(r).toEqual({ kind: "holdLayer", layerId: "factory-test", tap: "rgb_ug_status_macro" });
+    expect(r).toEqual({ kind: "holdLayer", layerId: "factory-test", tap: "rgb_ug_status_macro", tapSteps: [] });
   });
 
   test("a layer hold with no layerRefs is unknown, because its number can't be tied to a layer", () => {

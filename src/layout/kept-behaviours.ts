@@ -6,8 +6,11 @@ import type { Passthrough } from "./schema.ts";
 /** One behaviour call: `&sk LSHFT` is { name: "sk", params: ["LSHFT"] }. */
 export type KeptCall = { name: string; params: string[] };
 
-/** A kept node: its `compatible`, and its `bindings`, one cell per `<...>` with the calls in that cell. */
-export type KeptDefinition = { compatible: string | undefined; cells: KeptCall[][] };
+/**
+ * A kept node: its `compatible`, its `bindings` (one cell per `<...>`, with the calls in that cell), and its `#binding-cells`, which is
+ * how many parameters a call of it takes. Undefined when the node doesn't declare one, so no call of it reads.
+ */
+export type KeptDefinition = { compatible: string | undefined; cells: KeptCall[][]; bindingCells: number | undefined };
 
 /** Labels defined twice (behaviour and macro, or two of one kind) map to null: nothing resolves through an ambiguous name. */
 export function keptDefinitions(passthrough: readonly Passthrough[]): ReadonlyMap<string, KeptDefinition | null> {
@@ -34,7 +37,8 @@ export function parseKeptNode(source: string): KeptDefinition | null {
     if (calls === undefined) return null;
     cells.push(calls);
   }
-  return { compatible, cells };
+  const declared = /#binding-cells\s*=\s*<\s*(\d+)\s*>/.exec(text)?.[1];
+  return { compatible, cells, bindingCells: declared === undefined ? undefined : Number(declared) };
 }
 
 /**

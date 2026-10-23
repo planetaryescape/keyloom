@@ -47,9 +47,19 @@ const ZMK_RGB = new Map<string, LightingOp>([
 ]);
 
 export function readNative(native: NativeSource, kept: KeptMap): Reading {
-  if (native.firmware === "qmk") return readQmk(native.source);
+  if (native.firmware === "qmk") return readQmk(spaced(native.source, "qmk"));
   if (native.firmware === "zmk") return readZmk(native, kept);
   return { kind: "unknown" };
+}
+
+/**
+ * The source with the spacing C and devicetree allow, in one shape: none around `(`, `)` and `|` (QMK), and one space between the
+ * words of a ZMK call. Identifiers are not touched, so `Q K_BOOT` keeps its space and stays refused. Layer ref offsets stay in the
+ * source as written, so they are read from the raw text (`paramSpan`).
+ */
+function spaced(source: string, firmware: "qmk" | "zmk"): string {
+  const trimmed = source.trim();
+  return firmware === "qmk" ? trimmed.replace(/\s*([()|])\s*/g, "$1").replace(/\s+/g, " ") : trimmed.replace(/\s+/g, " ");
 }
 
 function readQmk(source: string): Reading {
@@ -71,8 +81,9 @@ function qmkOneShotMods(names: string): Mod[] {
 }
 
 function readZmk(native: NativeSource, kept: KeptMap): Reading {
-  if (!ZMK_CALL.test(native.source)) return { kind: "unknown" };
-  const calls = parseCalls(native.source);
+  const source = spaced(native.source, "zmk");
+  if (!ZMK_CALL.test(source)) return { kind: "unknown" };
+  const calls = parseCalls(source);
   if (calls?.length !== 1 || calls[0] === undefined) return { kind: "unknown" };
   const call = calls[0];
   const def = kept.get(call.name);
@@ -81,20 +92,43 @@ function readZmk(native: NativeSource, kept: KeptMap): Reading {
     const steps = builtin(call.name, call.params);
     return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
   }
-  if (def.compatible === HOLD_TAP) return holdLayer(native, call, def);
+  if (!takesArguments(call, def)) return { kind: "unknown" };
+  if (def.compatible === HOLD_TAP) return holdLayer(native, call, def, kept);
   const steps = resolveKept(call, def, kept, 1);
   return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
 }
 
-/** `&magic 5 0` holds layer 5 and taps the macro. Only a hold on `&mo` is a momentary layer, and the layer is the one layerRefs names. */
-function holdLayer(native: NativeSource, call: KeptCall, def: KeptDefinition): Reading {
+/** A call passes exactly the parameters its node declares with `#binding-cells`; a node that declares none reads no call. */
+function takesArguments(call: KeptCall, def: KeptDefinition): boolean {
+  return def.bindingCells !== undefined && call.params.length === def.bindingCells;
+}
+
+/**
+ * `&magic 5 0` holds layer 5 and taps the macro. Only a hold on `&mo` is a momentary layer, and the layer is the one layerRefs names.
+ * The tap's own steps come along, so a tap that does something risky (a bootloader) is named by the caller.
+ */
+function holdLayer(native: NativeSource, call: KeptCall, def: KeptDefinition, kept: KeptMap): Reading {
   const [hold, tap] = def.cells;
   if (def.cells.length !== 2 || hold?.length !== 1 || tap?.length !== 1 || hold[0]?.name !== "mo" || hold[0].params.length !== 0) return { kind: "unknown" };
-  const tapName = tap[0]?.name;
+  const tapCall = tap[0];
   const param = paramSpan(native.source, 0);
-  if (tapName === undefined || param === undefined) return { kind: "unknown" };
+  if (tapCall === undefined || param === undefined) return { kind: "unknown" };
   const ref = (native.layerRefs ?? []).find((r) => r.start >= param.start && r.start < param.end);
-  return ref === undefined ? { kind: "unknown" } : { kind: "holdLayer", layerId: ref.layerId, tap: tapName };
+  if (ref === undefined || call.params.length === 0) return { kind: "unknown" };
+  return { kind: "holdLayer", layerId: ref.layerId, tap: tapCall.name, tapSteps: resolveCall(tapCall, kept, 1) ?? [] };
+}
+
+/**
+ * Whether a new native's `layerRefs` are the ones its reading needs and nothing more. A layer hold's refs must each cover exactly its
+ * layer parameter, and name its layer. Anything else that reads has no refs, so the generator never rewrites its source.
+ */
+export function admittedLayerRefs(native: NativeSource, kept: KeptMap): boolean {
+  const refs = native.layerRefs ?? [];
+  const reading = readNative(native, kept);
+  if (reading.kind === "unknown") return false;
+  if (reading.kind === "steps") return refs.length === 0;
+  const param = paramSpan(native.source, 0);
+  return param !== undefined && refs.length > 0 && refs.every((r) => r.start === param.start && r.end === param.end && r.layerId === reading.layerId);
 }
 
 /** A kept behaviour's steps. A kept sticky key passes its parameter to `&sk`; a kept macro runs its calls in order. */
@@ -123,7 +157,7 @@ function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: 
 function resolveCall(call: KeptCall, kept: KeptMap, depth: number): Step[] | undefined {
   const def = kept.get(call.name);
   if (def === null) return undefined;
-  if (def !== undefined) return resolveKept(call, def, kept, depth);
+  if (def !== undefined) return takesArguments(call, def) ? resolveKept(call, def, kept, depth) : undefined;
   return builtin(call.name, call.params);
 }
 
