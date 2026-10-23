@@ -28,10 +28,10 @@ fn remember_port(app: &AppHandle, port: u16) {
 
 pub async fn start(app: &AppHandle) -> Result<Server, String> {
     let wanted = remembered_port(app);
-    let path = tauri::async_runtime::spawn_blocking(crate::login_path::resolve).await.map_err(|e| e.to_string())?;
-    match launch(app, wanted, &path).await {
+    let env = tauri::async_runtime::spawn_blocking(crate::login_path::resolve).await.map_err(|e| e.to_string())?;
+    match launch(app, wanted, &env).await {
         // `serve` refuses a port that is in use; any other free port will do.
-        Err(Failure::PortInUse) if wanted != 0 => launch(app, 0, &path).await.map_err(|f| f.to_string()),
+        Err(Failure::PortInUse) if wanted != 0 => launch(app, 0, &env).await.map_err(|f| f.to_string()),
         other => other.map_err(|f| f.to_string()),
     }
 }
@@ -50,7 +50,7 @@ impl std::fmt::Display for Failure {
     }
 }
 
-async fn launch(app: &AppHandle, port: u16, path: &str) -> Result<Server, Failure> {
+async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnvironment) -> Result<Server, Failure> {
     let other = |e: &dyn std::fmt::Display| Failure::Other(e.to_string());
     let (mut rx, child) = app
         .shell()
@@ -59,8 +59,10 @@ async fn launch(app: &AppHandle, port: u16, path: &str) -> Result<Server, Failur
         // --reuse: a server already on this data directory (BK's browser one) is attached to, not doubled (it would run a second sync engine).
         // --exit-on-stdin-close: the pipe the shell holds closes when the shell dies, however it dies.
         .args(["serve", "--port", &port.to_string(), "--no-open", "--exit-on-stdin-close", "--reuse"])
-        // So codex, docker and zapp are found where the person's terminal finds them (D-441).
-        .env("PATH", path)
+        // So codex, docker and zapp are found where the person's terminal finds them (D-441), and chat gets the provider
+        // settings the shell exports (D-443). Values are never logged.
+        .env("PATH", &env.path)
+        .envs(env.variables.iter().map(|(name, value)| (name.as_str(), value.as_str())))
         .spawn()
         .map_err(|e| other(&e))?;
 

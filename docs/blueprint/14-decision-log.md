@@ -1944,6 +1944,14 @@ Before a macOS UF2 flash restarts a ZMK half or waits for its boot drive, keyloo
 
 Evidence: `test/firmware/toolchain/screen-lock.test.ts` and `test/firmware/zmk/flash.test.ts`. The lock probe is tested with the JSON shape plutil prints and flash behaviour with injected functions. The live probe on BK's unlocked Mac returned false; no hardware flash was run.
 
+### D-443: The desktop sidecar inherits allowlisted provider settings from the login shell. (2026-10-22, Stage 11)
+
+Refines D-441. Read `PATH`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CODEX_API_KEY`, `CODEX_HOME`, `KEYLOOM_CODEX_BIN`, `KEYLOOM_CODEX_TRACE` and `KEYLOOM_PROVIDER` in the same bounded login-shell exchange: one `/usr/bin/env -0` between unique marks, parsed in the app, which keeps only those names and drops every other variable. NUL-separated records stop a multi-line value of another variable from passing for an allowlisted one, and the marks are anchored (the opening one starts a line, the closing one follows a NUL) so a printed command or a value containing the mark can't move them. A single external command keeps it working in nushell, which has no `||` for a `printenv` of an unset name. Pass non-empty allowlisted values to the sidecar only when the desktop app did not already set that variable; never log their values. If the shell misses the three-second deadline, keep D-441's PATH fallback and pass no shell provider values.
+
+In the desktop app, putting a provider key in the shell profile and reopening keyloom makes it available to chat, unless the app has attached to a `keyloom serve` started in a terminal (`--reuse`), which keeps that server's environment. Terminal users still restart `keyloom serve` after setting a key. The app never persists a key.
+
+Evidence: desktop `login_path` parser, allowlist and deadline tests. A probe under a minimal environment with a scratch `.zshrc` exporting a dummy `ANTHROPIC_API_KEY`, `KEYLOOM_PROVIDER` and an unrelated variable got only the two allowlisted names, in 18 ms despite a background process holding the pipe; with `KEYLOOM_PROVIDER` already set in the app's environment, only `ANTHROPIC_API_KEY` came from the shell.
+
 ### D-444: Refuse unknown QMK calls that receive a known layer name. (2026-10-22, stage 11 C3)
 - If kept QMK code passes a layer enum name to a function whose layer semantics keyloom does not know, a layer reorder is refused and the call's line is named. The importer cannot prove how that function uses the layer value.
 

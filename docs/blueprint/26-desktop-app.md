@@ -36,6 +36,8 @@ keyloom becomes an app in the Dock, with its own window and keyboard, and a quie
 
 Rung 24b embeds a diagnostics-only Rust executable inside the same Bun sidecar (D-426). Doctor starts and reaps it; `serve` and the desktop shell start no helper in this rung. The shell still supervises only its owned server. Native device transports remain TypeScript.
 
+The desktop shell starts `keyloom serve` with the login shell's PATH and the allowlisted model-provider settings it finds (`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CODEX_API_KEY`, `CODEX_HOME`, `KEYLOOM_CODEX_BIN`, `KEYLOOM_CODEX_TRACE` and `KEYLOOM_PROVIDER`; D-441, D-443). The lookup is one bounded shell exchange. Existing app environment values take precedence, and the shell's provider values are not logged or stored. Add a key to the shell profile and reopen the app to use it.
+
 The release matrix signs the visible Rust executable before embedding, without Bun's JIT entitlements, and separately submits it for notarisation when existing credentials are configured. Tauri later signs the outer Bun sidecar/app; that outer signature cannot sign hidden Rust bytes. D-424/Q41 still require installed signed/notarised-chain evidence, not just a local unsigned CLI smoke. No Linux/Windows Tauri support is claimed. The inherited macOS 12.0 bundle setting is not certified: pinned Bun documents a macOS 13+ runtime requirement. See [platform gates](33-device-helper-platforms.md) and [local evidence](../research/spikes/device-helper-24b.md).
 
 ## Decisions
