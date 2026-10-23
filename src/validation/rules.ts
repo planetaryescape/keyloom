@@ -305,7 +305,7 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
 const knownNatives = (before: Layout): Set<string> => new Set([...bindingsOf(before)].flatMap(({ binding: b }) => (b.kind === "native" ? [nativeKey(b)] : [])));
 
 /** A combo as a risky native sees it: its output, its trigger keys and the layers it works on. Moving any of them makes it new. */
-const comboSignature = (combo: Combo): string => JSON.stringify([nativeKey(combo.output as Extract<Binding, { kind: "native" }>), [...combo.positions].sort((a, b) => a - b), combo.layerIds]);
+const comboSignature = (combo: Combo, output: Extract<Binding, { kind: "native" }>): string => JSON.stringify([nativeKey(output), [...combo.positions].sort((a, b) => a - b), combo.layerIds]);
 
 /**
  * The natives a layout holds, by where they are: a key by its layer and position, a combo by its id. A native that moves to a slot that
@@ -314,7 +314,7 @@ const comboSignature = (combo: Combo): string => JSON.stringify([nativeKey(combo
 function heldNatives(doc: Layout): Map<string, string> {
   const held = new Map<string, string>();
   for (const { binding, slot } of bindingsOf(doc)) if (binding.kind === "native" && slot !== undefined) held.set(`layer:${slot.layerId}:${slot.position}`, nativeKey(binding));
-  for (const combo of doc.combos) if (combo.output.kind === "native") held.set(`combo:${combo.id}`, comboSignature(combo));
+  for (const combo of doc.combos) if (combo.output.kind === "native") held.set(`combo:${combo.id}`, comboSignature(combo, combo.output));
   return held;
 }
 
@@ -331,7 +331,7 @@ function newNatives(before: Layout, after: Layout): NewNative[] {
   }
   for (const combo of after.combos) {
     if (combo.output.kind !== "native") continue;
-    if (held.get(`combo:${combo.id}`) !== comboSignature(combo)) out.push({ native: combo.output, where: `combo "${combo.id}"` });
+    if (held.get(`combo:${combo.id}`) !== comboSignature(combo, combo.output)) out.push({ native: combo.output, where: `combo "${combo.id}"` });
   }
   return out;
 }
