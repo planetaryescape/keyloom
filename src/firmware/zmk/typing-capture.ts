@@ -2,6 +2,8 @@
 // trace and stop it. The transport is a parameter, so tests use a fake port and nothing here can reach a real keyboard.
 import { WINDOWS_COM_DRIVER_HINT } from "../toolchain/platform-support.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
+import { DeviceTransportError } from "../toolchain/device-helper/transport-client.ts";
+import { CAPTURE_CLOSE_TIMEOUT_MS, CAPTURE_WRITE_TIMEOUT_MS, captureDeadline } from "../emulate/capture-deadline.ts";
 import { type CaptureHooks, CaptureError, type CapturedTrace, type KeyCapture, TraceBuilder } from "../emulate/trace.ts";
 import type { SerialSession, SerialTransport } from "../toolchain/serial.ts";
 import { zmkRevision } from "./board-config.ts";
@@ -44,9 +46,13 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
   let finishing: Promise<CapturedTrace> | undefined;
   let pingWrite: Promise<void> | undefined;
   let stopping = false;
+  let ping: ReturnType<typeof setInterval> | undefined;
+  let framingFailed = false;
+  const message = (error: unknown) => error instanceof Error ? error.message : "connection unavailable";
 
   const interrupted = (reason: string) => {
     if (endedBy === undefined || endedBy === "the host asked") endedBy = reason;
+    else if (endedBy !== reason) builder.warn(`Recording incomplete: ${reason}`);
     settle(endedBy);
   };
   const end = (reason: string) => {
@@ -54,7 +60,10 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
     endedBy = reason;
     settle(reason);
   };
-  const failFraming = (error: StreamLineError) => interrupted(`the serial stream is incomplete: ${error.message}`);
+  const failFraming = (error: StreamLineError) => {
+    framingFailed = true;
+    interrupted(`the serial stream is incomplete: ${error.message}`);
+  };
   const handleLine = (line: string) => {
     const parsed = parseStreamLine(line);
     if (!parsed) return;
@@ -72,7 +81,7 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
   const session: SerialSession = await transport.open(
     path,
     (bytes) => {
-      if (endedBy !== undefined) return;
+      if (endedBy !== undefined || closing !== undefined) return;
       try {
         const framed = framer.push(bytes);
         for (const line of framed.lines) handleLine(line);
@@ -89,34 +98,49 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
     closing ??= (async () => {
       stopping = true;
       clearInterval(ping);
-      await session.close();
+      await captureDeadline(() => session.close(), "close", CAPTURE_CLOSE_TIMEOUT_MS);
     })();
     return closing;
   };
-  const ping = setInterval(() => {
-    if (stopping || endedBy !== undefined || pingWrite) return;
-    pingWrite = (async () => {
-      try { await session.write(TYPING_PING); }
-      catch (error) { interrupted(`the connection to the keyboard failed: ${error instanceof Error ? error.message : "connection unavailable"}`); }
-    })().finally(() => { pingWrite = undefined; });
-  }, hooks.keepaliveMs ?? PING_MS);
 
   try {
-    await session.write(TYPING_START);
-    const answered = await Promise.race([
+    await captureDeadline(() => session.write(TYPING_START), "START write", CAPTURE_WRITE_TIMEOUT_MS);
+    // The firmware ends the stream after 3 s without a START or keepalive, so pinging starts with START, not after the answer.
+    ping = setInterval(() => {
+      if (stopping || endedBy !== undefined || pingWrite) return;
+      pingWrite = (async () => {
+        try { await captureDeadline(() => session.write(TYPING_PING), "keepalive write", CAPTURE_WRITE_TIMEOUT_MS); }
+        catch (error) { interrupted(`the connection to the keyboard failed: ${error instanceof Error ? error.message : "connection unavailable"}`); }
+      })().finally(() => { pingWrite = undefined; });
+    }, hooks.keepaliveMs ?? PING_MS);
+    const answered = endedBy === undefined && await Promise.race([
       started.then(() => true),
       ended.then(() => false),
       sleep(hooks.startTimeoutMs ?? 2000).then(() => false),
     ]);
-    if (!answered) {
+    if (!answered || endedBy !== undefined) {
       const reason = endedBy ? `: ${endedBy}` : "";
       throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it`);
     }
-  } catch (error) {
-    try { await session.write(TYPING_STOP); } catch { /* The failed start is primary; close still releases the session. */ }
-    try { await close(); } catch { /* Preserve the start failure. */ }
+  } catch (thrown) {
+    // An interruption the keyboard reported first (framing, a lost connection) is the real reason; a START write that then
+    // timed out or failed is only how it surfaced.
+    const error = endedBy !== undefined && !message(thrown).includes(endedBy)
+      ? new CaptureError(`the keyboard didn't start streaming: ${endedBy}`, { cause: thrown })
+      : thrown;
+    const cleanupErrors: string[] = [];
+    try { await captureDeadline(() => session.write(TYPING_STOP), "STOP write", CAPTURE_WRITE_TIMEOUT_MS); }
+    catch (stopError) { cleanupErrors.push(`STOP failed: ${message(stopError)}`); }
+    try { await close(); }
+    catch (closeError) { cleanupErrors.push(`the keyboard connection did not close: ${message(closeError)}`); }
+    // A transport error (the helper died or timed out) keeps its own type, so the app can still say a restart is needed; it
+    // already explains why cleanup could not finish.
+    if (cleanupErrors.length > 0 && !(error instanceof DeviceTransportError)) {
+      throw new CaptureError(`${message(error)}; cleanup uncertain: ${cleanupErrors.join("; ")}`, { cause: error });
+    }
     throw error;
   }
+
 
   return {
     snapshot: () => builder.snapshot(),
@@ -126,9 +150,9 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
         stopping = true;
         clearInterval(ping);
         await pingWrite;
-        if (endedBy === undefined) {
+        if (endedBy === undefined || framingFailed) {
           try {
-            await session.write(TYPING_STOP);
+            await captureDeadline(() => session.write(TYPING_STOP), "STOP write", CAPTURE_WRITE_TIMEOUT_MS);
             const acknowledged = await Promise.race([ended.then(() => true), sleep(500).then(() => false)]);
             if (!acknowledged) interrupted("the keyboard did not confirm that recording stopped");
           } catch (error) {

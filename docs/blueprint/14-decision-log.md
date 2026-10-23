@@ -1978,3 +1978,9 @@ Refines D-421/D-422's consumer-before-helper lifetime. Register a manual flash s
 Await sync startup once before stopping the sync and review engines, including when startup fails. Log startup rejection without swallowing it: shutdown reports that reason once, alongside any helper cleanup failure. Settle both stops independently so one failure cannot hide the other or close the helper before the remaining stop finishes.
 
 Evidence: `test/app/firmware-shutdown.test.ts` gates artifact checks and checks another App still admits flashes; and final flash callbacks against fake toolchains; `test/cli/serve-shutdown.test.ts` exercises the serve stop hook with deferred startup and stop failures. No real keyboard was flashed.
+
+### D-446: Capture owns write and close deadlines. (2026-10-22, stage 11 A3)
+
+Refines D-429: both QMK and ZMK capture put a 750 ms bound on each START, keepalive and STOP write, and 1250 ms on their single close. These backstops leave the helper's 500 ms write and 1 s close deadlines time to report first. A timeout reports incomplete capture or cleanup uncertainty; it does not claim cancellation, retry a write or call close again. Keepalives start as soon as START is written, because the firmware ends the stream after 3 s without one; finish awaits the bounded in-flight keepalive before cleanup. Failed-start errors remain primary, with STOP/close failures appended and the original error retained as the cause. A ZMK framing failure attempts STOP before close and keeps its framing error primary.
+
+Evidence: `test/firmware/toolchain/key-capture-deadlines.test.ts` and `docs/issues/zmk-capture-trusts-transport-deadlines.md`. All new evidence uses synthetic sessions; no physical keyboard was opened.

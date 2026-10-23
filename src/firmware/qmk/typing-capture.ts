@@ -1,6 +1,8 @@
 // The host half of the Moonlander's key stream (D-281): start it over raw HID, keep it alive, decode the 32-byte reports into a
 // trace and stop it. The transport is a parameter, so tests use a fake keyboard and nothing here can reach a real one.
 import { WINDOWS_HID_DRIVER_HINT } from "../toolchain/platform-support.ts";
+import { DeviceTransportError } from "../toolchain/device-helper/transport-client.ts";
+import { CAPTURE_CLOSE_TIMEOUT_MS, CAPTURE_WRITE_TIMEOUT_MS, captureDeadline } from "../emulate/capture-deadline.ts";
 import { type CaptureHooks, CaptureError, type CapturedTrace, type KeyCapture, TraceBuilder } from "../emulate/trace.ts";
 import type { HidTransport, RawHidInterface } from "../toolchain/hid.ts";
 import { ZSA_VENDOR_ID, markerOf } from "./handsfree.ts";
@@ -32,7 +34,6 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
   let begun: () => void = () => {};
   const started = new Promise<void>((resolve) => (begun = resolve));
   let expected: number | undefined;
-  let closed = false;
   let closing: Promise<void> | undefined;
   let finishing: Promise<CapturedTrace> | undefined;
   let keepaliveWrite: Promise<void> | undefined;
@@ -40,6 +41,7 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
   const message = (error: unknown) => error instanceof Error ? error.message : "connection unavailable";
   const interrupted = (reason: string) => {
     if (endedBy === undefined || endedBy === "the host asked") endedBy = reason;
+    else if (endedBy !== reason) builder.warn(`Recording incomplete: ${reason}`);
     settle(endedBy);
   };
 
@@ -49,9 +51,11 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
     settle(reason);
   };
 
+  let keepalive: ReturnType<typeof setInterval> | undefined;
   const session = await transport.openSession(
     target,
     (bytes) => {
+      if (endedBy !== undefined || closing !== undefined) return;
       const report = decodeTypingReport(bytes);
       if (!report) return;
       if (expected !== undefined && report.seq !== expected) {
@@ -76,35 +80,47 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
 
   const close = () => {
     closing ??= (async () => {
-      closed = true;
+      stopping = true;
       clearInterval(keepalive);
-      await session.close();
+      await captureDeadline(() => session.close(), "close", CAPTURE_CLOSE_TIMEOUT_MS);
     })();
     return closing;
   };
-  const keepalive = setInterval(() => {
-    if (stopping || endedBy !== undefined || keepaliveWrite) return;
-    keepaliveWrite = (async () => {
-      try { await session.write(typingPacket("keepalive")); }
-      catch (error) { interrupted(`the connection to the keyboard failed: ${message(error)}`); }
-    })().finally(() => { keepaliveWrite = undefined; });
-  }, hooks.keepaliveMs ?? KEEPALIVE_MS);
 
   try {
-    await session.write(typingPacket("start"));
-    const answered = await Promise.race([started.then(() => true), ended.then(() => false), sleep(hooks.startTimeoutMs ?? 2000).then(() => false)]);
-    if (!answered) {
-      throw new CaptureError("the keyboard didn't start streaming. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it, then try again");
+    await captureDeadline(() => session.write(typingPacket("start")), "START write", CAPTURE_WRITE_TIMEOUT_MS);
+    // The firmware ends the stream after 3 s without a START or keepalive, so pinging starts with START, not after the answer.
+    keepalive = setInterval(() => {
+      if (stopping || endedBy !== undefined || keepaliveWrite) return;
+      keepaliveWrite = (async () => {
+        try { await captureDeadline(() => session.write(typingPacket("keepalive")), "keepalive write", CAPTURE_WRITE_TIMEOUT_MS); }
+        catch (error) { interrupted(`the connection to the keyboard failed: ${message(error)}`); }
+      })().finally(() => { keepaliveWrite = undefined; });
+    }, hooks.keepaliveMs ?? KEEPALIVE_MS);
+    const answered = endedBy === undefined && await Promise.race([started.then(() => true), ended.then(() => false), sleep(hooks.startTimeoutMs ?? 2000).then(() => false)]);
+    if (!answered || endedBy !== undefined) {
+      const reason = endedBy ? `: ${endedBy}` : "";
+      throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it, then try again`);
     }
-  } catch (err) {
-    try {
-      await session.write(typingPacket("stop"));
-    } catch {
-      // The write that failed is why we are here; closing is what matters.
+  } catch (thrown) {
+    // An interruption the keyboard reported first (framing, a lost connection) is the real reason; a START write that then
+    // timed out or failed is only how it surfaced.
+    const error = endedBy !== undefined && !message(thrown).includes(endedBy)
+      ? new CaptureError(`the keyboard didn't start streaming: ${endedBy}`, { cause: thrown })
+      : thrown;
+    const cleanupErrors: string[] = [];
+    try { await captureDeadline(() => session.write(typingPacket("stop")), "STOP write", CAPTURE_WRITE_TIMEOUT_MS); }
+    catch (stopError) { cleanupErrors.push(`STOP failed: ${message(stopError)}`); }
+    try { await close(); }
+    catch (closeError) { cleanupErrors.push(`the keyboard connection did not close: ${message(closeError)}`); }
+    // A transport error (the helper died or timed out) keeps its own type, so the app can still say a restart is needed; it
+    // already explains why cleanup could not finish.
+    if (cleanupErrors.length > 0 && !(error instanceof DeviceTransportError)) {
+      throw new CaptureError(`${message(error)}; cleanup uncertain: ${cleanupErrors.join("; ")}`, { cause: error });
     }
-    await close();
-    throw err;
+    throw error;
   }
+
 
   return {
     snapshot: () => builder.snapshot(),
@@ -114,9 +130,9 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
         stopping = true;
         clearInterval(keepalive);
         await keepaliveWrite;
-        if (endedBy === undefined && !closed) {
+        if (endedBy === undefined) {
           try {
-            await session.write(typingPacket("stop"));
+            await captureDeadline(() => session.write(typingPacket("stop")), "STOP write", CAPTURE_WRITE_TIMEOUT_MS);
             const acknowledged = await Promise.race([ended.then(() => true), sleep(500).then(() => false)]);
             if (!acknowledged) interrupted("the keyboard did not confirm that recording stopped");
           } catch (error) { interrupted(`the connection to the keyboard failed: ${message(error)}`); }
