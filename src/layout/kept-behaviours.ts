@@ -17,25 +17,38 @@ export function keptDefinitions(passthrough: readonly Passthrough[]): ReadonlyMa
     const m = /^(?:behavior|macro):(.+)$/.exec(p.anchor);
     if (m?.[1] === undefined) continue;
     const label = m[1];
-    out.set(label, out.has(label) ? null : parseKeptNode(p.source));
+    const parsed = parseKeptNode(p.source);
+    out.set(label, out.has(label) || parsed === null ? null : parsed);
   }
   return out;
 }
 
-export function parseKeptNode(source: string): KeptDefinition {
+/** Null when a cell can't be read as calls, so nothing resolves through a node keyloom can't read whole. */
+export function parseKeptNode(source: string): KeptDefinition | null {
   const text = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, " ");
   const compatible = /compatible\s*=\s*"([^"]*)"/.exec(text)?.[1];
   const bindings = /bindings\s*=\s*([^;]*);/.exec(text)?.[1] ?? "";
-  const cells = [...bindings.matchAll(/<([^>]*)>/g)].map((m) => parseCalls(m[1] ?? ""));
+  const cells: KeptCall[][] = [];
+  for (const m of bindings.matchAll(/<([^>]*)>/g)) {
+    const calls = parseCalls(m[1] ?? "");
+    if (calls === undefined) return null;
+    cells.push(calls);
+  }
   return { compatible, cells };
 }
 
-/** The calls in a `bindings` cell: each `&name` starts one, and the words after it up to the next `&` are its parameters. */
-export function parseCalls(text: string): KeptCall[] {
+/**
+ * The calls in a `bindings` cell: each `&name` starts one, and the words after it up to the next `&` are its parameters. Undefined when
+ * there is text before the first `&`, or a name that isn't an identifier, since a call keyloom can't read must not be read as another.
+ */
+export function parseCalls(text: string): KeptCall[] | undefined {
+  const [head = "", ...pieces] = text.split("&");
+  if (head.trim() !== "") return undefined;
   const calls: KeptCall[] = [];
-  for (const piece of text.split("&").slice(1)) {
+  for (const piece of pieces) {
     const [name, ...params] = piece.trim().split(/\s+/);
-    if (name !== undefined && name !== "") calls.push({ name, params });
+    if (name === undefined || !/^[A-Za-z_]\w*$/.test(name)) return undefined;
+    calls.push({ name, params });
   }
   return calls;
 }

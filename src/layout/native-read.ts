@@ -14,7 +14,10 @@ const HOLD_TAP = "zmk,behavior-hold-tap";
 const STICKY_KEY = "zmk,behavior-sticky-key";
 const MACRO = "zmk,behavior-macro";
 
-const QMK_MODS = new Map<string, Mod>([["MOD_LCTL", "LCTL"], ["MOD_LSFT", "LSFT"], ["MOD_LALT", "LALT"], ["MOD_LGUI", "LGUI"], ["MOD_RCTL", "RCTL"], ["MOD_RSFT", "RSFT"], ["MOD_RALT", "RALT"], ["MOD_RGUI", "RGUI"]]);
+// The one-shot's mods as QMK writes them: `OSM(MOD_LSFT)`, `OSM(MOD_LCTL|MOD_LALT)`. Whole-string, so `OSM(MOD_L SFT)` and `OSM(MOD_LSFT) ` do not read.
+const QMK_OSM = /^OSM\((MOD_[LR](?:CTL|SFT|ALT|GUI)(?:\|MOD_[LR](?:CTL|SFT|ALT|GUI))*)\)$/;
+// A ZMK binding's whole source: one `&name` and its parameters, separated by single spaces. Text before the `&` does not read.
+const ZMK_CALL = /^&[A-Za-z_]\w*(?: [^\s&]+)*$/;
 
 const QMK_STEPS = new Map<string, Step>([
   ["CW_TOGG", { kind: "capsWord" }], ["QK_CAPS_WORD_TOGGLE", { kind: "capsWord" }],
@@ -50,25 +53,27 @@ export function readNative(native: NativeSource, kept: KeptMap): Reading {
 }
 
 function readQmk(source: string): Reading {
-  const src = source.replace(/\s+/g, "");
-  const osm = /^OSM\((MOD_\w+(?:\|MOD_\w+)*)\)$/.exec(src);
-  if (osm?.[1] !== undefined) {
-    const picked = new Set<Mod>();
-    for (const part of osm[1].split("|")) {
-      const mod = QMK_MODS.get(part);
-      if (mod === undefined) return { kind: "unknown" };
-      picked.add(mod);
-    }
-    // In MOD_ORDER, so the same keys read the same whichever order the source lists them in.
-    return { kind: "steps", steps: [{ kind: "oneShot", mods: MOD_ORDER.filter((m) => picked.has(m)) }] };
-  }
-  const step = QMK_STEPS.get(src);
+  const osm = QMK_OSM.exec(source);
+  if (osm?.[1] !== undefined) return { kind: "steps", steps: [{ kind: "oneShot", mods: qmkOneShotMods(osm[1]) }] };
+  const step = QMK_STEPS.get(source);
   return step === undefined ? { kind: "unknown" } : { kind: "steps", steps: [step] };
 }
 
+/**
+ * QMK's one-shot holds five bits: the four modifiers and one right-hand flag, which makes every modifier in the set right-hand
+ * (quantum/modifiers.h). So `OSM(MOD_LSFT|MOD_RSFT)` is right Shift alone, and `OSM(MOD_LCTL|MOD_RSFT)` is right Ctrl and right Shift.
+ */
+function qmkOneShotMods(names: string): Mod[] {
+  const parts = names.split("|");
+  const side = parts.some((p) => p.startsWith("MOD_R")) ? "R" : "L";
+  const bases = new Set(parts.map((p) => p.slice(5)));
+  return MOD_ORDER.filter((m) => m.startsWith(side) && bases.has(m.slice(1)));
+}
+
 function readZmk(native: NativeSource, kept: KeptMap): Reading {
+  if (!ZMK_CALL.test(native.source)) return { kind: "unknown" };
   const calls = parseCalls(native.source);
-  if (calls.length !== 1 || calls[0] === undefined) return { kind: "unknown" };
+  if (calls?.length !== 1 || calls[0] === undefined) return { kind: "unknown" };
   const call = calls[0];
   const def = kept.get(call.name);
   if (def === null) return { kind: "unknown" };

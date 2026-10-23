@@ -53,9 +53,12 @@ const noLighting = (facts: TargetFacts, label: string): Written => ({
 function qmkStep(step: Step, facts: TargetFacts): Written {
   switch (step.kind) {
     case "oneShot": {
-      const names = orderedMods(step.mods).map((m) => QMK_MOD.get(m));
+      const mods = orderedMods(step.mods);
+      const names = mods.map((m) => QMK_MOD.get(m));
       if (names.length === 0 || names.some((n) => n === undefined)) return { why: "keyloom can't write that modifier for QMK" };
-      return { source: `OSM(${names.join("|")})`, label: `OS${modsText(orderedMods(step.mods))}` };
+      // QMK's right-hand flag applies to the whole one-shot, so a left and a right modifier together would read as two right ones.
+      if (mods.some((m) => m.startsWith("R")) && mods.some((m) => m.startsWith("L"))) return { why: "QMK's one-shot holds all left-hand or all right-hand modifiers, not one of each" };
+      return { source: `OSM(${names.join("|")})`, label: `OS${modsText(mods)}` };
     }
     case "capsWord": return { source: "CW_TOGG", label: "CapsW" };
     case "bootloader": return { source: "QK_BOOT", label: "Boot" };

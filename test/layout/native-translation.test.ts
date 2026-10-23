@@ -50,11 +50,40 @@ const zmk = (source: string, layerRefs?: Array<{ start: number; end: number; lay
 const qmk = (source: string) => ({ firmware: "qmk" as const, source });
 
 describe("reading a native binding", () => {
-  test("QMK one-shot modifiers read with their mods, in any spacing and either side", () => {
+  test("QMK one-shot modifiers read as QMK's five-bit one-shot holds them, one hand at a time", () => {
     expect(readNative(qmk("OSM(MOD_LSFT)"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LSFT"] }] });
-    expect(readNative(qmk("OSM( MOD_RSFT | MOD_LCTL )"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LCTL", "RSFT"] }] });
+    expect(readNative(qmk("OSM(MOD_LCTL|MOD_LSFT)"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LCTL", "LSFT"] }] });
+    // quantum/modifiers.h: the right-hand flag makes every modifier in the one-shot right-hand, so these are right Shift alone and right Ctrl with right Shift.
+    expect(readNative(qmk("OSM(MOD_LSFT|MOD_RSFT)"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["RSFT"] }] });
+    expect(readNative(qmk("OSM(MOD_LCTL|MOD_RSFT)"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["RCTL", "RSFT"] }] });
+    expect(readNative(qmk("OSM(MOD_RCTL|MOD_RSFT)"), kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["RCTL", "RSFT"] }] });
   });
 
+  test("a QMK source must be the whole canonical spelling: no spaces inside an identifier, no stray text", () => {
+    expect(readNative(qmk("Q K_BOOT"), kept())).toEqual({ kind: "unknown" });
+    expect(readNative(qmk("OSM(MOD_L SFT)"), kept())).toEqual({ kind: "unknown" });
+    expect(readNative(qmk("OSM( MOD_LSFT )"), kept())).toEqual({ kind: "unknown" });
+    expect(readNative(qmk("OSM(MOD_FOO)"), kept())).toEqual({ kind: "unknown" });
+    expect(readNative(qmk("KC_A CW_TOGG"), kept())).toEqual({ kind: "unknown" });
+  });
+
+  test("a ZMK source must be one call from its ampersand, with single spaces between its words", () => {
+    expect(readNative(zmk("garbage &caps_word"), kept())).toEqual({ kind: "unknown" });
+    expect(readNative(zmk("&sk  LSHFT"), kept())).toEqual({ kind: "unknown" });
+    expect(readNative(zmk("&caps_word "), kept())).toEqual({ kind: "unknown" });
+    expect(readNative(zmk("&caps_word"), kept())).toEqual({ kind: "steps", steps: [{ kind: "capsWord" }] });
+  });
+
+  test("a kept definition with text before its ampersand is not read through", () => {
+    const junk = [pass("behavior:junk", `junk: junk { compatible = "zmk,behavior-macro"; bindings = <garbage &caps_word>; };`)];
+    expect(readNative(zmk("&junk"), kept(junk))).toEqual({ kind: "unknown" });
+  });
+
+  test("QMK's one-shot writer refuses a left and a right modifier together, since the flag would make both right-hand", () => {
+    expect(writeSteps([{ kind: "oneShot", mods: ["LCTL", "RSFT"] }], "qmk", MOONLANDER)).toEqual({
+      why: "QMK's one-shot holds all left-hand or all right-hand modifiers, not one of each",
+    });
+  });
   test("QMK keycodes it does not know, and a modifier it does not know, are unknown rather than guessed", () => {
     expect(readNative(qmk("OSM(MOD_FOO)"), kept())).toEqual({ kind: "unknown" });
     expect(readNative(qmk("DUAL_FUNC_0"), kept())).toEqual({ kind: "unknown" });
@@ -164,24 +193,50 @@ describe("writing a meaning for a target", () => {
     expect(writeSteps([{ kind: "bootloader" }], "kanata", MOONLANDER)).toEqual({ why: "kanata has no action for it" });
   });
 
-  test("a mod set read from QMK writes back to the same QMK one-shot, in any order (round trip)", () => {
-    const mods: Mod[] = ["LCTL", "LSFT", "LALT", "LGUI", "RCTL", "RSFT", "RALT", "RGUI"];
-    fc.assert(fc.property(fc.uniqueArray(fc.constantFrom(...mods), { minLength: 1, maxLength: 8 }), (picked) => {
-      const names = picked.map((m) => `MOD_${m}`).join("|");
+  test("a one-hand mod set read from QMK writes back to the same QMK one-shot, in any order (round trip)", () => {
+    const hands: Mod[][] = [["LCTL", "LSFT", "LALT", "LGUI"], ["RCTL", "RSFT", "RALT", "RGUI"]];
+    fc.assert(fc.property(fc.constantFrom(...hands), fc.uniqueArray(fc.constantFrom(0, 1, 2, 3), { minLength: 1, maxLength: 4 }), (hand, picked) => {
+      const names = picked.map((i) => `MOD_${hand[i]}`).join("|");
       const read = readNative(qmk(`OSM(${names})`), kept());
       if (read.kind !== "steps") throw new Error("a QMK one-shot did not read");
       const written = writeSteps(read.steps, "qmk", MOONLANDER);
       if (!("source" in written)) throw new Error(written.why);
-      const again = readNative(qmk(written.source), kept());
-      expect(again).toEqual(read);
+      expect(readNative(qmk(written.source), kept())).toEqual(read);
     }));
+  });
+});
+
+describe("what the writers emit is admitted", () => {
+  const steps: Step[] = [
+    { kind: "oneShot", mods: ["LSFT"] }, { kind: "oneShot", mods: ["LCTL", "LALT"] }, { kind: "oneShot", mods: ["RSFT"] },
+    { kind: "capsWord" }, { kind: "bootloader" }, { kind: "reset" },
+    ...(["toggle", "hueUp", "hueDown", "satUp", "satDown", "briUp", "briDown", "speedUp", "speedDown", "effectNext", "effectPrev"] as const).map((op): Step => ({ kind: "lighting", op })),
+    { kind: "bluetooth", op: "clear" }, { kind: "bluetooth", op: "clearAll" }, { kind: "bluetooth", op: "next" }, { kind: "bluetooth", op: "previous" },
+    { kind: "bluetoothSelect", profile: 0 }, { kind: "output", to: "usb" }, { kind: "output", to: "ble" },
+  ];
+  test("every QMK spelling the writer emits reads back to the same step", () => {
+    for (const step of steps) {
+      const written = writeSteps([step], "qmk", MOONLANDER);
+      if (!("source" in written)) continue;
+      expect(readNative(qmk(written.source), kept())).toEqual({ kind: "steps", steps: [step] });
+    }
+  });
+  test("every ZMK spelling the writer emits reads back to the same step", () => {
+    for (const step of steps) {
+      const written = writeSteps([step], "zmk", CORNE);
+      if (!("source" in written)) continue;
+      expect(readNative(zmk(written.source), kept())).toEqual({ kind: "steps", steps: [step] });
+    }
   });
 });
 
 describe("kanata natives the validator admits", () => {
   test("the kanata forms kanataSource writes are admitted, and nothing else", () => {
     expect(kanataWrittenByKeyloom("(one-shot 2000 lshift)")).toBe(true);
-    expect(kanataWrittenByKeyloom("(one-shot 2000 (multi lshift rctl))")).toBe(true);
+    expect(kanataWrittenByKeyloom("(one-shot 2000 lshift )")).toBe(false);
+    expect(kanataWrittenByKeyloom("(one-shot 2000 (multi lshift rctrl))")).toBe(true);
+    expect(kanataWrittenByKeyloom("(one-shot 2000 nonexistent-key)")).toBe(false);
+    expect(kanataWrittenByKeyloom("(one-shot 2000 (multi lshift rctl))")).toBe(false);
     expect(kanataWrittenByKeyloom("(caps-word-toggle 2000)")).toBe(true);
     expect(kanataWrittenByKeyloom("(caps-word-toggle 9999)")).toBe(false);
     expect(kanataWrittenByKeyloom("(one-shot 2000 (cmd rm -rf /))")).toBe(false);

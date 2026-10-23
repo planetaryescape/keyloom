@@ -1,7 +1,7 @@
 // `native` bindings on a kanata layout (D-024). A kanata one carries its own source; a QMK or ZMK one whose meaning kanata has a name
 // for (read by layout/native-read.ts) is translated; the rest are refused by the generator rather than dropped.
 import { type KeptMap, readNative } from "../native-read.ts";
-import type { Step } from "../native-meaning.ts";
+import { MOD_ORDER, type Step } from "../native-meaning.ts";
 import { modAction } from "./names.ts";
 import { GenerateError } from "./generate-error.ts";
 
@@ -47,8 +47,12 @@ export function kanataSource(steps: readonly Step[]): string | undefined {
  */
 export function kanataWrittenByKeyloom(source: string): boolean {
   if (source === `(caps-word-toggle ${CAPS_WORD_MS})`) return true;
-  return new RegExp(`^\\(one-shot ${ONE_SHOT_MS} (?:[a-z0-9-]+|\\(multi [a-z0-9- ]+\\))\\)$`).test(source);
+  return KANATA_ONE_SHOT.test(source);
 }
+
+// Only the modifier key names modAction writes, so `(one-shot 2000 nonexistent-key)` is not one of keyloom's.
+const KANATA_MOD = MOD_ORDER.map((m) => modAction([m])).join("|");
+const KANATA_ONE_SHOT = new RegExp(`^\\(one-shot ${ONE_SHOT_MS} (?:(?:${KANATA_MOD})|\\(multi (?:${KANATA_MOD})(?: (?:${KANATA_MOD}))*\\))\\)$`);
 
 /** What a native binding of any firmware becomes on kanata; throws when it can't be written. `kept` is the layout's kept ZMK behaviours. */
 export function nativeAction(firmware: "qmk" | "zmk" | "kanata", source: string, where: string, kept: KeptMap = new Map()): string {
