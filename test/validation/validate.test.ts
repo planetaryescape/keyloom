@@ -514,3 +514,27 @@ describe("validate: a new native's layer refs and arguments (R2, R3, R4)", () =>
     expect(warnings).toEqual([]);
   });
 });
+
+describe("validate: a layer hold's lighting tap (lighting)", () => {
+  const holdWithRgbTap = () => tiny({
+    firmware: "zmk",
+    passthrough: [{
+      firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+      source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&rgb_ug RGB_TOG>; };`,
+    }],
+  });
+  const op: ChangeOp = { op: "setBinding", at: { layerId: "base", position: 0 }, binding: { kind: "native", firmware: "zmk", source: "&magic 1 0", label: "x", layerRefs: [{ start: 7, end: 8, layerId: "nav" }] } };
+
+  test("a layer hold whose tap is RGB_TOG is a lighting error on a board with no lighting", () => {
+    const noLighting: BoardDefinition = { ...tinyBoard, firmware: "zmk" };
+    delete noLighting.lighting;
+    const r = validate(noLighting, holdWithRgbTap(), [op]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toHaveLength(1);
+  });
+
+  test("the same hold is admitted on a board with lighting", () => {
+    const r = validate({ ...tinyBoard, firmware: "zmk" }, holdWithRgbTap(), [op]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toEqual([]);
+    expect(r.errors.filter((e) => e.code === "native_edit")).toEqual([]);
+  });
+});

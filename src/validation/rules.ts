@@ -379,8 +379,11 @@ export function nativeLighting(board: BoardDefinition, before: Layout, after: La
   const kept = keptDefinitions(after.passthrough);
   const out: Issue[] = [];
   for (const { native, slot, where } of newNatives(before, after)) {
+    // A layer hold lights through its tap, so the tap's steps count as much as a key's own.
     const reading = readNative(native, kept);
-    if (reading.kind !== "steps" || !reading.steps.some((step) => step.kind === "lighting")) continue;
+    if (reading.kind === "unknown") continue;
+    const steps = reading.kind === "steps" ? reading.steps : reading.tapSteps;
+    if (!steps.some((step) => step.kind === "lighting")) continue;
     const place = slot ? keyPlace(board, slot.position) : "a combo";
     out.push(issue("lighting_unsupported", `${where}: ${native.source} needs lighting, and ${board.id} has none keyloom writes`,
       `${capitalised(place)} is a light key. ${lightingRefusal(board)}`, slot ? [slot] : undefined));
