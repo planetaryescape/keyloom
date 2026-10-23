@@ -305,6 +305,82 @@ describe("validate: passthrough_layer_index with the layer numbers read (D-360)"
   });
 });
 
+describe("validate: risky_native (warning, D-451)", () => {
+  const risky = (ops: ChangeOp[], before = tiny()) => validate(tinyBoard, before, ops).warnings.filter((w) => w.code === "risky_native");
+
+  test("a new bootloader key warns in words that follow its place, and does not block the change", () => {
+    const r = validate(tinyBoard, tiny(), [set("base", 0, native("QK_BOOT"))]);
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.filter((x) => x.code === "risky_native")).toEqual([{
+      code: "risky_native",
+      message: 'layer "base", position 0: QK_BOOT would put the keyboard into its bootloader when pressed',
+      plain: "Left pinky, number row would put the keyboard into its bootloader when pressed",
+      slots: [at("base", 0)],
+    }]);
+  });
+
+  test("a new reset key and a new unpair-all key warn with their own effect", () => {
+    expect(risky([set("base", 0, native("QK_REBOOT"))]).map((w) => w.plain)).toEqual([expect.stringContaining("would restart the keyboard when pressed")]);
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&bt BT_CLR_ALL", label: "CLR_ALL" })]).map((w) => w.plain)).toEqual([expect.stringContaining("would forget every paired Bluetooth device")]);
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&bt BT_CLR", label: "CLR" })]).map((w) => w.plain)).toEqual([expect.stringContaining("would forget the Bluetooth device paired on the current profile")]);
+  });
+
+  test("a key already in the layout does not warn again when another key is edited", () => {
+    const before = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [native("QK_BOOT"), ...l.bindings.slice(1)] } : l)) });
+    expect(risky([set("base", 1, key("B"))], before)).toEqual([]);
+  });
+
+  test("an existing Boot key copied to a second position warns once, for the new position only", () => {
+    const before = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [native("QK_BOOT"), ...l.bindings.slice(1)] } : l)) });
+    const found = risky([set("base", 2, native("QK_BOOT"))], before);
+    expect(found.map((w) => w.slots)).toEqual([[at("base", 2)]]);
+  });
+
+  test("a swap that moves a Boot key to a slot that didn't hold it warns at the new slot", () => {
+    const before = tiny({ layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [native("QK_BOOT"), ...l.bindings.slice(1)] } : l)) });
+    expect(risky([{ op: "swapBindings", a: at("base", 0), b: at("base", 2) }], before).map((w) => w.slots)).toEqual([[at("base", 2)]]);
+  });
+
+  test("a new combo whose output is Boot warns, and names the combo", () => {
+    const combo = { id: "boot-combo", name: "Boot", positions: [2, 3], layerIds: "all" as const, output: native("QK_BOOT") };
+    const found = risky([{ op: "upsertCombo", combo }]);
+    expect(found.map((w) => w.plain)).toEqual(["A combo would put the keyboard into its bootloader when pressed"]);
+  });
+
+  test("a macro that does two risky things names both effects, not the first", () => {
+    const macro = `bt_both: bt_both { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&bt BT_CLR &bt BT_CLR_ALL>; };`;
+    const layout = tiny({ firmware: "zmk", passthrough: [{ firmware: "zmk", file: "keymap.keymap", anchor: "macro:bt_both", source: macro, refersToLayerIndices: false }] });
+    const board = { ...tinyBoard, firmware: "zmk" as const };
+    const found = validate(board, layout, [set("base", 0, { kind: "native", firmware: "zmk", source: "&bt_both", label: "both" })]).warnings.filter((w) => w.code === "risky_native");
+    expect(found.map((w) => w.plain)).toEqual(["Left pinky, number row would forget the Bluetooth device paired on the current profile and forget every paired Bluetooth device"]);
+  });
+
+  test("an agent-added RGB key on a board without lighting is an error, in the lighting refusal's words", () => {
+    const noLighting: BoardDefinition = { ...tinyBoard };
+    delete noLighting.lighting;
+    const r = validate(noLighting, tiny(), [set("base", 0, native("RGB_TOG"))]);
+    expect(r.ok).toBe(false);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. keyloom can't tell that the Moonlander's firmware has lighting controls, because nothing in this config uses them"]);
+  });
+
+  test("the same RGB key on a board with lighting is admitted without an error", () => {
+    expect(errorsOf([set("base", 0, native("RGB_TOG"))])).toEqual([]);
+  });
+
+  test("one-shots, caps word and lighting keys never warn", () => {
+    expect(risky([set("base", 0, native("OSM(MOD_LSFT)"))])).toEqual([]);
+    expect(risky([set("base", 0, native("CW_TOGG"))])).toEqual([]);
+    expect(risky([set("base", 0, native("RGB_TOG"))])).toEqual([]);
+    expect(risky([set("base", 0, native("RGB_MODE_REVERSE"))])).toEqual([]);
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&sk LSHFT", label: "OS" })])).toEqual([]);
+  });
+
+  test("a Bluetooth select or next key does not warn, since it forgets nothing", () => {
+    expect(risky([set("base", 0, { kind: "native", firmware: "zmk", source: "&bt BT_SEL 2", label: "BT2" })])).toEqual([]);
+  });
+});
+
 describe("validate: layer_limit", () => {
   test("32 layers on QMK", () => {
     expect(errorsOf([{ op: "renameLayer", layerId: "l0", name: "x" }], withLayers(32))).toEqual([]);
@@ -353,7 +429,13 @@ describe("validate: native_edit", () => {
   test("it can't be replaced by native source keyloom never imported, even at the same slot", () => {
     const [e] = errorsOf([set("base", 3, native("TD(DANCE_9)"))], withNative());
     expect(e).toMatchObject({ code: "native_edit", slots: [at("base", 3)] });
-    expect(codes(errorsOf([set("base", 0, native("RGB_TOG"))], withNative()))).toEqual(["native_edit"]);
+    expect(codes(errorsOf([set("base", 0, native("DUAL_FUNC_9"))], withNative()))).toEqual(["native_edit"]);
+  });
+
+  test("a native keyloom reads on the layout's own firmware can be added, as a copy translates one (D-451)", () => {
+    expect(errorsOf([set("base", 0, native("RGB_TOG"))], withNative())).toEqual([]);
+    // Another firmware's native is still refused as an edit (and as an unsupported firmware).
+    expect(codes(errorsOf([set("base", 0, { kind: "native", firmware: "zmk", source: "&caps_word", label: "CapsW" })], withNative()))).toContain("native_edit");
   });
 
   test("writing the same native binding back is not an edit", () => {
@@ -367,7 +449,7 @@ describe("validate: native_edit", () => {
   });
 
   test("a combo can't output new native source", () => {
-    const combo = { id: "c", name: "C", positions: [2, 3], layerIds: "all" as const, output: native("RGB_TOG") };
+    const combo = { id: "c", name: "C", positions: [2, 3], layerIds: "all" as const, output: native("DUAL_FUNC_9") };
     expect(codes(errorsOf([{ op: "upsertCombo", combo }]))).toEqual(["native_edit"]);
   });
 });
@@ -387,5 +469,118 @@ describe("validate: problems that were already there", () => {
     const broken = tiny();
     (broken.layers[0] as Layer).bindings[0] = { kind: "layer", action: "to", layerId: "ghost" };
     expect(codes(errorsOf([{ op: "swapBindings", a: at("base", 0), b: at("base", 1) }], broken))).toEqual(["unknown_ref"]);
+  });
+});
+
+describe("validate: a new native's layer refs and arguments (R2, R3, R4)", () => {
+  const magicKept = (tap: string) => ({
+    firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+    source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <${tap}>; };`,
+  });
+  const zmkLayout = (tap = "&rgb_ug_status_macro") => tiny({ firmware: "zmk", passthrough: [magicKept(tap)] });
+  const zmkBoard = { ...tinyBoard, firmware: "zmk" as const };
+  const zmkNative = (source: string, layerRefs?: Array<{ start: number; end: number; layerId: string }>): Binding => {
+    const binding: Binding = { kind: "native", firmware: "zmk", source, label: "x" };
+    return layerRefs ? { ...binding, layerRefs } : binding;
+  };
+  const nativeEdits = (ops: ChangeOp[], layout: Layout) => validate(zmkBoard, layout, ops).errors.filter((e) => e.code === "native_edit");
+  // "&magic " is 7 characters, so the layer parameter "1" sits at 7 to 8.
+  const hold = (source: string, refs: Array<{ start: number; end: number; layerId: string }>) => set("base", 0, zmkNative(source, refs));
+
+  test("a layer hold whose layer ref covers exactly its layer parameter is admitted (R2)", () => {
+    expect(nativeEdits([hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }])], zmkLayout())).toEqual([]);
+  });
+
+  test("a new native with layer refs that don't belong to a layer hold is a native_edit error, and the generator would rewrite nothing (R2)", () => {
+    // The CW_TOGG ref from the review: it would have emitted `0_TOGG`.
+    const cw: Binding = { kind: "native", firmware: "qmk", source: "CW_TOGG", label: "CapsW", layerRefs: [{ start: 0, end: 2, layerId: "base" }] };
+    expect(codes(validate(tinyBoard, tiny(), [set("base", 0, cw)]).errors)).toContain("native_edit");
+    // A hold with an extra ref on its tap digit is refused too: only the layer parameter's span may be rewritten.
+    expect(nativeEdits([hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }, { start: 9, end: 10, layerId: "nav" }])], zmkLayout())).toHaveLength(1);
+  });
+
+  test("a hold with more or fewer arguments than its kept node declares reads as unknown and is a native_edit error (R3)", () => {
+    expect(nativeEdits([hold("&magic 1", [{ start: 7, end: 8, layerId: "nav" }])], zmkLayout())).toHaveLength(1);
+    expect(nativeEdits([hold("&magic 1 0 JUNK", [{ start: 7, end: 8, layerId: "nav" }])], zmkLayout())).toHaveLength(1);
+  });
+
+  test("a layer hold whose tap is a bootloader warns for the tap's effect, not silently (R4)", () => {
+    const warnings = validate(zmkBoard, zmkLayout("&bootloader"), [hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }])]).warnings.filter((w) => w.code === "risky_native");
+    expect(warnings.map((w) => w.plain)).toEqual(["Left pinky, number row would put the keyboard into its bootloader when pressed"]);
+  });
+
+  test("the same hold with a harmless tap does not warn (R4)", () => {
+    const warnings = validate(zmkBoard, zmkLayout(), [hold("&magic 1 0", [{ start: 7, end: 8, layerId: "nav" }])]).warnings.filter((w) => w.code === "risky_native");
+    expect(warnings).toEqual([]);
+  });
+});
+
+describe("validate: a layer hold's lighting tap (lighting)", () => {
+  const holdWithRgbTap = () => tiny({
+    firmware: "zmk",
+    passthrough: [{
+      firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+      source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&rgb_ug RGB_TOG>; };`,
+    }],
+  });
+  const op: ChangeOp = { op: "setBinding", at: { layerId: "base", position: 0 }, binding: { kind: "native", firmware: "zmk", source: "&magic 1 0", label: "x", layerRefs: [{ start: 7, end: 8, layerId: "nav" }] } };
+
+  test("a layer hold whose tap is RGB_TOG is a lighting error on a board with no lighting", () => {
+    const noLighting: BoardDefinition = { ...tinyBoard, firmware: "zmk" };
+    delete noLighting.lighting;
+    const r = validate(noLighting, holdWithRgbTap(), [op]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toHaveLength(1);
+  });
+
+  test("the same hold is admitted on a board with lighting", () => {
+    const r = validate({ ...tinyBoard, firmware: "zmk" }, holdWithRgbTap(), [op]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toEqual([]);
+    expect(r.errors.filter((e) => e.code === "native_edit")).toEqual([]);
+  });
+});
+
+describe("validate: lighting controls admitted by evidence, not by per-key colours (L1, L2, L4)", () => {
+  const zmkBoardNoLight = (): BoardDefinition => {
+    const board: BoardDefinition = { ...tinyBoard, firmware: "zmk" };
+    delete board.lighting;
+    return board;
+  };
+  const rgb: Binding = { kind: "native", firmware: "zmk", source: "&rgb_ug RGB_TOG", label: "TOG" };
+
+  test("a layout that already holds a lighting control can move or swap it on a board with no per-key lighting (L1)", () => {
+    const before = tiny({ firmware: "zmk", layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [rgb, ...l.bindings.slice(1)] } : l)) });
+    const r = validate(zmkBoardNoLight(), before, [{ op: "swapBindings", a: at("base", 0), b: at("base", 1) }]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toEqual([]);
+  });
+
+  test("a new lighting control with nothing in the layout to prove the firmware refuses, with the controls wording (L1)", () => {
+    const r = validate(zmkBoardNoLight(), tiny({ firmware: "zmk" }), [set("base", 0, rgb)]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. keyloom can't tell that the Moonlander's firmware has lighting controls, because nothing in this config uses them"]);
+  });
+
+  test("a combo whose triggers move keeps its risky warning (L2)", () => {
+    const boot = { id: "boot-move", name: "Boot", positions: [0, 2], layerIds: "all" as const, output: native("QK_BOOT") };
+    const before = tiny({ combos: [boot] });
+    const moved = { ...boot, positions: [2, 3] };
+    const found = validate(tinyBoard, before, [{ op: "upsertCombo", combo: moved }]).warnings.filter((w) => w.code === "risky_native");
+    expect(found.map((w) => w.plain)).toEqual(["A combo would put the keyboard into its bootloader when pressed"]);
+  });
+
+  test("two identical layer refs on one layer parameter are a native_edit error, since the number would be written twice (L4)", () => {
+    const layout = tiny({ firmware: "zmk", passthrough: [{
+      firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+      source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&rgb_ug_status_macro>; };`,
+    }] });
+    const twice: Binding = { kind: "native", firmware: "zmk", source: "&magic 1 0", label: "x", layerRefs: [{ start: 7, end: 8, layerId: "nav" }, { start: 7, end: 8, layerId: "nav" }] };
+    expect(validate({ ...tinyBoard, firmware: "zmk" }, layout, [set("base", 0, twice)]).errors.filter((e) => e.code === "native_edit")).toHaveLength(1);
+  });
+
+  test("a hold's forwarded argument reaches its lighting tap, so a lighting tap is refused where the board has no lighting (L3)", () => {
+    const layout = tiny({ firmware: "zmk", passthrough: [{
+      firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+      source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&rgb_ug>; };`,
+    }] });
+    const hold: Binding = { kind: "native", firmware: "zmk", source: "&magic 1 RGB_TOG", label: "x", layerRefs: [{ start: 7, end: 8, layerId: "nav" }] };
+    expect(validate(zmkBoardNoLight(), layout, [set("base", 0, hold)]).errors.filter((e) => e.code === "lighting_unsupported")).toHaveLength(1);
   });
 });

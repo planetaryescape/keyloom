@@ -1,6 +1,7 @@
-// `native` bindings on a kanata layout (D-024). A kanata one carries its own source; QMK and ZMK ones that mean something
-// kanata has a name for are translated; the rest are refused by the generator rather than dropped.
-import type { Mod } from "../schema.ts";
+// `native` bindings on a kanata layout (D-024). A kanata one carries its own source; a QMK or ZMK one whose meaning kanata has a name
+// for (read by layout/native-read.ts) is translated; the rest are refused by the generator rather than dropped.
+import { type KeptMap, readNative } from "../native-read.ts";
+import { MOD_ORDER, type Step } from "../native-meaning.ts";
 import { modAction } from "./names.ts";
 import { GenerateError } from "./generate-error.ts";
 
@@ -31,11 +32,31 @@ function balanced(source: string): boolean {
   return depth === 0;
 }
 
-const QMK_MODS: Record<string, Mod> = { MOD_LSFT: "LSFT", MOD_LCTL: "LCTL", MOD_LALT: "LALT", MOD_LGUI: "LGUI", MOD_RSFT: "RSFT", MOD_RCTL: "RCTL", MOD_RALT: "RALT", MOD_RGUI: "RGUI" };
-const ZMK_MODS: Record<string, Mod> = { LSHFT: "LSFT", LSHIFT: "LSFT", LCTRL: "LCTL", LCTL: "LCTL", LALT: "LALT", LGUI: "LGUI", LCMD: "LGUI", RSHFT: "RSFT", RSHIFT: "RSFT", RCTRL: "RCTL", RCTL: "RCTL", RALT: "RALT", RGUI: "RGUI", RCMD: "RGUI" };
+/** The kanata action for a key's steps, or undefined when kanata has no action for them. A key with one step is the only shape kanata's one-shot and caps word take. */
+export function kanataSource(steps: readonly Step[]): string | undefined {
+  const [step] = steps;
+  if (steps.length !== 1 || step === undefined) return undefined;
+  // kanata's one-shot takes one key, a layer or a chord, so a pair of modifiers has no one-shot form and is refused (native-write.ts).
+  if (step.kind === "oneShot" && step.mods.length === 1) return `(one-shot ${ONE_SHOT_MS} ${modAction(step.mods)})`;
+  if (step.kind === "capsWord") return `(caps-word-toggle ${CAPS_WORD_MS})`;
+  return undefined;
+}
 
-/** What a native binding of any firmware becomes on kanata; throws when it can't be written. */
-export function nativeAction(firmware: "qmk" | "zmk" | "kanata", source: string, where: string): string {
+/**
+ * Whether a kanata native is one kanataSource writes: a one-shot of key names or a `(multi …)` of them, or the caps word. The
+ * validator admits these for a put's copy (D-451); any other kanata source is still refused.
+ */
+export function kanataWrittenByKeyloom(source: string): boolean {
+  if (source === `(caps-word-toggle ${CAPS_WORD_MS})`) return true;
+  return KANATA_ONE_SHOT.test(source);
+}
+
+// Only the single modifier key names modAction writes, so `(one-shot 2000 nonexistent-key)` and `(one-shot 2000 (multi …))` are not keyloom's.
+const KANATA_MOD = MOD_ORDER.map((m) => modAction([m])).join("|");
+const KANATA_ONE_SHOT = new RegExp(`^\\(one-shot ${ONE_SHOT_MS} (?:${KANATA_MOD})\\)$`);
+
+/** What a native binding of any firmware becomes on kanata; throws when it can't be written. `kept` is the layout's kept ZMK behaviours. */
+export function nativeAction(firmware: "qmk" | "zmk" | "kanata", source: string, where: string, kept: KeptMap = new Map()): string {
   const src = source.trim();
   if (firmware === "kanata") {
     const danger = dangerOf(src);
@@ -43,16 +64,8 @@ export function nativeAction(firmware: "qmk" | "zmk" | "kanata", source: string,
     if (src === "" || !balanced(src)) throw new GenerateError(`${where}: the kept kanata binding \`${src}\` has unbalanced brackets`);
     return src;
   }
-  if (firmware === "qmk") {
-    if (src === "CW_TOGG" || src === "QK_CAPS_WORD_TOGGLE") return `(caps-word-toggle ${CAPS_WORD_MS})`;
-    const osm = /^OSM\(\s*(MOD_\w+)\s*\)$/.exec(src);
-    const mod = osm?.[1] ? QMK_MODS[osm[1]] : undefined;
-    if (mod) return `(one-shot ${ONE_SHOT_MS} ${modAction([mod])})`;
-  } else {
-    if (/^&caps_word$/.test(src)) return `(caps-word-toggle ${CAPS_WORD_MS})`;
-    const sk = /^&sk\s+(\w+)$/.exec(src);
-    const mod = sk?.[1] ? ZMK_MODS[sk[1]] : undefined;
-    if (mod) return `(one-shot ${ONE_SHOT_MS} ${modAction([mod])})`;
-  }
+  const reading = readNative({ firmware, source: src }, kept);
+  const action = reading.kind === "steps" ? kanataSource(reading.steps) : undefined;
+  if (action !== undefined) return action;
   throw new GenerateError(`${where}: the ${firmware.toUpperCase()} binding \`${src}\` has no kanata equivalent keyloom knows, so it can't be written`);
 }

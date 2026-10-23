@@ -1,13 +1,19 @@
 // The rung 2 error rules (07#errors). Each takes a whole document so the same rule can run on
 // the layout before and after a change; validate.ts reports only what the change made worse.
 // Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
-import { lightingRefusal } from "../boards/capabilities.ts";
+import { lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
+import { keyPlace } from "../boards/key-names.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
+import { keptDefinitions } from "../layout/kept-behaviours.ts";
 import type { Slot } from "../layout/change.ts";
 import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
+import { admittedLayerRefs, readNative } from "../layout/native-read.ts";
+import { holdsLightingControl } from "../layout/lighting-controls.ts";
+import { kanataWrittenByKeyloom } from "../layout/kanata/natives.ts";
+import type { Step } from "../layout/native-meaning.ts";
 import type { Issue } from "./result.ts";
 import { conditionalLayerRules } from "./conditional-layer-rules.ts";
 import { holdTapOptions } from "./hold-tap-rules.ts";
@@ -273,18 +279,120 @@ const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b
  * key", which is a replacement by a different native binding. No op edits `passthrough`, so a
  * difference there can only be a bug; it is checked anyway because the cost of missing it is a
  * keymap that silently stops matching its custom C.
+ *
+ * A new native is allowed when it is the layout's own firmware and keyloom reads its meaning (native-read.ts): a shift, a
+ * caps word or a lighting key that a copy translated (D-451), or one an agent asks for. Source keyloom can't read stays refused.
  */
 export function nativeEdit(before: Layout, after: Layout): Issue[] {
-  const known = new Set<string>();
-  for (const { binding: b } of bindingsOf(before)) if (b.kind === "native") known.add(nativeKey(b));
+  const known = knownNatives(before);
+  const kept = keptDefinitions(after.passthrough);
+  // A kanata native is its own source, admitted only in the forms keyloom writes and with no layer refs to rewrite. A QMK or ZMK one is
+  // admitted when keyloom reads it and its layer refs are the ones its reading needs (admittedLayerRefs).
+  const understood = (b: Extract<Binding, { kind: "native" }>) =>
+    b.firmware === after.firmware && (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) && (b.layerRefs ?? []).length === 0 : admittedLayerRefs(b, kept));
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
-    if (b.kind === "native" && !known.has(nativeKey(b))) {
+    if (b.kind === "native" && !known.has(nativeKey(b)) && !understood(b)) {
       out.push(issue("native_edit", `${where}: ${b.source} is firmware source keyloom did not import; replace the key with a modelled binding instead`,
         `${slot ? keyOn(after, slot) : "A key"} would get custom behaviour keyloom didn't import and can't write. Use a regular key instead.`, slotOf(slot)));
     }
   }
   if (!deepEqual(before.passthrough, after.passthrough)) out.push(issue("native_edit", "a change touched a passthrough block; keyloom keeps those verbatim", "This change touches custom code that keyloom keeps exactly as it is."));
+  return out;
+}
+
+/** The native bindings a layout already has, by key, so a change that keeps one is not a new native. */
+const knownNatives = (before: Layout): Set<string> => new Set([...bindingsOf(before)].flatMap(({ binding: b }) => (b.kind === "native" ? [nativeKey(b)] : [])));
+
+/** A combo as a risky native sees it: its output, its trigger keys and the layers it works on. Moving any of them makes it new. */
+const comboSignature = (combo: Combo, output: Extract<Binding, { kind: "native" }>): string => JSON.stringify([nativeKey(output), [...combo.positions].sort((a, b) => a - b), combo.layerIds]);
+
+/**
+ * The natives a layout holds, by where they are: a key by its layer and position, a combo by its id. A native that moves to a slot that
+ * didn't hold it is new there, so it is checked again at the new place.
+ */
+function heldNatives(doc: Layout): Map<string, string> {
+  const held = new Map<string, string>();
+  for (const { binding, slot } of bindingsOf(doc)) if (binding.kind === "native" && slot !== undefined) held.set(`layer:${slot.layerId}:${slot.position}`, nativeKey(binding));
+  for (const combo of doc.combos) if (combo.output.kind === "native") held.set(`combo:${combo.id}`, comboSignature(combo, combo.output));
+  return held;
+}
+
+/** A native that is new at its place: the native, the key it is on (absent for a combo output), and where it is for the message. */
+type NewNative = { native: Extract<Binding, { kind: "native" }>; slot?: Slot; where: string };
+
+/** The natives in `after` that aren't in the same slot of `before`. */
+function newNatives(before: Layout, after: Layout): NewNative[] {
+  const held = heldNatives(before);
+  const out: NewNative[] = [];
+  for (const { binding, slot, where } of bindingsOf(after)) {
+    if (binding.kind !== "native" || slot === undefined) continue;
+    if (held.get(`layer:${slot.layerId}:${slot.position}`) !== nativeKey(binding)) out.push({ native: binding, slot, where });
+  }
+  for (const combo of after.combos) {
+    if (combo.output.kind !== "native") continue;
+    if (held.get(`combo:${combo.id}`) !== comboSignature(combo, combo.output)) out.push({ native: combo.output, where: `combo "${combo.id}"` });
+  }
+  return out;
+}
+
+const capitalised = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
+/**
+ * `risky_native` (warning, D-451): a new native that resets the keyboard or forgets Bluetooth pairings. BK's decision: "allow understood
+ * raw codes, warn on risky ones". A warning never blocks a change or a put. A key warns unless its own slot held the same native in
+ * `before`, so an existing Boot key copied to a second position warns once, for the new position. A macro that does several risky
+ * things names each distinct effect. One-shots, caps word, lighting and a Bluetooth select never warn.
+ */
+export function riskyNatives(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
+  const kept = keptDefinitions(after.passthrough);
+  const out: Issue[] = [];
+  for (const { native, slot, where } of newNatives(before, after)) {
+    const reading = readNative(native, kept);
+    // A layer hold is risky through its tap: `&magic 1 0` with a bootloader tap enters the bootloader when that tap is pressed.
+    if (reading.kind === "unknown") continue;
+    const steps = reading.kind === "steps" ? reading.steps : reading.tapSteps;
+    const effects = [...new Set(steps.flatMap((step) => riskEffect(step) ?? []))];
+    if (effects.length === 0) continue;
+    const verb = `would ${effects.join(" and ")}`;
+    const place = slot ? keyPlace(board, slot.position) : "a combo";
+    out.push(issue("risky_native", `${where}: ${native.source} ${verb}`, `${capitalised(place)} ${verb}`, slot ? [slot] : undefined));
+  }
+  return out;
+}
+
+/** What a risky step does, as the verb phrase after "would"; undefined for a step that is not risky. */
+function riskEffect(step: Step): string | undefined {
+  switch (step.kind) {
+    case "bootloader": return "put the keyboard into its bootloader when pressed";
+    case "reset": return "restart the keyboard when pressed";
+    case "bluetooth":
+      if (step.op === "clearAll") return "forget every paired Bluetooth device";
+      if (step.op === "clear") return "forget the Bluetooth device paired on the current profile";
+      return undefined;
+    default: return undefined;
+  }
+}
+
+/**
+ * A new native that drives the lights, on a board with no per-key lighting keyloom writes, is an error in the same words a colour edit
+ * gets (`lightingRefusal`). copy-plan refuses these natives for the same reason, so a copy and an agent edit agree.
+ */
+export function nativeLighting(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
+  // Per-key colours on the board, or a lighting control already in `before` (proof the firmware has them), admit any lighting key.
+  if (board.lighting !== undefined || holdsLightingControl(before)) return [];
+  const kept = keptDefinitions(after.passthrough);
+  const out: Issue[] = [];
+  for (const { native, slot, where } of newNatives(before, after)) {
+    // A layer hold lights through its tap, so the tap's steps count as much as a key's own.
+    const reading = readNative(native, kept);
+    if (reading.kind === "unknown") continue;
+    const steps = reading.kind === "steps" ? reading.steps : reading.tapSteps;
+    if (!steps.some((step) => step.kind === "lighting")) continue;
+    const place = slot ? keyPlace(board, slot.position) : "a combo";
+    out.push(issue("lighting_unsupported", `${where}: ${native.source} needs lighting controls, and nothing in this config shows that ${board.id}'s firmware has them`,
+      `${capitalised(place)} is a light key. ${lightingControlsRefusal(board)}`, slot ? [slot] : undefined));
+  }
   return out;
 }
 

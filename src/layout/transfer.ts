@@ -10,6 +10,9 @@ import { translateHoldTapProfile } from "./kanata/profiles.ts";
 import { type Hand, modsForHand } from "./mirror.ts";
 import { GenerateError } from "./kanata/generate-error.ts";
 import { macroAction } from "./kanata/macro.ts";
+import { type KeptMap, readNative } from "./native-read.ts";
+import { keptDefinitions } from "./kept-behaviours.ts";
+import { writeSteps, type TargetFacts } from "./native-write.ts";
 import { NO_TAP, ownTap } from "./rewrap.ts";
 import type { Binding, Hsv, HoldTapProfile, LayerLighting, Layout, Macro, SlotAction, TapDance } from "./schema.ts";
 
@@ -33,6 +36,11 @@ export type TransferEnv = {
    * settings, instead of getting a profile built for the hand. Absent for a copy of some keys onto a layout that has its own profiles.
    */
   keepProfiles?: boolean;
+  /**
+   * What the target board can do, for natives whose meaning it may or may not write (lighting keys, Bluetooth). Absent, the target
+   * has no lighting keyloom writes and Bluetooth only when it runs ZMK.
+   */
+  targetFacts?: TargetFacts;
 };
 
 export type Transferred = { binding: Binding } | { skip: string };
@@ -52,11 +60,15 @@ export class BindingTransfer {
   private readonly profiles: HoldTapProfile[];
   /** Profiles made in this copy, by hand: the second home-row key on a hand shares the first's profile instead of getting its own. */
   private readonly made = new Map<string, string>();
+  private readonly kept: KeptMap;
+  private readonly facts: TargetFacts;
 
   constructor(private readonly env: TransferEnv) {
     this.macros = [...env.target.macros];
     this.tapDances = [...env.target.tapDances];
     this.profiles = [...env.target.holdTapProfiles];
+    this.kept = keptDefinitions(env.source.passthrough);
+    this.facts = env.targetFacts ?? { board: env.target.boardId, lighting: { supported: false }, bluetooth: env.target.firmware === "zmk" };
   }
 
   /**
@@ -138,8 +150,27 @@ export class BindingTransfer {
         return { binding: { kind: "tapDance", tapDanceId: this.tapDanceFor(copy) } };
       }
       case "native":
-        return { skip: `it is ${source.label}, ${source.firmware.toUpperCase()} code that only works on its own keyboard` };
+        return this.native(source);
     }
+  }
+
+  /**
+   * A native whose meaning is known (native-read.ts) becomes what the target writes for it, or is skipped with the target's own reason.
+   * A `&magic`-style hold of a layer becomes the layer's momentary binding; its tap is not carried, and the copy says so.
+   */
+  private native(source: Extract<Binding, { kind: "native" }>): Transferred {
+    const reading = readNative(source, this.kept);
+    if (reading.kind === "unknown") return { skip: `it is ${source.label}, ${source.firmware.toUpperCase()} code that only works on its own keyboard` };
+    if (reading.kind === "holdLayer") {
+      const layerId = this.env.layers.get(reading.layerId);
+      if (layerId === undefined) return { skip: this.noLayer(reading.layerId) };
+      this.notes.push(`${source.label} holds its layer while it is held; its tap (&${reading.tap}) is not carried`);
+      return { binding: { kind: "layer", action: "momentary", layerId } };
+    }
+    const target = this.env.target.firmware;
+    const written = writeSteps(reading.steps, target, this.facts);
+    if ("why" in written) return { skip: written.why };
+    return { binding: { kind: "native", firmware: target, source: written.source, label: written.label } };
   }
 
   /** Why kanata's output can't say what the generator was asked to, or null when it can, or when the target isn't kanata. Skipping here keeps a put a set of warnings, not a validation failure. */

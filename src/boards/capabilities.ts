@@ -31,6 +31,9 @@ export function boardCapabilities(def: BoardDefinition): BoardCapabilities {
 }
 
 /** The sentence for a refused physical LED edit; it does not limit keyloom's display styling. */
+/** Why a board can't take a lighting-control key (RGB underglow or RGB matrix controls) when nothing in its layout shows the firmware has them. */
+export const lightingControlsRefusal = (def: BoardDefinition): string => `keyloom can't tell that the ${def.name}'s firmware has lighting controls, because nothing in this config uses them`;
+
 export const lightingRefusal = (def: BoardDefinition): string => `${def.name} can't show per-key hardware LED colours because ${boardCapabilities(def).lighting.because ?? DEFAULT_LIGHTING_LIMIT}.`;
 
 /** One line for the agent: what the board supports, and the reason for what it doesn't. */

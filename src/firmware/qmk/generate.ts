@@ -3,8 +3,9 @@
 // run without a filesystem.
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { RULES_KEYS } from "../../layout/firmware-options.ts";
-import type { FirmwareSetting, Layout, Passthrough } from "../../layout/schema.ts";
+import type { Binding, FirmwareSetting, Layout, Passthrough } from "../../layout/schema.ts";
 import { missingLayerNumbers, withLayerNumbers } from "../../layout/layer-refs.ts";
+import { readNative } from "../../layout/native-read.ts";
 import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { renderCombos } from "./emit-combos.ts";
 import { LIGHTING_PRELUDE, renderLighting } from "./emit-lighting.ts";
@@ -198,7 +199,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     { path: "config.h", content: `${h.join("\n")}\n` },
   ];
 
-  const rules = rulesMk(layout, combos.count, layout.tapDances.length > 0, marker !== undefined);
+  const rules = rulesMk(layout, combos.count, layout.tapDances.length > 0, marker !== undefined, usesCapsWord(layout));
   if (rules) files.push({ path: "rules.mk", content: rules });
 
   const keymapJson = passthroughIn(layout, "keymap.json")[0]?.source ?? (rev.build.modules ? `${JSON.stringify({ modules: rev.build.modules }, null, 4)}\n` : undefined);
@@ -217,7 +218,17 @@ const COMBO_YES = /^\s*COMBO_ENABLE\s*[:?]?=\s*yes\b/m;
  * are on: with COMBO_ENABLE and no key_combos[] the link fails, and with combos and no COMBO_ENABLE
  * they are silently dead. make takes the last assignment, so a correction is appended.
  */
-function rulesMk(layout: Layout, comboCount: number, hasTapDances: boolean, handsFree: boolean): string | undefined {
+/** Whether a QMK native in the layout is the caps word toggle. A key or a combo output can hold one; a tap dance slot can't. */
+function usesCapsWord(layout: Layout): boolean {
+  const bindings = [...layout.layers.flatMap((l) => l.bindings), ...layout.combos.map((c) => c.output)];
+  return bindings.some((b) => {
+    if (b.kind !== "native" || b.firmware !== "qmk") return false;
+    const reading = readNative(b, new Map());
+    return reading.kind === "steps" && reading.steps.some((step) => step.kind === "capsWord");
+  });
+}
+
+function rulesMk(layout: Layout, comboCount: number, hasTapDances: boolean, handsFree: boolean, capsWord: boolean): string | undefined {
   const source = passthroughIn(layout, "rules.mk")[0]?.source;
   let text = source === undefined ? "" : source.endsWith("\n") || source === "" ? source : `${source}\n`;
   const on = COMBO_YES.test(text);
@@ -233,6 +244,9 @@ function rulesMk(layout: Layout, comboCount: number, hasTapDances: boolean, hand
   for (const s of layout.settings) {
     if (s.firmware === "qmk" && RULES_KEYS.has(s.key)) text += `# keyloom: set on the settings page\n${s.key} = ${s.value === true || (typeof s.value === "number" && s.value !== 0) ? "yes" : "no"}\n`;
   }
+  // The caps word key does nothing unless its feature is compiled in (quantum/caps_word.c), and the settings page defaults it off, so a
+  // layout that has the key turns the feature on whatever the page says. The page then shows it on too.
+  if (capsWord) text += "# keyloom: the layout has a Caps Word key, which does nothing without the feature\nCAPS_WORD_ENABLE = yes\n";
   if (handsFree) text += `# keyloom: route raw_hid_receive through the bootloader command (handsfree.ts) and action_exec through the typing lab's recorder (typing-stream.ts)\n${WRAP_LINK_FLAG}\n${WRAP_ACTION_EXEC_FLAG}\n${NO_LTO}\n`;
   return text === "" ? undefined : text;
 }
