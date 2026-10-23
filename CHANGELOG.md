@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.54.0](https://github.com/planetaryescape/keyloom/compare/v0.53.2...v0.54.0) (2026-10-23)
+
+
+### Features
+
+* agent-made configs open themselves and the reply carries a config card ([#179](https://github.com/planetaryescape/keyloom/issues/179)) ([2058768](https://github.com/planetaryescape/keyloom/commit/205876887db651f32f36febd00a1596c4c465547))
+
+
+### Bug Fixes
+
+* bound typing-capture writes and close so a stuck transport can't hang the lab ([#182](https://github.com/planetaryescape/keyloom/issues/182)) ([b0c3ca3](https://github.com/planetaryescape/keyloom/commit/b0c3ca3e930733e312ac2337b93a0f1ddbbea056))
+* close the silent misses in layer numbers kept in firmware code ([#175](https://github.com/planetaryescape/keyloom/issues/175)) ([a863dbe](https://github.com/planetaryescape/keyloom/commit/a863dbee48648f420d63ec11689a43d9b6bcff37))
+* express the transport protocol's runtime checks in its JSON Schema ([#176](https://github.com/planetaryescape/keyloom/issues/176)) ([0df6609](https://github.com/planetaryescape/keyloom/commit/0df6609e330a839c83026034fae27ca23f6bf9b0))
+* keep lab start's JSON stderr to the error object ([#172](https://github.com/planetaryescape/keyloom/issues/172)) ([cf55ec3](https://github.com/planetaryescape/keyloom/commit/cf55ec39baaac38885d02ba668dac32fcc8483b3))
+* match doctor's permission hint to the board's own USB serial ([#171](https://github.com/planetaryescape/keyloom/issues/171)) ([d4f323c](https://github.com/planetaryescape/keyloom/commit/d4f323cbe94d776f4e8bd59e50491e126fd18aed))
+* pass model provider settings from the login shell to the desktop app's keyloom ([#181](https://github.com/planetaryescape/keyloom/issues/181)) ([dc107c3](https://github.com/planetaryescape/keyloom/commit/dc107c3fea27e1a9480f61a67ae00bbcd310957b))
+* refuse a UF2 flash while the macOS screen is locked ([#178](https://github.com/planetaryescape/keyloom/issues/178)) ([d62332e](https://github.com/planetaryescape/keyloom/commit/d62332e033f2f519419a49f5e47a59c0caeeec87))
+* report invalid_session for a write to an unknown serial session ([#169](https://github.com/planetaryescape/keyloom/issues/169)) ([aea4a9a](https://github.com/planetaryescape/keyloom/commit/aea4a9a1aacbee7620ae594da01d3085995fa859))
+* treat older recordings that lost events as incomplete ([#173](https://github.com/planetaryescape/keyloom/issues/173)) ([3f797d8](https://github.com/planetaryescape/keyloom/commit/3f797d824ace2c106920d3fe5788d783442f8a57))
+* wait for a manual flash that is still starting before shutdown closes the helper ([#177](https://github.com/planetaryescape/keyloom/issues/177)) ([ef2e8f0](https://github.com/planetaryescape/keyloom/commit/ef2e8f077815dd6e446598192c6d111e5870ebdf))
+
 ## [0.53.2](https://github.com/planetaryescape/keyloom/compare/v0.53.1...v0.53.2) (2026-10-22)
 
 
