@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.55.0](https://github.com/planetaryescape/keyloom/compare/v0.54.0...v0.55.0) (2026-10-23)
+
+
+### Features
+
+* copying a layout translates the firmware codes the new keyboard can do ([#184](https://github.com/planetaryescape/keyloom/issues/184)) ([da49da4](https://github.com/planetaryescape/keyloom/commit/da49da46a5609dd87fbcb13a9111a7b20964a761))
+
 ## [0.54.0](https://github.com/planetaryescape/keyloom/compare/v0.53.2...v0.54.0) (2026-10-23)
 
 
