@@ -479,8 +479,10 @@ describe("validate: a new native's layer refs and arguments (R2, R3, R4)", () =>
   });
   const zmkLayout = (tap = "&rgb_ug_status_macro") => tiny({ firmware: "zmk", passthrough: [magicKept(tap)] });
   const zmkBoard = { ...tinyBoard, firmware: "zmk" as const };
-  const zmkNative = (source: string, layerRefs?: Array<{ start: number; end: number; layerId: string }>): Binding =>
-    ({ kind: "native", firmware: "zmk", source, label: "x", ...(layerRefs ? { layerRefs } : {}) });
+  const zmkNative = (source: string, layerRefs?: Array<{ start: number; end: number; layerId: string }>): Binding => {
+    const binding: Binding = { kind: "native", firmware: "zmk", source, label: "x" };
+    return layerRefs ? { ...binding, layerRefs } : binding;
+  };
   const nativeEdits = (ops: ChangeOp[], layout: Layout) => validate(zmkBoard, layout, ops).errors.filter((e) => e.code === "native_edit");
   // "&magic " is 7 characters, so the layer parameter "1" sits at 7 to 8.
   const hold = (source: string, refs: Array<{ start: number; end: number; layerId: string }>) => set("base", 0, zmkNative(source, refs));

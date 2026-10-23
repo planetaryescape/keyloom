@@ -93,7 +93,7 @@ function readZmk(native: NativeSource, kept: KeptMap): Reading {
     return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
   }
   if (!takesArguments(call, def)) return { kind: "unknown" };
-  if (def.compatible === HOLD_TAP) return holdLayer(native, call, def, kept);
+  if (def.compatible === HOLD_TAP) return holdLayer(native, def, kept);
   const steps = resolveKept(call, def, kept, 1);
   return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
 }
@@ -107,14 +107,14 @@ function takesArguments(call: KeptCall, def: KeptDefinition): boolean {
  * `&magic 5 0` holds layer 5 and taps the macro. Only a hold on `&mo` is a momentary layer, and the layer is the one layerRefs names.
  * The tap's own steps come along, so a tap that does something risky (a bootloader) is named by the caller.
  */
-function holdLayer(native: NativeSource, call: KeptCall, def: KeptDefinition, kept: KeptMap): Reading {
+function holdLayer(native: NativeSource, def: KeptDefinition, kept: KeptMap): Reading {
   const [hold, tap] = def.cells;
   if (def.cells.length !== 2 || hold?.length !== 1 || tap?.length !== 1 || hold[0]?.name !== "mo" || hold[0].params.length !== 0) return { kind: "unknown" };
   const tapCall = tap[0];
   const param = paramSpan(native.source, 0);
   if (tapCall === undefined || param === undefined) return { kind: "unknown" };
   const ref = (native.layerRefs ?? []).find((r) => r.start >= param.start && r.start < param.end);
-  if (ref === undefined || call.params.length === 0) return { kind: "unknown" };
+  if (ref === undefined) return { kind: "unknown" };
   return { kind: "holdLayer", layerId: ref.layerId, tap: tapCall.name, tapSteps: resolveCall(tapCall, kept, 1) ?? [] };
 }
 
