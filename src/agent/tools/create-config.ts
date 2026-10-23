@@ -14,6 +14,6 @@ export const createConfigTool = (ports: { newConfig(input: z.infer<typeof InputS
     inputSchema: InputSchema,
     run: async (input) => {
       const made = await ports.newConfig(input);
-      return `Made the config "${made.name}" (${made.id}) on the ${made.boardName}${input.from === "this" ? ", copied from this one" : ", from the board's blank start"}. It is not on the keyboard; this conversation's config is unchanged. Tell BK it exists and that he can switch to it from the config menu and talk to you there; don't name any command.`;
+      return `Made the config "${made.name}" (${made.id}) on the ${made.boardName}${input.from === "this" ? ", copied from this one" : ", from the board's blank start"}. It is not on the keyboard; this conversation's config is unchanged. keyloom opens it for BK and shows a card for it under your reply. Tell BK it exists and offer to start changing it; don't tell him where to find it or name any command.`;
     },
   });

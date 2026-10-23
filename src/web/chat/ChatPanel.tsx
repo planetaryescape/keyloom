@@ -1,7 +1,7 @@
 import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessageSquare, MessagesSquare, Plus, ScrollText, SquarePen } from "lucide-react";
 import { Menu } from "../shell/Menu.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ApplyResponse, ChatSelection, ProposalCard } from "../../api/http.ts";
+import type { ApplyResponse, ChatPresentation, ChatSelection, ProposalCard } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
@@ -21,9 +21,12 @@ const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", codex
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { ProposalCard as ProposalCardView } from "./ProposalCard.tsx";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
+import { madeConfigs } from "../configs/agent-made-configs.ts";
+import { useConfigCards } from "../configs/useConfigCards.ts";
+import type { ConfigCards } from "./ConfigCards.tsx";
 import { useChat, type ChatDrafts } from "./useChat.ts";
 import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
-import type { Turn } from "./transcript.ts";
+import { withoutRepeats, type Turn } from "./transcript.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
 import "./chat.css";
 import "./command-bar.css";
@@ -74,6 +77,12 @@ interface Props {
   onClearCarried?: () => void;
   /** Told of every change to the thread, so a switch can carry it (D-317). */
   onTurns?: (turns: readonly Turn[]) => void;
+  /** A reply this chat sent and watched complete (never one replayed from history, a reload or another config's thread), with the thread as it now reads. */
+  onReplyCompleted?: (presentation: ChatPresentation, turns: readonly Turn[]) => void;
+  /** Opens a config from its card in a reply, carrying this thread along (D-317). */
+  onOpenConfig?: (id: string) => void;
+  /** Shows the proposals waiting on this config, from a config card's "Review". */
+  onReviewProposals?: () => void;
   /** Key changes kept on the board and not applied (D-317); sent with each message so the agent knows them. */
   drafts?: ChatDrafts;
   /** ⌘K commands (D-315): what the typed text can just do, offered above "Ask keyloom". */
@@ -84,14 +93,27 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried = null, onClearCarried, onTurns }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals }: Props) {
   const chat = useChat(token, layoutRef);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
+  // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.
+  const carried = useMemo(() => {
+    if (carriedIn === null) return null;
+    const turns = withoutRepeats(carriedIn.turns, transcript.turns);
+    return turns.length === 0 ? null : { ...carriedIn, turns };
+  }, [carriedIn, transcript.turns]);
   useEffect(() => {
     onActivity?.(streaming ? { stop: chat.stop } : null);
     return () => onActivity?.(null);
   }, [streaming, chat.stop, onActivity]);
+  // The config cards under replies that made configs; their data is read once for the whole thread.
+  const madeIds = useMemo(
+    () => [...(carried?.turns ?? []), ...transcript.turns].flatMap((turn) => (turn.kind === "assistant" ? madeConfigs(turn.presentation).map((made) => made.id) : [])),
+    [carried, transcript.turns],
+  );
+  const cardData = useConfigCards(token, madeIds, `${layoutRef}:${revisionId}`);
+  const configCards: ConfigCards | undefined = onOpenConfig === undefined ? undefined : { data: cardData, currentId: layoutRef, origin: carried?.from ?? null, onOpen: onOpenConfig, onReview: onReviewProposals ?? (() => {}) };
   const [draft, setDraft] = useState("");
   const [motionPaused, setMotionPaused] = useState(false);
   // The command rows for what's typed. Enter runs the highlighted one; a short text highlights the first command, a longer one (a
@@ -252,6 +274,13 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   }, [view, onHighlightDecision]);
 
   const empty = transcript.turns.length === 0;
+  // After the render that holds the finished reply, so what the parent carries along is the whole reply, not the one before its last words.
+  const liveCompleted = chat.liveCompleted;
+  useEffect(() => {
+    if (liveCompleted !== null) onReplyCompleted?.(liveCompleted.presentation, transcript.turns);
+    // Once per finished reply; the callback and the turns are read as they are at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveCompleted]);
   useEffect(() => {
     onTurns?.(transcript.turns);
     // The callback is the parent's setter through a ref; only the turns matter.
@@ -459,7 +488,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
               />
             ) : (
               <>
-              {carried === null ? null : <CarriedThreadView thread={carried} boardName={board.name.replace(/ keyboard \(ANSI\)$/, "")} />}
+              {carried === null ? null : <CarriedThreadView thread={carried} boardName={board.name.replace(/ keyboard \(ANSI\)$/, "")} {...(configCards === undefined ? {} : { configCards })} />}
               {transcript.turns.map((turn) =>
                 turn.kind === "user" ? (
                   <UserMessage
@@ -489,6 +518,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                     onSwitch={switchProvider}
                     compact={variant === "bar"}
                     motionPaused={motionPaused}
+                    {...(configCards === undefined ? {} : { configCards })}
                   />
                 ),
               )}

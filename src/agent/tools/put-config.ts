@@ -33,7 +33,7 @@ function describe(r: PutResult): string {
     lines.push(`Combos: ${r.combos.copied.length} copied${r.combos.skipped.length > 0 ? `; skipped: ${r.combos.skipped.map((s) => `${s.id} (${s.why})`).join("; ")}` : ""}.`);
   }
   if (r.notes.length > 0) lines.push("Notes:", ...r.notes.map((n) => `- ${n}`));
-  lines.push("Tell BK in plain words what came across and what did not, and that the proposals wait in the new config (the config menu's switcher, then its open proposals); he applies them, and putting the config on a keyboard is a separate step he takes. Then offer the choices in one line, such as: I matched keys by what they type; say if you'd rather keep positions. Don't name this tool or any command to him.");
+  lines.push("Tell BK in plain words what came across and what did not, and that the proposals are waiting to be applied on the new config; he applies them, and putting the config on a keyboard is a separate step he takes. keyloom opens the new config and shows a card for it under your reply, so don't tell him where to find it. Then offer the choices in one line, such as: I matched keys by what they type; say if you'd rather keep positions. Don't name this tool or any command to him.");
   return lines.join("\n");
 }
 

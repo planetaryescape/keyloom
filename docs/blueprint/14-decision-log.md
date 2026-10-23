@@ -1947,6 +1947,22 @@ Evidence: `test/firmware/toolchain/screen-lock.test.ts` and `test/firmware/zmk/f
 ### D-444: Refuse unknown QMK calls that receive a known layer name. (2026-10-22, stage 11 C3)
 - If kept QMK code passes a layer enum name to a function whose layer semantics keyloom does not know, a layer reorder is refused and the call's line is named. The importer cannot prove how that function uses the layer value.
 
+### D-450: Agent-made configs open themselves unless BK is editing or has moved on, and the reply carries a config card instead of directions. (2026-10-22, BK's v0.53.2)
+
+When BK asked the agent to copy a setup to another keyboard or to make a new config, the agent made the config and told him to "switch to it from the config menu", and the menu didn't list it until a reload (`docs/issues/config-menu-misses-agent-config.md`). The agent now says nothing about where it is. keyloom does the navigation.
+
+When BK watched a reply finish, the run completed and a `put_config` or `create_config` operation in it succeeded with a config reference, the page opens the last config made, through the same switch a menu pick uses. The chat thread travels with it (D-317) and the new config's proposals show as "N proposals waiting" beside the board (D-336). A config on another board opens on its own board.
+
+It does not open when BK has a key card, a combo draft, a key being placed, a swap, a quick-assign run, an unapplied or parked draft, a dialog or a staged colour change open (28: "Do not steal focus from someone typing or editing elsewhere"), when he has gone to another config while the run worked, or when the run was stopped, failed or ended incomplete. It opens a config at most once per page, and never for a reply the chat did not send in this page: history, a run found again after a reload and a thread carried in from another config are all read-only replays. Gating on "sent and watched here" is the only reliable signal, because a replay and a live reply look the same in the data once they are on screen.
+
+Every reply that made a config shows a card for each, from the operation references and `GET /api/configs`: name, board, source, open proposals, and "Open" from another config, or "Review N proposals" with "Back to <config>" once on it. If only the proposals cannot be read, the card drops the count and keeps its actions; its error wording gives no directions. The card is not stored on the turn; the typed `config_result` artifact stays unwired because nothing but the client needs this. The presentation keeps two references per operation (`chat-presentation.ts`), enough here because `put_config` records the config first.
+
+The menu and ⌘K reload their list when a turn names a config the list lacks. A card's "Open" for a config the page's list doesn't have yet reloads the list too, because selecting an unknown config left the page on its loading skeleton.
+
+Refines D-317 (the thread carried across a switch) and D-336 (a new config opens with its proposals).
+
+Evidence: `docs/issues/config-menu-misses-agent-config.md`, `docs/research/ui-audit/agent-opens-config/`.
+
 ### D-445: Shutdown closes manual flash admission before draining accepted starts. (2026-10-22, Stage 11)
 
 Refines D-421/D-422's consumer-before-helper lifetime. Register a manual flash start before checking its artifact asynchronously. Once shutdown begins, refuse new starts with `UsageError` (the editor's existing HTTP 400 `usage` code), wait for every accepted start to register its task or fail, then wait for running tasks before closing the helper. Always release pending starts, including when the artifact check throws. Admission closes for the App being shut down, not the whole process, so other Apps in the same process (a test run's) are unaffected.

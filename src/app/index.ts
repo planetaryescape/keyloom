@@ -14,6 +14,7 @@ export {
 } from "../layout/export-document.ts";
 export { type UploadInput, importUpload } from "./import-upload.ts";
 export { listRevisions } from "./history.ts";
+export { configsMadeInTurn } from "./made-configs.ts";
 export {
   type ConfigView, type ListConfigsOptions, type NewConfigInput, archiveConfig, blankDocument, deleteConfig, listConfigs, newBlankConfig, newConfig, newConfigFromImport, newConfigFromUpload, type NewBlankOutcome, renameConfig, restoreConfig, showConfig,
 } from "./configs.ts";

@@ -7,7 +7,10 @@ import { type ScriptStep, fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
 import { withoutCredentials } from "../helpers/no-credentials.ts";
 import { draft } from "../helpers/ops.ts";
-import { sendMessage } from "../../src/app/index.ts";
+import { importLayout, openApp, sendMessage } from "../../src/app/index.ts";
+import { FIXTURE_DIR } from "../helpers/board.ts";
+import { STYLE_FIXTURE } from "../helpers/zmk.ts";
+import { tempDir } from "../helpers/tmp.ts";
 import { insertConversation, insertMessage } from "../../src/persistence/conversations.ts";
 
 async function cli(args: string[], deps: Parameters<typeof runCli>[2] = {}) {
@@ -73,6 +76,30 @@ describe("keyloom chat", () => {
       expect(saved.code).toBe(0);
       expect(JSON.parse(saved.out).presentations[0].accounting).toEqual({ provider: "openrouter", model: "synthetic", usage, costUsd: 0.0123 });
     } finally { app.db.close(); }
+  });
+
+  test("a config the agent made is named with its board and id, in the table and additively in JSON", async () => {
+    const dir = tempDir();
+    const app = openApp({ dataDir: dir });
+    await importLayout(app, { board: "moergo/glove80", source: STYLE_FIXTURE, name: "my-glove80" });
+    await importLayout(app, { board: "zsa/moonlander", source: FIXTURE_DIR, name: "my-moonlander" });
+    app.db.close();
+    const steps = (): ScriptStep[] => [
+      { blocks: [{ tool: "put_config", input: { from: "my-glove80", board: "foostan/corne" } }] },
+      { blocks: [{ text: "Copied your Glove80 setup onto the Corne." }] },
+    ];
+    const table = await cli(["chat", "my-moonlander", "--message", "put my glove80 on my corne", "--format", "table", "--data-dir", dir], { model: anthropicModel(fakeAnthropic(steps()).client) });
+    expect(table.code).toBe(0);
+    expect(table.out).toMatch(/made config "my-glove80 on Corne" \(\S+\) on the Corne/);
+    expect(table.out).toContain("keyloom change list ");
+    const json = await cli(["chat", "my-moonlander", "--message", "again", "--format", "json", "--data-dir", dir], { model: anthropicModel(fakeAnthropic([
+      { blocks: [{ tool: "put_config", input: { from: "my-glove80", board: "foostan/corne", name: "second" } }] },
+      { blocks: [{ text: "Done." }] },
+    ]).client) });
+    const body = JSON.parse(json.out);
+    expect(body.configs_made).toEqual([{ id: expect.any(String), name: "second", board_id: "foostan/corne", board_name: "Corne" }]);
+    const plain = await cli(["chat", "my-moonlander", "--message", "hi", "--format", "json", "--data-dir", dir], { model: anthropicModel(fakeAnthropic([{ blocks: [{ text: "Hi." }] }]).client) });
+    expect(JSON.parse(plain.out).configs_made).toEqual([]);
   });
 
   test("the applying command from the output works", async () => {
