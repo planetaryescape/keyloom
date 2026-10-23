@@ -361,7 +361,7 @@ describe("validate: risky_native (warning, D-451)", () => {
     delete noLighting.lighting;
     const r = validate(noLighting, tiny(), [set("base", 0, native("RGB_TOG"))]);
     expect(r.ok).toBe(false);
-    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. Moonlander has no lighting controls in its firmware"]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. keyloom can't tell that the Moonlander's firmware has lighting controls, because nothing in this config uses them"]);
   });
 
   test("the same RGB key on a board with lighting is admitted without an error", () => {
@@ -555,7 +555,7 @@ describe("validate: lighting controls admitted by evidence, not by per-key colou
 
   test("a new lighting control with nothing in the layout to prove the firmware refuses, with the controls wording (L1)", () => {
     const r = validate(zmkBoardNoLight(), tiny({ firmware: "zmk" }), [set("base", 0, rgb)]);
-    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. Moonlander has no lighting controls in its firmware"]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. keyloom can't tell that the Moonlander's firmware has lighting controls, because nothing in this config uses them"]);
   });
 
   test("a combo whose triggers move keeps its risky warning (L2)", () => {
