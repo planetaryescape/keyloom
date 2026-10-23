@@ -361,7 +361,7 @@ describe("validate: risky_native (warning, D-451)", () => {
     delete noLighting.lighting;
     const r = validate(noLighting, tiny(), [set("base", 0, native("RGB_TOG"))]);
     expect(r.ok).toBe(false);
-    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual([expect.stringMatching(/^Left pinky, number row is a light key\. .*can't show per-key hardware LED colours/)]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. Moonlander has no lighting controls in its firmware"]);
   });
 
   test("the same RGB key on a board with lighting is admitted without an error", () => {
@@ -536,5 +536,51 @@ describe("validate: a layer hold's lighting tap (lighting)", () => {
     const r = validate({ ...tinyBoard, firmware: "zmk" }, holdWithRgbTap(), [op]);
     expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toEqual([]);
     expect(r.errors.filter((e) => e.code === "native_edit")).toEqual([]);
+  });
+});
+
+describe("validate: lighting controls admitted by evidence, not by per-key colours (L1, L2, L4)", () => {
+  const zmkBoardNoLight = (): BoardDefinition => {
+    const board: BoardDefinition = { ...tinyBoard, firmware: "zmk" };
+    delete board.lighting;
+    return board;
+  };
+  const rgb: Binding = { kind: "native", firmware: "zmk", source: "&rgb_ug RGB_TOG", label: "TOG" };
+
+  test("a layout that already holds a lighting control can move or swap it on a board with no per-key lighting (L1)", () => {
+    const before = tiny({ firmware: "zmk", layers: tiny().layers.map((l) => (l.id === "base" ? { ...l, bindings: [rgb, ...l.bindings.slice(1)] } : l)) });
+    const r = validate(zmkBoardNoLight(), before, [{ op: "swapBindings", a: at("base", 0), b: at("base", 1) }]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toEqual([]);
+  });
+
+  test("a new lighting control with nothing in the layout to prove the firmware refuses, with the controls wording (L1)", () => {
+    const r = validate(zmkBoardNoLight(), tiny({ firmware: "zmk" }), [set("base", 0, rgb)]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. Moonlander has no lighting controls in its firmware"]);
+  });
+
+  test("a combo whose triggers move keeps its risky warning (L2)", () => {
+    const boot = { id: "boot-move", name: "Boot", positions: [0, 2], layerIds: "all" as const, output: native("QK_BOOT") };
+    const before = tiny({ combos: [boot] });
+    const moved = { ...boot, positions: [2, 3] };
+    const found = validate(tinyBoard, before, [{ op: "upsertCombo", combo: moved }]).warnings.filter((w) => w.code === "risky_native");
+    expect(found.map((w) => w.plain)).toEqual(["A combo would put the keyboard into its bootloader when pressed"]);
+  });
+
+  test("two identical layer refs on one layer parameter are a native_edit error, since the number would be written twice (L4)", () => {
+    const layout = tiny({ firmware: "zmk", passthrough: [{
+      firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+      source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&rgb_ug_status_macro>; };`,
+    }] });
+    const twice: Binding = { kind: "native", firmware: "zmk", source: "&magic 1 0", label: "x", layerRefs: [{ start: 7, end: 8, layerId: "nav" }, { start: 7, end: 8, layerId: "nav" }] };
+    expect(validate({ ...tinyBoard, firmware: "zmk" }, layout, [set("base", 0, twice)]).errors.filter((e) => e.code === "native_edit")).toHaveLength(1);
+  });
+
+  test("a hold's forwarded argument reaches its lighting tap, so a lighting tap is refused where the board has no lighting (L3)", () => {
+    const layout = tiny({ firmware: "zmk", passthrough: [{
+      firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:magic", refersToLayerIndices: true,
+      source: `magic: magic_hold_tap { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&rgb_ug>; };`,
+    }] });
+    const hold: Binding = { kind: "native", firmware: "zmk", source: "&magic 1 RGB_TOG", label: "x", layerRefs: [{ start: 7, end: 8, layerId: "nav" }] };
+    expect(validate(zmkBoardNoLight(), layout, [set("base", 0, hold)]).errors.filter((e) => e.code === "lighting_unsupported")).toHaveLength(1);
   });
 });

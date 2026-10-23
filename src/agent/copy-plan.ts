@@ -2,14 +2,17 @@
 // (boards/correspondence), what each copied binding becomes on the target (layout/transfer), and
 // the ops that do it. The model still writes the proposal and decides what to ask BK; this is the
 // part it would get wrong by counting positions on two different boards.
+import type { BoardDefinition } from "../boards/schema.ts";
 import { keyName } from "../boards/key-names.ts";
-import { boardCapabilities, lightingRefusal } from "../boards/capabilities.ts";
+import { boardCapabilities, lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
+import { holdsLightingControl } from "../layout/lighting-controls.ts";
 import { type KeyMapping, type KeyMatch, type Strategy, mapKeys } from "../boards/correspondence.ts";
 import { keySlots } from "../boards/key-slots.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import { bindingFunctions } from "../layout/functions.ts";
 import { type LayerMatch, matchLayers } from "../layout/layer-match.ts";
 import { type Hand } from "../layout/mirror.ts";
+import type { TargetFacts } from "../layout/native-write.ts";
 import type { Binding, Layer, Layout } from "../layout/schema.ts";
 import { BindingTransfer, type TransferEnv, transferLighting } from "../layout/transfer.ts";
 import type { LayoutSnapshot } from "./ports.ts";
@@ -42,6 +45,12 @@ export const primaryTargets = (mapping: KeyMapping, minConfidence: number, inclu
     mapping.mapped.map((m) => [m.source, m.matches.filter((x) => x.confidence >= minConfidence && (includeExtra || !x.extra))] as const).filter(([, ms]) => ms.length > 0),
   );
 
+/** Per-key colours where the board has them; lighting controls where it has them, or its layout already holds one (a copy's start is blank, so usually it has none). */
+function lightingFacts(def: BoardDefinition, doc: Layout): TargetFacts["lighting"] {
+  if (def.lighting !== undefined || holdsLightingControl(doc)) return { supported: true };
+  return { supported: false, because: lightingControlsRefusal(def) };
+}
+
 export function transferEnv(from: LayoutSnapshot, to: LayoutSnapshot, layers: readonly LayerMatch[]): TransferEnv {
   const def = to.board.definition;
   const slots = keySlots(def, to.board.geometry).slots;
@@ -61,7 +70,8 @@ export function transferEnv(from: LayoutSnapshot, to: LayoutSnapshot, layers: re
     },
     triggerPositions: (hand) => [...new Set([...def.hands[hand === "left" ? "right" : "left"], ...(def.rows.thumb ?? [])])].sort((a, b) => a - b),
     // Assumed: every ZMK board here is wireless. No board definition or capability records Bluetooth, so this is the one place it's decided.
-    targetFacts: { board: def.name, lighting: boardCapabilities(def).lighting, bluetooth: to.document.firmware === "zmk" },
+    // Lighting controls need per-key hardware or evidence that the firmware has them: a key that drives the lights in the target's layout.
+    targetFacts: { board: def.name, lighting: lightingFacts(def, to.document), bluetooth: to.document.firmware === "zmk" },
   };
 }
 

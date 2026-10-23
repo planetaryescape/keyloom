@@ -1,7 +1,7 @@
 // The rung 2 error rules (07#errors). Each takes a whole document so the same rule can run on
 // the layout before and after a change; validate.ts reports only what the change made worse.
 // Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
-import { lightingRefusal } from "../boards/capabilities.ts";
+import { lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
 import { keyPlace } from "../boards/key-names.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
@@ -11,6 +11,7 @@ import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import { admittedLayerRefs, readNative } from "../layout/native-read.ts";
+import { holdsLightingControl } from "../layout/lighting-controls.ts";
 import { kanataWrittenByKeyloom } from "../layout/kanata/natives.ts";
 import type { Step } from "../layout/native-meaning.ts";
 import type { Issue } from "./result.ts";
@@ -303,14 +304,17 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
 /** The native bindings a layout already has, by key, so a change that keeps one is not a new native. */
 const knownNatives = (before: Layout): Set<string> => new Set([...bindingsOf(before)].flatMap(({ binding: b }) => (b.kind === "native" ? [nativeKey(b)] : [])));
 
+/** A combo as a risky native sees it: its output, its trigger keys and the layers it works on. Moving any of them makes it new. */
+const comboSignature = (combo: Combo): string => JSON.stringify([nativeKey(combo.output as Extract<Binding, { kind: "native" }>), [...combo.positions].sort((a, b) => a - b), combo.layerIds]);
+
 /**
- * The natives a layout holds, by where they are: a key by its layer and position, a combo output by the combo's id. A native that moves
- * to a slot that didn't hold it is new there, so it is checked again at the new place.
+ * The natives a layout holds, by where they are: a key by its layer and position, a combo by its id. A native that moves to a slot that
+ * didn't hold it is new there, so it is checked again at the new place.
  */
 function heldNatives(doc: Layout): Map<string, string> {
   const held = new Map<string, string>();
   for (const { binding, slot } of bindingsOf(doc)) if (binding.kind === "native" && slot !== undefined) held.set(`layer:${slot.layerId}:${slot.position}`, nativeKey(binding));
-  for (const combo of doc.combos) if (combo.output.kind === "native") held.set(`combo:${combo.id}`, nativeKey(combo.output));
+  for (const combo of doc.combos) if (combo.output.kind === "native") held.set(`combo:${combo.id}`, comboSignature(combo));
   return held;
 }
 
@@ -327,7 +331,7 @@ function newNatives(before: Layout, after: Layout): NewNative[] {
   }
   for (const combo of after.combos) {
     if (combo.output.kind !== "native") continue;
-    if (held.get(`combo:${combo.id}`) !== nativeKey(combo.output)) out.push({ native: combo.output, where: `combo "${combo.id}"` });
+    if (held.get(`combo:${combo.id}`) !== comboSignature(combo)) out.push({ native: combo.output, where: `combo "${combo.id}"` });
   }
   return out;
 }
@@ -375,7 +379,8 @@ function riskEffect(step: Step): string | undefined {
  * gets (`lightingRefusal`). copy-plan refuses these natives for the same reason, so a copy and an agent edit agree.
  */
 export function nativeLighting(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
-  if (board.lighting !== undefined) return [];
+  // Per-key colours on the board, or a lighting control already in `before` (proof the firmware has them), admit any lighting key.
+  if (board.lighting !== undefined || holdsLightingControl(before)) return [];
   const kept = keptDefinitions(after.passthrough);
   const out: Issue[] = [];
   for (const { native, slot, where } of newNatives(before, after)) {
@@ -385,8 +390,8 @@ export function nativeLighting(board: BoardDefinition, before: Layout, after: La
     const steps = reading.kind === "steps" ? reading.steps : reading.tapSteps;
     if (!steps.some((step) => step.kind === "lighting")) continue;
     const place = slot ? keyPlace(board, slot.position) : "a combo";
-    out.push(issue("lighting_unsupported", `${where}: ${native.source} needs lighting, and ${board.id} has none keyloom writes`,
-      `${capitalised(place)} is a light key. ${lightingRefusal(board)}`, slot ? [slot] : undefined));
+    out.push(issue("lighting_unsupported", `${where}: ${native.source} needs lighting controls, and ${board.id} has none in its firmware`,
+      `${capitalised(place)} is a light key. ${lightingControlsRefusal(board)}`, slot ? [slot] : undefined));
   }
   return out;
 }

@@ -93,7 +93,7 @@ function readZmk(native: NativeSource, kept: KeptMap): Reading {
     return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
   }
   if (!takesArguments(call, def)) return { kind: "unknown" };
-  if (def.compatible === HOLD_TAP) return holdLayer(native, def, kept);
+  if (def.compatible === HOLD_TAP) return holdLayer(native, call.params, def, kept);
   const steps = resolveKept(call, def, kept, 1);
   return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
 }
@@ -107,7 +107,7 @@ function takesArguments(call: KeptCall, def: KeptDefinition): boolean {
  * `&magic 5 0` holds layer 5 and taps the macro. Only a hold on `&mo` is a momentary layer, and the layer is the one layerRefs names.
  * The tap's own steps come along, so a tap that does something risky (a bootloader) is named by the caller.
  */
-function holdLayer(native: NativeSource, def: KeptDefinition, kept: KeptMap): Reading {
+function holdLayer(native: NativeSource, params: readonly string[], def: KeptDefinition, kept: KeptMap): Reading {
   const [hold, tap] = def.cells;
   if (def.cells.length !== 2 || hold?.length !== 1 || tap?.length !== 1 || hold[0]?.name !== "mo" || hold[0].params.length !== 0) return { kind: "unknown" };
   const tapCall = tap[0];
@@ -115,7 +115,17 @@ function holdLayer(native: NativeSource, def: KeptDefinition, kept: KeptMap): Re
   if (tapCall === undefined || param === undefined) return { kind: "unknown" };
   const ref = (native.layerRefs ?? []).find((r) => r.start >= param.start && r.start < param.end);
   if (ref === undefined) return { kind: "unknown" };
-  return { kind: "holdLayer", layerId: ref.layerId, tap: tapCall.name, tapSteps: resolveCall(tapCall, kept, 1) ?? [] };
+  return { kind: "holdLayer", layerId: ref.layerId, tap: tapCall.name, tapSteps: tapSteps(tapCall, params[1], kept) };
+}
+
+/**
+ * The tap's steps. The hold's second argument is forwarded to the tap as its parameter (`&magic 1 RGB_TOG` taps `&rgb_ug RGB_TOG`). A tap
+ * that takes no parameter reads without it, since the template's `&magic MAGIC 0` passes a placeholder to a macro tap. ZMK ignores the
+ * spare argument for a zero-argument behaviour; that is an assumption, not something read from the firmware here.
+ */
+function tapSteps(tapCall: KeptCall, forwarded: string | undefined, kept: KeptMap): readonly Step[] {
+  const withArgument = forwarded === undefined ? undefined : resolveCall({ name: tapCall.name, params: [...tapCall.params, forwarded] }, kept, 1);
+  return withArgument ?? resolveCall(tapCall, kept, 1) ?? [];
 }
 
 /**
@@ -128,7 +138,9 @@ export function admittedLayerRefs(native: NativeSource, kept: KeptMap): boolean 
   if (reading.kind === "unknown") return false;
   if (reading.kind === "steps") return refs.length === 0;
   const param = paramSpan(native.source, 0);
-  return param !== undefined && refs.length > 0 && refs.every((r) => r.start === param.start && r.end === param.end && r.layerId === reading.layerId);
+  // Exactly one ref: two identical refs would make the generator write the layer number twice (`&magic 22 0`).
+  const [only] = refs;
+  return param !== undefined && refs.length === 1 && only !== undefined && only.start === param.start && only.end === param.end && only.layerId === reading.layerId;
 }
 
 /** A kept behaviour's steps. A kept sticky key passes its parameter to `&sk`; a kept macro runs its calls in order. */
