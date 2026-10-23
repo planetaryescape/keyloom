@@ -312,10 +312,13 @@ function heldNatives(doc: Layout): Map<string, string> {
   return held;
 }
 
-/** The natives in `after` that aren't in the same slot of `before`, with where they are. */
-function newNatives(before: Layout, after: Layout): Array<{ native: Extract<Binding, { kind: "native" }>; slot?: Slot; where: string }> {
+/** A native that is new at its place: the native, the key it is on (absent for a combo output), and where it is for the message. */
+type NewNative = { native: Extract<Binding, { kind: "native" }>; slot?: Slot; where: string };
+
+/** The natives in `after` that aren't in the same slot of `before`. */
+function newNatives(before: Layout, after: Layout): NewNative[] {
   const held = heldNatives(before);
-  const out: ReturnType<typeof newNatives> = [];
+  const out: NewNative[] = [];
   for (const { binding, slot, where } of bindingsOf(after)) {
     if (binding.kind !== "native" || slot === undefined) continue;
     if (held.get(`layer:${slot.layerId}:${slot.position}`) !== nativeKey(binding)) out.push({ native: binding, slot, where });
