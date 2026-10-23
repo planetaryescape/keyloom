@@ -12,9 +12,10 @@ import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { type ZmkHandsFreeDeps, realZmkHandsFreeDeps, zmkHandsFreeHooks } from "../firmware/zmk/handsfree-flash.ts";
 import { buildZmk } from "../firmware/zmk/build.ts";
 import { buildZmkWest } from "../firmware/zmk/build-west.ts";
-import { BOOTLOADER_WAIT_MS, type FlashStep, ZMK_CHECKING_INSTRUCTION, flashUf2Drives, instructionFor } from "../firmware/zmk/flash.ts";
+import { BOOTLOADER_WAIT_MS, type FlashStep, type Uf2FlashInput, ZMK_CHECKING_INSTRUCTION, flashUf2Drives, instructionFor } from "../firmware/zmk/flash.ts";
 import { GenerateError as ZmkGenerateError, generateZmkSource } from "../firmware/zmk/generate.ts";
 import { defaultVolumeFinder, volumeFinderAt } from "../firmware/zmk/volumes.ts";
+import { screenIsLocked } from "../firmware/toolchain/screen-lock.ts";
 import type { FlashNote, FlashResult, FlashState } from "../firmware/toolchain/flash-state.ts";
 import type { LogSink } from "../firmware/toolchain/run.ts";
 import { portOfAnotherBoard } from "./zmk-ports.ts";
@@ -129,6 +130,7 @@ const qmk: FirmwareDriver = {
       return flashUf2Drives({
         artifactPath: a.artifactPath, steps: flash.steps, shape: "single", driveFileName: "firmware.uf2", log: a.log, onState: a.onState,
         findVolume: a.volumesRoot === undefined ? defaultVolumeFinder() : volumeFinderAt(a.volumesRoot),
+        screenLocked: process.platform === "darwin" ? () => screenIsLocked((line) => a.log.line(line)) : undefined,
         ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
         ...(a.signal ? { signal: a.signal } : {}),
       });
@@ -213,25 +215,33 @@ const zmk: FirmwareDriver = {
     const rev = zmkRevision(a.board.definition, a.boardRevision);
     // Without a root the real machine's mount root is used, which a test's preload refuses (test/helpers/no-real-flash.ts).
     const findVolume = a.volumesRoot === undefined ? defaultVolumeFinder() : volumeFinderAt(a.volumesRoot);
+    const screenLocked = process.platform === "darwin" ? () => screenIsLocked((line) => a.log.line(line)) : undefined;
     const handsFree = rev.flash.handsFree;
-    const hooks = handsFree
-      ? zmkHandsFreeHooks({
-          deps: realZmkHandsFreeDeps(a.handsFree?.zmk), board: a.board.definition, handsFree, steps: rev.flash.steps, buildId: a.buildId, findVolume, foreign: portOfAnotherBoard(a.board.definition.id),
-          artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))), log: (line) => a.log.line(line),
-          ...(a.lastGoodDir === undefined ? {} : {
-            loadLastGood: (half) => restoreLastGoodUf2(a.lastGoodDir as string, a.board.definition.id, half),
-            saveLastGood: (images) => promoteLastGood(join(a.lastGoodDir as string, a.board.definition.id.replace("/", "-")), images),
-          }),
-        })
-      : undefined;
-    const result = await flashUf2Drives({
+    let hooks: ReturnType<typeof zmkHandsFreeHooks> | undefined;
+    if (handsFree) {
+      const hookInput: Parameters<typeof zmkHandsFreeHooks>[0] = {
+        deps: realZmkHandsFreeDeps(a.handsFree?.zmk), board: a.board.definition, handsFree, steps: rev.flash.steps, buildId: a.buildId, findVolume, foreign: portOfAnotherBoard(a.board.definition.id),
+        artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))), log: (line) => a.log.line(line), screenLocked,
+      };
+      const lastGoodDir = a.lastGoodDir;
+      if (lastGoodDir !== undefined) {
+        hookInput.loadLastGood = (half) => restoreLastGoodUf2(lastGoodDir, a.board.definition.id, half);
+        hookInput.saveLastGood = (images) => promoteLastGood(join(lastGoodDir, a.board.definition.id.replace("/", "-")), images);
+      }
+      hooks = zmkHandsFreeHooks(hookInput);
+    }
+    // The Glove80's one file holds both halves; a west build's bundle holds one image per half.
+    const driveFileName = rev.build.kind === "zmk-moergo-template" ? "glove80.uf2" : "firmware.uf2";
+    const flashInput: Uf2FlashInput = {
       artifactPath: a.artifactPath, steps: rev.flash.steps,
-      // The Glove80's one file holds both halves; a west build's bundle holds one image per half.
-      ...(rev.build.kind === "zmk-moergo-template" ? { driveFileName: "glove80.uf2" } : { driveFileName: "firmware.uf2" }), log: a.log, onState: a.onState,
-      findVolume, ...(hooks ? { hooks } : {}),
-      ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
-      ...(a.signal ? { signal: a.signal } : {}),
-    });
+      driveFileName, log: a.log, onState: a.onState,
+      findVolume, screenLocked,
+    };
+    if (hooks) flashInput.hooks = hooks;
+    if (a.onLine) flashInput.onLine = a.onLine;
+    if (a.bootloaderWaitMs !== undefined) flashInput.bootloaderWaitMs = a.bootloaderWaitMs;
+    if (a.signal) flashInput.signal = a.signal;
+    const result = await flashUf2Drives(flashInput);
     return result;
   },
 };

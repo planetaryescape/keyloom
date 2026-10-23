@@ -155,7 +155,7 @@ test("a synchronous no-child launch keeps the CLI setup error without a cleanup 
   expect(stderr).toBe("");
   const result = cliResultSchema.parse(JSON.parse(stdout));
   expect(result.code).toBe(1);
-  expect(result.out).toBe("");
+  expect(result.out).toContain("keyloom is recording this keyboard's key presses");
   const errorLine = result.err.trim().split("\n").at(-1);
   if (!errorLine) throw new Error("CLI did not print an error document");
   const error = parseError(errorLine);

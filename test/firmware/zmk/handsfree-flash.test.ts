@@ -10,6 +10,7 @@ import { flashUf2Drives } from "../../../src/firmware/zmk/flash.ts";
 import { buildKey, halfMarker, keyInArtifact, keyInFirmware, parseSerial } from "../../../src/firmware/zmk/handsfree.ts";
 import { type HalfTarget, halfTargets, portsOfHalf, readHalf, restartHalf, zmkHandsFreeHooks } from "../../../src/firmware/zmk/handsfree-flash.ts";
 import { zmkRevision } from "../../../src/firmware/zmk/board-config.ts";
+import { SCREEN_LOCK_MESSAGE } from "../../../src/firmware/toolchain/screen-lock.ts";
 import { portOfAnotherBoard } from "../../../src/app/zmk-ports.ts";
 import * as volumes from "../../../src/firmware/zmk/volumes.ts";
 import { type FakeWorld, OLD_KEY, fakeWorld, glove80Image, serialOf, uf2Carrying } from "../../helpers/fake-zmk-halves.ts";
@@ -115,6 +116,36 @@ describe("which port is which half", () => {
     });
     expect(result).toEqual({ ok: true });
     expect(touches).toEqual([{ path: "COM12", baud: 1201 }]);
+  });
+
+  test("a lock during the hands-free boot-drive wait updates its instruction and timeout reason", async () => {
+    const right = targets.find((t) => t.half.marker === "R");
+    if (!right) throw new Error("Glove80 right half missing");
+    const instructions: string[] = [];
+    let checks = 0;
+    const result = await restartHalf({
+      deps: {
+        serial: async () => ({ list: async () => [port(serialOf(KEY, "R"), 0x16c0, 0x27d9)], touch: async () => {} }),
+        usb: async () => [], pollMs: 5, restartWaitMs: 40,
+      },
+      targets, target: right, findVolume: async () => null, log: () => {},
+      announce: (instruction) => instructions.push(instruction),
+      screenLocked: async () => ++checks > 1,
+    });
+    expect(result).toEqual({ ok: false, reason: SCREEN_LOCK_MESSAGE });
+    expect(instructions).toContain(SCREEN_LOCK_MESSAGE);
+  });
+
+  test("a lock detected immediately before the serial touch prevents the restart", async () => {
+    const right = targets.find((t) => t.half.marker === "R");
+    if (!right) throw new Error("Glove80 right half missing");
+    let touches = 0;
+    const result = await restartHalf({
+      deps: { serial: async () => ({ list: async () => [port(serialOf(KEY, "R"), 0x16c0, 0x27d9)], touch: async () => { touches++; } }), usb: async () => [] },
+      targets, target: right, findVolume: async () => null, log: () => {}, screenLocked: async () => true,
+    });
+    expect(result).toEqual({ ok: false, reason: SCREEN_LOCK_MESSAGE });
+    expect(touches).toBe(0);
   });
 
   test("a Corne half, whose IDs are unknown, takes any port with its letter and never calls an unmarked port its own", () => {

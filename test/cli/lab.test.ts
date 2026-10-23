@@ -76,6 +76,7 @@ async function cli(w: Awaited<ReturnType<typeof world>>, args: string[]): Promis
   return { code, out, err };
 }
 const json = (r: Result) => JSON.parse(r.out);
+const startedJson = (r: Result) => JSON.parse(r.out.slice(r.out.lastIndexOf('\n{\n  "schema_version"') + 1));
 
 describe("keyloom lab, end to end", () => {
   test("records, analyses, proposes, answers the agent and deletes", async () => {
@@ -83,14 +84,15 @@ describe("keyloom lab, end to end", () => {
 
     const started = await cli(w, ["lab", "start", w.layoutId, "--text", "sdsdsdsdsdsd", "--format", "json"]);
     expect(started.code).toBe(0);
-    // The notice came first, and it names what is recorded and how to delete it.
-    expect(started.err).toContain("keyloom is recording this keyboard's key presses");
-    expect(started.err).toContain("They stay on this computer, in keyloom's database.");
-    expect(started.err).not.toContain("on this Mac");
-    expect(started.err).toContain("Nothing is sent anywhere");
-    expect(started.err).toContain("keyloom lab delete");
+    // The notice is plain text on stdout ahead of the passage; the result is the only JSON document, after the last "{" line.
+    expect(JSON.parse(started.out.slice(started.out.indexOf("{")))).toMatchObject({ schema_version: 1 });
+    expect(started.out).toContain("They stay on this computer, in keyloom's database.");
+    expect(started.out).not.toContain("on this Mac");
+    expect(started.out).toContain("Nothing is sent anywhere");
+    expect(started.out).toContain("keyloom lab delete");
+    expect(started.err).toBe("");
     expect(started.out).toContain("typed:");
-    const session = json({ ...started, out: started.out.slice(started.out.indexOf("{")) });
+    const session = startedJson(started);
     // Read before the matcher: bun's toMatchObject replaces a value it matched against an asymmetric matcher.
     const id: string = session.session_id;
     expect(session).toMatchObject({ session_id: expect.stringMatching(/^typ_/), key_events: 24, ended_by: "host" });
@@ -153,7 +155,7 @@ describe("keyloom lab, end to end", () => {
   test("two analyses of one session at once leave one set of proposals, and an analysis from another version is not trusted", async () => {
     const w = await world();
     const started = await cli(w, ["lab", "start", w.layoutId, "--text", "sdsdsdsdsdsd", "--format", "json"]);
-    const id: string = json({ ...started, out: started.out.slice(started.out.indexOf("{")) }).session_id;
+    const id: string = startedJson(started).session_id;
     const both = await Promise.all([cli(w, ["lab", "analyse", id, "--format", "json"]), cli(w, ["lab", "analyse", id, "--format", "json"])]);
     expect(both.map((r) => r.code)).toEqual([0, 0]);
     const suggestions = json(both[0] as Result).suggestions.length;
@@ -171,7 +173,7 @@ describe("keyloom lab, end to end", () => {
   test("the emulator's log is not left behind: a good analysis removes it, a failed one keeps it for the person, and delete removes it too", async () => {
     const w = await world();
     const started = await cli(w, ["lab", "start", w.layoutId, "--text", "sdsdsdsdsdsd", "--format", "json"]);
-    const id: string = json({ ...started, out: started.out.slice(started.out.indexOf("{")) }).session_id;
+    const id: string = startedJson(started).session_id;
     const log = join(w.app.dataDir, "logs", `lab-${id}.log`);
     expect((await cli(w, ["lab", "analyse", id, "--format", "json"])).code).toBe(0);
     expect(existsSync(log)).toBe(false);

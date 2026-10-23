@@ -10,33 +10,52 @@ import { classify } from "../../src/cli/errors.ts";
 import { commandShiftApp } from "../helpers/command-shift.ts";
 import { tempDir } from "../helpers/tmp.ts";
 
-test("CLI emits a structured restart-required error and does not write an unexpected-bug log", async () => {
+test("CLI keeps the JSON error parseable and announces before capture", async () => {
   const { app, layoutId } = await commandShiftApp();
   try {
-    let out = "";
-    let err = "";
-    const io: Io = { out: (text) => { out += text; }, err: (text) => { err += text; }, isTTY: false };
-    const lab: LabCliDeps = {
+    for (const format of ["json", "jsonl"] as const) {
+      let out = "";
+      let err = "";
+      const events: string[] = [];
+      const io: Io = { out: (text) => { out += text; events.push("stdout"); }, err: (text) => { err += text; events.push("stderr"); }, isTTY: false };
+      const lab: LabCliDeps = {
+        terminal: { isInteractive: true, typing: async () => "" },
+        lab: {
+          startCapture: async () => {
+            expect(out).toContain("keyloom is recording this keyboard's key presses");
+            events.push("capture");
+            throw new DeviceTransportError({ code: "helper_exited", effect: "possible", retry: "never" });
+          },
+          replay: () => async () => { throw new Error("capture start must not replay"); },
+        },
+      };
+      const code = await runCli(["--data-dir", app.dataDir, "--format", format, "lab", "start", layoutId, "--text", "hello"], io, {}, undefined, undefined, lab);
+      expect(code).toBe(2);
+      expect(out).toContain("keyloom is recording this keyboard's key presses");
+      expect(JSON.parse(err.trim())).toEqual({
+        schema_version: 1,
+        error: {
+          code: "restart_required",
+          message: "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.",
+        },
+      });
+      expect(events.indexOf("stdout")).toBeLessThan(events.indexOf("capture"));
+      expect(events.indexOf("capture")).toBeLessThan(events.indexOf("stderr"));
+      expect(err).not.toContain("unexpected error");
+      expect(existsSync(join(app.dataDir, "logs"))).toBe(false);
+    }
+
+    let tableErr = "";
+    const tableIo: Io = { out: () => {}, err: (text) => { tableErr += text; }, isTTY: false };
+    await runCli(["--data-dir", app.dataDir, "--format", "table", "lab", "start", layoutId, "--text", "hello"], tableIo, {}, undefined, undefined, {
       terminal: { isInteractive: true, typing: async () => "" },
       lab: {
         startCapture: async () => { throw new DeviceTransportError({ code: "helper_exited", effect: "possible", retry: "never" }); },
         replay: () => async () => { throw new Error("capture start must not replay"); },
       },
-    };
-    const code = await runCli(["--data-dir", app.dataDir, "--format", "json", "lab", "start", layoutId, "--text", "hello"], io, {}, undefined, undefined, lab);
-    expect(code).toBe(2);
-    expect(out).toBe("");
-    expect(err).toContain("keyloom is recording this keyboard's key presses");
-    const jsonError = err.trim().split("\n").at(-1);
-    if (!jsonError) throw new Error("CLI did not print its structured error");
-    expect(JSON.parse(jsonError)).toEqual({
-      schema_version: 1,
-      error: {
-        code: "restart_required",
-        message: "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.",
-      },
     });
-    expect(err).not.toContain("unexpected error");
+    expect(tableErr).toContain("keyloom is recording this keyboard's key presses");
+    expect(tableErr).toContain("The keyboard connection has stopped responding.");
     expect(existsSync(join(app.dataDir, "logs"))).toBe(false);
   } finally { app.db.close(); }
 });

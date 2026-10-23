@@ -223,7 +223,8 @@
                 },
                 "bytes": {
                   "type": "string",
-                  "pattern": "^[A-Za-z0-9+/]{43}=$"
+                  "pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$",
+                  "contentEncoding": "base64"
                 }
               },
               "required": [
@@ -278,7 +279,8 @@
                     },
                     "bytes": {
                       "type": "string",
-                      "pattern": "^[A-Za-z0-9+/]{43}=$"
+                      "pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$",
+                      "contentEncoding": "base64"
                     }
                   },
                   "required": [
@@ -300,7 +302,11 @@
                       "type": "string",
                       "minLength": 4,
                       "maxLength": 5464,
-                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$",
+                      "contentEncoding": "base64",
+                      "x-minDecodedBytes": 1,
+                      "x-maxDecodedBytes": 4096,
+                      "x-runtime-refinement": "decoded base64 payload must contain 1 to 4096 bytes"
                     }
                   },
                   "required": [
@@ -500,7 +506,7 @@
             },
             "seq": {
               "type": "integer",
-              "minimum": 0,
+              "minimum": 1,
               "maximum": 9007199254740991
             },
             "event": {
@@ -516,7 +522,11 @@
               "type": "string",
               "minLength": 4,
               "maxLength": 5464,
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$",
+              "contentEncoding": "base64",
+              "x-minDecodedBytes": 1,
+              "x-maxDecodedBytes": 4096,
+              "x-runtime-refinement": "decoded base64 payload must contain 1 to 4096 bytes"
             }
           },
           "required": [
@@ -548,7 +558,7 @@
             },
             "seq": {
               "type": "integer",
-              "minimum": 0,
+              "minimum": 1,
               "maximum": 9007199254740991
             },
             "event": {
@@ -642,7 +652,7 @@
             },
             "seq": {
               "type": "integer",
-              "minimum": 0,
+              "minimum": 1,
               "maximum": 9007199254740991
             },
             "event": {
@@ -699,7 +709,9 @@
               "serial.touch.1200",
               "serial.touch.1201"
             ]
-          }
+          },
+          "uniqueItems": true,
+          "x-runtime-refinement": "duplicate capabilities are rejected; uniqueItems expresses this rule"
         }
       },
       "required": [
@@ -748,7 +760,10 @@
                 "const": true
               },
               "serial": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 256,
+                "x-maxUtf8Bytes": 256,
+                "x-runtime-refinement": "UTF-8 encoded string must not exceed 256 bytes"
               },
               "usagePage": {
                 "type": "number",
@@ -828,10 +843,16 @@
                 "const": true
               },
               "serial": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 256,
+                "x-maxUtf8Bytes": 256,
+                "x-runtime-refinement": "UTF-8 encoded string must not exceed 256 bytes"
               },
               "product": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 256,
+                "x-maxUtf8Bytes": 256,
+                "x-runtime-refinement": "UTF-8 encoded string must not exceed 256 bytes"
               },
               "interfaceNumber": {
                 "type": "integer",

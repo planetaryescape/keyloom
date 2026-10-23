@@ -1,2 +1,2 @@
 [test]
-preload = ["./test/helpers/no-real-flash.ts", "./test/helpers/isolate-data-dir.ts", "./test/helpers/no-paid-model.ts"]
+preload = ["./test/helpers/no-real-flash.ts", "./test/helpers/isolate-data-dir.ts", "./test/helpers/no-paid-model.ts", "./test/helpers/guard-toolchain-env.ts"]
