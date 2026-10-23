@@ -8,6 +8,6 @@ What is left:
 
 - Layouts stored before the numbers were read are read at startup (D-378, `src/app/layer-ref-backfill.ts`), as one revision each. A define that only the modelled keys use (the template's `DEFAULT`, `FACTORY_TEST`) has no kept code to renumber, so it is left as written; the keys are written by number and nothing reads it. A layout whose board is missing or whose head moved during the read is left alone and tried at the next start.
 
-Status: fixed on branch fix/layer-ref-coverage.
+Status: fixed in a863dbe (PR 175), released in v0.54.0.
 
 The importer now tracks QMK `PDF` and `set_single_default_layer`, ZMK custom layer behaviours, sticky-key bindings to layer behaviours, and layer calls inside macro bindings. Unknown QMK calls that receive a layer enum name are recorded as line-specific refusals. `test/firmware/qmk/layer-refs.test.ts` and `test/firmware/zmk/layer-refs.test.ts` cover the source cases; the D-378 backfill limitation above remains.
