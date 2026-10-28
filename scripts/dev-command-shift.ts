@@ -11,6 +11,7 @@ import { anthropicModel } from "../src/agent/anthropic-model.ts";
 import { importLayout, listLayouts, openApp } from "../src/app/index.ts";
 import { appChatBackend } from "../src/cli/chat-backend.ts";
 import { appEditorBackend } from "../src/cli/editor-backend.ts";
+import { type EditorBackend, EditorError } from "../src/server/editor-backend.ts";
 import { appLayoutSource } from "../src/cli/serve.ts";
 import { startServer } from "../src/server/start-server.ts";
 import { type ScriptStep, fakeAnthropic } from "../test/helpers/fake-anthropic.ts";
@@ -81,7 +82,10 @@ const script = Array.from({ length: 8 }, () => turn).flat();
 
 const client: Anthropic = fakeAnthropic(script).client;
 const model = anthropicModel(client);
+// The real editor backend serves build and flash routes; a demo must not reach a keyboard, so they refuse.
+const noHardware = () => Promise.reject(new EditorError(503, "demo_no_hardware", "This demo doesn't build or flash."));
+const editor = { ...appEditorBackend(app), startBuild: noHardware, startFlash: noHardware } satisfies EditorBackend;
 const server = startServer({
-  port, source: appLayoutSource(app), editor: appEditorBackend(app), chat: appChatBackend(app, { model }), token: "dev-token",
+  port, source: appLayoutSource(app), editor, chat: appChatBackend(app, { model }), token: "dev-token",
 });
 console.log(server.url);

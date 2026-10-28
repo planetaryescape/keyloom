@@ -10,6 +10,8 @@ import { anthropicModel } from "../src/agent/anthropic-model.ts";
 import { importLayout, listLayouts, openApp } from "../src/app/index.ts";
 import { appChatBackend } from "../src/cli/chat-backend.ts";
 import { appEditorBackend } from "../src/cli/editor-backend.ts";
+import { type EditorBackend, EditorError } from "../src/server/editor-backend.ts";
+import { type ConfigsBackend, ConfigsError } from "../src/server/configs-backend.ts";
 import { appConfigsBackend } from "../src/cli/configs-backend.ts";
 import { appLayoutSource } from "../src/cli/serve.ts";
 import { createSyncEngine } from "../src/app/index.ts";
@@ -36,9 +38,17 @@ const ask: ScriptStep[] = [{ blocks: [{ tool: "ask_user", input: { question: "Sh
 ], allowOther: true } }] }];
 const script = Array.from({ length: 8 }, () => (process.argv[4] === "ask" ? ask : turn)).flat();
 
+// The real editor backend serves build and flash routes; a demo must not reach a keyboard, so they refuse.
+const noHardware = () => Promise.reject(new EditorError(503, "demo_no_hardware", "This demo doesn't build or flash."));
+const editor = { ...appEditorBackend(app), startBuild: noHardware, startFlash: noHardware } satisfies EditorBackend;
+// Using a config starts a sync, which would write to a connected keyboard.
+const configs = {
+  ...appConfigsBackend(app, createSyncEngine(app)),
+  use: () => Promise.reject(new ConfigsError(409, "demo_no_hardware", "This demo doesn't put a config on a keyboard.")),
+} satisfies ConfigsBackend;
 const server = startServer({
-  port, source: appLayoutSource(app), editor: appEditorBackend(app), chat: appChatBackend(app, { model: anthropicModel(fakeAnthropic(script).client) }), token: "dev-token",
-  // The config card reads /api/configs. The engine is never started, so nothing reads or writes a keyboard.
-  configs: appConfigsBackend(app, createSyncEngine(app)),
+  port, source: appLayoutSource(app), editor, chat: appChatBackend(app, { model: anthropicModel(fakeAnthropic(script).client) }), token: "dev-token",
+  // The config card reads /api/configs. The engine is never started, and using a config refuses, so nothing reads or writes a keyboard.
+  configs,
 });
 console.log(server.url);

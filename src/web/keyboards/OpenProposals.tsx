@@ -45,6 +45,8 @@ export function OpenProposals({ proposals, layout, board, configName, firstFlash
           <p className="nb-note">Nothing is waiting. Applied and set-aside proposals are in History.</p>
         ) : (
           <div className="nb-proposal">
+            {/* Outside the keyed card, so switching options keeps the tab row, and the focus on it, mounted. */}
+            <ProposalTabs group={open} shownId={shown.changeSetId} pinnedId={pinnedId} onPin={onPin} />
             <ProposalCard
               // Each option is its own card: it reads its rows once, against the layout it was made for.
               key={shown.changeSetId}
@@ -58,7 +60,6 @@ export function OpenProposals({ proposals, layout, board, configName, firstFlash
               onAskAgain={onClose}
               onOpenRelease={onOpenRelease}
               compact
-              alternatives={<ProposalTabs group={open} shownId={shown.changeSetId} pinnedId={pinnedId} onPin={onPin} />}
             />
           </div>
         )}

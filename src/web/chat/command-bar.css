@@ -113,9 +113,9 @@
   margin-top: var(--space-1);
 }
 
-/* An option in the panel: its own surface after the reply, Apply at its foot. */
-.chat[data-variant="bar"][data-presentation="panel"] .proposal-compact.proposal-compact {
-  margin-top: var(--space-3);
+/* An option in the panel: its own surface after the reply, Apply at its foot. The surface is the group, which holds the option
+   tabs and the card, so the tabs stay mounted while each option remounts the card. */
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-bar {
   padding: var(--space-4);
   border-radius: var(--radius-md);
   background: var(--surface-2);

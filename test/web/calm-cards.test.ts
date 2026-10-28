@@ -65,11 +65,23 @@ describe("a proposal in chat", () => {
     expect(render([card("one", { tradeoffs: { gains: [], costs } })])).toContain(costs[0] as string);
   });
 
-  test("alternatives are one row of tabs above the card, and the card has its own actions after", async () => {
+  test("alternatives are one row of tabs above the card, outside it, and the card has its own actions after", async () => {
     const html = render([card("a", { proposalGroup: "g" }), card("b", { proposalGroup: "g" })]);
-    expect(await count(html, '.proposal-compact > .proposal-tabs[role="tablist"] > .proposal-tab')).toBe(2);
+    // The card is keyed by the option it shows, so tabs inside it would remount, and drop keyboard focus, on every switch.
+    expect(await count(html, '.proposal-bar > .proposal-tabs[role="tablist"] > .proposal-tab')).toBe(2);
+    expect(await count(html, ".proposal-compact .proposal-tabs")).toBe(0);
     expect(html.indexOf("proposal-tabs")).toBeLessThan(html.indexOf("proposal-title"));
     expect(await count(html, ".proposal-bar-foot .proposal-tabs")).toBe(0);
+  });
+
+  test("a proposal taken off the board offers Show it, so a lone one is never stuck off it", () => {
+    const off = renderToStaticMarkup(createElement(AssistantMessage, {
+      turn: turnOf([card("a")]), layout: fixture.document, board: fixture.board, pinnedId: null, compact: true,
+      onPreview: () => {}, onPin: () => {}, onApply: async () => {}, onRemovePriority: async () => {}, onAskAgain: () => {}, onOpenRelease: () => {}, onRetry: () => {}, onAnswer: () => {},
+    }));
+    expect(off).toContain(">Show it</button>");
+    expect(off).not.toMatch(/<button[^>]*disabled[^>]*>Not this/);
+    expect(render([card("a")])).toContain(">Not this</button>");
   });
 
   test("warnings are one line with the full text a tap away, and several fold into a count", async () => {

@@ -27,8 +27,6 @@ interface Props {
   onOpenRelease: () => void;
   /** The command bar's card: the explanation, the changes as chips, one trade-off line, the options as tabs, Apply (comp d). */
   compact?: boolean;
-  /** The tabs that switch between options, drawn where the comp puts them, beside Apply. */
-  alternatives?: React.ReactNode;
   /** The folded bar in a short window: the option's name, Not this and Apply on one line (P3 review). */
   line?: boolean;
 }
@@ -37,7 +35,7 @@ const MAX_ROWS = 6;
 
 // One alternative from the agent. The same card serves a fresh proposal, an applied one and a
 // superseded sibling, so the choice reads the same whichever you look at.
-export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, alternatives = null, line = false }: Props) {
+export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false }: Props) {
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -111,8 +109,9 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <span className="proposal-badge"><CircleSlash size={14} aria-hidden="true" />Superseded</span>
           ) : open ? (
             <>
-              <button type="button" className="bar-link" onClick={() => (confirming ? setConfirming(false) : onPin(proposal))} disabled={!pinned && !confirming}>
-                {confirming ? "Keep it" : "Not this"}
+              {/* onPin toggles: Not this takes it off the board, and Show it puts it back, so a lone proposal (no tabs) is never stuck off it. */}
+              <button type="button" className="bar-link" onClick={() => (confirming ? setConfirming(false) : onPin(proposal))}>
+                {confirming ? "Keep it" : pinned ? "Not this" : "Show it"}
               </button>
               <button
                 type="button"
@@ -154,7 +153,6 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     ) : null;
     return (
       <article className="proposal proposal-compact" data-status={proposal.status} data-pinned={pinned} aria-labelledby={titleId}>
-        {alternatives}
         <h3 id={titleId} className="proposal-title">{proposal.title}</h3>
         <p className="proposal-why">{lead}</p>
         {rows.length === 0 && costs.length === 0 ? null : (

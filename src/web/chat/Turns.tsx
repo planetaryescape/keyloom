@@ -266,6 +266,8 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
             if (shown === undefined) return null;
             return (
               <section className="proposal-group proposal-bar" key={group[0]?.changeSetId} aria-label={group.length > 1 ? `${group.length} options` : "Option"}>
+                {/* Outside the keyed card, so switching options keeps the tab row, and the focus on it, mounted. */}
+                <ProposalTabs group={group} shownId={shown.changeSetId} pinnedId={pinnedId} onPin={onPin} />
                 <ProposalCard
                   // A card reads its rows once, against the layout it was made for: each option is its own card.
                   key={shown.changeSetId}
@@ -279,7 +281,6 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                   onAskAgain={onAskAgain}
                   onOpenRelease={onOpenRelease}
                   compact
-                  alternatives={<ProposalTabs group={group} shownId={shown.changeSetId} pinnedId={pinnedId} onPin={onPin} />}
                 />
               </section>
             );
