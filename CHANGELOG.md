@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.56.0](https://github.com/planetaryescape/keyloom/compare/v0.55.0...v0.56.0) (2026-10-28)
+
+
+### Features
+
+* keyloom web starts the web app, as another name for serve ([#186](https://github.com/planetaryescape/keyloom/issues/186)) ([cbfc591](https://github.com/planetaryescape/keyloom/commit/cbfc5910718e6a319e9e8ce6cd8597c1810c2b20))
+
+
+### Bug Fixes
+
+* let the board's shadow fade past the stage when the board fits ([#188](https://github.com/planetaryescape/keyloom/issues/188)) ([ef5643f](https://github.com/planetaryescape/keyloom/commit/ef5643f720df1cdd52a34513a772701cf3b74b96))
+
 ## [0.55.0](https://github.com/planetaryescape/keyloom/compare/v0.54.0...v0.55.0) (2026-10-23)
 
 
