@@ -57,6 +57,9 @@ export function resolveLayerRefs(input: ResolveInput): Map<string, Resolved> {
       usedAsLayer.set(a.text, [...(usedAsLayer.get(a.text) ?? []), a]);
     } else refuse(a.site, a.line);
   }
+  // A use of the name gets one ref, however many identical definitions of the name there are (legal C): two refs on one span would
+  // be written twice.
+  const nameRefs = new Set<string>();
   for (const d of input.defines) {
     const named = usedAsLayer.get(d.name);
     if (named === undefined) continue;
@@ -65,7 +68,12 @@ export function resolveLayerRefs(input: ResolveInput): Map<string, Resolved> {
     if (others.length === 0 && layerId !== undefined) {
       ref(d.site, d.start, d.end, d.value, d.line);
       // A kept use of the name keeps the name: the define is the number, and renumbering writes the define, not the use (D-360).
-      for (const a of named) if (a.site !== "") at(a.site).layerRefs.push({ start: a.start, end: a.start + a.text.length, layerId });
+      for (const a of named) {
+        const key = `${a.site}:${a.start}`;
+        if (a.site === "" || nameRefs.has(key)) continue;
+        nameRefs.add(key);
+        at(a.site).layerRefs.push({ start: a.start, end: a.start + a.text.length, layerId });
+      }
     } else {
       // The number is also something else, or no layer has it, so it can't follow the layer it names: every use of it is refused.
       for (const u of others) refuse(u.site, u.line);

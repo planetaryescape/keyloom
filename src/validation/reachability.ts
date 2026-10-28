@@ -44,9 +44,9 @@ const ZMK_LAYER_BEHAVIORS: Record<string, LayerAction> = { mo: "momentary", lt: 
 /** A layer index, written as a number or as a name `#define`d to one in a kept block (the template's `#define LOWER 1`). */
 function zmkLayerIndex(param: string | undefined, doc: Layout): number | undefined {
   if (param === undefined) return undefined;
-  if (/^\d+$/.test(param)) return Number(param);
+  if (/^(?:\d+|0[xX][0-9a-fA-F]+)$/.test(param)) return Number(param);
   if (!/^\w+$/.test(param)) return undefined;
-  const value = doc.passthrough.map((p) => new RegExp(`^\\s*#define\\s+${param}\\s+(\\d+)\\s*$`, "m").exec(p.source)?.[1]).find((v) => v !== undefined);
+  const value = doc.passthrough.map((p) => new RegExp(`^\\s*#define\\s+${param}\\s+((?:\\d+|0[xX][0-9a-fA-F]+))\\s*$`, "m").exec(p.source)?.[1]).find((v) => v !== undefined);
   return value === undefined ? undefined : Number(value);
 }
 

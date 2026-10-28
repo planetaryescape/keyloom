@@ -105,6 +105,22 @@ describe("a #define used as a layer in a kept key (MoErgo's `&magic MAGIC 0`)", 
     expect(found.get("d")?.layerRefs).toHaveLength(1);
   });
 
+  test("identical duplicate defines give a key one ref, and each define its own", async () => {
+    const found = await readZmkLayerRefs([
+      { site: "d1", source: "#define MAGIC 2", kind: "define" },
+      { site: "d2", source: "#define MAGIC 2", kind: "define" },
+      { site: "k", source: "&magic MAGIC 0", kind: "binding" },
+    ], { layerIds: ids, layerBehaviours: new Map(), keymapCalls: [], defines: new Map([["MAGIC", "2"]]) });
+    expect(found.get("k")?.layerRefs).toEqual([{ start: 7, end: 12, layerId: "l2" }]);
+    expect(found.get("d1")?.layerRefs).toEqual([{ start: 14, end: 15, layerId: "l2" }]);
+    expect(found.get("d2")?.layerRefs).toEqual([{ start: 14, end: 15, layerId: "l2" }]);
+  });
+
+  test("a hex define follows its layer: the number is rewritten, the name is not", async () => {
+    const found = await resolve(sites("#define MAGIC 0x2", "&magic MAGIC 0"));
+    expect(renumber("#define MAGIC 0x2", found.get("d")?.layerRefs, ["l2", "l0", "l1"])).toBe("#define MAGIC 0");
+  });
+
   test("a define that is also used for something else is refused on the key too, and the key gets no ref", async () => {
     const found = await readZmkLayerRefs([
       { site: "d", source: "#define MAGIC 2", kind: "define" },

@@ -173,7 +173,27 @@ describe("reading a native binding", () => {
     const reset = pass("macro:reset_tap", `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &bootloader>; };`);
     expect(readNative(zmk("&reset_tap"), kept([reset]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
     const pressed = pass("macro:press_reset", `press_reset: press_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_press &sys_reset &macro_release &macro_pause_for_release &bt BT_CLR>; };`);
-    expect(readNative(zmk("&press_reset"), kept([pressed]))).toEqual({ kind: "steps", steps: [{ kind: "reset" }, { kind: "bluetooth", op: "clear" }] });
+    // A copy can't translate a macro that acts on press or release: the steps would be written as if they fired on press. The warning
+    // still reads them (readNative's forWarning).
+    expect(readNative(zmk("&press_reset"), kept([pressed]))).toEqual({ kind: "unknown" });
+    expect(readNative(zmk("&press_reset"), kept([pressed]), true)).toEqual({ kind: "steps", steps: [{ kind: "reset" }, { kind: "bluetooth", op: "clear" }] });
+  });
+
+  test("a release-only bootloader macro is not translated, but the warning still reads it", () => {
+    const release = pass("macro:release_boot", `release_boot: release_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_release &bootloader>; };`);
+    expect(readNative(zmk("&release_boot"), kept([release]))).toEqual({ kind: "unknown" });
+    expect(readNative(zmk("&release_boot"), kept([release]), true)).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const pause = pass("macro:pause_boot", `pause_boot: pause_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_pause_for_release &bootloader>; };`);
+    expect(readNative(zmk("&pause_boot"), kept([pause]))).toEqual({ kind: "unknown" });
+  });
+
+  test("a hex timing parameter is read past like a decimal one, and a name in its place is not", () => {
+    const hex = pass("macro:hex_wait", `hex_wait: hex_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 0x32 &macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&hex_wait"), kept([hex]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const upper = pass("macro:upper_hex_wait", `upper_hex_wait: upper_hex_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 0X32 &macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&upper_hex_wait"), kept([upper]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const named = pass("macro:named_wait", `named_wait: named_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time TAP_MS &bootloader>; };`);
+    expect(readNative(zmk("&named_wait"), kept([named]))).toEqual({ kind: "unknown" });
   });
 
   test("a macro's timing controls with one number are skipped, and any other shape of them is not", () => {
