@@ -9,6 +9,8 @@ interface Props {
   baseline: number | boolean;
   /** Written in words when the option can't do anything yet, such as Caps Word's timeout with Caps Word off. */
   blockedBy: string | null;
+  /** Why the layout forces this on whatever it stores (a Caps Word key turns Caps Word on): shown, and not editable. */
+  forced: string | null;
   changed: boolean;
   /** Changed here and not applied yet: the amber dot (D-263). */
   staged?: boolean;
@@ -29,9 +31,9 @@ const show = (spec: OptionSpec, value: number | boolean): string => {
 
 // One option: its name and default, a switch or a slider, and when to change it (D-103). Nothing is saved from here:
 // the page's footer applies every staged option as one change set.
-export function SettingRow({ spec, value, baseline, blockedBy, changed, staged = false, advanced, keptOwn, sourceText, onChange }: Props) {
+export function SettingRow({ spec, value, baseline, blockedBy, forced, changed, staged = false, advanced, keptOwn, sourceText, onChange }: Props) {
   const id = useId();
-  const dependent = blockedBy !== null || sourceText !== undefined;
+  const dependent = blockedBy !== null || sourceText !== undefined || forced !== null;
   // One line of plain words; the rest of the explanation opens on request (P4 review).
   const cut = spec.words.indexOf(". ");
   const lead = cut < 0 ? spec.words : spec.words.slice(0, cut + 1);
@@ -79,6 +81,7 @@ export function SettingRow({ spec, value, baseline, blockedBy, changed, staged =
         </details>
       )}
       {blockedBy === null ? null : <p className="setting-note">{blockedBy}</p>}
+      {forced === null ? null : <p className="setting-note">{forced}</p>}
       {sourceText === undefined ? null : <p className="setting-note">This is set to {sourceText} in your source, which the sliders can't show. Ask the chat to change it.</p>}
       {keptOwn.length === 0 ? null : (
         <p className="setting-note">

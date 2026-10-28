@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { applyOps } from "../../src/layout/apply-ops.ts";
-import { OPTIONS, baselineOf, currentValue, optionsFor, otherSettings, sourceText } from "../../src/layout/firmware-options.ts";
-import type { Layout } from "../../src/layout/schema.ts";
+import { OPTIONS, baselineOf, currentValue, forcedOn, optionsFor, otherSettings, sourceText } from "../../src/layout/firmware-options.ts";
+import type { Binding, Layout } from "../../src/layout/schema.ts";
 import { settingsChange } from "../../src/layout/settings-ops.ts";
 import { moonlander } from "../helpers/board.ts";
 import { importOryxSource } from "../../src/firmware/qmk/import.ts";
@@ -113,5 +113,41 @@ describe("the change set for edits", () => {
     const change = settingsChange(own, board, [{ spec: spec("TAPPING_TERM"), value: 190 }]);
     expect(change?.keptOwn).toEqual([{ profile: own.holdTapProfiles[0]?.name as string, label: "Tapping term" }]);
     expect(change?.ops.some((o) => o.op === "upsertHoldTapProfile")).toBe(false);
+  });
+});
+
+describe("a Caps Word key forces CAPS_WORD_ENABLE on, so the page shows on", () => {
+  // Position 45 is a base-layer key on the Moonlander fixture (the generator test uses the same one).
+  const capsAt = (base: Layout, binding: Binding): Layout => ({ ...base, layers: base.layers.map((l, i) => (i === 0 ? { ...l, bindings: l.bindings.map((b, p) => (p === 45 ? binding : b)) } : l)) });
+  const capsKey: Binding = { kind: "native", firmware: "qmk", source: "CW_TOGG", label: "CapsW" };
+  const stored = (base: Layout, value: boolean): Layout => ({ ...base, settings: [...base.settings.filter((s) => s.key !== "CAPS_WORD_ENABLE"), { firmware: "qmk", key: "CAPS_WORD_ENABLE", value }] });
+
+  test("stored off with a Caps Word key on the layout shows on, and says why", () => {
+    const withKey = stored(capsAt(layout, capsKey), false);
+    expect(currentValue(spec("CAPS_WORD_ENABLE"), withKey, board)).toBe(true);
+    expect(forcedOn(spec("CAPS_WORD_ENABLE"), withKey)).toContain("A Caps Word key on this layout turns it on");
+  });
+
+  test("without a Caps Word key the stored value stands, and nothing is forced", () => {
+    expect(currentValue(spec("CAPS_WORD_ENABLE"), stored(layout, false), board)).toBe(false);
+    expect(forcedOn(spec("CAPS_WORD_ENABLE"), stored(layout, false))).toBeNull();
+    // A one-shot is not a Caps Word key.
+    expect(forcedOn(spec("CAPS_WORD_ENABLE"), capsAt(layout, { kind: "native", firmware: "qmk", source: "OSM(MOD_LSFT)", label: "OS" }))).toBeNull();
+  });
+
+  test("a Caps Word key in a combo's output forces it on too", () => {
+    const combo: Layout = { ...layout, combos: [{ id: "c", name: "C", positions: [0, 1], layerIds: "all", output: capsKey }] };
+    expect(currentValue(spec("CAPS_WORD_ENABLE"), combo, board)).toBe(true);
+  });
+
+  test("an edit that turns it off is no op, so no off op is staged for a setting the keyboard keeps on", () => {
+    const withKey = capsAt(layout, capsKey);
+    expect(settingsChange(withKey, board, [{ spec: spec("CAPS_WORD_ENABLE"), value: false }])).toBeNull();
+    expect(settingsChange(stored(withKey, false), board, [{ spec: spec("CAPS_WORD_ENABLE"), value: false }])).toBeNull();
+  });
+
+  test("the other options still stage with a Caps Word key on the layout", () => {
+    const change = settingsChange(capsAt(layout, capsKey), board, [{ spec: spec("CAPS_WORD_ENABLE"), value: false }, { spec: spec("COMBO_TERM"), value: 40 }]);
+    expect(change?.ops).toEqual([{ op: "setFirmwareSetting", setting: { firmware: "qmk", key: "COMBO_TERM", value: 40 } }]);
   });
 });

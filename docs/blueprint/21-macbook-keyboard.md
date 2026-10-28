@@ -59,7 +59,7 @@ Rung 19's cross-board mapping ([20](20-cross-board.md)) does the work, and a put
 - **Matched by function.** Most of the typing block matches by what the keys do.
 - **No counterpart.** Thumb clusters and extra layer keys have none on a MacBook, which has two Command keys, two Option keys and one Space for both thumbs. Those come back as placement proposals among Space-hold, Caps Lock and right Option. BK picks, the way D-019's "make room" works.
 - **Combos** are translated through the mapping.
-- **What kanata or keyloom's output can't say** is left off with a reason (a macro that holds a non-modifier, a tap dance with a hold, native ZMK or QMK code), never a refusal. kanata's `tap-dance` accepts a nested `tap-hold` (checked with `kanata --check` on v1.12.0); keyloom's generator now writes it (D-383), and every carried layer is held from a key the board lists, or is left out.
+- **What kanata or keyloom's output can't say** is left off with a reason (a macro that holds a non-modifier, a tap dance with a hold, native ZMK or QMK code, a key kanata can't send on macOS such as Print Screen), never a refusal. The validator refuses the same keys set by hand (`firmware_unsupported`). kanata's `tap-dance` accepts a nested `tap-hold` (checked with `kanata --check` on v1.12.0); keyloom's generator now writes it (D-383), and every carried layer is held from a key the board lists, or is left out.
 - **Hold-tap profiles** are translated from QMK/ZMK option names to kanata's variants and timings. Nothing is dropped silently (D-024).
 
 ## Karabiner-Elements later

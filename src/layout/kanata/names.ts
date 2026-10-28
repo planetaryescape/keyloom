@@ -1,13 +1,14 @@
 // How keyloom keys, modifiers and characters are written in a kanata config (21). Names come from the generated
 // key table, whose kanata column is read from kanata's own source at a pinned SHA (scripts/gen-keycodes.ts).
-import { type KeyCode, isKeyCode, kanataName } from "../keycodes.ts";
+import { type KeyCode, isKeyCode, kanataName, keyCodeInfo } from "../keycodes.ts";
 import type { Mod } from "../schema.ts";
 import { textKeys } from "../text-keys.ts";
 import { GenerateError } from "./generate-error.ts";
 
+/** Throws GenerateError for a key kanata can't send on macOS, so every writer refuses it the same way (kanata-rules.ts, transfer.ts). */
 export function keyName(code: string): string {
   const name = isKeyCode(code) ? kanataName(code) : undefined;
-  if (name === undefined) throw new GenerateError(`${code} has no kanata key name on macOS, so kanata can't send it`);
+  if (name === undefined) throw new GenerateError(`${isKeyCode(code) ? keyCodeInfo(code).label : code} has no kanata key name on macOS, so kanata can't send it`);
   return name;
 }
 

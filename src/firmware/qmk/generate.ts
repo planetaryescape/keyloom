@@ -2,10 +2,9 @@
 // Pure: it returns text, so the same layout always gives the same bytes and the round-trip test can
 // run without a filesystem.
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { RULES_KEYS } from "../../layout/firmware-options.ts";
+import { RULES_KEYS, hasCapsWordKey } from "../../layout/firmware-options.ts";
 import type { Binding, FirmwareSetting, Layout, Passthrough } from "../../layout/schema.ts";
 import { missingLayerNumbers, withLayerNumbers } from "../../layout/layer-refs.ts";
-import { readNative } from "../../layout/native-read.ts";
 import { type EmitContext, bindingToC } from "./emit-binding.ts";
 import { renderCombos } from "./emit-combos.ts";
 import { LIGHTING_PRELUDE, renderLighting } from "./emit-lighting.ts";
@@ -199,7 +198,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     { path: "config.h", content: `${h.join("\n")}\n` },
   ];
 
-  const rules = rulesMk(layout, combos.count, layout.tapDances.length > 0, marker !== undefined, usesCapsWord(layout));
+  const rules = rulesMk(layout, combos.count, layout.tapDances.length > 0, marker !== undefined, hasCapsWordKey(layout));
   if (rules) files.push({ path: "rules.mk", content: rules });
 
   const keymapJson = passthroughIn(layout, "keymap.json")[0]?.source ?? (rev.build.modules ? `${JSON.stringify({ modules: rev.build.modules }, null, 4)}\n` : undefined);
@@ -218,16 +217,6 @@ const COMBO_YES = /^\s*COMBO_ENABLE\s*[:?]?=\s*yes\b/m;
  * are on: with COMBO_ENABLE and no key_combos[] the link fails, and with combos and no COMBO_ENABLE
  * they are silently dead. make takes the last assignment, so a correction is appended.
  */
-/** Whether a QMK native in the layout is the caps word toggle. A key or a combo output can hold one; a tap dance slot can't. */
-function usesCapsWord(layout: Layout): boolean {
-  const bindings = [...layout.layers.flatMap((l) => l.bindings), ...layout.combos.map((c) => c.output)];
-  return bindings.some((b) => {
-    if (b.kind !== "native" || b.firmware !== "qmk") return false;
-    const reading = readNative(b, new Map());
-    return reading.kind === "steps" && reading.steps.some((step) => step.kind === "capsWord");
-  });
-}
-
 function rulesMk(layout: Layout, comboCount: number, hasTapDances: boolean, handsFree: boolean, capsWord: boolean): string | undefined {
   const source = passthroughIn(layout, "rules.mk")[0]?.source;
   let text = source === undefined ? "" : source.endsWith("\n") || source === "" ? source : `${source}\n`;
