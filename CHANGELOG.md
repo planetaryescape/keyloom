@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.56.1](https://github.com/planetaryescape/keyloom/compare/v0.56.0...v0.56.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* a board can record that its firmware has lighting controls, so a copy keeps RGB keys on the Glove80 ([#190](https://github.com/planetaryescape/keyloom/issues/190)) ([e096d4f](https://github.com/planetaryescape/keyloom/commit/e096d4fff240adeb1acee167e33ecfc3f5cdec4d))
+* a copy skips Print Screen on the MacBook, and Settings shows Caps Word on when a Caps Word key turns it on ([#194](https://github.com/planetaryescape/keyloom/issues/194)) ([ae08799](https://github.com/planetaryescape/keyloom/commit/ae0879952350d1527c8a0d31bfd8439a44373b58))
+* dev servers draw the live Moonlander board with the synchronized Oryx layout ([#189](https://github.com/planetaryescape/keyloom/issues/189)) ([333c666](https://github.com/planetaryescape/keyloom/commit/333c6669d7f12a5d42d6e6c14792a3a539acf6c1))
+* read ZMK layer defines on kept keys, and see risky steps behind macro controls ([#192](https://github.com/planetaryescape/keyloom/issues/192)) ([7285c13](https://github.com/planetaryescape/keyloom/commit/7285c13d31fdabf872abf22dbb24e0ec877f7c7e))
+
 ## [0.56.0](https://github.com/planetaryescape/keyloom/compare/v0.55.0...v0.56.0) (2026-10-28)
 
 
