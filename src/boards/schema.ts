@@ -88,6 +88,9 @@ export const BoardDefinitionSchema = z.strictObject({
   // Why the board lacks something people ask for, in one sentence they can read (20#capabilities). The agent and the validator quote it
   // instead of offering what the board cannot do. Only `lighting` for now: it is absent exactly when `lighting` above is.
   limits: z.strictObject({ lighting: z.string().min(1) }).optional(),
+  // The firmware has lighting control keys (QMK `RGB_*`, ZMK `&rgb_ug …`) even though keyloom writes no per-key colours for it, such as the
+  // Glove80's underglow. It admits those keys with no layout evidence (D-453). Absent means no evidence; a derived board never sets it.
+  lightingControls: z.boolean().optional(),
   // Where this board differs from the firmware's own default for a setting on the settings page, such as mouse keys on a Moonlander.
   settingDefaults: z.record(z.string(), z.union([z.number(), z.boolean()])).optional(),
   // Display-only rotation; never affects positions or generation (04).

@@ -558,6 +558,23 @@ describe("validate: lighting controls admitted by evidence, not by per-key colou
     expect(r.errors.filter((e) => e.code === "lighting_unsupported").map((e) => e.plain)).toEqual(["Left pinky, number row is a light key. keyloom can't tell that the Moonlander's firmware has lighting controls, because nothing in this config uses them"]);
   });
 
+  test("a board that records lighting controls admits a new lighting key with nothing in the layout (D-453)", () => {
+    const board = { ...zmkBoardNoLight(), lightingControls: true };
+    expect(validate(board, tiny({ firmware: "zmk" }), [set("base", 0, rgb)]).errors.filter((e) => e.code === "lighting_unsupported")).toEqual([]);
+  });
+
+  test("the fact is false, or absent, refuses as before (D-453)", () => {
+    for (const board of [{ ...zmkBoardNoLight(), lightingControls: false }, zmkBoardNoLight()]) {
+      expect(validate(board, tiny({ firmware: "zmk" }), [set("base", 0, rgb)]).errors.filter((e) => e.code === "lighting_unsupported")).toHaveLength(1);
+    }
+  });
+
+  test("the fact admits lighting keys only: per-key colours stay refused on that board (D-453, D-190)", () => {
+    const board = { ...zmkBoardNoLight(), lightingControls: true };
+    const r = validate(board, tiny({ firmware: "zmk" }), [{ op: "setLayerLighting", layerId: "base", lighting: { layer: [10, 255, 255] } }]);
+    expect(r.errors.filter((e) => e.code === "lighting_unsupported")).toHaveLength(1);
+  });
+
   test("a combo whose triggers move keeps its risky warning (L2)", () => {
     const boot = { id: "boot-move", name: "Boot", positions: [0, 2], layerIds: "all" as const, output: native("QK_BOOT") };
     const before = tiny({ combos: [boot] });

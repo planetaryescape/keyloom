@@ -4,8 +4,7 @@
 // part it would get wrong by counting positions on two different boards.
 import type { BoardDefinition } from "../boards/schema.ts";
 import { keyName } from "../boards/key-names.ts";
-import { boardCapabilities, lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
-import { holdsLightingControl } from "../layout/lighting-controls.ts";
+import { boardCapabilities, hasLightingControls, lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
 import { type KeyMapping, type KeyMatch, type Strategy, mapKeys } from "../boards/correspondence.ts";
 import { keySlots } from "../boards/key-slots.ts";
 import type { ChangeOp } from "../layout/change.ts";
@@ -47,7 +46,7 @@ export const primaryTargets = (mapping: KeyMapping, minConfidence: number, inclu
 
 /** Per-key colours where the board has them; lighting controls where it has them, or its layout already holds one (a copy's start is blank, so usually it has none). */
 function lightingFacts(def: BoardDefinition, doc: Layout): TargetFacts["lighting"] {
-  if (def.lighting !== undefined || holdsLightingControl(doc)) return { supported: true };
+  if (hasLightingControls(def, doc)) return { supported: true };
   return { supported: false, because: lightingControlsRefusal(def) };
 }
 

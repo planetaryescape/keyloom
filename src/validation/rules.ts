@@ -1,7 +1,7 @@
 // The rung 2 error rules (07#errors). Each takes a whole document so the same rule can run on
 // the layout before and after a change; validate.ts reports only what the change made worse.
 // Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
-import { lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
+import { hasLightingControls, lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
 import { keyPlace } from "../boards/key-names.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
@@ -11,7 +11,6 @@ import { isKeyCode, keyCodeInfo } from "../layout/keycodes.ts";
 import type { Binding, Combo, LayerRef, Layout, Mod } from "../layout/schema.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import { admittedLayerRefs, readNative } from "../layout/native-read.ts";
-import { holdsLightingControl } from "../layout/lighting-controls.ts";
 import { kanataWrittenByKeyloom } from "../layout/kanata/natives.ts";
 import type { Step } from "../layout/native-meaning.ts";
 import type { Issue } from "./result.ts";
@@ -379,8 +378,8 @@ function riskEffect(step: Step): string | undefined {
  * gets (`lightingRefusal`). copy-plan refuses these natives for the same reason, so a copy and an agent edit agree.
  */
 export function nativeLighting(board: BoardDefinition, before: Layout, after: Layout): Issue[] {
-  // Per-key colours on the board, or a lighting control already in `before` (proof the firmware has them), admit any lighting key.
-  if (board.lighting !== undefined || holdsLightingControl(before)) return [];
+  // Per-key LEDs, the board's own record, or a lighting control already in `before` (proof the firmware has them), admit any lighting key.
+  if (hasLightingControls(board, before)) return [];
   const kept = keptDefinitions(after.passthrough);
   const out: Issue[] = [];
   for (const { native, slot, where } of newNatives(before, after)) {
