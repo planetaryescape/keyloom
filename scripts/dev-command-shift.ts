@@ -25,6 +25,14 @@ if (listLayouts(app).length === 0) await importLayout(app, { board: "zsa/moonlan
 
 const at = (position: number) => ({ layerId: "layer-0", position });
 const cmdShift = { kind: "modifier", mods: ["LGUI", "LSFT"] };
+// propose_changes requires a decisionDraft on every alternative (src/agent/tools/propose-changes.ts); the
+// script predates it, so its input failed the tool's schema and nothing was saved.
+const decisionDraft = (choice: string, reason: string) => ({
+  goal: "A Command–Shift key I can press with my left pinky",
+  choice,
+  reason,
+  scope: { apps: [], habits: ["Command–Shift shortcuts with the left hand"] },
+});
 const alternatives = [
   {
     title: "Command–Shift where Tab is",
@@ -35,6 +43,7 @@ const alternatives = [
     ],
     explanation: "Command–Shift takes the Tab key under your left pinky. Tab is still on your left thumb, and X, C and V each move one place left to close the gap.",
     tradeoffs: { gains: ["Command–Shift under the pinky, next to Z", "Backspace and the home row stay put"], costs: ["Cut, copy and paste each move one key", "Tab is on the thumb only"] },
+    decisionDraft: decisionDraft("Command–Shift where Tab is, with X, C and V each one place left", "It loses nothing you use and keeps Backspace where it is."),
   },
   {
     title: "Command–Shift on the F16 key",
@@ -44,6 +53,7 @@ const alternatives = [
     ],
     explanation: "The F16 key on the top row is free to give up. Command–Shift goes there, which is a stretch from the home row.",
     tradeoffs: { gains: ["Nothing you use moves"], costs: ["The key is a long reach from the home row", "F16 is gone"] },
+    decisionDraft: decisionDraft("Command–Shift on the F16 key", "You barely use F16, so nothing you use moves."),
   },
   {
     title: "Command–Shift on Backspace",
@@ -53,6 +63,7 @@ const alternatives = [
     ],
     explanation: "The best position for the pinky, but it takes Backspace's place and pushes Backspace down a row.",
     tradeoffs: { gains: ["The easiest key to reach"], costs: ["Backspace moves, which you asked me to keep where it is"] },
+    decisionDraft: decisionDraft("Command–Shift on Backspace, with Backspace one row down", "It is the easiest key to reach."),
   },
 ];
 
