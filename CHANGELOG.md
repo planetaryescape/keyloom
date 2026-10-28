@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.58.0](https://github.com/planetaryescape/keyloom/compare/v0.57.0...v0.58.0) (2026-10-28)
+
+
+### Features
+
+* calmer result cards, a one-click cost footer and a neutral question card ([#193](https://github.com/planetaryescape/keyloom/issues/193)) ([e2f7194](https://github.com/planetaryescape/keyloom/commit/e2f7194e786b344b5f0b6b158db2878a53145311))
+
 ## [0.57.0](https://github.com/planetaryescape/keyloom/compare/v0.56.1...v0.57.0) (2026-10-28)
 
 
