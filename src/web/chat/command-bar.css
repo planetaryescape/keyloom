@@ -113,9 +113,9 @@
   margin-top: var(--space-1);
 }
 
-/* An option in the panel: its own surface after the reply, Apply at its foot. */
-.chat[data-variant="bar"][data-presentation="panel"] .proposal-compact.proposal-compact {
-  margin-top: var(--space-3);
+/* An option in the panel: its own surface after the reply, Apply at its foot. The surface is the group, which holds the option
+   tabs and the card, so the tabs stay mounted while each option remounts the card. */
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-bar {
   padding: var(--space-4);
   border-radius: var(--radius-md);
   background: var(--surface-2);
@@ -953,6 +953,128 @@
 
 .proposal-compact .proposal-why strong {
   font-weight: var(--weight-semibold);
+}
+
+/* A proposal says what changes and what it costs in a line or two; the keys and the reasoning are behind Details (D-456's sibling for cards, 28). */
+.proposal-compact {
+  gap: var(--space-2);
+}
+
+.proposal-compact .proposal-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.proposal-compact > .proposal-tabs {
+  margin-bottom: var(--space-3);
+}
+
+.proposal-facts {
+  display: flex;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.proposal-facts strong {
+  flex: none;
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+/* A long cost (a copy's list of keys left off) is cut at two lines; Details has all of it. */
+.proposal-cost {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.proposal-notes {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+}
+
+.proposal-notes-toggle,
+.proposal-details-toggle {
+  display: inline-flex;
+  min-height: 32px;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.proposal-notes-toggle {
+  color: var(--pending-ink);
+}
+
+.proposal-notes[data-tone="error"] .proposal-notes-toggle {
+  color: var(--bad-ink);
+}
+
+.proposal-notes-toggle svg {
+  flex: none;
+}
+
+.proposal-notes-toggle span[data-open="false"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proposal-notes ul {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--ink-2);
+}
+
+.proposal-details {
+  margin-top: var(--space-1);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.proposal-details-toggle:hover,
+.proposal-notes-toggle:hover {
+  color: var(--ink);
+}
+
+.proposal-details-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.proposal-details h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.proposal-details p {
+  margin: var(--space-2) 0 0;
+}
+
+.proposal-details ul:not(.proposal-chips) {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.proposal-details .proposal-chips {
+  flex-wrap: wrap;
+  overflow: visible;
+  mask-image: none;
 }
 
 /* The folded bar: one row. */

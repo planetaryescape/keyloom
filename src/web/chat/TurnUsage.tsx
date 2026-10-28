@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import type { ChatAccounting } from "../../api/http.ts";
 
 /** Only the exact Opus 5.5 IDs whose list prices evals/provider.ts uses. Never infer a model. */
@@ -12,8 +13,10 @@ function dollars(cost: number): string {
   return cost > 0 && cost < 0.0001 ? "<$0.0001" : `$${cost.toFixed(4)}`;
 }
 
-/** Quiet, visible facts below each reply, including legacy and interrupted turns. */
+/** The dollar figure below each reply, with the tokens and how the figure was reached one click away (D-456); legacy and interrupted turns say what was not reported. */
 export function TurnUsage({ accounting }: { accounting: ChatAccounting | undefined }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
   const usage = accounting?.usage;
   // Adapters initialise missing usage to zero (notably a Codex turn stopped to ask a question).
   const hasTokens = usage !== undefined && (usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheCreationTokens) > 0;
@@ -25,5 +28,12 @@ export function TurnUsage({ accounting }: { accounting: ChatAccounting | undefin
     ...(usage.cacheReadTokens > 0 ? [`${usage.cacheReadTokens.toLocaleString("en-US")} cache read`] : []),
     ...(usage.cacheCreationTokens > 0 ? [`${usage.cacheCreationTokens.toLocaleString("en-US")} cache write`] : []),
   ].join(" · ") + " tokens" : "Token usage not reported";
-  return <p className="msg-usage"><span className="sr-only">Turn usage and cost: </span>{tokens}{" "}<span>{costText}</span></p>;
+  // At rest only the dollars; "reported" or "estimated" is in the expanded text, so an unknown cost never reads as a number.
+  const atRest = cost !== undefined ? dollars(cost) : estimate !== undefined ? dollars(estimate) : "Cost not reported";
+  return (
+    <div className="msg-usage">
+      <button type="button" className="msg-usage-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>{atRest}</button>
+      <p id={panelId} hidden={!open}><span className="sr-only">Turn usage and cost: </span>{tokens}{" "}<span>{costText}</span></p>
+    </div>
+  );
 }

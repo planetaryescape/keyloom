@@ -9,6 +9,7 @@ import { QuestionCard } from "./QuestionCard.tsx";
 import { PriorityChips } from "./PriorityChips.tsx";
 import { ProposalCompare } from "./ProposalCompare.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
+import { ProposalTabs } from "./ProposalTabs.tsx";
 import { keyLabel, layerName, optionLabels } from "./proposal-facts.ts";
 import type { AssistantTurn, ConfirmationCard, OutcomeCard, UserTurn } from "./transcript.ts";
 import { AgentWorking } from "./AgentWorking.tsx";
@@ -265,6 +266,8 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
             if (shown === undefined) return null;
             return (
               <section className="proposal-group proposal-bar" key={group[0]?.changeSetId} aria-label={group.length > 1 ? `${group.length} options` : "Option"}>
+                {/* Outside the keyed card, so switching options keeps the tab row, and the focus on it, mounted. */}
+                <ProposalTabs group={group} shownId={shown.changeSetId} pinnedId={pinnedId} onPin={onPin} />
                 <ProposalCard
                   // A card reads its rows once, against the layout it was made for: each option is its own card.
                   key={shown.changeSetId}
@@ -278,26 +281,6 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                   onAskAgain={onAskAgain}
                   onOpenRelease={onOpenRelease}
                   compact
-                  alternatives={
-                    group.length < 2 ? null : (
-                      <div className="proposal-tabs" role="tablist" aria-label="Options">
-                        {group.map((proposal, index) => (
-                          <button
-                            key={proposal.changeSetId}
-                            type="button"
-                            role="tab"
-                            className="proposal-tab"
-                            aria-selected={proposal.changeSetId === shown.changeSetId}
-                            data-status={proposal.status}
-                            onClick={() => proposal.changeSetId !== pinnedId && onPin(proposal)}
-                          >
-                            <span className="proposal-tab-n">{index + 1}</span>
-                            <span className="proposal-tab-title" title={proposal.title}>{optionLabels(group.map((option) => option.title))[index]}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )
-                  }
                 />
               </section>
             );

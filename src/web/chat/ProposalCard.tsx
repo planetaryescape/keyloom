@@ -1,4 +1,4 @@
-import { ArrowRight, CircleCheck, CircleSlash, Eye, EyeOff, Hammer, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ArrowRight, ChevronRight, CircleCheck, CircleSlash, Eye, EyeOff, Hammer, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -7,7 +7,7 @@ import { ApiError } from "../api.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { previewProposal } from "./preview.ts";
 import { ProposalMoves } from "./ProposalMoves.tsx";
-import { changeWords, keyLabel, replacedNatives, shortTitle, slotKey, slotName } from "./proposal-facts.ts";
+import { changeWords, keyLabel, leadSentence, replacedNatives, shortTitle, slotKey, slotName } from "./proposal-facts.ts";
 import "./proposal.css";
 
 interface Props {
@@ -27,8 +27,6 @@ interface Props {
   onOpenRelease: () => void;
   /** The command bar's card: the explanation, the changes as chips, one trade-off line, the options as tabs, Apply (comp d). */
   compact?: boolean;
-  /** The tabs that switch between options, drawn where the comp puts them, beside Apply. */
-  alternatives?: React.ReactNode;
   /** The folded bar in a short window: the option's name, Not this and Apply on one line (P3 review). */
   line?: boolean;
 }
@@ -37,7 +35,7 @@ const MAX_ROWS = 6;
 
 // One alternative from the agent. The same card serves a fresh proposal, an applied one and a
 // superseded sibling, so the choice reads the same whichever you look at.
-export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, alternatives = null, line = false }: Props) {
+export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false }: Props) {
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -62,6 +60,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     });
   });
   const { gains, costs } = proposal.tradeoffs;
+  // The validator's count, not the rows': a key whose binding changes while its printed label stays the same still changes.
+  const changedKeys = proposal.validation.diff.changed.length;
   const open = proposal.status === "proposed";
 
   // The apply moves focus here so a screen reader hears the result and the next step is a Tab away.
@@ -92,6 +92,12 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
 
   // The validator's warnings and errors, only when there are any: a clean proposal says nothing about checking.
   const problems = proposal.validation.errors.length + proposal.validation.warnings.length;
+  const { lead, rest } = leadSentence(proposal.explanation);
+  // The details show the moves as chips, so "function lost" would only say them again (the same filter as the full form's hideLost).
+  const issues = [
+    ...proposal.validation.errors.map((issue) => ({ tone: "error" as const, text: issue.plain ?? issue.message })),
+    ...proposal.validation.warnings.filter((issue) => issue.code !== "function_lost").map((issue) => ({ tone: "warning" as const, text: issue.plain ?? issue.message })),
+  ];
 
   // Applied, superseded, or Not this and Apply: the same in the card and in the folded line.
   const actions = (
@@ -105,8 +111,9 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <span className="proposal-badge"><CircleSlash size={14} aria-hidden="true" />Superseded</span>
           ) : open ? (
             <>
-              <button type="button" className="bar-link" onClick={() => (confirming ? setConfirming(false) : onPin(proposal))} disabled={!pinned && !confirming}>
-                {confirming ? "Keep it" : "Not this"}
+              {/* onPin toggles: Not this takes it off the board, and Show it puts it back, so a lone proposal (no tabs) is never stuck off it. */}
+              <button type="button" className="bar-link" onClick={() => (confirming ? setConfirming(false) : onPin(proposal))}>
+                {confirming ? "Keep it" : pinned ? "Not this" : "Show it"}
               </button>
               <button
                 type="button"
@@ -148,23 +155,16 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     ) : null;
     return (
       <article className="proposal proposal-compact" data-status={proposal.status} data-pinned={pinned} aria-labelledby={titleId}>
-        <h3 id={titleId} className="sr-only">{proposal.title}</h3>
-        {/* The tab carries a short name; the full title leads the sentence. */}
-        <p className="proposal-why"><strong>{proposal.title.replace(/[.\s]+$/, "")}.</strong> {proposal.explanation}</p>
-        {chips.length === 0 ? null : (
-          <ul className="proposal-chips" aria-label="Keys this changes">
-            {chips.map((chip) => (
-              <li key={chip.key}>
-                <span>{chip.from}</span>
-                <ArrowRight size={12} aria-label="becomes" role="img" />
-                <strong>{chip.to}</strong>
-              </li>
-            ))}
-          </ul>
+        <h3 id={titleId} className="proposal-title">{proposal.title}</h3>
+        <p className="proposal-why">{lead}</p>
+        {changedKeys === 0 && costs.length === 0 ? null : (
+          <p className="proposal-facts">
+            {changedKeys === 0 ? null : <strong>{changedKeys} {changedKeys === 1 ? "key changes" : "keys change"}</strong>}
+            {changedKeys === 0 || costs.length === 0 ? null : <span aria-hidden="true"> · </span>}
+            {costs.length === 0 ? null : <span className="proposal-cost">{costs.join("; ")}</span>}
+          </p>
         )}
-        {costs.length === 0 ? null : <p className="proposal-trade"><span>Trade-off:</span> {costs.join(" ")}</p>}
-        {proposal.decisionDraft === null || !open ? null : <p className="proposal-trade"><span>keyloom will remember:</span> {proposal.decisionDraft.reason}</p>}
-        {problems === 0 ? null : <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} showMoves={false} />}
+        <ProposalNotes issues={issues} />
         {confirmBlock}
         {failure === null ? null : (
           <div className="proposal-problem" role="alert">
@@ -175,8 +175,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             </div>
           </div>
         )}
+        <ProposalDetails chips={chips} rest={rest} gains={gains} costs={costs} remembers={proposal.decisionDraft === null || !open ? null : proposal.decisionDraft.reason} />
         <div className="proposal-bar-foot">
-          {alternatives}
           <span className="proposal-bar-gap" />
           {actions}
         </div>
@@ -312,5 +312,66 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         </div>
       ) : null}
     </article>
+  );
+}
+
+type Note = { tone: "error" | "warning"; text: string };
+
+/** The validator's findings in chat: one line, and the full text a tap away. The editor keeps the full list (Validation.tsx). */
+function ProposalNotes({ issues }: { issues: readonly Note[] }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const [first] = issues;
+  if (first === undefined) return null;
+  const errors = issues.filter((issue) => issue.tone === "error").length;
+  const summary = issues.length === 1 ? first.text : `${issues.length} ${errors > 0 ? "problems" : "warnings"}`;
+  return (
+    <div className="proposal-notes" data-tone={errors > 0 ? "error" : "warning"}>
+      <button type="button" className="proposal-notes-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <TriangleAlert size={14} aria-hidden="true" />
+        <span data-open={open}>{summary}</span>
+      </button>
+      <ul id={id} hidden={!open}>
+        {issues.map((issue, index) => <li key={index}>{issue.text}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+/** What a reader checks before applying, behind one button: the keys, the rest of the reasoning, both sides of the trade and what keyloom will remember. */
+function ProposalDetails({ chips, rest, gains, costs, remembers }: {
+  chips: readonly { key: string; from: string; to: string }[];
+  rest: string;
+  gains: readonly string[];
+  costs: readonly string[];
+  remembers: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  if (chips.length === 0 && rest === "" && gains.length === 0 && costs.length === 0 && remembers === null) return null;
+  return (
+    <div className="proposal-details">
+      <button type="button" className="proposal-details-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <ChevronRight size={14} aria-hidden="true" />
+        Details
+      </button>
+      <div id={id} hidden={!open}>
+        {chips.length === 0 ? null : (
+          <ul className="proposal-chips" aria-label="Keys this changes">
+            {chips.map((chip) => (
+              <li key={chip.key}>
+                <span>{chip.from}</span>
+                <ArrowRight size={12} aria-label="becomes" role="img" />
+                <strong>{chip.to}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+        {rest === "" ? null : <p>{rest}</p>}
+        {gains.length === 0 ? null : <><h4>Gains</h4><ul>{gains.map((text) => <li key={text}>{text}</li>)}</ul></>}
+        {costs.length === 0 ? null : <><h4>Costs</h4><ul>{costs.map((text) => <li key={text}>{text}</li>)}</ul></>}
+        {remembers === null ? null : <><h4>keyloom will remember</h4><p>{remembers}</p></>}
+      </div>
+    </div>
   );
 }
