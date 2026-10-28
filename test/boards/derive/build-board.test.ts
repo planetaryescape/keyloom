@@ -97,6 +97,8 @@ describe("deriveBoard", () => {
     const build = derived.definition.revisions[0]?.build;
     expect(build?.kind === "qmk-docker" && build.submodules).toContain("lib/pico-sdk");
     expect(derived.summary.manualFlashReason).toBeNull();
+    // Derivation reads no lighting, so it never claims lighting controls (D-453); the layout's own keys are the evidence there.
+    expect(derived.definition.lightingControls).toBeUndefined();
     const result = await check(derived);
     expect(result.issues.filter((i) => i.level === "error")).toEqual([]);
   });

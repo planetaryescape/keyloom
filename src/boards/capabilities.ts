@@ -1,6 +1,8 @@
 // What a board can do that a layout may ask for, as facts the agent and the validator quote
 // (20#capabilities). The model holds all of these for both firmwares except per-key hardware LED colours, which
 // need a LED table in board.json, so the one thing that varies by board is lighting.
+import { holdsLightingControl } from "../layout/lighting-controls.ts";
+import type { Layout } from "../layout/schema.ts";
 import type { BoardDefinition } from "./schema.ts";
 
 export type Capability = { supported: boolean; /** Why not, in a sentence people can read; present when unsupported. */ because?: string };
@@ -28,6 +30,15 @@ export function boardCapabilities(def: BoardDefinition): BoardCapabilities {
     macros: yes,
     holdTap: yes,
   };
+}
+
+/**
+ * Whether a lighting-control key (RGB underglow or the RGB matrix's controls) is admitted on this board: the board has per-key LEDs,
+ * the board records that its firmware has the controls (`lightingControls`, D-453), or the layout already holds one. Per-key colours
+ * don't use this: they stay on `board.lighting` alone.
+ */
+export function hasLightingControls(def: BoardDefinition, doc: Layout): boolean {
+  return def.lighting !== undefined || def.lightingControls === true || holdsLightingControl(doc);
 }
 
 /** The sentence for a refused physical LED edit; it does not limit keyloom's display styling. */
