@@ -1,4 +1,4 @@
-import { ArrowRight, CircleCheck, CircleSlash, Eye, EyeOff, Hammer, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ArrowRight, ChevronRight, CircleCheck, CircleSlash, Eye, EyeOff, Hammer, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -7,7 +7,7 @@ import { ApiError } from "../api.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { previewProposal } from "./preview.ts";
 import { ProposalMoves } from "./ProposalMoves.tsx";
-import { changeWords, keyLabel, replacedNatives, shortTitle, slotKey, slotName } from "./proposal-facts.ts";
+import { changeWords, keyLabel, leadSentence, replacedNatives, shortTitle, slotKey, slotName } from "./proposal-facts.ts";
 import "./proposal.css";
 
 interface Props {
@@ -92,6 +92,12 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
 
   // The validator's warnings and errors, only when there are any: a clean proposal says nothing about checking.
   const problems = proposal.validation.errors.length + proposal.validation.warnings.length;
+  const { lead, rest } = leadSentence(proposal.explanation);
+  // The details show the moves as chips, so "function lost" would only say them again (the same filter as the full form's hideLost).
+  const issues = [
+    ...proposal.validation.errors.map((issue) => ({ tone: "error" as const, text: issue.plain ?? issue.message })),
+    ...proposal.validation.warnings.filter((issue) => issue.code !== "function_lost").map((issue) => ({ tone: "warning" as const, text: issue.plain ?? issue.message })),
+  ];
 
   // Applied, superseded, or Not this and Apply: the same in the card and in the folded line.
   const actions = (
@@ -148,23 +154,17 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     ) : null;
     return (
       <article className="proposal proposal-compact" data-status={proposal.status} data-pinned={pinned} aria-labelledby={titleId}>
-        <h3 id={titleId} className="sr-only">{proposal.title}</h3>
-        {/* The tab carries a short name; the full title leads the sentence. */}
-        <p className="proposal-why"><strong>{proposal.title.replace(/[.\s]+$/, "")}.</strong> {proposal.explanation}</p>
-        {chips.length === 0 ? null : (
-          <ul className="proposal-chips" aria-label="Keys this changes">
-            {chips.map((chip) => (
-              <li key={chip.key}>
-                <span>{chip.from}</span>
-                <ArrowRight size={12} aria-label="becomes" role="img" />
-                <strong>{chip.to}</strong>
-              </li>
-            ))}
-          </ul>
+        {alternatives}
+        <h3 id={titleId} className="proposal-title">{proposal.title}</h3>
+        <p className="proposal-why">{lead}</p>
+        {rows.length === 0 && costs.length === 0 ? null : (
+          <p className="proposal-facts">
+            {rows.length === 0 ? null : <strong>{rows.length} {rows.length === 1 ? "key changes" : "keys change"}</strong>}
+            {rows.length === 0 || costs.length === 0 ? null : <span aria-hidden="true"> · </span>}
+            {costs.length === 0 ? null : <span className="proposal-cost">{costs.join("; ")}</span>}
+          </p>
         )}
-        {costs.length === 0 ? null : <p className="proposal-trade"><span>Trade-off:</span> {costs.join(" ")}</p>}
-        {proposal.decisionDraft === null || !open ? null : <p className="proposal-trade"><span>keyloom will remember:</span> {proposal.decisionDraft.reason}</p>}
-        {problems === 0 ? null : <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} showMoves={false} />}
+        <ProposalNotes issues={issues} />
         {confirmBlock}
         {failure === null ? null : (
           <div className="proposal-problem" role="alert">
@@ -175,8 +175,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             </div>
           </div>
         )}
+        <ProposalDetails chips={chips} rest={rest} gains={gains} costs={costs} remembers={proposal.decisionDraft === null || !open ? null : proposal.decisionDraft.reason} />
         <div className="proposal-bar-foot">
-          {alternatives}
           <span className="proposal-bar-gap" />
           {actions}
         </div>
@@ -312,5 +312,66 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         </div>
       ) : null}
     </article>
+  );
+}
+
+type Note = { tone: "error" | "warning"; text: string };
+
+/** The validator's findings in chat: one line, and the full text a tap away. The editor keeps the full list (Validation.tsx). */
+function ProposalNotes({ issues }: { issues: readonly Note[] }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const [first] = issues;
+  if (first === undefined) return null;
+  const errors = issues.filter((issue) => issue.tone === "error").length;
+  const summary = issues.length === 1 ? first.text : `${issues.length} ${errors > 0 ? "problems" : "warnings"}`;
+  return (
+    <div className="proposal-notes" data-tone={errors > 0 ? "error" : "warning"}>
+      <button type="button" className="proposal-notes-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <TriangleAlert size={14} aria-hidden="true" />
+        <span data-open={open}>{summary}</span>
+      </button>
+      <ul id={id} hidden={!open}>
+        {issues.map((issue, index) => <li key={index}>{issue.text}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+/** What a reader checks before applying, behind one button: the keys, the rest of the reasoning, both sides of the trade and what keyloom will remember. */
+function ProposalDetails({ chips, rest, gains, costs, remembers }: {
+  chips: readonly { key: string; from: string; to: string }[];
+  rest: string;
+  gains: readonly string[];
+  costs: readonly string[];
+  remembers: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  if (chips.length === 0 && rest === "" && gains.length === 0 && costs.length === 0 && remembers === null) return null;
+  return (
+    <div className="proposal-details">
+      <button type="button" className="proposal-details-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <ChevronRight size={14} aria-hidden="true" />
+        Details
+      </button>
+      <div id={id} hidden={!open}>
+        {chips.length === 0 ? null : (
+          <ul className="proposal-chips" aria-label="Keys this changes">
+            {chips.map((chip) => (
+              <li key={chip.key}>
+                <span>{chip.from}</span>
+                <ArrowRight size={12} aria-label="becomes" role="img" />
+                <strong>{chip.to}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+        {rest === "" ? null : <p>{rest}</p>}
+        {gains.length === 0 ? null : <><h4>Gains</h4><ul>{gains.map((text) => <li key={text}>{text}</li>)}</ul></>}
+        {costs.length === 0 ? null : <><h4>Costs</h4><ul>{costs.map((text) => <li key={text}>{text}</li>)}</ul></>}
+        {remembers === null ? null : <><h4>keyloom will remember</h4><p>{remembers}</p></>}
+      </div>
+    </div>
   );
 }

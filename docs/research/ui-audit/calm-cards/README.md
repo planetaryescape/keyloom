@@ -50,3 +50,21 @@ Source: UI = a component string; agent = text the model writes; server = text a 
 ## Observed, not changed
 
 The activity row read "3 accepted · 2 saved proposals" for three alternatives, while the card offered three options (`before-proposal-dark-1440-activity.png`). I did not look into why.
+
+## Built (D-456, D-457)
+
+BK approved the direction on 2026-10-28; the answers to the four questions above are D-456 (footer: USD at rest, the rest one click away), D-457 (question card without the accent), the tabs hidden for a single proposal (a compact row above the card for two or three), and warnings as one line in chat only.
+
+After screenshots from the real app, light and dark at 1440 and 390, `after-*` beside `before-*`:
+
+- Proposal and footer: `after-proposal-<theme>-<width>.png`, with `-activity` for the remembered chips and folded steps.
+- Copy proposal: `after-copy-<theme>-<width>-review.png` (and `-review-tall`), config card and reply: `after-copy-<theme>-<width>-config.png`.
+- Question: `after-question-<theme>-<width>.png`.
+
+The before shots exist for dark 1440 and light 390 only. The before 390 config shot lacks the card: the second put in that session reused the config name and failed, and the dev script now starts a fresh data directory per shot.
+
+What changed: `ProposalCard` (compact) says the first sentence, "N keys change" and the cost, with Details holding the keys, the rest of the reasoning, gains, costs and what keyloom will remember; `ProposalNotes` shows one warning line, `Validation.tsx` is untouched; `ProposalTabs` is one row above the card; `OpenProposals` shows the same card; `TurnUsage` is a button with the USD figure; the config card drops the repeated count and shows "Back" as a link; the question card is neutral; the remembered chips lose their label word. The propose and put tools ask the model for a short first sentence and a short reply.
+
+The "3 accepted · 2 saved proposals" line was wrong. `chat-presentation.ts` kept two references per operation, so three proposals read as two, and the same cap flagged ordinary runs "Some working details were not retained" (which also kept the steps unfolded). It keeps three now (the stored schema allows eight); `test/app/chat-presentation.test.ts` covers it.
+
+Not done: a copy's "112 not carried" as a number needs structured counts on the proposal, which is a data change for A2; the card shows the server's first sentence and the cut cost line instead.

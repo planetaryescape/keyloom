@@ -519,3 +519,14 @@
   top: var(--space-3);
   right: var(--space-4);
 }
+
+/* A waiting proposal in the panel is the chat's compact card, on its own surface like the chat's panel presentation. */
+.nb-proposal .proposal-compact,
+.nb-proposal .proposal-compact[data-pinned="true"] {
+  padding: var(--space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  outline: 0;
+  box-shadow: none;
+}

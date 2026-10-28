@@ -39,12 +39,13 @@ export function configCardView(data: ConfigCardData, currentId: string, origin: 
   const facts = [config.boardName];
   if (config.copiedFrom !== null) facts.push(`Copied from ${config.copiedFrom.layoutName ?? "a config that has been deleted"}`);
   if (config.archivedAt !== null) return { title: config.name, facts, note: "Archived. Restore it from the config menu to open it.", ...NONE };
-  facts.push(...count(waiting));
-  if (configId !== currentId) return { title: config.name, facts, note: null, action: { kind: "open", id: config.id, label: "Open" }, secondary: null };
+  const counted = [...facts, ...count(waiting)];
+  if (configId !== currentId) return { title: config.name, facts: counted, note: null, action: { kind: "open", id: config.id, label: "Open" }, secondary: null };
   // On the new config: review what waits on it, and keep the way back to the config BK asked from when this thread knows it.
   const back = origin !== null && origin.id !== currentId ? { kind: "back" as const, id: origin.id, label: `Back to ${origin.name}` } : null;
+  // The count is the button's own words ("Review 2 proposals"), so the facts don't say it twice.
   if (waiting !== null && waiting > 0) {
     return { title: config.name, facts, note: null, action: { kind: "review", id: config.id, label: waiting === 1 ? "Review proposal" : `Review ${waiting} proposals` }, secondary: back };
   }
-  return { title: config.name, facts, note: null, action: back, secondary: null };
+  return { title: config.name, facts: counted, note: null, action: back, secondary: null };
 }

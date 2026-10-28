@@ -95,3 +95,13 @@ export function optionLabels(titles: readonly string[], max = 22): string[] {
     return shortTitle(rest.charAt(0).toUpperCase() + rest.slice(1), max);
   });
 }
+
+/**
+ * The first sentence of an explanation and the rest, so a card can say what changes in a line and keep the
+ * reasoning one tap away. No sentence end means the whole text is the lead.
+ */
+export function leadSentence(text: string): { lead: string; rest: string } {
+  const trimmed = text.trim();
+  const match = /^(.+?[.!?])(?:\s+([\s\S]*))?$/.exec(trimmed);
+  return match === null ? { lead: trimmed, rest: "" } : { lead: match[1] ?? trimmed, rest: (match[2] ?? "").trim() };
+}

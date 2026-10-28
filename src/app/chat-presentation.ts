@@ -30,6 +30,9 @@ export function clipPublicText(text: string, budget: number): string {
   return text.slice(0, end);
 }
 
+/** A put records its config and up to two proposals; propose_changes saves up to three. A cap of two showed "2 saved proposals" for three and flagged a normal run as truncated. */
+const MAX_REFERENCES = 3;
+
 export function unobservedPresentation(presentation: Presentation): Presentation {
   return { ...presentation, status: "unobserved", warning: UNOBSERVED_WARNING, operations: presentation.operations.map((operation) => operation.status === "running" ? { ...operation, status: "unknown" } : operation) };
 }
@@ -73,9 +76,9 @@ export function chatPresentation(app: App, conversationId: string, userMessageId
           status: operation.tool === "unknown" && event.status === "succeeded" ? "unknown" : event.status,
           durationMs: event.durationMs, accepted: event.accepted, declined: event.declined,
           validationCodes: [...new Set(event.validationCodes.map((code) => CODES.has(code) ? code : "validation_declined"))].slice(0, 4),
-          references: event.references.filter((ref) => ID.test(ref.id)).slice(0, 2),
+          references: event.references.filter((ref) => ID.test(ref.id)).slice(0, MAX_REFERENCES),
         });
-        if (event.validationCodes.length > 4 || event.references.length > 2) state.detailsTruncated = true;
+        if (event.validationCodes.length > 4 || event.references.length > MAX_REFERENCES) state.detailsTruncated = true;
       } else if (event.type === "limit_reached") state.detailsTruncated = true;
       else message({ id: event.id, kind: event.kind, text: event.text });
       publish();

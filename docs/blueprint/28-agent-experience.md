@@ -1,6 +1,6 @@
 # 28: The agent works beside the keyboard
 
-Status: partly implemented, 2026-10-20. Rung 26a shipped in v0.42.0. Rung 27 interactive question kinds (single/multiple choice, short text, layer, key, keyboard_or_config), explicit recommendation, reopened selection actions, typed artifacts, and confirmation/outcome cards are built on feat/rung27-interactive-questions. Agent-made configs open themselves and the reply carries a config card (D-450, 2026-10-22). Cross-keyboard target plans below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
+Status: partly implemented, 2026-10-20. Rung 26a shipped in v0.42.0. Rung 27 interactive question kinds (single/multiple choice, short text, layer, key, keyboard_or_config), explicit recommendation, reopened selection actions, typed artifacts, and confirmation/outcome cards are built on feat/rung27-interactive-questions. Agent-made configs open themselves and the reply carries a config card (D-450, 2026-10-22). Proposal, config, question and footer cards were made calmer (D-456, D-457, 2026-10-28). Cross-keyboard target plans below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
 
 Reconciled with origin/main at `72370d0494497ae4bdd6036106fcec9d3f6c1aab`: inherit the no-accent-stripe/no-sparkle rule in [18](18-visual-design.md#patterns-keyloom-doesnt-use) and separate case/keycap controls (D-319).
 
@@ -155,6 +155,15 @@ The model supplies content and references, not HTML, JSX, CSS or runnable compon
 ## Motion supports activity and then stops
 
 Inherit Instrument Sans, the existing size scale, spacing, surfaces, icons and semantic colors from [23](23-design-concept.md) and `src/web/tokens.css`. Keep the board's light and color semantics. A completed read step uses a quiet check and "Read", not device-green "On your keyboard".
+
+## Card shapes: a line or two, details on demand
+
+BK called the cards wordy (2026-10-28); the shapes below are built (D-456, D-457). Each says what changes and what it costs in a line or two, with one primary action; the board preview carries the key-level detail.
+
+- **Proposal.** Title, the explanation's first sentence, "N keys change" with the cost (cut at two lines), one validator line when there is a finding (the full text a tap away), Details (the keys, the rest of the reasoning, gains, costs, what keyloom will remember), then Not this and Apply. Several alternatives are one row of tabs above the card; a single proposal has none. The panel for a copy's waiting proposals uses the same card.
+- **Config.** Name, board and source, and "Review N proposals" as the one primary button; "Back to X" is a text link. The count is not repeated as a fact.
+- **Question.** A neutral surface (D-457) with the question, numbered options of at least 44px and the Recommended mark.
+- **Activity and footer.** Remembered chips with an icon and no label, working notes folded into one line when the run is clean, and one USD figure under the reply (D-456).
 
 No question, proposal, result or confirmation gets a colored stripe on its edge, a substitute glow or a sparkle/wand icon for AI. Reuse the existing title glyphs, plain labels and marks on the keyboard. A color picker can address the case or keycaps separately; neither setting is firmware lighting.
 

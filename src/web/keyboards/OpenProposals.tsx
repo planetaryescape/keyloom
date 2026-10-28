@@ -1,8 +1,10 @@
 import { LoaderCircle, X, Zap } from "lucide-react";
+import { useEffect } from "react";
 import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { ProposalCard } from "../chat/ProposalCard.tsx";
+import { ProposalTabs } from "../chat/ProposalTabs.tsx";
 import "./keyboards.css";
 
 // A config's open proposals that no conversation shows (n5, D-336): the ones "Put my config on it" made, and any other made outside the
@@ -22,40 +24,43 @@ export function OpenProposals({ proposals, layout, board, configName, firstFlash
   onOpenRelease: () => void;
 }) {
   const open = proposals?.filter((p) => p.status === "proposed") ?? [];
+  // One card at a time, the pinned option or the first, and the board shows it: a lone proposal needs no tabs and no "show it" button.
+  const shown = open.find((p) => p.changeSetId === pinnedId) ?? open[0];
+  useEffect(() => {
+    if (shown !== undefined && pinnedId !== shown.changeSetId && !open.some((p) => p.changeSetId === pinnedId)) onPin(shown);
+    // Pin once per set of proposals, not on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown?.changeSetId]);
   return (
     <section className="nb-panel" aria-label="Proposals">
       <header className="nb-panel-head nb-panel-head-row">
         <div>
           <p className="nb-eyebrow nb-eyebrow-quiet">{configName}</p>
           <h2>{open.length === 2 ? "Two ways to put it on" : open.length === 1 ? "A proposal waiting" : "Proposals"}</h2>
-          <p className="nb-lead">Proposals, checked like any change. Pin one to see it on the board; apply one and its sibling is set aside.</p>
         </div>
         <button type="button" className="sheet-close" aria-label="Close the proposals" onClick={onClose}><X size={16} aria-hidden="true" /></button>
       </header>
       <div className="nb-panel-body nb-proposals">
-        {proposals === null ? <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Loading…</p> : open.length === 0 ? (
+        {proposals === null ? <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Loading…</p> : shown === undefined ? (
           <p className="nb-note">Nothing is waiting. Applied and set-aside proposals are in History.</p>
         ) : (
-          open.map((p, i) => (
-            <div key={p.changeSetId} className="nb-proposal">
-              {/* Pinning is a visible button, not a hover: the card's own Not this unpins. */}
-              <button type="button" className="sheet-action nb-pin" aria-pressed={pinnedId === p.changeSetId} onClick={() => onPin(p)}>
-                {pinnedId === p.changeSetId ? "On the board" : "Show it on the board"}
-              </button>
-              <ProposalCard
-                proposal={p}
-                {...(open.length > 1 ? { option: { number: i + 1, of: open.length } } : {})}
-                layout={layout}
-                board={board}
-                pinned={pinnedId === p.changeSetId}
-                onPreview={onPreview}
-                onPin={onPin}
-                onApply={onApply}
-                onAskAgain={onClose}
-                onOpenRelease={onOpenRelease}
-              />
-            </div>
-          ))
+          <div className="nb-proposal">
+            <ProposalCard
+              // Each option is its own card: it reads its rows once, against the layout it was made for.
+              key={shown.changeSetId}
+              proposal={shown}
+              layout={layout}
+              board={board}
+              pinned={pinnedId === shown.changeSetId}
+              onPreview={onPreview}
+              onPin={onPin}
+              onApply={onApply}
+              onAskAgain={onClose}
+              onOpenRelease={onOpenRelease}
+              compact
+              alternatives={<ProposalTabs group={open} shownId={shown.changeSetId} pinnedId={pinnedId} onPin={onPin} />}
+            />
+          </div>
         )}
         {firstFlash ? (
           <div className="nb-flash">

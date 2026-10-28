@@ -34,7 +34,7 @@ export function PriorityChips({ priorities, layout, onRemove }: Props) {
     <div className="priorities" role="group" aria-label="Remembered from what you said">
       <p className="priorities-label">
         <BookmarkCheck size={14} aria-hidden="true" />
-        Remembered
+        <span className="sr-only">Remembered</span>
       </p>
       <ul>
         {priorities.map((card) => {

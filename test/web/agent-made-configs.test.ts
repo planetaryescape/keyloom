@@ -86,6 +86,8 @@ describe("the config card", () => {
   test("on the new config the main action reviews its waiting proposals and the way back is the second button", () => {
     const view = configCardView(ready({}, 3), "c1", { id: "x", name: "Daily" }, "c1");
     expect(view.action).toEqual({ kind: "review", id: "c1", label: "Review 3 proposals" });
+    // The count is the button's words, so the facts don't repeat it.
+    expect(view.facts).toEqual(["Corne", "Copied from My Glove80"]);
     expect(view.secondary).toEqual({ kind: "back", id: "x", label: "Back to Daily" });
     expect(configCardView(ready({}, 1), "c1", null, "c1")).toMatchObject({ action: { label: "Review proposal" }, secondary: null });
   });

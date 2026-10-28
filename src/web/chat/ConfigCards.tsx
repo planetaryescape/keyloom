@@ -31,7 +31,7 @@ export function ConfigCardList({ presentation, cards }: { presentation: ChatPres
             {view.action === null ? null : (
               <div className="config-card-actions">
                 <CardButton action={view.action} cards={cards} primary />
-                {view.secondary === null ? null : <CardButton action={view.secondary} cards={cards} />}
+                {view.secondary === null ? null : <CardButton action={view.secondary} cards={cards} link />}
               </div>
             )}
           </section>
@@ -43,10 +43,10 @@ export function ConfigCardList({ presentation, cards }: { presentation: ChatPres
 
 const ICONS = { open: ArrowRight, back: ArrowLeft, review: ClipboardCheck };
 
-function CardButton({ action, cards, primary = false }: { action: ConfigCardAction; cards: ConfigCards; primary?: boolean }) {
+function CardButton({ action, cards, primary = false, link = false }: { action: ConfigCardAction; cards: ConfigCards; primary?: boolean; link?: boolean }) {
   const Icon = ICONS[action.kind];
   return (
-    <button type="button" className={primary ? "button config-card-action button-primary" : "button config-card-action"} onClick={() => (action.kind === "review" ? cards.onReview() : cards.onOpen(action.id))}>
+    <button type="button" className={primary ? "button config-card-action button-primary" : link ? "button config-card-action config-card-back" : "button config-card-action"} onClick={() => (action.kind === "review" ? cards.onReview() : cards.onOpen(action.id))}>
       <Icon size={14} aria-hidden="true" />
       {action.label}
     </button>
