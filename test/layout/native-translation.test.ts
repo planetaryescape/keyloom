@@ -187,6 +187,15 @@ describe("reading a native binding", () => {
     expect(readNative(zmk("&pause_boot"), kept([pause]))).toEqual({ kind: "unknown" });
   });
 
+  test("a macro with a step the reader can't read still warns about its bootloader, in either order, and a copy does not translate it", () => {
+    const before = pass("macro:key_before_boot", `key_before_boot: key_before_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &kp A &bootloader>; };`);
+    const after = pass("macro:key_after_boot", `key_after_boot: key_after_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&bootloader &kp A>; };`);
+    for (const [name, macro] of [["&key_before_boot", before], ["&key_after_boot", after]] as const) {
+      expect(readNative(zmk(name), kept([macro]), true)).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+      expect(readNative(zmk(name), kept([macro]))).toEqual({ kind: "unknown" });
+    }
+  });
+
   test("a hex timing parameter is read past like a decimal one, and a name in its place is not", () => {
     const hex = pass("macro:hex_wait", `hex_wait: hex_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 0x32 &macro_tap &bootloader>; };`);
     expect(readNative(zmk("&hex_wait"), kept([hex]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });

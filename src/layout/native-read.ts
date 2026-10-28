@@ -185,7 +185,12 @@ function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: 
           continue;
         }
         const more = resolveCall(inner, kept, depth + 1, forWarning);
-        if (more === undefined) return undefined;
+        // The warning reads the steps it can and passes over one it can't, so a bootloader beside a key it doesn't model still warns.
+        // A copy needs every step, so one unreadable step leaves the macro unknown.
+        if (more === undefined) {
+          if (forWarning) continue;
+          return undefined;
+        }
         steps.push(...more);
       }
     }
