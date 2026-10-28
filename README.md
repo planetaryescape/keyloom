@@ -60,10 +60,10 @@ Windows x64 (PowerShell): `irm https://raw.githubusercontent.com/planetaryescape
 On macOS or Linux, start the app:
 
 ```sh
-keyloom serve
+keyloom web
 ```
 
-This opens the web app at `http://127.0.0.1:4477`. Use `--port` to change the port and `--no-open` to skip opening the browser.
+This opens the web app at `http://127.0.0.1:4477`. `keyloom serve` is the same command. Use `--port` to change the port and `--no-open` to skip opening the browser.
 
 Building firmware needs Docker. Flashing a Moonlander needs [Zapp](https://github.com/zsa/zapp). `keyloom doctor` checks both, along with the bundled device helper.
 

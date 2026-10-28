@@ -8,7 +8,7 @@ The CLI is the canonical surface (D-030, taken from spotuify). Everything the we
 
 ```
 keyloom
-  serve [--port 4477] [--no-open]          start the local web app and open it in the browser
+  serve [--port 4477] [--no-open]          start the local web app and open it in the browser (also: web)
   boards list                              boards keyloom has definitions for
   boards show <board>                      physical keys, hands, firmware, build and flash recipe
   boards check <dir>                       validate a board definition (for contributors, 04)

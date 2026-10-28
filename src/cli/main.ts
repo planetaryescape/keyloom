@@ -219,6 +219,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
 
   program
     .command("serve")
+    .alias("web")
     .description("start the local web app and open it in the browser")
     .option("--port <port>", "port on 127.0.0.1; 0 picks a free one", String(DEFAULT_PORT))
     .option("--no-open", "don't open the browser")
