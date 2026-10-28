@@ -107,6 +107,8 @@ describe("what kanata can't write is refused before Apply", () => {
 
     const inCombo: Layout = { ...identityLayout(board), combos: [{ id: "c", name: "Combo", positions: [at("A"), at("S")], layerIds: "all", output: { kind: "key", code: "PRINT_SCREEN" } }] };
     expect(unsendable(inCombo).map((e) => e.plain)).toEqual([expect.stringContaining('Combo "Combo"')]);
+    const holdTapCombo: Layout = { ...identityLayout(board), combos: [{ id: "c", name: "Combo", positions: [at("A"), at("S")], layerIds: "all", output: { kind: "holdTap", tap: { code: "PRINT_SCREEN" }, hold: { mods: ["LSFT"] }, profileId: "p" } }] };
+    expect(unsendable(holdTapCombo).map((e) => e.plain)).toEqual([expect.stringContaining('Combo "Combo"')]);
 
     const dance = withDance({ id: "t", name: "Tab", tap: { kind: "key", code: "PRINT_SCREEN" } });
     expect(unsendable(dance).map((e) => e.plain)).toEqual([expect.stringContaining('Tap dance "Tab"')]);

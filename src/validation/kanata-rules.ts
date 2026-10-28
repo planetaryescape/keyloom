@@ -39,6 +39,7 @@ export function kanataSupport(doc: Layout): Issue[] {
     const output = combo.output;
     if (output.kind === "native" && output.firmware === "kanata") attempt(() => nativeAction("kanata", output.source, `combo "${combo.id}"`), undefined, `Combo "${combo.name}"`);
     if (output.kind === "key") attempt(() => keyName(output.code), undefined, `Combo "${combo.name}"`);
+    if (output.kind === "holdTap" && output.tap.macroId === undefined) attempt(() => keyName(output.tap.code), undefined, `Combo "${combo.name}"`);
   }
   for (const dance of doc.tapDances) {
     for (const slot of [dance.tap, dance.hold, dance.doubleTap, dance.tapThenHold]) {
