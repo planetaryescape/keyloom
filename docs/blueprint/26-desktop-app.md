@@ -42,12 +42,13 @@ The release matrix signs the visible Rust executable before embedding, without B
 
 ## Decisions
 
-D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md).
+D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), and D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them.
 
 ## As built
 
 - **One server per data directory (D-323).** `keyloom serve` writes `serve.json` (mode 0600) in the data directory and refuses to start beside a live one; `--reuse` prints the live one's URL and exits 0, which is how the app attaches to the browser server instead of starting a second sync engine. A server that predates this change writes no record, so the app starts its own until that server is restarted on a new binary.
 - **The server words the menu bar (D-325).** Each `/api/events` frame carries `menuBar`: a summary, one line per board in the header's words, the config Sync now targets, the title beside the icon and the notices since the last frame on that stream.
+- **The shell checks its keyloom (D-454).** It passes `--client-protocol 1` (`DESKTOP_PROTOCOL` in `sidecar.rs`, equal to `src/api/desktop-protocol.ts`; a test compares them). A live server on another protocol is not attached to: the CLI prints `keyloom cannot attach: …` and exits 10, the tray summary shows those words, and when the CLI also prints `keyloom can replace it: …` (the server is older or unknown) the menu gets an item with that label. Picking it re-runs the sidecar with `--replace`, which stops the old server after it finishes any keyboard write. A newer server is never offered for replacing. Not exercised live: the tray and the menu item were checked by `cargo test` on the parsing and by driving the compiled CLI, not in a running app.
 - **Fonts are bundled (D-326)** into the web bundle, for the app and for a browser tab alike.
 - **Signing.** Tauri signs the shell and the sidecar with hardened runtime and `Entitlements.plist` (the three bun entitlements, applied to both binaries). The CI job is in `release.yml`, steps and secrets in `desktop/tauri/README.md`.
 - **Install.** A Homebrew cask is prepared at `packaging/homebrew/keyloom.rb` for `planetaryescape/homebrew-tap`. The updater is compiled in only with a key (D-328).

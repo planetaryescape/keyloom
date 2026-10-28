@@ -5,6 +5,17 @@ export class UsageError extends Error {
   override name = "UsageError";
 }
 
+/**
+ * Two keyloom binaries that cannot work together: a desktop app and a `serve` that speak different protocols, or a running server this
+ * one must not attach to or replace (D-454). Exit 10; `kind` says which.
+ */
+export class IncompatibleError extends Error {
+  override name = "IncompatibleError";
+  constructor(readonly kind: "client_protocol_mismatch" | "server_incompatible", message: string) {
+    super(message);
+  }
+}
+
 /** A layout, revision or board that doesn't exist: exit 3. */
 export class NotFoundError extends Error {
   override name = "NotFoundError";

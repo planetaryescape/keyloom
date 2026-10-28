@@ -27,6 +27,8 @@ pub struct AppState {
     pub server: Mutex<Option<Server>>,
     pub sidecar: Mutex<Option<sidecar::Running>>,
     pub sync_layout: Mutex<Option<String>>,
+    /// Signalled when the person picks the menu item that replaces an incompatible server (offered only when the CLI offers it).
+    pub replace: tokio::sync::Notify,
 }
 
 fn show_window(app: &AppHandle) {
@@ -89,6 +91,7 @@ pub fn run() {
                     move |app, event| match event.id().as_ref() {
                         "open" => show_window(app),
                         "sync_now" => menu_bar::sync_now(app),
+                        "replace" => app.state::<AppState>().replace.notify_one(),
                         "login" => {
                             let manager = app.autolaunch();
                             let result = if manager.is_enabled().unwrap_or(false) { manager.disable() } else { manager.enable() };
@@ -118,23 +121,40 @@ pub fn run() {
             // Everything that waits on the server runs off the setup thread so the menu-bar extra shows at once.
             let handle2 = handle.clone();
             tauri::async_runtime::spawn(async move {
-                match sidecar::start(&handle2).await {
-                    Ok(server) => {
-                        let url = server.url.clone();
-                        *handle2.state::<AppState>().server.lock().unwrap() = Some(server);
-                        let h = handle2.clone();
-                        // Window creation must happen on the main thread.
-                        let _ = handle2.run_on_main_thread(move || {
-                            if let Err(err) = open_window(&h, &url) {
-                                eprintln!("keyloom-desktop: window failed: {err}");
-                            }
-                        });
-                        let items = menu_bar::Items { menu, summary, sync_now, lines: Mutex::new(Vec::new()) };
-                        menu_bar::watch(handle2, tray, items).await;
-                    }
-                    Err(err) => {
-                        eprintln!("keyloom-desktop: could not start keyloom: {err}");
-                        let _ = summary.set_text(format!("keyloom could not start: {err}"));
+                let mut mode = sidecar::Mode::Reuse;
+                loop {
+                    match sidecar::start(&handle2, mode).await {
+                        Ok(server) => {
+                            let url = server.url.clone();
+                            *handle2.state::<AppState>().server.lock().unwrap() = Some(server);
+                            let h = handle2.clone();
+                            // Window creation must happen on the main thread.
+                            let _ = handle2.run_on_main_thread(move || {
+                                if let Err(err) = open_window(&h, &url) {
+                                    eprintln!("keyloom-desktop: window failed: {err}");
+                                }
+                            });
+                            let items = menu_bar::Items { menu, summary, sync_now, lines: Mutex::new(Vec::new()) };
+                            menu_bar::watch(handle2, tray, items).await;
+                            return;
+                        }
+                        // Another keyloom is serving the data directory and can't work with this app (D-454). The CLI worded why; when it
+                        // offers to replace that server, its label becomes a menu item, and the CLI is re-run with --replace only if it is picked.
+                        Err(sidecar::Failure::Incompatible { words, replace }) => {
+                            eprintln!("keyloom-desktop: {words}");
+                            let _ = summary.set_text(&words);
+                            let Some(label) = replace else { return };
+                            let Ok(item) = MenuItem::with_id(&handle2, "replace", label, true, None::<&str>) else { return };
+                            let _ = menu.insert(&item, 1);
+                            handle2.state::<AppState>().replace.notified().await;
+                            let _ = menu.remove(&item);
+                            mode = sidecar::Mode::Replace;
+                        }
+                        Err(err) => {
+                            eprintln!("keyloom-desktop: could not start keyloom: {err}");
+                            let _ = summary.set_text(format!("keyloom could not start: {err}"));
+                            return;
+                        }
                     }
                 }
             });

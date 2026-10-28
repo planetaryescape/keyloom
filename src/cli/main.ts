@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   requireCommandSupport, type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
-  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, ValidationFailedError,
+  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { registerConfigCommands } from "./commands/config.ts";
@@ -20,7 +20,9 @@ import { registerReviewCommand } from "./commands/review.ts";
 import { registerProviderCommands } from "./commands/provider.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
-import { announceServer, liveServer } from "../server/running-server.ts";
+import { announceServer } from "../server/running-server.ts";
+import { resolveExistingServer } from "./serve-existing.ts";
+import { DESKTOP_PROTOCOL } from "../server/server-compat.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
 import { importTable } from "./report.ts";
 import pkg from "../../package.json" with { type: "json" };
@@ -225,12 +227,24 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .option("--no-open", "don't open the browser")
     .option("--exit-on-stdin-close", "stop when standard input closes, so a parent that dies can't leave this server running (the desktop app uses it)")
     .option("--reuse", "if keyloom is already serving this data directory, print its URL and exit 0 instead of failing (the desktop app uses it)")
+    .option("--replace", "if another keyloom is serving this data directory, stop it (after it finishes any keyboard write) and serve from this one; refused if that server is newer")
+    .option("--client-protocol <n>", "the desktop protocol the caller was built for (the desktop app passes it); refuses to start if this keyloom speaks another, and makes --reuse refuse a server that does")
     .option("--board-dev <board>", "contributors: show a board's keys with their position numbers instead of your layouts; takes a board ID under ./boards or a board folder")
     .option("--provider <provider>", `model provider for new chats: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
-    .action(async (opts: { port: string; open: boolean; exitOnStdinClose?: boolean; reuse?: boolean; boardDev?: string; provider?: string }) => {
+    .action(async (opts: { port: string; open: boolean; exitOnStdinClose?: boolean; reuse?: boolean; replace?: boolean; clientProtocol?: string; boardDev?: string; provider?: string }) => {
       const provider = opts.provider === undefined ? undefined : parseProvider(opts.provider);
       const port = Number(opts.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535) throw new UsageError(`--port must be 0-65535, got "${opts.port}"`);
+      if (opts.reuse && opts.replace) throw new UsageError("--reuse attaches to a running server and --replace stops it; pass one");
+      let clientProtocol: number | undefined;
+      if (opts.clientProtocol !== undefined) {
+        clientProtocol = Number(opts.clientProtocol);
+        if (!/^\d+$/.test(opts.clientProtocol)) throw new UsageError(`--client-protocol must be a whole number, got "${opts.clientProtocol}"`);
+        // Before anything is started or stopped: a caller built for another protocol would misread this server.
+        if (clientProtocol !== DESKTOP_PROTOCOL) {
+          throw new IncompatibleError("client_protocol_mismatch", `the desktop app was built for keyloom desktop protocol ${clientProtocol}, but this keyloom ${pkg.version} speaks protocol ${DESKTOP_PROTOCOL}. The app and its keyloom are from different releases; reinstall the app (or install the matching keyloom).`);
+        }
+      }
       const start = (app: App | undefined) => {
         try {
           return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, ...(provider ? { provider } : {}), ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
@@ -240,6 +254,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         }
       };
       // Serve until interrupted; withApp closes the database after the server stops.
+      let releaseLock = () => {};
       const untilInterrupted = async (app: App | undefined) => {
         // Before the server takes a request, so no edit sees a layout whose kept code is not yet read (D-361).
         if (app !== undefined) {
@@ -249,7 +264,9 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         }
         const running = start(app);
         // Announced before the URL is printed, so whoever reads the URL can already find the record. --board-dev has no database or sync engine to protect.
-        const forget = app === undefined ? () => {} : announceServer(app.dataDir, running.url);
+        const forget = app === undefined ? () => {} : announceServer(app.dataDir, running.url, { version: pkg.version, protocol: DESKTOP_PROTOCOL });
+        // The directory lock taken before looking for another server: a racing serve or --replace may look now.
+        releaseLock();
         io.err(`keyloom is running at ${running.url}\nPress Ctrl-C to stop.\n`);
         await new Promise<void>((resolve) => {
           const stop = () => resolve();
@@ -274,21 +291,20 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       if (opts.boardDev === undefined) {
         // Before the database opens: a second server would also run the migrations and a second sync engine (D-323).
         const dir = dataDirOf(globals().dataDir);
-        const other = await liveServer(dir);
-        if (other !== undefined) {
-          if (opts.reuse) {
-            io.err(`keyloom is already running at ${other.url}\n`);
-            return;
-          }
-          throw new UsageError(`keyloom is already serving ${dir} at ${other.url} (process ${other.pid}); open that, or stop it first`);
-        }
+        const outcome = await resolveExistingServer({ dir, reuse: opts.reuse === true, replace: opts.replace === true, clientProtocol, mine: { version: pkg.version, protocol: DESKTOP_PROTOCOL }, say: io.err });
+        if (outcome.attached) return;
+        releaseLock = outcome.release;
       }
       if (opts.boardDev !== undefined) {
         // Fails now, with the fix, rather than on the first request.
         await boardDevView(opts.boardDev);
         await untilInterrupted(undefined);
       } else {
-        await withApp(untilInterrupted);
+        try {
+          await withApp(untilInterrupted);
+        } finally {
+          releaseLock();
+        }
       }
     });
 

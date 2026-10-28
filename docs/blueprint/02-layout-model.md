@@ -119,7 +119,7 @@ A **function** is what a binding ultimately produces, independent of where it si
 
 ## Database
 
-One SQLite file at `$XDG_DATA_HOME/keyloom/keyloom.db` (default `~/.local/share/keyloom/keyloom.db`), opened with `bun:sqlite` in WAL mode (D-032). Migrations are numbered SQL files in `src/persistence/migrations/` and run at startup.
+One SQLite file at `$XDG_DATA_HOME/keyloom/keyloom.db` (default `~/.local/share/keyloom/keyloom.db`), opened with `bun:sqlite` in WAL mode (D-032). Migrations are numbered SQL files in `src/persistence/migrations/` and run at startup. A database holding a migration this binary does not have is refused before any migration runs: the error names the database's schema and this keyloom's version and says to upgrade (exit 10, D-455), because a keyloom that ignored the rows it didn't know would misread tables a newer one had changed.
 
 ```sql
 layouts(

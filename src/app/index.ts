@@ -1,7 +1,7 @@
 // The only module src/cli (and src/server) may import (01#modules).
 export { type App, closeApp, openApp } from "./context.ts";
 export { drainDeviceConsumers, shutdownDeviceConnections } from "./device-connections.ts";
-export { BusyError, LabCaptureError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { BusyError, IncompatibleError, LabCaptureError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
@@ -77,3 +77,4 @@ export {
   endRecording, labPassages, realLabDeps, incompleteRecording, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
 } from "./lab.ts";
 export { PlatformUnavailableError, requireCommandSupport, windowsUnavailable } from "../firmware/toolchain/platform-support.ts";
+export { SchemaTooNewError, assertDataDirOpenable } from "../persistence/schema-guard.ts";
