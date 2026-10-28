@@ -49,7 +49,7 @@ Elsewhere: `boards/` holds one data folder per board (no code), `firmware/zmk/` 
 
 ## Run, test, build
 
-- `bun install`, then `bun src/cli/main.ts <command>` runs the CLI from the clone. `bun src/cli/main.ts serve` starts the app. `bun scripts/dev-editor.ts` runs the editor over a fake backend, with no Docker or keyboard.
+- `bun install`, then `bun src/cli/main.ts <command>` runs the CLI from the clone. `bun src/cli/main.ts serve` starts the app. `bun scripts/dev-editor.ts` runs the editor over a fake backend, with no Docker or keyboard, on the synchronized Oryx layout (`test/fixtures/oryx/synchronized`) and the live Moonlander board.
 - `bun test` runs the suite. The preload in `bunfig.toml` blocks real flashing, real credentials and paid models. `bunx tsc --noEmit` type-checks. `bun run depcruise` checks the module table. CI runs all three.
 - Live agent evals in `evals/scenarios/` are skipped unless a provider credential is set. `KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex` picks the provider. They cost money.
 - Docker tests are gated by `KEYLOOM_DOCKER_TESTS`.

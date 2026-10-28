@@ -4,9 +4,9 @@ import { blankDocument } from "../../src/app/configs.ts";
 import { startServer } from "../../src/server/start-server.ts";
 import { FakeChat } from "../helpers/fake-chat-backend.ts";
 import { FakeEditor } from "../helpers/fake-editor-backend.ts";
-import { loadFixture } from "../server/fixture.ts";
+import { devSample } from "../helpers/dev-sample.ts";
 
-const first = await loadFixture();
+const first = await devSample();
 const board = getBoard("moergo/glove80");
 const second = { ...first, board: board.definition, geometry: board.geometry, document: blankDocument(board.definition.id) };
 const a = new FakeEditor(first);
