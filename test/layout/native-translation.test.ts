@@ -169,6 +169,62 @@ describe("reading a native binding", () => {
     expect(r).toEqual({ kind: "holdLayer", layerId: "factory-test", tap: "rgb_ug_status_macro", tapSteps: [] });
   });
 
+  test("a macro's controls are modes, and the steps after them still read: `&macro_tap &bootloader` is a bootloader step", () => {
+    const reset = pass("macro:reset_tap", `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&reset_tap"), kept([reset]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const pressed = pass("macro:press_reset", `press_reset: press_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_press &sys_reset &macro_release &macro_pause_for_release &bt BT_CLR>; };`);
+    // A copy can't translate a macro that acts on press or release: the steps would be written as if they fired on press. The warning
+    // still reads them (readNative's forWarning).
+    expect(readNative(zmk("&press_reset"), kept([pressed]))).toEqual({ kind: "unknown" });
+    expect(readNative(zmk("&press_reset"), kept([pressed]), true)).toEqual({ kind: "steps", steps: [{ kind: "reset" }, { kind: "bluetooth", op: "clear" }] });
+  });
+
+  test("a release-only bootloader macro is not translated, but the warning still reads it", () => {
+    const release = pass("macro:release_boot", `release_boot: release_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_release &bootloader>; };`);
+    expect(readNative(zmk("&release_boot"), kept([release]))).toEqual({ kind: "unknown" });
+    expect(readNative(zmk("&release_boot"), kept([release]), true)).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const pause = pass("macro:pause_boot", `pause_boot: pause_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_pause_for_release &bootloader>; };`);
+    expect(readNative(zmk("&pause_boot"), kept([pause]))).toEqual({ kind: "unknown" });
+  });
+
+  test("a macro with a step the reader can't read still warns about its bootloader, in either order, and a copy does not translate it", () => {
+    const before = pass("macro:key_before_boot", `key_before_boot: key_before_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &kp A &bootloader>; };`);
+    const after = pass("macro:key_after_boot", `key_after_boot: key_after_boot { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&bootloader &kp A>; };`);
+    for (const [name, macro] of [["&key_before_boot", before], ["&key_after_boot", after]] as const) {
+      expect(readNative(zmk(name), kept([macro]), true)).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+      expect(readNative(zmk(name), kept([macro]))).toEqual({ kind: "unknown" });
+    }
+  });
+
+  test("a hex timing parameter is read past like a decimal one, and a name in its place is not", () => {
+    const hex = pass("macro:hex_wait", `hex_wait: hex_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 0x32 &macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&hex_wait"), kept([hex]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const upper = pass("macro:upper_hex_wait", `upper_hex_wait: upper_hex_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 0X32 &macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&upper_hex_wait"), kept([upper]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const named = pass("macro:named_wait", `named_wait: named_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time TAP_MS &bootloader>; };`);
+    expect(readNative(zmk("&named_wait"), kept([named]))).toEqual({ kind: "unknown" });
+  });
+
+  test("a macro's timing controls with one number are skipped, and any other shape of them is not", () => {
+    const timed = pass("macro:timed_reset", `timed_reset: timed_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 50 &macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&timed_reset"), kept([timed]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const tapTime = pass("macro:tap_time_reset", `tap_time_reset: tap_time_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap_time 10 &bootloader>; };`);
+    expect(readNative(zmk("&tap_time_reset"), kept([tapTime]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    // Wrong shapes: no number, or two. Not skipped, so the macro reads as unknown rather than hiding a step.
+    const bare = pass("macro:bare_wait", `bare_wait: bare_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time &bootloader>; };`);
+    expect(readNative(zmk("&bare_wait"), kept([bare]))).toEqual({ kind: "unknown" });
+    const two = pass("macro:two_wait", `two_wait: two_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 1 2 &bootloader>; };`);
+    expect(readNative(zmk("&two_wait"), kept([two]))).toEqual({ kind: "unknown" });
+  });
+
+  test("a hold-tap whose tap is a macro with a bootloader step reads that step as the tap's (`&magic 1 0`)", () => {
+    const reset = pass("macro:reset_tap", `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &bootloader>; };`);
+    const hold = pass("behavior:reset_hold", `reset_hold: reset_hold { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&reset_tap>; };`);
+    expect(readNative(zmk("&reset_hold 1 0", [{ start: 12, end: 13, layerId: "nav" }]), kept([reset, hold]))).toEqual({
+      kind: "holdLayer", layerId: "nav", tap: "reset_tap", tapSteps: [{ kind: "bootloader" }],
+    });
+  });
+
   test("a layer hold with no layerRefs is unknown, because its number can't be tied to a layer", () => {
     expect(readNative(zmk("&magic 5 0"), kept())).toEqual({ kind: "unknown" });
   });

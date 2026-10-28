@@ -66,3 +66,92 @@ describe("ZMK layer numbers in kept devicetree", () => {
     expect(r.unprovable).toEqual([{ line: 2, text: "bindings = <&mo MYSTERY>;" }]);
   });
 });
+
+describe("a #define used as a layer in a kept key (MoErgo's `&magic MAGIC 0`)", () => {
+  const sites = (defineSource: string, keySource: string) => [
+    { site: "d", source: defineSource, kind: "define" as const },
+    { site: "k", source: keySource, kind: "binding" as const },
+  ];
+  const resolve = (s: ZmkSite[], defines: [string, string][] = [["MAGIC", "2"]]) => readZmkLayerRefs(s, {
+    layerIds: ids, layerBehaviours: new Map(), keymapCalls: [], defines: new Map(defines),
+  });
+
+  test("the key records the ref on its layer parameter, and the define keeps its own", async () => {
+    const found = await resolve(sites("#define MAGIC 2", "&magic MAGIC 0"));
+    expect(found.get("k")).toEqual({ layerRefs: [{ start: 7, end: 12, layerId: "l2" }], unprovable: [] });
+    expect(found.get("d")?.layerRefs).toEqual([{ start: 14, end: 15, layerId: "l2" }]);
+  });
+
+  test("the ref follows the name when the source has extra spacing between its words", async () => {
+    const found = await resolve(sites("#define MAGIC 2", "&magic   MAGIC\t0"));
+    expect(found.get("k")?.layerRefs).toEqual([{ start: 9, end: 14, layerId: "l2" }]);
+  });
+
+  test("renumbering moves the define's number and leaves the key's name alone", async () => {
+    const found = await resolve(sites("#define MAGIC 2", "&magic MAGIC 0"));
+    const moved = ["l2", "l0", "l1"];
+    expect(renumber("#define MAGIC 2", found.get("d")?.layerRefs, moved)).toBe("#define MAGIC 0");
+    expect(renumber("&magic MAGIC 0", found.get("k")?.layerRefs, moved)).toBe("&magic MAGIC 0");
+  });
+
+  test("a define used by two keys is recorded on each key, and on the define once", async () => {
+    const found = await resolve([
+      { site: "d", source: "#define MAGIC 2", kind: "define" },
+      { site: "k1", source: "&magic MAGIC 0", kind: "binding" },
+      { site: "k2", source: "&magic MAGIC 1", kind: "binding" },
+    ]);
+    expect(found.get("k1")?.layerRefs).toEqual([{ start: 7, end: 12, layerId: "l2" }]);
+    expect(found.get("k2")?.layerRefs).toEqual([{ start: 7, end: 12, layerId: "l2" }]);
+    expect(found.get("d")?.layerRefs).toHaveLength(1);
+  });
+
+  test("identical duplicate defines give a key one ref, and each define its own", async () => {
+    const found = await readZmkLayerRefs([
+      { site: "d1", source: "#define MAGIC 2", kind: "define" },
+      { site: "d2", source: "#define MAGIC 2", kind: "define" },
+      { site: "k", source: "&magic MAGIC 0", kind: "binding" },
+    ], { layerIds: ids, layerBehaviours: new Map(), keymapCalls: [], defines: new Map([["MAGIC", "2"]]) });
+    expect(found.get("k")?.layerRefs).toEqual([{ start: 7, end: 12, layerId: "l2" }]);
+    expect(found.get("d1")?.layerRefs).toEqual([{ start: 14, end: 15, layerId: "l2" }]);
+    expect(found.get("d2")?.layerRefs).toEqual([{ start: 14, end: 15, layerId: "l2" }]);
+  });
+
+  test("a hex define follows its layer: the number is rewritten, the name is not", async () => {
+    const found = await resolve(sites("#define MAGIC 0x2", "&magic MAGIC 0"));
+    expect(renumber("#define MAGIC 0x2", found.get("d")?.layerRefs, ["l2", "l0", "l1"])).toBe("#define MAGIC 0");
+  });
+
+  test("a define that is also used for something else is refused on the key too, and the key gets no ref", async () => {
+    const found = await readZmkLayerRefs([
+      { site: "d", source: "#define MAGIC 2", kind: "define" },
+      { site: "k", source: "&magic MAGIC 0", kind: "binding" },
+      { site: "n", source: "t: t { tapping-term-ms = <MAGIC>; };", kind: "node" },
+    ], { layerIds: ids, layerBehaviours: new Map(), keymapCalls: [], defines: new Map([["MAGIC", "2"]]) });
+    expect(found.get("k")?.layerRefs).toEqual([]);
+    expect(found.get("k")?.unprovable).toEqual([{ line: 1, text: "&magic MAGIC 0" }]);
+    expect(found.get("d")?.layerRefs).toEqual([]);
+  });
+
+  test("a define that names no layer is not a layer ref, wherever it is used", async () => {
+    const found = await resolve([
+      { site: "d", source: "#define TAP_MS 200", kind: "define" },
+      { site: "k", source: "&kp TAP_MS", kind: "binding" },
+    ], [["TAP_MS", "200"]]);
+    expect(found.get("k")).toBeUndefined();
+    expect(found.get("d")).toBeUndefined();
+  });
+
+  test("a define with a non-layer number used in a layer position is refused where it is used", async () => {
+    const found = await resolve([
+      { site: "d", source: "#define TAP_MS 200", kind: "define" },
+      { site: "k", source: "&magic TAP_MS 0", kind: "binding" },
+    ], [["TAP_MS", "200"]]);
+    expect(found.get("k")).toEqual({ layerRefs: [], unprovable: [{ line: 1, text: "&magic TAP_MS 0" }] });
+  });
+
+  test("a define named like an Object prototype property is read as any other name", async () => {
+    const found = await resolve(sites("#define constructor 2", "&magic constructor 0"), [["constructor", "2"]]);
+    expect(found.get("k")?.layerRefs).toEqual([{ start: 7, end: 18, layerId: "l2" }]);
+    expect(found.get("d")?.layerRefs).toEqual([{ start: 20, end: 21, layerId: "l2" }]);
+  });
+});

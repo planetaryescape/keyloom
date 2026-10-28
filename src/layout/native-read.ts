@@ -13,6 +13,16 @@ const MAX_DEPTH = 4;
 const HOLD_TAP = "zmk,behavior-hold-tap";
 const STICKY_KEY = "zmk,behavior-sticky-key";
 const MACRO = "zmk,behavior-macro";
+// A macro's controls set how the steps after them run (tap, press or release), pause for a release, or set the timing of the steps after
+// them. None presses anything itself, so a step after one still reads as a step of the macro (ZMK's handle_control_binding,
+// moergo-sc/zmk app/src/behaviors/behavior_macro.c @ ce69e85). The timing controls take one number; any other shape is not skipped.
+const MACRO_CONTROLS = new Set(["macro_tap", "macro_press", "macro_release", "macro_pause_for_release"]);
+const MACRO_TIMING = new Set(["macro_wait_time", "macro_tap_time"]);
+// The controls that act on press or release, or wait for a release. A macro with one of these is not translatable (a copy writes its
+// steps as taps), but the risky-key warning still reads through it.
+const ACTIVATION_CONTROLS = new Set(["macro_press", "macro_release", "macro_pause_for_release"]);
+// A layer number or timing value as written: decimal or hex. Anything else (a name, a sum) is not read.
+const NUMBER_LITERAL = /^(?:\d+|0[xX][0-9a-fA-F]+)$/;
 
 // The one-shot's mods as QMK writes them: `OSM(MOD_LSFT)`, `OSM(MOD_LCTL|MOD_LALT)`. Whole-string, so `OSM(MOD_L SFT)` and `OSM(MOD_LSFT) ` do not read.
 const QMK_OSM = /^OSM\((MOD_[LR](?:CTL|SFT|ALT|GUI)(?:\|MOD_[LR](?:CTL|SFT|ALT|GUI))*)\)$/;
@@ -46,9 +56,14 @@ const ZMK_RGB = new Map<string, LightingOp>([
   ["RGB_BRI", "briUp"], ["RGB_BRD", "briDown"], ["RGB_SPI", "speedUp"], ["RGB_SPD", "speedDown"], ["RGB_EFF", "effectNext"], ["RGB_EFR", "effectPrev"],
 ]);
 
-export function readNative(native: NativeSource, kept: KeptMap): Reading {
+/**
+ * What a native does. The default reads for translation: what a copy or an agent edit writes. A macro that acts on release (or pauses
+ * for one) is not translatable, since keyloom would write the step as if it fired on press. `forWarning` keeps every step in view
+ * instead, so a risky step behind any macro control still warns.
+ */
+export function readNative(native: NativeSource, kept: KeptMap, forWarning = false): Reading {
   if (native.firmware === "qmk") return readQmk(spaced(native.source, "qmk"));
-  if (native.firmware === "zmk") return readZmk(native, kept);
+  if (native.firmware === "zmk") return readZmk(native, kept, forWarning);
   return { kind: "unknown" };
 }
 
@@ -80,7 +95,7 @@ function qmkOneShotMods(names: string): Mod[] {
   return MOD_ORDER.filter((m) => m.startsWith(side) && bases.has(m.slice(1)));
 }
 
-function readZmk(native: NativeSource, kept: KeptMap): Reading {
+function readZmk(native: NativeSource, kept: KeptMap, forWarning: boolean): Reading {
   const source = spaced(native.source, "zmk");
   if (!ZMK_CALL.test(source)) return { kind: "unknown" };
   const calls = parseCalls(source);
@@ -93,8 +108,8 @@ function readZmk(native: NativeSource, kept: KeptMap): Reading {
     return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
   }
   if (!takesArguments(call, def)) return { kind: "unknown" };
-  if (def.compatible === HOLD_TAP) return holdLayer(native, call.params, def, kept);
-  const steps = resolveKept(call, def, kept, 1);
+  if (def.compatible === HOLD_TAP) return holdLayer(native, call.params, def, kept, forWarning);
+  const steps = resolveKept(call, def, kept, 1, forWarning);
   return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
 }
 
@@ -107,7 +122,7 @@ function takesArguments(call: KeptCall, def: KeptDefinition): boolean {
  * `&magic 5 0` holds layer 5 and taps the macro. Only a hold on `&mo` is a momentary layer, and the layer is the one layerRefs names.
  * The tap's own steps come along, so a tap that does something risky (a bootloader) is named by the caller.
  */
-function holdLayer(native: NativeSource, params: readonly string[], def: KeptDefinition, kept: KeptMap): Reading {
+function holdLayer(native: NativeSource, params: readonly string[], def: KeptDefinition, kept: KeptMap, forWarning: boolean): Reading {
   const [hold, tap] = def.cells;
   if (def.cells.length !== 2 || hold?.length !== 1 || tap?.length !== 1 || hold[0]?.name !== "mo" || hold[0].params.length !== 0) return { kind: "unknown" };
   const tapCall = tap[0];
@@ -115,7 +130,7 @@ function holdLayer(native: NativeSource, params: readonly string[], def: KeptDef
   if (tapCall === undefined || param === undefined) return { kind: "unknown" };
   const ref = (native.layerRefs ?? []).find((r) => r.start >= param.start && r.start < param.end);
   if (ref === undefined) return { kind: "unknown" };
-  return { kind: "holdLayer", layerId: ref.layerId, tap: tapCall.name, tapSteps: tapSteps(tapCall, params[1], kept) };
+  return { kind: "holdLayer", layerId: ref.layerId, tap: tapCall.name, tapSteps: tapSteps(tapCall, params[1], kept, forWarning) };
 }
 
 /**
@@ -123,9 +138,9 @@ function holdLayer(native: NativeSource, params: readonly string[], def: KeptDef
  * that takes no parameter reads without it, since the template's `&magic MAGIC 0` passes a placeholder to a macro tap. ZMK ignores the
  * spare argument for a zero-argument behaviour; that is an assumption, not something read from the firmware here.
  */
-function tapSteps(tapCall: KeptCall, forwarded: string | undefined, kept: KeptMap): readonly Step[] {
-  const withArgument = forwarded === undefined ? undefined : resolveCall({ name: tapCall.name, params: [...tapCall.params, forwarded] }, kept, 1);
-  return withArgument ?? resolveCall(tapCall, kept, 1) ?? [];
+function tapSteps(tapCall: KeptCall, forwarded: string | undefined, kept: KeptMap, forWarning: boolean): readonly Step[] {
+  const withArgument = forwarded === undefined ? undefined : resolveCall({ name: tapCall.name, params: [...tapCall.params, forwarded] }, kept, 1, forWarning);
+  return withArgument ?? resolveCall(tapCall, kept, 1, forWarning) ?? [];
 }
 
 /**
@@ -138,13 +153,21 @@ export function admittedLayerRefs(native: NativeSource, kept: KeptMap): boolean 
   if (reading.kind === "unknown") return false;
   if (reading.kind === "steps") return refs.length === 0;
   const param = paramSpan(native.source, 0);
-  // Exactly one ref: two identical refs would make the generator write the layer number twice (`&magic 22 0`).
+  // Exactly one ref: two identical refs would make the generator write the layer number twice (`&magic 22 0`). A new native's ref is a
+  // number, since a name it used would be written out unresolved (imported keys keep theirs; they were read from the file).
   const [only] = refs;
-  return param !== undefined && refs.length === 1 && only !== undefined && only.start === param.start && only.end === param.end && only.layerId === reading.layerId;
+  return param !== undefined && refs.length === 1 && only !== undefined && only.start === param.start && only.end === param.end && only.layerId === reading.layerId
+    && NUMBER_LITERAL.test(native.source.slice(only.start, only.end));
+}
+
+/** A control that sets modes or timing and presses nothing, so the steps around it still read. */
+function isMacroControl(call: KeptCall): boolean {
+  if (MACRO_CONTROLS.has(call.name)) return call.params.length === 0;
+  return MACRO_TIMING.has(call.name) && call.params.length === 1 && NUMBER_LITERAL.test(call.params[0] ?? "");
 }
 
 /** A kept behaviour's steps. A kept sticky key passes its parameter to `&sk`; a kept macro runs its calls in order. */
-function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: number): Step[] | undefined {
+function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: number, forWarning: boolean): Step[] | undefined {
   if (depth > MAX_DEPTH) return undefined;
   if (def.compatible === STICKY_KEY) {
     const only = def.cells.length === 1 && def.cells[0]?.length === 1 ? def.cells[0][0] : undefined;
@@ -157,8 +180,17 @@ function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: 
     const steps: Step[] = [];
     for (const cell of def.cells) {
       for (const inner of cell) {
-        const more = resolveCall(inner, kept, depth + 1);
-        if (more === undefined) return undefined;
+        if (!kept.has(inner.name) && isMacroControl(inner)) {
+          if (!forWarning && ACTIVATION_CONTROLS.has(inner.name)) return undefined;
+          continue;
+        }
+        const more = resolveCall(inner, kept, depth + 1, forWarning);
+        // The warning reads the steps it can and passes over one it can't, so a bootloader beside a key it doesn't model still warns.
+        // A copy needs every step, so one unreadable step leaves the macro unknown.
+        if (more === undefined) {
+          if (forWarning) continue;
+          return undefined;
+        }
         steps.push(...more);
       }
     }
@@ -167,10 +199,10 @@ function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: 
   return undefined;
 }
 
-function resolveCall(call: KeptCall, kept: KeptMap, depth: number): Step[] | undefined {
+function resolveCall(call: KeptCall, kept: KeptMap, depth: number, forWarning: boolean): Step[] | undefined {
   const def = kept.get(call.name);
   if (def === null) return undefined;
-  if (def !== undefined) return takesArguments(call, def) ? resolveKept(call, def, kept, depth) : undefined;
+  if (def !== undefined) return takesArguments(call, def) ? resolveKept(call, def, kept, depth, forWarning) : undefined;
   return builtin(call.name, call.params);
 }
 

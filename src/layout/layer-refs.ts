@@ -2,6 +2,8 @@
 // layer numbers (D-360); this renumbers them for the layer order the document has now. Pure: no parsing happens here.
 import type { Binding, Layout, LayerRef } from "./schema.ts";
 
+const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 /**
  * `source` with each recorded number replaced by its layer's current index. A number that already reads right is left as it was
  * written, and so is one whose layer is gone: `missingLayerNumbers` reports those, and `passthrough_layer_index` refuses the change.
@@ -14,7 +16,9 @@ export function renumber(source: string, refs: readonly LayerRef[] | undefined, 
     const index = layerIds.indexOf(ref.layerId);
     out += source.slice(at, ref.start);
     const written = source.slice(ref.start, ref.end);
-    out += index < 0 || Number(written) === index ? written : String(index);
+    // A ref that is an identifier (a `#define` used as a layer) keeps the name; only its define's number is rewritten. Numeric literals
+    // of any form (decimal or hex) are rewritten like the rest.
+    out += index < 0 || IDENTIFIER.test(written) || Number(written) === index ? written : String(index);
     at = ref.end;
   }
   return out + source.slice(at);

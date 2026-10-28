@@ -14,6 +14,16 @@ describe("renumber", () => {
     expect(renumber("MO(0x1)", [{ start: 3, end: 6, layerId: "b" }], ids)).toBe("MO(0x1)");
   });
 
+  test("a hex literal is a number like any other, so it is rewritten when its layer moves", () => {
+    expect(renumber("MO(0x2)", [{ start: 3, end: 6, layerId: "a" }], ids)).toBe("MO(0)");
+    expect(renumber("MO(0x2)", [{ start: 3, end: 6, layerId: "c" }], ids)).toBe("MO(0x2)");
+  });
+
+  test("a ref that is a name keeps the name when its layer moves, since the define that holds the number is the one rewritten", () => {
+    expect(renumber("&magic MAGIC 0", [{ start: 7, end: 12, layerId: "c" }], ids)).toBe("&magic MAGIC 0");
+    expect(renumber("&magic MAGIC 0 &mo 1", [{ start: 7, end: 12, layerId: "c" }, { start: 19, end: 20, layerId: "a" }], ids)).toBe("&magic MAGIC 0 &mo 0");
+  });
+
   test("a number whose layer is gone is left as written, and missingLayerNumbers names the layer", () => {
     const refs = [{ start: 3, end: 4, layerId: "z" }];
     expect(renumber("MO(1)", refs, ids)).toBe("MO(1)");

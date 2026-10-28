@@ -1,6 +1,8 @@
 # A Glove80 `&magic MAGIC 0` key is not read, so its layer is not carried
 
-Status: open. Found in stage T (D-451), 2026-10-23, on `feat/copy-translates-codes`.
+Status: fixed on branch fix/five-zmk (the importer records the layer ref on a kept key whose layer parameter is a `#define` that names a layer; renumbering keeps the name).
+
+Found in stage T (D-451), 2026-10-23, on `feat/copy-translates-codes`.
 
 The MoErgo template writes the magic key as `&magic MAGIC 0`, with `#define MAGIC 2` in the same file. Importing it keeps the key as native code, and the copy can't read it, so the magic key is not carried and its layer has no way in.
 

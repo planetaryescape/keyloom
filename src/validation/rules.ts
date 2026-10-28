@@ -347,7 +347,8 @@ export function riskyNatives(board: BoardDefinition, before: Layout, after: Layo
   const kept = keptDefinitions(after.passthrough);
   const out: Issue[] = [];
   for (const { native, slot, where } of newNatives(before, after)) {
-    const reading = readNative(native, kept);
+    // The warning reads through every macro control: a release-only bootloader still warns, though a copy does not translate it.
+    const reading = readNative(native, kept, true);
     // A layer hold is risky through its tap: `&magic 1 0` with a bootloader tap enters the bootloader when that tap is pressed.
     if (reading.kind === "unknown") continue;
     const steps = reading.kind === "steps" ? reading.steps : reading.tapSteps;
