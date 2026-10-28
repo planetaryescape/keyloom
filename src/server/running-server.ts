@@ -61,20 +61,36 @@ export function readRecord(dataDir: string): RunningRecord | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
+/** The same server: a new one on the same pid or port would differ in at least `startedAt`. */
+export const sameServer = (a: RunningRecord | undefined, b: RunningRecord | undefined): boolean =>
+  a !== undefined && b !== undefined && a.pid === b.pid && a.url === b.url && a.startedAt === b.startedAt;
+
+/** How many times discovery looks again when the record changes under its probe. */
+const DISCOVERY_ATTEMPTS = 3;
+
 /**
  * The server already serving `dataDir`, or undefined. A record counts only if its process exists and the server answers with its
- * token: a crash leaves the file behind, and a recycled pid is not a keyloom server.
+ * token: a crash leaves the file behind, and a recycled pid is not a keyloom server. The probe takes up to `timeoutMs`, so the record is
+ * read again afterwards: one that changed meanwhile (the server exited and another announced) is looked at afresh, because acting on
+ * the first server's identity could signal it, or start beside its successor.
  */
 export async function liveServer(dataDir: string, timeoutMs = 1500): Promise<RunningRecord | undefined> {
-  const record = readRecord(dataDir);
-  if (record === undefined || record.pid === process.pid || !processAlive(record.pid)) return undefined;
-  try {
-    const url = new URL(record.url);
-    const token = url.searchParams.get("t");
-    if (token === null) return undefined;
-    const res = await fetch(new URL("/api/layouts", url.origin), { headers: { "x-keyloom-token": token }, signal: AbortSignal.timeout(timeoutMs) });
-    return res.ok ? record : undefined;
-  } catch {
-    return undefined;
+  for (let attempt = 0; attempt < DISCOVERY_ATTEMPTS; attempt++) {
+    const record = readRecord(dataDir);
+    if (record === undefined || record.pid === process.pid || !processAlive(record.pid)) return undefined;
+    let answered = false;
+    try {
+      const url = new URL(record.url);
+      const token = url.searchParams.get("t");
+      if (token === null) return undefined;
+      const res = await fetch(new URL("/api/layouts", url.origin), { headers: { "x-keyloom-token": token }, signal: AbortSignal.timeout(timeoutMs) });
+      answered = res.ok;
+    } catch {
+      // Not answering: handled below with a re-read, since a successor may have announced meanwhile.
+    }
+    const after = readRecord(dataDir);
+    if (sameServer(record, after)) return answered ? record : undefined;
   }
+  // The record kept changing under every probe; nothing can be trusted as the server to act on.
+  return undefined;
 }

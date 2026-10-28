@@ -96,7 +96,8 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
     let (exit_tx, exited) = std::sync::mpsc::channel();
     let mut child = Some(child);
     let mut stderr = String::new();
-    // --replace waits for the old server to finish any keyboard write before it starts (up to two minutes, src/server/replace-server.ts).
+    // --replace waits for the directory lock and then for the old server to finish any keyboard write, all inside one 120 s budget
+    // (TAKEOVER_TIMEOUT_MS in src/server/replace-server.ts). This is tied to it: keep this longer than that, and change them together.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(if mode == Mode::Replace { 135 } else { 20 });
     loop {
         let event = tokio::time::timeout_at(deadline, rx.recv()).await.map_err(|_| Failure::Other("timed out waiting for keyloom to print its URL".into()))?;

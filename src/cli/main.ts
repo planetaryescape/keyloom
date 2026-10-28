@@ -254,7 +254,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         }
       };
       // Serve until interrupted; withApp closes the database after the server stops.
-      let releaseReplace = () => {};
+      let releaseLock = () => {};
       const untilInterrupted = async (app: App | undefined) => {
         // Before the server takes a request, so no edit sees a layout whose kept code is not yet read (D-361).
         if (app !== undefined) {
@@ -265,8 +265,8 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         const running = start(app);
         // Announced before the URL is printed, so whoever reads the URL can already find the record. --board-dev has no database or sync engine to protect.
         const forget = app === undefined ? () => {} : announceServer(app.dataDir, running.url, { version: pkg.version, protocol: DESKTOP_PROTOCOL });
-        // A racing --replace may look at the directory again now.
-        releaseReplace();
+        // The directory lock taken before looking for another server: a racing serve or --replace may look now.
+        releaseLock();
         io.err(`keyloom is running at ${running.url}\nPress Ctrl-C to stop.\n`);
         await new Promise<void>((resolve) => {
           const stop = () => resolve();
@@ -293,7 +293,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         const dir = dataDirOf(globals().dataDir);
         const outcome = await resolveExistingServer({ dir, reuse: opts.reuse === true, replace: opts.replace === true, clientProtocol, mine: { version: pkg.version, protocol: DESKTOP_PROTOCOL }, say: io.err });
         if (outcome.attached) return;
-        releaseReplace = outcome.release;
+        releaseLock = outcome.release;
       }
       if (opts.boardDev !== undefined) {
         // Fails now, with the fix, rather than on the first request.
@@ -303,7 +303,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         try {
           await withApp(untilInterrupted);
         } finally {
-          releaseReplace();
+          releaseLock();
         }
       }
     });

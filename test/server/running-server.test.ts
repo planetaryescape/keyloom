@@ -60,4 +60,43 @@ describe("serve.json", () => {
     write(dir, JSON.stringify({ pid: process.ppid, url: "http://127.0.0.1:9/?t=x", startedAt: "z" }));
     expect(await liveServer(dir, 300)).toBeUndefined();
   });
+
+  test("a record that changes while the probe is out is looked at again, and the successor is what comes back", async () => {
+    const dir = tempDir();
+    let probes = 0;
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        // The first server answers, exits, and its successor announces, all while liveServer is waiting.
+        if (probes++ === 0) write(dir, record("successor"));
+        return new Response("[]");
+      },
+    });
+    try {
+      write(dir, record("first"));
+      expect((await liveServer(dir, 1000))?.startedAt).toBe("successor");
+      expect(probes).toBe(2);
+    } finally {
+      server.stop(true);
+    }
+    function record(startedAt: string): string {
+      return JSON.stringify({ pid: process.ppid, url: `http://127.0.0.1:${server.port}/?t=x`, startedAt });
+    }
+  });
+
+  test("a record that keeps changing is no server at all, not the first snapshot", async () => {
+    const dir = tempDir();
+    let n = 0;
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => (write(dir, record()), new Response("[]")),
+    });
+    const record = (): string => JSON.stringify({ pid: process.ppid, url: `http://127.0.0.1:${server.port}/?t=x`, startedAt: `s${n++}` });
+    try {
+      write(dir, record());
+      expect(await liveServer(dir, 1000)).toBeUndefined();
+    } finally {
+      server.stop(true);
+    }
+  });
 });

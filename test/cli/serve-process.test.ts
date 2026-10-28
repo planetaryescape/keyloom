@@ -211,4 +211,84 @@ describe("keyloom serve for the desktop app", () => {
     },
     SLOW_RUNNER_MS,
   );
+
+  test(
+    "a plain serve waits behind a held directory lock and starts only after it is released",
+    async () => {
+      const dir = tempDir();
+      const marker = join(tempDir(), "released");
+      const lock = join(import.meta.dir, "../../src/server/directory-lock.ts");
+      const holder = Bun.spawn(["bun", "-e", `
+        import { acquireDirectoryLock } from ${JSON.stringify(lock)};
+        import { writeFileSync } from "node:fs";
+        const release = await acquireDirectoryLock(${JSON.stringify(dir)}, { now: Date.now, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), deadline: Date.now() + 10000 });
+        console.log("held");
+        await new Promise((r) => setTimeout(r, 1500));
+        writeFileSync(${JSON.stringify(marker)}, String(Date.now()));
+        release();
+      `], { stdout: "pipe", stderr: "pipe" });
+      await new Response(holder.stdout.pipeThrough(new TextDecoderStream())).body?.getReader().read();
+      const proc = spawnServe(dir, "--port", "0");
+      try {
+        const said = await firstLine(proc, /keyloom is running at/);
+        const startedAt = Date.now();
+        await holder.exited;
+        expect(startedAt).toBeGreaterThanOrEqual(Number(readFileSync(marker, "utf8")));
+        expect(said).toContain("running");
+      } finally {
+        proc.kill("SIGTERM");
+        await proc.exited;
+      }
+    },
+    SLOW_RUNNER_MS,
+  );
+
+  test(
+    "several --reuse starts at once leave exactly one server; the rest attach to it",
+    async () => {
+      const dir = tempDir();
+      const procs = Array.from({ length: 4 }, () => spawnServe(dir, "--port", "0", "--reuse", "--client-protocol", String(DESKTOP_PROTOCOL)));
+      const outputs = new Map<ReturnType<typeof spawnServe>, string>();
+      try {
+        // The starter never exits on its own; the attachers exit 0 once they have printed where the server is.
+        await Promise.all(procs.map(async (p) => outputs.set(p, await firstLine(p, /keyloom is (already )?running at \S+/))));
+        const starters = procs.filter((p) => !/already/.test(outputs.get(p)!));
+        expect(starters).toHaveLength(1);
+        for (const p of procs) if (p !== starters[0]) expect(await p.exited).toBe(0);
+        expect(starters[0]!.exitCode).toBeNull();
+      } finally {
+        for (const p of procs) p.kill("SIGTERM");
+        await Promise.all(procs.map((p) => p.exited));
+      }
+    },
+    SLOW_RUNNER_MS,
+  );
+
+  test(
+    "two --replace runs against an old server leave one new server, and the old one gone",
+    async () => {
+      const dir = tempDir();
+      const old = spawnServe(dir, "--port", "0");
+      await firstLine(old, /keyloom is running at/);
+      const record = JSON.parse(readFileSync(join(dir, "serve.json"), "utf8"));
+      delete record.version;
+      delete record.protocol;
+      writeFileSync(join(dir, "serve.json"), JSON.stringify(record));
+      const procs = [1, 2].map(() => spawnServe(dir, "--port", "0", "--replace", "--client-protocol", String(DESKTOP_PROTOCOL)));
+      try {
+        const outputs = await Promise.all(procs.map((p) => firstLine(p, /keyloom is (already )?running at \S+/)));
+        expect(outputs.filter((o) => !/already/.test(o))).toHaveLength(1);
+        expect(await old.exited).toBe(0);
+        const loser = procs[outputs.findIndex((o) => /already/.test(o))]!;
+        expect(await loser.exited).toBe(0);
+        const winner = procs.find((p) => p !== loser)!;
+        expect(winner.exitCode).toBeNull();
+      } finally {
+        old.kill("SIGTERM");
+        for (const p of procs) p.kill("SIGTERM");
+        await Promise.all([old.exited, ...procs.map((p) => p.exited)]);
+      }
+    },
+    SLOW_RUNNER_MS,
+  );
 });
