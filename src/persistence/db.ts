@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { MIGRATIONS } from "./migrations.ts";
 import { databasePath } from "./paths.ts";
+import { assertSchemaKnown } from "./schema-guard.ts";
 
 /** Opens (creating if needed) the database in `dir`, in WAL mode, with migrations applied. */
 export function openDatabase(dir: string): Database {
@@ -11,7 +12,14 @@ export function openDatabase(dir: string): Database {
   db.run("PRAGMA busy_timeout = 5000");
   enableWal(db);
   db.run("PRAGMA foreign_keys = ON");
-  migrate(db);
+  try {
+    // Before any migration: a database a newer keyloom upgraded is refused, not half-understood (D-455).
+    assertSchemaKnown(db, databasePath(dir));
+    migrate(db);
+  } catch (err) {
+    db.close();
+    throw err;
+  }
   return db;
 }
 

@@ -20,9 +20,15 @@ The inherited bundle config says macOS 12.0; pinned Bun 1.3.14 documents a 13+ r
 
 A signed build runs on the Mac that made it without notarisation, because nothing quarantines it. A downloaded copy is refused by Gatekeeper until it is notarised.
 
+## The sidecar must match the app
+
+The app and its `keyloom` sidecar are one release. `fetch-sidecar.sh` with no argument downloads the *latest* release, which is not necessarily the version `build.sh` stamps on the app, so for a local build pass the binary you built (above) or set `KEYLOOM_TAG=vX.Y.Z`. The release workflow builds the sidecar from the same commit. The shell passes `--client-protocol <DESKTOP_PROTOCOL>` and a sidecar that speaks another protocol refuses to start; one too old to know the flag fails on the unknown option, and the menu bar shows `keyloom could not start: …`.
+
+**Protocol bump rule.** `DESKTOP_PROTOCOL` (`src/sidecar.rs`) must equal `DESKTOP_PROTOCOL` in `src/api/desktop-protocol.ts`; `test/api/desktop-protocol.test.ts` fails if they differ. Bump both when you change a `serve` flag the shell passes, a stderr marker line it reads, the `menuBar` object in `/api/events` frames, `POST /api/sync` or the `x-keyloom-token` header. That test also pins the `menuBar` shape and fails with a message saying so.
+
 ## What the shell does
 
-- Starts `keyloom serve --port <last port or 0> --no-open --exit-on-stdin-close --reuse`. The server exits when the shell's pipe closes, so a crashed shell leaves nothing behind. `--reuse` makes the CLI print the address of a server already serving the same data directory and exit; the shell then attaches to that server and never stops it (D-323).
+- Starts `keyloom serve --port <last port or 0> --no-open --exit-on-stdin-close --reuse --client-protocol 1`. The server exits when the shell's pipe closes, so a crashed shell leaves nothing behind. `--reuse` makes the CLI print the address of a server already serving the same data directory and exit; the shell then attaches to that server and never stops it (D-323). If that server speaks another protocol, or predates the check, the CLI exits 10 with `keyloom cannot attach: …`; the shell shows those words in the menu bar and, when the CLI also prints `keyloom can replace it: …`, adds a menu item that re-runs the sidecar with `--replace` instead of `--reuse` (D-454).
 - Closing the window hides it; the menu-bar extra and Dock icon stay. Quit (menu bar or Cmd-Q) sends SIGTERM to a server it started and waits up to 30 seconds, so a keyboard write in progress finishes.
 - Launch at login is a menu-bar checkbox and is off until it is ticked.
 

@@ -134,11 +134,16 @@ pub async fn watch(app: AppHandle, tray: TrayIcon, items: Items) {
         failures += 1;
         // A server we attached to can be stopped by whoever started it (BK's browser one). The shell then starts its own, once the old one is clearly gone.
         if !owned && failures >= GIVE_UP_ATTACHED_AFTER {
-            match sidecar::start(&app).await {
+            match sidecar::start(&app, sidecar::Mode::Reuse).await {
                 Ok(server) => {
                     crate::navigate(&app, &server.url);
                     *app.state::<AppState>().server.lock().unwrap() = Some(server);
                     failures = 0;
+                }
+                // A server that came back and can't work with this app: say so where the person looks, in the CLI's words.
+                Err(sidecar::Failure::Incompatible { words, .. }) => {
+                    eprintln!("keyloom-desktop: {words}");
+                    let _ = items.summary.set_text(&words);
                 }
                 Err(err) => eprintln!("keyloom-desktop: could not take over serving: {err}"),
             }

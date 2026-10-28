@@ -9,6 +9,7 @@ The CLI is the canonical surface (D-030, taken from spotuify). Everything the we
 ```
 keyloom
   serve [--port 4477] [--no-open]          start the local web app and open it in the browser (also: web)
+                                           [--reuse | --replace] [--client-protocol N]   see Serving beside another keyloom
   boards list                              boards keyloom has definitions for
   boards show <board>                      physical keys, hands, firmware, build and flash recipe
   boards check <dir>                       validate a board definition (for contributors, 04)
@@ -214,6 +215,10 @@ Use a user-owned, nonsymlink cache that other users cannot write. Reinstall the 
 - `layout show` in table mode prints each layer as a grid placed by the board's physical rows, the same rendering the agent gets from `get_layout` ([03](03-agent.md#tools)). What the agent sees and what a human debugging it sees are the same text.
 - `chat` streams assistant text to stdout as it arrives. With `--format json` it prints one final object: `{ conversationId, messageIds, proposals: [{ changeSetId, title, validation }] }`.
 
+## Serving beside another keyloom
+
+One server serves a data directory (D-323). `serve --reuse` attaches to a live one and exits 0 (the desktop app uses it). `serve --replace` stops it with SIGTERM, waits up to two minutes for its process to exit (it finishes a keyboard write first; it is never killed), and serves from this keyloom; it is refused when the live server is newer, and `--reuse` and `--replace` are exclusive. `serve --client-protocol N` is the desktop app saying which protocol it was built for (`DESKTOP_PROTOCOL`, 1): a keyloom that speaks another refuses to start, and `--reuse` with it refuses a live server whose `serve.json` `protocol` differs, or is missing, by printing `keyloom cannot attach: …` (and `keyloom can replace it: …` when the server is older or unknown) and exiting 10. Without `--client-protocol`, `--reuse` attaches to any live server. `serve.json` records `version` and `protocol`.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -228,6 +233,7 @@ Use a user-owned, nonsymlink cache that other users cannot write. Reinstall the 
 | 7 | Build failed |
 | 8 | Flash failed or timed out waiting for the bootloader |
 | 9 | Model API error: auth, rate limit or refusal after fallback |
+| 10 | Incompatible keyloom: the data directory's database was migrated by a newer keyloom (`schema_too_new`), `serve --client-protocol` names a protocol this keyloom doesn't speak (`client_protocol_mismatch`), or the server already running can't be used (`server_incompatible`) (D-454, D-455) |
 
 ## Agent skill
 
