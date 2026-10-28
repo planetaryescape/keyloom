@@ -1,5 +1,6 @@
-// Runs the editor over the Moonlander sample with an in-memory fake backend, so the whole journey
-// (edit, apply, undo, build, flash) can be tried or screenshotted without Docker or a keyboard:
+// Runs the editor over the synchronized Oryx layout on the live Moonlander board, with an in-memory fake
+// backend, so the whole journey (edit, apply, undo, build, flash) can be tried or screenshotted without Docker
+// or a keyboard:
 //
 //   bun scripts/dev-editor.ts [port]          # default 4490
 //
@@ -12,11 +13,11 @@
 // Edits live in memory and vanish when the process stops. Ctrl-C stops it.
 import { FakeChat } from "../test/helpers/fake-chat-backend.ts";
 import { FakeEditor } from "../test/helpers/fake-editor-backend.ts";
-import { loadFixture } from "../test/server/fixture.ts";
+import { devSample } from "../test/helpers/dev-sample.ts";
 import { startServer } from "../src/server/start-server.ts";
 
 const port = Number(process.argv[2] ?? 4490);
-const fixture = await loadFixture();
+const fixture = await devSample();
 const fake = new FakeEditor(fixture, {
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
   failFlash: process.env.KEYLOOM_FAKE_FAIL_FLASH === "1",
