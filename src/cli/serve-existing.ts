@@ -3,8 +3,8 @@
 import { IncompatibleError, UsageError, assertDataDirOpenable } from "../app/index.ts";
 import { acquireDirectoryLock } from "../server/directory-lock.ts";
 import { type Identity, assessServer, wouldDowngrade } from "../server/server-compat.ts";
-import { type ProcessDeps, TAKEOVER_TIMEOUT_MS, realProcessDeps, stopServer } from "../server/replace-server.ts";
-import { type RunningRecord, liveServer, readRecord, sameServer } from "../server/running-server.ts";
+import { type ProcessDeps, TAKEOVER_TIMEOUT_MS, realProcessDeps, stopServer, waitForExit } from "../server/replace-server.ts";
+import { type DrainingServer, type RunningRecord, liveServer, readRecord, sameServer } from "../server/running-server.ts";
 
 export type ExistingServerRequest = {
   dir: string;
@@ -17,7 +17,7 @@ export type ExistingServerRequest = {
 };
 
 export type ExistingServerDeps = {
-  live?: (dir: string) => Promise<RunningRecord | undefined>;
+  live?: (dir: string) => Promise<RunningRecord | DrainingServer | undefined>;
   /** The record on disk now, for the check just before a signal. */
   record?: (dir: string) => RunningRecord | undefined;
   process?: ProcessDeps;
@@ -37,16 +37,23 @@ export async function resolveExistingServer(req: ExistingServerRequest, deps: Ex
   const live = deps.live ?? liveServer;
   const recordOnDisk = deps.record ?? readRecord;
   const clock = deps.process ?? realProcessDeps;
+  const sayLine = (line: string) => req.say(`${line}\n`);
   const deadline = clock.now() + (deps.timeoutMs ?? TAKEOVER_TIMEOUT_MS);
 
   // Replace checks the data directory first: stopping a server this binary then can't replace would leave the person with none.
   if (req.replace) (deps.canOpen ?? assertDataDirOpenable)(req.dir);
   // Every start takes the lock, so a plain serve can't start between a replacer's old server exiting and its replacement announcing.
-  const release = await acquireDirectoryLock(req.dir, { ...clock, deadline, say: (line) => req.say(`${line}\n`) });
+  const release = await acquireDirectoryLock(req.dir, { ...clock, deadline, say: sayLine });
   try {
     for (let attempt = 0; ; attempt++) {
       const other = await live(req.dir);
       if (other === undefined) return { attached: false, release };
+      if ("draining" in other) {
+        // A server we verified is shutting down and has dropped its record, but its process may still be writing to a keyboard. The
+        // directory is not free until that process is gone; wait, never signal, then look again.
+        await waitForExit(other.pid, "was already shutting down", { deps: clock, deadline, say: sayLine });
+        continue;
+      }
 
       if (!req.replace) {
         if (!req.reuse) throw new UsageError(`keyloom is already serving ${req.dir} at ${other.url} (process ${other.pid}); open that, or stop it first`);
@@ -72,9 +79,11 @@ export async function resolveExistingServer(req: ExistingServerRequest, deps: Ex
         req.say(`keyloom cannot attach: ${words}\n`);
         throw new IncompatibleError("server_incompatible", words);
       }
-      const outcome = await stopServer(other, { deps: clock, deadline, say: (line) => req.say(`${line}\n`), stillCurrent: () => sameServer(other, recordOnDisk(req.dir)) });
+      const outcome = await stopServer(other, { deps: clock, deadline, say: sayLine, stillCurrent: () => sameServer(other, recordOnDisk(req.dir)) });
       if (outcome === "stopped") return { attached: false, release };
-      // The record changed between looking and signalling (the server exited and another announced): judge what is there now.
+      // The record changed between looking and signalling. If the server we verified is still alive it is shutting down (its record goes
+      // before its last keyboard write finishes): wait for it without signalling, then judge what is there now.
+      if (clock.alive(other.pid)) await waitForExit(other.pid, "was already shutting down", { deps: clock, deadline, say: sayLine });
       if (attempt + 1 >= REASSESSMENTS) throw new UsageError(`the server for ${req.dir} keeps changing, so none was stopped; try again in a moment.`);
     }
   } catch (err) {

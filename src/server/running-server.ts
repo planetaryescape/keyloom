@@ -69,12 +69,19 @@ export const sameServer = (a: RunningRecord | undefined, b: RunningRecord | unde
 const DISCOVERY_ATTEMPTS = 3;
 
 /**
+ * A server that answered a probe and then dropped or changed its record while its process is still alive. That is a server shutting
+ * down (SIGTERM removes the record before a keyboard write finishes), not an absent one: starting beside it would run two sync engines.
+ */
+export type DrainingServer = { draining: true; pid: number };
+
+/**
  * The server already serving `dataDir`, or undefined. A record counts only if its process exists and the server answers with its
  * token: a crash leaves the file behind, and a recycled pid is not a keyloom server. The probe takes up to `timeoutMs`, so the record is
- * read again afterwards: one that changed meanwhile (the server exited and another announced) is looked at afresh, because acting on
- * the first server's identity could signal it, or start beside its successor.
+ * read again afterwards: one that changed meanwhile is looked at afresh, because acting on the first server's identity could signal it,
+ * or start beside its successor. If it changed because the server that answered is going away but its process still exists, that
+ * process is returned as `draining` so the caller waits for it instead of treating the directory as free.
  */
-export async function liveServer(dataDir: string, timeoutMs = 1500): Promise<RunningRecord | undefined> {
+export async function liveServer(dataDir: string, timeoutMs = 1500): Promise<RunningRecord | DrainingServer | undefined> {
   for (let attempt = 0; attempt < DISCOVERY_ATTEMPTS; attempt++) {
     const record = readRecord(dataDir);
     if (record === undefined || record.pid === process.pid || !processAlive(record.pid)) return undefined;
@@ -90,6 +97,8 @@ export async function liveServer(dataDir: string, timeoutMs = 1500): Promise<Run
     }
     const after = readRecord(dataDir);
     if (sameServer(record, after)) return answered ? record : undefined;
+    // Only a server that answered is known to be a keyloom server; a pid that merely exists could be anything.
+    if (answered && processAlive(record.pid)) return { draining: true, pid: record.pid };
   }
   // The record kept changing under every probe; nothing can be trusted as the server to act on.
   return undefined;

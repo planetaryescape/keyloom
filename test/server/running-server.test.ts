@@ -1,6 +1,6 @@
 // The record a server leaves in the data directory, and how little of a damaged one is trusted (D-454).
 import { describe, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { announceServer, liveServer, readRecord } from "../../src/server/running-server.ts";
 import { tempDir } from "../helpers/tmp.ts";
@@ -61,42 +61,59 @@ describe("serve.json", () => {
     expect(await liveServer(dir, 300)).toBeUndefined();
   });
 
-  test("a record that changes while the probe is out is looked at again, and the successor is what comes back", async () => {
+  test("a record that changes while the probe is out, because the server that answered has gone, is looked at again and the successor comes back", async () => {
     const dir = tempDir();
+    const gone = Bun.spawn(["sleep", "30"]);
     let probes = 0;
     const server = Bun.serve({
       port: 0,
-      fetch: () => {
+      fetch: async () => {
         // The first server answers, exits, and its successor announces, all while liveServer is waiting.
-        if (probes++ === 0) write(dir, record("successor"));
+        if (probes++ === 0) {
+          gone.kill();
+          await gone.exited;
+          write(dir, record("successor", process.ppid));
+        }
         return new Response("[]");
       },
     });
     try {
-      write(dir, record("first"));
-      expect((await liveServer(dir, 1000))?.startedAt).toBe("successor");
+      write(dir, record("first", gone.pid));
+      const found = await liveServer(dir, 1000);
+      expect(found && "startedAt" in found ? found.startedAt : found).toBe("successor");
       expect(probes).toBe(2);
     } finally {
       server.stop(true);
+      gone.kill();
     }
-    function record(startedAt: string): string {
-      return JSON.stringify({ pid: process.ppid, url: `http://127.0.0.1:${server.port}/?t=x`, startedAt });
+    function record(startedAt: string, pid: number): string {
+      return JSON.stringify({ pid, url: `http://127.0.0.1:${server.port}/?t=x`, startedAt });
     }
   });
 
-  test("a record that keeps changing is no server at all, not the first snapshot", async () => {
-    const dir = tempDir();
-    let n = 0;
-    const server = Bun.serve({
-      port: 0,
-      fetch: () => (write(dir, record()), new Response("[]")),
-    });
-    const record = (): string => JSON.stringify({ pid: process.ppid, url: `http://127.0.0.1:${server.port}/?t=x`, startedAt: `s${n++}` });
-    try {
-      write(dir, record());
-      expect(await liveServer(dir, 1000)).toBeUndefined();
-    } finally {
-      server.stop(true);
+  test("a server that answered and then dropped or changed its record while its process lives is draining, not absent", async () => {
+    for (const change of ["removed", "replaced"]) {
+      const dir = tempDir();
+      const server = Bun.serve({
+        port: 0,
+        fetch: () => {
+          if (change === "removed") rmSync(join(dir, "serve.json"));
+          else write(dir, JSON.stringify({ pid: process.ppid, url: `http://127.0.0.1:${server.port}/?t=x`, startedAt: "other" }));
+          return new Response("[]");
+        },
+      });
+      try {
+        write(dir, JSON.stringify({ pid: process.ppid, url: `http://127.0.0.1:${server.port}/?t=x`, startedAt: "first" }));
+        expect(await liveServer(dir, 1000)).toEqual({ draining: true, pid: process.ppid });
+      } finally {
+        server.stop(true);
+      }
     }
+  });
+
+  test("a record whose process is alive but did not answer is still no server, even if the record then goes", async () => {
+    const dir = tempDir();
+    write(dir, JSON.stringify({ pid: process.ppid, url: "http://127.0.0.1:9/?t=x", startedAt: "first" }));
+    expect(await liveServer(dir, 300)).toBeUndefined();
   });
 });

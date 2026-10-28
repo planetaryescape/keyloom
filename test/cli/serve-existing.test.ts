@@ -12,7 +12,7 @@ const mine = { version: "0.57.0", protocol: DESKTOP_PROTOCOL };
 const server = (extra: Partial<RunningRecord> = {}): RunningRecord => ({ pid: 4242, url: "http://127.0.0.1:5/?t=tok", startedAt: "z", ...extra });
 
 /** A clock that moves only when someone sleeps, and a process that exits `exitsAfterMs` after SIGTERM (never, if undefined). */
-function fakeProcess(log: string[], opts: { exitsAfterMs?: number; signalError?: string } = {}): ProcessDeps & { termAt: number | undefined } {
+function fakeProcess(log: string[], opts: { exitsAfterMs?: number; exitsAtMs?: number; signalError?: string } = {}): ProcessDeps & { termAt: number | undefined } {
   let t = 0;
   const p = {
     termAt: undefined as number | undefined,
@@ -23,6 +23,8 @@ function fakeProcess(log: string[], opts: { exitsAfterMs?: number; signalError?:
     },
     alive: (pid: number) => {
       if (pid === process.pid) return true;
+      // A process that goes away on its own, unasked, at a fixed time.
+      if (opts.exitsAtMs !== undefined) return t < opts.exitsAtMs;
       return p.termAt === undefined || opts.exitsAfterMs === undefined ? true : t - p.termAt < opts.exitsAfterMs;
     },
     sleep: async (ms: number) => void (t += ms),
@@ -257,7 +259,7 @@ describe("one deadline, and re-reading the record before a signal", () => {
       live: async () => seen.shift(),
       // On disk, A has already been replaced by B when we are about to signal A.
       record: () => b,
-      process: fakeProcess(log),
+      process: fakeProcess(log, { exitsAtMs: 0 }),
       canOpen: () => {},
     });
     expect(out).toEqual({ attached: true });
@@ -270,7 +272,7 @@ describe("one deadline, and re-reading the record before a signal", () => {
     const err = await resolveExistingServer(request({ reuse: false, replace: true }).req, {
       ...serving(server({ pid: 4000 + n++, startedAt: String(n), version: "0.56.0", protocol: 0 })),
       record: () => server({ pid: 1, startedAt: "elsewhere" }),
-      process: fakeProcess(log),
+      process: fakeProcess(log, { exitsAtMs: 0 }),
       canOpen: () => {},
     }).catch((e) => e);
     expect(err).toBeInstanceOf(UsageError);
@@ -291,5 +293,65 @@ describe("one deadline, and re-reading the record before a signal", () => {
     expect(out.attached).toBe(false);
     expect(asked).toBe(1);
     expect(log).toEqual(["SIGTERM 4242"]);
+  });
+});
+
+describe("a verified server that is shutting down is not an absent one", () => {
+  const draining = { draining: true, pid: 4242 } as const;
+
+  for (const mode of ["plain", "reuse", "replace"] as const) {
+    test(`${mode}: when the record vanished during the probe and its process is alive, nothing starts until the process has exited, and nothing is signalled`, async () => {
+      const log: string[] = [];
+      const proc = fakeProcess(log, { exitsAtMs: 2500 });
+      const { req, said } = request({ reuse: mode === "reuse", replace: mode === "replace" });
+      let looks = 0;
+      const out = await resolveExistingServer(req, { live: async () => (looks++ === 0 ? draining : undefined), process: proc, canOpen: () => {} });
+      expect(out.attached).toBe(false);
+      expect(proc.now()).toBeGreaterThanOrEqual(2500);
+      expect(looks).toBe(2);
+      expect(log).toEqual([]);
+      expect(said.some((l) => l.includes("keyboard sync that is writing"))).toBe(true);
+      if (!out.attached) out.release();
+    });
+  }
+
+  test("--replace: the record vanishing just before SIGTERM sends no signal, and the start waits for the process", async () => {
+    const log: string[] = [];
+    const proc = fakeProcess(log, { exitsAtMs: 3000 });
+    const a = server({ version: "0.56.0", protocol: 0 });
+    let looks = 0;
+    const out = await resolveExistingServer(request({ reuse: false, replace: true }).req, {
+      live: async () => (looks++ === 0 ? a : undefined),
+      record: () => undefined,
+      process: proc,
+      canOpen: () => {},
+    });
+    expect(out.attached).toBe(false);
+    expect(log).toEqual([]);
+    expect(proc.now()).toBeGreaterThanOrEqual(3000);
+  });
+
+  test("a process that never exits times out with nothing started and nothing signalled", async () => {
+    for (const vanish of ["during the probe", "before the signal"]) {
+      const log: string[] = [];
+      const proc = fakeProcess(log);
+      const a = server({ version: "0.56.0", protocol: 0 });
+      const deps: ExistingServerDeps = vanish === "during the probe" ? { live: async () => draining } : { live: async () => a, record: () => undefined };
+      const err = await resolveExistingServer(request({ reuse: false, replace: true }).req, { ...deps, process: proc, timeoutMs: 5000, canOpen: () => {} }).catch((e) => e);
+      expect(err).toBeInstanceOf(UsageError);
+      expect(err.message).toContain("was already shutting down");
+      expect(err.message).toContain("no second server was started");
+      expect(proc.now()).toBeLessThan(5500);
+      expect(log).toEqual([]);
+    }
+  });
+
+  test("an exhausted budget signals nothing", async () => {
+    for (const timeoutMs of [0, -1]) {
+      const log: string[] = [];
+      const err = await resolveExistingServer(request({ reuse: false, replace: true }).req, { ...serving(server({ version: "0.56.0", protocol: 0 })), process: fakeProcess(log), timeoutMs, canOpen: () => {} }).catch((e) => e);
+      expect(err).toBeInstanceOf(UsageError);
+      expect(log).toEqual([]);
+    }
   });
 });
