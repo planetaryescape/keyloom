@@ -8,7 +8,11 @@ import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 const MAIN = join(import.meta.dir, "../../src/cli/main.ts");
 
 function spawnServe(dataDir: string, ...flags: string[]) {
-  const proc = Bun.spawn(["bun", MAIN, "--data-dir", dataDir, "serve", "--no-open", ...flags], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  return spawnCommand("serve", dataDir, ...flags);
+}
+
+function spawnCommand(command: "serve" | "web", dataDir: string, ...flags: string[]) {
+  const proc = Bun.spawn(["bun", MAIN, "--data-dir", dataDir, command, "--no-open", ...flags], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   return proc;
 }
 
@@ -64,6 +68,17 @@ describe("keyloom serve for the desktop app", () => {
         first.kill("SIGTERM");
         await first.exited;
       }
+    },
+    SLOW_RUNNER_MS,
+  );
+
+  test(
+    "keyloom web is another name for keyloom serve",
+    async () => {
+      const proc = spawnCommand("web", tempDir(), "--port", "0");
+      await firstLine(proc, /keyloom is running at http:\/\/127\.0\.0\.1:\d+\/\?t=\S+/);
+      proc.kill("SIGTERM");
+      await proc.exited;
     },
     SLOW_RUNNER_MS,
   );
