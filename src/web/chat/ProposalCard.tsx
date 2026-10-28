@@ -60,6 +60,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     });
   });
   const { gains, costs } = proposal.tradeoffs;
+  // The validator's count, not the rows': a key whose binding changes while its printed label stays the same still changes.
+  const changedKeys = proposal.validation.diff.changed.length;
   const open = proposal.status === "proposed";
 
   // The apply moves focus here so a screen reader hears the result and the next step is a Tab away.
@@ -155,10 +157,10 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
       <article className="proposal proposal-compact" data-status={proposal.status} data-pinned={pinned} aria-labelledby={titleId}>
         <h3 id={titleId} className="proposal-title">{proposal.title}</h3>
         <p className="proposal-why">{lead}</p>
-        {rows.length === 0 && costs.length === 0 ? null : (
+        {changedKeys === 0 && costs.length === 0 ? null : (
           <p className="proposal-facts">
-            {rows.length === 0 ? null : <strong>{rows.length} {rows.length === 1 ? "key changes" : "keys change"}</strong>}
-            {rows.length === 0 || costs.length === 0 ? null : <span aria-hidden="true"> · </span>}
+            {changedKeys === 0 ? null : <strong>{changedKeys} {changedKeys === 1 ? "key changes" : "keys change"}</strong>}
+            {changedKeys === 0 || costs.length === 0 ? null : <span aria-hidden="true"> · </span>}
             {costs.length === 0 ? null : <span className="proposal-cost">{costs.join("; ")}</span>}
           </p>
         )}

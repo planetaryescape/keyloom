@@ -52,6 +52,12 @@ describe("a proposal in chat", () => {
     expect(await count(html, ".proposal-tabs")).toBe(0);
   });
 
+  test("the key count is the validator's, even for a key whose printed label stays the same", () => {
+    // No op changes what slot 3 prints, but the validator says it changed (a binding with the same label, say).
+    const sameLabel = card("a", { ops: [], validation: { ...validation, diff: { ...validation.diff, changed: [{ layerId: "base", position: 3 }] } } });
+    expect(render([sameLabel])).toContain("1 key changes");
+  });
+
   test("a proposal with no costs and no gains shows no cost line and no empty headings", async () => {
     const html = render([card("one", { tradeoffs: { gains: [], costs: [] }, explanation: "Just this." })]);
     expect(await count(html, ".proposal-cost")).toBe(0);
