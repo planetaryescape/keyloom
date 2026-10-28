@@ -13,9 +13,11 @@ const MAX_DEPTH = 4;
 const HOLD_TAP = "zmk,behavior-hold-tap";
 const STICKY_KEY = "zmk,behavior-sticky-key";
 const MACRO = "zmk,behavior-macro";
-// A macro's controls set how the steps after them run (tap, press or release) or pause for a release. None presses anything itself, so a
-// step after one still reads as a step of the macro (ZMK's handle_control_binding, moergo-sc/zmk app/src/behaviors/behavior_macro.c @ ce69e85).
+// A macro's controls set how the steps after them run (tap, press or release), pause for a release, or set the timing of the steps after
+// them. None presses anything itself, so a step after one still reads as a step of the macro (ZMK's handle_control_binding,
+// moergo-sc/zmk app/src/behaviors/behavior_macro.c @ ce69e85). The timing controls take one number; any other shape is not skipped.
 const MACRO_CONTROLS = new Set(["macro_tap", "macro_press", "macro_release", "macro_pause_for_release"]);
+const MACRO_TIMING = new Set(["macro_wait_time", "macro_tap_time"]);
 
 // The one-shot's mods as QMK writes them: `OSM(MOD_LSFT)`, `OSM(MOD_LCTL|MOD_LALT)`. Whole-string, so `OSM(MOD_L SFT)` and `OSM(MOD_LSFT) ` do not read.
 const QMK_OSM = /^OSM\((MOD_[LR](?:CTL|SFT|ALT|GUI)(?:\|MOD_[LR](?:CTL|SFT|ALT|GUI))*)\)$/;
@@ -146,6 +148,12 @@ export function admittedLayerRefs(native: NativeSource, kept: KeptMap): boolean 
   return param !== undefined && refs.length === 1 && only !== undefined && only.start === param.start && only.end === param.end && only.layerId === reading.layerId;
 }
 
+/** A control that sets modes or timing and presses nothing, so the steps around it still read. */
+function isMacroControl(call: KeptCall): boolean {
+  if (MACRO_CONTROLS.has(call.name)) return call.params.length === 0;
+  return MACRO_TIMING.has(call.name) && call.params.length === 1 && /^\d+$/.test(call.params[0] ?? "");
+}
+
 /** A kept behaviour's steps. A kept sticky key passes its parameter to `&sk`; a kept macro runs its calls in order. */
 function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: number): Step[] | undefined {
   if (depth > MAX_DEPTH) return undefined;
@@ -160,7 +168,7 @@ function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: 
     const steps: Step[] = [];
     for (const cell of def.cells) {
       for (const inner of cell) {
-        if (MACRO_CONTROLS.has(inner.name) && !kept.has(inner.name) && inner.params.length === 0) continue;
+        if (!kept.has(inner.name) && isMacroControl(inner)) continue;
         const more = resolveCall(inner, kept, depth + 1);
         if (more === undefined) return undefined;
         steps.push(...more);

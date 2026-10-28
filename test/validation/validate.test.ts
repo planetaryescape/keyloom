@@ -368,6 +368,15 @@ describe("validate: risky_native (warning, D-451)", () => {
     expect(r.warnings.filter((w) => w.code === "risky_native").map((w) => w.plain)).toEqual(["Left pinky, number row would put the keyboard into its bootloader when pressed"]);
   });
 
+  test("a bootloader step behind a macro's wait-time control warns", () => {
+    const timed = { firmware: "zmk" as const, file: "keymap.keymap", anchor: "macro:timed_reset", refersToLayerIndices: false,
+      source: `timed_reset: timed_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 50 &macro_tap &bootloader>; };` };
+    const layout = tiny({ firmware: "zmk", passthrough: [timed] });
+    const board = { ...tinyBoard, firmware: "zmk" as const };
+    const found = validate(board, layout, [set("base", 0, { kind: "native", firmware: "zmk", source: "&timed_reset", label: "T" })]).warnings.filter((w) => w.code === "risky_native");
+    expect(found.map((w) => w.plain)).toEqual(["Left pinky, number row would put the keyboard into its bootloader when pressed"]);
+  });
+
   test("a zero-argument macro of bootloader steps, used directly as a key, warns", () => {
     const reset = { firmware: "zmk" as const, file: "keymap.keymap", anchor: "macro:reset_tap", refersToLayerIndices: false,
       source: `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_press &macro_release &sys_reset>; };` };

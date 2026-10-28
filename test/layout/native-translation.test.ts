@@ -176,6 +176,18 @@ describe("reading a native binding", () => {
     expect(readNative(zmk("&press_reset"), kept([pressed]))).toEqual({ kind: "steps", steps: [{ kind: "reset" }, { kind: "bluetooth", op: "clear" }] });
   });
 
+  test("a macro's timing controls with one number are skipped, and any other shape of them is not", () => {
+    const timed = pass("macro:timed_reset", `timed_reset: timed_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 50 &macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&timed_reset"), kept([timed]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const tapTime = pass("macro:tap_time_reset", `tap_time_reset: tap_time_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap_time 10 &bootloader>; };`);
+    expect(readNative(zmk("&tap_time_reset"), kept([tapTime]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    // Wrong shapes: no number, or two. Not skipped, so the macro reads as unknown rather than hiding a step.
+    const bare = pass("macro:bare_wait", `bare_wait: bare_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time &bootloader>; };`);
+    expect(readNative(zmk("&bare_wait"), kept([bare]))).toEqual({ kind: "unknown" });
+    const two = pass("macro:two_wait", `two_wait: two_wait { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_wait_time 1 2 &bootloader>; };`);
+    expect(readNative(zmk("&two_wait"), kept([two]))).toEqual({ kind: "unknown" });
+  });
+
   test("a hold-tap whose tap is a macro with a bootloader step reads that step as the tap's (`&magic 1 0`)", () => {
     const reset = pass("macro:reset_tap", `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &bootloader>; };`);
     const hold = pass("behavior:reset_hold", `reset_hold: reset_hold { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&reset_tap>; };`);
