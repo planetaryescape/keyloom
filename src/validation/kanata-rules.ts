@@ -5,6 +5,7 @@ import type { BoardDefinition } from "../boards/schema.ts";
 import type { Slot } from "../layout/change.ts";
 import { GenerateError } from "../layout/kanata/generate-error.ts";
 import { macroAction } from "../layout/kanata/macro.ts";
+import { keyName } from "../layout/kanata/names.ts";
 import { nativeAction } from "../layout/kanata/natives.ts";
 import { readKanataProfile } from "../layout/kanata/profiles.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
@@ -14,7 +15,7 @@ import { keyOn } from "./words.ts";
 
 const issue = (code: string, message: string, plain: string, slots?: Slot[]): Issue => (slots?.length ? { code, message, plain, slots } : { code, message, plain });
 
-/** `firmware_unsupported` for what kanata can't write: a macro that holds a non-modifier, a kept binding that runs a command. */
+/** `firmware_unsupported` for what kanata can't write: a key kanata can't send on macOS, a macro that holds a non-modifier, a kept binding that runs a command. */
 export function kanataSupport(doc: Layout): Issue[] {
   if (doc.firmware !== "kanata") return [];
   const out: Issue[] = [];
@@ -28,10 +29,22 @@ export function kanataSupport(doc: Layout): Issue[] {
   };
   for (const layer of doc.layers) {
     for (const [position, b] of layer.bindings.entries()) {
-      if (b.kind === "native" && b.firmware === "kanata") attempt(() => nativeAction("kanata", b.source, `layer "${layer.id}", position ${position}`), { layerId: layer.id, position });
+      const slot = { layerId: layer.id, position };
+      if (b.kind === "native" && b.firmware === "kanata") attempt(() => nativeAction("kanata", b.source, `layer "${layer.id}", position ${position}`), slot);
+      if (b.kind === "key") attempt(() => keyName(b.code), slot);
+      if (b.kind === "holdTap" && b.tap.macroId === undefined) attempt(() => keyName(b.tap.code), slot);
     }
   }
-  for (const combo of doc.combos) if (combo.output.kind === "native" && combo.output.firmware === "kanata") attempt(() => nativeAction("kanata", (combo.output as Extract<Binding, { kind: "native" }>).source, `combo "${combo.id}"`), undefined, `Combo "${combo.name}"`);
+  for (const combo of doc.combos) {
+    const output = combo.output;
+    if (output.kind === "native" && output.firmware === "kanata") attempt(() => nativeAction("kanata", output.source, `combo "${combo.id}"`), undefined, `Combo "${combo.name}"`);
+    if (output.kind === "key") attempt(() => keyName(output.code), undefined, `Combo "${combo.name}"`);
+  }
+  for (const dance of doc.tapDances) {
+    for (const slot of [dance.tap, dance.hold, dance.doubleTap, dance.tapThenHold]) {
+      if (slot?.kind === "key") attempt(() => keyName(slot.code), undefined, `Tap dance "${dance.name}"`);
+    }
+  }
   for (const m of doc.macros) attempt(() => macroAction(m), undefined, `Macro "${m.name}"`);
   return out;
 }

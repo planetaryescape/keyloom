@@ -94,6 +94,28 @@ describe("what kanata can't write is refused before Apply", () => {
     expect(issues(layout).some((e) => e.message.includes("only modifiers can be held"))).toBe(true);
   });
 
+  test("a key kanata can't send on macOS is refused on a layer, under a hold-tap, in a combo and in a tap dance, and a change that sets one is refused", () => {
+    const unsendable = (layout: Layout) => issues(layout).filter((e) => e.code === "firmware_unsupported" && e.message.includes("Print Screen"));
+    const onLayer = identityLayout(board);
+    onLayer.layers[0]!.bindings[at("Q")] = { kind: "key", code: "PRINT_SCREEN" };
+    expect(unsendable(onLayer).map((e) => e.slots)).toEqual([[{ layerId: "base", position: at("Q") }]]);
+    expect(unsendable(onLayer)[0]?.plain).toContain("Print Screen");
+
+    const underHold = identityLayout(board);
+    underHold.layers[0]!.bindings[at("Q")] = { kind: "holdTap", tap: { code: "PRINT_SCREEN" }, hold: { mods: ["LSFT"] }, profileId: "p" };
+    expect(unsendable(underHold)).toHaveLength(1);
+
+    const inCombo: Layout = { ...identityLayout(board), combos: [{ id: "c", name: "Combo", positions: [at("A"), at("S")], layerIds: "all", output: { kind: "key", code: "PRINT_SCREEN" } }] };
+    expect(unsendable(inCombo).map((e) => e.plain)).toEqual([expect.stringContaining('Combo "Combo"')]);
+
+    const dance = withDance({ id: "t", name: "Tab", tap: { kind: "key", code: "PRINT_SCREEN" } });
+    expect(unsendable(dance).map((e) => e.plain)).toEqual([expect.stringContaining('Tap dance "Tab"')]);
+
+    const result = evaluate(board, identityLayout(board), [{ op: "setBinding", at: { layerId: "base", position: at("Q") }, binding: { kind: "key", code: "PRINT_SCREEN" } }]).result;
+    expect(result.ok).toBe(false);
+    expect(result.errors.map((e) => e.code)).toContain("firmware_unsupported");
+  });
+
   test("QMK and ZMK profiles on a kanata layout are refused until translated", () => {
     const layout = richLayout();
     const foreign: Layout = { ...layout, holdTapProfiles: [{ id: "hrm", name: "HRM", firmware: "qmk", options: { TAPPING_TERM: 200 } }, layout.holdTapProfiles[1]!] };

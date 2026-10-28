@@ -10,6 +10,8 @@ import { translateHoldTapProfile } from "./kanata/profiles.ts";
 import { type Hand, modsForHand } from "./mirror.ts";
 import { GenerateError } from "./kanata/generate-error.ts";
 import { macroAction } from "./kanata/macro.ts";
+import { keyName } from "./kanata/names.ts";
+import { isKeyCode, keyCodeInfo } from "./keycodes.ts";
 import { type KeptMap, readNative } from "./native-read.ts";
 import { keptDefinitions } from "./kept-behaviours.ts";
 import { writeSteps, type TargetFacts } from "./native-write.ts";
@@ -95,7 +97,10 @@ export class BindingTransfer {
   bind(source: Binding, target: Binding, position: number): Transferred {
     const hand = this.env.handAt(position);
     switch (source.kind) {
-      case "key":
+      case "key": {
+        const why = this.unsendable(source.code);
+        return why === null ? { binding: source } : { skip: `it is ${why}` };
+      }
       case "transparent":
       case "none":
         return { binding: source };
@@ -108,6 +113,10 @@ export class BindingTransfer {
       case "holdTap": {
         const tap = ownTap(target);
         if (tap === null) return { skip: NO_TAP };
+        if (tap.macroId === undefined) {
+          const why = this.unsendable(tap.code);
+          if (why !== null) return { skip: `the key it lands on is ${why}` };
+        }
         let hold = source.hold;
         if ("mods" in hold) {
           if (hand === null) return { skip: "the key it lands on belongs to neither hand, so a modifier has no hand to take" };
@@ -185,6 +194,12 @@ export class BindingTransfer {
     }
   }
 
+  /** The key's name and why kanata can't send it, when the target is kanata and it can't; null otherwise. */
+  private unsendable(code: string): string | null {
+    if (this.kanataRefusal(() => keyName(code)) === null) return null;
+    return `${isKeyCode(code) ? keyCodeInfo(code).label : code}, which kanata can't send on macOS`;
+  }
+
   private noLayer(id: string): string {
     const name = this.env.source.layers.find((l) => l.id === id)?.name ?? id;
     return `it switches to the ${name} layer, and the target has no layer that does the same job`;
@@ -192,7 +207,10 @@ export class BindingTransfer {
 
   private slot(a: SlotAction, hand: Hand | null): { action: SlotAction } | { skip: string } {
     switch (a.kind) {
-      case "key": return { action: a };
+      case "key": {
+        const why = this.unsendable(a.code);
+        return why === null ? { action: a } : { skip: `a tap dance slot is ${why}` };
+      }
       case "modifier": return { action: hand === null ? a : { kind: "modifier", mods: modsForHand(a.mods, hand) } };
       case "layer": {
         const layerId = this.env.layers.get(a.layerId);

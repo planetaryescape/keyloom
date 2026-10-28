@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { BindingTransfer, type TransferEnv, transferLighting } from "../../src/layout/transfer.ts";
 import type { Binding, HoldTapProfile, Layout } from "../../src/layout/schema.ts";
 
-const doc = (firmware: "qmk" | "zmk", over: Partial<Layout> = {}): Layout => ({
+const doc = (firmware: "qmk" | "zmk" | "kanata", over: Partial<Layout> = {}): Layout => ({
   schemaVersion: 1, boardId: "x/y", firmware,
   layers: [{ id: "base", name: "Base", bindings: Array.from({ length: 6 }, (): Binding => ({ kind: "key", code: "A" })) }, { id: "nav", name: "Nav", bindings: [] }],
   macros: [], tapDances: [], combos: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [], ...over,
@@ -85,6 +85,21 @@ describe("BindingTransfer", () => {
     expect(t.prerequisiteOps()).toHaveLength(1);
     t.rollback(cp);
     expect(t.prerequisiteOps()).toEqual([]);
+  });
+
+  test("a key kanata can't send on macOS is skipped with the reason on a kanata target, and carried to a keyboard that can send it", () => {
+    const toKanata = new BindingTransfer(env(doc("qmk"), doc("kanata")));
+    expect(toKanata.bind(key("PRINT_SCREEN"), key("A"), 0)).toEqual({ skip: "it is Print Screen, which kanata can't send on macOS" });
+    expect(toKanata.bind(key("A"), key("A"), 0)).toEqual({ binding: key("A") });
+    expect(new BindingTransfer(env(doc("qmk"), doc("zmk"))).bind(key("PRINT_SCREEN"), key("A"), 0)).toEqual({ binding: key("PRINT_SCREEN") });
+  });
+
+  test("a hold-tap whose tap lands on a key kanata can't send is skipped, as is a tap dance slot that sends one", () => {
+    const toKanata = new BindingTransfer(env(doc("qmk"), doc("kanata")));
+    expect(toKanata.bind(holdTap("A", ["LCTL"]), key("PRINT_SCREEN"), 4)).toEqual({ skip: "the key it lands on is Print Screen, which kanata can't send on macOS" });
+    const dance: Binding = { kind: "tapDance", tapDanceId: "td" };
+    const source = doc("qmk", { tapDances: [{ id: "td", name: "TD", tap: { kind: "key", code: "PRINT_SCREEN" } }] });
+    expect(new BindingTransfer(env(source, doc("kanata"))).bind(dance, key("A"), 0)).toEqual({ skip: "a tap dance slot is Print Screen, which kanata can't send on macOS" });
   });
 
   test("a combo's modifier is copied as written (position -1 has no hand)", () => {
