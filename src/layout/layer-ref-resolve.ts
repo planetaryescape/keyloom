@@ -61,8 +61,12 @@ export function resolveLayerRefs(input: ResolveInput): Map<string, Resolved> {
     const named = usedAsLayer.get(d.name);
     if (named === undefined) continue;
     const others = input.uses.filter((u) => u.name === d.name && !layerUse.has(`${u.site}:${u.start}`));
-    if (others.length === 0 && input.layerIds[d.value] !== undefined) ref(d.site, d.start, d.end, d.value, d.line);
-    else {
+    const layerId = input.layerIds[d.value];
+    if (others.length === 0 && layerId !== undefined) {
+      ref(d.site, d.start, d.end, d.value, d.line);
+      // A kept use of the name keeps the name: the define is the number, and renumbering writes the define, not the use (D-360).
+      for (const a of named) if (a.site !== "") at(a.site).layerRefs.push({ start: a.start, end: a.start + a.text.length, layerId });
+    } else {
       // The number is also something else, or no layer has it, so it can't follow the layer it names: every use of it is refused.
       for (const u of others) refuse(u.site, u.line);
       for (const a of named) refuse(a.site, a.line);

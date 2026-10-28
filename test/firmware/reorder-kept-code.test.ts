@@ -1,4 +1,5 @@
 // BK's real boards, reordered: the kept code and kept keys still name the layers they named before (D-360).
+import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "bun:test";
 import { applyOps } from "../../src/layout/apply-ops.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
@@ -86,6 +87,41 @@ describe("the Glove80 (MoErgo's keymap)", () => {
     // The kept tap dance and hold-tap read the same defines.
     expect(now).toContain("bindings = <&mo LOWER>, <&to LOWER>;");
     expect(now).toContain("&magic MAGIC 0");
+  });
+
+  test("the magic key's layer is the define's: moving that layer renumbers the define, and the key keeps its name", async () => {
+    const { board, geometry, layout } = await load();
+    const magic: ChangeOp[] = [{ op: "moveLayer", layerId: "magic-layer", afterLayerId: "factory-test-layer" }];
+    expect(validate(board, layout, magic).errors).toEqual([]);
+    const src = (l: Layout) => generateZmkSource({ layout: l, board, geometry, revisionId: "rev" }).files.map((f) => f.content).join("\n");
+    const now = src(moved(layout, magic));
+    expect(now.match(/#define MAGIC \d/g)).toEqual(["#define MAGIC 3"]);
+    expect(now.match(/&magic MAGIC 0/g)?.length).toBe(1);
+    expect(now).not.toContain("&magic 3 0");
+  });
+
+  test("importing and generating again without changes writes the magic key and its define as they were", async () => {
+    const { board, geometry, layout } = await load();
+    const generated = generateZmkSource({ layout, board, geometry, revisionId: "rev" }).files.map((f) => f.content).join("\n");
+    const template = (await readFile(`${TEMPLATE_FIXTURE}/glove80.keymap`, "utf8"));
+    // The generator lays out the keymap's columns its own way, so the key's line is compared with its spacing collapsed.
+    const keyLine = (src: string) => src.split("\n").find((l) => l.includes("&magic MAGIC 0"))?.trim().split(/\s+/).join(" ");
+    expect(keyLine(generated)).toBe(keyLine(template));
+    expect(generated.match(/#define MAGIC \d/g)).toEqual(["#define MAGIC 2"]);
+  });
+
+  test("a layout stored before the importer recorded the key's layer still generates the same text", async () => {
+    const { board, geometry, layout } = await load();
+    const stripped: Layout = {
+      ...layout,
+      layers: layout.layers.map((l) => ({
+        ...l,
+        bindings: l.bindings.map((b) => (b.kind === "native" && b.source === "&magic MAGIC 0" ? { kind: "native" as const, firmware: "zmk" as const, source: b.source, label: b.label } : b)),
+      })),
+    };
+    const src = (l: Layout) => generateZmkSource({ layout: l, board, geometry, revisionId: "rev" }).files.map((f) => f.content).join("\n");
+    expect(src(stripped)).toBe(src(layout));
+    expect(validate(board, stripped, [{ op: "moveLayer", layerId: "magic-layer", afterLayerId: "factory-test-layer" }]).errors).toEqual([]);
   });
 
   test("deleting a layer the keymap's code names is refused", async () => {

@@ -13,6 +13,9 @@ const MAX_DEPTH = 4;
 const HOLD_TAP = "zmk,behavior-hold-tap";
 const STICKY_KEY = "zmk,behavior-sticky-key";
 const MACRO = "zmk,behavior-macro";
+// A macro's controls set how the steps after them run (tap, press or release) or pause for a release. None presses anything itself, so a
+// step after one still reads as a step of the macro (ZMK's handle_control_binding, moergo-sc/zmk app/src/behaviors/behavior_macro.c @ ce69e85).
+const MACRO_CONTROLS = new Set(["macro_tap", "macro_press", "macro_release", "macro_pause_for_release"]);
 
 // The one-shot's mods as QMK writes them: `OSM(MOD_LSFT)`, `OSM(MOD_LCTL|MOD_LALT)`. Whole-string, so `OSM(MOD_L SFT)` and `OSM(MOD_LSFT) ` do not read.
 const QMK_OSM = /^OSM\((MOD_[LR](?:CTL|SFT|ALT|GUI)(?:\|MOD_[LR](?:CTL|SFT|ALT|GUI))*)\)$/;
@@ -157,6 +160,7 @@ function resolveKept(call: KeptCall, def: KeptDefinition, kept: KeptMap, depth: 
     const steps: Step[] = [];
     for (const cell of def.cells) {
       for (const inner of cell) {
+        if (MACRO_CONTROLS.has(inner.name) && !kept.has(inner.name) && inner.params.length === 0) continue;
         const more = resolveCall(inner, kept, depth + 1);
         if (more === undefined) return undefined;
         steps.push(...more);

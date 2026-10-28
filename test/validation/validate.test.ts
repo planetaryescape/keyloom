@@ -356,6 +356,27 @@ describe("validate: risky_native (warning, D-451)", () => {
     expect(found.map((w) => w.plain)).toEqual(["Left pinky, number row would forget the Bluetooth device paired on the current profile and forget every paired Bluetooth device"]);
   });
 
+  test("a bootloader step behind a macro control in a kept hold-tap's tap warns, and is admitted (`&macro_tap` is a mode)", () => {
+    const reset = { firmware: "zmk" as const, file: "keymap.keymap", anchor: "macro:reset_tap", refersToLayerIndices: false,
+      source: `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &bootloader>; };` };
+    const hold = { firmware: "zmk" as const, file: "keymap.keymap", anchor: "behavior:reset_hold", refersToLayerIndices: true,
+      source: `reset_hold: reset_hold { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&reset_tap>; };` };
+    const layout = tiny({ firmware: "zmk", passthrough: [reset, hold] });
+    const board = { ...tinyBoard, firmware: "zmk" as const };
+    const r = validate(board, layout, [set("base", 0, { kind: "native", firmware: "zmk", source: "&reset_hold 1 0", label: "R", layerRefs: [{ start: 12, end: 13, layerId: "nav" }] })]);
+    expect(r.errors.filter((e) => e.code === "native_edit")).toEqual([]);
+    expect(r.warnings.filter((w) => w.code === "risky_native").map((w) => w.plain)).toEqual(["Left pinky, number row would put the keyboard into its bootloader when pressed"]);
+  });
+
+  test("a zero-argument macro of bootloader steps, used directly as a key, warns", () => {
+    const reset = { firmware: "zmk" as const, file: "keymap.keymap", anchor: "macro:reset_tap", refersToLayerIndices: false,
+      source: `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_press &macro_release &sys_reset>; };` };
+    const layout = tiny({ firmware: "zmk", passthrough: [reset] });
+    const board = { ...tinyBoard, firmware: "zmk" as const };
+    const found = validate(board, layout, [set("base", 0, { kind: "native", firmware: "zmk", source: "&reset_tap", label: "R" })]).warnings.filter((w) => w.code === "risky_native");
+    expect(found.map((w) => w.plain)).toEqual(["Left pinky, number row would restart the keyboard when pressed"]);
+  });
+
   test("an agent-added RGB key on a board without lighting is an error, in the lighting refusal's words", () => {
     const noLighting: BoardDefinition = { ...tinyBoard };
     delete noLighting.lighting;

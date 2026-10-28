@@ -169,6 +169,21 @@ describe("reading a native binding", () => {
     expect(r).toEqual({ kind: "holdLayer", layerId: "factory-test", tap: "rgb_ug_status_macro", tapSteps: [] });
   });
 
+  test("a macro's controls are modes, and the steps after them still read: `&macro_tap &bootloader` is a bootloader step", () => {
+    const reset = pass("macro:reset_tap", `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &bootloader>; };`);
+    expect(readNative(zmk("&reset_tap"), kept([reset]))).toEqual({ kind: "steps", steps: [{ kind: "bootloader" }] });
+    const pressed = pass("macro:press_reset", `press_reset: press_reset { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_press &sys_reset &macro_release &macro_pause_for_release &bt BT_CLR>; };`);
+    expect(readNative(zmk("&press_reset"), kept([pressed]))).toEqual({ kind: "steps", steps: [{ kind: "reset" }, { kind: "bluetooth", op: "clear" }] });
+  });
+
+  test("a hold-tap whose tap is a macro with a bootloader step reads that step as the tap's (`&magic 1 0`)", () => {
+    const reset = pass("macro:reset_tap", `reset_tap: reset_tap { compatible = "zmk,behavior-macro"; #binding-cells = <0>; bindings = <&macro_tap &bootloader>; };`);
+    const hold = pass("behavior:reset_hold", `reset_hold: reset_hold { compatible = "zmk,behavior-hold-tap"; #binding-cells = <2>; bindings = <&mo>, <&reset_tap>; };`);
+    expect(readNative(zmk("&reset_hold 1 0", [{ start: 12, end: 13, layerId: "nav" }]), kept([reset, hold]))).toEqual({
+      kind: "holdLayer", layerId: "nav", tap: "reset_tap", tapSteps: [{ kind: "bootloader" }],
+    });
+  });
+
   test("a layer hold with no layerRefs is unknown, because its number can't be tied to a layer", () => {
     expect(readNative(zmk("&magic 5 0"), kept())).toEqual({ kind: "unknown" });
   });
