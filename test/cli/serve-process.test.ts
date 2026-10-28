@@ -291,4 +291,23 @@ describe("keyloom serve for the desktop app", () => {
     },
     SLOW_RUNNER_MS,
   );
+
+  test(
+    "doctor refuses a data directory a newer keyloom migrated (exit 10, schema_too_new) instead of reading its tables",
+    async () => {
+      const dir = tempDir();
+      const db = new Database(databasePath(dir), { create: true });
+      db.run("PRAGMA journal_mode = WAL");
+      db.run("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL)");
+      db.query("INSERT INTO schema_migrations VALUES (999, 'from_the_future', 0)").run();
+      db.close();
+      const doctor = Bun.spawn(["bun", MAIN, "--data-dir", dir, "doctor"], { stdout: "pipe", stderr: "pipe" });
+      const [out, err] = await Promise.all([new Response(doctor.stdout).text(), new Response(doctor.stderr).text()]);
+      expect(await doctor.exited).toBe(10);
+      expect(err).toContain("schema_too_new");
+      expect(err).toMatch(/schema 999.*Upgrade keyloom/s);
+      expect(out).not.toContain("layouts");
+    },
+    SLOW_RUNNER_MS,
+  );
 });

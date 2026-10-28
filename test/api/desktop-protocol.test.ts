@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { DESKTOP_PROTOCOL } from "../../src/api/desktop-protocol.ts";
+import { TAKEOVER_TIMEOUT_MS } from "../../src/server/replace-server.ts";
 import { MenuBarSchema, SyncEventSchema } from "../../src/api/http.ts";
 
 const SHELL = join(import.meta.dir, "../../desktop/tauri/src-tauri/src");
@@ -16,6 +17,11 @@ describe("desktop protocol", () => {
     const match = rust.match(/const\s+DESKTOP_PROTOCOL\s*:\s*u32\s*=\s*(\d+)\s*;/);
     expect(match, "sidecar.rs has no `const DESKTOP_PROTOCOL: u32 = N;`").not.toBeNull();
     expect(Number(match![1])).toBe(DESKTOP_PROTOCOL);
+  });
+
+  test("the shell waits for the sidecar's URL longer than the CLI may wait in any mode", () => {
+    const seconds = Number(readFileSync(join(SHELL, "sidecar.rs"), "utf8").match(/const\s+URL_WAIT_SECS\s*:\s*u64\s*=\s*(\d+)\s*;/)?.[1]);
+    expect(seconds * 1000).toBeGreaterThan(TAKEOVER_TIMEOUT_MS);
   });
 
   test("the shell passes the number to serve as --client-protocol", () => {

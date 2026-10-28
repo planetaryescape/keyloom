@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { deviceHelperDiagnostic, type HelperDiagnostic } from "../firmware/toolchain/device-helper/diagnostics.ts";
 import { DeviceTransportError } from "../firmware/toolchain/device-helper/transport-client.ts";
 import { Database } from "bun:sqlite";
+import { SchemaTooNewError, assertSchemaKnown } from "../persistence/schema-guard.ts";
 import { classifyModelError, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
 import { DEFAULT_MODELS } from "../agent/provider.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
@@ -53,6 +54,8 @@ export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
   let db: Database | undefined;
   try {
     db = new Database(file, { readonly: true, strict: true });
+    // A database a newer keyloom migrated is refused like everywhere else (D-455), not reported as a failed check.
+    assertSchemaKnown(db, file);
     const integrity = (db.query("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check;
     checks.push({ name: "database integrity", ok: integrity === "ok", detail: integrity });
     const mode = (db.query("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode;
@@ -82,6 +85,7 @@ export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
       // table might not exist
     }
   } catch (err) {
+    if (err instanceof SchemaTooNewError) throw err;
     checks.push({ name: "database", ok: false, detail: (err as Error).message });
   } finally {
     db?.close();

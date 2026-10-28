@@ -57,6 +57,11 @@ pub enum Failure {
 }
 
 // The CLI prints these two lines (src/cli/serve-existing.ts) and exits 10; the shell shows them and decides nothing.
+// How long the shell waits for the sidecar's URL. Every `serve` mode may wait for the directory lock, or for a server that is finishing a
+// keyboard write, before it prints one, all inside one 120 s budget (TAKEOVER_TIMEOUT_MS in src/server/replace-server.ts). This is tied to
+// it: keep this longer than that, and change them together. A shorter wait gives up on a launch that was only queued behind another app.
+const URL_WAIT_SECS: u64 = 135;
+
 const CANNOT_ATTACH: &str = "keyloom cannot attach: ";
 const CAN_REPLACE: &str = "keyloom can replace it: ";
 
@@ -96,9 +101,7 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
     let (exit_tx, exited) = std::sync::mpsc::channel();
     let mut child = Some(child);
     let mut stderr = String::new();
-    // --replace waits for the directory lock and then for the old server to finish any keyboard write, all inside one 120 s budget
-    // (TAKEOVER_TIMEOUT_MS in src/server/replace-server.ts). This is tied to it: keep this longer than that, and change them together.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(if mode == Mode::Replace { 135 } else { 20 });
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(URL_WAIT_SECS);
     loop {
         let event = tokio::time::timeout_at(deadline, rx.recv()).await.map_err(|_| Failure::Other("timed out waiting for keyloom to print its URL".into()))?;
         match event {
@@ -157,6 +160,12 @@ pub fn stop(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn waits_for_the_url_longer_than_the_cli_may_wait_in_any_mode() {
+        // TAKEOVER_TIMEOUT_MS is 120_000 in src/server/replace-server.ts; test/api/desktop-protocol.test.ts checks this pair too.
+        assert!(URL_WAIT_SECS > 120);
+    }
 
     #[test]
     fn reads_the_words_and_the_replace_label_from_the_cli() {
