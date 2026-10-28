@@ -25,3 +25,5 @@ Before the fix, a scratch copy (`keyboard put` of the Glove80 template onto `app
 After the fix, the same copy reports `lower_layer` position 21, `PrtSc`, as not carried with `it is Print Screen, which kanata can't send on macOS`. It has 111 keys, not 112. The applied copy generates `keyloom.kbd` and `safe.kbd`, and both pass `kanata --check` (exit 0). A direct `setBinding` of `PRINT_SCREEN` on the MacBook layout is refused by `change check` with `firmware_unsupported` (exit 4).
 
 The fix is in `src/layout/transfer.ts` (`unsendable`, used for a key, a hold-tap's tap and a tap dance key slot), `src/validation/kanata-rules.ts` (`kanataSupport` now checks plain keys, hold-tap taps, combo outputs and tap-dance key slots through `keyName`), and `src/layout/kanata/names.ts` (the error names the key by its label).
+
+Follow-up, not built: a `deflocalkeys` entry in the generated config could name `KEY_PRINT` on macOS, which would let the copy carry the key. It's a new config feature, so it's left for a later decision.
