@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.57.0](https://github.com/planetaryescape/keyloom/compare/v0.56.1...v0.57.0) (2026-10-28)
+
+
+### Features
+
+* clients check they have a keyloom they can work with, and a keyloom refuses a database a newer one migrated ([#196](https://github.com/planetaryescape/keyloom/issues/196)) ([f8a476e](https://github.com/planetaryescape/keyloom/commit/f8a476ede246b22d5b062d5ca7b55ae213c5720b))
+
 ## [0.56.1](https://github.com/planetaryescape/keyloom/compare/v0.56.0...v0.56.1) (2026-10-28)
 
 
