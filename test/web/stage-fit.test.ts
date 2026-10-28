@@ -49,3 +49,18 @@ describe("every shipped board fits the editor's stage", () => {
     }
   }
 });
+
+// The stage drops its scroll box, and so stops clipping the board's shadow, only when this is false (docs/issues/stage-clips-board-shadow.md).
+describe("a board overflows the stage on either side", () => {
+  test("a board too tall for the stage at the smallest key overflows, though it fits sideways", () => {
+    expect(fitUnit({ width: 10, height: 10 }, { width: 1000, height: 200 }, 34)).toEqual({ unit: 34, overflowing: true });
+  });
+
+  test("a board too wide for the stage at the smallest key overflows", () => {
+    expect(fitUnit({ width: 40, height: 4 }, { width: 1000, height: 600 }, 34)).toEqual({ unit: 34, overflowing: true });
+  });
+
+  test("a board that fits both ways doesn't", () => {
+    expect(fitUnit({ width: 20, height: 8 }, { width: 1000, height: 600 }, 34)).toEqual({ unit: 50, overflowing: false });
+  });
+});

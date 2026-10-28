@@ -27,7 +27,7 @@ interface FitInput {
 export function useFitUnit({ width, height }: FitInput): {
   ref: RefObject<HTMLDivElement | null>;
   unit: number;
-  /** True when the board is wider than the stage and scrolls sideways. */
+  /** True when the board is wider or taller than the stage, so the stage scrolls it. */
   overflowing: boolean;
 } {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -56,7 +56,7 @@ export function fitUnit(board: FitInput, available: { width: number; height: num
   const byWidth = board.width > 0 ? available.width / board.width : MAX_UNIT;
   const byHeight = board.height > 0 && available.height > 0 ? available.height / board.height : MAX_UNIT;
   const unit = Math.floor(Math.max(min, Math.min(MAX_UNIT, byWidth, byHeight)));
-  return { unit, overflowing: board.width * unit > available.width + 1 };
+  return { unit, overflowing: board.width * unit > available.width + 1 || board.height * unit > available.height + 1 };
 }
 
 export const MIN_UNIT = { touch: MIN_UNIT_TOUCH, mouse: MIN_UNIT_MOUSE } as const;

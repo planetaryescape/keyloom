@@ -1,5 +1,7 @@
 # The stage cuts off the board's shadow along a straight line
 
+Status: fixed on branch `fix/stage-shadow-and-flaky-limits`. In windows wider than 900 px, the well only scrolls when the board is wider or taller than the stage (`fitUnit`'s `overflowing` now checks both sides). A board that fits gets `overflow: visible`, so nothing clips its shadows. Narrow windows keep the scroll box, because they scroll the edited key above the sheet.
+
 The board's shadow on the stage stops at a hard horizontal edge a little below the board, instead of fading out. It is faint in the light theme with the board following the theme. It shows clearly under a dark case on the light stage, such as a Glove80 pinned to Grey or a Moonlander pinned to Black (D-395). There the light stage reads as a pale band, with the shadow above it.
 
 ## What clips it
@@ -24,3 +26,7 @@ Not fixed: the coordinator asked for this to be left alone for now, 2026-10-18.
 Tried on 2026-10-23 (branch `fix/stage-shadow-clip`, not merged): pad the well's bottom by 72 px for the shadow, leave the board's fit size unchanged, and translate the board down by half that so it stays centred. In the dev editor at 1440×900 (Moonlander fixture) the board kept its place to 1 px, but the well's `scrollHeight` grew from 569 to 572 against a `clientHeight` of 569, a 3 px vertical overflow and so a scrollbar wherever scrollbars always show. In the default light and dark themes the shadow edge wasn't visible before or after.
 
 The choice left: make the board 72 px shorter, so the shadow fits inside the well, or draw the contact shadow outside the scrolling box, positioned from the board's measured size. That needs a ResizeObserver and scroll tracking.
+
+## Fixed by dropping the scroll box when the board fits
+
+On 2026-10-28 the dev editor ran at 1440×900 in the light theme with the Moonlander fixture. The case was given a longer test shadow, `drop-shadow(0 40px 30px rgb(0 0 0 / 0.95))`. On main `45c67e9` the shadow stops in a hard line at the well's bottom edge, y 750, with the well at `overflow: auto`. On the fix it fades out past that line with the well at `overflow: visible`, and `scrollHeight` equals `clientHeight` at 569. With the shipped shadow, both builds give the same pixels from y 700 to 768. The Moonlander's shadow has faded by about y 740, so on that board the clip was never visible. Opening a key's card still parts the board with no scrollbar (`scrollWidth` 1440 = `clientWidth`). At 800 px wide the well stays `overflow: auto`.
