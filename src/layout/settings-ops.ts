@@ -2,7 +2,7 @@
 // copied the option from the layout-wide setting would otherwise keep the old value and QMK would emit a per-key callback
 // that undoes the edit on exactly the keys the person meant to change.
 import type { ChangeOp } from "./change.ts";
-import { type OptionBoard, type OptionSpec, baselineOf, currentValue, isSet } from "./firmware-options.ts";
+import { type OptionBoard, type OptionSpec, baselineOf, currentValue, forcedOn, isSet } from "./firmware-options.ts";
 import type { HoldTapProfile, Layout } from "./schema.ts";
 
 /** The options a hold-tap profile can carry a copy of (src/firmware/qmk/config-h.ts TAP_HOLD_KEYS, the ones the page offers). */
@@ -28,7 +28,8 @@ export function settingsChange(layout: Layout, board: Pick<OptionBoard, "setting
   const profiles = new Map<string, HoldTapProfile>();
 
   for (const { spec, value } of edits) {
-    if (value === currentValue(spec, layout, board)) continue;
+    // A forced setting takes no edit: the firmware gets the forced value whatever is stored, so an op would say off and do on.
+    if (value === currentValue(spec, layout, board) || forcedOn(spec, layout) !== null) continue;
     const backToBaseline = value === baselineOf(spec, layout, board);
     const previous = layout.settings.find((s) => s.firmware === spec.firmware && s.key === spec.key)?.value;
     if (backToBaseline) {

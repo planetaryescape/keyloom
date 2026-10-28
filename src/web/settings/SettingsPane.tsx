@@ -1,7 +1,7 @@
 import { LoaderCircle, Search } from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { type OptionSpec, baselineOf, currentValue, optionsFor, otherSettings, sourceText } from "../../layout/firmware-options.ts";
+import { type OptionSpec, baselineOf, currentValue, forcedOn, optionsFor, otherSettings, sourceText } from "../../layout/firmware-options.ts";
 import { type SettingEdit, settingsChange } from "../../layout/settings-ops.ts";
 import type { LayerLighting, Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
@@ -53,7 +53,8 @@ export function SettingsPane(props: Props) {
   const [problem, setProblem] = useState<string | null>(null);
 
   const specs = useMemo(() => optionsFor(board), [board]);
-  const valueOf = (spec: OptionSpec) => staged.get(spec.key) ?? currentValue(spec, layout, board);
+  // A forced setting shows what the firmware gets, even when an earlier staged edit disagrees (a Caps Word key added after staging).
+  const valueOf = (spec: OptionSpec) => (forcedOn(spec, layout) === null ? staged.get(spec.key) : undefined) ?? currentValue(spec, layout, board);
   const edits = useMemo<SettingEdit[]>(() => specs.flatMap((spec) => (staged.has(spec.key) ? [{ spec, value: staged.get(spec.key) as number | boolean }] : [])), [specs, staged]);
   const change = useMemo(() => settingsChange(layout, board, edits), [layout, board, edits]);
   const colourOps = useMemo(() => lightingOps(layout, lighting), [layout, lighting]);
@@ -136,6 +137,7 @@ export function SettingsPane(props: Props) {
               <h3>{group}</h3>
               {rows.map((spec) => {
                 const value = valueOf(spec);
+                const forced = forcedOn(spec, layout);
                 return (
                   <SettingRow
                     key={spec.key}
@@ -143,7 +145,8 @@ export function SettingsPane(props: Props) {
                     value={value}
                     baseline={baselineOf(spec, layout, board)}
                     blockedBy={blockedBy(spec)}
-                    changed={value !== baselineOf(spec, layout, board)}
+                    forced={forced}
+                    changed={value !== baselineOf(spec, layout, board) && forced === null}
                     staged={staged.has(spec.key)}
                     advanced={advanced}
                     keptOwn={staged.has(spec.key) ? keptFor(spec) : []}

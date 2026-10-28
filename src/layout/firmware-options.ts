@@ -2,6 +2,7 @@
 // when to change it. Every default below was read from the pinned firmware, not remembered: QMK's from ZSA's firmware25
 // (quantum/action_tapping.h, process_combo.h, caps_word.h, process_auto_shift.h, action_util.c) and ZMK's from MoErgo's Kconfig
 // as built into the Glove80 image. A "flag" with a default of false is simply not defined, which is how both firmwares read it.
+import { readNative } from "./native-read.ts";
 import type { Firmware, FirmwareSetting, Layout } from "./schema.ts";
 
 /** What the options need to know about a board. A structural type, because the layout layer sits below the board definitions. */
@@ -133,8 +134,33 @@ function rulesValue(layout: Layout, key: string): boolean | undefined {
   return last === undefined ? undefined : last.toLowerCase() === "yes";
 }
 
-/** What the firmware will do now: the setting if there is one, else the baseline. */
+/**
+ * Whether the layout holds a QMK Caps Word key (a native the reader calls the caps word toggle) on a key or a combo output. A
+ * tap dance slot can't hold one. The QMK generator turns CAPS_WORD_ENABLE on for this, and the settings page reads it too.
+ */
+export function hasCapsWordKey(layout: Layout): boolean {
+  const bindings = [...layout.layers.flatMap((l) => l.bindings), ...layout.combos.map((c) => c.output)];
+  return bindings.some((b) => {
+    if (b.kind !== "native" || b.firmware !== "qmk") return false;
+    const reading = readNative(b, new Map());
+    return reading.kind === "steps" && reading.steps.some((step) => step.kind === "capsWord");
+  });
+}
+
+/**
+ * Why a setting is on whatever the layout stores, or null when nothing forces it. The firmware gets the forced value, so the
+ * page shows it, and an edit to the other value would be a lie: it would stage an op the generator then ignores.
+ */
+export function forcedOn(spec: OptionSpec, layout: Layout): string | null {
+  if (spec.firmware === "qmk" && spec.key === "CAPS_WORD_ENABLE" && hasCapsWordKey(layout)) {
+    return "A Caps Word key on this layout turns it on, so it stays on while that key is there.";
+  }
+  return null;
+}
+
+/** What the firmware will do now: the forced value if something forces it, else the setting if there is one, else the baseline. */
 export function currentValue(spec: OptionSpec, layout: Layout, board: Pick<OptionBoard, "settingDefaults">): number | boolean {
+  if (forcedOn(spec, layout) !== null) return true;
   const own = layout.settings.find((s) => s.firmware === spec.firmware && s.key === spec.key)?.value;
   if (spec.kind === "flag") return own === undefined ? Boolean(baselineOf(spec, layout, board)) : own === true || (typeof own === "number" && own !== 0);
   return typeof own === "number" ? own : Number(baselineOf(spec, layout, board));
