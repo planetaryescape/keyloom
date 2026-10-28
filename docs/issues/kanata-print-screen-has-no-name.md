@@ -1,6 +1,6 @@
 # A Print Screen key carries onto the MacBook, then stops its kanata config from generating
 
-Status: fixed on branch fix/five-kanata (the copy and the validator refuse Print Screen on a MacBook layout, with the reason; kanata has no macOS name for it, so the table is unchanged). Found during stage T's verification, 2026-10-23. Checked on origin/main `f1ba5e6`.
+Status: fixed in ae08799 (PR 194), released in v0.56.1 (the copy and the validator refuse Print Screen on a MacBook layout, with the reason; kanata has no macOS name for it, so the table is unchanged). Found during stage T's verification, 2026-10-23. Checked on origin/main `f1ba5e6`.
 
 `PRINT_SCREEN` has no kanata name in the key table: `kanataName("PRINT_SCREEN")` is `undefined`, and `keyName("PRINT_SCREEN")` (`src/layout/kanata/names.ts:10`) throws "PRINT_SCREEN has no kanata key name on macOS, so kanata can't send it".
 

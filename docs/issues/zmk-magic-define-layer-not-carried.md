@@ -1,6 +1,6 @@
 # A Glove80 `&magic MAGIC 0` key is not read, so its layer is not carried
 
-Status: fixed on branch fix/five-zmk (the importer records the layer ref on a kept key whose layer parameter is a `#define` that names a layer; renumbering keeps the name).
+Status: fixed in 7285c13 (PR 192), released in v0.56.1 (the importer records the layer ref on a kept key whose layer parameter is a `#define` that names a layer; renumbering keeps the name).
 
 Found in stage T (D-451), 2026-10-23, on `feat/copy-translates-codes`.
 

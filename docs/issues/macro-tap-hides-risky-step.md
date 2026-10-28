@@ -1,6 +1,6 @@
 # A bootloader step inside a macro tap gets no risky-key warning
 
-Status: fixed on branch fix/five-zmk (the reader treats `&macro_tap`, `&macro_press`, `&macro_release` and `&macro_pause_for_release` as modes and reads the steps after them).
+Status: fixed in 7285c13 (PR 192), released in v0.56.1 (the reader treats `&macro_tap`, `&macro_press`, `&macro_release` and `&macro_pause_for_release` as modes and reads the steps after them).
 
 Found by stage T's independent review (round 5), 2026-10-23, at `02e8c4f`.
 

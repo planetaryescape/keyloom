@@ -1,6 +1,6 @@
 # Settings shows Caps Word off while the firmware turns it on
 
-Status: fixed on branch fix/five-kanata (Settings shows Caps Word on, with the line, and a staged off is no edit; the CLI has no settings view, tracked in `docs/issues/cli-has-no-settings-view.md`). Found in stage T (D-451), 2026-10-23, at `02e8c4f`.
+Status: fixed in ae08799 (PR 194), released in v0.56.1 (Settings shows Caps Word on, with the line, and a staged off is no edit; the CLI has no settings view, tracked in `docs/issues/cli-has-no-settings-view.md`). Found in stage T (D-451), 2026-10-23, at `02e8c4f`.
 
 A Caps Word key does nothing in QMK unless `CAPS_WORD_ENABLE` is compiled in, so the QMK generator turns it on when the layout holds a Caps Word key (`usesCapsWord` in `src/firmware/qmk/generate.ts`). The settings page reads the stored value, so with `CAPS_WORD_ENABLE: false` stored and a `CW_TOGG` key present, `currentValue()` returns false and the page shows it off, while the generated `rules.mk` ends with `CAPS_WORD_ENABLE = yes`.
 
