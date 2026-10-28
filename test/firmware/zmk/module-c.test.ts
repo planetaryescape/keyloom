@@ -1,12 +1,15 @@
 // The module's C compiled for the host against stand-ins for Zephyr's headers, as the Moonlander's wrapper is (test/firmware/qmk/handsfree.test.ts).
 // The real proof that it builds into the firmware is the Docker builds in the rung's evidence; this runs the arithmetic and the state machine.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { join } from "node:path";
 import { tempDir } from "../../helpers/tmp.ts";
 import { LOCAL_BAUD, RELAY_BAUD } from "../../../src/firmware/zmk/handsfree.ts";
 
 const SRC = `${import.meta.dir}/../../../firmware/zmk/keyloom-zmk/src`;
 const cc = Bun.which("cc") ?? Bun.which("gcc") ?? Bun.which("clang");
+
+// Each test runs the C compiler, up to three times; loaded full runs have exceeded Bun's 5 s default.
+setDefaultTimeout(30_000);
 
 /** Just enough of Zephyr for the two files: IS_ENABLED, MIN, ssize_t, the hwinfo and UART calls, and a clock the harness controls. */
 const STUBS: Record<string, string> = {

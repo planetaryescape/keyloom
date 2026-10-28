@@ -1,10 +1,13 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { CheckoutError, checkoutState, ensureCheckout } from "../../../src/firmware/toolchain/checkout.ts";
 import { git, gitEnv, originRepo } from "../../helpers/git-fixture.ts";
 import { withPath } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
+
+// These tests spawn git clones and submodule fetches; loaded full runs have exceeded Bun's 5 s default.
+setDefaultTimeout(30_000);
 
 const inFileProtocol = <T>(fn: () => Promise<T>) => withPath("/nonexistent-extra-path", fn, gitEnv);
 

@@ -373,6 +373,14 @@ a.menu-item {
   padding: var(--caption-room) var(--space-6) var(--floor-room);
 }
 
+/* A board that fits the stage needs no scroll box, and a scroll box clips the board's shadows at its edge
+   (docs/issues/stage-clips-board-shadow.md). Narrow windows keep it: they scroll the board above the sheet. */
+@media (min-width: 901px) {
+  .keyboard-well[data-overflowing="false"] {
+    overflow: visible;
+  }
+}
+
 /* margin: auto centres the board and still lets it scroll from its left edge when it is wider than the stage. */
 .keyboard {
   flex: none;
