@@ -61,6 +61,8 @@ pub enum Failure {
 // keyboard write, before it prints one, all inside one 120 s budget (TAKEOVER_TIMEOUT_MS in src/server/replace-server.ts). This is tied to
 // it: keep this longer than that, and change them together. A shorter wait gives up on a launch that was only queued behind another app.
 const URL_WAIT_SECS: u64 = 135;
+// TAKEOVER_TIMEOUT_MS is 120_000 in src/server/replace-server.ts; test/api/desktop-protocol.test.ts checks this pair too.
+const _: () = assert!(URL_WAIT_SECS > 120, "the shell must wait longer than the CLI's 120 s takeover budget");
 
 const CANNOT_ATTACH: &str = "keyloom cannot attach: ";
 const CAN_REPLACE: &str = "keyloom can replace it: ";
@@ -160,12 +162,6 @@ pub fn stop(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn waits_for_the_url_longer_than_the_cli_may_wait_in_any_mode() {
-        // TAKEOVER_TIMEOUT_MS is 120_000 in src/server/replace-server.ts; test/api/desktop-protocol.test.ts checks this pair too.
-        assert!(URL_WAIT_SECS > 120);
-    }
 
     #[test]
     fn reads_the_words_and_the_replace_label_from_the_cli() {
