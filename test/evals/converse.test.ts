@@ -35,6 +35,16 @@ describe("converse", () => {
     expect(requests[2]?.toolResults).toEqual(["yes"]);
   });
 
+  test("fails when the last turn is still waiting for an answer, even beside a valid proposal", async () => {
+    const world = await commandShiftApp();
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "propose_changes", input: proposal("F17") }] },
+      { blocks: [ask("Which hand?")] },
+    ]);
+    await expect(converse(world.app, world.layoutId, { message: "give me a key" }, { nudges: [], maxTurns: 1, model: anthropicModel(client) }))
+      .rejects.toThrow(/still awaiting_answer after 1 turns/);
+  });
+
   test("nudges a completed turn that proposed nothing, and gives up at the turn limit", async () => {
     const world = await commandShiftApp();
     const { client, requests } = fakeAnthropic([{ blocks: [{ text: "Tell me more." }] }, { blocks: [{ text: "Still unsure." }] }]);

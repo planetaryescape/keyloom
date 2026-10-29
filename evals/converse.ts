@@ -21,7 +21,8 @@ export type Exchange = {
  * Sends `first`, answers each question with its recommended option (an option's ID where it has one, as the chat sends it) or, when
  * the scenario's point is what BK says, with `typedAnswer`, and
  * after a completed turn with nothing proposed yet sends the next of `nudges` (the last one repeats). Stops once a proposal exists
- * and the turn is complete, or after `maxTurns` turns. The caller's checks decide whether that was enough. `model` replaces the
+ * and the turn is complete, or after `maxTurns` turns. Throws when the last turn is still waiting for an answer; whether a completed
+ * conversation proposed enough is for the caller's checks. `model` replaces the
  * provider's, for the scripted test of this loop.
  */
 export async function converse(
@@ -52,6 +53,8 @@ export async function converse(
     if (outcome.status === "complete" && (opts.stop ? opts.stop(outcomes) : outcomes.some((o) => o.proposals.length > 0))) break;
   }
   if (conversationId === undefined) throw new Error("converse needs at least one turn");
+  // A question left open is not a finished evaluation, whatever the proposals say: fail the scenario rather than score half a conversation.
+  if (outcomes.at(-1)?.status !== "complete") throw new Error(`the conversation was still ${outcomes.at(-1)?.status} after ${opts.maxTurns} turns; raise maxTurns or fix the scenario's answers`);
   return { outcomes, conversationId, questions: outcomes.flatMap((o) => (o.question === undefined ? [] : [o.question])) };
 }
 

@@ -39,10 +39,10 @@ function toolUses(app: ReturnType<typeof openApp>, conversationId: string): Tool
 }
 
 async function talk(app: ReturnType<typeof openApp>, layoutId: string, first: string) {
-  // The colours scenario ends in an explanation, not a proposal, so a finished reply with no question mark is an answer.
+  // The colours scenario ends in an explanation, not a proposal, so a first reply with no question mark is the answer.
   const { outcomes, conversationId, questions } = await converse(app, layoutId, { message: first }, {
     nudges: [NUDGE], maxTurns: MAX_TURNS,
-    stop: (all) => all.some((o) => o.proposals.length > 0) || !all.at(-1)?.text.includes("?"),
+    stop: (all) => all.some((o) => o.proposals.length > 0) || (all.length === 1 && !all[0]?.text.includes("?")),
   });
   const usage = outcomes.reduce(
     (a, o) => ({ inputTokens: a.inputTokens + o.usage.inputTokens, outputTokens: a.outputTokens + o.usage.outputTokens, cacheReadTokens: a.cacheReadTokens + o.usage.cacheReadTokens, cacheCreationTokens: a.cacheCreationTokens + o.usage.cacheCreationTokens }),

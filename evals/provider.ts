@@ -47,11 +47,17 @@ export function costLine(outcomes: ChatOutcome[], usage: Usage): string {
 export const reportFile = (date: string, model: string | undefined, effort: string | undefined, scenario: string): string =>
   `${date}-${evalProvider}-${(model ?? "unknown").replaceAll("/", "-")}-${effort}-${scenario}.md`;
 
+/** What a question says to BK: its words, what matters and each option. */
+const questionWords = (o: ChatOutcome): string[] => {
+  const q = o.question;
+  return q === undefined ? [] : [q.question, ...(q.considerations ?? []), ...q.options.flatMap((opt) => [opt.label, opt.description ?? ""])];
+};
+
 /**
- * D-279: keys are named by what they print and where they sit, never by number. True when no reply, proposal title, explanation or
- * trade-off says "key 43" or "position 30" to BK.
+ * D-279: keys are named by what they print and where they sit, never by number. True when no reply, question, proposal title,
+ * explanation or trade-off says "key 43" or "position 30" to BK.
  */
 export function namesNoKeyNumbers(outcomes: readonly ChatOutcome[]): boolean {
-  const said = outcomes.flatMap((o) => [o.text, ...o.proposals.flatMap((p) => [p.title, p.explanation, ...p.tradeoffs.gains, ...p.tradeoffs.costs])]);
+  const said = outcomes.flatMap((o) => [o.text, ...questionWords(o), ...o.proposals.flatMap((p) => [p.title, p.explanation, ...p.tradeoffs.gains, ...p.tradeoffs.costs])]);
   return said.every((text) => !/\b(key|position)\s+\d+/i.test(text));
 }
