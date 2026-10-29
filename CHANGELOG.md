@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.59.1](https://github.com/planetaryescape/keyloom/compare/v0.59.0...v0.59.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* accept answers after the layout changes ([c2e790d](https://github.com/planetaryescape/keyloom/commit/c2e790d088210cf719171c7b9ecd6484856b3cf9))
+* one timed-out test no longer cascades, evals answer refining questions, and keyloom layout settings shows the firmware settings ([#201](https://github.com/planetaryescape/keyloom/issues/201)) ([e894e6d](https://github.com/planetaryescape/keyloom/commit/e894e6dc25bb1c5f658832107f61eea201a6520c))
+
 ## [0.59.0](https://github.com/planetaryescape/keyloom/compare/v0.58.0...v0.59.0) (2026-10-29)
 
 
