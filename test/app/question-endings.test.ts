@@ -1,17 +1,19 @@
-// Every way a question ends (D-452), through the durable run APIs the app uses (`startAgentRun`, `answerAgentRun`). `sendMessage` creates no run
-// row, so it never meets the two guards that refuse an answer once the layout head has moved since the run paused (agent-runs.ts, conversations.ts):
-// tests that only used it missed the question BK could see and not answer. A scripted model behind the real SDK; nothing reaches a network.
+// Every way a question ends (D-452), and how one is answered after the layout head moved (D-458), through the durable run APIs the app uses
+// (`startAgentRun`, `answerAgentRun`). `sendMessage` creates no run row, so it has neither the run's status check nor the head the run was accepted
+// at, which the note compares (agent-runs.ts, conversations.ts): tests that only used it missed the question BK could see and not answer. A scripted
+// model behind the real SDK; nothing reaches a network.
 import { describe, expect, test } from "bun:test";
 import { anthropicModel } from "../../src/agent/anthropic-model.ts";
 import { type AgentModel, emptyUsage } from "../../src/agent/model.ts";
 import { ConversationDetailSchema } from "../../src/api/http.ts";
-import { answerAgentRun, cancelAgentRun, drainAgentRuns, inspectAgentRun, startAgentRun, waitForAgentRun } from "../../src/app/agent-runs.ts";
-import { type App, applyChange, rejectChange, showConversation } from "../../src/app/index.ts";
+import { type AgentRunSnapshot, answerAgentRun, cancelAgentRun, drainAgentRuns, inspectAgentRun, startAgentRun, waitForAgentRun } from "../../src/app/agent-runs.ts";
+import { type App, applyChange, applyOps, getLayout, importLayout, rejectChange, showConversation, undo } from "../../src/app/index.ts";
 import { SKIPPED_ANSWER } from "../../src/app/question-skip.ts";
 import { listMessages } from "../../src/persistence/conversations.ts";
-import { commandShiftApp } from "../helpers/command-shift.ts";
+import { FIXTURE_DIR } from "../helpers/board.ts";
+import { F16_POSITION, TAB_POSITION, commandShiftApp } from "../helpers/command-shift.ts";
 import { type ScriptStep, type SeenRequest, fakeAnthropic } from "../helpers/fake-anthropic.ts";
-import { draft } from "../helpers/ops.ts";
+import { draft, setKey } from "../helpers/ops.ts";
 import { CLOSE_FOLLOWUP, QUICK_REQUEST, closeScript, lastSaved } from "../helpers/refine-journey.ts";
 import { fromConversation, questionClosed, questionOpen, questionSkipped, type AssistantTurn } from "../../src/web/chat/transcript.ts";
 
@@ -58,7 +60,7 @@ describe("applying a proposal while a question waits, through the durable runs",
       expect(closed).toMatchObject({ closed: true, answer: expect.stringContaining(CLOSED("Option")) });
       expect(closed?.skipped).toBeUndefined();
       expect(inspectAgentRun(world.app, second.id)).toMatchObject({ status: "completed", presentation: { status: "completed" } });
-      // Both guards still refuse an answer to it, and now say so about a question that is gone, not one that is open.
+      // Both answer paths still refuse it, and say so about a question that is gone: the run no longer waits and the question is no longer open.
       await expect(answerAgentRun(world.app, second.id, "late-answer", { toolUseId: open?.toolUseId ?? "", text: "Yes" }, { model })).rejects.toThrow(/no longer current/);
       await expect(turn(world, model, { conversationId: first.conversationId, answer: { toolUseId: open?.toolUseId ?? "", text: "Yes" } })).rejects.toThrow(/not open any more/);
 
@@ -422,6 +424,263 @@ describe("the other ways a question ends", () => {
       expect(questionsOf(world.app, failed.conversationId)).toEqual([]);
     } finally {
       await drainAgentRuns(world.app);
+    }
+  });
+});
+
+// A question can wait while the layout head moves by any means (an editor edit, an undo, an apply in another conversation, a change made while the
+// turn was still working). The answer is taken, and the model reads a note first, because what it read of the layout before is out of date. The
+// validator still decides every revision against the head (D-014): the answer changes what the model is told, not what can be applied (D-458).
+describe("a question answered after the layout head moved", () => {
+  const note = (revisions: string, words: string) => `The layout changed after your last reply began${revisions}. Read it again with get_layout before you revise anything. BK's answer:\n\n${words}`;
+  /** BK puts `code` on a key in the editor: the head moves with a revision that is not an agent proposal. */
+  const edit = (world: { app: App; layoutId: string }, summary: string, code = "F5", position = F16_POSITION) =>
+    applyOps(world.app, world.layoutId, { baseRevisionId: getLayout(world.app, world.layoutId).revision.id, ops: setKey(position, code), summary });
+  /** The answer by either route: the run's own answer route (`keyloom agent answer`), or an answer sent to the conversation (the browser). */
+  const answerBy = (route: "run" | "conversation", world: { app: App; layoutId: string }, model: AgentModel, paused: AgentRunSnapshot, answer: { toolUseId: string; text: string }, requestId: string) =>
+    route === "run"
+      ? answerAgentRun(world.app, paused.id, requestId, answer, { model })
+      : startAgentRun(world.app, { version: 1, requestId, layoutRef: world.layoutId, input: { conversationId: paused.conversationId, answer } }, { model });
+  const storedResults = (app: App, conversationId: string) => listMessages(app.db, conversationId).flatMap((m) => m.content).filter((b) => b.type === "tool_result");
+
+  for (const route of ["run", "conversation"] as const) {
+    test(`an editor edit: the answer is taken by the ${route}'s route, the run resumes, and the model reads the note, the answer and the layout as it is now`, async () => {
+      const world = await commandShiftApp();
+      const { client, requests } = fakeAnthropic([
+        { blocks: [ask("Which hand is free?")] },
+        // The resumed turn does what the note asks: it reads the layout again.
+        { blocks: [{ tool: "get_layout", input: {} }] },
+        { blocks: [{ text: "Left it is." }] },
+        { blocks: [{ text: "Fine." }] },
+      ]);
+      const model = anthropicModel(client);
+      try {
+        const paused = await turn(world, model, { message: "put F5 on F16" });
+        const [open] = questionsOf(world.app, paused.conversationId);
+        expect(paused.status).toBe("waiting_user");
+        const moved = edit(world, "Put F5 on F16");
+        // Nothing marks the question stale: the card still offers its options and the run still waits.
+        expect(questionsOf(world.app, paused.conversationId)[0]).toMatchObject({ answer: null });
+        expect(inspectAgentRun(world.app, paused.id).status).toBe("waiting_user");
+
+        const answer = { toolUseId: open?.toolUseId ?? "", text: "Left" };
+        const answered = await answerBy(route, world, model, paused, answer, "answer-moved");
+        expect((await waitForAgentRun(world.app, answered.id)).status).toBe("completed");
+        expect(inspectAgentRun(world.app, paused.id).status).toBe("completed");
+        // The next request carries the note and the answer, as the one result the question is owed.
+        expect(requests[1]?.toolResults).toEqual([note(' (1 revision: "Put F5 on F16")', "Left")]);
+        // The resumed turn reads the head as it is now, not a snapshot of the one it paused on.
+        expect(requests[2]?.toolResults.join("\n")).toContain(`head revision ${moved.revisionId}`);
+        // The card shows BK's words, not the note.
+        expect(questionsOf(world.app, paused.conversationId)[0]).toMatchObject({ answer: "Left" });
+        expect(questionsOf(world.app, paused.conversationId)[0]?.closed).toBeUndefined();
+
+        // The same answer identity returns the same continuation and runs nothing again.
+        const calls = requests.length;
+        expect((await answerBy(route, world, model, paused, answer, "answer-moved")).id).toBe(answered.id);
+        expect(requests).toHaveLength(calls);
+        // The note stays in the stored result, so a later message replays the history the model last read.
+        await turn(world, model, { conversationId: paused.conversationId, message: "thanks" });
+        const replayed = (requests.at(-1)?.body.messages ?? []).flatMap((m: { content: unknown }) => (Array.isArray(m.content) ? m.content : []))
+          .filter((b: { type: string }) => b.type === "tool_result").map((b: { content: unknown }) => b.content);
+        expect(replayed).toContain(note(' (1 revision: "Put F5 on F16")', "Left"));
+      } finally {
+        await drainAgentRuns(world.app);
+      }
+    });
+  }
+
+  test("an undo: the answer is taken, and the note names the undo", async () => {
+    const world = await commandShiftApp();
+    const { client, requests } = fakeAnthropic([{ blocks: [ask("Which hand is free?")] }, { blocks: [{ text: "Left it is." }] }]);
+    const model = anthropicModel(client);
+    try {
+      edit(world, "Put F5 on F16");
+      const paused = await turn(world, model, { message: "go" });
+      const [open] = questionsOf(world.app, paused.conversationId);
+      undo(world.app, world.layoutId);
+      expect(inspectAgentRun(world.app, paused.id).status).toBe("waiting_user");
+
+      const answered = await answerAgentRun(world.app, paused.id, "answer-undone", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+      expect((await waitForAgentRun(world.app, answered.id)).status).toBe("completed");
+      expect(requests[1]?.toolResults).toEqual([note(' (1 revision: "Undo: Put F5 on F16")', "Left")]);
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("a proposal of another conversation applied: the answer is taken, and the note names that change", async () => {
+    const world = await commandShiftApp();
+    const { client, requests } = fakeAnthropic([
+      { blocks: [ask("Which hand is free?")] },
+      // Another conversation on the same layout proposes something, and BK applies it.
+      { blocks: [{ tool: "propose_changes", input: proposal("Option on F17", "F17") }] },
+      { blocks: [{ text: "Here it is." }] },
+      { blocks: [{ text: "Left it is." }] },
+    ]);
+    const model = anthropicModel(client);
+    try {
+      const paused = await turn(world, model, { message: "go" });
+      const [open] = questionsOf(world.app, paused.conversationId);
+      const other = await turn(world, model, { message: "put F17 on F16" });
+      expect(other.conversationId).not.toBe(paused.conversationId);
+      applyChange(world.app, proposalsOf(world.app, other.conversationId)[0]?.changeSetId ?? "");
+      // The other conversation's apply ends its own questions only; this one still waits.
+      expect(questionsOf(world.app, paused.conversationId)[0]).toMatchObject({ answer: null });
+      expect(inspectAgentRun(world.app, paused.id).status).toBe("waiting_user");
+
+      const answered = await answerAgentRun(world.app, paused.id, "answer-elsewhere", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+      expect((await waitForAgentRun(world.app, answered.id)).status).toBe("completed");
+      expect(requests.at(-1)?.toolResults).toEqual([note(' (1 revision: "Option on F17.")', "Left")]);
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("a change made while the turn was still working counts too: the question was stranded from the start", async () => {
+    const world = await commandShiftApp();
+    const { client, requests } = fakeAnthropic([
+      (_seen) => {
+        edit(world, "Put F5 on F16 while the turn ran");
+        return { blocks: [ask("Which hand is free?")] };
+      },
+      { blocks: [{ text: "Left it is." }] },
+    ]);
+    const model = anthropicModel(client);
+    try {
+      const paused = await turn(world, model, { message: "go" });
+      expect(paused.status).toBe("waiting_user");
+      const [open] = questionsOf(world.app, paused.conversationId);
+      const answered = await answerAgentRun(world.app, paused.id, "answer-midturn", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+      expect((await waitForAgentRun(world.app, answered.id)).status).toBe("completed");
+      expect(requests[1]?.toolResults).toEqual([note(' (1 revision: "Put F5 on F16 while the turn ran")', "Left")]);
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("several revisions are counted and the latest is named; a starting point the layout never had still says it changed", async () => {
+    for (const unknownStart of [false, true]) {
+      const world = await commandShiftApp();
+      const { client, requests } = fakeAnthropic([{ blocks: [ask("Which hand is free?")] }, { blocks: [{ text: "Left it is." }] }]);
+      const model = anthropicModel(client);
+      try {
+        const paused = await turn(world, model, { message: "go" });
+        const [open] = questionsOf(world.app, paused.conversationId);
+        edit(world, "Put F5 on F16");
+        edit(world, "Put F18 on F16", "F18");
+        if (unknownStart) world.app.db.query("UPDATE agent_runs SET revision_id = 'rev_unknown' WHERE id = ?").run(paused.id);
+        const answered = await answerAgentRun(world.app, paused.id, "answer-many", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+        expect((await waitForAgentRun(world.app, answered.id)).status).toBe("completed");
+        expect(requests[1]?.toolResults).toEqual([note(unknownStart ? "" : ' (2 revisions, the latest "Put F18 on F16")', "Left")]);
+        expect(questionsOf(world.app, paused.conversationId)[0]).toMatchObject({ answer: "Left" });
+      } finally {
+        await drainAgentRuns(world.app);
+      }
+    }
+  });
+
+  test("a long or multi-line summary stays one short line, so the card still finds BK's words", async () => {
+    const world = await commandShiftApp();
+    const { client, requests } = fakeAnthropic([{ blocks: [ask("Which hand is free?")] }, { blocks: [{ text: "Left it is." }] }]);
+    const model = anthropicModel(client);
+    try {
+      const paused = await turn(world, model, { message: "go" });
+      const [open] = questionsOf(world.app, paused.conversationId);
+      edit(world, `Put F5 on F16\n\nso the thumb stays free ${"x".repeat(150)}`);
+      const answered = await answerAgentRun(world.app, paused.id, "answer-long", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+      expect((await waitForAgentRun(world.app, answered.id)).status).toBe("completed");
+      // Whitespace is one space, and the summary is cut at 99 characters and an ellipsis.
+      expect(requests[1]?.toolResults).toEqual([note(` (1 revision: "${"Put F5 on F16 so the thumb stays free ".padEnd(99, "x")}…")`, "Left")]);
+      expect(questionsOf(world.app, paused.conversationId)[0]).toMatchObject({ answer: "Left" });
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("an answer given when the head did not move carries no note", async () => {
+    const world = await commandShiftApp();
+    const { client, requests } = fakeAnthropic([{ blocks: [ask("Which hand is free?")] }, { blocks: [{ text: "Left it is." }] }]);
+    const model = anthropicModel(client);
+    try {
+      const paused = await turn(world, model, { message: "go" });
+      const [open] = questionsOf(world.app, paused.conversationId);
+      const answered = await answerAgentRun(world.app, paused.id, "answer-still", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+      expect((await waitForAgentRun(world.app, answered.id)).status).toBe("completed");
+      expect(requests[1]?.toolResults).toEqual(["Left"]);
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("the other checks still refuse once the head moved: another question, another layout's conversation, a run that no longer waits", async () => {
+    const world = await commandShiftApp();
+    const elsewhere = await importLayout(world.app, { board: "zsa/moonlander", source: FIXTURE_DIR, name: "elsewhere" });
+    const { client, requests } = fakeAnthropic([{ blocks: [ask("Which hand is free?")] }, { blocks: [{ text: "Ok." }] }]);
+    const model = anthropicModel(client);
+    try {
+      const paused = await turn(world, model, { message: "go" });
+      const [open] = questionsOf(world.app, paused.conversationId);
+      const toolUseId = open?.toolUseId ?? "";
+      edit(world, "Put F5 on F16");
+
+      // A question that is not the open one.
+      await expect(answerAgentRun(world.app, paused.id, "wrong-question", { toolUseId: "not-the-question", text: "Left" }, { model })).rejects.toThrow(/not open any more/);
+      await expect(turn(world, model, { conversationId: paused.conversationId, answer: { toolUseId: "not-the-question", text: "Left" } })).rejects.toThrow(/not open any more/);
+      // A conversation of another layout.
+      await expect(startAgentRun(world.app, { version: 1, requestId: "other-layout", layoutRef: elsewhere.layoutId, input: { conversationId: paused.conversationId, answer: { toolUseId, text: "Left" } } }, { model }))
+        .rejects.toThrow(/belongs to another layout/);
+      // Nothing was stored by any of them: the question is open and the run waits.
+      expect(storedResults(world.app, paused.conversationId)).toEqual([]);
+      expect(inspectAgentRun(world.app, paused.id).status).toBe("waiting_user");
+      expect(questionsOf(world.app, paused.conversationId)[0]).toMatchObject({ answer: null });
+
+      // BK types a message instead: it answers the question in his own words, with no note, and the paused run is over.
+      await turn(world, model, { conversationId: paused.conversationId, message: "never mind, something else" });
+      expect(inspectAgentRun(world.app, paused.id).status).toBe("completed");
+      expect(requests.at(-1)?.toolResults).toEqual(["BK did not pick an option; he wrote his own message instead."]);
+      // A run that no longer waits refuses an answer, as the head moves again.
+      edit(world, "Put F18 on F16", "F18");
+      await expect(answerAgentRun(world.app, paused.id, "late", { toolUseId, text: "Left" }, { model })).rejects.toThrow("that question is no longer current");
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("applying the conversation's own proposals after an editor edit still ends the question: Skipped for the one it refines, Closed for another", async () => {
+    for (const apply of ["refined", "other"] as const) {
+      const world = await commandShiftApp();
+      const { client, requests } = fakeAnthropic([
+        { blocks: [{ tool: "propose_changes", input: proposal("Option", "F17") }] },
+        { blocks: [apply === "refined" ? ask("Should the Option stay?") : { text: "Here it is." }] },
+        ...(apply === "other" ? [{ blocks: [ask()] }] : []),
+        { blocks: [{ text: "Understood." }] },
+      ]);
+      const model = anthropicModel(client);
+      try {
+        const first = await turn(world, model, { message: "put F17 on F16" });
+        const paused = apply === "other" ? await turn(world, model, { conversationId: first.conversationId, message: "and move Backspace" }) : first;
+        const [open] = questionsOf(world.app, first.conversationId);
+        expect(paused.status).toBe("waiting_user");
+        // The editor edit comes first, on a key the proposal does not touch, and moves the head.
+        edit(world, "Put F5 on Tab", "F5", TAB_POSITION);
+        applyChange(world.app, proposalsOf(world.app, first.conversationId)[0]?.changeSetId ?? "");
+
+        const [ended] = questionsOf(world.app, first.conversationId);
+        if (apply === "refined") expect(ended).toMatchObject({ skipped: true, answer: SKIPPED_ANSWER });
+        else expect(ended).toMatchObject({ closed: true, answer: expect.stringContaining(CLOSED("Option")) });
+        expect(inspectAgentRun(world.app, paused.id).status).toBe("completed");
+        await expect(answerAgentRun(world.app, paused.id, "late-answer", { toolUseId: open?.toolUseId ?? "", text: "Yes" }, { model })).rejects.toThrow(/no longer current/);
+        await expect(turn(world, model, { conversationId: first.conversationId, answer: { toolUseId: open?.toolUseId ?? "", text: "Yes" } })).rejects.toThrow(/not open any more/);
+        // The model is told how it ended, in the result's own words and with no note about the layout.
+        await turn(world, model, { conversationId: first.conversationId, message: "thanks" });
+        const results = resultsIn(requests.at(-1));
+        expect(results).toHaveLength(1);
+        expect(results[0]?.content).toContain(apply === "refined" ? SKIPPED_ANSWER : CLOSED("Option"));
+        expect(results[0]?.content).not.toContain("Read it again with get_layout");
+      } finally {
+        await drainAgentRuns(world.app);
+      }
     }
   });
 });

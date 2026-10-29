@@ -60,7 +60,7 @@ The marker for Closed is the result's fixed opening words, read by `isClosedAnsw
 
 The same rule has to hold when the apply comes while the turn is still running, before the question is stored. A turn that commits a question now compares the conversation's applied agent proposals with those applied when the turn started. If any became applied meanwhile, the question is stored with its result at once: Skipped when one of them is the proposal it refines, otherwise Closed. Round 4 did this only for the proposal the question refines, so an unrelated apply during the turn still produced the unanswerable state. A refined proposal that was only rejected, or revised by a call in the same reply, no longer counts as decided: nothing moved the head, so the question stays open and answerable, and the model is not told that BK applied something he did not.
 
-Not covered, by decision: the head moving by other means while a question waits (an editor edit, an undo, an apply in another conversation; each reproduced). That leaves the same unanswerable state and already does on main. It is logged in `docs/issues/open-question-unanswerable-after-layout-change.md` with the two options (close it on any head change, or accept the answer with a note to the model).
+Not covered, by decision: the head moving by other means while a question waits (an editor edit, an undo, an apply in another conversation; each reproduced). That leaves the same unanswerable state and already does on main. It is logged in `docs/issues/open-question-unanswerable-after-layout-change.md` with the two options (close it on any head change, or accept the answer with a note to the model). D-458 settled it afterwards with the second: both guards no longer compare the head, and the answer reaches the model behind a note.
 
 ### Where a question sits among the calls
 
@@ -85,7 +85,7 @@ A question is open while its `ask_user` call has no result after it (`openQuesti
 | BK applies any other agent proposal of the conversation | the Closed result | Closed, you applied another proposal | completed | completed | yes |
 | Either apply lands while the turn is still running | stored when the turn commits, as above | as above | completed | `completed` at commit, never `waiting_user` | yes |
 | BK rejects the proposal it refines, or a call in the same reply revises it | nothing | stays open, answerable | Needs your answer | `waiting_user` | yes, unchanged: the head did not move |
-| The head moves by other means (editor edit, undo, apply in another conversation) | nothing | stays open; its options are refused with "that question's target has changed" | Needs your answer | `waiting_user` | no, logged; a typed message still goes through |
+| The head moves by other means (editor edit, undo, apply in another conversation, a change while the turn is working) | nothing; BK's answer is stored behind a note that the layout changed (D-458) | stays open and answerable; once answered it shows his words, not the note | Needs your answer | `waiting_user`, then `completed` by the answer | yes, fixed by D-458 |
 | A call beside the question, or one before it, reaches the turn's 64-call activity limit | the question; the refused call has an error result and was not run | open, answerable | Needs your answer | `waiting_user` | yes, fixed in round 6 |
 | A call beside the question throws | the question; that call has an error result | open, answerable | Needs your answer | `waiting_user` | yes, unchanged |
 | Stop while the calls beside the question run | the question; each call not yet run has an error result ("The operation was aborted.") and saved nothing | open, answerable | Needs your answer | `waiting_user`, stop recorded | yes, unchanged |
@@ -93,7 +93,7 @@ A question is open while its `ask_user` call has no result after it (`openQuesti
 | Stop as the question arrives | the question, open | open, answerable | Needs your answer | `waiting_user` with the stop recorded | yes, unchanged |
 | The turn fails | no question | none | failed | `failed` | yes |
 
-Each in-scope row has a test: `test/app/question-endings.test.ts` (through `startAgentRun` and `answerAgentRun`, which `sendMessage` does not use and which carry the guards), `test/agent/turns.test.ts` (the activity limit), `test/agent/question-order.test.ts` (Anthropic, OpenRouter, Codex and the `onPause` contract) and `test/web/refine-cards.test.ts` (the card, the reducer, the work row). The real app shows the Closed card in `after-closed-light-1440.png` (`bun scripts/refine-journey.ts`, which now also runs `scripts/dev-command-shift.ts close`); `journey-transcript.md` has the chat text.
+Each in-scope row has a test: `test/app/question-endings.test.ts` (through `startAgentRun` and `answerAgentRun`, which `sendMessage` does not use and which carry the run row: its status and the head it was accepted at), `test/agent/turns.test.ts` (the activity limit), `test/agent/question-order.test.ts` (Anthropic, OpenRouter, Codex and the `onPause` contract) and `test/web/refine-cards.test.ts` (the card, the reducer, the work row). The real app shows the Closed card in `after-closed-light-1440.png` (`bun scripts/refine-journey.ts`, which now also runs `scripts/dev-command-shift.ts close`); `journey-transcript.md` has the chat text.
 
 ### Where this differs from the brief
 

@@ -11,7 +11,6 @@ import { processAlive } from "../firmware/toolchain/lock.ts";
 import type { App } from "./context.ts";
 import { messageModel, runPreparedMessage, storeMessage, type SendMessageInput } from "./conversations.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
-import { getLayout } from "./layouts.ts";
 
 const ownerToken = crypto.randomUUID();
 const owned = new Map<string, { app: App; abort: AbortController; done: Promise<void> }>();
@@ -145,7 +144,8 @@ export async function answerAgentRun(app: App, id: string, requestId: string, an
   const request: AgentRunRequest = { version: 1, requestId, layoutRef: row.layout_id, input: { conversationId: row.conversation_id, answer } };
   const prior = duplicate(app, request);
   if (prior) return inspectAgentRun(app, prior.id);
-  if (row.status !== "waiting_user" || getLayout(app, row.layout_id).revision.id !== row.revision_id) throw new UsageError("that question or its target is no longer current");
+  // The layout head may have moved since the run was accepted: the answer still goes through, behind a note to the model (D-458).
+  if (row.status !== "waiting_user") throw new UsageError("that question is no longer current");
   return startAgentRun(app, request, opts);
 }
 
