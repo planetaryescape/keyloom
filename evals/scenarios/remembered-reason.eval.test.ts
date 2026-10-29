@@ -8,9 +8,10 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type ChatOutcome, applyChange, getLayout, listDecisions, proposeChange, sendMessage, showDecision } from "../../src/app/index.ts";
+import { applyChange, getLayout, listDecisions, proposeChange, showDecision } from "../../src/app/index.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { commandShiftApp, TAB_POSITION } from "../../test/helpers/command-shift.ts";
+import { MAX_QUESTIONS, converse, said } from "../converse.ts";
 import { costLine, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 
@@ -18,12 +19,14 @@ const REASON = "My right hand stays on the mouse, so the left hand has to do Com
 const SEEDED: ChangeOp[] = [{ op: "setBinding", at: { layerId: "layer-0", position: TAB_POSITION }, binding: { kind: "modifier", mods: ["LGUI", "LSFT"] } }];
 
 const ASK = "Replace the Command-Shift key with a Caps Lock key.";
-// What BK says to the agent's question: the reason no longer holds, so go ahead.
-const ANSWERS = [
-  "I stopped using Figma for that months ago and the shortcuts aren't a thing for me anymore. It doesn't hold any more. Please go ahead and propose it.",
+// What BK says when a turn ends in prose with nothing proposed yet: the reason no longer holds, so go ahead.
+// A question asked with the ask tool gets the first of these too: the recommended option would not say the reason is gone.
+const GONE = "I stopped using Figma for that months ago and the shortcuts aren't a thing for me anymore. It doesn't hold any more. Please go ahead and propose it.";
+const NUDGES = [
+  GONE,
   "Yes, propose it now.",
 ];
-const MAX_TURNS = 3;
+const MAX_TURNS = 3 + MAX_QUESTIONS;
 
 describe("eval: remembered reason", () => {
   test.skipIf(!live)("quotes the stored reason and asks, proposals carry the reminder, applying anyway supersedes it", async () => {
@@ -38,21 +41,11 @@ describe("eval: remembered reason", () => {
     });
     const old = applyChange(app, seededChange.id).decisionId as string;
 
-    const outcomes: ChatOutcome[] = [];
-    let conversationId: string | undefined;
-    for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const outcome = await sendMessage(app, layoutId, {
-      provider: evalProvider,
-        message: turn === 0 ? ASK : (ANSWERS[turn - 1] ?? "Yes, propose it now."), ...(conversationId ? { conversationId } : {}),
-      });
-      conversationId = outcome.conversationId;
-      outcomes.push(outcome);
-      expect(outcome.status).toBe("complete");
-      if (outcome.proposals.length > 0) break;
-    }
+    const { outcomes, questions } = await converse(app, layoutId, { message: ASK }, { nudges: NUDGES, maxTurns: MAX_TURNS, typedAnswer: GONE });
 
     const first = outcomes[0];
-    const reply = (first?.text ?? "").toLowerCase();
+    // The ask tool carries the question, so the reply is the first turn as the chat shows it.
+    const reply = (first ? said(first) : "").toLowerCase();
     const proposals = outcomes.flatMap((o) => o.proposals);
     const valid = proposals.filter((p) => p.validation.ok);
     const usage = outcomes.reduce(
@@ -65,6 +58,7 @@ describe("eval: remembered reason", () => {
 
     const checks = {
       namesKeysNotNumbers: namesNoKeyNumbers(outcomes),
+      atMostThreeQuestions: questions.length <= MAX_QUESTIONS,
       askedBeforeProposing: (first?.proposals.length ?? 0) === 0,
       // The reply uses the stored reason (the mouse, the left hand or Figma), not a generic confirmation.
       citesTheStoredReason: /mouse|left hand|figma/.test(reply),
@@ -76,7 +70,8 @@ describe("eval: remembered reason", () => {
       everyProposalHasADraft: valid.length > 0 && valid.every((p) => p.decisionDraft !== null && p.decisionDraft.reason.length > 0),
       applyingAnywaySupersedes: false,
     };
-    const chosen = valid[0];
+    // The newest proposal: an earlier one in the chain has been set aside by the revision.
+    const chosen = valid.at(-1);
     let successor: string | null = null;
     if (chosen) {
       successor = applyChange(app, chosen.changeSetId).decisionId;
@@ -98,7 +93,7 @@ describe("eval: remembered reason", () => {
       `- ${old}: ${REASON}`,
       "",
       "## Agent replies",
-      ...outcomes.map((o, i) => `### Turn ${i + 1}\n${o.text}`),
+      ...outcomes.map((o, i) => `### Turn ${i + 1} (${o.status})\n${said(o)}`),
       "",
       "## Proposals",
       ...proposals.map((p) => `### ${p.title} (${p.validation.ok ? "valid" : "invalid"})\n${p.explanation}\n\nOps: ${JSON.stringify(p.ops)}\n\nReminders: ${JSON.stringify(p.validation.diff.reminders)}\nWarnings: ${p.validation.warnings.map((w) => w.code).join(", ")}\n\nDecision draft: ${JSON.stringify(p.decisionDraft)}`),

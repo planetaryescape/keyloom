@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createAgentPorts } from "../../src/app/agent-ports.ts";
-import { type ChatOutcome, applyOps, getLayout, importLayout, openApp, sendMessage } from "../../src/app/index.ts";
+import { type ChatOutcome, applyOps, getLayout, importLayout, openApp } from "../../src/app/index.ts";
 import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import { bindingFunctions } from "../../src/layout/functions.ts";
 import type { Layout } from "../../src/layout/schema.ts";
@@ -15,9 +15,11 @@ import { listMessages } from "../../src/persistence/conversations.ts";
 import { FIXTURE_DIR } from "../../test/helpers/board.ts";
 import { tempDir } from "../../test/helpers/tmp.ts";
 import { TEMPLATE_FIXTURE } from "../../test/helpers/zmk.ts";
+import { MAX_QUESTIONS, converse, said } from "../converse.ts";
 import { costLine, costUsd, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
-const MAX_TURNS = 3;
+// Turns include the answers to questions.
+const MAX_TURNS = 3 + MAX_QUESTIONS;
 const NUDGE = "Please decide and go ahead; I trust your mapping.";
 
 type ToolUse = { name: string; input: Record<string, unknown> };
@@ -36,22 +38,17 @@ function toolUses(app: ReturnType<typeof openApp>, conversationId: string): Tool
   );
 }
 
-async function converse(app: ReturnType<typeof openApp>, layoutId: string, first: string) {
-  const outcomes: ChatOutcome[] = [];
-  let conversationId: string | undefined;
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const outcome = await sendMessage(app, layoutId, { provider: evalProvider, message: turn === 0 ? first : NUDGE, ...(conversationId ? { conversationId } : {}) });
-    conversationId = outcome.conversationId;
-    outcomes.push(outcome);
-    expect(outcome.status).toBe("complete");
-    // The colours scenario ends in an explanation, not a proposal, so a turn with text and no question mark is an answer.
-    if (outcome.proposals.length > 0 || (turn === 0 && !outcome.text.includes("?"))) break;
-  }
+async function talk(app: ReturnType<typeof openApp>, layoutId: string, first: string) {
+  // The colours scenario ends in an explanation, not a proposal, so a finished reply with no question mark is an answer.
+  const { outcomes, questions } = await converse(app, layoutId, { message: first }, {
+    nudges: [NUDGE], maxTurns: MAX_TURNS,
+    stop: (all) => all.some((o) => o.proposals.length > 0) || !said(all.at(-1) as ChatOutcome).includes("?"),
+  });
   const usage = outcomes.reduce(
     (a, o) => ({ inputTokens: a.inputTokens + o.usage.inputTokens, outputTokens: a.outputTokens + o.usage.outputTokens, cacheReadTokens: a.cacheReadTokens + o.usage.cacheReadTokens, cacheCreationTokens: a.cacheCreationTokens + o.usage.cacheCreationTokens }),
     { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
   );
-  return { outcomes, usage, uses: toolUses(app, outcomes[0]?.conversationId as string), text: outcomes.map((o) => o.text).join("\n"), proposals: outcomes.flatMap((o) => o.proposals) };
+  return { outcomes, questions, usage, uses: toolUses(app, outcomes[0]?.conversationId as string), text: outcomes.map(said).join("\n"), proposals: outcomes.flatMap((o) => o.proposals) };
 }
 
 /** Looked at the other layout itself instead of asking BK for it. */
@@ -66,10 +63,11 @@ const ASKS_FOR_THE_LAYOUT = /oryx|screenshot|screen shot|export|send me (a |the 
 describe("eval: copy from my other keyboard", () => {
   test.skipIf(!live)("colours: on a board that cannot show them, explains why and proposes nothing; never asks for an Oryx link", async () => {
     const { app, layoutId } = await setup();
-    const run = await converse(app, layoutId, "copy the colors (rgb) key lights to be like the ones on my moonlander keyboard");
+    const run = await talk(app, layoutId, "copy the colors (rgb) key lights to be like the ones on my moonlander keyboard");
     const lightingOps = run.proposals.flatMap((p) => p.ops).filter((o) => o.op === "setLayerLighting");
     const checks = {
       namesKeysNotNumbers: namesNoKeyNumbers(run.outcomes),
+      atMostThreeQuestions: run.questions.length <= MAX_QUESTIONS,
       // The board's limit is in the prompt, so a model that answers from it without opening the Moonlander has not needed to look; one that does look is also right.
       lookedOrAnsweredFromTheBoardsLimit: looked(run.uses) || /underglow|one effect|no way to give a key/i.test(run.text),
       didNotAskForOryxOrScreenshots: !ASKS_FOR_THE_LAYOUT.test(run.text),
@@ -87,7 +85,7 @@ describe("eval: copy from my other keyboard", () => {
       `Turns: ${run.outcomes.length}. Model requests: ${run.outcomes.reduce((n, o) => n + o.iterations, 0)}. ${costLine(run.outcomes, run.usage)}`,
       "",
       "### Agent replies",
-      ...run.outcomes.map((o, i) => `Turn ${i + 1}: ${o.text}`),
+      ...run.outcomes.map((o, i) => `Turn ${i + 1} (${o.status}): ${said(o)}`),
     ].join("\n");
     save(date, run.outcomes, "cross-board-colours", section);
     expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
@@ -103,7 +101,7 @@ describe("eval: copy from my other keyboard", () => {
     const before = getLayout(app, second.layoutId);
     expect(before.document.layers.some((l) => l.lighting !== undefined)).toBe(false);
 
-    const run = await converse(app, second.layoutId, "copy the colors (rgb) key lights from my other moonlander, 'my-moonlander', onto this one");
+    const run = await talk(app, second.layoutId, "copy the colors (rgb) key lights from my other moonlander, 'my-moonlander', onto this one");
     const valid = run.proposals.filter((p) => p.validation.ok);
     const afterEach = valid.map((p) => {
       const applied = applyLayoutOps(before.document, p.ops);
@@ -114,6 +112,7 @@ describe("eval: copy from my other keyboard", () => {
     const lit = seen.layers.filter((l) => l.lighting !== undefined);
     const checks = {
       namesKeysNotNumbers: namesNoKeyNumbers(run.outcomes),
+      atMostThreeQuestions: run.questions.length <= MAX_QUESTIONS,
       lookedAtTheOtherMoonlanderItself: looked(run.uses),
       didNotAskForOryxOrScreenshots: !ASKS_FOR_THE_LAYOUT.test(run.text),
       proposedSomethingValid: valid.length > 0,
@@ -129,7 +128,7 @@ describe("eval: copy from my other keyboard", () => {
       `Turns: ${run.outcomes.length}. Model requests: ${run.outcomes.reduce((n, o) => n + o.iterations, 0)}. ${costLine(run.outcomes, run.usage)}`,
       "",
       "### Agent replies",
-      ...run.outcomes.map((o, i) => `Turn ${i + 1}: ${o.text}`),
+      ...run.outcomes.map((o, i) => `Turn ${i + 1} (${o.status}): ${said(o)}`),
     ].join("\n");
     save(date, run.outcomes, "cross-board-colours-supported", section);
     expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
@@ -139,7 +138,7 @@ describe("eval: copy from my other keyboard", () => {
     const { app, layoutId } = await setup();
     const moon = getLayout(app, "my-moonlander");
     const before = getLayout(app, layoutId);
-    const run = await converse(app, layoutId, "copy my home row mods from my moonlander");
+    const run = await talk(app, layoutId, "copy my home row mods from my moonlander");
 
     const board = before.board.definition;
     const home = new Set(board.rows.home);
@@ -159,6 +158,7 @@ describe("eval: copy from my other keyboard", () => {
 
     const checks = {
       namesKeysNotNumbers: namesNoKeyNumbers(run.outcomes),
+      atMostThreeQuestions: run.questions.length <= MAX_QUESTIONS,
       lookedAtTheMoonlanderItself: looked(run.uses),
       usedMapKeys: run.uses.some((u) => u.name === "map_keys"),
       proposedSomethingValid: valid.length > 0,
@@ -194,7 +194,7 @@ describe("eval: copy from my other keyboard", () => {
       `Turns: ${run.outcomes.length}. Model requests: ${run.outcomes.reduce((n, o) => n + o.iterations, 0)}. ${costLine(run.outcomes, run.usage)}`,
       "",
       "### Agent replies",
-      ...run.outcomes.map((o, i) => `Turn ${i + 1}: ${o.text}`),
+      ...run.outcomes.map((o, i) => `Turn ${i + 1} (${o.status}): ${said(o)}`),
       "",
       "### Proposals",
       ...run.proposals.map((p) => `#### ${p.title} (${p.validation.ok ? "valid" : "invalid"})\n${p.explanation}\n\nOps: ${JSON.stringify(p.ops)}\n\nWarnings: ${p.validation.warnings.map((w) => w.code).join(", ") || "none"}`),
