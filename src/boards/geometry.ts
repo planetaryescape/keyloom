@@ -66,11 +66,12 @@ export async function generateGeometry(board: BoardDefinition, rev: BoardRevisio
   if (board.firmware === "kanata") throw new GeometryError(`${board.id} is a software remapper: its geometry.json is written by hand, so there is nothing to regenerate`);
   const ref = geometryPath(rev);
   const { path, label } = splitLayoutRef(ref);
-  const text = await fetchPinned(rev, path, opts.fetchText ?? defaultFetcher, opts.cacheDir);
+  const source = rev.build.kind === "zmk-west-docker" && rev.build.boardModule ? { ...rev.source, ...rev.build.boardModule } : rev.source;
+  const text = await fetchPinned({ source }, path, opts.fetchText ?? defaultFetcher, opts.cacheDir);
   if (board.firmware === "zmk") {
     const keys = parsePhysicalLayout(text, label);
     if (keys.length !== board.keyCount) throw new GeometryError(`${path} has ${keys.length} keys, board.json says keyCount ${board.keyCount}`);
-    return GeometrySchema.parse({ schemaVersion: 1, source: { repo: rev.source.repo, sha: rev.source.sha, path: ref }, keys });
+    return GeometrySchema.parse({ schemaVersion: 1, source: { repo: source.repo, sha: source.sha, path: ref }, keys });
   }
   let doc: { layouts?: Record<string, { layout?: QmkKey[] }>; layout_aliases?: Record<string, string> };
   try {

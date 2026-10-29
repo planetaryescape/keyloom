@@ -7,10 +7,10 @@ const ZSA_VENDOR_ID = "0x3297";
 const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** The board whose revision declares these USB IDs for the running firmware (QMK `detect`, ZMK hands-free halves). */
-export function boardByUsbId(boards: readonly BoardDefinition[], device: Pick<UsbIdentity, "vendorId" | "productId">): BoardDefinition | undefined {
+export function boardByUsbId(boards: readonly BoardDefinition[], device: Pick<UsbIdentity, "vendorId" | "productId"> & Partial<Pick<UsbIdentity, "product">>): BoardDefinition | undefined {
   return boards.find((b) =>
     b.revisions.some((r) => {
-      if (r.detect && r.detect.usbProductId.toLowerCase() === device.productId && (r.detect.usbVendorId ?? (b.vendor === "ZSA" ? ZSA_VENDOR_ID : undefined))?.toLowerCase() === device.vendorId) return true;
+      if (r.detect && (r.detect.product === undefined || r.detect.product === device.product) && r.detect.usbProductId.toLowerCase() === device.productId && (r.detect.usbVendorId ?? (b.vendor === "ZSA" ? ZSA_VENDOR_ID : undefined))?.toLowerCase() === device.vendorId) return true;
       const free = r.flash.kind === "uf2-drives" ? r.flash.handsFree : undefined;
       return free !== undefined && free.usbVendorId?.toLowerCase() === device.vendorId && free.halves.some((h) => h.usbProductId?.toLowerCase() === device.productId);
     }),
@@ -26,7 +26,7 @@ export function boardForCandidate(boards: readonly BoardDefinition[], c: Candida
       if (b.revisions.some((r) => r.qmkTarget !== undefined && (r.qmkTarget === target || r.qmkTarget.startsWith(`${target}/`) || target.startsWith(`${r.qmkTarget}/`)))) return true;
     } else {
       const siblings = c.entry.zmk.siblings;
-      if (b.revisions.some((r) => r.build.kind === "zmk-west-docker" && r.build.targets.some((t) => siblings.includes(t.shield)))) return true;
+      if (b.revisions.some((r) => r.build.kind === "zmk-west-docker" && r.build.targets.some((t) => siblings.includes(t.shield ?? t.board ?? "")))) return true;
     }
     return b.firmware === c.firmware && normName(b.name) === normName(c.name);
   });

@@ -1033,3 +1033,18 @@ button.cap[data-review="hint"]::before {
   content: "";
   pointer-events: none;
 }
+
+/* Encoder presses remain editable keys; the concentric rim shows the physical rotary control. */
+.cap[data-rotary] .cap-body {
+  border-radius: 50%;
+  background: repeating-conic-gradient(#292c2e 0deg 4deg, #777b7d 4deg 6deg, #303335 6deg 10deg);
+  box-shadow: 0 5px 0 #1b1d1f, 0 8px 8px #0006, inset 0 0 0 1px #a0a4a6;
+}
+.cap[data-rotary] .cap-top {
+  inset: 10%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 35% 25%, #737778, #484c4e 70%, #303436);
+  box-shadow: inset 0 1px 1px #ffffff55, 0 1px 2px #0008;
+}
+.cap[data-rotary] .cap-print { color: #f1f2f2; }
+.cap[data-rotary] .cap-face { inset: 15%; }

@@ -343,6 +343,7 @@ export function Keyboard({
               ref={(element) => {
                 buttons.current[index] = element;
               }}
+              data-rotary={shapes?.[String(index)]?.kind === "rotary-encoder" || undefined}
               tone={description.kind}
               {...(keycaps?.[String(index)] === undefined ? {} : { keycap: keycaps[String(index)] as KeycapColour })}
               legend={legendOverrides?.[index] ?? description.legend}

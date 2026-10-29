@@ -61,6 +61,23 @@ async function setup() {
 }
 
 describe("buildZmkWest (fake docker)", () => {
+  test("an external board module is pinned, each half selects its own board, and no shield is invented", async () => {
+    const s = await setup();
+    const build = s.board.definition.revisions[0]!.build;
+    if (build.kind !== "zmk-west-docker") throw new Error("expected west recipe");
+    build.boardModule = { repo: "https://github.com/Keebart/zmk-config", sha: "a".repeat(40) };
+    build.targets = [{ id: "left", board: "corne_choc_pro_left" }, { id: "right", board: "corne_choc_pro_right" }];
+    await s.build("ok");
+    const manifest = await Bun.file(join(s.dir, "work", "config", "west.yml")).text();
+    expect(manifest).toContain("name: board-module");
+    expect(manifest).toContain("revision: " + "a".repeat(40));
+    const script = westScript(build, true);
+    expect(script).toContain("-b corne_choc_pro_left -- -DZMK_CONFIG");
+    expect(script).toContain("-b corne_choc_pro_right -- -DZMK_CONFIG");
+    expect(script).not.toContain("-DSHIELD=undefined");
+    expect(script).toContain("CMAKE_BUILD_PARALLEL_LEVEL=5");
+  });
+
   test("writes the manifest pinned to the board's ZMK SHA and the keymap and conf into config/, then bundles one UF2 per target", async () => {
     const s = await setup();
     const r = await s.build("ok");

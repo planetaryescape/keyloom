@@ -32,6 +32,8 @@ export function rowsOf(geometry: Geometry | undefined, keyCount: number): number
 }
 
 export function renderLayers(layout: Layout, board: BoardDefinition, geometry: Geometry | undefined, ctx: EmitContext): string[] {
+  const build = board.revisions[0]?.build;
+  const sensors = build?.kind === "zmk-west-docker" ? build.sensorBindings : undefined;
   const rows = rowsOf(geometry, board.keyCount);
   const left = new Set(board.hands.left);
   const nodeNames = new Set<string>();
@@ -74,6 +76,7 @@ export function renderLayers(layout: Layout, board: BoardDefinition, geometry: G
     out.push(
       `${name} {`,
       `    // layer ${li}`,
+      ...(sensors ? [`    sensor-bindings = <${sensors.join(" ")}>;`] : []),
       `    display-name = ${quote(layer.name)};`,
       "    bindings = <",
       ...lines.map((l) => `        ${l}`),

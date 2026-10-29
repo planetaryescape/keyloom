@@ -190,8 +190,12 @@ Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds 
 
 ### ZMK: `zmk-west-docker`
 
+For external hardware definitions, set `boardModule` to their repository URL and immutable commit SHA. `source` still pins ZMK itself. Geometry comes from `physicalLayout` in the hardware module; append `#label` to select its physical layout in the generated keymap. See `boards/keebart/corne-choc-pro-bt/board.json` for an integrated split board with separate targets and rotary encoders.
+
+`config` supplies board defaults before the layout settings in the generated `.conf`. `sensorBindings` supplies one devicetree binding per sensor, in hardware order, on every layer. Encoder presses remain normal key bindings.
+
 - `board` is the `west build -b` board, such as `nice_nano_v2`. A shield whose `.zmk.yml` says `requires: [pro_micro]` fits any Pro Micro–compatible controller; the nice!nano v2 is one.
-- `targets` has one entry per half. `shield` is the `-DSHIELD` value, such as `corne_left`. `id` is a short name, such as `left`.
+- `targets` has one entry per half. `shield` is the optional `-DSHIELD` value, such as `corne_left`. Integrated boards set a per-target `board` instead, such as `corne_choc_pro_left`. `id` is a short name, such as `left`.
 - `keymapName` is the shield name without `_left` or `_right`. keyloom writes `config/<keymapName>.keymap` and `config/<keymapName>.conf`.
 - `physicalLayout` is the file in the ZMK tree that holds the `zmk,physical-layout` node. Look in `app/dts/layouts/` for your board, such as `app/dts/layouts/foostan/corne/6column.dtsi`. Boards with several layouts, such as 5-column and 6-column, have several files. To find which one your shield uses, open the shield's `.dtsi` under `app/boards/shields/<shield>/` and look for `chosen { zmk,physical-layout = &...; }`; the file that defines that label is the one. Its key count must equal `keyCount`.
 - Each flash step has a `target` that names a build target. `volume` is the label of the boot drive. A nice!nano shows up as `NICENANO`. `enter` is how to put that half into its bootloader. For a nice!nano that is a double tap on the reset button.
@@ -281,7 +285,13 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.keymapName` | `zmk-west-docker` | The base name of `config/<name>.keymap` and `.conf`. |
 | `revisions[].build.targets` | `zmk-west-docker` | One west build per half, in the order built. |
 | `revisions[].build.targets[].id` | `zmk-west-docker` | A short name, such as `left`. Names the half's UF2. |
-| `revisions[].build.targets[].shield` | `zmk-west-docker` | The `-DSHIELD` value, such as `corne_left`. |
+| `revisions[].build.targets[].shield` | `zmk-west-docker`, optional | The `-DSHIELD` value, such as `corne_left`. |
+| `revisions[].build.targets[].board` | `zmk-west-docker`, optional | Overrides the recipe's `board` for this half. |
+| `revisions[].build.boardModule` | `zmk-west-docker`, optional | External hardware definitions. Also owns `physicalLayout`. |
+| `revisions[].build.boardModule.repo` | `zmk-west-docker` | Hardware module repository URL. |
+| `revisions[].build.boardModule.sha` | `zmk-west-docker` | Immutable hardware module commit SHA. |
+| `revisions[].build.config` | `zmk-west-docker`, optional | `CONFIG_…=…` defaults, emitted before layout settings. |
+| `revisions[].build.sensorBindings` | `zmk-west-docker`, optional | Devicetree sensor bindings in hardware order, emitted on every layer. |
 | `revisions[].build.kanataVersion` | `kanata-config` | The kanata release the generated config targets, such as `1.12.0`. Software-remapper boards only; `source.ref` must be `v<version>`. |
 | `revisions[].flash` | all | The flash recipe. |
 | `revisions[].flash.kind` | all | `zapp`, `uf2-drives`, `dfu-tool`, `manual` or, for a software remapper, `kanata-reload`. |
@@ -310,6 +320,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.instructions` | `manual` | What to tell the person: which tool flashes the file, and how to enter the bootloader. |
 | `revisions[].detect` | all | `null`, or an object that names the USB device. |
 | `revisions[].detect.usbProductId` | all | The board's USB product ID, such as `0x1969`. keyloom uses it to tell hardware revisions apart. |
+| `revisions[].detect.product` | optional | Exact USB product string required in addition to IDs; use it for hardware sharing ZMK's default USB IDs. |
 | `revisions[].detect.usbVendorId` | optional | The vendor ID the running firmware reports, such as `0x4653`, when the board is not ZSA's. keyloom assumes ZSA's `0x3297` for a ZSA board without it. |
 | `revisions[].device` | `kanata-config`, optional | How a software remapper finds the keyboard to take. A board with no USB IDs (a laptop's own) has `detect: null` and this. |
 | `revisions[].device.kind` | `device` | `macos-product-name`. |
@@ -346,7 +357,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.statusLeds[].x` | all | An LED's horizontal position, in key units after `rotate` and `shift`. |
 | `display.statusLeds[].y` | all | The LED's vertical position, in the same units. |
 | `display.caseHug` | all | Optional. Draws a case that hugs the keys, reaching this many key units past each one, instead of one outline around them all. Keys turned about the same point (a thumb fan) get a curved band. The Glove80 uses `0.3`. |
-| `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. Drawing only: binding order never changes. |
+| `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. An optional `kind: "rotary-encoder"` draws a circular knurled control while retaining its editable press binding. Drawing only: binding order never changes. |
 | `display.colourways` | all | Optional. The case and keycap colours the maker sells, so the drawn board can be pinned to the one on the desk in Settings (D-395, D-319). Leave it out and the board follows the theme. |
 | `display.colourways.cases` | all | The case colours, at least two. |
 | `display.colourways.cases[].id` | all | A short id, kept in the browser when it is pinned, such as `black`. |

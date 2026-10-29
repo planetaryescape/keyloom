@@ -40,8 +40,12 @@ export const ZmkWestTargetSchema = z.strictObject({
   /** Names the target's UF2 in the build, and the flash step that writes it. */
   id: z.string().regex(/^[a-z0-9-]+$/),
   /** The `-DSHIELD` value, such as `corne_left`. */
-  shield: z.string().min(1),
+  shield: z.string().min(1).optional(),
+  /** Integrated split boards have a different controller target per half. */
+  board: z.string().regex(/^[a-zA-Z0-9_/-]+$/).optional(),
 });
+
+export const ZmkBoardModuleSchema = z.strictObject({ repo: z.string().url(), sha });
 
 export const ZmkWestDockerBuildSchema = z.strictObject({
   kind: z.literal("zmk-west-docker"),
@@ -53,6 +57,12 @@ export const ZmkWestDockerBuildSchema = z.strictObject({
   keymapName: z.string().regex(/^[a-z0-9_-]+$/),
   /** The file in the firmware tree that holds the `zmk,physical-layout`; geometry.json is generated from it. */
   physicalLayout: z.string().min(1),
+  /** External hardware definitions, fetched by west at an immutable revision; also owns physicalLayout. */
+  boardModule: ZmkBoardModuleSchema.optional(),
+  /** Board defaults needed when replacing the vendor keymap. */
+  config: z.array(z.string().regex(/^CONFIG_[A-Z0-9_]+=.+$/)).optional(),
+  /** Sensor bindings in the hardware sensor order, retained on every layer. */
+  sensorBindings: z.array(z.string().regex(/^&[a-z][a-z0-9_]*(?: [A-Z][A-Z0-9_]*)*$/)).optional(),
   /** One west build each, in the order given. */
   targets: z.array(ZmkWestTargetSchema).min(1),
 });

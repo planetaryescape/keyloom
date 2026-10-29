@@ -158,7 +158,10 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     "};",
   ];
 
-  const root = ["/ {", ...indent(blocks([behaviors, macros, ...sources("root"), combos, conditionals, keymap]), 4), "};"];
+  const build = board.revisions[0]?.build;
+  const physicalLabel = build?.kind === "zmk-west-docker" && build.boardModule ? build.physicalLayout.split("#")[1] : undefined;
+  const chosen = physicalLabel ? [`chosen { zmk,physical-layout = <&${physicalLabel}>; };`] : [];
+  const root = ["/ {", ...indent(chosen, 4), ...indent(blocks([behaviors, macros, ...sources("root"), combos, conditionals, keymap]), 4), "};"];
   const overrides = layout.holdTapProfiles.filter((p) => BUILTIN_PROFILES.has(p.id)).map(renderBuiltinOverride);
 
   const keymapText = blocks([
@@ -174,6 +177,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
   const marker = input.handsFree ? handsFreeConf(input.handsFree.config, input.handsFree.buildId) : undefined;
   const confLines = [
     header(input.revisionId, "#"),
+    ...(build?.kind === "zmk-west-docker" ? build.config ?? [] : []),
     ...layout.settings.filter((s) => s.firmware === "zmk").map(settingLine),
     ...layout.passthrough.filter((p) => p.file === CONF_FILE).map((p) => p.source),
     ...(marker?.shared ?? []),
