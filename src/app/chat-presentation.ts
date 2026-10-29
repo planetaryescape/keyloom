@@ -83,6 +83,7 @@ export function chatPresentation(app: App, conversationId: string, userMessageId
       else message({ id: event.id, kind: event.kind, text: event.text });
       publish();
     },
+    handoff(value: NonNullable<Presentation["handoff"]>) { state.handoff = value; },
     finish(status: Presentation["status"], models?: ModelMessage[], stored?: MessageRow[], questionToolUseId?: string, accounting?: Presentation["accounting"], questionRefines?: string) {
       if (accounting !== undefined) state.accounting = accounting;
       if (questionToolUseId !== undefined) {

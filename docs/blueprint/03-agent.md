@@ -1,6 +1,6 @@
 # 03: Agent
 
-Revision, 2026-10-29: D-452 replaced D-020's alternatives. `propose_changes` takes one proposal and `supersedes`, and `ask_user` takes considerations and a step; the tool table and the loop below say how. D-458 lets a question be answered after the layout head moves, behind a note to the model.
+Revision, 2026-10-29: D-452 replaced D-020's alternatives. `propose_changes` takes one proposal and `supersedes`, and `ask_user` takes considerations and a step; the tool table and the loop below say how. D-458 lets a question be answered after the layout head moves, behind a note to the model. D-460 implements whole-config adaptation in a target-owned conversation, keeping ordinary writes scoped to one layout.
 
 Extension, 2026-10-18: [28](28-agent-experience.md), [29](29-agent-app-control.md) and [30](30-agent-keyboard-context.md) broaden the agent into an app-wide keyboard specialist and specify its presentation/runtime. Rung 26a implements observed work, public-message grouping and bounded saved presentation; [compiled acceptance](../screenshots/agent-experience/integrated/README.md) records what was checked. Durable execution and broader app/collection control remain proposals. D-401 proposes replacing the one-conversation-layout write limit; D-403 preserves validated proposals and user approval. The historical provider and post-Apply wording below must not override the current provider chapter or actual auto-sync state.
 
@@ -111,3 +111,9 @@ BK's second problem (D-020, D-025): he wants one key for Command–Shift, and ev
 - The agent puts its best placement on the board first, from his priorities and the layout, then asks which shortcuts he uses it for, so it knows which hand needs to stay free, and checks priorities and decisions for keys that must not move. Each answer revises the proposal (D-452).
 - The proposal places `{ kind: "modifier", mods: ["LGUI", "LSFT"] }`. It moves whatever it displaces to a reachable slot or drops it with a `dropFunction` op and a reason. It also lists what gets less convenient.
 - The preview shows the relearn cost: how many functions moved and which ones.
+
+## A whole-config copy continues on its new config
+
+`put_config` ends the source turn successfully and starts adaptation in a conversation owned by the new, unselected config (D-460). The target agent receives the whole-layout translator's seed, omissions, board facts and remembered reasons from the source and relevant target config. It proposes one best validated adaptation before asking consequential questions through D-452. The source thread travels read-only; every ordinary write still belongs to one conversation layout. Comfort remains a hypothesis.
+
+Apply remembers the final reason and request/answer provenance on the new config. Selecting that config for the keyboard is a separate action. Stop preserves committed preparation; Retry continues its saved target. [A3 evidence and lifecycle](../research/copy-adaptation/README.md).

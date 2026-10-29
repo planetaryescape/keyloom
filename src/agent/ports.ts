@@ -118,7 +118,10 @@ export type PutInput = {
 };
 
 /** A put (22#putting-bks-config-on-it): a new config on the other board and its proposals. Nothing is applied and nothing reaches a keyboard. */
+export type CopyHandoff = { layoutId: string; conversationId: string; runId: string; requestId: string };
+
 export type PutResult = {
+  handoff?: CopyHandoff;
   config: { id: string; name: string; boardName: string };
   proposals: Array<{ changeSetId: string; title: string; summary: string; warnings: number; changedKeys: number }>;
   placements: PlacementProposal[];

@@ -22,7 +22,10 @@ export function ConfigCardList({ presentation, cards }: { presentation: ChatPres
   return (
     <>
       {made.map(({ id }) => {
-        const view = configCardView(cards.data.get(id) ?? { state: "loading" }, cards.currentId, cards.origin, id);
+        const data: ConfigCardData = cards.data.get(id) ?? { state: "loading" };
+        // This endpoint counts proposals outside chat; a handoff's proposal lives in its target conversation.
+        const counted = data.state === "ready" && presentation?.handoff?.layoutId === id ? { ...data, waiting: null } : data;
+        const view = configCardView(counted, cards.currentId, cards.origin, id);
         return (
           <section key={id} className="ask-card ask-card-done config-card" aria-label={`Config ${view.title}`}>
             <p className="ask-question config-card-title"><Keyboard size={14} aria-hidden="true" /><span>{view.title}</span></p>

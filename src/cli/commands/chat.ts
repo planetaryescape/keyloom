@@ -2,12 +2,12 @@
 import type { Command } from "commander";
 import { createInterface } from "node:readline";
 import {
-  type AgentModel, type ChatOutcome, type ConfigView, configsMadeInTurn, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage, showConversation,
+  type AgentModel, type App, type ChatOutcome, type ConfigView, configsMadeInTurn, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage, showConversation,
 } from "../../app/index.ts";
 import { SCHEMA_VERSION, columns, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
 import { opLine } from "../change-report.ts";
-import { answerAgentRun, cancelAgentRequest, cancelAgentRun, inspectAgentRun, startAgentRun, waitForAgentRun, type AgentRunSnapshot } from "../../app/agent-runs.ts";
+import { answerAgentRun, cancelAgentRequest, cancelAgentRun, inspectAgentRun, startAgentRun, waitForAgentRun, savedRunOutcome, type AgentRunSnapshot } from "../../app/agent-runs.ts";
 
 /** Seams for tests: a scripted model, and lines to read instead of stdin. */
 export type ChatDeps = { model?: AgentModel; lines?: AsyncIterable<string> };
@@ -27,11 +27,14 @@ const proposalJson = (p: ChatOutcome["proposals"][number]) => ({ change_set_id: 
 
 const configJson = (c: ConfigView) => ({ id: c.id, name: c.name, board_id: c.boardId, board_name: c.boardName });
 
-const outcomeJson = (o: ChatOutcome, configs: readonly ConfigView[] = []) => ({
+const outcomeJson = (o: ChatOutcome, configs: readonly ConfigView[] = [], copySource?: ChatOutcome) => ({
+  ...(copySource === undefined ? {} : { copy_source: { conversation_id: copySource.conversationId, model: copySource.model, usage: copySource.usage, ...(copySource.costUsd === undefined ? {} : { cost_usd: copySource.costUsd }) } }),
   conversation_id: o.conversationId,
   message_ids: o.messageIds,
   status: o.status,
   text: o.text,
+  ...(o.question === undefined ? {} : { question: o.question }),
+  ...(o.handoff === undefined ? {} : { handoff: o.handoff }),
   proposals: o.proposals.map(proposalJson),
   // Additive: the configs the agent made this turn (put_config, create_config). The web opens these; here they are named.
   configs_made: configs.map(configJson),
@@ -85,8 +88,21 @@ export function parseProvider(text: string): ProviderId {
 
 export function registerChatCommands(program: Command, ctx: CliContext, deps: ChatDeps = {}): void {
   const agent = program.command("agent").description("saved agent work; inspection never replays it");
-  const showRun = (run: AgentRunSnapshot) => print(ctx.io, ctx.format(), { json: run, ids: [run.id], table: `${run.id}: ${run.status}\nConversation ${run.conversationId}\n${run.committedPreparations} saved preparation(s)${run.cancelRequested ? "\nStop requested; preparation remains." : ""}${run.presentation?.warning ? `\n${run.presentation.warning}` : ""}` });
+  const showRun = (run: AgentRunSnapshot) => print(ctx.io, ctx.format(), { json: run, ids: [run.id], table: `${run.id}: ${run.status}\nConversation ${run.conversationId}\n${run.committedPreparations} saved preparation(s)${run.cancelRequested ? "\nStop requested; preparation remains." : ""}${run.presentation?.warning ? `\n${run.presentation.warning}` : ""}${run.handoff ? `\nContinues on ${run.handoff.layoutId}, conversation ${run.handoff.conversationId}, run ${run.handoff.runId}` : ""}` });
   agent.command("show").argument("<id>", "run or request identity").action(async (id: string) => showRun(await ctx.withApp((app) => inspectAgentRun(app, id))));
+  const showFinishedRun = async (app: App, run: AgentRunSnapshot) => {
+    const finished = await waitForAgentRun(app, run.id);
+    if (ctx.format() === "table") showRun(finished);
+    if (finished.handoff) {
+      const target = await waitForAgentRun(app, finished.handoff.runId);
+      if (ctx.format() === "table") showRun(target);
+      if (target.status === "waiting_user") {
+        const question = savedRunOutcome(app, target.id).question;
+        if (question && ctx.format() === "table") ctx.io.out(`\n${question.question}\n${question.options.map((option) => option.label).join(" / ")}\nAnswer with: keyloom agent answer ${target.id} ${question.toolUseId} <answer> --request-id <unique-id>\n`);
+      }
+    }
+    if (ctx.format() !== "table") showRun(finished);
+  };
   agent.command("cancel").argument("<id>").option("--request", "persist Stop for this request identity even before acceptance").action(async (id: string, opts: { request?: boolean }) => {
     const result = await ctx.withApp((app) => opts.request ? cancelAgentRequest(app, id) : cancelAgentRun(app, id));
     if (result.status === "pending_acceptance") print(ctx.io, ctx.format(), { json: result, ids: [], table: `Stop saved for request ${result.requestId}; no run has been accepted yet.` });
@@ -96,14 +112,14 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
     .action(async (layoutRef: string, message: string, opts: { requestId: string; conversation?: string; provider?: string }) => {
       await ctx.withApp(async (app) => {
         const run = await startAgentRun(app, { version: 1, requestId: opts.requestId, layoutRef, input: { message, ...(opts.conversation ? { conversationId: opts.conversation } : {}) } }, { ...(deps.model ? { model: deps.model } : {}), ...(opts.provider ? { provider: parseProvider(opts.provider) } : {}) });
-        showRun(await waitForAgentRun(app, run.id));
+        await showFinishedRun(app, run);
       });
     });
   agent.command("answer").argument("<run>").argument("<question>").argument("<text>").requiredOption("--request-id <id>", "unique answer identity")
     .action(async (id: string, toolUseId: string, text: string, opts: { requestId: string }) => {
       await ctx.withApp(async (app) => {
         const run = await answerAgentRun(app, id, opts.requestId, { toolUseId, text }, deps.model ? { model: deps.model } : {});
-        showRun(await waitForAgentRun(app, run.id));
+        await showFinishedRun(app, run);
       });
     });
   program
@@ -128,15 +144,16 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
           if (layouts.length !== 1) throw new UsageError(layouts.length === 0 ? "no layouts yet; import one first" : `name a layout: ${layouts.map((l) => l.name).join(", ")}`);
           ref = (layouts[0] as { id: string }).id;
         }
-        const layoutRef: string = ref;
+        let layoutRef: string = ref;
         let conversationId = opts.conversation;
         let pendingSelect = select;
         let last: ChatOutcome | undefined;
         let lastConfigs: ConfigView[] = [];
+        let lastCopySource: ChatOutcome | undefined;
 
         const turn = async (message: string) => {
           let streamed = false;
-          const outcome = await sendMessage(app, layoutRef, {
+          let outcome = await sendMessage(app, layoutRef, {
             message,
             ...(conversationId ? { conversationId } : {}),
             ...(pendingSelect ? { selection: pendingSelect } : {}),
@@ -152,10 +169,21 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
               }
             },
           });
+          lastCopySource = undefined;
+          const made = configsMadeInTurn(app, outcome.conversationId, outcome.messageIds[0] ?? "");
+          if (outcome.handoff) {
+            const handoff = outcome.handoff;
+            lastCopySource = outcome;
+            if (!machine) ctx.io.out(`\nContinuing on the copied config ${handoff.layoutId}.\n`);
+            await waitForAgentRun(app, handoff.runId);
+            outcome = savedRunOutcome(app, handoff.runId);
+            layoutRef = handoff.layoutId;
+            if (!machine && outcome.question) ctx.io.out(`\n${outcome.question.question}\n${outcome.question.options.map((option) => option.label).join(" / ")}\nAnswer with: keyloom agent answer ${handoff.runId} ${outcome.question.toolUseId} <answer> --request-id <unique-id>\n`);
+          }
           pendingSelect = undefined;
           conversationId = outcome.conversationId;
           last = outcome;
-          lastConfigs = configsMadeInTurn(app, outcome.conversationId, outcome.messageIds[0] ?? "");
+          lastConfigs = [...made, ...configsMadeInTurn(app, outcome.conversationId, outcome.messageIds[0] ?? "")].filter((config, index, all) => all.findIndex((value) => value.id === config.id) === index);
           if (!machine) {
             if (streamed) ctx.io.out("\n");
             for (const p of outcome.priorities) ctx.io.err(`remembered ${p.id} (${p.priorityKind}): ${p.statement}\n`);
@@ -183,7 +211,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
         }
 
         if (last === undefined) return;
-        if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(last, lastConfigs), table: "", ids: [last.conversationId] });
+        if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(last, lastConfigs, lastCopySource), table: "", ids: [last.conversationId] });
         else ctx.io.err(`conversation ${last.conversationId}\n`);
       });
     });

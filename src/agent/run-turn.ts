@@ -118,6 +118,7 @@ export async function runAgentTurn(input: {
   maxIterations?: number;
   callbacks?: AgentCallbacks;
   signal?: AbortSignal;
+  copyContext?: string;
 }): Promise<TurnOutcome> {
   const { model, ports, callbacks = {} } = input;
   const recorder = new TurnRecorder();
@@ -145,7 +146,7 @@ export async function runAgentTurn(input: {
   // runs them), and what it saves is beside the question, not something the question refines.
   let savedBeforeQuestion: number | undefined;
   const result = await model.run({
-    system: assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices(), ports.layouts().filter((l) => l.layoutId !== snapshot.layoutId)),
+    system: [assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices(), ports.layouts().filter((l) => l.layoutId !== snapshot.layoutId)), input.copyContext].filter(Boolean).join("\n\n"),
     messages: mergeConsecutiveUsers(input.history),
     tools,
     maxIterations: input.maxIterations ?? DEFAULT_MAX_ITERATIONS,
@@ -159,7 +160,7 @@ export async function runAgentTurn(input: {
   // A valid question is where the turn ends, whatever else happened on the way to it. A call before it or beside it (the Anthropic adapter runs
   // those) may have reached the activity limit and been refused with an error result; that must not turn the turn into an `iteration_limit`.
   // Stored with any other status the question would be open on a failed run, which no answer path accepts although the layout never changed.
-  const status = result.pending !== undefined && asked?.success ? "awaiting_answer" : observer.limited() ? "iteration_limit" : classify(result.stopReason);
+  const status = observer.completed() ? "complete" : result.pending !== undefined && asked?.success ? "awaiting_answer" : observer.limited() ? "iteration_limit" : classify(result.stopReason);
   // A provider that never says where the question fell leaves everything saved counting as before it.
   const refines = proposals.slice(0, savedBeforeQuestion ?? proposals.length).flatMap((p) => (p.changeSetId === null ? [] : [p.changeSetId])).at(-1);
   const messages = resumable(result.messages, status);
@@ -175,6 +176,6 @@ export async function runAgentTurn(input: {
     iterations: result.iterations,
     toolCalls: recorder.toolCalls,
     validationFailures: recorder.validationFailures,
-    ...(result.pending !== undefined && asked?.success ? { question: { ...asked.data, toolUseId: result.pending.id, ...(refines === undefined ? {} : { refines }) } } : {}),
+    ...(!observer.completed() && result.pending !== undefined && asked?.success ? { question: { ...asked.data, toolUseId: result.pending.id, ...(refines === undefined ? {} : { refines }) } } : {}),
   };
 }

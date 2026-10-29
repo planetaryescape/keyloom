@@ -372,7 +372,10 @@ export const ChatEventSchema = z.discriminatedUnion("type", [
 ]);
 export type ChatEvent = z.infer<typeof ChatEventSchema>;
 
+export const CopyHandoffSchema = z.object({ layoutId: z.string(), conversationId: z.string(), runId: z.string(), requestId: z.string() });
+
 export const ChatPresentationSchema = z.object({
+  handoff: CopyHandoffSchema.optional(),
   version: z.literal(1), userMessageId: z.string().min(1),
   // Absent on older recordings and when execution did not return usage.
   accounting: ChatAccountingSchema.optional(),

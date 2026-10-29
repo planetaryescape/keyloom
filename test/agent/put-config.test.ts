@@ -1,3 +1,4 @@
+import { waitForAgentRun } from "../../src/app/agent-runs.ts";
 // "Put my Glove80 setup on my Corne" from chat (22, D-372): the agent's put_config tool runs the keyboard put as proposals on a new
 // config. Nothing is applied, the conversation's layout is untouched, and the validator decides (D-014). The model is a fake.
 import { describe, expect, test } from "bun:test";
@@ -92,7 +93,10 @@ describe("put_config", () => {
       { blocks: [{ text: "I made a Glove80-on-Corne config with its proposals; nothing is on your keyboard." }] },
     ]);
     const result = await sendMessage(app, moon.layoutId, { message: "put my Glove80 setup on my Corne", model: anthropicModel(client) });
-    expect(requests[1]?.toolResults.join("\n")).toContain("Nothing was applied");
+    expect(result.handoff).toBeDefined();
+    if (result.handoff) await waitForAgentRun(app, result.handoff.runId);
+    expect(requests[1]?.body.system).toContain("Continue the requested whole-config adaptation on this NEW config");
+    expect(requests[1]?.body.system).toContain("Translated seed (not applied or proposed)");
     expect(result.proposals).toEqual([]);
     expect(listConfigs(app).some((c) => c.name === "my-glove80 on Corne")).toBe(true);
     expect(listChanges(app, moon.layoutId)).toEqual([]);

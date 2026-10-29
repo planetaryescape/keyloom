@@ -13,6 +13,7 @@ const InputSchema = z.object({
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function describe(r: PutResult): string {
+  if (r.handoff) return `Made the separate config "${r.config.name}" (${r.config.id}) on ${r.config.boardName}. The copy is continuing in its own conversation ${r.handoff.conversationId}, run ${r.handoff.runId}. Its agent will prepare one best validated adaptation, then ask only consequential questions. The original configs are unchanged, and the new config is not selected for the keyboard.`;
   const lines = [
     `Made the config "${r.config.name}" (${r.config.id}) on the ${r.config.boardName}. Nothing was applied, nothing was built or flashed, and this conversation's layout is unchanged.`,
     `${plural(r.proposals.length, "proposal")} stored on it for BK to review (the validator checked each against the new config):`,
@@ -41,9 +42,10 @@ export const putConfigTool = (ports: AgentPorts) =>
   defineTool({
     name: "put_config",
     description:
-      'Put BK\'s setup from one of his layouts onto another board, such as "put my Glove80 setup on my Corne": it makes a NEW config on that board and stores the mapping of every layer (keys, layer keys, hold-taps, combos) as proposals on it, checked by the validator. Nothing is applied and nothing reaches a keyboard; this conversation\'s layout is not changed. Call it at once on a request like "put my Glove80 config on this keyboard", with the defaults: a new config that leaves the current one untouched, every layer except factory and test layers, keys matched by what they type and then by place, layer keys placed by the rules. Do not ask BK which parts or how to match first; show the result, then offer the choices in one line. It works on the MacBook keyboard too. Call list_layouts first to find the layout and the board, and tell BK which board and layout you used. A name already taken is an error: call again with another name. Use map_keys instead to carry parts of another layout into THIS conversation\'s layout.',
+      'Put BK\'s setup from one of his layouts onto another board, such as "put my Glove80 setup on my Corne": it makes a NEW config on that board and continues the task in a conversation owned by the new config. There the agent adapts every layer, including keys, layer keys, hold-taps and combos, and stores one best validated proposal before asking consequential questions. Nothing is applied and nothing reaches a keyboard; this conversation\'s layout is not changed. Call it at once on a request like "put my Glove80 config on this keyboard", with the defaults: a new config that leaves the current one untouched, every layer except factory and test layers, keys matched by what they type and then by place, layer keys placed by the rules. Do not ask BK which parts or how to match first; the successful call ends this turn and refinement continues on the new config. It works on the MacBook keyboard too. Call list_layouts first to find the layout and the board, and tell BK which board and layout you used. A name already taken is an error: call again with another name. Use map_keys instead to carry parts of another layout into THIS conversation\'s layout.',
     inputSchema: InputSchema,
     // `placements` is a record, which strict structured output does not accept (it needs every object closed).
     strict: false,
+    completes: true,
     run: ({ from, board, name, placements, layers }) => describe(ports.put({ from, board, ...(name === undefined ? {} : { name }), ...(placements === undefined ? {} : { placements }), ...(layers === undefined ? {} : { layers }) })),
   });

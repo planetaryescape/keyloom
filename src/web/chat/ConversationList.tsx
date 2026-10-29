@@ -18,8 +18,8 @@ interface Props {
   currentId: string | null;
   onBack: () => void;
   onReload: () => void;
-  /** Resolves to an error message, or null once it is open. */
-  onOpen: (id: string) => Promise<string | null>;
+  /** Null means open; undefined means canceled or replaced; a string is an error. */
+  onOpen: (id: string) => Promise<string | null | undefined>;
 }
 
 export function ConversationList({ history, currentId, onBack, onReload, onOpen }: Props) {
@@ -31,7 +31,7 @@ export function ConversationList({ history, currentId, onBack, onReload, onOpen 
     setFailure(null);
     const error = await onOpen(id);
     setOpening(null);
-    setFailure(error);
+    setFailure(error ?? null);
   }
 
   return (

@@ -6,7 +6,7 @@ export type ConfigCardData =
   | { state: "loading" }
   | { state: "error" }
   | { state: "gone" }
-  /** `waiting` is null when the config was read but its proposals could not be. */
+  /** `waiting` is null when the outside-chat count is unavailable or does not describe this card's chat-owned proposals. */
   | { state: "ready"; config: ApiConfig; waiting: number | null };
 
 /** The config BK came from when the thread was carried here, which is where "Back" goes. */

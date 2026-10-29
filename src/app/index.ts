@@ -56,7 +56,7 @@ export type { LayoutRow, RevisionRow } from "../persistence/layouts.ts";
 export { dataDir, logsDir } from "../persistence/paths.ts";
 export {
   type ChatEvent, type ChatOutcome, type ConversationView, type DisplayMessage, type PriorityCard, type ProposalCard, type SendMessageInput,
-  listConversationSummaries, sendMessage, showConversation,
+  listConversationSummaries, showConversation,
 } from "./conversations.ts";
 export {
   type DecisionRow, type DecisionStatus, type OutcomeQuestion, type OutcomeStatus, dismissOutcome, editDecision, listDecisions, outcomeQuestions,
@@ -79,3 +79,5 @@ export {
 } from "./lab.ts";
 export { PlatformUnavailableError, requireCommandSupport, windowsUnavailable } from "../firmware/toolchain/platform-support.ts";
 export { SchemaTooNewError, assertDataDirOpenable } from "../persistence/schema-guard.ts";
+
+export { sendMessage } from "./send-message.ts";

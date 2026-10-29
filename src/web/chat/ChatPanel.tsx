@@ -72,6 +72,9 @@ interface Props {
   onApplied: (proposal: ProposalCard, result: ApplyResponse) => Promise<void>;
   onOpenRelease: () => void;
   /** The thread on screen before a board or config switch (D-317), shown read-only above this layout's own. */
+  initialConversation?: string | undefined;
+  continueCopy?: boolean | undefined;
+  onContinueCopy?: (handoff: NonNullable<ChatPresentation["handoff"]>) => void;
   carried?: CarriedThread | null;
   /** Explicit New discards the read-only thread carried from another board, not its saved history. */
   onClearCarried?: () => void;
@@ -93,8 +96,16 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals }: Props) {
-  const chat = useChat(token, layoutRef);
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals }: Props) {
+  const chat = useChat(token, layoutRef, onContinueCopy, initialConversation);
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (initialConversation === undefined || arrived.current) return;
+    arrived.current = true;
+    void chat.open(initialConversation).then((error) => {
+      if (error === null && continueCopy) void chat.send("Continue adapting the copied setup.", null);
+    });
+  }, [initialConversation, continueCopy, chat.open, chat.send]);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.

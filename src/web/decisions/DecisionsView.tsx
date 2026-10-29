@@ -17,8 +17,8 @@ interface Props {
   /** Rejects with a message to show. */
   onEdit: (id: string, patch: DecisionPatch) => Promise<void>;
   onRetire: (id: string) => Promise<void>;
-  /** Opens the conversation a decision came from; resolves to an error message, or null once it is showing. */
-  onOpenConversation: (conversationId: string) => Promise<string | null>;
+  /** Null means showing; undefined means canceled or replaced; a string is an error. */
+  onOpenConversation: (conversationId: string) => Promise<string | null | undefined>;
 }
 
 const when = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });

@@ -12,7 +12,10 @@ export const AccountingSchema = z.object({
 });
 export type Accounting = z.infer<typeof AccountingSchema>;
 
+export const CopyHandoffSchema = z.object({ layoutId: z.string(), conversationId: z.string(), runId: z.string(), requestId: z.string() });
+
 export const PresentationSchema = z.object({
+  handoff: CopyHandoffSchema.optional(),
   version: z.literal(1),
   userMessageId: z.string().min(1),
   accounting: AccountingSchema.optional(),

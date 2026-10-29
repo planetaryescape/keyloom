@@ -72,7 +72,7 @@ function checkedName(name: string): string {
   return trimmed;
 }
 
-export type NewConfigInput = { name: string } & (
+export type NewConfigInput = { name: string; selectFirst?: boolean } & (
   /** A copy of the config's head, or of one revision of it, or of the revision a version names. */
   | { from: "config"; config: string; revision?: string; version?: string }
   /** The board's empty starting point (`blankDocument`), or `start` where `newBlankConfig` found the firmware's default keymap. */
@@ -122,7 +122,7 @@ export function newConfig(app: App, input: NewConfigInput): ConfigView {
     summary = `Copied from ${source.name}: ${plainSummary(found.revision.summary)}`;
   }
   try {
-    const created = createLayout(app.db, { name, layout, summary, origin: "import", ...(copiedFrom ? { copiedFrom } : {}) });
+    const created = createLayout(app.db, { name, layout, summary, origin: "import", ...(input.selectFirst === undefined ? {} : { selectFirst: input.selectFirst }), ...(copiedFrom ? { copiedFrom } : {}) });
     return viewOf(app, created.layout, getBoardConfig(app.db, created.layout.boardId));
   } catch (err) {
     if (err instanceof NameTakenError) throw new UsageError(`a config named "${name}" already exists; pick another name`);

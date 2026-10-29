@@ -1,4 +1,6 @@
 // Use cases for talking to the agent: send a message, list and show conversations (03, 10).
+import { conversationCopyContext, copyHandoff } from "./copy-context.ts";
+import type { CopyHandoff, PutInput, PutResult } from "../agent/ports.ts";
 import { type AgentModel, type ContentBlock, type ModelMessage } from "../agent/model.ts";
 import { neutralBlock } from "../agent/blocks.ts";
 import type { ProviderId } from "../agent/provider.ts";
@@ -81,6 +83,7 @@ export type QuestionCard = {
 };
 
 export type ChatOutcome = {
+  handoff?: CopyHandoff;
   conversationId: string;
   /** The IDs of the messages stored for this turn, BK's first. */
   messageIds: string[];
@@ -263,13 +266,8 @@ export function storeMessage(app: App, ref: string, input: SendMessageInput, mod
 
 export type PreparedMessage = ReturnType<typeof storeMessage>;
 
-export async function sendMessage(app: App, ref: string, input: SendMessageInput): Promise<ChatOutcome> {
-  const model = await messageModel(app, ref, input);
-  const prepared = transact(app.db, () => storeMessage(app, ref, input, model));
-  return runPreparedMessage(app, prepared, input);
-}
 
-export async function runPreparedMessage(app: App, prepared: PreparedMessage, input: SendMessageInput, runId?: string): Promise<ChatOutcome> {
+export async function runPreparedMessage(app: App, prepared: PreparedMessage, input: SendMessageInput, runId?: string, copy?: (input: PutInput) => PutResult): Promise<ChatOutcome> {
   const { view, selection, conversation, userMessage, resolvedQuestions, model } = prepared;
   answering.set(conversation.id, userMessage.id);
   // What BK had applied when this turn began, so a question it pauses on can be closed if he applies something while it runs (D-452).
@@ -283,15 +281,26 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
 
     const history: ModelMessage[] = listMessages(app.db, conversation.id).map((m) => ({ role: m.role, content: m.content.map(neutralBlock) }));
     let outcome: TurnOutcome;
+    let handoff: CopyHandoff | undefined;
+    const copyContext = conversationCopyContext(app, conversation.id, resolvedQuestions.flatMap((question) => question.questionRefines === undefined ? [] : [question.questionRefines]));
     try {
       outcome = await runAgentTurn({
         model,
-        ports: createAgentPorts(app, view.layout.id, conversation.id, [userMessage.id], selection, runId),
+        ports: createAgentPorts(app, view.layout.id, conversation.id, [...new Set([...(copyContext?.active ? copyContext.sourceMessageIds : []), userMessage.id])], selection, runId, undefined, copy === undefined ? undefined : (value) => {
+          const result = copy(value);
+          handoff = result.handoff;
+          return result;
+        }, copyContext?.blocksCopy === true),
+        ...(copyContext === undefined ? {} : { copyContext: copyContext.prompt }),
         history,
         ...(input.maxIterations === undefined ? {} : { maxIterations: input.maxIterations }),
         ...(input.signal ? { signal: input.signal } : {}),
         callbacks: {
-          onObservation: (event) => presentation.observe(event),
+          onObservation: (event) => {
+            handoff = runId === undefined ? handoff : copyHandoff(app, runId);
+            if (handoff) presentation.handoff(handoff);
+            presentation.observe(event);
+          },
           onText: (delta) => input.onEvent?.({ type: "text", delta }),
           onToolCall: (name) => input.onEvent?.({ type: "tool", name }),
           onProposal: (p) => {
@@ -315,6 +324,10 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
       throw err;
     }
 
+    if (handoff !== undefined && (input.signal?.aborted || conversationRun(app.db, conversation.id)?.cancel_requested)) {
+      presentation.finish("cancelled");
+      throw new DOMException("Copy stopped after preparation; saved config remains", "AbortError");
+    }
     return transact(app.db, () => {
       const stored = outcome.messages.map((m) => insertMessage(app.db, { conversationId: conversation.id, role: m.role, content: m.content }));
       // A question refines the last proposal saved before it, in the order the model made its calls; one asked before anything was proposed
@@ -351,6 +364,7 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
       });
 
       const result: ChatOutcome = {
+        ...(handoff === undefined ? {} : { handoff }),
         conversationId: conversation.id, messageIds, status: waiting || outcome.status !== "awaiting_answer" ? outcome.status : "complete", text: outcome.text, proposals, priorities,
         provider: model.provider, model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
         ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, closing ?? null, refines) }),

@@ -127,6 +127,43 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         if (message.stop_reason === "refusal") {
           break;
         }
+        const uses = message.content.filter((block) => block.type === "tool_use");
+        const terminalAt = uses.findIndex((block) => request.tools.find((tool) => tool.name === block.name)?.completes);
+        const pauseAt = uses.findIndex((block) => pausing.has(block.name) && request.tools.find((tool) => tool.name === block.name)?.inputSchema.safeParse(block.input).success);
+        if (terminalAt >= 0 && (pauseAt < 0 || terminalAt < pauseAt)) {
+          const results: Array<{ type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }> = [];
+          let finished = false;
+          let pending: { id: string; name: string; input: unknown } | undefined;
+          for (const block of uses) {
+            const tool = request.tools.find((candidate) => candidate.name === block.name);
+            if (!finished && !pending && tool?.pauses && tool.inputSchema.safeParse(block.input).success) {
+              request.onPause?.();
+              pending = { id: block.id, name: block.name, input: block.input };
+              continue;
+            }
+            if (finished || !tool || (pending && (tool.pauses || tool.completes))) {
+              results.push({ type: "tool_result", tool_use_id: block.id, content: "Not run: the task continued on its new config.", is_error: true });
+              continue;
+            }
+            try {
+              results.push({ type: "tool_result", tool_use_id: block.id, content: await tool.run(block.input) });
+              finished ||= tool.completes === true;
+            } catch (error) {
+              results.push({ type: "tool_result", tool_use_id: block.id, content: error instanceof Error ? error.message : String(error), is_error: true });
+            }
+          }
+          const before = runner.params.messages.slice(request.messages.length).map((item) => {
+            if (item.role === "system") throw new Error("Unexpected system message in tool-runner history");
+            return toStored({ role: item.role, content: item.content });
+          });
+          if (finished || pending) return {
+            messages: [...before, toStored({ role: "assistant", content: message.content }), { role: "user", content: results }],
+            stopReason: pending ? AWAITING_ANSWER : "end_turn", ...(pending ? { pending } : {}), iterations, usage, ...(completeCost && costUsd !== undefined ? { costUsd } : {}),
+          };
+          // A name conflict is a correctable tool error, not a completed handoff. The SDK must not execute these calls twice.
+          runner.setMessagesParams((params) => ({ ...params, messages: [...params.messages, { role: "assistant", content: message.content }, { role: "user", content: results }] }));
+          continue;
+        }
         // A question for the person ends the turn here, before the runner runs any tool or asks the model again (D-382).
         const call = message.content.find((b) => b.type === "tool_use" && pausing.has(b.name) && request.tools.find((tool) => tool.name === b.name)?.inputSchema.safeParse(b.input).success);
         if (call !== undefined && call.type === "tool_use") {
@@ -152,7 +189,7 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
           }
           const tool = request.tools.find((candidate) => candidate.name === b.name);
           const base = { type: "tool_result" as const, tool_use_id: b.id as string };
-          if (tool === undefined || tool.pauses === true) {
+          if (tool === undefined || tool.pauses === true || tool.completes === true) {
             results.push({ ...base, content: "Not run: you asked BK a question in the same reply. Call it again after the answer if it is still needed.", is_error: true });
             continue;
           }

@@ -16,6 +16,7 @@ export function toolObserver(ports: AgentPorts, emit: (event: AgentObservation) 
   const context = new AsyncLocalStorage<OperationResult>();
   let calls = 0;
   let limited = false;
+  let completed = false;
   const validation = (result: ValidationResult) => {
     const current = context.getStore();
     if (!current) return;
@@ -54,11 +55,13 @@ export function toolObserver(ports: AgentPorts, emit: (event: AgentObservation) 
   };
   return {
     limited: () => limited,
+    completed: () => completed,
     ports: observed,
     wrap: (tools: ModelTool[]): ModelTool[] => tools.map((tool) => ({
       ...tool,
       run: async (raw) => {
         signal?.throwIfAborted();
+        if (completed) throw new Error("Not run: this task continued on its new config.");
         if (calls >= 64) {
           limited = true;
           emit({ type: "limit_reached" });
@@ -71,6 +74,7 @@ export function toolObserver(ports: AgentPorts, emit: (event: AgentObservation) 
         return context.run(result, async () => {
           try {
             const out = await tool.run(raw);
+            if (tool.completes) completed = true;
             // The proposal attempt guard refuses without calling a port again.
             if (tool.name === "propose_changes" && result.accepted + result.declined === 0) result.declined++;
             emit({ type: "operation_finished", operationId, status: result.declined ? result.accepted ? "partial" : "declined" : "succeeded", durationMs: Math.round(performance.now() - started), ...result });

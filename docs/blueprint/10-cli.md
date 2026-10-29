@@ -124,7 +124,7 @@ keyloom --data-dir <scratch> agent start <config> 'Explain this layout' --reques
 keyloom --data-dir <scratch> agent answer <run> <question-tool-id> Left --request-id <unique-answer-id>
 ```
 
-Stop is explicit and does not roll back saved configs, proposals or memory. `agent cancel <run-or-request>` requests cancellation of accepted work; `--request` can also persist cancellation before acceptance. Its `pending_acceptance` result is an intent, not an invented run. A live foreign owner observes the request; only its recorded terminal result confirms it stopped. The [26b contract](../research/spikes/26b-contract.md) specifies the wire shapes and fail-closed pending-Stop limit. Legacy `chat` remains available with its existing stream-owned execution.
+Stop is explicit and does not roll back saved configs, proposals or memory. `agent cancel <run-or-request>` requests cancellation of accepted work; `--request` can also persist cancellation before acceptance. Its `pending_acceptance` result is an intent, not an invented run. A live foreign owner observes the request; only its recorded terminal result confirms it stopped. The [26b contract](../research/spikes/26b-contract.md) specifies the wire shapes and fail-closed pending-Stop limit. Legacy `chat` retains stream-owned execution for ordinary conversations; copies use the bounded handoff coordinator (D-460).
 
 ## The typing lab records your typing and tunes the board to it
 
@@ -247,3 +247,16 @@ One server serves a data directory (D-323). `serve --reuse` attaches to a live o
 ## Agent skill
 
 The repo ships `skills/keyloom/SKILL.md`, so coding agents and BK's own agents can drive keyloom through the CLI. It covers the loop, which is to `import`, `layout show`, `change check`, `change propose` and `change apply`. It also covers the `--data-dir` rule for tests, and the rule that `flash` is never run without BK asking, because it rewrites the keyboard he types on. There's no MCP server, which follows BK's standing preference for a CLI plus a skill.
+
+## Continue a copied setup on its target
+
+```sh
+keyloom --data-dir <scratch> agent start <config> 'Put my source setup on this board' --request-id <copy-request>
+keyloom --data-dir <scratch> agent show <target-run> --format json
+keyloom --data-dir <scratch> conversations show <target-conversation> --format json
+keyloom --data-dir <scratch> agent answer <target-run> <question-tool-id> 'Use the inner thumb' --request-id <answer-request>
+```
+
+A successful copy returns the original source run with `handoff: { layoutId, conversationId, runId, requestId }` identifying its separate target. The command waits for the target's owned work before exiting. Table output names the target question and answer command; JSON stays one source snapshot. Repeating the original request ID returns those same artifacts.
+
+Legacy one-shot `chat` follows the handoff and returns the target outcome, including `question` when waiting and the original `configs_made`. `copy_source` reports the source turn's model, usage and any reported cost separately from the target outcome, so the two turns are not added twice. Interactive chat continues on that target layout and conversation. Ordinary legacy chats retain stream ownership; only a copy enters the durable handoff coordinator. Applying the target proposal and selecting its config for the keyboard remain separate actions.

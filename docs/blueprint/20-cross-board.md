@@ -2,7 +2,7 @@
 
 Proposed extension, 2026-10-18: [30](30-agent-keyboard-context.md) adds explicit destination targeting, transfers visible in the originating conversation and multi-keyboard outcomes (D-401, D-402, D-405). It reuses the correspondence and capability rules here. The existing one-layout write scope below describes the baseline implementation, not the new target experience.
 
-Status: built in rung 19, 2026-10-15. Source baseline: origin/main at `898dec6` (v0.19.0). Results: S21 in [15](15-open-questions.md). Native code is translated where its meaning is known (D-451, 2026-10-22).
+Status: built in rung 19, 2026-10-15. Source baseline: origin/main at `898dec6` (v0.19.0). Results: S21 in [15](15-open-questions.md). Native code is translated where its meaning is known (D-451, 2026-10-22). Whole-config agent adaptation is built with a separate target conversation (D-460, 2026-10-29); it uses the correspondence rules below.
 
 BK, on seeing the agent fail: "I think the agent shoudl be able to see the layouts of other keyboards. and it should be possible for me to say copy this thing from my other keyboard and apply it here and it should have the smarts to figure out the best way to do it even if the keyboards have differnt number of keys or differnt layouts" (D-220).
 
@@ -84,3 +84,9 @@ S21 read MoErgo's tree at `ce69e85`. Its underglow fills one buffer with one eff
 - home row mods onto the Glove80: a valid proposal on home-row keys only, each letter with the source's modifiers on the hand it sits on, in profiles that wait for the other hand. The model used `list_layouts`, `get_layout` of the Moonlander and `map_keys`.
 
 Reports are in `evals/reports/`.
+
+## A whole-config adaptation keeps its originals
+
+Ask the agent to put one setup onto another supported board. `put_config` creates a separate, unselected config and hands off to its own conversation (D-460). The target run starts from `planLayoutPut`'s translated whole-layout seed, considers source and target remembered decisions, and prepares one validated proposal with its reasons. Questions refine that proposal one at a time; they never write to the source config. Untranslated and displaced functions remain visible in the proposal and validation results.
+
+The target preference config is the initiating conversation's config when its board matches, otherwise that board's configured layout, if any. Source and target facts retain their own board coordinates and revision IDs. The copy does not infer a typing profile or claim measured comfort. `map_keys` remains the tool for carrying selected parts into an existing conversation layout.

@@ -56,7 +56,7 @@ function choicesOf(input: PutInput): Map<number, number> {
 }
 
 export function previewPut(app: App, input: PutInput): PutPreview {
-  const { view, target, plan } = planFor(app, input);
+  const { view, target, plan } = planPut(app, input);
   const blank = blankDocument(target.definition.id);
   const ops = plan.opsWithPlacements.length > 0 ? plan.opsWithPlacements : plan.ops;
   const after = evaluate(target.definition, blank, ops).after ?? blank;
@@ -89,7 +89,7 @@ function chooseLayers(doc: Layout, wanted: readonly string[] | undefined): { kep
   return { kept: { ...doc, layers }, notes: out.length > 0 ? [`Left out ${out.join(", ")}: ${why}`] : [] };
 }
 
-function planFor(app: App, input: PutInput) {
+export function planPut(app: App, input: PutInput) {
   const view = getLayout(app, input.from);
   const target = showBoard(input.board);
   if (target.definition.id === view.layout.boardId) throw new UsageError(`${view.layout.name} is already a ${target.definition.name} config; to copy it, use \`keyloom config new\``);
@@ -117,7 +117,7 @@ function planFor(app: App, input: PutInput) {
 }
 
 export function putConfig(app: App, input: PutInput): PutOutcome {
-  const { view, target, plan } = planFor(app, input);
+  const { view, target, plan } = planPut(app, input);
 
   const name = input.name ?? `${view.layout.name} on ${target.definition.name}`;
   const config = newConfig(app, { name, from: "blank", board: target.definition.id });
