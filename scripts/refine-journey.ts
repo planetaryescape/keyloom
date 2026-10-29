@@ -25,27 +25,42 @@ const profile = mkdtempSync(join(tmpdir(), "refine-journey-chrome-"));
 // Port 0 lets Chrome pick a free debugging port and write it to its own profile, so the script can only reach the Chrome it started,
 // never another browser already listening on a fixed port.
 const chrome = Bun.spawn([CHROME, "--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run", "--disable-gpu", "--hide-scrollbars", "about:blank"], { stdout: "ignore", stderr: "ignore" });
-// The profile and every run's data directory live in $TMPDIR and nothing else would remove them. An exit handler covers a failed run and
-// Ctrl-C (which exits through it) as well as the normal end; Chrome is stopped first so it stops writing into its profile.
+// The profile and every run's data directory live in $TMPDIR and nothing else would remove them. `cleanup` stops the subprocesses and waits
+// for them to exit before it removes the directories they write into. It runs at the normal end, after a failure and on Ctrl-C.
 const scratch: string[] = [profile];
 let demoServer: Bun.Subprocess | undefined;
 const removeScratch = (dir: string) => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-process.once("exit", () => {
-  chrome.kill("SIGKILL");
-  demoServer?.kill("SIGKILL");
-  for (const dir of scratch) removeScratch(dir);
-});
-process.once("SIGINT", () => process.exit(130));
-process.once("SIGTERM", () => process.exit(143));
+async function stop(child: Bun.Subprocess | undefined) {
+  if (child === undefined || child.exitCode !== null) return;
+  child.kill("SIGTERM");
+  // A child that ignores SIGTERM must not leave the directory in place for ever.
+  const stuck = await Promise.race([child.exited.then(() => false), sleep(5000).then(() => true)]);
+  if (stuck) {
+    child.kill("SIGKILL");
+    await child.exited;
+  }
+}
+async function cleanup() {
+  await Promise.all([stop(chrome), stop(demoServer)]);
+  for (const dir of scratch.splice(0)) removeScratch(dir);
+}
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]] as const) {
+  process.once(signal, () => void cleanup().finally(() => process.exit(code)));
+}
 let targets: Array<{ type: string; webSocketDebuggerUrl: string }> = [];
 for (let i = 0; i < 50 && targets.length === 0; i++) {
   await sleep(200);
   try {
     const port = (await Bun.file(join(profile, "DevToolsActivePort")).text()).split("\n")[0];
+    // SAFETY: /json/list is Chrome's own DevTools target list; each entry has a type and, for a page, a webSocketDebuggerUrl.
     targets = ((await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as typeof targets).filter((t) => t.type === "page");
   } catch { /* not up yet */ }
 }
-const ws = new WebSocket(targets[0]?.webSocketDebuggerUrl ?? "");
+if (targets[0] === undefined) {
+  await cleanup();
+  throw new Error("Chrome did not open a page to drive");
+}
+const ws = new WebSocket(targets[0].webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map<number, (v: any) => void>();
@@ -184,26 +199,27 @@ async function journey(theme: string, width: number, height: number, record: boo
       if (record) transcript.push(`## A request with nothing to ask\n${await chatText()}`);
     }
   } finally {
-    server.kill("SIGTERM");
-    await server.exited;
+    await stop(server);
     removeScratch(dataDir);
-    scratch.splice(scratch.indexOf(dataDir), 1);
+    if (scratch.includes(dataDir)) scratch.splice(scratch.indexOf(dataDir), 1);
   }
 }
 
-// JOURNEY_ONLY="light:390" runs one combination and skips the apply and skip runs, for a quick look.
-const only = process.env.JOURNEY_ONLY;
-for (const theme of ["light", "dark"]) for (const [width, height] of [[1440, 900], [390, 844]] as const) {
-  if (only !== undefined && only !== `${theme}:${width}`) continue;
-  await journey(theme, width, height, theme === "light" && width === 1440, false);
+try {
+  // JOURNEY_ONLY="light:390" runs one combination and skips the apply and skip runs, for a quick look.
+  const only = process.env.JOURNEY_ONLY;
+  for (const theme of ["light", "dark"]) for (const [width, height] of [[1440, 900], [390, 844]] as const) {
+    if (only !== undefined && only !== `${theme}:${width}`) continue;
+    await journey(theme, width, height, theme === "light" && width === 1440, false);
+  }
+  if (only === undefined) {
+    await journey("light", 1440, 900, true, true);
+    await journey("light", 1440, 900, false, false, true);
+    await journey("light", 1440, 900, false, false, false, true);
+  }
+  writeFileSync(join(OUT, "journey-transcript.md"), `# The refine journey through the real app\n\nScripted model, scratch data directory, headless Chrome 1440x900, light theme. Text is the chat column's innerText after each step.\n\n${transcript.join("\n\n")}\n`);
+} finally {
+  ws.close();
+  await cleanup();
 }
-if (only === undefined) {
-  await journey("light", 1440, 900, true, true);
-  await journey("light", 1440, 900, false, false, true);
-  await journey("light", 1440, 900, false, false, false, true);
-}
-writeFileSync(join(OUT, "journey-transcript.md"), `# The refine journey through the real app\n\nScripted model, scratch data directory, headless Chrome 1440x900, light theme. Text is the chat column's innerText after each step.\n\n${transcript.join("\n\n")}\n`);
-ws.close();
-chrome.kill("SIGTERM");
-await sleep(500);
 console.log("done");
