@@ -218,21 +218,21 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     }
   }, [token, layoutRef]);
 
-  /** Resolves to an error message, or null once the conversation is showing. */
+  /** Resolves to null once showing, an error message on failure, or undefined if canceled or replaced. */
   const open = useCallback(
-    async (id: string): Promise<string | null> => {
+    async (id: string): Promise<string | null | undefined> => {
       handoff.current = undefined;
       controller.current?.abort();
       const mine = new AbortController();
       controller.current = mine;
       try {
         const detail = await fetchConversation(token, id, mine.signal);
-        if (controller.current !== mine || mine.signal.aborted) return null;
+        if (controller.current !== mine || mine.signal.aborted) return undefined;
         setProblem(null);
         dispatch({ type: "loaded", detail });
         conversationId.current = id;
         const saved = await latestSavedRun(token, id, mine.signal);
-        if (controller.current !== mine || mine.signal.aborted) return null;
+        if (controller.current !== mine || mine.signal.aborted) return undefined;
         if (saved !== null) {
           savedRun.current = saved.id;
           localStorage.setItem(storageKey, saved.id);
@@ -241,7 +241,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         } else { savedRun.current = null; controller.current = null; localStorage.removeItem(storageKey); }
         return null;
       } catch (error) {
-        if (controller.current !== mine || mine.signal.aborted) return null;
+        if (controller.current !== mine || mine.signal.aborted) return undefined;
         controller.current = null;
         return error instanceof Error ? error.message : "Couldn't open that conversation.";
       }

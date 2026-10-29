@@ -11,6 +11,12 @@ const failed = new Set<string>();
 const runs = new Map<string, { snapshot: AgentRunSnapshot; text: string }>();
 let releaseSlow: (() => void) | undefined;
 let slowWaiting = false;
+let deferred: { stage: "conversation" | "latest-run"; entered: boolean; release?: () => void } | undefined;
+async function deferOpen(stage: "conversation" | "latest-run", path: string) {
+  if (deferred?.stage !== stage || !path.includes("deferred")) return;
+  deferred.entered = true;
+  await new Promise<void>((resolve) => { if (deferred) deferred.release = resolve; });
+}
 let current: ReturnType<typeof useChat> | undefined;
 const storageKey = "keyloom.agent.current.synthetic-handoff";
 localStorage.removeItem(storageKey);
@@ -43,8 +49,8 @@ globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: Request
     }
     return Response.json(row.snapshot);
   }
-  if (path.startsWith("/api/agent/v1/conversations/")) return Response.json(null);
-  if (path.startsWith("/api/conversations/")) return Response.json(detail(path.split("/").at(-1) ?? "history", "historic input"));
+  if (path.startsWith("/api/agent/v1/conversations/")) { await deferOpen("latest-run", path); return Response.json(null); }
+  if (path.startsWith("/api/conversations/")) { await deferOpen("conversation", path); return Response.json(detail(path.split("/").at(-1) ?? "history", "historic input")); }
   throw new Error(`Unexpected synthetic request: ${path}`);
 }, { preconnect: globalThis.fetch.preconnect });
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
@@ -55,6 +61,27 @@ async function runChecks() {
   if (!output) throw new Error("Missing fixture output");
   output.textContent = "Running actual useChat recovery checks…";
   try {
+    for (const stage of ["conversation", "latest-run"] as const) {
+      for (const replacement of ["new", "open"] as const) {
+        deferred = { stage, entered: false };
+        const opening = chat().open("deferred");
+        // Match ChatPanel's initial-copy continuation: only a successful open may send.
+        const continuation = opening.then((error) => { if (error === null) return chat().send("Continue adapting the copied setup.", null); });
+        while (!deferred.entered) await frame();
+        const before = posts.length;
+        if (replacement === "new") chat().newConversation();
+        else check(await chat().open("replacement") === null, "Current replacement open did not report success");
+        await frame();
+        deferred.release?.();
+        const outcome = await opening; await continuation; await frame();
+        check(outcome === undefined && posts.length === before, `Canceled ${stage} open after ${replacement} submitted a stale continuation`);
+        check(chat().transcript.conversationId === (replacement === "new" ? null : "replacement"), "Canceled open replaced the current conversation");
+        deferred = undefined;
+      }
+    }
+    check(await chat().open("normal-history") === null, "Normal history open did not report success");
+    await frame();
+    check(chat().transcript.conversationId === "normal-history", "Successful history open did not show its conversation");
     await chat().send("copy", null); await frame();
     await chat().send("fail later message", null); await frame();
     await chat().retry(); await frame();
@@ -79,7 +106,7 @@ async function runChecks() {
     releaseSlow?.(); await slow; await frame();
     await chat().retry(); await frame();
     check(redirects.length === 0 && chat().transcript.turns.length === 0, "An old observer restored the handoff after New");
-    output.textContent = "PASS 5 actual useChat recovery checks: new-message retry, New conversation, Open history, genuine handoff retry, late observer protection.";
+    output.textContent = "PASS 10 actual useChat recovery checks: canceled opens at both async boundaries after New/replacement, normal history, new-message retry, New conversation, Open history, genuine handoff retry, late observer protection.";
   } catch (error) { output.textContent = `FAIL ${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ posts, redirects })}`; }
 }
 function Harness() {
