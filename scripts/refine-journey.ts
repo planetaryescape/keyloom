@@ -10,7 +10,7 @@
 // refines (after-skipped); one applies a proposal that question 2 does not refine (after-closed). Chrome gets its own profile and debugging port; it never touches
 // another browser, a running keyloom, or a real data directory.
 import { Database } from "bun:sqlite";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ANSWER_1, ANSWER_2, CLOSE_FOLLOWUP, QUICK_REQUEST, REQUEST } from "../test/helpers/refine-journey.ts";
@@ -25,6 +25,18 @@ const profile = mkdtempSync(join(tmpdir(), "refine-journey-chrome-"));
 // Port 0 lets Chrome pick a free debugging port and write it to its own profile, so the script can only reach the Chrome it started,
 // never another browser already listening on a fixed port.
 const chrome = Bun.spawn([CHROME, "--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run", "--disable-gpu", "--hide-scrollbars", "about:blank"], { stdout: "ignore", stderr: "ignore" });
+// The profile and every run's data directory live in $TMPDIR and nothing else would remove them. An exit handler covers a failed run and
+// Ctrl-C (which exits through it) as well as the normal end; Chrome is stopped first so it stops writing into its profile.
+const scratch: string[] = [profile];
+let demoServer: Bun.Subprocess | undefined;
+const removeScratch = (dir: string) => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+process.once("exit", () => {
+  chrome.kill("SIGKILL");
+  demoServer?.kill("SIGKILL");
+  for (const dir of scratch) removeScratch(dir);
+});
+process.once("SIGINT", () => process.exit(130));
+process.once("SIGTERM", () => process.exit(143));
 let targets: Array<{ type: string; webSocketDebuggerUrl: string }> = [];
 for (let i = 0; i < 50 && targets.length === 0; i++) {
   await sleep(200);
@@ -78,7 +90,9 @@ const transcript: string[] = [];
 /** One fresh server and page: ask for the key, answer both questions, and (when `apply`) apply the final proposal and read the decision. */
 async function journey(theme: string, width: number, height: number, record: boolean, apply: boolean, skip = false, close = false) {
   const dataDir = mkdtempSync(join(tmpdir(), "keyloom-refine-"));
+  scratch.push(dataDir);
   const server = Bun.spawn(["bun", join(import.meta.dir, "dev-command-shift.ts"), String(APP_PORT), dataDir, ...(close ? ["close"] : [])], { stdout: "pipe", stderr: "inherit" });
+  demoServer = server;
   const reader = server.stdout.getReader();
   const started = new TextDecoder().decode((await reader.read()).value);
   if (!started.includes(String(APP_PORT))) throw new Error(`the demo server did not start: ${started}`);
@@ -172,6 +186,8 @@ async function journey(theme: string, width: number, height: number, record: boo
   } finally {
     server.kill("SIGTERM");
     await server.exited;
+    removeScratch(dataDir);
+    scratch.splice(scratch.indexOf(dataDir), 1);
   }
 }
 
