@@ -4,11 +4,14 @@ import { applyOps } from "../src/layout/apply-ops.ts";
 import type { ChangeOp } from "../src/layout/change.ts";
 import type { Layout } from "../src/layout/schema.ts";
 
+// Either side counts: right Command with right Shift is Command-Shift on a Mac, and a live run proposed exactly that (RGUI+RSFT).
+const isCommandShift = (mods: readonly string[]): boolean => (mods.includes("LGUI") || mods.includes("RGUI")) && (mods.includes("LSFT") || mods.includes("RSFT"));
+
 /** How many keys send Command-Shift as one key or hold it: counted, so a proposal is judged by what it adds and not by what the layout already had. */
 export const commandShiftKeys = (doc: Layout): number =>
   doc.layers.flatMap((l) => l.bindings).filter((b) =>
-    (b.kind === "modifier" && b.mods.includes("LGUI") && b.mods.includes("LSFT")) ||
-    (b.kind === "holdTap" && JSON.stringify(b.hold).includes("LGUI") && JSON.stringify(b.hold).includes("LSFT")),
+    (b.kind === "modifier" && isCommandShift(b.mods)) ||
+    (b.kind === "holdTap" && "mods" in b.hold && isCommandShift(b.hold.mods)),
   ).length;
 
 export type ChainProposal = { ops: ChangeOp[]; validation: { diff: { displaced: readonly unknown[]; dropped: readonly unknown[] } } };

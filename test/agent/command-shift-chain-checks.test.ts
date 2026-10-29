@@ -34,4 +34,14 @@ describe("the chain checks of the Command-Shift eval", () => {
     expect(chainChecks(before, chain).everyValidOneGivesCommandShift).toBe(false);
     expect(chainChecks(before, [])).toEqual({ everyValidOneGivesCommandShift: false, displacedShown: false });
   });
+
+  test("right Command with right Shift counts as Command-Shift: the first proposal of the 2026-10-29 OpenRouter run", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const before = getLayout(app, layoutId).document;
+    // Its ops, copied from evals/reports/2026-10-29-openrouter-anthropic-claude-opus-5.5-medium-command-shift.md.
+    const right: ChangeOp[] = [{ op: "setBinding", at: { layerId: "layer-0", position: 53 }, binding: { kind: "modifier", mods: ["RGUI", "RSFT"] } }];
+    const chain = [{ ops: right, validation: checkChange(app, layoutId, { ops: right }) }];
+    expect(chain[0]?.validation.ok).toBe(true);
+    expect(chainChecks(before, chain).everyValidOneGivesCommandShift).toBe(true);
+  });
 });
