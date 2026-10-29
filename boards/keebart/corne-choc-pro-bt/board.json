@@ -36,14 +36,26 @@
         "config": [
           "CONFIG_ZMK_STUDIO=n",
           "CONFIG_ZMK_KEYBOARD_NAME=\"Corne Choc BT\"",
-          "CONFIG_ZMK_RGB_UNDERGLOW_ON_START=n"
+          "CONFIG_SPI=y",
+          "CONFIG_WS2812_STRIP=y"
         ],
         "sensorBindings": [
           "&inc_dec_kp C_VOL_UP C_VOL_DN",
           "&inc_dec_kp C_VOL_UP C_VOL_DN",
           "&inc_dec_kp C_BRI_UP C_BRI_DN",
           "&inc_dec_kp C_BRI_UP C_BRI_DN"
-        ]
+        ],
+        "rgbMatrix": {
+          "module": {
+            "repo": "https://github.com/gudzpoz/zmk-rgb-matrix",
+            "sha": "3166a4ec6801a5726f12a53e82cff92323116025"
+          },
+          "strip": "led_strip",
+          "physicalLayout": "default_layout",
+          "leftLedCount": 23,
+          "maxBrightness": 30,
+          "leftTarget": "left"
+        }
       },
       "flash": {
         "kind": "uf2-drives",
@@ -269,9 +281,6 @@
     "41": 44,
     "42": 43
   },
-  "limits": {
-    "lighting": "its lights, where it has any, are ZMK underglow, which shows one effect across the whole strip, and ZMK has no way to give a key its own colour on a layer"
-  },
   "importers": [
     "zmk-keymap"
   ],
@@ -385,5 +394,55 @@
   "holdKeyFallback": [
     19,
     22
-  ]
+  ],
+  "lighting": {
+    "ledPositions": [
+      42,
+      33,
+      19,
+      5,
+      4,
+      18,
+      32,
+      41,
+      40,
+      31,
+      17,
+      3,
+      2,
+      16,
+      30,
+      29,
+      15,
+      1,
+      0,
+      14,
+      28,
+      6,
+      20,
+      43,
+      34,
+      22,
+      8,
+      9,
+      23,
+      35,
+      44,
+      45,
+      36,
+      24,
+      10,
+      11,
+      25,
+      37,
+      38,
+      26,
+      12,
+      13,
+      27,
+      39,
+      7,
+      21
+    ]
+  }
 }

@@ -67,6 +67,20 @@ function checkRecipes(def: BoardDefinition, rev: BoardRevision, err: (message: s
   if (rev.flash.kind !== "uf2-drives") err(`${at}: a ZMK board flashes with uf2-drives, not ${rev.flash.kind}`);
   if (rev.qmkTarget) err(`${at}: qmkTarget is for QMK boards`);
   if (rev.build.kind === "zmk-west-docker" && rev.flash.kind === "uf2-drives") {
+    if (rev.build.rgbMatrix) {
+      const rgb = rev.build.rgbMatrix;
+      if (rev.build.targets.length !== 2 || !rev.build.targets.some((t) => t.id === rgb.leftTarget)) {
+        err(`${at}: RGB matrix needs two targets and a matching leftTarget`);
+      }
+      const positions = def.lighting?.ledPositions;
+      const split = rev.build.rgbMatrix.leftLedCount;
+      if (!positions || split >= positions.length || new Set(positions).size !== positions.length || positions.some((p) => p >= def.keyCount)) {
+        err(`${at}: RGB matrix needs a unique, in-range LED map covering both halves`);
+      } else if (positions.slice(0, split).some((p) => !def.hands.left.includes(p)) || positions.slice(split).some((p) => !def.hands.right.includes(p))) {
+        err(`${at}: RGB LED order must list the left half before the right half`);
+      }
+      if (!rev.flash.handsFree) err(`${at}: RGB matrix needs the keyloom module for its external power rail`);
+    }
     const targets = new Set(rev.build.targets.map((t) => t.id));
     if (targets.size !== rev.build.targets.length) err(`${at}: two build targets have the same id`);
     const flashed = new Set<string>();

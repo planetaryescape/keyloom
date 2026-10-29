@@ -290,6 +290,15 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.boardModule` | `zmk-west-docker`, optional | External hardware definitions. Also owns `physicalLayout`. |
 | `revisions[].build.boardModule.repo` | `zmk-west-docker` | Hardware module repository URL. |
 | `revisions[].build.boardModule.sha` | `zmk-west-docker` | Immutable hardware module commit SHA. |
+| `revisions[].build.rgbMatrix` | `zmk-west-docker`, optional | Per-key RGB engine; requires an LED map and the keyloom module. |
+| `revisions[].build.rgbMatrix.module` | `zmk-west-docker` | Pinned RGB module dependency. |
+| `revisions[].build.rgbMatrix.module.repo` | `zmk-west-docker` | RGB module repository URL. |
+| `revisions[].build.rgbMatrix.module.sha` | `zmk-west-docker` | Immutable RGB module commit SHA. |
+| `revisions[].build.rgbMatrix.strip` | `zmk-west-docker` | Devicetree label of the LED strip. |
+| `revisions[].build.rgbMatrix.physicalLayout` | `zmk-west-docker` | Devicetree label of the physical key layout. |
+| `revisions[].build.rgbMatrix.leftLedCount` | `zmk-west-docker` | Number of entries at the start of the LED map belonging to the left half. |
+| `revisions[].build.rgbMatrix.leftTarget` | `zmk-west-docker` | Target ID for the left half; the build supplies a per-half devicetree flag. |
+| `revisions[].build.rgbMatrix.maxBrightness` | `zmk-west-docker` | Hardware brightness cap, 1–100 percent, scaled by the master control. |
 | `revisions[].build.config` | `zmk-west-docker`, optional | `CONFIG_…=…` defaults, emitted before layout settings. |
 | `revisions[].build.sensorBindings` | `zmk-west-docker`, optional | Devicetree sensor bindings in hardware order, emitted on every layer. |
 | `revisions[].build.kanataVersion` | `kanata-config` | The kanata release the generated config targets, such as `1.12.0`. Software-remapper boards only; `source.ref` must be `v<version>`. |
@@ -336,7 +345,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `holdKeyFallback` | optional | Positions a layer may be held from once the preferred ones are used, so no carried layer has no way in; less-used keys such as `;` and `'`. |
 | `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
 | `lighting` | qmk | Optional. Present on a board with per-key RGB that keyloom writes layer colours for. |
-| `lighting.ledPositions` | qmk | For each LED number, the key position it sits under. Read it from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates. |
+| `lighting.ledPositions` | qmk, zmk with RGB matrix | For each LED number, the key position it sits under. Read it from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates. |
 | `lightingControls` | all | Optional. `true` when the firmware has lighting control keys (RGB underglow or the RGB matrix's controls) but no per-key LED table. Set it only with evidence from the firmware's own config, such as a `CONFIG_*RGB*=y` line in the board's defconfig, and say where in the commit. |
 | `limits` | all | Optional. What the board can't do, in a sentence the agent and the validator can quote. |
 | `limits.lighting` | all | Why the board can't show per-key colours, such as "its lights are underglow, which shows one effect across the whole strip". Set it on a board with no `lighting`. |

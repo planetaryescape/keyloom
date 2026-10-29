@@ -14,6 +14,7 @@ import { renderLayers } from "./emit-keymap.ts";
 import { handsFreeConf } from "./handsfree.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
 import { GenerateError } from "./generate-error.ts";
+import { matrixControls, renderZmkLighting } from "./emit-lighting.ts";
 import { macroHoldTaps } from "./macro-hold-taps.ts";
 
 export { GenerateError } from "./generate-error.ts";
@@ -160,10 +161,12 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
 
   const build = board.revisions[0]?.build;
   const physicalLabel = build?.kind === "zmk-west-docker" && build.boardModule ? build.physicalLayout.split("#")[1] : undefined;
-  const chosen = physicalLabel ? [`chosen { zmk,physical-layout = <&${physicalLabel}>; };`] : [];
-  const root = ["/ {", ...indent(chosen, 4), ...indent(blocks([behaviors, macros, ...sources("root"), combos, conditionals, keymap]), 4), "};"];
+  const hasChosenLayout = kept("root").some((p) => /\bzmk,physical-layout\s*=/.test(p.source));
+  const chosen = physicalLabel && !hasChosenLayout ? [`chosen { zmk,physical-layout = <&${physicalLabel}>; };`] : [];
+  const root = ["/ {", ...indent(blocks([chosen, behaviors, macros, ...sources("root"), combos, conditionals, keymap]), 4), "};"];
   const overrides = layout.holdTapProfiles.filter((p) => BUILTIN_PROFILES.has(p.id)).map(renderBuiltinOverride);
 
+  const lighting = renderZmkLighting(layout, board);
   const keymapText = blocks([
     [header(input.revisionId, "//")],
     [...BASE_INCLUDES, ...extraIncludes],
@@ -172,6 +175,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     root,
     ...overrides,
     ...sources("top"),
+    lighting,
   ]);
 
   const marker = input.handsFree ? handsFreeConf(input.handsFree.config, input.handsFree.buildId) : undefined;
@@ -181,6 +185,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     ...layout.settings.filter((s) => s.firmware === "zmk").map(settingLine),
     ...layout.passthrough.filter((p) => p.file === CONF_FILE).map((p) => p.source),
     ...(marker?.shared ?? []),
+    ...(lighting.length ? ["CONFIG_ZMK_RGB_UNDERGLOW=n", "CONFIG_KEYLOOM_RGB_POWER=y"] : []),
   ];
 
   // KEYMAP_FILE and CONF_FILE label the layout's passthrough (they are stored in saved layouts); the
@@ -191,7 +196,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
   return {
     keymapName: name,
     files: [
-      { path: `${name}.keymap`, content: `${keymapText.join("\n")}\n` },
+      { path: `${name}.keymap`, content: `${lighting.length ? matrixControls(keymapText.join("\n")) : keymapText.join("\n")}\n` },
       { path: `${name}.conf`, content: `${confLines.join("\n")}\n` },
       ...(marker?.perHalf ?? []),
     ],

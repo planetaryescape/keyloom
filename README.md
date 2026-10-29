@@ -89,7 +89,7 @@ keyloom import --board moergo/glove80 ~/Downloads/layout.keymap
 | ZSA Moonlander (rev A and B) | QMK | Oryx source zip | Zapp. Hands-free once a keyloom build is on the board | Yes |
 | MoErgo Glove80 | ZMK | Layout Editor `.keymap` | UF2 drive per half. keyloom's `keyloom-zmk` module lets it restart each half into the bootloader itself after one manual flash | No: its lights show one effect across all keys |
 | foostan Corne | ZMK | ZMK `.keymap` | The same as the Glove80 | No |
-| Keebart Corne Choc Pro BT (46 positions, two encoders) | ZMK | ZMK `.keymap` | Matching UF2 per half on KEEBART; [first-flash verification pending](docs/issues/keebart-corne-first-flash.md) | No |
+| Keebart Corne Choc Pro BT (46 positions, two encoders) | ZMK | ZMK `.keymap` | Matching UF2 per half on KEEBART; [first-flash record](docs/issues/keebart-corne-first-flash.md) | Per-key/layer adapter; [BT LED map verification pending](docs/issues/corne-per-key-rgb.md) |
 | MacBook built-in keyboard (ANSI) | kanata | Karabiner `karabiner.json` (read only) | No flashing. keyloom writes a kanata config and reloads it | No: macOS controls the backlight |
 
 Other boards are added as a folder under `boards/`, with no code. The MacBook board needs [kanata](https://github.com/jtroo/kanata) and a one-time setup; `keyloom remap --help` lists the steps.

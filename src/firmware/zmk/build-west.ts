@@ -19,8 +19,8 @@ import { MODULE_DIR, MODULE_FILES, OVERLAY_FILE, writeModule } from "./module.ts
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
 
 /** The user config's manifest: ZMK at the pinned SHA, with its own `app/west.yml` for Zephyr and the modules. */
-export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDockerBuild["boardModule"]): string {
-  return `manifest:\n  projects:\n    - name: zmk\n      url: ${repo}\n      revision: ${sha}\n      import: app/west.yml${boardModule ? `\n    - name: board-module\n      url: ${boardModule.repo}\n      revision: ${boardModule.sha}` : ""}\n  self:\n    path: config\n`;
+export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDockerBuild["boardModule"], rgbMatrix?: ZmkWestDockerBuild["rgbMatrix"]): string {
+  return `manifest:\n  projects:\n    - name: zmk\n      url: ${repo}\n      revision: ${sha}\n      import: app/west.yml${boardModule ? `\n    - name: board-module\n      url: ${boardModule.repo}\n      revision: ${boardModule.sha}` : ""}${rgbMatrix ? `\n    - name: zmk-rgb-matrix\n      url: ${rgbMatrix.module.repo}\n      revision: ${rgbMatrix.module.sha}` : ""}\n  self:\n    path: config\n`;
 }
 
 /** What a build with keyloom's module adds to `west build`: the module, and the overlay that gives it a serial port (a module can't add an overlay itself). */
@@ -35,7 +35,7 @@ export function westScript(build: ZmkWestDockerBuild, withModule = false): strin
     "[ -d .west ] || west init -l config",
     "west update --fetch-opt=--filter=tree:0",
     "west zephyr-export",
-    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config${withModule ? ` ${moduleFlags()}` : ""}`),
+    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
   ];
   return lines.join("\n");
 }
@@ -57,7 +57,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       await mkdir(config, { recursive: true });
       // A keymap or conf left from another layout must not be built.
       for (const f of await readdir(config)) if (/\.(keymap|conf)$/.test(f)) await rm(join(config, f));
-      await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule));
+      await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule, build.rgbMatrix));
       for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
       const handsFree = rev.flash.handsFree !== undefined;
       if (handsFree) await writeModule(input.checkoutDir);

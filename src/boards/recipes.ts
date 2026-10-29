@@ -59,6 +59,15 @@ export const ZmkWestDockerBuildSchema = z.strictObject({
   physicalLayout: z.string().min(1),
   /** External hardware definitions, fetched by west at an immutable revision; also owns physicalLayout. */
   boardModule: ZmkBoardModuleSchema.optional(),
+  /** Per-key RGB engine, pinned independently of the board hardware module. */
+  rgbMatrix: z.strictObject({
+    module: ZmkBoardModuleSchema,
+    strip: z.string().regex(/^[a-z][a-z0-9_]*$/),
+    physicalLayout: z.string().regex(/^[a-z][a-z0-9_]*$/),
+    leftLedCount: z.number().int().positive(),
+    leftTarget: z.string().regex(/^[a-z][a-z0-9_-]*$/),
+    maxBrightness: z.number().int().min(1).max(100),
+  }).optional(),
   /** Board defaults needed when replacing the vendor keymap. */
   config: z.array(z.string().regex(/^CONFIG_[A-Z0-9_]+=.+$/)).optional(),
   /** Sensor bindings in the hardware sensor order, retained on every layer. */

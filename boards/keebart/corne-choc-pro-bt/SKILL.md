@@ -10,4 +10,6 @@ The first flash needs physical bootloader entry on each half: connect it by USB,
 
 ZMK Studio is disabled in this recipe so a saved Studio keymap cannot override the layout being built. Bluetooth pairing settings are retained; do not use settings-reset firmware as part of a normal layout update.
 
-RGB is off at startup to save battery. The board supports ZMK underglow controls, not independently assigned per-key layer colours.
+Per-key and per-layer colours use the pinned RGB matrix module through keyloom’s existing lighting controls. Toggle and brightness affect the full matrix; hue, saturation, speed and effects affect the fallback effect on layers without assigned colours. The initial master brightness is 60% of the hardware cap of 30%. Idle blanks the LEDs.
+
+The candidate LED order is inferred from Keebart’s wired Corne map, not yet verified on the BT PCB. Do not describe key-to-LED placement as hardware-verified. See `docs/issues/corne-per-key-rgb.md` for provenance and the physical completion check.

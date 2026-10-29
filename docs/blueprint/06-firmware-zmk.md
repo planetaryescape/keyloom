@@ -111,3 +111,11 @@ Generated from this document into the agent's firmware context ([03](03-agent.md
 ## Conditional layers
 
 A `zmk,conditional-layers` container is read into `Layout.conditionalLayers` and written back after the combos, children named from the condition ids and layers by current index. A child keyloom can't model (three or more `if-layers`, another property) is kept as written inside the generated container. See D-387.
+
+## Keebart per-key lighting uses an external RGB matrix module
+
+Status: implemented in the adapter; hardware colour placement is pending (D-461).
+
+`zmk-west-docker.rgbMatrix` pins the RGB engine and names its LED strip, physical layout, left-half LED count and brightness cap. `lighting.ledPositions` maps chain order to key positions. Generation writes one static overlay for each coloured layer, with a highest-active-layer condition and identical overlay order on both halves. Uncoloured layers show the fallback effect. Existing `&rgb_ug` controls target the new engine’s matrix or effect controller.
+
+The Corne keeps ZMK v0.3.0; a compatibility header supplies the enabled-child count helper its Zephyr lacks. The keyloom module handles its switched LED supply. The original Glove80 recipe remains unchanged. [Usage, source provenance and verification](../issues/corne-per-key-rgb.md).

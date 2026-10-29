@@ -14,6 +14,7 @@ import { run } from "../toolchain/run.ts";
 import { zmkRevision } from "./board-config.ts";
 import { hint } from "./build.ts";
 import { westManifest } from "./build-west.ts";
+import { readZmkLighting } from "./import-lighting.ts";
 import { nativeFiles } from "./emulate-keymap.ts";
 import { parseRunLog } from "./emulate-log.ts";
 import { ImageBuildError, ensureImage, imageTag } from "./image.ts";
@@ -109,7 +110,7 @@ export const emulateZmk: Emulator = async (input) => {
   const keymap = input.source.files.find((f) => f.path.endsWith(".keymap"))?.content;
   if (keymap === undefined) throw new EmulationError("the generated source has no keymap");
   const files = nativeFiles({
-    keymap, conf: input.source.files.find((f) => f.path.endsWith(".conf"))?.content ?? "", keyCount: input.board.keyCount, events: input.events,
+    keymap: readZmkLighting(keymap, input.board).source, conf: input.source.files.find((f) => f.path.endsWith(".conf"))?.content ?? "", keyCount: input.board.keyCount, events: input.events,
   });
   const say = (line: string) => {
     input.log.line(line);

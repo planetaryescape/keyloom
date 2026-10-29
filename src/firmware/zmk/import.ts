@@ -14,6 +14,7 @@ import { importCombo } from "./import-combos.ts";
 import { CONDITIONAL_COMPATIBLE, importConditionalLayer } from "./import-conditional.ts";
 import { annotateZmkLayerRefs } from "./layer-refs.ts";
 import { importHoldTap, importMacro, importTapDance, isHoldTap, isMacro, isTapDance } from "./import-behaviors.ts";
+import { readZmkLighting } from "./import-lighting.ts";
 import { ZmkImportError } from "./import-error.ts";
 import { type OptionValue, cellsOf, optionOf, stringOf } from "./props.ts";
 import { slug } from "./slug.ts";
@@ -41,7 +42,8 @@ export async function importZmkSource(path: string, board: BoardDefinition): Pro
 export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): Promise<ZmkImportResult> {
   if (board.firmware !== "zmk") throw new ZmkImportError(`board ${board.id} is ${board.firmware}, not zmk`);
   const warnings: string[] = [];
-  const items = await parseDts(files.keymap);
+  const rgb = readZmkLighting(files.keymap, board);
+  const items = await parseDts(rgb.source);
 
   const defines = new Map<string, string>();
   const kept: Kept[] = [];
@@ -262,6 +264,14 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
     settings: conf.settings,
     passthrough,
   } satisfies Layout);
+
+  if (rgb.lighting) {
+    if (rgb.lighting.length !== layout.layers.length) throw new ZmkImportError("The RGB metadata and keymap have different layer counts; import the original keyloom layout export.");
+    layout.layers.forEach((layer, i) => {
+      const colours = rgb.lighting?.[i];
+      if (colours) layer.lighting = colours;
+    });
+  }
 
   return {
     layout,

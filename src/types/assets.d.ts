@@ -36,3 +36,18 @@ declare module "*.yml" {
   const text: string;
   export default text;
 }
+
+declare module "*.h" {
+  const text: string;
+  export default text;
+}
+
+declare module "*.zephyr" {
+  const content: string;
+  export default content;
+}
+
+declare module "*.ld" {
+  const content: string;
+  export default content;
+}
