@@ -35,6 +35,7 @@ type Row = { key: string; name: string; value: number | boolean; default: number
 const rows = async (dataDir: string, ref: string, extra: string[] = []): Promise<Record<string, Row>> => {
   const r = await cli(["--format", "json", "layout", "settings", ref, ...extra], dataDir);
   expect(r.code).toBe(0);
+  // SAFETY: the JSON shape is what these tests assert; a missing field fails the matcher that reads it.
   return Object.fromEntries((JSON.parse(r.out).settings as Row[]).map((s) => [s.key, s]));
 };
 

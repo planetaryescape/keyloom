@@ -12,6 +12,7 @@ const GO_AHEAD = "Fine, go with your recommendation.";
 
 export type Exchange = {
   outcomes: ChatOutcome[];
+  conversationId: string;
   /** The questions the agent asked, in order. */
   questions: NonNullable<ChatOutcome["question"]>[];
 };
@@ -41,13 +42,17 @@ export async function converse(
       const pick = options.find((o) => o.recommended === true) ?? options[0];
       next = { answer: { toolUseId: waiting.question.toolUseId, text: opts.typedAnswer ?? (pick ? (pick.id ?? pick.label) : GO_AHEAD) } };
     } else next = { message: opts.nudges[Math.min(nudged++, opts.nudges.length - 1)] ?? GO_AHEAD };
-    const outcome = await sendMessage(app, layoutId, { provider: evalProvider, ...(opts.model ? { model: opts.model } : {}), ...next, ...(conversationId ? { conversationId } : {}) });
+    const input: SendMessageInput = { provider: evalProvider, ...next };
+    if (opts.model) input.model = opts.model;
+    if (conversationId) input.conversationId = conversationId;
+    const outcome = await sendMessage(app, layoutId, input);
     conversationId = outcome.conversationId;
     outcomes.push(outcome);
     expect(["awaiting_answer", "complete"]).toContain(outcome.status);
     if (outcome.status === "complete" && (opts.stop ? opts.stop(outcomes) : outcomes.some((o) => o.proposals.length > 0))) break;
   }
-  return { outcomes, questions: outcomes.flatMap((o) => (o.question === undefined ? [] : [o.question])) };
+  if (conversationId === undefined) throw new Error("converse needs at least one turn");
+  return { outcomes, conversationId, questions: outcomes.flatMap((o) => (o.question === undefined ? [] : [o.question])) };
 }
 
 /** Everything the agent said in a turn, a question's words included, for checks on its reply and for the report. */

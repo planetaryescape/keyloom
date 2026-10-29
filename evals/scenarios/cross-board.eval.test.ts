@@ -40,15 +40,15 @@ function toolUses(app: ReturnType<typeof openApp>, conversationId: string): Tool
 
 async function talk(app: ReturnType<typeof openApp>, layoutId: string, first: string) {
   // The colours scenario ends in an explanation, not a proposal, so a finished reply with no question mark is an answer.
-  const { outcomes, questions } = await converse(app, layoutId, { message: first }, {
+  const { outcomes, conversationId, questions } = await converse(app, layoutId, { message: first }, {
     nudges: [NUDGE], maxTurns: MAX_TURNS,
-    stop: (all) => all.some((o) => o.proposals.length > 0) || !said(all.at(-1) as ChatOutcome).includes("?"),
+    stop: (all) => all.some((o) => o.proposals.length > 0) || !all.at(-1)?.text.includes("?"),
   });
   const usage = outcomes.reduce(
     (a, o) => ({ inputTokens: a.inputTokens + o.usage.inputTokens, outputTokens: a.outputTokens + o.usage.outputTokens, cacheReadTokens: a.cacheReadTokens + o.usage.cacheReadTokens, cacheCreationTokens: a.cacheCreationTokens + o.usage.cacheCreationTokens }),
     { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
   );
-  return { outcomes, questions, usage, uses: toolUses(app, outcomes[0]?.conversationId as string), text: outcomes.map(said).join("\n"), proposals: outcomes.flatMap((o) => o.proposals) };
+  return { outcomes, questions, usage, uses: toolUses(app, conversationId), text: outcomes.map(said).join("\n"), proposals: outcomes.flatMap((o) => o.proposals) };
 }
 
 /** Looked at the other layout itself instead of asking BK for it. */

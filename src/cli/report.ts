@@ -30,7 +30,7 @@ export function importTable(o: ImportOutcome): string {
 }
 
 const show = (s: SettingView, v: number | boolean): string => {
-  if (typeof v === "boolean") return v ? "on" : "off";
+  if (s.kind === "flag") return v ? "on" : "off";
   if (v === 0 && s.zero !== null) return s.zero;
   return s.unit === "" ? String(v) : `${v} ${s.unit}`;
 };
