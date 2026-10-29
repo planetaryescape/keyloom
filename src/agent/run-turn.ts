@@ -155,8 +155,11 @@ export async function runAgentTurn(input: {
     ...(input.signal ? { signal: input.signal } : {}),
   });
 
-  const status = observer.limited() ? "iteration_limit" : classify(result.stopReason);
   const asked = result.pending === undefined ? undefined : StoredQuestionSchema.safeParse(result.pending.input);
+  // A valid question is where the turn ends, whatever else happened on the way to it. A call before it or beside it (the Anthropic adapter runs
+  // those) may have reached the activity limit and been refused with an error result; that must not turn the turn into an `iteration_limit`.
+  // Stored with any other status the question would be open on a failed run, which no answer path accepts although the layout never changed.
+  const status = result.pending !== undefined && asked?.success ? "awaiting_answer" : observer.limited() ? "iteration_limit" : classify(result.stopReason);
   // A provider that never says where the question fell leaves everything saved counting as before it.
   const refines = proposals.slice(0, savedBeforeQuestion ?? proposals.length).flatMap((p) => (p.changeSetId === null ? [] : [p.changeSetId])).at(-1);
   const messages = resumable(result.messages, status);

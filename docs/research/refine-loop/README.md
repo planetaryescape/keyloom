@@ -86,17 +86,30 @@ A question is open while its `ask_user` call has no result after it (`openQuesti
 | Either apply lands while the turn is still running | stored when the turn commits, as above | as above | completed | `completed` at commit, never `waiting_user` | yes |
 | BK rejects the proposal it refines, or a call in the same reply revises it | nothing | stays open, answerable | Needs your answer | `waiting_user` | yes, unchanged: the head did not move |
 | The head moves by other means (editor edit, undo, apply in another conversation) | nothing | stays open; its options are refused with "that question's target has changed" | Needs your answer | `waiting_user` | no, logged; a typed message still goes through |
+| A call beside the question, or one before it, reaches the turn's 64-call activity limit | the question; the refused call has an error result and was not run | open, answerable | Needs your answer | `waiting_user` | yes, fixed in round 6 |
+| A call beside the question throws | the question; that call has an error result | open, answerable | Needs your answer | `waiting_user` | yes, unchanged |
+| Stop while the calls beside the question run | the question; each call not yet run has an error result ("The operation was aborted.") and saved nothing | open, answerable | Needs your answer | `waiting_user`, stop recorded | yes, unchanged |
 | Stop before the question is reached | no question | none | stopped | `cancelled` | yes |
 | Stop as the question arrives | the question, open | open, answerable | Needs your answer | `waiting_user` with the stop recorded | yes, unchanged |
 | The turn fails | no question | none | failed | `failed` | yes |
 
-Each in-scope row has a test: `test/app/question-endings.test.ts` (through `startAgentRun` and `answerAgentRun`, which `sendMessage` does not use and which carry the guards), `test/agent/question-order.test.ts` (Anthropic, OpenRouter, Codex and the `onPause` contract) and `test/web/refine-cards.test.ts` (the card, the reducer, the work row). The real app shows the Closed card in `after-closed-light-1440.png` (`bun scripts/refine-journey.ts`, which now also runs `scripts/dev-command-shift.ts close`); `journey-transcript.md` has the chat text.
+Each in-scope row has a test: `test/app/question-endings.test.ts` (through `startAgentRun` and `answerAgentRun`, which `sendMessage` does not use and which carry the guards), `test/agent/turns.test.ts` (the activity limit), `test/agent/question-order.test.ts` (Anthropic, OpenRouter, Codex and the `onPause` contract) and `test/web/refine-cards.test.ts` (the card, the reducer, the work row). The real app shows the Closed card in `after-closed-light-1440.png` (`bun scripts/refine-journey.ts`, which now also runs `scripts/dev-command-shift.ts close`); `journey-transcript.md` has the chat text.
 
 ### Where this differs from the brief
 
 - The brief put the rule in the apply's transaction. The same rule also has to run when the turn commits, or an unrelated apply during the turn recreates the unanswerable state (a test fails without it).
 - Round 4 treated a refined proposal that was rejected or superseded, not only applied, as decided, and stored "BK applied the proposal without answering" for it. That told the model something false and closed a question nothing had made unanswerable. Only an apply counts now.
 - The brief asked that Codex be checked, not changed. It needs no signal, and a test says why.
+
+## Round 6: a valid question ends the turn waiting, whatever a call beside it did
+
+The round-4 verifier blocked `df98bd9` on one finding, reproduced here on that commit before any change. After 64 successful calls, a reply `[ask_user(valid question), list_layouts({})]` ran the second call (the adapter runs the calls beside a question), the observer refused it as the 65th and marked the turn limited, and `runAgentTurn` turned `awaiting_answer` into `iteration_limit` while keeping the question. The run was `failed`, its presentation `incomplete`, the question open, and `answerAgentRun` refused ("that question or its target is no longer current") though the layout never changed. The same on Anthropic and OpenRouter, which share the adapter.
+
+The status line was the whole problem, not the sibling. `observer.limited()` outranked everything in `runAgentTurn`, so the same state is reachable with no call beside the question: the limit hit in an earlier reply (the 65th call refused, the model reads that and asks). I reproduced that on unmodified main at `e90ab9e`, where the line has been since `33d5f98`. A fix that only skipped the sibling would leave that route open. So the rule is now in one place: a valid pending question makes the turn `awaiting_answer`, and only a turn with no question can end as `iteration_limit`. Stored question and run status can no longer disagree, because the question exists exactly when that status does.
+
+The sibling the verifier suggested not running is already not run: the observer refuses a call past 64 before it reaches the tool and the adapter gives it an error result, so every `tool_use` still has exactly one `tool_result`. Its text says the turn stopped, which is not quite true beside a question; the model reads it once, on the next turn, and the answer follows it. I left the observer's wording alone, since it is also what the model reads when there is no question.
+
+I checked the other ways a call beside the question can end. One that throws is caught by the adapter into an error result. Stop while those calls run makes every call that has not started throw the abort, so it does not run (a proposal beside the question is not saved), and the question is stored with the run `waiting_user` and the stop recorded, as when Stop arrives at the question itself. Neither stranded anything, and both rows are in the table above with tests. Codex counts its calls against `maxIterations` (12 unless the caller raises it) and refuses a call after its question before counting it, so it rarely reaches the observer's 64; if it does, the same rule applies, because the status is decided in `runAgentTurn` for every provider.
 
 ## The turn sequence for "one key for Command–Shift", two questions
 

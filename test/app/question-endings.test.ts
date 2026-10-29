@@ -8,8 +8,9 @@ import { ConversationDetailSchema } from "../../src/api/http.ts";
 import { answerAgentRun, cancelAgentRun, drainAgentRuns, inspectAgentRun, startAgentRun, waitForAgentRun } from "../../src/app/agent-runs.ts";
 import { type App, applyChange, rejectChange, showConversation } from "../../src/app/index.ts";
 import { SKIPPED_ANSWER } from "../../src/app/question-skip.ts";
+import { listMessages } from "../../src/persistence/conversations.ts";
 import { commandShiftApp } from "../helpers/command-shift.ts";
-import { type SeenRequest, fakeAnthropic } from "../helpers/fake-anthropic.ts";
+import { type ScriptStep, type SeenRequest, fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { draft } from "../helpers/ops.ts";
 import { CLOSE_FOLLOWUP, QUICK_REQUEST, closeScript, lastSaved } from "../helpers/refine-journey.ts";
 import { fromConversation, questionClosed, questionOpen, questionSkipped, type AssistantTurn } from "../../src/web/chat/transcript.ts";
@@ -138,6 +139,101 @@ describe("the ended question as the browser receives it", () => {
       } finally {
         await drainAgentRuns(world.app);
       }
+    }
+  });
+});
+
+// The turn may do 64 things (observation.ts): the 65th is refused with an error result and not run, and the turn is marked limited. A valid question
+// still ends the turn waiting for BK. Any other ending left the question open on a failed run, which no answer path accepts ("no longer current")
+// though the layout never changed. The calls beside the question are run by the Anthropic and OpenRouter adapter after it pauses.
+describe("a call beside the question, or an earlier one, reaches the turn's activity limit", () => {
+  const listAll = { tool: "list_layouts", input: {} };
+  /** The turn's whole budget: 64 successful calls over eight replies. */
+  const spent: ScriptStep[] = Array.from({ length: 8 }, () => ({ blocks: Array.from({ length: 8 }, () => listAll) }));
+  const toolResults = (app: App, conversationId: string) => listMessages(app.db, conversationId).flatMap((m) => m.content).flatMap((b) => (b.type === "tool_result" ? [b] : []));
+
+  for (const provider of ["anthropic", "openrouter"] as const) {
+    test(`a call batched after the question is refused, the run waits, and the answer resumes it (${provider})`, async () => {
+      const world = await commandShiftApp();
+      const { client, requests } = fakeAnthropic([...spent, { blocks: [ask("Which hand is free?"), listAll] }, { blocks: [{ text: "Left it is." }] }]);
+      const model = anthropicModel(client, { provider });
+      try {
+        const paused = await turn(world, model, { message: "go" });
+        // The run waits, not failed, and the question is open.
+        expect(paused).toMatchObject({ status: "waiting_user", presentation: { status: "waiting_user" } });
+        const [open] = questionsOf(world.app, paused.conversationId);
+        expect(open).toMatchObject({ answer: null, question: "Which hand is free?" });
+        // The refused call has its one result, an error that says why; the 64 before it ran.
+        const refused = toolResults(world.app, paused.conversationId).filter((b) => b.is_error === true);
+        expect(refused).toHaveLength(1);
+        expect(refused[0]?.content).toMatch(/activity limit/);
+        // The answer is accepted and resumes the turn.
+        const answering = await answerAgentRun(world.app, paused.id, "answer-limit", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+        expect((await waitForAgentRun(world.app, answering.id)).status).toBe("completed");
+        expect(questionsOf(world.app, paused.conversationId)[0]).toMatchObject({ answer: "Left" });
+        // The model was told both: the call it made beside the question was not run, and BK's answer.
+        expect(resultsIn(requests.at(-1)).map((r) => r.content)).toEqual([expect.stringMatching(/activity limit/), "Left"]);
+      } finally {
+        await drainAgentRuns(world.app);
+      }
+    });
+  }
+
+  test("the limit reached in an earlier reply, then a question on its own, ends the same way", async () => {
+    const world = await commandShiftApp();
+    // Reply 9 is the 65th call, refused; the model reads that and asks.
+    const { client } = fakeAnthropic([...spent, { blocks: [listAll] }, { blocks: [ask("Which hand is free?")] }, { blocks: [{ text: "Left it is." }] }]);
+    const model = anthropicModel(client);
+    try {
+      const paused = await turn(world, model, { message: "go" });
+      expect(paused).toMatchObject({ status: "waiting_user", presentation: { status: "waiting_user" } });
+      const [open] = questionsOf(world.app, paused.conversationId);
+      expect(open).toMatchObject({ answer: null });
+      const answering = await answerAgentRun(world.app, paused.id, "answer-earlier", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+      expect((await waitForAgentRun(world.app, answering.id)).status).toBe("completed");
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("a call batched after the question that throws gets an error result, and the run waits", async () => {
+    const world = await commandShiftApp();
+    const { client } = fakeAnthropic([{ blocks: [ask("Which hand is free?"), { tool: "get_layout", input: { layout: "no-such-layout" } }] }, { blocks: [{ text: "Left it is." }] }]);
+    const model = anthropicModel(client);
+    try {
+      const paused = await turn(world, model, { message: "go" });
+      expect(paused).toMatchObject({ status: "waiting_user", presentation: { status: "waiting_user" } });
+      const failed = toolResults(world.app, paused.conversationId).filter((b) => b.is_error === true);
+      expect(failed).toHaveLength(1);
+      expect(failed[0]?.content).toContain("no-such-layout");
+      const [open] = questionsOf(world.app, paused.conversationId);
+      const answering = await answerAgentRun(world.app, paused.id, "answer-throws", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model });
+      expect((await waitForAgentRun(world.app, answering.id)).status).toBe("completed");
+    } finally {
+      await drainAgentRuns(world.app);
+    }
+  });
+
+  test("Stop while the calls beside the question run: they are not run, the question is stored, and it can still be answered", async () => {
+    const world = await commandShiftApp();
+    const { client } = fakeAnthropic([{ blocks: [ask("Which hand is free?"), listAll, { tool: "propose_changes", input: proposal("Option", "F17") }] }, { blocks: [{ text: "Left it is." }] }]);
+    const base = anthropicModel(client);
+    // Stop is pressed as the first call beside the question starts.
+    const model: AgentModel = { ...base, run: (request) => base.run({ ...request, tools: request.tools.map((tool) => tool.name !== "list_layouts" ? tool : { ...tool, run: (raw) => { cancelAgentRun(world.app, "stop-beside"); return tool.run(raw); } }) }) };
+    try {
+      const started = await startAgentRun(world.app, { version: 1, requestId: "stop-beside", layoutRef: world.layoutId, input: { message: "go" } }, { model });
+      const paused = await waitForAgentRun(world.app, started.id);
+      expect(paused).toMatchObject({ status: "waiting_user", cancelRequested: true, presentation: { status: "waiting_user" } });
+      // Neither call ran: each has an error result, and the proposal was never saved.
+      const stopped = toolResults(world.app, paused.conversationId).filter((b) => b.is_error === true);
+      expect(stopped).toHaveLength(2);
+      expect(proposalsOf(world.app, paused.conversationId)).toEqual([]);
+      const [open] = questionsOf(world.app, paused.conversationId);
+      expect(open).toMatchObject({ answer: null });
+      const answering = await answerAgentRun(world.app, paused.id, "answer-stop", { toolUseId: open?.toolUseId ?? "", text: "Left" }, { model: anthropicModel(fakeAnthropic([{ blocks: [{ text: "Left it is." }] }]).client) });
+      expect((await waitForAgentRun(world.app, answering.id)).status).toBe("completed");
+    } finally {
+      await drainAgentRuns(world.app);
     }
   });
 });
