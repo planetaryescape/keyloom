@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.60.0](https://github.com/planetaryescape/keyloom/compare/v0.59.1...v0.60.0) (2026-10-29)
+
+
+### Features
+
+* adapt copied setups in their own config conversation ([f7df5fb](https://github.com/planetaryescape/keyloom/commit/f7df5fb878af5257aac087fa870eaee7b00be548))
+
 ## [0.59.1](https://github.com/planetaryescape/keyloom/compare/v0.59.0...v0.59.1) (2026-10-29)
 
 
