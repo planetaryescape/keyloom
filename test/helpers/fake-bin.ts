@@ -20,9 +20,9 @@ export function fakeBinDir(scripts: Record<string, string>): string {
 }
 
 type Scope = { dir: string; env: Record<string, string> };
-const activeScopes: Scope[] = [];
+let activeScopes: Scope[] = [];
 // What each variable held before the first scope that touched it. Cleared when the last scope ends.
-const original = new Map<string, string | undefined>();
+let original = new Map<string, string | undefined>();
 
 /**
  * Runs `fn` with `dir` first on PATH, then removes this scope's changes. A test that times out leaves its `fn` running, so
@@ -38,16 +38,33 @@ export async function withPath<T>(dir: string, fn: () => Promise<T>, env: Record
   try {
     return await fn();
   } finally {
-    activeScopes.splice(activeScopes.indexOf(scope), 1);
-    process.env.PATH = (process.env.PATH ?? "").split(":").filter((entry) => entry !== dir).join(":");
-    for (const k of Object.keys(env)) {
-      const owner = activeScopes.findLast((s) => k in s.env);
-      const value = owner ? owner.env[k] : original.get(k);
-      if (!owner) original.delete(k);
-      if (value === undefined) delete process.env[k];
-      else process.env[k] = value;
+    const index = activeScopes.indexOf(scope);
+    // resetWithPath dropped this scope when its test timed out: the next test owns the environment now, so there is nothing to give back.
+    if (index !== -1) {
+      activeScopes.splice(index, 1);
+      // One occurrence only: a nested scope with the same directory leaves the outer scope's entry in place.
+      const entries = (process.env.PATH ?? "").split(":");
+      const at = entries.indexOf(dir);
+      if (at !== -1) entries.splice(at, 1);
+      process.env.PATH = entries.join(":");
+      for (const k of Object.keys(env)) {
+        const owner = activeScopes.findLast((s) => k in s.env);
+        const value = owner ? owner.env[k] : original.get(k);
+        if (!owner) original.delete(k);
+        if (value === undefined) delete process.env[k];
+        else process.env[k] = value;
+      }
     }
   }
+}
+
+/**
+ * Forgets every active scope. The guard calls it before each test: a scope still running from a test that timed out would
+ * otherwise re-apply its variables when a later scope ends, and its own `finally` would take things back from the next test.
+ */
+export function resetWithPath(): void {
+  activeScopes = [];
+  original = new Map();
 }
 
 /** A well-formed DFU file for `vid:pid`: payload, then the 16-byte suffix with a real CRC. */

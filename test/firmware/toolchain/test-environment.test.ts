@@ -56,6 +56,49 @@ describe("toolchain test environment", () => {
     expect({ ...process.env }).toEqual(before);
   });
 
+  test("a nested scope with the same directory leaves the outer scope's PATH entry in place", async () => {
+    const before = { ...process.env };
+    const bin = fakeBinDir({});
+    await withPath(bin, async () => {
+      await withPath(bin, async () => {}, { FAKE_MODE: "inner" });
+      expect((process.env.PATH ?? "").split(":").filter((entry) => entry === bin)).toHaveLength(1);
+    });
+    expect({ ...process.env }).toEqual(before);
+  });
+
+  test("a scope abandoned by a timed-out test re-applies nothing when a later scope ends", async () => {
+    const dir = tempDir();
+    const file = join(dir, "abandoned.test.ts");
+    const fakeBin = fileURLToPath(new URL("../../helpers/fake-bin.ts", import.meta.url));
+    await Bun.write(file, `
+import { expect, test } from "bun:test";
+import { fakeBinDir, withPath } from ${JSON.stringify(fakeBin)};
+const original = process.env.PATH;
+test("sets FAKE_MODE and times out while its scope is still running", async () => {
+  await withPath(fakeBinDir({}), () => Bun.sleep(400), { FAKE_MODE: "abandoned" });
+}, 50);
+test("runs its own scope to the end", async () => {
+  await withPath(fakeBinDir({}), async () => {}, { FAKE_MODE: "next" });
+});
+test("sees the baseline after the abandoned scope finally ends", async () => {
+  await Bun.sleep(500);
+  expect(process.env.FAKE_MODE).toBeUndefined();
+  expect(process.env.PATH).toBe(original);
+});
+`);
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_CONFIG_") && !name.startsWith("FAKE_")));
+    const child = Bun.spawn([process.execPath, "test", "--preload", fileURLToPath(new URL("../../helpers/guard-toolchain-env.ts", import.meta.url)), file], {
+      cwd: dir, env, stdout: "pipe", stderr: "pipe",
+    });
+    const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    const output = stdout + stderr;
+    // Only the first test fails (its own timeout); the second and third pass, with no leak reported against either.
+    expect(output).toContain("2 pass");
+    expect(output).toContain("1 fail");
+    expect(output).not.toContain("(fail) runs its own scope");
+    expect(output).not.toContain("(fail) sees the baseline");
+  });
+
   test("the preload starts each test with the baseline PATH, so a leaked fake git cannot reach the next test", async () => {
     const dir = tempDir();
     const file = join(dir, "path.test.ts");
