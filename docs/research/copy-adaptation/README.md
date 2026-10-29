@@ -1,6 +1,6 @@
 # Copied setups refine on their separate target config
 
-Implementation base: fetched `origin/main bb99c14f62208bd146ae13f84183ac6406fecf81` (v0.59.1). Decision: D-460. No real keyboard, kanata reload, personal data or paid model is part of these checks.
+Checked implementation: `1d71429e32c9fab8ca338f40684820ddca4ec764`, tree `60ea256dea8bf43c5382d4de4a3e9fd0fc933653`, on `feat/copy-adaptation`. Base: fetched `origin/main bb99c14f62208bd146ae13f84183ac6406fecf81` (v0.59.1). Decision: D-460. Checks use synthetic fixture data, with no real keyboard or kanata reload. The real-model check used an existing ChatGPT subscription through Codex, without a new API billing route.
 
 Run the deterministic journey:
 
@@ -36,27 +36,41 @@ No database migration is added. The accepted target request JSON stores copy con
 To assess an authorized live model, from `evals/`:
 
 ```sh
-KEYLOOM_EVAL_PROVIDER=codex KEYLOOM_LIVE_EVALS=1 bun test ./scenarios/copy-adaptation.eval.test.ts
+KEYLOOM_EVAL_PROVIDER=codex KEYLOOM_LIVE_EVALS=1 agent-work run -- bun test ./scenarios/copy-adaptation.eval.test.ts
 ```
 
-The scenario is gated, uses the synthetic fixture and writes a report under `evals/reports/`. It was prepared without running a paid model. It checks proposal ownership, refinement/Apply memory, actual left-thumb access, and preservation of the originals. Browser screenshots, keyboard-only navigation and installed-release proof belong to the release gate; deterministic tests cannot substitute for them.
+On 2026-10-29, Codex `gpt-6.1-sol` at medium effort passed the synthetic scenario: one test, 29 assertions, 73.48 seconds. Its first best proposal placed Navigation37 and Space38 before the answer supplied any placements. Initial and final layouts retained ESCAPE, A, LCTL, LEFT and momentary Navigation access. It asked one refining question; its reply to the answer completed, and Apply retained the request and answer provenance. The run used the existing ChatGPT login with API-key billing routes removed.
 
-## Local verification
+The scenario is gated and writes its report under `evals/reports/`; the full run report is retained in the orchestration handover. This checks one small synthetic setup. It does not measure comfort, physical keyboard behavior, browser interaction or behavior across other models and boards.
 
-The focused app, adapter and CLI checks passed: 27 tests, 164 assertions. The gated live scenario was loaded with live calls disabled: one skip, no failures. Main and eval TypeScript checks and dependency-cruiser pass. The first-config preservation test fails when its unselected-creation fix is disabled and passes with the fix restored.
+## Source checks pass; release gates remain pending
+
+| Check | Result |
+|---|---|
+| Focused app, adapter, CLI and component checks | 126 passed, zero failures, 690 assertions across ten files |
+| Main and eval TypeScript checks; dependency-cruiser | Passed |
+| Frozen full suite | 3339 passed, 231 skipped, zero failures across 359 files; 260.04 seconds |
+| CLI subprocess journey | Plain, target-edit, source-edit and nested-copy modes passed |
+| Review regression probes | Concurrent terminal calls, malformed earlier question, later copy request and config-card count passed |
+| Local compiled CLI artifact | Full synthetic copy/refine/Apply journey passed; packaged hardware transport was not exercised |
+| Published v0.59.1 reader | Saved source/target runs, target conversation and layout list remained readable |
+
+The first-config preservation test fails when its unselected-creation fix is disabled. The concurrent-terminal, malformed-pause and later-task regressions fail with their corresponding original source restored, then pass with the fixes.
+
+Browser/screenshots and keyboard-only navigation, verification of the published A3 release, and the required independent-provider review remain pending. A3 remains under verification.
 
 React Doctor reported an ordered `await` and a lookup through the bounded tool list in the Anthropic adapter. The calls must execute in order to preserve question/terminal boundaries, so those diagnostics do not warrant concurrent execution. The TypeScript and simplification review retained the repository's conditional-spread idiom rather than changing adjacent style.
 
-An early full run exposed ordinary legacy-chat regressions when every stream was routed through durable acceptance. Ordinary legacy streams now keep their original ownership and error propagation; only a copy enters the handoff coordinator. The affected original tests pass. Exact-candidate full-suite and release evidence are retained in the orchestration handover; this note does not claim an installed or browser journey was verified.
+An early full run exposed ordinary legacy-chat regressions when every stream was routed through durable acceptance. Ordinary legacy streams now keep their original ownership and error propagation; only a copy enters the handoff coordinator. The affected original tests pass. Frozen-source command logs and the local compiled-artifact evidence are retained in the orchestration handover.
 
 ## Review regressions preserve later tasks and concurrent terminal boundaries
 
-The first candidate kept its copy restriction for every later turn in the target conversation. The restriction now belongs to the adaptation task: after its proposal is applied, a fresh request can make another copy. A continuation answering a question still cannot create a config. `test/app/copy-adaptation.test.ts` covers both durable and legacy paths, Apply during an answer, and contexts saved before facts were stored separately.
+The first candidate kept its copy restriction for every later turn in the target conversation. The restriction now belongs to the adaptation task: after its proposal is applied, a fresh request can make another copy. An answer refining that copy still cannot create another config. `test/app/copy-adaptation.test.ts` covers both durable and legacy paths, Apply during an answer, and contexts saved before facts were stored separately.
 
 `test/agent/codex-terminal-concurrency.test.ts` sends overlapping HTTP calls through the real MCP server to asynchronous tools. It checks one successful terminal effect, correction after a failed first call, and exclusion after an asynchronous pause. A per-run promise chain preserves arrival order without a separate queue service.
 
 The shared Anthropic/OpenRouter adapter validates an earlier question before giving it precedence over a terminal tool. A malformed question receives a validation error; a successful following copy completes the source with paired tool results. The regression continues the original source conversation afterward to check that no hidden open question remains.
 
-The gated live eval checks Navigation37 and Space38 in the first best proposal before giving any placement answer, and checks ESCAPE, A, LCTL, LEFT and Navigation access in both initial and final layouts. It also requires final completion and at most three questions before Apply, so applying cannot hide a fourth unanswered question. No paid evaluation was run for these review fixes.
+The gated live eval checks Navigation37 and Space38 in the first best proposal before giving any placement answer, and checks ESCAPE, A, LCTL, LEFT and Navigation access in both initial and final layouts. It also requires final completion and at most three questions before Apply, so applying cannot hide a fourth unanswered question.
 
 A copied-config result card omits the outside-chat proposal count when its presentation identifies a target conversation. The actual proposal remains in that chat; direct `keyboard put` and ordinary `create_config` cards retain their counts. A static React render regression checks this distinction. This is component evidence, not browser or screenshot verification.
