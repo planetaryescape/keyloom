@@ -18,7 +18,7 @@ export const DEFAULT_MODEL = DEFAULT_MODELS.anthropic;
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export const DEFAULT_EFFORT: Effort = "medium";
 
-// Room for thinking plus a proposal with three alternatives; streaming keeps a long reply from timing out.
+// Room for thinking plus a proposal; streaming keeps a long reply from timing out.
 const MAX_TOKENS = 16_000;
 
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
@@ -137,13 +137,28 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
       // One missing iteration makes the total unknown. A partial sum is not the reported price of a turn.
       if (!completeCost) costUsd = undefined;
       if (pause !== undefined) {
-        // The runner appends the assistant message only when it goes on to answer the calls, so the stopped one is added here. Calls beside
-        // the question get an error result: they did not run, and the API wants a result for every call before the next message.
-        const uses = pause.message.content as Array<{ type: string; id?: string; name?: string }>;
+        // The runner appends the assistant message only when it goes on to answer the calls, so the stopped one is added here. The API wants a
+        // result for every call before the next message. A call beside the question is run first: a proposal batched with its question must
+        // reach the board (D-452), where answering "not run" would leave BK a question over an empty board. A second question is not run.
+        const uses = pause.message.content as Array<{ type: string; id?: string; name?: string; input?: unknown }>;
         const others = uses.filter((b) => b.type === "tool_use" && b.id !== pause?.call.id);
+        const results = [];
+        for (const b of others) {
+          const tool = request.tools.find((candidate) => candidate.name === b.name);
+          const base = { type: "tool_result" as const, tool_use_id: b.id as string };
+          if (tool === undefined || tool.pauses === true) {
+            results.push({ ...base, content: "Not run: you asked BK a question in the same reply. Call it again after the answer if it is still needed.", is_error: true });
+            continue;
+          }
+          try {
+            results.push({ ...base, content: await tool.run(b.input) });
+          } catch (err) {
+            results.push({ ...base, content: err instanceof Error ? err.message : String(err), is_error: true });
+          }
+        }
         const stored: ModelMessage[] = [
           toStored({ role: "assistant", content: pause.message.content }),
-          ...(others.length === 0 ? [] : [{ role: "user" as const, content: others.map((b) => ({ type: "tool_result" as const, tool_use_id: b.id as string, content: "Not run: you asked BK a question in the same reply. Call it again after the answer if it is still needed.", is_error: true })) }]),
+          ...(results.length === 0 ? [] : [{ role: "user" as const, content: results }]),
         ];
         const before = runner.params.messages.slice(request.messages.length).map((m) => toStored(m as { role: "user" | "assistant"; content: unknown }));
         return { messages: [...before, ...stored], stopReason: AWAITING_ANSWER, iterations, usage, pending: pause.call, ...(costUsd === undefined ? {} : { costUsd }) };

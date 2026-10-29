@@ -53,6 +53,27 @@ export type AssistantTurn = {
   ending: ChatOutcome["status"] | null;
 };
 export type Turn = UserTurn | AssistantTurn;
+
+/**
+ * Applying the proposal a question refines answers it by implication (D-452): the proposal was good enough, so the question closes as
+ * skipped, which is derived and so holds after a reload. Old conversations asked before proposing, so they have no proposal in the turn.
+ */
+export const questionSkipped = (turn: AssistantTurn): boolean => turn.question?.answer === null && turn.proposals.some((p) => p.status === "applied");
+
+/**
+ * The open proposals the board should show: those of the newest reply that left any open, once the thread's last reply is done. Not the last
+ * reply's own, because an answer that changes nothing proposes nothing, and the proposal on the board is still the one to pin (D-452).
+ */
+export function openProposalsOnBoard(turns: readonly Turn[]): ProposalCard[] {
+  const last = turns.at(-1);
+  if (last?.kind !== "assistant" || last.phase !== "done") return [];
+  const open = (turn: Turn): turn is AssistantTurn => turn.kind === "assistant" && turn.phase === "done" && turn.proposals.some((p) => p.status === "proposed");
+  const holder = turns.findLast(open);
+  return holder === undefined ? [] : holder.proposals.filter((p) => p.status === "proposed");
+}
+
+/** The question is still waiting for BK. */
+export const questionOpen = (turn: AssistantTurn): boolean => turn.question?.answer === null && !questionSkipped(turn);
 /** The provider and model a conversation started on and stays on (D-111). Null before the first reply, and for one from before it was recorded. */
 export type Pinned = { provider: ChatOutcome["provider"]; model: string | null };
 export type Transcript = { conversationId: string | null; pinned: Pinned | null; turns: Turn[]; runSequences?: Record<string, number> };
@@ -87,6 +108,18 @@ function updateLast(state: Transcript, change: (turn: AssistantTurn) => Assistan
 
 function withProposal(proposals: readonly ProposalCard[], card: ProposalCard): ProposalCard[] {
   return proposals.some((p) => p.changeSetId === card.changeSetId) ? [...proposals] : [...proposals, card];
+}
+
+/**
+ * A card that revises another sets that one aside (D-452). The stream sends only the new card, so the old one, which may sit in an earlier
+ * reply, has to be marked here; the server already did, and a reload says the same.
+ */
+function supersede(turns: readonly Turn[], cards: readonly ProposalCard[]): Turn[] {
+  const replaced = new Set(cards.flatMap((card) => (card.supersedes ? [card.supersedes] : [])));
+  if (replaced.size === 0) return [...turns];
+  return turns.map((turn) => turn.kind !== "assistant" || !turn.proposals.some((p) => replaced.has(p.changeSetId) && p.status === "proposed")
+    ? turn
+    : { ...turn, proposals: turn.proposals.map((p) => (replaced.has(p.changeSetId) && p.status === "proposed" ? { ...p, status: "superseded" as const } : p)) });
 }
 
 function withPriority(priorities: readonly PriorityCard[], card: PriorityCard): PriorityCard[] {
@@ -168,12 +201,14 @@ function onEvent(state: Transcript, event: ObservedChatEvent): Transcript {
       return updateLast(state, (turn) => turn.presentation === undefined ? { ...turn, text: turn.text + event.delta, activity: null } : turn);
     case "tool":
       return updateLast(state, (turn) => turn.presentation === undefined ? { ...turn, activity: toolActivity(event.name) } : turn);
-    case "proposal":
-      return updateLast(state, (turn) => ({ ...turn, activity: null, proposals: withProposal(turn.proposals, event.proposal) }));
+    case "proposal": {
+      const next = updateLast(state, (turn) => ({ ...turn, activity: null, proposals: withProposal(turn.proposals, event.proposal) }));
+      return { ...next, turns: supersede(next.turns, [event.proposal]) };
+    }
     case "priority":
       return updateLast(state, (turn) => ({ ...turn, priorities: withPriority(turn.priorities, event.priority) }));
-    case "done":
-      return updateLast({ ...state, conversationId: event.outcome.conversationId, pinned: { provider: event.outcome.provider, model: event.outcome.model } }, (turn) => ({
+    case "done": {
+      const next = updateLast({ ...state, conversationId: event.outcome.conversationId, pinned: { provider: event.outcome.provider, model: event.outcome.model } }, (turn) => ({
         ...turn,
         text: completedText(turn, event.outcome),
         proposals: event.outcome.proposals.reduce(withProposal, turn.proposals),
@@ -187,6 +222,8 @@ function onEvent(state: Transcript, event: ObservedChatEvent): Transcript {
           ...(event.outcome.costUsd === undefined ? {} : { costUsd: event.outcome.costUsd }),
         },
       }));
+      return { ...next, turns: supersede(next.turns, event.outcome.proposals) };
+    }
     case "error":
       return updateLast(state, (turn) => ({ ...interruptedTurn(turn, "failed"), failure: { code: event.code, message: event.message } }));
   }
@@ -251,10 +288,12 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
         ...state,
         turns: state.turns.map((turn) => {
           if (turn.kind !== "assistant" || !turn.proposals.some((p) => p.changeSetId === action.changeSetId)) return turn;
+          // What the server sets aside is the rest of this proposal's group; a separate proposal beside it stays open (D-452).
+          const group = turn.proposals.find((p) => p.changeSetId === action.changeSetId)?.proposalGroup ?? null;
           return {
             ...turn,
             proposals: turn.proposals.map((p) =>
-              p.changeSetId === action.changeSetId ? { ...p, status: "applied" as const } : p.status === "proposed" ? { ...p, status: "superseded" as const } : p,
+              p.changeSetId === action.changeSetId ? { ...p, status: "applied" as const } : p.status === "proposed" && group !== null && p.proposalGroup === group ? { ...p, status: "superseded" as const } : p,
             ),
           };
         }),

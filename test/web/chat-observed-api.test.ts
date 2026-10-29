@@ -75,7 +75,7 @@ test("backend note + tool + long final answer agrees live/reloaded without dupli
 
 test("answered old waiting snapshot and hidden answer owner survive a later request and reload in the same order", async () => {
   const { layoutId } = await browser([
-    { blocks: [{ text: "One choice first." }, { tool: "ask_user", input: { question: "Which?", options: [{ label: "This" }, { label: "That" }], allowOther: true } }] },
+    { blocks: [{ text: "One choice first." }, { tool: "ask_user", input: { question: "Which?", options: [{ label: "This" }, { label: "That" }], allowOther: true, considerations: ["It changes the proposal."], step: { n: 1, of: 1 } } }] },
     { blocks: [{ text: "Prepared that choice." }] },
     { blocks: [{ text: "Another answer." }] },
   ]);

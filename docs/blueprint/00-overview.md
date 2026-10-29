@@ -22,7 +22,7 @@ keyloom is open source and meant to interest other keyboard owners (D-007). BK s
 1. **Pick the board.** keyloom loads its definition, which includes the firmware (D-002).
 2. **Import the current layout** from the source the board uses today (D-016, [05](05-firmware-qmk.md), [06](06-firmware-zmk.md)).
 3. **Say what's wrong or what you want**, in chat, optionally with keys selected on the picture (D-010, D-012).
-4. **The agent asks what it needs**, such as which functions you barely use and which keys must not move (D-021). Then it proposes one to three alternatives as change sets (D-014, D-020).
+4. **The agent asks what it needs**, such as which functions you barely use and which keys must not move (D-021). Then it proposes its best change set first and refines it with questions, one at a time (D-452, which replaced D-020's alternatives) (D-014, D-020).
 5. **Preview.** The changed and displaced keys are highlighted, with each alternative's explanation and trade-off (D-015).
 6. **Accept.** The change set is applied as one revision, and the decision and its reason are recorded (D-022, D-023).
 7. **Build and flash** ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)).

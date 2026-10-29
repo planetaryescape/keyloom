@@ -15,7 +15,7 @@ function scripted(steps: FakeStep[]) {
   symlinkSync("/dev/null", join(fake.dir, "record.json"));
   return codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-question-identity-home-"), KEYLOOM_CODEX_BIN: fake.bin } });
 }
-const ask = (question: string) => scripted([{ call: "ask_user", input: { question, options: [{ label: "Left" }, { label: "Right" }] } }]);
+const ask = (question: string) => scripted([{ call: "ask_user", input: { question, options: [{ label: "Left" }, { label: "Right" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } } }]);
 
 test("consecutive real Codex exec questions have unique canonical IDs, different answers and idempotent continuation after reload", async () => {
   const { app, dir, layoutId } = await optionOptionApp();

@@ -8,7 +8,7 @@ test("CLI starts, inspects, answers once and cancels the same persisted syntheti
   const { app, dir } = await optionOptionApp();
   app.db.close();
   const fake = fakeAnthropic([
-    { blocks: [{ tool: "ask_user", input: { question: "Which?", options: [{ label: "Left" }, { label: "Right" }] } }] },
+    { blocks: [{ tool: "ask_user", input: { question: "Which?", options: [{ label: "Left" }, { label: "Right" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } } }] },
     { blocks: [{ text: "Saved CLI answer" }] },
   ]);
   const model = anthropicModel(fake.client);

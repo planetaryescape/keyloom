@@ -2,7 +2,7 @@
 import { type AgentModel, type ContentBlock, type ModelMessage } from "../agent/model.ts";
 import { neutralBlock } from "../agent/blocks.ts";
 import type { ProviderId } from "../agent/provider.ts";
-import { type AskedQuestion, AskUserSchema, ASK_USER } from "../agent/tools/ask-user.ts";
+import { type AskedQuestion, StoredQuestionSchema, ASK_USER } from "../agent/tools/ask-user.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
 import { type Draft, typedText, userMessageText } from "../agent/prompt.ts";
 import type { DecisionDraft } from "../layout/change.ts";
@@ -56,6 +56,10 @@ export type QuestionCard = {
   kind?: AskedQuestion["kind"];
   question: string;
   options: { id?: string; label: string; description?: string; recommended?: boolean }[];
+  /** What matters for this choice (D-452); absent on a question stored before it. */
+  considerations?: string[];
+  /** Where this question sits in the run; absent on a question stored before D-452. The card shows "Question n of m" when `of` is 2 or more. */
+  step?: { n: number; of: number };
   placeholder?: string;
   targetBoard?: string;
   targetLayer?: string;
@@ -120,24 +124,36 @@ export function conversationTitle(message: string): string {
 const answering = new Map<string, string | null>();
 
 
+/**
+ * The options in the order BK sees them: the recommended one first and the only one marked, whatever order the model sent (D-452). The
+ * stored call keeps the model's order, because a provider replays it exactly; this is applied each time the question is shown, so a question
+ * stored before D-452 reads the same way. With none marked, the first is the recommendation unless it says it is not.
+ */
+export function recommendedFirst<T extends { recommended?: boolean | undefined }>(options: readonly T[]): T[] {
+  const marked = options.findIndex((o) => o.recommended === true);
+  const at = marked >= 0 ? marked : options.findIndex((o) => o.recommended !== false);
+  if (at < 0) return [...options];
+  const unmarked = options.filter((_, i) => i !== at).map(({ recommended: _dropped, ...rest }) => rest as unknown as T);
+  return [{ ...options[at], recommended: true } as T, ...unmarked];
+}
+
 const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => {
   const card: QuestionCard = {
     toolUseId,
     question: q.question,
-    options: (q.options ?? []).map((opt, i) => {
-      const o: { id?: string; label: string; description?: string; recommended?: boolean } = {
-        label: opt.label,
-      };
+    options: recommendedFirst(q.options ?? []).map((opt) => {
+      const o: { id?: string; label: string; description?: string; recommended?: boolean } = { label: opt.label };
       if (opt.id) o.id = opt.id;
       if (opt.description) o.description = opt.description;
-      if (opt.recommended !== undefined) o.recommended = opt.recommended;
-      else if (i === 0) o.recommended = true;
+      if (opt.recommended === true) o.recommended = true;
       return o;
     }),
     allowOther: q.allowOther === true,
     answer,
   };
   if (q.kind) card.kind = q.kind;
+  if (q.considerations) card.considerations = q.considerations;
+  if (q.step) card.step = q.step;
   if (q.placeholder) card.placeholder = q.placeholder;
   if (q.targetBoard) card.targetBoard = q.targetBoard;
   if (q.targetLayer) card.targetLayer = q.targetLayer;
@@ -373,7 +389,7 @@ export function showConversation(app: App, id: string): ConversationView {
     const toolCalls = m.content.flatMap((b) => (b.type === "tool_use" && typeof b.name === "string" ? [b.name] : []));
     if (text === "" && toolCalls.length === 0) continue;
     const asked = m.content.map(neutralBlock).find((b) => b.type === "tool_use" && b.name === ASK_USER);
-    const parsed = asked?.type === "tool_use" ? AskUserSchema.safeParse(asked.input) : undefined;
+    const parsed = asked?.type === "tool_use" ? StoredQuestionSchema.safeParse(asked.input) : undefined;
     const question = asked?.type === "tool_use" && parsed?.success ? cardOf(parsed.data, asked.id, answers.get(asked.id) ?? null) : undefined;
     messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt, ...(question === undefined ? {} : { question }) });
   }

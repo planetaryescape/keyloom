@@ -54,7 +54,7 @@ Firmware names, positions and revision IDs stay behind Advanced view.
 
 ### The journeys, end to end
 
-1. **Tell it what I want.** ⌘K from anywhere; selected keys and the layer on screen carry into the question. The proposal is drawn on the caps it touches in amber; alternatives redraw it. Apply presses the changed keys down; the sync line goes amber ("Sending to your Moonlander…") and then green. The reason is kept against those keys.
+1. **Tell it what I want.** ⌘K from anywhere; selected keys and the layer on screen carry into the question. The proposal is drawn on the caps it touches in amber; a revision redraws it (D-452; before it, alternatives did). Apply presses the changed keys down; the sync line goes amber ("Sending to your Moonlander…") and then green. The reason is kept against those keys.
 2. **Change a key by hand.** Click it, or press it on the real keyboard and it lights on screen. The card shows the key as a big cap. Pick a hold: the board shows the draft in amber, Apply says what it will do. Enter presses the key and the light runs to the sync line.
 3. **Switch boards.** Click a silhouette. The new board replaces the old on the stage with its own case and layers. The ⌘K thread stays; the sync line now speaks about the new board.
 4. **A new board appears.** A card on the stage offers to put a layout on it; the fit is previewed like any proposal; nothing is sent before Apply ([22](22-new-keyboard.md)).

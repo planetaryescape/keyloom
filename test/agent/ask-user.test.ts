@@ -18,6 +18,8 @@ const QUESTION = {
   question: "Replace the config on your keyboard, or add this one beside it?",
   options: [{ label: "Add it as a new config", description: "The current one stays on the keyboard." }, { label: "Replace the current config" }],
   allowOther: true,
+  considerations: ["Replacing leaves the old config in History."],
+  step: { n: 1, of: 1 },
 };
 
 async function world() {
@@ -77,10 +79,10 @@ describe("ask_user", () => {
     expect(last.content[1]).toMatchObject({ type: "text" });
   });
 
-  test("a tool called beside the question does not run, and is told so", async () => {
+  test("a tool called beside the question runs first (D-452), and a second question beside it does not run and is told so", async () => {
     const { app, mac } = await world();
     const { client, requests } = fakeAnthropic([
-      { blocks: [{ tool: "list_layouts", input: {} }, { tool: "ask_user", input: QUESTION }] },
+      { blocks: [{ tool: "list_layouts", input: {} }, { tool: "ask_user", input: QUESTION }, { tool: "ask_user", input: QUESTION }] },
       { blocks: [{ text: "ok" }] },
     ]);
     const model = anthropicModel(client);
@@ -88,8 +90,13 @@ describe("ask_user", () => {
     expect(first.status).toBe("awaiting_answer");
     await sendMessage(app, mac.layout.id, { conversationId: first.conversationId, answer: { toolUseId: first.question?.toolUseId ?? "", text: "Add it as a new config" }, model });
     const results = requests[1]?.body.messages.at(-1).content.filter((b: { type: string }) => b.type === "tool_result");
-    expect(results).toHaveLength(2);
-    expect(JSON.stringify(results)).toContain("Not run");
+    // The first question is the one answered; list_layouts ran, and the second question was not run.
+    expect(results).toHaveLength(3);
+    expect(results[0].content).toContain("2 layouts");
+    expect(results[0].is_error).toBeUndefined();
+    expect(results[1].content).toContain("Not run");
+    expect(results[1].is_error).toBe(true);
+    expect(results[2].content).toBe("Add it as a new config");
   });
 
   test("a message needs either words or an answer, never both", async () => {
@@ -181,6 +188,7 @@ describe("interactive question kinds (Rung 27)", () => {
       targetBoard: "apple/macbook-ansi",
       targetLayer: "lay_base",
       allowedPositions: [24, 25],
+      considerations: ["It changes the proposal."], step: { n: 1, of: 1 },
     };
     const { client } = fakeAnthropic([
       { blocks: [{ tool: "ask_user", input: keyQuestion }] },
@@ -208,6 +216,7 @@ describe("interactive question kinds (Rung 27)", () => {
       kind: "short_text" as const,
       question: "What should this config be called?",
       placeholder: "e.g. Work QWERTY",
+      considerations: ["It changes the proposal."], step: { n: 1, of: 1 },
     };
     const { client } = fakeAnthropic([
       { blocks: [{ tool: "ask_user", input: shortTextQ }] },

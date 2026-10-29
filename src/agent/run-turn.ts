@@ -5,7 +5,7 @@ import type { AgentModel, ModelMessage, ModelTool, Usage } from "./model.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
 import type { AgentPorts, ProposalResult, RecordedPriority } from "./ports.ts";
 import { type ToolCallTrace, TurnRecorder, type ValidationFailureTrace } from "./recorder.ts";
-import { type AskedQuestion, AskUserSchema } from "./tools/ask-user.ts";
+import { type AskedQuestion, StoredQuestionSchema } from "./tools/ask-user.ts";
 import { createTools } from "./tools/index.ts";
 import { toolObserver, type AgentObservation } from "./observation.ts";
 
@@ -151,7 +151,7 @@ export async function runAgentTurn(input: {
   });
 
   const status = observer.limited() ? "iteration_limit" : classify(result.stopReason);
-  const asked = result.pending === undefined ? undefined : AskUserSchema.safeParse(result.pending.input);
+  const asked = result.pending === undefined ? undefined : StoredQuestionSchema.safeParse(result.pending.input);
   const messages = resumable(result.messages, status);
   return {
     status,

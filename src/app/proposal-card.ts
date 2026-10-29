@@ -9,6 +9,8 @@ export type ProposalCard = {
   changeSetId: string;
   /** Alternatives from one `propose_changes` call share a group (03). */
   proposalGroup: string | null;
+  /** The change set this one revised (D-452): the one that is now `superseded`. */
+  supersedes: string | null;
   title: string;
   explanation: string;
   tradeoffs: { gains: string[]; costs: string[] };
@@ -22,6 +24,7 @@ export type ProposalCard = {
 export const toCard = (row: ChangeSetRow): ProposalCard => ({
   changeSetId: row.id,
   proposalGroup: row.proposalGroup,
+  supersedes: row.tradeoffs.supersedes ?? null,
   title: row.title ?? row.explanation.slice(0, 80),
   explanation: row.explanation,
   tradeoffs: row.tradeoffs,

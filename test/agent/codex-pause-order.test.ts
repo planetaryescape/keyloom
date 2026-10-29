@@ -11,7 +11,7 @@ import { neutralBlock } from "../../src/agent/blocks.ts";
 test("a buffered failed question completion cannot claim the later valid question's pause", async () => {
   const fake = fakeCodex({ steps: [
     { call: "ask_user", input: { question: 7, options: "PRIVATE_CANARY" }, deferCompletion: true },
-    { call: "ask_user", input: { question: "Keep or replace?", options: [{ label: "Keep" }, { label: "Replace" }] } },
+    { call: "ask_user", input: { question: "Keep or replace?", options: [{ label: "Keep" }, { label: "Replace" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } } },
   ] });
   const { app, layoutId } = await optionOptionApp();
   try {
@@ -31,7 +31,7 @@ test("a buffered failed question completion cannot claim the later valid questio
 });
 
 test("a buffered Codex-reported failure with valid arguments cannot replace the successful question", async () => {
-  const question = { question: "Keep or replace?", options: [{ label: "Keep" }, { label: "Replace" }] };
+  const question = { question: "Keep or replace?", options: [{ label: "Keep" }, { label: "Replace" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } };
   const fake = fakeCodex({ steps: [
     { call: "ask_user", input: question, codexError: "PRIVATE_FAILURE", deferCompletion: true },
     { call: "ask_user", input: question },

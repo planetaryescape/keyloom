@@ -4,6 +4,7 @@ import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
+import { functionName } from "../editor/function-label.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { previewProposal } from "./preview.ts";
 import { ProposalMoves } from "./ProposalMoves.tsx";
@@ -29,13 +30,15 @@ interface Props {
   compact?: boolean;
   /** The folded bar in a short window: the option's name, Not this and Apply on one line (P3 review). */
   line?: boolean;
+  /** A later proposal revised this one (D-452), so a superseded card says "by the revised proposal". Absent for one set aside because a sibling was applied. */
+  revised?: boolean;
 }
 
 const MAX_ROWS = 6;
 
 // One alternative from the agent. The same card serves a fresh proposal, an applied one and a
 // superseded sibling, so the choice reads the same whichever you look at.
-export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false }: Props) {
+export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false, revised = false }: Props) {
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -63,6 +66,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   // The validator's count, not the rows': a key whose binding changes while its printed label stays the same still changes.
   const changedKeys = proposal.validation.diff.changed.length;
   const open = proposal.status === "proposed";
+  // A function the proposal gives up on purpose is said where Apply is, with its reason: the keys on the board show what moves, not what is lost.
+  const { dropped } = proposal.validation.diff;
 
   // The apply moves focus here so a screen reader hears the result and the next step is a Tab away.
   useEffect(() => {
@@ -134,10 +139,25 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     return (
       <article className="proposal-line" data-status={proposal.status} data-pinned={pinned} aria-label={proposal.title}>
         <strong className="proposal-line-title" title={proposal.title}>{shortTitle(proposal.title, 44)}</strong>
+        {dropped.length === 0 ? null : <span className="proposal-line-drop">Drops {dropped.map((d) => functionName(d.function, layout)).join(", ")}</span>}
         {failure === null ? null : <span className="proposal-line-problem" role="alert">{failure.message}</span>}
         {confirming ? <span className="proposal-line-problem" role="alert">Replaces {natives.length === 1 ? "a custom key" : `${natives.length} custom keys`} keyloom can&apos;t write back; Undo restores it.</span> : null}
         <span className="proposal-bar-gap" />
         {actions}
+      </article>
+    );
+  }
+
+  // A revised proposal replaces this one on the board, so the old card folds to a line; Details still holds all it said (D-452).
+  if (compact && proposal.status === "superseded") {
+    return (
+      <article className="proposal-superseded" data-status="superseded" aria-label={`${proposal.title}, superseded`}>
+        <p>
+          <CircleSlash size={14} aria-hidden="true" />
+          <strong title={proposal.title}>{shortTitle(proposal.title, 44)}</strong>
+          <span>{revised ? "Superseded by the revised proposal" : "Superseded"}</span>
+        </p>
+        <ProposalDetails chips={chips} rest={proposal.explanation} gains={gains} costs={costs} remembers={null} />
       </article>
     );
   }
@@ -164,6 +184,12 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             {costs.length === 0 ? null : <span className="proposal-cost">{costs.join("; ")}</span>}
           </p>
         )}
+        {dropped.map((d) => (
+          <p key={d.function} className="proposal-drop">
+            <CircleSlash size={14} aria-hidden="true" />
+            <span><strong>Drops {functionName(d.function, layout)}</strong> · {d.reason}</span>
+          </p>
+        ))}
         <ProposalNotes issues={issues} />
         {confirmBlock}
         {failure === null ? null : (

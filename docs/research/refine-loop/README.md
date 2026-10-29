@@ -4,6 +4,23 @@ Written against origin/main `e2f7194` (v0.57.0 plus the calm cards, PR 193). Not
 
 Comps: `comps.html` (open it; `?theme=light|dark&w=1440|390&open=1`), shot as `comps-<theme>-<width>.png`. "Before" panels are crops of the real-app screenshots in `../ui-audit/calm-cards/` (`after-proposal-*`, `after-question-*`), which are the app at `e2f7194`. The comp wording is illustrative; the model writes the real text.
 
+## Round 2: what was built, and where it differs from this note
+
+BK approved the comps ("Looks right, build it") and the defaults for the five questions below: a new request while a proposal is open sits beside it (the model declares `supersedes: null`); applying while a question is open closes it as "Skipped, you applied the proposal"; the prompt asks for at most three questions and the schema caps `of` at 5; "Question n of m" shows only when m is 2 or more; one live eval per provider, run by the orchestrator, not by the worker. The decision is D-452 in `../../blueprint/14-decision-log.md`.
+
+Differences from round 1:
+
+- `refines` was dropped, as recommended.
+- The supersede link is `tradeoffs.supersedes` on the new row, not a column and not a migration: `tradeoffs` already carries `supersededDecisionIds`, so the key joins a validated JSON object that an older keyloom parses and ignores, and its installed binaries keep opening a data directory that holds revisions. A migration would have made them refuse it (D-455).
+- A call with two or more `alternatives` is a tool error that says why, as recommended; one is read as a proposal.
+- The Anthropic adapter runs a non-pausing call batched with the question before it stops (about twenty lines, `src/agent/anthropic-model.ts`), tested with a batched propose, ask and second ask.
+- Three bugs found in round 1 were fixed: `cardOf` marked two options "Recommended"; a streamed card now marks the old one superseded in web state; the folded bar line and the board pin find the open proposal when the newest reply proposed nothing.
+- Found in the real app and fixed: the question sat above the proposal it refines (it now sits under it), and the log left the final card under the fold when the model's closing line arrived after the proposal (the log now re-places a card it placed, until the person scrolls).
+- The folded bar line also says "Drops F16", because it too offered Apply without naming what is lost.
+- Applying closes the chat bar (existing behaviour), so "Skipped" is seen when the thread is opened again.
+
+Evidence: screenshots of the real app (scripted model, scratch data, headless Chrome) are `after-first`, `after-revised`, `after-revised-superseded`, `after-final`, `after-quick` for light and dark at 1440 and 390, plus `after-skipped-light-1440.png`; `journey-transcript.md` is the chat text after each step and the decision applying wrote, from the scratch database. `bun scripts/refine-journey.ts` regenerates them. The comp screenshots (`comps-*.png`) are the round-1 design.
+
 ## The turn sequence for "one key for Command–Shift", two questions
 
 A turn is one request from BK to the next pause. A reply is one request to the model inside a turn.
@@ -74,12 +91,12 @@ The prompt says: after an answer, call `propose_changes` with `supersedes` set t
 |---|---|---|
 | `ask_user` input (inside stored messages) | New fields; read through an all-optional schema | Loads as it did: no kicker, no considerations; recommended-first applies to it too |
 | `QuestionCard` (API) | `considerations?`, `step?`, `refines?` (zod objects strip unknown keys, so an older client ignores them) | n/a |
-| `change_sets` | One nullable column `supersedes TEXT NULL` on the new row (migration 0015, `ALTER TABLE ... ADD COLUMN`) | Null on every existing row |
+| `change_sets.tradeoffs` JSON | One optional key `supersedes` on the new row; no migration | Absent on every existing row |
 | `ProposalCard` (API) | `supersedes: string | null`, additive | Null |
 | `propose_changes` stored inputs | Not re-parsed | `alternatives` calls stay in history unchanged |
 | Alternatives groups | Unchanged | Tabs still render for a group of two or more |
 
-On the column: the link lives on the new row so the old row only flips to `superseded`. "Superseded by revision" is then "status `superseded` and some card has `supersedes` equal to my id"; a stored sibling-superseded card keeps today's plain "Superseded". Alternatives: the existing `tradeoffs` JSON already carries `supersededDecisionIds` as a side channel, which works with no migration but hides a relation in a blob and was not designed for it. I recommend the column. Its cost is real and intended: after migration 0015 an older keyloom refuses that data directory (`SchemaTooNewError`, D-455), which BK sees only if he runs an old binary on a migrated directory.
+On where the link lives (round 2 reverses my round-1 recommendation of a column): `tradeoffs` is a zod-validated JSON column (`TradeoffsSchema`, `src/persistence/change-sets.ts`) that already carries a link to other rows, `supersededDecisionIds`, written by `recordSupersededDecisionIds`. `supersedes` joins it as one more optional key, so there is no migration. The relation is read only in memory, from `listConversationChangeSets`, so nothing needs an index. A keyloom that predates it parses the row (zod objects ignore unknown keys) and shows the old set as `superseded` through the status column that already existed, so BK's installed 0.57 and 0.58 binaries keep opening a data directory that holds revisions. A column would instead make them refuse it (`SchemaTooNewError`, D-455). "Superseded by revision" is "status `superseded` and some card has `supersedes` equal to my id"; a stored sibling-superseded card keeps today's plain "Superseded".
 
 Live updates: the `proposal` stream event carries the new card with `supersedes`; the web reducer marks that id `superseded` locally (today only apply updates statuses live, `transcript.ts#L253`). No new event type.
 
@@ -124,7 +141,7 @@ The brief's list stands. Additions: a test for a batched propose and ask reply (
 - Require `considerations` and `step` on the model-facing schema only; the read schema must stay optional (correction 2). The brief's "old conversations must still load" is satisfied only that way.
 - Drop `refines` from round 2 unless A4 names a consumer (correction 3).
 - Add the declare-or-supersede rule and the inherited `sourceMessageIds` to the supersede rules (corrections 5 and 6). Reject the `proposalGroup` shortcut (correction 4).
-- Name the migration. The brief says "persisted shapes change" but not that this is schema 15, which makes an older keyloom refuse a migrated data directory.
+- Look for a place for the link before adding a column (round 2 found one: `tradeoffs`, so there is no migration and no D-455 refusal).
 - The "propose then ask" survey line (`system.md:12`) says "call no other tool in that reply". That stays, and the new text goes beside it in `:12`, `:14`, `:17` and `:82` as the brief lists. `system.md:110` (the tool line) and the `ask_user` and `propose_changes` descriptions also need the new wording; the brief's list omits the tool descriptions.
 - The survey is accurate for the files it names; I checked `ask-user.ts`, `propose-changes.ts`, `Turns.tsx`, `ProposalCard.tsx`, `OpenProposals.tsx`, and the stored question path.
 

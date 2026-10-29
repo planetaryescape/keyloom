@@ -9,7 +9,7 @@ import { effectReceipt } from "../persistence/agent-runs.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import type { SelectionScope } from "../validation/selection-rules.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
-import { checkChange, proposeChange } from "./changes.ts";
+import { checkChange, proposeChange, requireDeclared, requireSupersedable } from "./changes.ts";
 import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
 import { ValidationFailedError } from "./errors.ts";
@@ -85,16 +85,22 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
       if (showDecision(app, input.decisionId).layoutId !== layoutId) throw new Error(`"${input.decisionId}" is not a decision on this layout`);
       return toChoiceFact(recordOutcome(app, input.decisionId, { status: input.status, note: input.note }));
     },
-    propose(alternatives: Proposal[]): ProposalResult[] {
+    propose(alternatives: Proposal[], options: { supersedes?: string | null } = {}): ProposalResult[] {
+      const { supersedes } = options;
+      requireDeclared(app, conversationId, supersedes);
+      const replaced = typeof supersedes === "string" ? requireSupersedable(app, layoutId, conversationId, supersedes) : undefined;
       // One group for the alternatives of a call, so applying one supersedes the rest.
       const proposalGroup = newId("pg");
       return alternatives.map((alt) => {
         const validation = checkChange(app, layoutId, { ops: alt.ops, ...scope });
         if (!validation.ok) return { title: alt.title, changeSetId: null, validation };
         try {
+          // A revision answers the same request as what it replaces, so the decision it writes links back to those messages as well (D-022).
+          const from = [...new Set([...(replaced?.decisionDraft?.sourceMessageIds ?? []), ...sourceMessageIds])];
           const cs = proposeChange(app, layoutId, {
             ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
-            decisionDraft: { ...alt.decisionDraft, sourceMessageIds },
+            ...(typeof supersedes === "string" ? { supersedes } : {}),
+            decisionDraft: { ...alt.decisionDraft, sourceMessageIds: from },
           });
           return { title: alt.title, changeSetId: cs.id, validation: cs.validation };
         } catch (err) {
@@ -126,7 +132,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         }),
       );
     },
-    propose: (input) => receipt("propose_changes", input, () => ports.propose(input)),
+    propose: (input, options) => receipt("propose_changes", { input, supersedes: options?.supersedes }, () => ports.propose(input, options)),
     recordPriority: (input) => receipt("record_priority", input, () => ports.recordPriority(input)),
     recordOutcome: (input) => receipt("update_decision_outcome", input, () => ports.recordOutcome(input)),
   };

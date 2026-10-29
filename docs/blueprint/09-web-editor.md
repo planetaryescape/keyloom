@@ -65,7 +65,7 @@ Every editor change goes through the same path as the agent's. The UI builds `Ch
 Each proposal from the agent ([03](03-agent.md#the-loop-for-one-message)) shows twice. A card in the chat carries the title, the explanation's first sentence, the number of keys that change and the cost, with the keys, gains and the rest of the reasoning behind Details (D-456, D-457). A strip under the keyboard carries the changed, displaced and dropped functions, the relearn count, warnings and reminders ([07](07-change-validation.md)).
 
 - Hovering a proposal highlights its changed keys on the keyboard, and shows displaced functions with an arrow to their new home.
-- "Preview" switches the keyboard to the proposed document, with a banner showing it isn't applied. Comparing alternatives is a toggle between them.
+- "Preview" switches the keyboard to the proposed document, with a banner showing it isn't applied. Comparing alternatives is a toggle between them, for groups stored before D-452; a new proposal is one card and a revision replaces it.
 - "Apply" applies it. The new revision appears, and the proposal's siblings are marked superseded. Apply never builds or flashes. Build and Flash stay separate buttons, so nothing touches the keyboard without a deliberate click.
 
 ## Decisions view
