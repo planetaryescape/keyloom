@@ -3,7 +3,7 @@
 // reason up and ask before proposing, the proposals should carry the reminder, and applying one anyway
 // should supersede the old decision. It costs money, so it runs only on purpose:
 //   KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex (default anthropic) with that provider's credential,
-//   KEYLOOM_LIVE_EVALS=1 bun test evals/scenarios/remembered-reason.eval.test.ts
+//   KEYLOOM_LIVE_EVALS=1 bun test ./scenarios/remembered-reason.eval.test.ts, from evals/ (see 11-observability-and-evals)
 // Otherwise it is skipped, and nothing here touches the network.
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";

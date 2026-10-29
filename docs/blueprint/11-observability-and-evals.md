@@ -48,7 +48,7 @@ bun test test/evals/vocabulary-oracles.test.ts
 bun run evals
 ```
 
-The second command safely skips live tests by default. `evals/provider.ts` requires **both** `KEYLOOM_LIVE_EVALS=1` and the selected provider's credential. `KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex` selects it (default Anthropic); the credential is its environment API key, or a successful `codex login status`. `evals/bunfig.toml` keeps real flashing and real data blocked while permitting this explicit live gate; ordinary `bun test` additionally strips credentials.
+The second command safely skips live tests by default. `evals/provider.ts` requires **both** `KEYLOOM_LIVE_EVALS=1` and the selected provider's credential. `KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex` selects it (default Anthropic); the credential is its environment API key, or a successful `codex login status`. `evals/bunfig.toml` keeps real flashing and real data blocked while permitting this explicit live gate; ordinary `bun test` additionally strips credentials. `bun run evals` runs from `evals/`, because Bun applies the `bunfig.toml` of the directory it runs in even beside `--config`, and the root one's preloads would strip the credential; to run one scenario, `cd evals && bun test ./scenarios/<file>`.
 
 Only with separate permission to spend model credits, run through the shared local resource queue:
 

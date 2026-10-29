@@ -2,7 +2,7 @@
 // one at a time, each answer revising the proposal (the old one superseded), and a decision that carries what BK answered. It costs money,
 // so it runs only on purpose, once per provider:
 //   KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex (default anthropic) with that provider's credential,
-//   KEYLOOM_LIVE_EVALS=1 bun test evals/scenarios/command-shift.eval.test.ts
+//   KEYLOOM_LIVE_EVALS=1 bun test ./scenarios/command-shift.eval.test.ts, from evals/ (see 11-observability-and-evals)
 // Otherwise it is skipped, and nothing here touches the network. The report goes to evals/reports/.
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";

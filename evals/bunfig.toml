@@ -1,4 +1,6 @@
 # Keep hardware and real data blocked, but let provider.ts enforce the explicit paid-eval gate.
 # The default test config additionally removes credentials, so normal `bun test` stays offline.
+# Bun reads bunfig.toml from the directory it runs in and applies it even beside --config, so a run from the repo root gets the root
+# preloads, which strip every credential: evals run from this directory (`bun run evals`), and the preload paths are relative to it.
 [test]
-preload = ["./test/helpers/no-real-flash.ts", "./test/helpers/isolate-data-dir.ts"]
+preload = ["../test/helpers/no-real-flash.ts", "../test/helpers/isolate-data-dir.ts"]
