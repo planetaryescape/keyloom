@@ -12,6 +12,7 @@ import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import { deepEqual } from "../../src/layout/equal.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import { BACKSPACE_POSITION, commandShiftApp } from "../../test/helpers/command-shift.ts";
+import { chainChecks } from "../command-shift-checks.ts";
 import { costLine, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 
@@ -26,14 +27,6 @@ const ANSWERS = [
 // The prompt asks for at most three questions, so a run that is still asking after the fourth turn has not converged.
 const MAX_TURNS = 5;
 
-
-const hasCommandShift = (doc: Layout) =>
-  doc.layers.some((l) =>
-    l.bindings.some((b) =>
-      (b.kind === "modifier" && b.mods.includes("LGUI") && b.mods.includes("LSFT")) ||
-      (b.kind === "holdTap" && JSON.stringify(b.hold).includes("LGUI") && JSON.stringify(b.hold).includes("LSFT")),
-    ),
-  );
 
 describe("eval: Command-Shift", () => {
   test.skipIf(!live)("puts one proposal first, refines it with questions, carries the answers into the decision, and undoes in one step", async () => {
@@ -80,13 +73,8 @@ describe("eval: Command-Shift", () => {
       // The revision chain: each proposal after the first replaced the one before, so exactly one is open and the rest are set aside.
       revisionsSupersede: proposals.length >= 2 && proposals.slice(1).every((p) => p.supersedes !== null && p.supersedes !== undefined) && open.length === 1,
       theNewestIsOnTheBoard: final !== undefined && final.id === proposals.at(-1)?.changeSetId,
-      // Every valid proposal in the chain places Command-Shift, not only the last: a wrong first proposal followed by a right one is not a pass.
-      everyValidOneGivesCommandShift: valid.length > 0 && valid.every((p) => {
-        const applied = applyLayoutOps(before, p.ops);
-        return applied.ok && hasCommandShift(applied.layout);
-      }),
-      // A valid proposal never loses a function silently; this checks the agent showed what moves or what it gives up.
-      displacedShown: valid.some((p) => p.validation.diff.displaced.length + p.validation.diff.dropped.length > 0),
+      // Every valid proposal in the chain, not only the last (evals/command-shift-checks.ts).
+      ...chainChecks(before, valid),
       backspacePinned: subjects.includes("BACKSPACE"),
       f16RarelyUsed: subjects.includes("F16"),
       finalKeepsBackspace: final !== undefined && (() => {

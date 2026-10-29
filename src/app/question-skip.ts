@@ -2,7 +2,8 @@
 // Its own file because applying (changes.ts) must resolve it and the conversation code (conversations.ts) imports changes.ts.
 import { neutralBlock } from "../agent/blocks.ts";
 import { ASK_USER } from "../agent/tools/ask-user.ts";
-import { type ChangeSetRow, listConversationChangeSets } from "../persistence/change-sets.ts";
+import type { ChangeSetRow } from "../persistence/change-sets.ts";
+import { listPresentations } from "../persistence/chat-presentations.ts";
 import { type MessageRow, insertMessage, listMessages } from "../persistence/conversations.ts";
 import { resolvePresentedQuestion } from "./chat-presentation.ts";
 import type { App } from "./context.ts";
@@ -21,15 +22,18 @@ export function openQuestion(messages: readonly MessageRow[]): { toolUseId: stri
 }
 
 /**
- * Called inside the transaction that applies `cs`. A question is open only while nothing newer than it exists, so it refines the newest
- * proposal of the conversation, whatever turn that came from. Applying that proposal answers the question by implication: the result is
- * stored, so a reload, a later message and the model all see a skipped question and not an open or "answered in his own words" one.
+ * Called inside the transaction that applies `cs`. A question refines the proposal saved earlier in its own turn, recorded with the pause
+ * (`questionRefines`), and a question asked before anything was proposed refines nothing. Applying that proposal answers the question by
+ * implication: the result is stored, so a reload, a later message and the model all see a skipped question and not an open or "answered
+ * in his own words" one. (An apply that comes before the question is stored is handled when the paused turn is committed.)
  */
 export function skipQuestionRefining(app: App, cs: ChangeSetRow): void {
   if (cs.conversationId === null || cs.source !== "agent") return;
   const open = openQuestion(listMessages(app.db, cs.conversationId));
   if (open === undefined) return;
-  if (listConversationChangeSets(app.db, cs.conversationId).filter((c) => c.source === "agent").at(-1)?.id !== cs.id) return;
+  // Only the question recorded as refining this proposal. One that refines nothing, or another proposal, is not the apply's to answer.
+  const recorded = listPresentations(app.db, cs.conversationId).find((p) => p.status === "waiting_user" && p.questionToolUseId === open.toolUseId);
+  if (recorded?.questionRefines !== cs.id) return;
   insertMessage(app.db, { conversationId: cs.conversationId, role: "user", content: [{ type: "tool_result", tool_use_id: open.toolUseId, content: SKIPPED_ANSWER }] });
   resolvePresentedQuestion(app, cs.conversationId, open.toolUseId);
   // The run that paused on it is over, as when an answer arrives (storeMessage).

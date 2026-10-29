@@ -79,7 +79,7 @@ describe("a question's state in a reply", () => {
     const t1 = [
       sentFirst, ev({ type: "proposal", proposal: card("p1") }), ev({ type: "done", outcome: outcome({ proposals: [card("p1")] }) }),
       { type: "sent" as const, userId: "u2", assistantId: "a2", text: "and the thumb?", selection: null },
-      ev({ type: "done", outcome: outcome({ status: "awaiting_answer", question: question({ toolUseId: "q2", answer: null }) }) }),
+      ev({ type: "done", outcome: outcome({ status: "awaiting_answer", question: question({ toolUseId: "q2", answer: null, refines: "p1" }) }) }),
     ].reduce(transcriptReducer, EMPTY);
     const applied = transcriptReducer(t1, { type: "applied", changeSetId: "p1" });
     const asked = (t: Transcript) => t.turns.filter((x): x is AssistantTurn => x.kind === "assistant").find((x) => x.question !== null);
@@ -90,12 +90,16 @@ describe("a question's state in a reply", () => {
     expect(asked(later)?.question).toMatchObject({ skipped: true, answer: "Skipped" });
   });
 
-  test("applying a proposal that is not the newest leaves the question open", () => {
+  test("applying a proposal that the question was not recorded as refining leaves it open", () => {
     const sentFirst = { type: "sent" as const, userId: "u1", assistantId: "a1", text: "go", selection: null };
     const ev = (event: ChatEvent) => ({ type: "event" as const, event });
-    const t = [sentFirst, ev({ type: "proposal", proposal: card("p1", { proposalGroup: "g1" }) }), ev({ type: "proposal", proposal: card("p2", { proposalGroup: "g2" }) }), ev({ type: "done", outcome: { conversationId: "c", messageIds: ["m"], status: "awaiting_answer", text: "", proposals: [], priorities: [], provider: "anthropic", model: "m", effort: "medium", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, question: question({ answer: null }) } })].reduce(transcriptReducer, EMPTY);
-    const after = transcriptReducer(t, { type: "applied", changeSetId: "p1" });
-    expect((after.turns.find((x): x is AssistantTurn => x.kind === "assistant"))?.question?.answer).toBeNull();
+    const t = [sentFirst, ev({ type: "proposal", proposal: card("p1", { proposalGroup: "g1" }) }), ev({ type: "proposal", proposal: card("p2", { proposalGroup: "g2" }) }), ev({ type: "done", outcome: { conversationId: "c", messageIds: ["m"], status: "awaiting_answer", text: "", proposals: [], priorities: [], provider: "anthropic", model: "m", effort: "medium", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, question: question({ answer: null, refines: "p2" }) } })].reduce(transcriptReducer, EMPTY);
+    const turnOf = (x: Transcript) => x.turns.find((y): y is AssistantTurn => y.kind === "assistant");
+    expect(turnOf(transcriptReducer(t, { type: "applied", changeSetId: "p1" }))?.question?.answer).toBeNull();
+    expect(turnOf(transcriptReducer(t, { type: "applied", changeSetId: "p2" }))?.question).toMatchObject({ skipped: true });
+    // A question that refines nothing is never skipped by an apply.
+    const none = [sentFirst, ev({ type: "proposal", proposal: card("p1") }), ev({ type: "done", outcome: { conversationId: "c", messageIds: ["m"], status: "awaiting_answer", text: "", proposals: [], priorities: [], provider: "anthropic", model: "m", effort: "medium", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, question: question({ answer: null }) } })].reduce(transcriptReducer, EMPTY);
+    expect(turnOf(transcriptReducer(none, { type: "applied", changeSetId: "p1" }))?.question?.answer).toBeNull();
   });
 });
 

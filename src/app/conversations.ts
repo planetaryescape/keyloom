@@ -10,7 +10,7 @@ import type { Usage } from "../agent/model.ts";
 import {
   type ConversationRow, type MessageRow, type Selection, findConversation, insertConversation, insertMessage, listConversations, listMessages,
 } from "../persistence/conversations.ts";
-import { type ChangeSetRow, listConversationChangeSets } from "../persistence/change-sets.ts";
+import { type ChangeSetRow, findChangeSet, listConversationChangeSets } from "../persistence/change-sets.ts";
 import { type DecisionRow, type Subject, listConversationPriorities } from "../persistence/decisions.ts";
 import { appendLog } from "../persistence/log.ts";
 import { transact } from "../persistence/transaction.ts";
@@ -65,6 +65,8 @@ export type QuestionCard = {
   step?: { n: number; of: number };
   /** BK applied the proposal this question refines instead of answering it (D-452). */
   skipped?: boolean;
+  /** The change set this question refines; applying that one skips it. Absent when it refines nothing. */
+  refines?: string;
   placeholder?: string;
   targetBoard?: string;
   targetLayer?: string;
@@ -142,7 +144,7 @@ export function recommendedFirst<T extends { recommended?: boolean | undefined }
   return [{ ...options[at], recommended: true } as T, ...unmarked];
 }
 
-const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => {
+const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null, refines?: string): QuestionCard => {
   const card: QuestionCard = {
     toolUseId,
     question: q.question,
@@ -157,6 +159,7 @@ const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): Que
     answer,
   };
   if (answer === SKIPPED_ANSWER) card.skipped = true;
+  if (refines !== undefined) card.refines = refines;
   if (q.kind) card.kind = q.kind;
   if (q.considerations) card.considerations = q.considerations;
   if (q.step) card.step = q.step;
@@ -305,10 +308,20 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
 
     return transact(app.db, () => {
       const stored = outcome.messages.map((m) => insertMessage(app.db, { conversationId: conversation.id, role: m.role, content: m.content }));
-      presentation.finish(outcome.status === "awaiting_answer" ? "waiting_user" : outcome.status === "complete" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId, {
+      // A question refines the proposal saved earlier in this turn, before it was asked; one asked before anything was proposed refines nothing.
+      // It is recorded here, with the question, and read back from the record, never worked out later from which proposal is newest.
+      const refines = outcome.question === undefined ? undefined : outcome.proposals.flatMap((p) => (p.changeSetId === null ? [] : [p.changeSetId])).at(-1);
+      // BK applied that proposal (or it was otherwise decided) while the turn was still running, so nothing is left to refine: the question is
+      // stored as skipped now, as it would have been had the apply come after, rather than left open and unanswerable.
+      const decided = refines !== undefined && findChangeSet(app.db, refines)?.status !== "proposed";
+      const waiting = outcome.status === "awaiting_answer" && !decided;
+      if (outcome.question !== undefined && decided) {
+        insertMessage(app.db, { conversationId: conversation.id, role: "user", content: [{ type: "tool_result", tool_use_id: outcome.question.toolUseId, content: SKIPPED_ANSWER }] });
+      }
+      presentation.finish(waiting ? "waiting_user" : outcome.status === "complete" || outcome.status === "awaiting_answer" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId, {
         provider: model.provider, model: model.model, usage: outcome.usage,
         ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
-      });
+      }, refines);
       const messageIds = [userMessage.id, ...stored.map((m) => m.id)];
       const ids = new Set(outcome.proposals.flatMap((p) => (p.changeSetId ? [p.changeSetId] : [])));
       const proposals = listConversationChangeSets(app.db, conversation.id).filter((c) => ids.has(c.id)).map(toCard);
@@ -328,13 +341,13 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
       });
 
       const result: ChatOutcome = {
-        conversationId: conversation.id, messageIds, status: outcome.status, text: outcome.text, proposals, priorities,
+        conversationId: conversation.id, messageIds, status: waiting || outcome.status !== "awaiting_answer" ? outcome.status : "complete", text: outcome.text, proposals, priorities,
         provider: model.provider, model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
-        ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, null) }),
+        ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, decided ? SKIPPED_ANSWER : null, refines) }),
         ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
       };
       if (runId !== undefined) app.db.query("UPDATE agent_runs SET status = ?, outcome_json = ?, finished_at = ?, seq = seq + 1 WHERE id = ?")
-        .run(outcome.status === "awaiting_answer" ? "waiting_user" : outcome.status === "complete" ? "completed" : "failed", JSON.stringify(result), Date.now(), runId);
+        .run(waiting ? "waiting_user" : result.status === "complete" ? "completed" : "failed", JSON.stringify(result), Date.now(), runId);
       input.onEvent?.({ type: "done", outcome: result });
       return result;
     });
@@ -377,6 +390,9 @@ export function showConversation(app: App, id: string): ConversationView {
   const messages: DisplayMessage[] = [];
   const stored = listMessages(app.db, id);
   const answers = new Map(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" ? [[b.tool_use_id, b.content] as const] : []))));
+  // A call that got an error result was refused (invalid input, or "Not run" beside the question that paused the turn), so it is not the question.
+  const refused = new Set(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" && b.is_error === true ? [b.tool_use_id] : []))));
+  const refines = new Map(listPresentations(app.db, id).flatMap((p) => (p.questionToolUseId !== undefined && p.questionRefines !== undefined ? [[p.questionToolUseId, p.questionRefines] as const] : [])));
   for (const m of stored) {
     const typed = m.content.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("");
     // The selection travels beside the message, so the bubble shows what BK typed, not the header the model was given.
@@ -384,9 +400,9 @@ export function showConversation(app: App, id: string): ConversationView {
     const text = m.role === "user" && (m.selection || typed.startsWith("Unapplied draft on ")) ? typedText(typed) : typed;
     const toolCalls = m.content.flatMap((b) => (b.type === "tool_use" && typeof b.name === "string" ? [b.name] : []));
     if (text === "" && toolCalls.length === 0) continue;
-    const asked = m.content.map(neutralBlock).find((b) => b.type === "tool_use" && b.name === ASK_USER);
+    const asked = m.content.map(neutralBlock).find((b) => b.type === "tool_use" && b.name === ASK_USER && !refused.has(b.id));
     const parsed = asked?.type === "tool_use" ? StoredQuestionSchema.safeParse(asked.input) : undefined;
-    const question = asked?.type === "tool_use" && parsed?.success ? cardOf(parsed.data, asked.id, answers.get(asked.id) ?? null) : undefined;
+    const question = asked?.type === "tool_use" && parsed?.success ? cardOf(parsed.data, asked.id, answers.get(asked.id) ?? null, refines.get(asked.id)) : undefined;
     messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt, ...(question === undefined ? {} : { question }) });
   }
   const run = conversationRun(app.db, id);

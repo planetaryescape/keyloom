@@ -31,6 +31,15 @@ The cross-model verifier blocked `ec4ada9` on four findings and one should-fix, 
 4. The model schema allowed four options for a refining question. A single_choice question now has two or three; the pickers keep theirs; stored calls load through the lenient schema.
 5. The live eval checked Command–Shift only in the final proposal and dropped `displacedShown`. Both are restored across every valid proposal in the chain.
 
+## Round 4: the question's proposal is recorded, not inferred
+
+Round 3 skipped the open question when the newest proposal was applied. The verifier showed that was wrong: a remembered-decision question asked before proposing (system.md, "Earlier decisions") would be consumed by applying an unrelated proposal, an apply between a proposal and its question left that question open and unanswerable, and reload showed the first `ask_user` call of a reply, not the one the turn paused on. The design now:
+
+- The association is recorded when the question is stored: `questionRefines` in the pause's stored presentation (the last proposal saved earlier in the same turn; absent when none), shown on the card as `refines`. Applying that proposal skips that question; nothing else does. The web reducer uses the same field.
+- A turn committed with its proposal already decided (applied while the turn ran) stores the question as skipped at once.
+- Reload shows the question the turn paused on: the `ask_user` call with no error result.
+- The eval's checks are in `evals/command-shift-checks.ts`, applied with `.every`, and a placement is judged by Command–Shift keys added, since the fixture's layout already satisfied the old whole-layout test.
+
 ## The turn sequence for "one key for Command–Shift", two questions
 
 A turn is one request from BK to the next pause. A reply is one request to the model inside a turn.

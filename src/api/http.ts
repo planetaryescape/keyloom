@@ -231,6 +231,8 @@ export const QuestionCardSchema = z.object({
   step: z.object({ n: z.number().int().min(1), of: z.number().int().min(1) }).optional(),
   // BK applied the proposal this question refines instead of answering it, so the card reads "Skipped" (D-452).
   skipped: z.boolean().optional(),
+  // The change set this question refines (D-452); absent when it refines nothing. Applying that one skips the question, and no other does.
+  refines: z.string().optional(),
   placeholder: z.string().optional(),
   targetBoard: z.string().optional(),
   targetLayer: z.string().optional(),
@@ -373,6 +375,7 @@ export const ChatPresentationSchema = z.object({
   // Absent on older recordings and when execution did not return usage.
   accounting: ChatAccountingSchema.optional(),
   questionToolUseId: z.string().min(1).max(128).optional(),
+  questionRefines: z.string().min(1).max(80).optional(),
   status: z.enum(["running", "waiting_user", "completed", "incomplete", "failed", "cancelled", "unobserved"]),
   operations: z.array(z.object({
     id: z.string().min(1), tool: z.string().max(64), label: z.string().max(80),

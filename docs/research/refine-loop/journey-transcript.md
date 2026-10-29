@@ -29,29 +29,29 @@ Command–Shift can go where Tab is, under your left pinky. Backspace stays put.
 Read layout
 
 Completed
-11 ms
+13 ms
 
 Find function
 
 Completed
-7 ms
+8 ms
 
 Remember priority
 
 Completed
-5 ms
+6 ms
 
 Remember priority
 
 Completed
-2 ms
+3 ms
 
 Prepare proposals
 
 1 accepted · 1 saved proposal
 
 Completed
-20 ms
+28 ms
 
 keyloom offered 1 option.
 
@@ -293,17 +293,17 @@ Command–Shift can go where Tab is, under your left pinky. Backspace stays put.
 Read layout
 
 Completed
-11 ms
+16 ms
 
 Find function
 
 Completed
-6 ms
+8 ms
 
 Remember priority
 
 Completed
-4 ms
+6 ms
 
 Remember priority
 
@@ -315,7 +315,7 @@ Prepare proposals
 1 accepted · 1 saved proposal
 
 Completed
-21 ms
+23 ms
 
 keyloom offered 1 option.
 
@@ -391,7 +391,7 @@ Prepare proposals
 1 accepted · 1 saved proposal
 
 Completed
-9 ms
+12 ms
 
 keyloom offered 1 option.
 
@@ -503,7 +503,7 @@ esc
     "goal": "A Command–Shift key I can press with my left pinky",
     "choice": "Command–Shift on the F16 key",
     "reason": "You want X, C and V to stay where they are, you barely use F16, and a reach to the top row is fine.",
-    "source_message_ids": "[\"msg_01M62NEGZT01FFA69X8MEGZ5RV\",\"msg_01M62NEH5WBW0EZ6HHHDMVE3C4\",\"msg_01M62NEHBXNAKDD389V3AGA6E8\"]"
+    "source_message_ids": "[\"msg_01M62RWQZD63X2ZR711HVWE7BZ\",\"msg_01M62RWR4AGFDA6CZDSZ4E9472\",\"msg_01M62RWR9HZ45SB9REEY2SK9NX\"]"
   }
 ]
 
@@ -517,12 +517,12 @@ esc
   {
     "title": "Command–Shift on the F16 key",
     "status": "superseded",
-    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62NEH1K3DXXMKVFADK9FC3K\"}"
+    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62RWR1EW2S26S6DGA3WRP2Y\"}"
   },
   {
     "title": "Command–Shift on the F16 key",
     "status": "applied",
-    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62NEH6CZVFK0E964X9Z3JM5\"}"
+    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62RWR4Z41FDZGTVWX0N5G98\"}"
   }
 ]
 

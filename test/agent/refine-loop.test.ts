@@ -154,54 +154,104 @@ describe("every answer reaches the decision", () => {
   });
 });
 
-// Applying the proposal a question refines answers it by implication, and the server records that (D-452).
+// Applying the proposal a question refines answers it by implication, and the server records that (D-452). Which proposal a question
+// refines is recorded when it is stored: the last one saved earlier in its own turn, and none for a question asked before proposing.
 describe("applying while a question is open", () => {
   const ops = (code: string) => [{ op: "dropFunction", function: "key:F16", reason: "you said so" }, { op: "setBinding", at: { layerId: "layer-0", position: 6 }, binding: { kind: "key", code } }];
   const proposal = (title: string, code: string, over: object = {}) => ({ title, ops: ops(code), explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(), ...over });
-  const ask = (n: number) => ({ tool: "ask_user", input: { question: `Question ${n}?`, considerations: ["It matters."], step: { n, of: 2 }, options: [{ label: "Yes" }, { label: "No" }] } });
-  const questionOf = (app: Parameters<typeof showConversation>[0], id: string) => showConversation(app, id).messages.flatMap((m) => (m.question === undefined ? [] : [m.question]));
+  const ask = (n: number, text = `Question ${n}?`) => ({ tool: "ask_user", input: { question: text, considerations: ["It matters."], step: { n, of: 2 }, options: [{ label: "Yes" }, { label: "No" }] } });
+  const questionsOf = (app: Parameters<typeof showConversation>[0], id: string) => showConversation(app, id).messages.flatMap((m) => (m.question === undefined ? [] : [m.question]));
 
-  test("a question asked in a later reply than its proposal is skipped when that proposal is applied, and stays skipped after the next message", async () => {
+  test("the question is recorded as refining the proposal saved before it in its turn, and applying that proposal skips it for good", async () => {
     const { app, layoutId } = await commandShiftApp();
-    const { client, requests } = fakeAnthropic([
-      { blocks: [{ tool: "propose_changes", input: proposal("One", "F17") }] },
-      { blocks: [ask(1)] },
-      // The answer is not revised for, so question 2 belongs to a reply with no proposal.
-      { blocks: [ask(2)] },
-      { blocks: [{ text: "Understood, it is applied." }] },
-    ]);
+    const { client, requests } = fakeAnthropic([...refineScript().slice(0, 5), { blocks: [{ text: "Understood." }] }]);
     const model = anthropicModel(client);
-    const first = await sendMessage(app, layoutId, { message: "go", model });
-    const second = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: first.question?.toolUseId ?? "", text: "Yes" }, model });
-    expect(second.proposals).toEqual([]);
-    expect(second.status).toBe("awaiting_answer");
+    const first = await sendMessage(app, layoutId, { message: REQUEST, model });
+    const second = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: first.question?.toolUseId ?? "", text: ANSWER_1 }, model });
+    const p2 = second.proposals[0]?.changeSetId ?? "";
+    expect(first.question?.refines).toBe(first.proposals[0]?.changeSetId);
+    expect(second.question?.refines).toBe(p2);
 
-    applyChange(app, first.proposals[0]?.changeSetId ?? "");
-    const [q1, q2] = questionOf(app, first.conversationId);
-    expect(q1).toMatchObject({ answer: "Yes" });
-    expect(q2).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true });
+    // Question 2 refines the revision. Applying it skips question 2 and only that one: question 1 was answered.
+    applyChange(app, p2);
+    const [q1, q2] = questionsOf(app, first.conversationId);
+    expect(q1).toMatchObject({ answer: ANSWER_1, refines: first.proposals[0]?.changeSetId });
+    expect(q2).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true, refines: p2 });
 
     // A message after the apply: the question is not "answered in his own words" and is still skipped, now and on reload.
     const next = await sendMessage(app, layoutId, { conversationId: first.conversationId, message: "thanks", model });
     expect(next.status).toBe("complete");
-    expect(questionOf(app, first.conversationId)[1]).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true });
+    expect(questionsOf(app, first.conversationId)[1]).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true });
     // The model was told, and the history has one result for the question, so the API accepts it.
     const last = requests.at(-1)?.body.messages.at(-1);
     expect(JSON.stringify(last)).toContain(SKIPPED_ANSWER);
     expect(JSON.stringify(last).match(/tool_result/g)).toHaveLength(1);
   });
 
-  test("applying a proposal that is not the newest leaves the question open", async () => {
+  test("a question asked before anything was proposed refines nothing, and applying an unrelated proposal leaves it open and answerable", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "propose_changes", input: proposal("Option", "F17") }] },
+      { blocks: [{ text: "Here it is." }] },
+      // Turn 2: a remembered-decision question comes before any proposal, so it belongs to no proposal.
+      { blocks: [ask(1, "Backspace was placed on purpose. Does that still hold?")] },
+      { blocks: [{ text: "Kept." }] },
+    ]);
+    const model = anthropicModel(client);
+    const first = await sendMessage(app, layoutId, { message: "put F17 on F16", model });
+    const second = await sendMessage(app, layoutId, { conversationId: first.conversationId, message: "and move Backspace", model });
+    expect(second.status).toBe("awaiting_answer");
+    expect(second.question?.refines).toBeUndefined();
+
+    applyChange(app, first.proposals[0]?.changeSetId ?? "");
+    expect(questionsOf(app, first.conversationId)[0]).toMatchObject({ answer: null });
+    expect(questionsOf(app, first.conversationId)[0]?.skipped).toBeUndefined();
+    // Still answerable.
+    const answered = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: second.question?.toolUseId ?? "", text: "Yes" }, model });
+    expect(answered.status).toBe("complete");
+  });
+
+  test("an apply between the proposal and its question, while the turn is running, stores the question as skipped when the turn is committed", async () => {
     const { app, layoutId } = await commandShiftApp();
     const { client } = fakeAnthropic([
       { blocks: [{ tool: "propose_changes", input: proposal("One", "F17") }] },
-      { blocks: [{ tool: "propose_changes", input: proposal("Two", "F18", { supersedes: null }) }] },
-      { blocks: [ask(1)] },
+      // BK applies the proposal now, before the model has asked its question.
+      (seen) => {
+        applyChange(app, lastSaved(seen));
+        return { blocks: [ask(1)] };
+      },
+      { blocks: [{ text: "Fine, it is applied." }] },
     ]);
-    const first = await sendMessage(app, layoutId, { message: "go", model: anthropicModel(client) });
-    const one = listChanges(app, layoutId, {}).find((cs) => cs.title === "One");
-    applyChange(app, one?.id ?? "");
-    expect(questionOf(app, first.conversationId)[0]).toMatchObject({ answer: null });
+    const model = anthropicModel(client);
+    const first = await sendMessage(app, layoutId, { message: "go", model });
+    // Nothing waits: the card reads Skipped, the run is over, and the turn is complete.
+    expect(first.status).toBe("complete");
+    expect(first.question).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true, refines: first.proposals[0]?.changeSetId });
+    expect(questionsOf(app, first.conversationId)[0]).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true });
+    expect(showConversation(app, first.conversationId).presentations[0]?.status).toBe("completed");
+    // A later message goes through, with one result for the question.
+    const next = await sendMessage(app, layoutId, { conversationId: first.conversationId, message: "thanks", model });
+    expect(next.status).toBe("complete");
+  });
+});
+
+describe("a reply that holds two questions", () => {
+  test("a reload shows the question the turn paused on, not the first one the adapter refused", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const valid = (question: string) => ({ question, considerations: ["It matters."], step: { n: 1, of: 2 }, options: [{ label: "Yes" }, { label: "No" }] });
+    // The first has four options, which the model schema refuses (the adapter pauses on the second and answers the first "Not run").
+    const refused = { ...valid("The refused question?"), options: ["A", "B", "C", "D"].map((label) => ({ label })) };
+    const { client } = fakeAnthropic([{ blocks: [{ tool: "ask_user", input: refused }, { tool: "ask_user", input: valid("The real question?") }] }, { blocks: [{ text: "ok" }] }]);
+    const model = anthropicModel(client);
+    const out = await sendMessage(app, layoutId, { message: "go", model });
+    expect(out.status).toBe("awaiting_answer");
+    expect(out.question?.question).toBe("The real question?");
+    const reloaded = showConversation(app, out.conversationId).messages.flatMap((m) => (m.question === undefined ? [] : [m.question]));
+    expect(reloaded).toHaveLength(1);
+    expect(reloaded[0]).toMatchObject({ question: "The real question?", toolUseId: out.question?.toolUseId, answer: null });
+    // And it can be answered.
+    const done = await sendMessage(app, layoutId, { conversationId: out.conversationId, answer: { toolUseId: out.question?.toolUseId ?? "", text: "Yes" }, model });
+    expect(done.status).toBe("complete");
   });
 });
 

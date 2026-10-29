@@ -283,14 +283,13 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
     case "loaded":
       return fromConversation(action.detail);
     case "applied": {
-      // The open question refines the newest proposal; applying that one skips it, as the server stores it (D-452).
-      const newest = state.turns.flatMap((turn) => (turn.kind === "assistant" ? turn.proposals : [])).at(-1);
-      const skips = newest?.changeSetId === action.changeSetId;
+      // Applying the proposal an open question was recorded as refining skips it, as the server stores it; a question that refines nothing,
+      // or another proposal, stays open (D-452).
       return {
         ...state,
         turns: state.turns.map((turn) => {
           if (turn.kind !== "assistant") return turn;
-          const skipped = skips && turn.question?.answer === null ? { question: { ...turn.question, answer: "Skipped", skipped: true } } : {};
+          const skipped = turn.question?.answer === null && turn.question.refines === action.changeSetId ? { question: { ...turn.question, answer: "Skipped", skipped: true } } : {};
           if (!turn.proposals.some((p) => p.changeSetId === action.changeSetId)) return { ...turn, ...skipped };
           // What the server sets aside is the rest of this proposal's group; a separate proposal beside it stays open (D-452).
           const group = turn.proposals.find((p) => p.changeSetId === action.changeSetId)?.proposalGroup ?? null;
