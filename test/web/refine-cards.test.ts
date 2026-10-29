@@ -27,7 +27,8 @@ const turn = (id: string, over: Partial<AssistantTurn> = {}): AssistantTurn => (
   kind: "assistant", id, text: "", activity: null, proposals: [], priorities: [], question: null, phase: "done", failure: null, ending: "complete", ...over,
 });
 const renderQuestion = (q: Question, skipped = false) => renderToStaticMarkup(createElement(QuestionCard, { question: q, skipped, onAnswer: () => {} }));
-const renderTurn = (t: AssistantTurn, revised: string[] = []) => renderToStaticMarkup(createElement(AssistantMessage, {
+const renderTurn = (t: AssistantTurn, revised: string[] = [], working?: Parameters<typeof AssistantMessage>[0]["working"]) => renderToStaticMarkup(createElement(AssistantMessage, {
+  ...(working === undefined ? {} : { working }),
   turn: t, layout: fixture.document, board: fixture.board, pinnedId: t.proposals.at(-1)?.changeSetId ?? null, compact: true, revised: new Set(revised),
   onPreview: () => {}, onPin: () => {}, onApply: async () => {}, onRemovePriority: async () => {}, onAskAgain: () => {}, onOpenRelease: () => {}, onRetry: () => {}, onAnswer: () => {},
 }));
@@ -61,13 +62,49 @@ describe("the question card", () => {
 });
 
 describe("a question's state in a reply", () => {
-  test("is open until it is answered or the proposal it refines is applied", () => {
-    const open = turn("a", { question: question(), proposals: [card("p1")] });
-    expect(questionOpen(open)).toBe(true);
-    const applied = turn("a", { question: question(), proposals: [card("p1", { status: "applied" })] });
-    expect(questionSkipped(applied)).toBe(true);
-    expect(questionOpen(applied)).toBe(false);
+  test("is open until it is answered or skipped, and skipped is what the server says, so it holds after a reload", () => {
+    expect(questionOpen(turn("a", { question: question(), proposals: [card("p1")] }))).toBe(true);
+    const skipped = turn("a", { question: question({ answer: "BK applied the proposal without answering.", skipped: true }), proposals: [card("p1")] });
+    expect(questionSkipped(skipped)).toBe(true);
+    expect(questionOpen(skipped)).toBe(false);
     expect(questionOpen(turn("a", { question: question({ answer: "x" }), proposals: [card("p1")] }))).toBe(false);
+    expect(questionSkipped(turn("a", { question: question({ answer: "x" }) }))).toBe(false);
+  });
+
+  test("applying the newest proposal skips the open question even when it was asked in a later reply, and it stays skipped after a message", () => {
+    const sentFirst = { type: "sent" as const, userId: "u1", assistantId: "a1", text: "go", selection: null };
+    const ev = (event: ChatEvent) => ({ type: "event" as const, event });
+    // P1 in reply 1. Reply 2, to a message, has a question and no proposal of its own: the question refines P1 across the turns.
+    const outcome = (over: object) => ({ conversationId: "c", messageIds: ["m"], status: "complete" as const, text: "", proposals: [], priorities: [], provider: "anthropic" as const, model: "m", effort: "medium", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, ...over });
+    const t1 = [
+      sentFirst, ev({ type: "proposal", proposal: card("p1") }), ev({ type: "done", outcome: outcome({ proposals: [card("p1")] }) }),
+      { type: "sent" as const, userId: "u2", assistantId: "a2", text: "and the thumb?", selection: null },
+      ev({ type: "done", outcome: outcome({ status: "awaiting_answer", question: question({ toolUseId: "q2", answer: null }) }) }),
+    ].reduce(transcriptReducer, EMPTY);
+    const applied = transcriptReducer(t1, { type: "applied", changeSetId: "p1" });
+    const asked = (t: Transcript) => t.turns.filter((x): x is AssistantTurn => x.kind === "assistant").find((x) => x.question !== null);
+    expect(asked(applied)?.question).toMatchObject({ skipped: true });
+    expect(questionOpen(asked(applied) as AssistantTurn)).toBe(false);
+    // A message afterwards leaves it skipped and does not turn it into "answered in your own words".
+    const later = transcriptReducer(applied, { type: "sent", userId: "u3", assistantId: "a3", text: "thanks", selection: null });
+    expect(asked(later)?.question).toMatchObject({ skipped: true, answer: "Skipped" });
+  });
+
+  test("applying a proposal that is not the newest leaves the question open", () => {
+    const sentFirst = { type: "sent" as const, userId: "u1", assistantId: "a1", text: "go", selection: null };
+    const ev = (event: ChatEvent) => ({ type: "event" as const, event });
+    const t = [sentFirst, ev({ type: "proposal", proposal: card("p1", { proposalGroup: "g1" }) }), ev({ type: "proposal", proposal: card("p2", { proposalGroup: "g2" }) }), ev({ type: "done", outcome: { conversationId: "c", messageIds: ["m"], status: "awaiting_answer", text: "", proposals: [], priorities: [], provider: "anthropic", model: "m", effort: "medium", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, question: question({ answer: null }) } })].reduce(transcriptReducer, EMPTY);
+    const after = transcriptReducer(t, { type: "applied", changeSetId: "p1" });
+    expect((after.turns.find((x): x is AssistantTurn => x.kind === "assistant"))?.question?.answer).toBeNull();
+  });
+});
+
+describe("the work row of a reply with a skipped question", () => {
+  test("stops saying it needs an answer once the question is skipped, though the stored run still waits", () => {
+    const waiting = { kind: "unavailable", status: "waiting" } as const;
+    expect(renderTurn(turn("a", { question: question(), proposals: [card("p1")] }), [], waiting)).toContain("Needs your answer");
+    const skipped = turn("a", { question: question({ answer: "BK applied the proposal without answering.", skipped: true }), proposals: [card("p1", { status: "applied" })] });
+    expect(renderTurn(skipped, [], waiting)).not.toContain("Needs your answer");
   });
 });
 
@@ -142,9 +179,23 @@ describe("the proposals the board shows", () => {
     expect(openProposalsOnBoard(turns).map((p) => p.changeSetId)).toEqual(["p1"]);
   });
 
-  test("the newest reply's open proposal wins over an older one, and none shows while a reply is still streaming", () => {
-    const turns: Turn[] = [done("a1", { proposals: [card("p1", { status: "superseded" })] }), done("a2", { proposals: [card("p2")] })];
+  test("a revision is on the board the moment it arrives, while the reply is still streaming", () => {
+    const turns: Turn[] = [done("a1", { proposals: [card("p1", { status: "superseded" })] }), done("a2", { phase: "streaming", ending: null, proposals: [card("p2", { supersedes: "p1" })] })];
     expect(openProposalsOnBoard(turns).map((p) => p.changeSetId)).toEqual(["p2"]);
-    expect(openProposalsOnBoard([...turns, done("a3", { phase: "streaming" })])).toEqual([]);
+  });
+
+  test("a revision saved in a reply that was then cut off stays on the board, in place of the old preview", () => {
+    const failed = done("a2", { phase: "failed", ending: null, failure: { code: "model_connection", message: "gone" }, proposals: [card("p2", { supersedes: "p1" })] });
+    const stopped = done("a2", { phase: "stopped", ending: null, proposals: [card("p2", { supersedes: "p1" })] });
+    for (const last of [failed, stopped]) {
+      expect(openProposalsOnBoard([done("a1", { proposals: [card("p1", { status: "superseded" })] }), last]).map((p) => p.changeSetId)).toEqual(["p2"]);
+    }
+  });
+
+  test("the newest reply's open proposal wins over an older one, and a reply with none leaves the older one", () => {
+    const turns: Turn[] = [done("a1", { proposals: [card("p1")] }), done("a2", { proposals: [card("p2")] })];
+    expect(openProposalsOnBoard(turns).map((p) => p.changeSetId)).toEqual(["p2"]);
+    expect(openProposalsOnBoard([...turns, done("a3", { phase: "streaming" })]).map((p) => p.changeSetId)).toEqual(["p2"]);
+    expect(openProposalsOnBoard([done("a1", { proposals: [card("p1", { status: "applied" })] })])).toEqual([]);
   });
 });

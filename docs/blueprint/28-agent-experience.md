@@ -158,7 +158,7 @@ Inherit Instrument Sans, the existing size scale, spacing, surfaces, icons and s
 
 ## One proposal, then questions that refine it (D-452)
 
-The agent puts its single best proposal on the board first, using defaults it says in a line, and asks only about a choice that would change it and that nothing BK said answers (at most three questions, one at a time). Each answer produces a revised proposal, which the validator checks and which supersedes the one before: only the newest can be applied, and the board pins it. The flow applies to every task the agent proposes changes for and every provider. Comps and design note: [refine-loop](../research/refine-loop/README.md). A new request while a proposal is open sits beside it unless the agent says it replaces it, and a revision that changes nothing is said in one line.
+The agent puts its single best proposal on the board first, using defaults it says in a line, and asks only about a choice that would change it and that nothing BK said answers (at most three questions, one at a time). Every answer produces a revised proposal (the same ops when it only confirms the proposal, so the answer is in the decision), which the validator checks and which supersedes the one before: only the newest can be applied, and the board pins it the moment it arrives, even if the reply is then cut off. The flow applies to every task the agent proposes changes for and every provider. Comps and design note: [refine-loop](../research/refine-loop/README.md). A new request while a proposal is open sits beside it unless the agent says it replaces it.
 
 ## Card shapes: a line or two, details on demand
 

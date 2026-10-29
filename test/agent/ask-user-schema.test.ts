@@ -29,6 +29,17 @@ describe("what the model must send", () => {
     expect(AskUserSchema.safeParse({ ...ok, step: { n: 1.5, of: 2 } }).success).toBe(false);
   });
 
+  test("a refining question has two or three options; the pickers keep their longer lists", () => {
+    const four = [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }];
+    expect(AskUserSchema.safeParse({ ...ok, options: four }).success).toBe(false);
+    expect(AskUserSchema.safeParse({ ...ok, kind: "single_choice", options: four }).success).toBe(false);
+    expect(AskUserSchema.safeParse({ ...ok, options: [{ label: "A" }] }).success).toBe(false);
+    expect(AskUserSchema.safeParse({ ...ok, options: undefined }).success).toBe(false);
+    expect(AskUserSchema.safeParse({ ...ok, options: four.slice(0, 3) }).success).toBe(true);
+    for (const kind of ["key", "layer", "keyboard_or_config", "multiple_choice"] as const) expect(AskUserSchema.safeParse({ ...ok, kind, options: four }).success).toBe(true);
+    expect(AskUserSchema.safeParse({ ...ok, kind: "short_text", options: undefined }).success).toBe(true);
+  });
+
   test("keeps the limits it had", () => {
     expect(AskUserSchema.safeParse({ ...ok, question: "x".repeat(241) }).success).toBe(false);
     expect(AskUserSchema.safeParse({ ...ok, options: [{ label: "x".repeat(61) }] }).success).toBe(false);
@@ -41,6 +52,12 @@ describe("what is stored", () => {
   test("a question from before the loop parses, so its card is not lost while the conversation waits for its answer", () => {
     expect(StoredQuestionSchema.safeParse({ question: "Which?", options: [{ label: "A" }] }).success).toBe(true);
     expect(StoredQuestionSchema.safeParse(ok).success).toBe(true);
+  });
+
+  test("a stored four-option refining question, which the model schema now refuses, still loads", () => {
+    const four = { ...ok, options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }] };
+    expect(AskUserSchema.safeParse(four).success).toBe(false);
+    expect(StoredQuestionSchema.safeParse(four).success).toBe(true);
   });
 });
 

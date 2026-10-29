@@ -229,6 +229,8 @@ export const QuestionCardSchema = z.object({
   // What matters for this choice and where it sits in the run (D-452). Absent on a question stored before it, and from an older server.
   considerations: z.array(z.string()).optional(),
   step: z.object({ n: z.number().int().min(1), of: z.number().int().min(1) }).optional(),
+  // BK applied the proposal this question refines instead of answering it, so the card reads "Skipped" (D-452).
+  skipped: z.boolean().optional(),
   placeholder: z.string().optional(),
   targetBoard: z.string().optional(),
   targetLayer: z.string().optional(),

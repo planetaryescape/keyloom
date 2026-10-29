@@ -17,6 +17,9 @@ import { transact } from "../persistence/transaction.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 import { createAgentPorts } from "./agent-ports.ts";
+import { SKIPPED_ANSWER, openQuestion } from "./question-skip.ts";
+
+export { openQuestion };
 import { type ProposalCard, toCard } from "./proposal-card.ts";
 import { defaultAgentModel } from "./chat-model.ts";
 import type { App } from "./context.ts";
@@ -60,6 +63,8 @@ export type QuestionCard = {
   considerations?: string[];
   /** Where this question sits in the run; absent on a question stored before D-452. The card shows "Question n of m" when `of` is 2 or more. */
   step?: { n: number; of: number };
+  /** BK applied the proposal this question refines instead of answering it (D-452). */
+  skipped?: boolean;
   placeholder?: string;
   targetBoard?: string;
   targetLayer?: string;
@@ -151,6 +156,7 @@ const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): Que
     allowOther: q.allowOther === true,
     answer,
   };
+  if (answer === SKIPPED_ANSWER) card.skipped = true;
   if (q.kind) card.kind = q.kind;
   if (q.considerations) card.considerations = q.considerations;
   if (q.step) card.step = q.step;
@@ -162,16 +168,6 @@ const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): Que
   if (q.allowedKeyboards) card.allowedKeyboards = q.allowedKeyboards;
   return card;
 };
-
-/** The question a conversation is waiting on: an `ask_user` call in the stored messages with no result after it (D-382). */
-export function openQuestion(messages: readonly MessageRow[]): { toolUseId: string } | undefined {
-  const blocks = (m: MessageRow) => m.content.map(neutralBlock);
-  const answered = new Set(messages.flatMap((m) => blocks(m).flatMap((b) => (b.type === "tool_result" ? [b.tool_use_id] : []))));
-  for (const m of messages.toReversed()) {
-    for (const b of blocks(m)) if (b.type === "tool_use" && b.name === ASK_USER && !answered.has(b.id)) return { toolUseId: b.id };
-  }
-  return undefined;
-}
 
 const toPriorityCard = (row: DecisionRow): PriorityCard => ({
   id: row.id,

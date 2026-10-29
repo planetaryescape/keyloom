@@ -21,6 +21,16 @@ Differences from round 1:
 
 Evidence: screenshots of the real app (scripted model, scratch data, headless Chrome) are `after-first`, `after-revised`, `after-revised-superseded`, `after-final`, `after-quick` for light and dark at 1440 and 390, plus `after-skipped-light-1440.png`; `journey-transcript.md` is the chat text after each step and the decision applying wrote, from the scratch database. `bun scripts/refine-journey.ts` regenerates them. The comp screenshots (`comps-*.png`) are the round-1 design.
 
+## Round 3: the verifier's findings
+
+The cross-model verifier blocked `ec4ada9` on four findings and one should-fix, all accepted:
+
+1. An answer with no revision was lost from the decision. Every answer is now a revision (the prompt no longer allows "the answer changes nothing"); source ids accumulate along the chain, and a revision also takes every message of BK's since the replaced proposal was saved, so an answer the model skipped still links.
+2. Apply did not reliably skip a question asked in a later reply, and the skipped state turned into "answered in his own words" after the next message. Applying the newest agent proposal now stores a result for the open question in its transaction (`SKIPPED_ANSWER`), the card gets `skipped: true`, and the web reducer does the same at once.
+3. A revision reached the board only when its reply was done. The board now takes the newest reply that holds an open proposal in any state, so it is pinned as it arrives and an interrupted reply keeps it.
+4. The model schema allowed four options for a refining question. A single_choice question now has two or three; the pickers keep theirs; stored calls load through the lenient schema.
+5. The live eval checked Command–Shift only in the final proposal and dropped `displacedShown`. Both are restored across every valid proposal in the chain.
+
 ## The turn sequence for "one key for Command–Shift", two questions
 
 A turn is one request from BK to the next pause. A reply is one request to the model inside a turn.
@@ -34,7 +44,7 @@ A turn is one request from BK to the next pause. A reply is one request to the m
 | | 2 | `ask_user`: step 2 of 2 | Question 2 of 2 under P2 |
 | 3 (BK answers) | 1 | `propose_changes` with `supersedes: cs_2` (P3), then a one-line text | P2 folds; P3 is the card with Apply |
 
-A turn whose answer changes nothing makes no `propose_changes` call and says so in one line; the next question or the end follows. The proposal and question in one turn are in separate replies on purpose (next section).
+Every answer gets a revision, with the same ops when it only confirms the proposal (round 3; round 1 said an answer that changes nothing makes no call, which loses it from the decision). The proposal and question in one turn are in separate replies on purpose (next section).
 
 ## Where the brief needs correcting
 
@@ -83,7 +93,7 @@ Everything else is as today: the question (240), options (label 60, description 
 
 ### The answer revises
 
-The prompt says: after an answer, call `propose_changes` with `supersedes` set to the proposal the question was about, with the decision draft's `reason` written from the answer in BK's own words ("You said your left hand stays free for the letter ..."), or say plainly that the answer changes nothing; then ask the next question or stop. No decision is written per answer: decisions are written only on Apply (`remember` in `src/app/changes.ts`), so the final proposal's draft is the one that persists (D-022). My tests will prove the plumbing (the scripted model writes the reason; Apply stores it with the inherited `sourceMessageIds`). They can't prove the model writes a good reason; only a paid eval can, which I have not run.
+The prompt says: after an answer, call `propose_changes` with `supersedes` set to the proposal the question was about, with the decision draft's `reason` written from the answer in BK's own words ("You said your left hand stays free for the letter ..."); then ask the next question or stop. No decision is written per answer: decisions are written only on Apply (`remember` in `src/app/changes.ts`), so the final proposal's draft is the one that persists (D-022). My tests will prove the plumbing (the scripted model writes the reason; Apply stores it with the inherited `sourceMessageIds`). They can't prove the model writes a good reason; only a paid eval can, which I have not run.
 
 ## Stored shapes and how old conversations load
 

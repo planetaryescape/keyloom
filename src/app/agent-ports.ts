@@ -5,6 +5,10 @@ import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import type { DecisionRow } from "../persistence/decisions.ts";
 import { newId } from "../persistence/ids.ts";
+import type { ChangeSetRow } from "../persistence/change-sets.ts";
+import { listMessages } from "../persistence/conversations.ts";
+import { neutralBlock } from "../agent/blocks.ts";
+import { ASK_USER } from "../agent/tools/ask-user.ts";
 import { effectReceipt } from "../persistence/agent-runs.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import type { SelectionScope } from "../validation/selection-rules.ts";
@@ -32,6 +36,21 @@ export const toChoiceFact = (d: DecisionRow): ChoiceFact => ({
  * `selection` is what he had selected when he sent the message, so a proposal that strays from it is warned about (07).
  * A null `conversationId` is a board review (D-340): its proposals belong to no conversation, so they show in the config's open proposals.
  */
+/**
+ * The messages of BK's a revision answers, so the decision it writes links back to all of them (D-022): what the replaced proposal carried
+ * (which accumulates along the chain), every answer or message of his since it was saved (an answer the model did not revise for must not
+ * drop out of the chain), and this turn's. Without duplicates, in the order they were said.
+ */
+function lineage(replaced: ChangeSetRow | undefined, current: string[], app: App): string[] {
+  if (replaced === undefined) return current;
+  const messages = replaced.conversationId === null ? [] : listMessages(app.db, replaced.conversationId);
+  const asked = new Set(messages.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_use" && b.name === ASK_USER ? [b.id] : []))));
+  const since = messages
+    .filter((m) => m.role === "user" && m.createdAt >= replaced.createdAt && m.content.map(neutralBlock).some((b) => b.type === "text" || (b.type === "tool_result" && asked.has(b.tool_use_id))))
+    .map((m) => m.id);
+  return [...new Set([...(replaced.decisionDraft?.sourceMessageIds ?? []), ...since, ...current])];
+}
+
 export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope, runId?: string, firmware?: GeometryOptions): AgentPorts {
   const scope = selection ? { selection } : {};
   const snapshotOf = (ref: string): LayoutSnapshot => {
@@ -95,8 +114,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         const validation = checkChange(app, layoutId, { ops: alt.ops, ...scope });
         if (!validation.ok) return { title: alt.title, changeSetId: null, validation };
         try {
-          // A revision answers the same request as what it replaces, so the decision it writes links back to those messages as well (D-022).
-          const from = [...new Set([...(replaced?.decisionDraft?.sourceMessageIds ?? []), ...sourceMessageIds])];
+          const from = lineage(replaced, sourceMessageIds, app);
           const cs = proposeChange(app, layoutId, {
             ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
             ...(typeof supersedes === "string" ? { supersedes } : {}),

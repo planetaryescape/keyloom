@@ -29,29 +29,29 @@ Command–Shift can go where Tab is, under your left pinky. Backspace stays put.
 Read layout
 
 Completed
-24 ms
+11 ms
 
 Find function
 
 Completed
-18 ms
-
-Remember priority
-
-Completed
-16 ms
+7 ms
 
 Remember priority
 
 Completed
 5 ms
 
+Remember priority
+
+Completed
+2 ms
+
 Prepare proposals
 
 1 accepted · 1 saved proposal
 
 Completed
-72 ms
+20 ms
 
 keyloom offered 1 option.
 
@@ -293,29 +293,29 @@ Command–Shift can go where Tab is, under your left pinky. Backspace stays put.
 Read layout
 
 Completed
-27 ms
+11 ms
 
 Find function
 
 Completed
-15 ms
-
-Remember priority
-
-Completed
-11 ms
-
-Remember priority
-
-Completed
 6 ms
+
+Remember priority
+
+Completed
+4 ms
+
+Remember priority
+
+Completed
+2 ms
 
 Prepare proposals
 
 1 accepted · 1 saved proposal
 
 Completed
-42 ms
+21 ms
 
 keyloom offered 1 option.
 
@@ -391,7 +391,7 @@ Prepare proposals
 1 accepted · 1 saved proposal
 
 Completed
-15 ms
+9 ms
 
 keyloom offered 1 option.
 
@@ -503,7 +503,7 @@ esc
     "goal": "A Command–Shift key I can press with my left pinky",
     "choice": "Command–Shift on the F16 key",
     "reason": "You want X, C and V to stay where they are, you barely use F16, and a reach to the top row is fine.",
-    "source_message_ids": "[\"msg_01M62HB6NPXNM3JWM404600JTT\",\"msg_01M62HB6VGHMQSRRA26VPVYDE7\",\"msg_01M62HB70P3CE7QYTC4PYZRSJY\"]"
+    "source_message_ids": "[\"msg_01M62NEGZT01FFA69X8MEGZ5RV\",\"msg_01M62NEH5WBW0EZ6HHHDMVE3C4\",\"msg_01M62NEHBXNAKDD389V3AGA6E8\"]"
   }
 ]
 
@@ -517,12 +517,12 @@ esc
   {
     "title": "Command–Shift on the F16 key",
     "status": "superseded",
-    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62HB6S311WPGZ26MR2RDN3M\"}"
+    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62NEH1K3DXXMKVFADK9FC3K\"}"
   },
   {
     "title": "Command–Shift on the F16 key",
     "status": "applied",
-    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62HB6W9D5EBZ8JQVME090AK\"}"
+    "tradeoffs": "{\"gains\":[\"Nothing you use moves\"],\"costs\":[\"A stretch from the home row\"],\"supersedes\":\"cs_01M62NEH6CZVFK0E964X9Z3JM5\"}"
   }
 ]
 
@@ -541,39 +541,7 @@ Remembered
 
 Backspace stays where it is
 F16: rarely used
-
-Needs your answer
-
 5 completed steps · working notes
-
-Command–Shift can go where Tab is, under your left pinky. Backspace stays put.
-
-Read layout
-
-Completed
-22 ms
-
-Find function
-
-Completed
-13 ms
-
-Remember priority
-
-Completed
-10 ms
-
-Remember priority
-
-Completed
-5 ms
-
-Prepare proposals
-
-1 accepted · 1 saved proposal
-
-Completed
-45 ms
 
 keyloom offered 1 option.
 

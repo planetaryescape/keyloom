@@ -55,25 +55,24 @@ export type AssistantTurn = {
 export type Turn = UserTurn | AssistantTurn;
 
 /**
- * Applying the proposal a question refines answers it by implication (D-452): the proposal was good enough, so the question closes as
- * skipped, which is derived and so holds after a reload. Old conversations asked before proposing, so they have no proposal in the turn.
+ * Applying the proposal a question refines answers it by implication (D-452). The server stores that as the question's result and marks the
+ * card `skipped`, so it holds after a reload and after a later message, which would otherwise read "answered in his own words".
  */
-export const questionSkipped = (turn: AssistantTurn): boolean => turn.question?.answer === null && turn.proposals.some((p) => p.status === "applied");
+export const questionSkipped = (turn: AssistantTurn): boolean => turn.question?.skipped === true;
 
 /**
- * The open proposals the board should show: those of the newest reply that left any open, once the thread's last reply is done. Not the last
- * reply's own, because an answer that changes nothing proposes nothing, and the proposal on the board is still the one to pin (D-452).
+ * The open proposals the board should show: those of the newest reply that holds any, in whatever state that reply is in. A proposal is
+ * validated and saved when it arrives, so it is pinned then and not when the reply ends; and a reply cut off after saving one still shows
+ * it. Not the last reply's own, because a reply that proposes nothing leaves the proposal on the board in place (D-452).
  */
 export function openProposalsOnBoard(turns: readonly Turn[]): ProposalCard[] {
-  const last = turns.at(-1);
-  if (last?.kind !== "assistant" || last.phase !== "done") return [];
-  const open = (turn: Turn): turn is AssistantTurn => turn.kind === "assistant" && turn.phase === "done" && turn.proposals.some((p) => p.status === "proposed");
+  const open = (turn: Turn): turn is AssistantTurn => turn.kind === "assistant" && turn.proposals.some((p) => p.status === "proposed");
   const holder = turns.findLast(open);
   return holder === undefined ? [] : holder.proposals.filter((p) => p.status === "proposed");
 }
 
 /** The question is still waiting for BK. */
-export const questionOpen = (turn: AssistantTurn): boolean => turn.question?.answer === null && !questionSkipped(turn);
+export const questionOpen = (turn: AssistantTurn): boolean => turn.question?.answer === null;
 /** The provider and model a conversation started on and stays on (D-111). Null before the first reply, and for one from before it was recorded. */
 export type Pinned = { provider: ChatOutcome["provider"]; model: string | null };
 export type Transcript = { conversationId: string | null; pinned: Pinned | null; turns: Turn[]; runSequences?: Record<string, number> };
@@ -283,21 +282,28 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
     }
     case "loaded":
       return fromConversation(action.detail);
-    case "applied":
+    case "applied": {
+      // The open question refines the newest proposal; applying that one skips it, as the server stores it (D-452).
+      const newest = state.turns.flatMap((turn) => (turn.kind === "assistant" ? turn.proposals : [])).at(-1);
+      const skips = newest?.changeSetId === action.changeSetId;
       return {
         ...state,
         turns: state.turns.map((turn) => {
-          if (turn.kind !== "assistant" || !turn.proposals.some((p) => p.changeSetId === action.changeSetId)) return turn;
+          if (turn.kind !== "assistant") return turn;
+          const skipped = skips && turn.question?.answer === null ? { question: { ...turn.question, answer: "Skipped", skipped: true } } : {};
+          if (!turn.proposals.some((p) => p.changeSetId === action.changeSetId)) return { ...turn, ...skipped };
           // What the server sets aside is the rest of this proposal's group; a separate proposal beside it stays open (D-452).
           const group = turn.proposals.find((p) => p.changeSetId === action.changeSetId)?.proposalGroup ?? null;
           return {
             ...turn,
+            ...skipped,
             proposals: turn.proposals.map((p) =>
               p.changeSetId === action.changeSetId ? { ...p, status: "applied" as const } : p.status === "proposed" && group !== null && p.proposalGroup === group ? { ...p, status: "superseded" as const } : p,
             ),
           };
         }),
       };
+    }
     case "priorityRemoved":
       return {
         ...state,

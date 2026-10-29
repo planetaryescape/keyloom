@@ -80,10 +80,13 @@ describe("eval: Command-Shift", () => {
       // The revision chain: each proposal after the first replaced the one before, so exactly one is open and the rest are set aside.
       revisionsSupersede: proposals.length >= 2 && proposals.slice(1).every((p) => p.supersedes !== null && p.supersedes !== undefined) && open.length === 1,
       theNewestIsOnTheBoard: final !== undefined && final.id === proposals.at(-1)?.changeSetId,
-      finalGivesCommandShift: final !== undefined && (() => {
-        const applied = applyLayoutOps(before, final.ops);
+      // Every valid proposal in the chain places Command-Shift, not only the last: a wrong first proposal followed by a right one is not a pass.
+      everyValidOneGivesCommandShift: valid.length > 0 && valid.every((p) => {
+        const applied = applyLayoutOps(before, p.ops);
         return applied.ok && hasCommandShift(applied.layout);
-      })(),
+      }),
+      // A valid proposal never loses a function silently; this checks the agent showed what moves or what it gives up.
+      displacedShown: valid.some((p) => p.validation.diff.displaced.length + p.validation.diff.dropped.length > 0),
       backspacePinned: subjects.includes("BACKSPACE"),
       f16RarelyUsed: subjects.includes("F16"),
       finalKeepsBackspace: final !== undefined && (() => {

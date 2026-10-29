@@ -53,7 +53,7 @@ export const proposeChangesTool = (ports: AgentPorts, recorder: TurnRecorder, on
   const tool = defineTool({
     name: "propose_changes",
     description:
-      "Put your best proposal on BK's board: one change set with ops, an explanation, trade-offs and a decision draft. This is the only way a proposal reaches him. It is validated against the head: a valid one is saved for BK to apply, an invalid one comes back with errors for you to repair. You never apply anything. After BK answers a question, call it again with supersedes set to the proposal the question was about; the new one replaces the old on the board. Whenever a proposal of yours is open, say with supersedes whether this replaces one (its id) or stands beside it (null).",
+      "Put your best proposal on BK's board: one change set with ops, an explanation, trade-offs and a decision draft. This is the only way a proposal reaches him. It is validated against the head: a valid one is saved for BK to apply, an invalid one comes back with errors for you to repair. You never apply anything. After BK answers a question, call it again with supersedes set to the proposal the question was about, for every answer: the same ops if the answer only confirms it, and a decision draft whose reason carries the answer. The new one replaces the old on the board. Whenever a proposal of yours is open, say with supersedes whether this replaces one (its id) or stands beside it (null).",
     inputSchema: InputSchema,
     // The ChangeOp union makes a strict grammar the API rejects as too large; zod checks the input instead.
     strict: false,

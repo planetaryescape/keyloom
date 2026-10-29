@@ -10,6 +10,7 @@ import { fakeAnthropic, type ScriptStep } from "../helpers/fake-anthropic.ts";
 import { fakeCodex } from "../helpers/fake-codex.ts";
 import { draft } from "../helpers/ops.ts";
 import { ANSWER_1, ANSWER_2, QUICK_REQUEST, REQUEST, lastSaved, quickScript, refineScript } from "../helpers/refine-journey.ts";
+import { SKIPPED_ANSWER } from "../../src/app/question-skip.ts";
 import { tempDir } from "../helpers/tmp.ts";
 
 const status = (app: Parameters<typeof listChanges>[0], layoutId: string) =>
@@ -89,6 +90,118 @@ describe("the refine journey, through the app", () => {
     expect(out.proposals).toHaveLength(1);
     expect(out.proposals[0]?.supersedes).toBeNull();
     expect(out.proposals[0]?.validation.diff.dropped).toEqual([{ function: "key:F16", reason: "you said you barely use it" }]);
+  });
+});
+
+// What an answer leaves in the decision (D-022). The decision applying writes is the last proposal's draft, so every answer has to reach it:
+// every answer is a revision (the same ops when it only confirms), and the messages accumulate along the chain.
+describe("every answer reaches the decision", () => {
+  const ops = [{ op: "dropFunction", function: "key:F16", reason: "you said so" }, { op: "setBinding", at: { layerId: "layer-0", position: 6 }, binding: { kind: "key", code: "F17" } }];
+  const proposal = (reason: string, over: object = {}) => ({ title: "F17 on the F16 key", ops, explanation: "F17 goes where F16 is.", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft({ goal: "A key", choice: "F17 on the F16 key", reason }), ...over });
+  const ask = (n: number, of: number) => ({ tool: "ask_user", input: { question: `Question ${n}?`, considerations: ["It matters."], step: { n, of }, options: [{ label: "Yes" }, { label: "No" }] } });
+
+  test("a three-step chain whose answers leave the ops unchanged accumulates every message, once each, and the last reason carries the last answer", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "propose_changes", input: proposal("You want F17 there.") }] },
+      { blocks: [ask(1, 3)] },
+      (seen) => ({ blocks: [{ tool: "propose_changes", input: proposal("You want F17 there, and said yes to one.", { supersedes: lastSaved(seen) }) }] }),
+      { blocks: [ask(2, 3)] },
+      (seen) => ({ blocks: [{ tool: "propose_changes", input: proposal("You want F17 there, said yes to one and no to two.", { supersedes: lastSaved(seen) }) }] }),
+      { blocks: [ask(3, 3)] },
+      (seen) => ({ blocks: [{ tool: "propose_changes", input: proposal("You want F17 there, said yes to one, no to two and yes to three.", { supersedes: lastSaved(seen) }) }] }),
+      { blocks: [{ text: "Done." }] },
+    ]);
+    const model = anthropicModel(client);
+    const outcomes = [await sendMessage(app, layoutId, { message: "put F17 on F16", model })];
+    for (const text of ["Yes", "No", "Yes"]) {
+      const waiting = outcomes.at(-1);
+      outcomes.push(await sendMessage(app, layoutId, { conversationId: waiting?.conversationId ?? "", answer: { toolUseId: waiting?.question?.toolUseId ?? "", text }, model }));
+    }
+    const last = outcomes.at(-1);
+    expect(last?.status).toBe("complete");
+    // The ops never changed: each answer is a revision all the same, and only the newest is open.
+    const sets = listChanges(app, layoutId, {});
+    expect(sets).toHaveLength(4);
+    expect(sets.filter((cs) => cs.status === "proposed")).toHaveLength(1);
+    expect(new Set(sets.map((cs) => JSON.stringify(cs.ops))).size).toBe(1);
+    const applied = applyChange(app, last?.proposals[0]?.changeSetId ?? "");
+    const decision = listDecisions(app, layoutId, { kind: "choice" }).find((d) => d.id === applied.decisionId);
+    expect(decision?.reason).toContain("yes to three");
+    // The request and all three answers, each once, in the order they were said.
+    expect(decision?.sourceMessageIds).toEqual(outcomes.map((o) => o.messageIds[0] ?? ""));
+    expect(new Set(decision?.sourceMessageIds).size).toBe(4);
+  });
+
+  test("an answer the model did not revise for still links the decision to it", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "propose_changes", input: proposal("You want F17 there.") }] },
+      { blocks: [ask(1, 2)] },
+      // Answer 1 is not revised for: the model asks again with no proposal.
+      { blocks: [ask(2, 2)] },
+      (seen) => ({ blocks: [{ tool: "propose_changes", input: proposal("You want F17 there, and said no to two.", { supersedes: lastSaved(seen) }) }] }),
+      { blocks: [{ text: "Done." }] },
+    ]);
+    const model = anthropicModel(client);
+    const first = await sendMessage(app, layoutId, { message: "put F17 on F16", model });
+    const second = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: first.question?.toolUseId ?? "", text: "Yes" }, model });
+    expect(second.proposals).toEqual([]);
+    const third = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: second.question?.toolUseId ?? "", text: "No" }, model });
+    const applied = applyChange(app, third.proposals[0]?.changeSetId ?? "");
+    const decision = listDecisions(app, layoutId, { kind: "choice" }).find((d) => d.id === applied.decisionId);
+    expect(decision?.sourceMessageIds).toEqual([first, second, third].map((o) => o.messageIds[0] ?? ""));
+  });
+});
+
+// Applying the proposal a question refines answers it by implication, and the server records that (D-452).
+describe("applying while a question is open", () => {
+  const ops = (code: string) => [{ op: "dropFunction", function: "key:F16", reason: "you said so" }, { op: "setBinding", at: { layerId: "layer-0", position: 6 }, binding: { kind: "key", code } }];
+  const proposal = (title: string, code: string, over: object = {}) => ({ title, ops: ops(code), explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(), ...over });
+  const ask = (n: number) => ({ tool: "ask_user", input: { question: `Question ${n}?`, considerations: ["It matters."], step: { n, of: 2 }, options: [{ label: "Yes" }, { label: "No" }] } });
+  const questionOf = (app: Parameters<typeof showConversation>[0], id: string) => showConversation(app, id).messages.flatMap((m) => (m.question === undefined ? [] : [m.question]));
+
+  test("a question asked in a later reply than its proposal is skipped when that proposal is applied, and stays skipped after the next message", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const { client, requests } = fakeAnthropic([
+      { blocks: [{ tool: "propose_changes", input: proposal("One", "F17") }] },
+      { blocks: [ask(1)] },
+      // The answer is not revised for, so question 2 belongs to a reply with no proposal.
+      { blocks: [ask(2)] },
+      { blocks: [{ text: "Understood, it is applied." }] },
+    ]);
+    const model = anthropicModel(client);
+    const first = await sendMessage(app, layoutId, { message: "go", model });
+    const second = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: first.question?.toolUseId ?? "", text: "Yes" }, model });
+    expect(second.proposals).toEqual([]);
+    expect(second.status).toBe("awaiting_answer");
+
+    applyChange(app, first.proposals[0]?.changeSetId ?? "");
+    const [q1, q2] = questionOf(app, first.conversationId);
+    expect(q1).toMatchObject({ answer: "Yes" });
+    expect(q2).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true });
+
+    // A message after the apply: the question is not "answered in his own words" and is still skipped, now and on reload.
+    const next = await sendMessage(app, layoutId, { conversationId: first.conversationId, message: "thanks", model });
+    expect(next.status).toBe("complete");
+    expect(questionOf(app, first.conversationId)[1]).toMatchObject({ answer: SKIPPED_ANSWER, skipped: true });
+    // The model was told, and the history has one result for the question, so the API accepts it.
+    const last = requests.at(-1)?.body.messages.at(-1);
+    expect(JSON.stringify(last)).toContain(SKIPPED_ANSWER);
+    expect(JSON.stringify(last).match(/tool_result/g)).toHaveLength(1);
+  });
+
+  test("applying a proposal that is not the newest leaves the question open", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "propose_changes", input: proposal("One", "F17") }] },
+      { blocks: [{ tool: "propose_changes", input: proposal("Two", "F18", { supersedes: null }) }] },
+      { blocks: [ask(1)] },
+    ]);
+    const first = await sendMessage(app, layoutId, { message: "go", model: anthropicModel(client) });
+    const one = listChanges(app, layoutId, {}).find((cs) => cs.title === "One");
+    applyChange(app, one?.id ?? "");
+    expect(questionOf(app, first.conversationId)[0]).toMatchObject({ answer: null });
   });
 });
 
@@ -246,11 +359,29 @@ describe("a question beside a proposal in one reply (Anthropic and OpenRouter)",
   });
 });
 
+describe("a refining question with too many options", () => {
+  test("is refused with a message the model can read, does not pause the turn, and the repeat with three options does", async () => {
+    const { app, layoutId } = await commandShiftApp();
+    const q = (options: string[]) => ({ question: "Which?", considerations: ["It matters."], step: { n: 1, of: 2 }, options: options.map((label) => ({ label })) });
+    const { client } = fakeAnthropic([
+      { blocks: [{ tool: "ask_user", input: q(["A", "B", "C", "D"]) }] },
+      (seen) => {
+        expect(seen.toolResults[0]).toContain("invalid input for ask_user");
+        expect(seen.toolResults[0]).toContain("2 to 3 options");
+        return { blocks: [{ tool: "ask_user", input: q(["A", "B", "C"]) }] };
+      },
+    ]);
+    const out = await sendMessage(app, layoutId, { message: "go", model: anthropicModel(client) });
+    expect(out.status).toBe("awaiting_answer");
+    expect(out.question?.options.map((o) => o.label)).toEqual(["A", "B", "C"]);
+  });
+});
+
 describe("a ask_user from before the loop", () => {
   test("a stored question without considerations or a step still loads, shows open, and takes an answer", async () => {
     const { app, layoutId } = await commandShiftApp();
     // The model is held to the new shape, so a call in the old shape never gets this far; it is stored the way an older keyloom stored it.
-    const stored = fakeAnthropic([{ blocks: [{ tool: "ask_user", input: { question: "Left or right?", considerations: ["x"], step: { n: 1, of: 1 }, options: [{ label: "Left" }] } }] }, { blocks: [{ text: "ok" }] }]);
+    const stored = fakeAnthropic([{ blocks: [{ tool: "ask_user", input: { question: "Left or right?", considerations: ["x"], step: { n: 1, of: 1 }, options: [{ label: "Left" }, { label: "Right" }] } }] }, { blocks: [{ text: "ok" }] }]);
     const first = await sendMessage(app, layoutId, { message: "go", model: anthropicModel(stored.client) });
     const row = listMessages(app.db, first.conversationId).at(-1);
     if (row === undefined) throw new Error("no message stored");

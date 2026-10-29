@@ -238,6 +238,8 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
   // Existing turns have no correlated lifecycle. Never infer completed calls from their old tool-name hint.
   let work: AgentWorkView = working ?? (turn.presentation === undefined ? { kind: "unavailable", status } : presentationView(turn.presentation, turn.preparations));
   if (questionOpen(turn)) work = { ...work, status: "waiting" };
+  // The recorded run paused on this question; skipping it ended the wait, whatever the stored presentation still says (D-452).
+  else if (questionSkipped(turn) && work.status === "waiting") work = { ...work, status: "completed" };
   else if (turn.phase === "stopped") work = { ...work, status: "stopped" };
   else if (turn.failure !== null && work.status !== "disconnected") work = { ...work, status: "failed" };
   return (
