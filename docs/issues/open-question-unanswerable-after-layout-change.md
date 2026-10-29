@@ -1,6 +1,6 @@
 # A question that waits can't be answered once the layout head moves by any means but an apply of its conversation's proposal
 
-Status: fixed on branch fix/answer-after-layout-change (D-458, option 2 below). Found by the A2 verifier in round 3, who reproduced it by applying an unrelated proposal. A2 closes that case: applying any agent proposal of the conversation now closes its open question (D-452). The cases below were not covered by A2; D-458 covers them. Checked against origin/main `e90ab9eaf9536495be26b10f8625d63a98f1c167` (v0.58.0), where it already happened, and again at `48c2f0285370e6ede6501bd2f1a185ac86c45bf5` (v0.59.0) before the fix.
+Status: fixed in `3cde318` and `65a989b` (D-458, option 2 below). Found by the A2 verifier in round 3, who reproduced it by applying an unrelated proposal. A2 closes that case: applying any agent proposal of the conversation now closes its open question (D-452). The cases below were not covered by A2; D-458 covers them. Checked against origin/main `e90ab9eaf9536495be26b10f8625d63a98f1c167` (v0.58.0), where it already happened, and again at `48c2f0285370e6ede6501bd2f1a185ac86c45bf5` (v0.59.0) before the fix.
 
 The agent asks a question and the turn pauses; BK sees the options. If the layout changes before he answers, the card still offers its options, the run stays `waiting_user`, and picking one fails. Typing a message instead still works and ends the run.
 

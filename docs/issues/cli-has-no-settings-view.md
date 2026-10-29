@@ -1,6 +1,6 @@
 # The CLI has no view of the firmware settings
 
-Status: fixed on branch fix/open-issues-batch by `keyloom layout settings <layout>` (D-459; `src/app/firmware-settings.ts`, `test/cli/layout-settings.test.ts`). Found in fix/five-kanata, 2026-10-28, while checking the Caps Word settings fix against D-030 (every feature is in the CLI). Base origin/main `45c67e9`.
+Status: fixed in `e894e6d` (PR 201) by `keyloom layout settings <layout>` (D-459; `src/app/firmware-settings.ts`, `test/cli/layout-settings.test.ts`). Found in fix/five-kanata, 2026-10-28, while checking the Caps Word settings fix against D-030 (every feature is in the CLI). Base origin/main `45c67e9`.
 
 The Settings page (`src/web/settings/SettingsPane.tsx`) shows each firmware option with its value, default and forced state. No CLI command shows that page's view.
 
