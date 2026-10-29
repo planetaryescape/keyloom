@@ -47,6 +47,6 @@ Option 1 keeps both guards and what they mean; option 2 keeps the answer BK was 
 
 ## Fix
 
-D-458 took option 2. `answerAgentRun` and `storeMessage` no longer compare the run's `revision_id` with the head, and `storeMessage` stores an answer given after the head moved as a note, a blank line and BK's words (`src/app/answer-after-move.ts`). Option 1 was not built. Every other check on an answer stays, and applying one of the conversation's own agent proposals still ends its question (D-452).
+D-458 took option 2. `answerAgentRun` and `storeMessage` no longer compare the run's `revision_id` with the head, and `storeMessage` stores an answer given after the head moved with a note ahead of BK's words, recording his words apart so the card shows them (`src/app/answer-after-move.ts`). Option 1 was not built. Every other check on an answer stays, and applying one of the conversation's own agent proposals still ends its question (D-452).
 
 Checked on `48c2f02` before the change, with the repro above: `answerAgentRun` threw "that question or its target is no longer current" and `startAgentRun` threw "that question's target has changed". An editor edit made while the turn was still working left the question refused from the moment it appeared, because `revision_id` is the head at acceptance and not at the pause. The editor-edit, undo, other-conversation and mid-turn cases are tests in `test/app/question-endings.test.ts`, through `startAgentRun` and `answerAgentRun`. The upgrade and backfill revisions were not run; they append through the same `appendRevision`.

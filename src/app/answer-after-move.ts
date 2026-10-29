@@ -1,13 +1,9 @@
 // What the model reads with BK's answer when the layout head moved after the run that asked the question began (D-458). Its own file because only
-// the conversation code uses it: to store the answer, and to show BK his own words back.
+// the conversation code uses it, to store the answer.
+import type { ContentBlock } from "../agent/model.ts";
 import { headline } from "../layout/history-summary.ts";
 import type { App } from "./context.ts";
 import { listRevisions } from "./history.ts";
-
-// The fixed ends of the note. What lies between them varies, so the card finds BK's words by both ends and not by the whole text, the way
-// `typedText` finds a message after a selection header.
-const OPENING = "The layout changed after your last reply began";
-const CLOSING = ". Read it again with get_layout before you revise anything. BK's answer:\n\n";
 
 /** A revision's summary as one short line: a change from the chat stores the agent's whole explanation, and the note must stay one paragraph. */
 function brief(summary: string): string {
@@ -17,23 +13,20 @@ function brief(summary: string): string {
 }
 
 /**
- * The result stored for an answer: BK's words, behind a note when the layout head is not `since`, the head the run that asked was accepted at (so a
- * change made while that run was still working counts too). The model reads the note first and looks at the layout again; every revision it makes
- * after that is still validated against the head (D-014). With `since` not among the revisions (it always is) the note says the layout changed
- * and not how.
+ * The tool result stored for an answer. When the layout head is `since`, the head the run that asked was accepted at, it is BK's words. When it is
+ * not (a change made while that run was still working counts too), a note goes ahead of them: the model reads it first and looks at the layout
+ * again, and every revision it makes after that is still validated against the head (D-014). With `since` not among the revisions (it always is)
+ * the note says the layout changed and not how.
+ *
+ * The note is told from his words by the record, never by reading the text: `words` is what he wrote, and the card shows it. `providerData` is the
+ * block as the API gets it. An older keyloom sends a block with a key it does not know exactly as stored, so without it `words` would go to the API.
  */
-export function answerResult(app: App, layoutId: string, since: string, head: string, words: string): string {
-  if (since === head) return words;
+export function answerResult(app: App, layoutId: string, toolUseId: string, since: string, head: string, words: string): ContentBlock {
+  if (since === head) return { type: "tool_result", tool_use_id: toolUseId, content: words };
   const revisions = listRevisions(app, layoutId);
   const moved = revisions.findIndex((revision) => revision.id === since);
   const latest = revisions[0];
   const named = moved < 0 || latest === undefined ? "" : moved === 1 ? ` (1 revision: "${brief(latest.summary)}")` : ` (${moved} revisions, the latest "${brief(latest.summary)}")`;
-  return `${OPENING}${named}${CLOSING}${words}`;
-}
-
-/** BK's words without the note `answerResult` put ahead of them; any other result comes back as it is. */
-export function answerWords(stored: string): string {
-  if (!stored.startsWith(OPENING)) return stored;
-  const end = stored.indexOf(CLOSING);
-  return end < 0 ? stored : stored.slice(end + CLOSING.length);
+  const content = `The layout changed after your last reply began${named}. Read it again with get_layout before you revise anything. BK's answer:\n\n${words}`;
+  return { type: "tool_result", tool_use_id: toolUseId, content, words, providerData: { type: "tool_result", tool_use_id: toolUseId, content } };
 }
