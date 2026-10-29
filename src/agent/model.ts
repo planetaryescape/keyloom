@@ -8,11 +8,12 @@ import type { ProviderId } from "./provider.ts";
  * A stored content block, neutral between providers (D-111). `providerData` is the provider's own
  * block, opaque to everything but that provider's adapter: it replays it unchanged, which models
  * with thinking blocks require. An `opaque` block has nothing neutral to say (a thinking block).
+ * `words` on a tool result is the part of `content` BK wrote, when keyloom put a note ahead of it for the model (D-458).
  */
 export type ContentBlock =
   | { type: "text"; text: string; providerData?: unknown }
   | { type: "tool_use"; id: string; name: string; input: unknown; providerData?: unknown }
-  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean; providerData?: unknown }
+  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean; words?: string; providerData?: unknown }
   | { type: "opaque"; providerData: unknown };
 
 export type ModelMessage = { role: "user" | "assistant"; content: ContentBlock[] };

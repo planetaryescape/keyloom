@@ -12,7 +12,7 @@ Observed on the PR 145 heads `0f20ab1` and `f0e85dc`, while other agents' jobs s
 
 Run the queued suite with the environment printed in the failing `git` child, to see whether another test file overwrote or cleared the `GIT_CONFIG_*` variables in the shared Bun process. Check whether `awaitMountedFiles`'s settle window reads a clock that a fake can stall. If a test mutates `process.env` without restoring it, scope that change to the child it spawns.
 
-Status: the Git cascade is fixed on branch fix/open-issues-batch (cause under "A timed-out test left a fake git on PATH"). The mounted-file timing failure is fixed in 582b511 (PR 174), released in v0.54.0. The slow individual tests that start the cascade still time out under heavy load; they now fail alone.
+Status: the Git cascade is fixed in `e894e6d` (PR 201) (cause under "A timed-out test left a fake git on PATH"). The mounted-file timing failure is fixed in 582b511 (PR 174), released in v0.54.0. The slow individual tests that start the cascade still time out under heavy load; they now fail alone.
 The successful-retry fixture now allows 3 s for its subprocess probes, with a regression that failed against its old 200 ms budget. A preload guard fails and restores leaked `GIT_CONFIG_*` and `FAKE_*` values; the original Git failure has not reproduced here.
 
 ## The 200 ms fixture expires before a slow fourth probe

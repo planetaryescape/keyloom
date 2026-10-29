@@ -17,6 +17,7 @@ import { transact } from "../persistence/transaction.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 import { createAgentPorts } from "./agent-ports.ts";
+import { answerResult } from "./answer-after-move.ts";
 import { SKIPPED_ANSWER, appliedProposalIds, closingResult, isClosedAnswer, openQuestion } from "./question-skip.ts";
 
 export { openQuestion };
@@ -241,12 +242,15 @@ export function storeMessage(app: App, ref: string, input: SendMessageInput, mod
   const conversation = existing ?? insertConversation(app.db, { layoutId: view.layout.id, title: conversationTitle(input.message ?? ""), provider: model.provider, model: model.model });
   const waiting = conversationRun(app.db, conversation.id);
   if (answering.has(conversation.id) || waiting?.status === "running") throw new BusyError(`conversation ${conversation.id} is still answering the last message`);
-  if (input.answer !== undefined && waiting?.status === "waiting_user" && waiting.revision_id !== view.revision.id) throw new UsageError("that question's target has changed");
   const open = openQuestion(listMessages(app.db, conversation.id));
   if (input.answer !== undefined && open?.toolUseId !== input.answer.toolUseId) throw new UsageError("that question is not open any more");
+  // The layout head may have moved since the run that asked was accepted: the answer is still taken, behind a note that says so, because the
+  // model's earlier readings of the layout are out of date. The validator still decides every revision against the head (D-014, D-458). With no
+  // run waiting (a question asked over the legacy route has none) there is no earlier head, so nothing is said to have moved.
+  const askedAt = waiting?.status === "waiting_user" ? waiting.revision_id : view.revision.id;
   // Typing instead of pressing an option still answers it: the API needs a result for every call before the next message.
   const results: ContentBlock[] = input.answer !== undefined
-    ? [{ type: "tool_result", tool_use_id: input.answer.toolUseId, content: input.answer.text }]
+    ? [answerResult(app, view.layout.id, input.answer.toolUseId, askedAt, view.revision.id, input.answer.text)]
     : open === undefined ? [] : [{ type: "tool_result", tool_use_id: open.toolUseId, content: "BK did not pick an option; he wrote his own message instead." }];
   const text = input.message === undefined ? undefined : userMessageText(input.message, selection, view.document, view.board, checkedDrafts(view, input.drafts));
   const userMessage = insertMessage(app.db, {
@@ -317,8 +321,8 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
       // refines nothing, and a proposal from a call after it is not what it refines. The turn works that out where the order is known; it is
       // recorded here, with the question, and read back from the record, never worked out later from which proposal is newest.
       const refines = outcome.question?.refines;
-      // BK applied an agent proposal of this conversation while the turn was still running. The layout head moved, so an answer to this
-      // question would be refused: it is stored as ended now, as it would have been had the apply come after, rather than left open.
+      // BK applied an agent proposal of this conversation while the turn was still running. He decided by acting, so this question is stored
+      // as ended now, as it would have been had the apply come after, rather than left open.
       const closing = outcome.question === undefined ? undefined : closingResult(app, conversation.id, appliedAtStart, refines);
       const waiting = outcome.status === "awaiting_answer" && closing === undefined;
       if (outcome.question !== undefined && closing !== undefined) {
@@ -395,7 +399,7 @@ export function showConversation(app: App, id: string): ConversationView {
   if (!conversation) throw new NotFoundError(`no conversation "${id}"`);
   const messages: DisplayMessage[] = [];
   const stored = listMessages(app.db, id);
-  const answers = new Map(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" ? [[b.tool_use_id, b.content] as const] : []))));
+  const answers = new Map(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" ? [[b.tool_use_id, b.words ?? b.content] as const] : []))));
   // A call that got an error result was refused (invalid input, or "Not run" beside the question that paused the turn), so it is not the question.
   const refused = new Set(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" && b.is_error === true ? [b.tool_use_id] : []))));
   const refines = new Map(listPresentations(app.db, id).flatMap((p) => (p.questionToolUseId !== undefined && p.questionRefines !== undefined ? [[p.questionToolUseId, p.questionRefines] as const] : [])));

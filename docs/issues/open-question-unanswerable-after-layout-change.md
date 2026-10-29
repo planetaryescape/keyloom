@@ -1,6 +1,6 @@
 # A question that waits can't be answered once the layout head moves by any means but an apply of its conversation's proposal
 
-Status: open. Found by the A2 verifier in round 3, who reproduced it by applying an unrelated proposal. A2 closes that case: applying any agent proposal of the conversation now closes its open question (D-452). The cases below are not covered. Checked against origin/main `e90ab9eaf9536495be26b10f8625d63a98f1c167` (v0.58.0), where it already happens.
+Status: fixed in `3cde318` and `65a989b` (D-458, option 2 below). Found by the A2 verifier in round 3, who reproduced it by applying an unrelated proposal. A2 closes that case: applying any agent proposal of the conversation now closes its open question (D-452). The cases below were not covered by A2; D-458 covers them. Checked against origin/main `e90ab9eaf9536495be26b10f8625d63a98f1c167` (v0.58.0), where it already happened, and again at `48c2f0285370e6ede6501bd2f1a185ac86c45bf5` (v0.59.0) before the fix.
 
 The agent asks a question and the turn pauses; BK sees the options. If the layout changes before he answers, the card still offers its options, the run stays `waiting_user`, and picking one fails. Typing a message instead still works and ends the run.
 
@@ -44,3 +44,9 @@ The orchestrator settled that this stage keeps both guards and does not loosen d
 2. Allow the answer, with a note to the model. Drop the two guards for a question whose head moved and prefix the answer's result with a note that the layout changed after it was asked, so the model re-reads before it revises. The question stays answerable and nothing disappears. The cost is that D-411's guards were written to stop an answer being applied to a layout the question was not about; a revision built on a stale reading of the layout still has to pass the validator against the head (D-014), but the model is working from an answer to a question about keys that may have moved.
 
 Option 1 keeps both guards and what they mean; option 2 keeps the answer BK was about to give. Whichever is chosen, `test/app/question-endings.test.ts` is where the editor-edit, undo and other-conversation cases belong.
+
+## Fix
+
+D-458 took option 2. `answerAgentRun` and `storeMessage` no longer compare the run's `revision_id` with the head, and `storeMessage` stores an answer given after the head moved with a note ahead of BK's words, recording his words apart so the card shows them (`src/app/answer-after-move.ts`). Option 1 was not built. Every other check on an answer stays, and applying one of the conversation's own agent proposals still ends its question (D-452).
+
+Checked on `48c2f02` before the change, with the repro above: `answerAgentRun` threw "that question or its target is no longer current" and `startAgentRun` threw "that question's target has changed". An editor edit made while the turn was still working left the question refused from the moment it appeared, because `revision_id` is the head at acceptance and not at the pause. The editor-edit, undo, other-conversation and mid-turn cases are tests in `test/app/question-endings.test.ts`, through `startAgentRun` and `answerAgentRun`. The upgrade and backfill revisions were not run; they append through the same `appendRevision`.

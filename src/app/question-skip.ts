@@ -15,9 +15,8 @@ export const SKIPPED_ANSWER = "BK applied the proposal without answering.";
 const CLOSED_OPENING = "BK applied another proposal (";
 
 /**
- * The result stored for a question closed because BK applied some other proposal of its conversation; the card reads it as "Closed". Every
- * apply moves the layout head, and an answer to a question asked before that is refused (agent-runs.ts, conversations.ts), so the model is told
- * the question is gone and may ask again.
+ * The result stored for a question closed because BK applied some other proposal of its conversation; the card reads it as "Closed". He decided
+ * by acting, and the layout has changed since the question was asked, so the model is told the question is gone and may ask again.
  */
 export const closedAnswer = (title: string | null): string =>
   `${CLOSED_OPENING}"${title ?? "a proposal"}") without answering. The layout has changed since you asked, so this question is closed; ask again if it still matters.`;
@@ -35,8 +34,8 @@ export function openQuestion(messages: readonly MessageRow[]): { toolUseId: stri
 }
 
 /**
- * Called inside the transaction that applies `cs`. Applying any agent proposal of a conversation closes its open question: the layout head
- * moves, and an answer asked before it is refused, so a question left open would be one BK can see and cannot answer. The result stored says
+ * Called inside the transaction that applies `cs`. Applying any agent proposal of a conversation closes its open question: BK decided by
+ * acting, so a question left open would be one he has already settled with his hands. The result stored says
  * what happened. A question refines the proposal saved before it in its own turn, recorded with the pause (`questionRefines`), and applying
  * that one skips the question; any other apply closes it. The result is stored so a reload, a later message and the model all see an ended
  * question and not an open or "answered in his own words" one, and the run that paused on it is over, as when an answer arrives.
@@ -61,7 +60,7 @@ export const appliedProposalIds = (app: App, conversationId: string): Set<string
  * The result to store for a question a turn is about to pause on, when BK applied an agent proposal of the conversation while the turn was
  * running. It is the same ending as an apply after the question is stored: Skipped when one of them is the proposal the question refines,
  * Closed for any other. Undefined when none was applied, so the question waits. A proposal that was only rejected, or revised by a call in the
- * same reply, is not an apply: the head did not move, so the question stays answerable.
+ * same reply, is not an apply: BK decided nothing by acting and the head did not move, so the question stays answerable.
  */
 export function closingResult(app: App, conversationId: string, appliedAtStart: ReadonlySet<string>, refines: string | undefined): string | undefined {
   const applied = listConversationChangeSets(app.db, conversationId)
