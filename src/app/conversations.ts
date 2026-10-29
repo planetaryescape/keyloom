@@ -282,15 +282,15 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
     const history: ModelMessage[] = listMessages(app.db, conversation.id).map((m) => ({ role: m.role, content: m.content.map(neutralBlock) }));
     let outcome: TurnOutcome;
     let handoff: CopyHandoff | undefined;
-    const copyContext = conversationCopyContext(app, conversation.id);
+    const copyContext = conversationCopyContext(app, conversation.id, resolvedQuestions.flatMap((question) => question.questionRefines === undefined ? [] : [question.questionRefines]));
     try {
       outcome = await runAgentTurn({
         model,
-        ports: createAgentPorts(app, view.layout.id, conversation.id, [...(copyContext?.sourceMessageIds ?? []), userMessage.id], selection, runId, undefined, copy === undefined ? undefined : (value) => {
+        ports: createAgentPorts(app, view.layout.id, conversation.id, [...(copyContext?.active ? copyContext.sourceMessageIds : []), userMessage.id], selection, runId, undefined, copy === undefined ? undefined : (value) => {
           const result = copy(value);
           handoff = result.handoff;
           return result;
-        }),
+        }, copyContext?.blocksCopy === true),
         ...(copyContext === undefined ? {} : { copyContext: copyContext.prompt }),
         history,
         ...(input.maxIterations === undefined ? {} : { maxIterations: input.maxIterations }),

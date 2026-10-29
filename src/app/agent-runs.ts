@@ -144,8 +144,9 @@ export async function executeLegacyMessage(app: App, prepared: PreparedMessage, 
   input.signal?.addEventListener("abort", stop, { once: true });
   if (input.signal?.aborted) abort.abort();
   let accepted = false;
+  const copyContext = conversationCopyContext(app, prepared.conversation.id, prepared.resolvedQuestions.flatMap((question) => question.questionRefines === undefined ? [] : [question.questionRefines]));
   const work = runPreparedMessage(app, prepared, { ...input, signal: abort.signal }, undefined, (value) => {
-    if (conversationCopyContext(app, prepared.conversation.id)) throw new UsageError("Continue adapting this config; do not create another copy.");
+    if (copyContext?.blocksCopy) throw new UsageError("Continue adapting this config; do not create another copy.");
     const result = transact(app.db, () => {
       if (!accepted) {
         const request = { version: 1, requestId: id, layoutRef: prepared.view.layout.id, input: { conversationId: prepared.conversation.id, message: input.message } };
@@ -187,7 +188,9 @@ function prepareCopy(app: App, parentId: string, prepared: PreparedMessage, inpu
   const sourceMessages = history.filter((message) => message.role === "user" && message.content.map(neutralBlock).some((block) => block.type === "text" || (block.type === "tool_result" && asked.has(block.tool_use_id))));
   const { context, source, target, plan } = prepareCopyContext(app, prepared.view.layout.id, input, parentId, sourceMessages.map((message) => message.id));
   const config = newConfig(app, { name: input.name ?? `${source.layout.name} on ${target.definition.name}`, from: "blank", board: target.definition.id, selectFirst: false });
-  const text = sourceMessages.flatMap((message) => message.content.map(neutralBlock).flatMap((block) => block.type === "text" ? [typedText(block.text)] : block.type === "tool_result" && asked.has(block.tool_use_id) ? [block.words ?? block.content] : [])).join("\n\n");
+  const words = (message: PreparedMessage["userMessage"]) => message.content.map(neutralBlock).flatMap((block) => block.type === "text" ? [typedText(block.text)] : block.type === "tool_result" && asked.has(block.tool_use_id) ? [block.words ?? block.content] : []).join("\n");
+  const earlier = sourceMessages.filter((message) => message.id !== prepared.userMessage.id).map(words).join("\n\n");
+  const text = [words(prepared.userMessage), ...(earlier ? [`Earlier user context (the request above is current):\n${earlier}`] : [])].filter(Boolean).join("\n\n");
   const childInput: SendMessageInput = { message: text || `Continue the requested adaptation of ${source.layout.name} to ${target.definition.name}.`, model: prepared.model, presentationVersion: 1 };
   const child = storeMessage(app, config.id, childInput, prepared.model);
   const id = newId("run");
@@ -219,14 +222,14 @@ function launch(app: App, id: string, prepared: PreparedMessage, input: SendMess
   input.signal?.addEventListener("abort", stop, { once: true });
   if (input.signal?.aborted) abort.abort();
   const cancelCheck = setInterval(() => { if (findRun(app.db, id)?.cancel_requested) abort.abort(); }, 100);
-  const copyContext = conversationCopyContext(app, prepared.conversation.id);
+  const copyContext = conversationCopyContext(app, prepared.conversation.id, prepared.resolvedQuestions.flatMap((question) => question.questionRefines === undefined ? [] : [question.questionRefines]));
   entry.done = runPreparedMessage(app, prepared, {
     ...input, signal: abort.signal,
     onEvent: (event) => {
       if (event.type === "presentation") app.db.query("UPDATE agent_runs SET seq = seq + 1 WHERE id = ?").run(id);
       input.onEvent?.(event);
     },
-  }, id, copyContext !== undefined ? () => { throw new UsageError("Continue adapting this config; do not create another copy."); } : (value) => prepareCopy(app, id, prepared, value)).then(() => undefined, () => {
+  }, id, copyContext?.blocksCopy ? () => { throw new UsageError("Continue adapting this config; do not create another copy."); } : (value) => prepareCopy(app, id, prepared, value)).then(() => undefined, () => {
     app.db.query("UPDATE agent_runs SET status = ?, finished_at = ?, seq = seq + 1 WHERE id = ? AND status = 'running'")
       .run(abort.signal.aborted ? "cancelled" : "failed", Date.now(), id);
   }).finally(() => {

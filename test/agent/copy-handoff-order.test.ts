@@ -73,3 +73,34 @@ test("a failed copy name can be corrected in the same source turn", async () => 
     expect(listLayouts(app).filter((layout) => layout.name === "Corrected copy")).toHaveLength(1);
   } finally { await drainAgentRuns(app); app.db.close(); }
 });
+
+for (const provider of ["anthropic", "openrouter"] as const) test(`${provider}: an invalid earlier question cannot hide a successful copy's completed boundary`, async () => {
+  const { listMessages } = await import("../../src/persistence/conversations.ts");
+  const { app, layoutId } = await optionOptionApp();
+  const { client, requests } = fakeAnthropic([
+    { blocks: [{ tool: "ask_user", input: { question: 42, options: [] } }, { tool: "put_config", input: { from: layoutId, board: "moergo/glove80", name: "Copy after invalid question" } }] },
+    { blocks: [ask] },
+    { blocks: [{ text: "A later request about the original config." }] },
+  ]);
+  const model = anthropicModel(client, { provider });
+  try {
+    const result = await sendMessage(app, layoutId, { message: "Copy", model });
+    expect(result.status).toBe("complete");
+    expect(result.question).toBeUndefined();
+    if (!result.handoff) throw new Error("missing handoff");
+    await waitForAgentRun(app, result.handoff.runId);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.body.system).toContain("Continue the requested whole-config adaptation on this NEW config");
+    expect(showConversation(app, result.conversationId).messages.some((message) => message.question !== undefined)).toBe(false);
+    const blocks = listMessages(app.db, result.conversationId).flatMap((message) => message.content);
+    const calls = blocks.filter((block) => block.type === "tool_use");
+    const results = blocks.filter((block) => block.type === "tool_result");
+    expect(calls).toHaveLength(2);
+    expect(calls.every((call) => results.some((answer) => answer.tool_use_id === call.id))).toBe(true);
+    expect(results.some((answer) => answer.is_error === true && String(answer.content).includes("invalid input for ask_user"))).toBe(true);
+    const later = await sendMessage(app, layoutId, { conversationId: result.conversationId, message: "Now explain this original config", model });
+    expect(later.status).toBe("complete");
+    expect(later.question).toBeUndefined();
+    expect(requests).toHaveLength(3);
+  } finally { await drainAgentRuns(app); app.db.close(); }
+});

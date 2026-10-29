@@ -16,7 +16,7 @@ import { ValidationResultSchema } from "../validation/result.ts";
 import { checkChange, proposeChange, requireDeclared, requireSupersedable } from "./changes.ts";
 import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
-import { ValidationFailedError } from "./errors.ts";
+import { UsageError, ValidationFailedError } from "./errors.ts";
 import type { GeometryOptions } from "../boards/geometry.ts";
 import { newBlankConfig, newConfig, resolveBlankStart } from "./configs.ts";
 import { putConfig } from "./keyboard-put.ts";
@@ -51,7 +51,7 @@ function lineage(replaced: ChangeSetRow | undefined, current: string[], app: App
   return [...new Set([...(replaced.decisionDraft?.sourceMessageIds ?? []), ...since, ...current])];
 }
 
-export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope, runId?: string, firmware?: GeometryOptions, copy?: (input: PutInput) => PutResult): AgentPorts {
+export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope, runId?: string, firmware?: GeometryOptions, copy?: (input: PutInput) => PutResult, restrictConfigCreation = false): AgentPorts {
   const scope = selection ? { selection } : {};
   const snapshotOf = (ref: string): LayoutSnapshot => {
     const view = getLayout(app, ref);
@@ -68,6 +68,9 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
     const upgraded = upgradeStoredOryx(s.document, s.board.definition);
     return upgraded === null ? s : { ...s, document: upgraded.layout };
   };
+  const requireConfigCreation = () => {
+    if (restrictConfigCreation) throw new UsageError("Continue adapting this config; do not create another copy.");
+  };
   const ports: AgentPorts = {
     snapshot: () => snapshotOf(layoutId),
     layouts: () => listLayouts(app).map((row) => viewOf(row.id)),
@@ -83,6 +86,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
       };
     },
     newConfig(input) {
+      requireConfigCreation();
       if (input.from === "this") {
         const made = newConfig(app, { name: input.name, from: "config", config: layoutId });
         return { id: made.id, name: made.name, boardName: made.boardName };
@@ -139,6 +143,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
     ...ports,
     put: (input) => receipt("put_config", input, () => ports.put(input)),
     newConfig: (input) => {
+      requireConfigCreation();
       if (input.from === "this") {
         return receipt("create_config", input, () => ports.newConfig(input) as { id: string; name: string; boardName: string });
       }

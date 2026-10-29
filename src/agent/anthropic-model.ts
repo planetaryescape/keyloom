@@ -129,7 +129,7 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         }
         const uses = message.content.filter((block) => block.type === "tool_use");
         const terminalAt = uses.findIndex((block) => request.tools.find((tool) => tool.name === block.name)?.completes);
-        const pauseAt = uses.findIndex((block) => pausing.has(block.name));
+        const pauseAt = uses.findIndex((block) => pausing.has(block.name) && request.tools.find((tool) => tool.name === block.name)?.inputSchema.safeParse(block.input).success);
         if (terminalAt >= 0 && (pauseAt < 0 || terminalAt < pauseAt)) {
           const results: Array<{ type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }> = [];
           let finished = false;
@@ -141,7 +141,7 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
               pending = { id: block.id, name: block.name, input: block.input };
               continue;
             }
-            if (finished || !tool || tool.pauses || (pending && tool.completes)) {
+            if (finished || !tool || (pending && (tool.pauses || tool.completes))) {
               results.push({ type: "tool_result", tool_use_id: block.id, content: "Not run: the task continued on its new config.", is_error: true });
               continue;
             }

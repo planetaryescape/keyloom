@@ -255,3 +255,105 @@ test("a process interrupted after copy receipt leaves source and target inspecta
     expect(listLayouts(app)).toHaveLength(prior);
   } finally { app.db.close(); }
 });
+
+for (const route of ["durable", "legacy"] as const) test(`an applied copy permits an explicit new copy request in the same conversation (${route})`, async () => {
+  const { sendMessage } = await import("../../src/app/index.ts");
+  const { app, layoutId } = await fixture();
+  try {
+    const source = await startAgentRun(app, { version: 1, requestId: `decided-copy-${route}`, layoutRef: layoutId, input: { message: "Copy" } }, { model: scripted(layoutId) });
+    const finished = await waitForAgentRun(app, source.id);
+    if (!finished.handoff) throw new Error("missing first handoff");
+    const handoff = finished.handoff;
+    await waitForAgentRun(app, handoff.runId);
+    const original = savedRunOutcome(app, handoff.runId).proposals[0];
+    if (!original) throw new Error("missing original proposal");
+    applyChange(app, original.changeSetId);
+    if (route === "durable") app.db.query("UPDATE agent_runs SET request_json = json_remove(request_json, '$.copyContext.provenance') WHERE id = ?").run(handoff.runId);
+    let calls = 0;
+    let failure: unknown;
+    const model: AgentModel = { provider: "anthropic", model: "synthetic-new-task", effort: "high", classifyError: () => null, async run(request) {
+      try {
+        if (++calls === 1) {
+          expect(request.system).toContain("# Earlier copy provenance (read-only)");
+          expect(request.system).toContain("Keep layer access in my left hand");
+          expect(request.system).not.toContain("Do not make another config or call put_config");
+          expect(request.system).not.toContain("Translated seed (not applied or proposed)");
+          await request.tools.find((tool) => tool.name === "put_config")?.run({ from: layoutId, board: "foostan/corne", name: `Second requested copy ${route}` });
+        } else {
+          const text = request.messages[0]?.content.flatMap((block) => block.type === "text" ? [block.text] : []).join("\n");
+          expect(text?.startsWith("Now put my source on the Corne as a separate new config")).toBe(true);
+        }
+        return done;
+      } catch (error) { failure = error; throw error; }
+    } };
+    const next = route === "legacy"
+      ? await sendMessage(app, handoff.layoutId, { conversationId: handoff.conversationId, message: "Now put my source on the Corne as a separate new config", model })
+      : await (async () => {
+        const run = await startAgentRun(app, { version: 1, requestId: `new-copy-${route}`, layoutRef: handoff.layoutId, input: { conversationId: handoff.conversationId, message: "Now put my source on the Corne as a separate new config" } }, { model });
+        await waitForAgentRun(app, run.id);
+        if (failure) throw failure;
+        return savedRunOutcome(app, run.id);
+      })();
+    if (failure) throw failure;
+    expect(next.handoff).toBeDefined();
+    if (!next.handoff) throw new Error("new user task did not hand off");
+    await waitForAgentRun(app, next.handoff.runId);
+    expect(listLayouts(app).filter((layout) => layout.name === `Second requested copy ${route}`)).toHaveLength(1);
+    expect(next.conversationId).toBe(handoff.conversationId);
+  } finally { await drainAgentRuns(app); app.db.close(); }
+});
+
+for (const route of ["durable", "legacy"] as const) test(`an answer cannot make another copy even when Apply occurs during that answer (${route})`, async () => {
+  const { sendMessage } = await import("../../src/app/index.ts");
+  const { app, layoutId } = await fixture();
+  try {
+    const source = await startAgentRun(app, { version: 1, requestId: `answer-boundary-${route}`, layoutRef: layoutId, input: { message: "Copy" } }, { model: scripted(layoutId) });
+    const finished = await waitForAgentRun(app, source.id);
+    if (!finished.handoff) throw new Error("missing handoff");
+    await waitForAgentRun(app, finished.handoff.runId);
+    const original = savedRunOutcome(app, finished.handoff.runId).proposals[0];
+    if (!original) throw new Error("no original proposal");
+    let blocked = false;
+    let createBlocked = 0;
+    const model: AgentModel = { provider: "anthropic", model: "synthetic-answer", effort: "high", classifyError: () => null, async run(request) {
+      applyChange(app, original.changeSetId);
+      try { await request.tools.find((tool) => tool.name === "put_config")?.run({ from: layoutId, board: "foostan/corne", name: "Unrequested recursive copy" }); }
+      catch (error) { blocked = error instanceof Error && error.message.includes("Continue adapting this config"); }
+      for (const from of ["this", "blank"]) {
+        try { await request.tools.find((tool) => tool.name === "create_config")?.run({ name: "Unrequested created config", from }); }
+        catch (error) { if (error instanceof Error && error.message.includes("Continue adapting this config")) createBlocked++; }
+      }
+      return done;
+    } };
+    if (route === "legacy") await sendMessage(app, finished.handoff.layoutId, { conversationId: finished.handoff.conversationId, answer: { toolUseId: "target-question", text: "Inner thumb" }, model });
+    else {
+      const answered = await answerAgentRun(app, finished.handoff.runId, `answer-copy-${route}`, { toolUseId: "target-question", text: "Inner thumb" }, { model });
+      await waitForAgentRun(app, answered.id);
+    }
+    expect(blocked).toBe(true);
+    expect(createBlocked).toBe(2);
+    expect(listLayouts(app).some((layout) => layout.name === "Unrequested recursive copy" || layout.name === "Unrequested created config")).toBe(false);
+  } finally { await drainAgentRuns(app); app.db.close(); }
+});
+
+
+test("an applied copy keeps ordinary config creation available for a later request", async () => {
+  const { sendMessage } = await import("../../src/app/index.ts");
+  const { app, layoutId } = await fixture();
+  try {
+    const source = await startAgentRun(app, { version: 1, requestId: "later-create", layoutRef: layoutId, input: { message: "Copy" } }, { model: scripted(layoutId) });
+    const completed = await waitForAgentRun(app, source.id);
+    if (!completed.handoff) throw new Error("missing handoff");
+    await waitForAgentRun(app, completed.handoff.runId);
+    const proposal = savedRunOutcome(app, completed.handoff.runId).proposals[0];
+    if (!proposal) throw new Error("missing proposal");
+    applyChange(app, proposal.changeSetId);
+    const model: AgentModel = { provider: "anthropic", model: "synthetic-create", effort: "high", classifyError: () => null, async run(request) {
+      await request.tools.find((tool) => tool.name === "create_config")?.run({ name: "Later ordinary config", from: "this" });
+      return done;
+    } };
+    const outcome = await sendMessage(app, completed.handoff.layoutId, { conversationId: completed.handoff.conversationId, message: "Make a separate config from this setup", model });
+    expect(outcome.status).toBe("complete");
+    expect(listLayouts(app).filter((layout) => layout.name === "Later ordinary config")).toHaveLength(1);
+  } finally { await drainAgentRuns(app); app.db.close(); }
+});

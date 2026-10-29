@@ -18,6 +18,9 @@ The broader app journey tests create a separate target conversation, save one pr
 | Tool after successful copy | Refused; no source question or second config |
 | Question before copy | Source waits; copy does not execute |
 | Failed copy followed by question | Ordinary tool error; question remains answerable; no target artifacts |
+| Invalid question before successful copy | Validation error for that question; source completes without another source request |
+| Fresh request after the copy is applied | Ordinary copy/config creation is available; historical facts remain without old control instructions |
+| Answer continuing a copy | Config creation stays blocked, including when Apply occurs during that answer |
 | Answer with unchanged ops | Valid replacement supersedes previous proposal and retains answer provenance |
 | Invalid replacement | Previous target proposal remains open |
 | Target edit while waiting | G1's moved-head note names the target change |
@@ -45,3 +48,15 @@ The focused app, adapter and CLI checks passed: 27 tests, 164 assertions. The ga
 React Doctor reported an ordered `await` and a lookup through the bounded tool list in the Anthropic adapter. The calls must execute in order to preserve question/terminal boundaries, so those diagnostics do not warrant concurrent execution. The TypeScript and simplification review retained the repository's conditional-spread idiom rather than changing adjacent style.
 
 An early full run exposed ordinary legacy-chat regressions when every stream was routed through durable acceptance. Ordinary legacy streams now keep their original ownership and error propagation; only a copy enters the handoff coordinator. The affected original tests pass. Exact-candidate full-suite and release evidence are retained in the orchestration handover; this note does not claim an installed or browser journey was verified.
+
+## Review regressions preserve later tasks and concurrent terminal boundaries
+
+The first candidate kept its copy restriction for every later turn in the target conversation. The restriction now belongs to the adaptation task: after its proposal is applied, a fresh request can make another copy. A continuation answering a question still cannot create a config. `test/app/copy-adaptation.test.ts` covers both durable and legacy paths, Apply during an answer, and contexts saved before facts were stored separately.
+
+`test/agent/codex-terminal-concurrency.test.ts` sends overlapping HTTP calls through the real MCP server to asynchronous tools. It checks one successful terminal effect, correction after a failed first call, and exclusion after an asynchronous pause. A per-run promise chain preserves arrival order without a separate queue service.
+
+The shared Anthropic/OpenRouter adapter validates an earlier question before giving it precedence over a terminal tool. A malformed question receives a validation error; a successful following copy completes the source with paired tool results. The regression continues the original source conversation afterward to check that no hidden open question remains.
+
+The gated live eval checks Navigation37 and Space38 in the first best proposal before giving any placement answer, and checks ESCAPE, A, LCTL, LEFT and Navigation access in both initial and final layouts. It also requires final completion and at most three questions before Apply, so applying cannot hide a fourth unanswered question. No paid evaluation was run for these review fixes.
+
+A copied-config result card omits the outside-chat proposal count when its presentation identifies a target conversation. The actual proposal remains in that chat; direct `keyboard put` and ordinary `create_config` cards retain their counts. A static React render regression checks this distinction. This is component evidence, not browser or screenshot verification.

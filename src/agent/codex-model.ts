@@ -80,21 +80,29 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       let paused = false;
       let finished = false;
       let abortRun: (() => void) | undefined;
+      let ordered = Promise.resolve();
       const tools: ModelTool[] = request.tools.map((tool) => ({
         ...tool,
-        run: async (raw) => {
-          if (paused || finished) throw new Error("keyloom is waiting for an answer; this tool was not run");
-          if (++toolCalls > request.maxIterations) {
-            limitHit = true;
-            abortRun?.();
-            throw new Error("keyloom stopped this turn: too many tool calls");
-          }
-          const out = await tool.run(raw);
-          // A question for the person. Codex is stopped when the call's completed item arrives, which is the id the answer will attach to (D-382).
-          // From here every call throws, so nothing is saved after the question and `onPause` has nothing to tell the turn (D-452).
-          if (tool.pauses === true) paused = true;
-          if (tool.completes === true) finished = true;
-          return out;
+        run: (raw) => {
+          // MCP requests can overlap. Queue arrival order before awaiting a tool, so an async terminal call owns the boundary.
+          const result = ordered.then(async () => {
+            request.signal?.throwIfAborted();
+            if (paused || finished) throw new Error("keyloom is waiting for an answer; this tool was not run");
+            if (++toolCalls > request.maxIterations) {
+              limitHit = true;
+              abortRun?.();
+              throw new Error("keyloom stopped this turn: too many tool calls");
+            }
+            const out = await tool.run(raw);
+            // A question for the person. Codex is stopped when the call's completed item arrives, which is the id the answer will attach to (D-382).
+            // From here every call throws, so nothing is saved after the question and `onPause` has nothing to tell the turn (D-452).
+            if (tool.pauses === true) paused = true;
+            if (tool.completes === true) finished = true;
+            return out;
+          });
+          // A failed call leaves the next correction runnable; a successful pause/completion is checked inside that next call.
+          ordered = result.then(() => undefined, () => undefined);
+          return result;
         },
       }));
 

@@ -1,3 +1,6 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ConfigCardList } from "../../src/web/chat/ConfigCards.tsx";
 import { describe, expect, test } from "bun:test";
 import type { ChatPresentation } from "../../src/api/http.ts";
 import type { ApiConfig } from "../../src/api/configs.ts";
@@ -111,6 +114,15 @@ describe("the config card", () => {
     expect(failed.note).toBe("Couldn't load this config right now.");
     expect(failed.note).not.toMatch(/menu/i);
     expect(configCardView({ state: "loading" }, "x", null, "c1").action).toBeNull();
+  });
+
+  test("a handoff card omits the outside-chat count while legacy cards keep it", () => {
+    const made = presentation([op("op_1", "put_config", "succeeded", config("c1"))]);
+    const cards = { data: new Map([["c1", ready({}, 0)]]), currentId: "c1", origin: null, onOpen: () => {}, onReview: () => {} };
+    const render = (value: ChatPresentation) => renderToStaticMarkup(createElement(ConfigCardList, { presentation: value, cards }));
+    expect(render(made)).toContain("No proposals waiting");
+    expect(render({ ...made, handoff: { layoutId: "c1", conversationId: "target-chat", runId: "target-run", requestId: "target-request" } })).not.toContain("No proposals waiting");
+    expect(render({ ...made, handoff: { layoutId: "other", conversationId: "other-chat", runId: "other-run", requestId: "other-request" } })).toContain("No proposals waiting");
   });
 
   test("handles a source that was deleted, a blank start and a single proposal", () => {
