@@ -1,3 +1,4 @@
+import { waitForAgentRun } from "../../src/app/agent-runs.ts";
 // The agent's ask_user (D-380..D-382): the turn stops at the question, the transcript keeps it open across a reload, and the answer is
 // the tool call's result. Scripted Anthropic behind the real SDK; nothing reaches a network.
 import { describe, expect, test } from "bun:test";
@@ -168,9 +169,12 @@ describe("a request to copy a setup onto the keyboard", () => {
 
     expect(out.status).toBe("complete");
     expect(out.question).toBeUndefined();
-    // The first model reply already acted: the second request carries the put's result, and nothing was asked in between.
+    expect(out.handoff).toBeDefined();
+    if (out.handoff) await waitForAgentRun(app, out.handoff.runId);
     expect(requests).toHaveLength(2);
-    expect(requests[1]?.toolResults.join("\n")).toContain("Nothing was applied");
+    expect(requests[1]?.body.system).toContain("Continue the requested whole-config adaptation on this NEW config");
+    expect(requests[1]?.body.messages[0]).toMatchObject({ role: "user" });
+    expect(JSON.stringify(listMessages(app.db, out.conversationId))).toContain("tool_result");
     expect(requests[0]?.body.system).toContain("Call it at once");
     expect(requests[0]?.body.tools.map((t: { name: string }) => t.name)).toContain("ask_user");
     expect(listConfigs(app).some((c) => c.name === "my-glove80 on MacBook keyboard (ANSI)")).toBe(true);

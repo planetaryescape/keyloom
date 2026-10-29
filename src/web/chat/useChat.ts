@@ -34,7 +34,7 @@ const isAbort = (error: unknown): boolean => error instanceof DOMException && er
  * finished reply (open a config it made) without acting again on every replay. It is state, so whoever reads it sees the transcript
  * as rendered with the finished reply in it.
  */
-export function useChat(token: string, layoutRef: string) {
+export function useChat(token: string, layoutRef: string, onContinueCopy?: (handoff: NonNullable<ChatPresentation["handoff"]>) => void, initialConversation?: string) {
   const [liveCompleted, setLiveCompleted] = useState<{ presentation: ChatPresentation; id: number } | null>(null);
   const [transcript, dispatch] = useReducer(transcriptReducer, EMPTY);
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -42,6 +42,7 @@ export function useChat(token: string, layoutRef: string) {
   const controller = useRef<AbortController | null>(null);
   const counter = useRef(0);
   const savedRun = useRef<string | null>(null);
+  const handoff = useRef<ChatPresentation["handoff"]>(undefined);
   const pendingAcceptance = useRef<{ id: string; stopped: boolean; controller: AbortController } | null>(null);
   const storageKey = `keyloom.agent.current.${layoutRef}`;
   // Read when a message goes out; the reducer's copy is a render behind inside an event handler.
@@ -56,6 +57,7 @@ export function useChat(token: string, layoutRef: string) {
     await observeSavedRun(token, id, mine.signal, (snapshot, detail) => {
       if (controller.current !== mine) return;
       savedRun.current = snapshot.id;
+      handoff.current = snapshot.handoff;
       conversationId.current = snapshot.conversationId;
       completed = snapshot.status === "completed" ? snapshot.presentation : null;
       dispatch({ type: "saved", snapshot, detail });
@@ -65,6 +67,7 @@ export function useChat(token: string, layoutRef: string) {
   }, [token]);
 
   useEffect(() => {
+    if (initialConversation !== undefined) return;
     const id = localStorage.getItem(storageKey);
     if (!id) return;
     const mine = new AbortController();
@@ -73,7 +76,7 @@ export function useChat(token: string, layoutRef: string) {
       if (!mine.signal.aborted) setProblem(classify(error));
     }).finally(() => { if (controller.current === mine) controller.current = null; });
     return () => mine.abort();
-  }, [storageKey, observe]);
+  }, [storageKey, observe, initialConversation]);
 
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
 
@@ -171,10 +174,11 @@ export function useChat(token: string, layoutRef: string) {
 
   /** Asks again for the reply that failed, in the same conversation. */
   const retry = useCallback(() => {
+    if (handoff.current !== undefined && onContinueCopy !== undefined) { onContinueCopy(handoff.current); return Promise.resolve(); }
     const user = lastUser(transcript);
     if (user === undefined || streaming) return Promise.resolve();
     return run(user.text, user.selection, { type: "retry", assistantId: nextId("reply") });
-  }, [transcript, streaming, run]);
+  }, [transcript, streaming, run, onContinueCopy]);
 
   const stop = useCallback(() => {
     if (controller.current === null) return;

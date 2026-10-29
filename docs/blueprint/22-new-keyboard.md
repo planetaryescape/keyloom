@@ -1,6 +1,6 @@
 # 22: A new keyboard: connect it and put my config on it
 
-Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on origin/main at `f0ac50d` (v0.31.1); the screens built on fake USB (part 2, D-336); the agent's `put_config` tool runs the put from chat (D-372); the DFU flash recipes and the smoke build (S43) are built and run only against fakes and Docker, 2026-10-17, rung 21 part 2 (D-365 to D-369), so no recipe has flashed a physical keyboard. The rest of this chapter is the design it follows. Detection ran against BK's real USB bus once (S42) and the derived boards built in Docker (S43), both in [15](15-open-questions.md); nothing here has put a config on a physical keyboard.
+Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on origin/main at `f0ac50d` (v0.31.1); the screens built on fake USB (part 2, D-336); the agent's `put_config` hands adaptation to a separate target conversation (D-460); the DFU flash recipes and the smoke build (S43) are built and run only against fakes and Docker, 2026-10-17, rung 21 part 2 (D-365 to D-369), so no recipe has flashed a physical keyboard. The rest of this chapter is the design it follows. Detection ran against BK's real USB bus once (S42) and the derived boards built in Docker (S43), both in [15](15-open-questions.md); nothing here has put a config on a physical keyboard.
 
 BK: "If I get a new keyboard I just connect it and say put my config on this. Doesn't matter what keyboard it is as long as it uses ZMK or QMK."
 
@@ -68,3 +68,7 @@ Not built, and not guessed at:
 - A flash on a physical keyboard. The three `dfu-tool` recipes run the commands QMK's flashing guide gives and are tested against fake tools and a fake USB bus only (D-369).
 - Reading Studio, Vial or VIA for the keyboard's own name or keymap, a bootloader drive's Board-ID for the controller, and the right half of a split ZMK keyboard (its product string is unobserved, spike 4).
 
+
+## Agent copies refine a separate target config
+
+The agent's `put_config` now hands adaptation to a conversation owned by a separate, unselected config (D-460), replacing the direct mapping alternatives described above for agent calls. Its first proposal adapts the complete setup from the existing translator's seed and source/target remembered reasons. D-452 questions refine it, and Apply records the final reason. Original configs and board selection stay intact, including when the target board has no config yet. Direct `keyboard put` retains its deterministic proposal behavior.

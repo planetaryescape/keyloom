@@ -54,7 +54,7 @@ const isUniqueViolation = (err: unknown): boolean => (err as { code?: string }).
 /** Creates a layout and its first revision in one transaction. */
 export function createLayout(
   db: Database,
-  input: { name: string; layout: Layout; summary: string; origin: Origin; now?: number; copiedFrom?: { layoutId: string; revisionId: string } },
+  input: { name: string; layout: Layout; summary: string; origin: Origin; now?: number; selectFirst?: boolean; copiedFrom?: { layoutId: string; revisionId: string } },
 ): { layout: LayoutRow; revision: RevisionRow } {
   const now = input.now ?? Date.now();
   const layoutId = newId("lay");
@@ -70,7 +70,7 @@ export function createLayout(
         "INSERT INTO revisions (id, layout_id, parent_id, document, origin, summary, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)",
       ).run(revisionId, layoutId, JSON.stringify(input.layout), input.origin, input.summary, now);
       // A board's first config is the one on its keyboard; later ones wait to be put on (D-300).
-      db.query("INSERT OR IGNORE INTO board_config (board_id, layout_id) VALUES (?, ?)").run(input.layout.boardId, layoutId);
+      if (input.selectFirst !== false) db.query("INSERT OR IGNORE INTO board_config (board_id, layout_id) VALUES (?, ?)").run(input.layout.boardId, layoutId);
     }).immediate();
   } catch (err) {
     if (isUniqueViolation(err)) throw new NameTakenError(`a layout named "${input.name}" already exists`);

@@ -126,7 +126,7 @@ interface ViewerProps {
 }
 
 /** What a board or config switch carries to the next layout (D-317). */
-export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean };
+export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean; conversationId?: string; continueCopy?: boolean };
 
 // `resume` is a draft kept from an earlier visit to this key (D-317); the card opens on it.
 type Editing = { layerId: string; position: number; focus: boolean; resume?: Draft };
@@ -1292,7 +1292,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
    * travels as what was on screen: this layout's turns, after any it had carried in itself, so a run of switches keeps the whole thread.
    */
   function switchLayout(id: string) {
-    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry() };
+    const handoff = turnsNow.current.flatMap((turn) => turn.kind === "assistant" && turn.presentation?.handoff?.layoutId === id ? [turn.presentation.handoff] : []).at(-1);
+    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry(), ...(handoff === undefined ? {} : { conversationId: handoff.conversationId }) };
     if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
     else chrome.onSelect(id);
     // A config made since the page loaded isn't in the page's list yet, and selecting an unknown one leaves the page on its skeleton.
@@ -1322,7 +1323,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const id = autoOpenTarget(presentation, { currentId: layoutRef, opened: openedForAgent.current, busy: busyHere });
     if (id === null) return;
     openedForAgent.current.add(id);
-    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen: true, thread: threadToCarry(turns) };
+    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen: true, thread: threadToCarry(turns), ...(presentation.handoff === undefined ? {} : { conversationId: presentation.handoff.conversationId }) };
     if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
     // The list of configs behind the page doesn't have it yet; reloading also selects it.
     chrome.onReload?.(id);
@@ -1530,6 +1531,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onOpenRelease={onOpenRelease}
                 commands={chatCommands}
                 drafts={chatDrafts}
+                initialConversation={chrome.arrival?.conversationId}
+                continueCopy={chrome.arrival?.continueCopy}
+                onContinueCopy={(handoff) => {
+                  chrome.onCarry?.(handoff.layoutId, { layerName: null, chatOpen: true, thread: threadToCarry(), conversationId: handoff.conversationId, continueCopy: true });
+                  chrome.onReload?.(handoff.layoutId);
+                }}
                 carried={carriedThread}
                 onClearCarried={() => setCarriedThread(null)}
                 onTurns={(turns) => {

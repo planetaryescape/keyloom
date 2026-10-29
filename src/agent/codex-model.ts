@@ -78,11 +78,12 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       let toolCalls = 0;
       let limitHit = false;
       let paused = false;
+      let finished = false;
       let abortRun: (() => void) | undefined;
       const tools: ModelTool[] = request.tools.map((tool) => ({
         ...tool,
         run: async (raw) => {
-          if (paused) throw new Error("keyloom is waiting for an answer; this tool was not run");
+          if (paused || finished) throw new Error("keyloom is waiting for an answer; this tool was not run");
           if (++toolCalls > request.maxIterations) {
             limitHit = true;
             abortRun?.();
@@ -92,6 +93,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
           // A question for the person. Codex is stopped when the call's completed item arrives, which is the id the answer will attach to (D-382).
           // From here every call throws, so nothing is saved after the question and `onPause` has nothing to tell the turn (D-452).
           if (tool.pauses === true) paused = true;
+          if (tool.completes === true) finished = true;
           return out;
         },
       }));
@@ -99,7 +101,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       const server = await startToolServer(tools);
       const scratch = prepareScratch(server.token, env);
       try {
-        return await runCodex({ request, server, scratch, model, effort, env, timeoutMs, isLimitHit: () => limitHit || paused, isPaused: () => paused, pausing: new Set(request.tools.filter((t) => t.pauses === true).map((t) => t.name)), setAbort: (f) => (abortRun = f) });
+        return await runCodex({ request, server, scratch, model, effort, env, timeoutMs, isFinished: () => finished, isLimitHit: () => limitHit || paused || finished, isPaused: () => paused, pausing: new Set(request.tools.filter((t) => t.pauses === true).map((t) => t.name)), setAbort: (f) => (abortRun = f) });
       } finally {
         await server.stop();
         scratch.remove();
@@ -118,6 +120,7 @@ async function runCodex(input: {
   timeoutMs: number;
   isLimitHit: () => boolean;
   isPaused: () => boolean;
+  isFinished: () => boolean;
   pausing: ReadonlySet<string>;
   setAbort: (abort: () => void) => void;
 }): ReturnType<AgentModel["run"]> {
@@ -216,7 +219,7 @@ async function runCodex(input: {
           } else if (item.kind === "mcp_tool_call") {
             publish("working_note");
             steps.push({ call: { ...item.call, id: `codex_${executionId}_${item.call.id}` } });
-            if (input.isPaused() && isSuccessfulPausingCall(item.call)) {
+            if ((input.isPaused() && isSuccessfulPausingCall(item.call)) || (input.isFinished() && request.tools.some((tool) => tool.name === item.call.tool && tool.completes) && !item.call.error && item.call.status !== "failed")) {
               questionSeen = true;
               kill("limit");
             }
@@ -267,7 +270,7 @@ async function runCodex(input: {
   const messages = synthesise(completedSteps);
   return {
     messages,
-    stopReason: limited ? "tool_use" : "end_turn",
+    stopReason: limited && !input.isFinished() ? "tool_use" : "end_turn",
     iterations: steps.filter((s) => "call" in s).length + 1,
     usage,
   };

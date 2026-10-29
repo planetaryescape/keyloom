@@ -8,6 +8,7 @@ export function defineTool<S extends z.ZodObject>(def: {
   inputSchema: S;
   strict?: boolean;
   pauses?: boolean;
+  completes?: boolean;
   run: (input: z.infer<S>) => Promise<string> | string;
 }): ModelTool {
   return {
@@ -16,6 +17,7 @@ export function defineTool<S extends z.ZodObject>(def: {
     inputSchema: def.inputSchema,
     ...(def.strict === undefined ? {} : { strict: def.strict }),
     ...(def.pauses === undefined ? {} : { pauses: def.pauses }),
+    ...(def.completes === undefined ? {} : { completes: def.completes }),
     run: (raw) => {
       // Streamed tool input is not validated by the API (03#model-and-sdk), so this is the check.
       const parsed = def.inputSchema.safeParse(raw);
