@@ -19,19 +19,52 @@ export function fakeBinDir(scripts: Record<string, string>): string {
   return dir;
 }
 
-/** Runs `fn` with `dir` first on PATH, then restores it. */
+type Scope = { dir: string; env: Record<string, string> };
+let activeScopes: Scope[] = [];
+// What each variable held before the first scope that touched it. Cleared when the last scope ends.
+let original = new Map<string, string | undefined>();
+
+/**
+ * Runs `fn` with `dir` first on PATH, then removes this scope's changes. A test that times out leaves its `fn` running, so
+ * scopes overlap and end in any order. Restoring a snapshot taken at the start would put a stale fake git back for every
+ * later file, so a variable goes back to the newest scope still active that sets it, or else to its original value.
+ */
 export async function withPath<T>(dir: string, fn: () => Promise<T>, env: Record<string, string> = {}): Promise<T> {
-  const saved = { PATH: process.env.PATH, ...Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]])) };
+  const scope: Scope = { dir, env };
+  for (const k of Object.keys(env)) if (!original.has(k)) original.set(k, process.env[k]);
+  activeScopes.push(scope);
   process.env.PATH = `${dir}:${process.env.PATH}`;
   Object.assign(process.env, env);
   try {
     return await fn();
   } finally {
-    for (const [k, v] of Object.entries(saved)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
+    const index = activeScopes.indexOf(scope);
+    // resetWithPath dropped this scope when its test timed out: the next test owns the environment now, so there is nothing to give back.
+    if (index !== -1) {
+      activeScopes.splice(index, 1);
+      // One occurrence only: a nested scope with the same directory leaves the outer scope's entry in place.
+      const entries = (process.env.PATH ?? "").split(":");
+      const at = entries.indexOf(dir);
+      if (at !== -1) entries.splice(at, 1);
+      process.env.PATH = entries.join(":");
+      for (const k of Object.keys(env)) {
+        const owner = activeScopes.findLast((s) => k in s.env);
+        const value = owner ? owner.env[k] : original.get(k);
+        if (!owner) original.delete(k);
+        if (value === undefined) delete process.env[k];
+        else process.env[k] = value;
+      }
     }
   }
+}
+
+/**
+ * Forgets every active scope. The guard calls it before each test: a scope still running from a test that timed out would
+ * otherwise re-apply its variables when a later scope ends, and its own `finally` would take things back from the next test.
+ */
+export function resetWithPath(): void {
+  activeScopes = [];
+  original = new Map();
 }
 
 /** A well-formed DFU file for `vid:pid`: payload, then the 16-byte suffix with a real CRC. */

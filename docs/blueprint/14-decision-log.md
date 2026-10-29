@@ -2071,3 +2071,13 @@ BK, 2026-10-22: the agent builds the best proposal first, then asks questions on
 - **Not in this decision:** a per-option board preview on the question (A2b), the copy adapting to the target board (A3), a "Fix issues" button (A4).
 
 Evidence and comps: `docs/research/refine-loop/`.
+
+### D-459: `keyloom layout settings <layout>` prints the Settings page's view, read only. A change stays with `setFirmwareSetting` ops. Extends D-030 to firmware options. (2026-10-29, BK: "fix the issues")
+
+The Settings page shows every firmware option with its value, default and forced state, and the CLI showed none of it: `layout show` carried only what the layout stores, which hides a Caps Word key's forced "on" (`docs/issues/cli-has-no-settings-view.md`).
+
+- **One row per option the page offers** (`optionsFor(board)`): `key`, plain `name`, `group`, `kind`, `unit`, `value` (`currentValue`, forced values included; null when the stored text is an expression, whose result is not known here), `default` (`baselineOf`, which reads an Oryx `rules.mk` switch), `stored` (`isSet`), `source_text` (the stored expression when the value is not a number or switch, such as `(TAPPING_TERM + 10)`) and `forced_by` (`forcedOn`, the reason text or null).
+- **Formats:** table (`KEY NAME VALUE DEFAULT STORED NOTE`, the forced reason in the note), json (the layout's ID, name, board and revision, then `settings`), jsonl (one option per line with `layout_id`), ids (the keys). `--rev` reads an older revision, as `layout show` does.
+- **Read only.** No `set` verb: a write is a `setFirmwareSetting` or `removeFirmwareSetting` op through `change check`, `change propose` and `change apply`, so it passes the validator like every other change (D-014). `--help` and the table footer say so.
+- **Not shown:** settings the layout stores that the page has no control for (`otherSettings`). They stay in `layout show --format json`. A board with no options (the MacBook's kanata) prints a one-line note.
+- **Built in** `src/app/firmware-settings.ts` (`layoutSettings`) and `src/cli/main.ts`; tests in `test/cli/layout-settings.test.ts`.

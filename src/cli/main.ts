@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  requireCommandSupport, type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
+  requireCommandSupport, type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, layoutSettings, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -24,7 +24,7 @@ import { announceServer } from "../server/running-server.ts";
 import { resolveExistingServer } from "./serve-existing.ts";
 import { DESKTOP_PROTOCOL } from "../server/server-compat.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
-import { importTable } from "./report.ts";
+import { importTable, settingsTable } from "./report.ts";
 import pkg from "../../package.json" with { type: "json" };
 
 const stdIo = (): Io => ({
@@ -139,6 +139,25 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         },
         ids: [view.layout.id],
         table: `${view.layout.id}  ${view.layout.name}  ${view.layout.boardId}  ${view.revision.id}\n\n${grids}`,
+      });
+    });
+
+  layout
+    .command("settings")
+    .description("print the firmware settings the Settings page offers for a layout: each value in force, its default, whether the layout stores it, and why it is forced. Read only: change a value with a setFirmwareSetting op (`change propose`)")
+    .argument("<layout>", "layout ID or name")
+    .option("--rev <revision>", "a revision ID instead of the head")
+    .action(async (ref: string, opts: { rev?: string }) => {
+      const view = await withApp((app) => layoutSettings(app, ref, opts.rev));
+      const body = { layout_id: view.layoutId, name: view.name, board_id: view.boardId, revision_id: view.revisionId };
+      const row = (s: (typeof view.settings)[number]) => ({
+        key: s.key, name: s.name, group: s.group, kind: s.kind, unit: s.unit || null, value: s.value, default: s.default, stored: s.stored, source_text: s.sourceText, forced_by: s.forcedBy,
+      });
+      print(io, format(), {
+        json: { ...body, settings: view.settings.map(row) },
+        rows: view.settings.map((s) => ({ schema_version: SCHEMA_VERSION, layout_id: view.layoutId, ...row(s) })),
+        ids: view.settings.map((s) => s.key),
+        table: settingsTable(view),
       });
     });
 

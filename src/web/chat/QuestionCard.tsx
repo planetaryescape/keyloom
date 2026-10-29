@@ -5,8 +5,6 @@ import { optionForKey } from "./question-keys.ts";
 
 interface Props {
   question: Question;
-  /** BK applied the proposal this question refines, so it needs no answer (D-452). A question closed by another apply says so on the question itself. */
-  skipped?: boolean;
   /** A reply is already streaming from this answer, or another is. */
   disabled?: boolean;
   onAnswer: (toolUseId: string, text: string) => void;
@@ -30,11 +28,13 @@ function QuestionHead({ id, question }: { id: string; question: Question }) {
 
 // The agent's question to BK (D-381, Rung 27): interactive question kinds (single/multiple choice, short text, layer, key, keyboard).
 // Once answered it is a quiet, read-only line.
-export function QuestionCard({ question, skipped = false, disabled = false, onAnswer }: Props) {
+export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
   const id = useId();
   const [typing, setTyping] = useState(question.kind === "short_text");
   const [text, setText] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // BK applied the proposal this question refines, so it needs no answer (D-452); a question closed by another apply says so on itself.
+  const skipped = question.skipped === true;
   const open = question.answer === null && !skipped;
   const kind = question.kind ?? "single_choice";
 

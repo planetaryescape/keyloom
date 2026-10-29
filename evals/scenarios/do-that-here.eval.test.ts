@@ -7,15 +7,17 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type ChatOutcome, getLayout, sendMessage } from "../../src/app/index.ts";
+import { getLayout } from "../../src/app/index.ts";
 import { applyOps as applyLayoutOps } from "../../src/layout/apply-ops.ts";
 import type { Layout } from "../../src/layout/schema.ts";
 import { type HomeRowCase, glove80HomeRow, moonlanderHomeRow } from "../../test/helpers/home-row.ts";
+import { MAX_QUESTIONS, converse, said } from "../converse.ts";
 import { costLine, costUsd, evalProvider, live, namesNoKeyNumbers, reportFile } from "../provider.ts";
 
 
 const MESSAGE = "give these the same home row mods as the left, mirrored";
-const MAX_TURNS = 3;
+// Turns include the answers to questions.
+const MAX_TURNS = 3 + MAX_QUESTIONS;
 const NUDGE = "Yes, mirror them exactly as the left is. Please propose now.";
 
 
@@ -31,20 +33,7 @@ const sortMods = (mods: readonly string[]) => [...mods].sort();
 async function runBoard(name: string, make: () => Promise<HomeRowCase>) {
   const c = await make();
   const before = getLayout(c.app, c.layoutId).document;
-  const outcomes: ChatOutcome[] = [];
-  let conversationId: string | undefined;
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const outcome = await sendMessage(c.app, c.layoutId, {
-      provider: evalProvider,
-      message: turn === 0 ? MESSAGE : NUDGE,
-      ...(turn === 0 ? { selection: { layer: c.layerId, positions: c.selection } } : {}),
-      ...(conversationId ? { conversationId } : {}),
-    });
-    conversationId = outcome.conversationId;
-    outcomes.push(outcome);
-    expect(outcome.status).toBe("complete");
-    if (outcome.proposals.length > 0) break;
-  }
+  const { outcomes, questions } = await converse(c.app, c.layoutId, { message: MESSAGE, selection: { layer: c.layerId, positions: c.selection } }, { nudges: [NUDGE], maxTurns: MAX_TURNS });
 
   const proposals = outcomes.flatMap((o) => o.proposals);
   const valid = proposals.filter((p) => p.validation.ok);
@@ -63,7 +52,8 @@ async function runBoard(name: string, make: () => Promise<HomeRowCase>) {
   const board = getLayout(c.app, c.layoutId).board.definition;
 
   const checks = {
-      namesKeysNotNumbers: namesNoKeyNumbers(outcomes),
+    namesKeysNotNumbers: namesNoKeyNumbers(outcomes),
+    atMostThreeQuestions: questions.length <= MAX_QUESTIONS,
     proposedSomething: valid.length > 0,
     everyProposalChangesExactlyTheSelection: valid.length > 0 && valid.every((p) => JSON.stringify(sorted(p.validation.diff.changed.map((s) => s.position))) === JSON.stringify(wanted) && p.validation.diff.changed.every((s) => s.layerId === c.layerId)),
     noOutsideSelectionWarning: valid.every((p) => !p.validation.warnings.some((w) => w.code === "outside_selection")),
@@ -93,7 +83,7 @@ async function runBoard(name: string, make: () => Promise<HomeRowCase>) {
     `Tokens: ${usage.inputTokens} in, ${usage.outputTokens} out, ${usage.cacheReadTokens} cache read, ${usage.cacheCreationTokens} cache write.`,
     costLine(outcomes, usage),
     "### Agent replies",
-    ...outcomes.map((o, i) => `Turn ${i + 1}: ${o.text}`),
+    ...outcomes.map((o, i) => `Turn ${i + 1} (${o.status}): ${said(o)}`),
     "",
     "### Proposals",
     ...proposals.map((p) => `#### ${p.title} (${p.validation.ok ? "valid" : "invalid"})\n${p.explanation}\n\nOps: ${JSON.stringify(p.ops)}\n\nChanged: ${JSON.stringify(p.validation.diff.changed.map((s) => s.position))}. Warnings: ${p.validation.warnings.map((w) => w.code).join(", ") || "none"}\n\nGains: ${p.tradeoffs.gains.join("; ")}\nCosts: ${p.tradeoffs.costs.join("; ")}`),

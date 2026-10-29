@@ -12,6 +12,7 @@ export {
 export {
   type LayoutExportDocument, type LayoutExportProbe, LAYOUT_EXPORT_KIND, LAYOUT_EXPORT_SCHEMA_VERSION, LayoutExportDocumentSchema, buildLayoutExportDocument, probeLayoutExport,
 } from "../layout/export-document.ts";
+export { type SettingView, type SettingsView, layoutSettings } from "./firmware-settings.ts";
 export { type UploadInput, importUpload } from "./import-upload.ts";
 export { listRevisions } from "./history.ts";
 export { configsMadeInTurn } from "./made-configs.ts";

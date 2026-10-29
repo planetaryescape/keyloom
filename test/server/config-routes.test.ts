@@ -22,11 +22,13 @@ afterEach(async () => {
   worlds = [];
 });
 
-async function serve() {
+// `quietMs` is how long an edit waits before the sync engine builds and flashes it. Tests that read version history must outlast any
+// delay between their edits and the read, or the engine adds a version of the head in between (it did on a slow CI runner).
+async function serve(opts: { quietMs?: number } = {}) {
   const w = await syncWorld();
   worlds.push(w);
   w.flashed();
-  const engine = w.engine();
+  const engine = w.engine(opts.quietMs === undefined ? {} : { quietMs: opts.quietMs });
   await engine.start();
   const backend = appConfigsBackend(w.app, engine, { fetchText: defaultKeymapTree(), cacheDir: tempDir() });
   const server = Bun.serve({
@@ -135,10 +137,12 @@ describe("configs", () => {
 
 describe("versions", () => {
   test("history, naming, compare and restore", async () => {
-    const { w, call, post } = await serve();
+    const { w, call, post } = await serve({ quietMs: 600_000 });
     const first = w.head();
     edit(w, w.layoutId, "F17");
     const head = edit(w, w.layoutId, "F18");
+    // Longer than the default 40 ms quiet window, so an engine left on its default would have put the head on the keyboard by now.
+    await Bun.sleep(150);
 
     const history = VersionHistoryResponseSchema.parse(await (await call(`/api/configs/${w.layoutId}/versions`)).json());
     expect(history.versions).toEqual([]);

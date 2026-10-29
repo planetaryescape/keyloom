@@ -29,13 +29,15 @@ if (listLayouts(app).length === 0) await importLayout(app, { board: "zsa/moonlan
 const turn: ScriptStep[] = [
   { blocks: [{ tool: "list_layouts", input: {} }] },
   { blocks: [{ tool: "put_config", input: { from: "Moonlander daily", board: "foostan/corne" } }] },
-  { blocks: [{ text: "I made a new config, \"Moonlander daily on Corne\", on your Corne from your Moonlander daily layout. Your Moonlander config is untouched, and nothing has been built or flashed.\n\nThe Corne has far fewer keys than the Moonlander, so most of the top row, the number row and the thumb clusters had no key of their own. Where I could, I matched keys by what they type and then by place; the keys that did not fit are listed as not carried, and the layer keys are placed on the nearest thumb keys.\n\nI stored two proposals on the new config for you to review: one that carries everything that fits, and one that keeps the layer keys where you had them. Say if you would rather keep positions than match by what keys type." }] },
+  { blocks: [{ text: "I made a new config, \"Moonlander daily on Corne\", on your Corne from your Moonlander daily layout. Your Moonlander config is untouched, and nothing has been built or flashed.\n\nThe Corne has far fewer keys than the Moonlander, so most of the top row, the number row and the thumb clusters had no key of their own. Where I could, I matched keys by what they type and then by place; the keys that did not fit are listed as not carried,.\n\nI stored two proposals on the new config for you to review: one that carries everything that fits, and one that also places the layer keys that had no counterpart, each on a key of the Corne chosen among the candidates. Say if you would rather keep positions than match by what keys type." }] },
 ];
-// `ask` as the third argument replaces the copy with one question, so the question card can be tried too.
+// `ask` as the third argument replaces the copy with one question and a closing reply to its answer, so the question card can be tried too.
 const ask: ScriptStep[] = [{ blocks: [{ tool: "ask_user", input: { question: "Should the thumb keys keep their positions, or match by what they type?", options: [
   { label: "Match by what keys type", description: "Carries the most keys; some land on a different place.", recommended: true },
   { label: "Keep positions", description: "Each key stays where it was; keys with no place are left off." },
-], allowOther: true } }] }];
+], allowOther: true } }] },
+// An answer gets a reply of its own, so answering does not just ask the same question again.
+{ blocks: [{ text: "Thanks, that settles it. In this demo nothing more happens: the real agent would revise the proposal with your answer." }] }];
 const script = Array.from({ length: 8 }, () => (process.argv[4] === "ask" ? ask : turn)).flat();
 
 // The real editor backend serves build and flash routes; a demo must not reach a keyboard, so they refuse.

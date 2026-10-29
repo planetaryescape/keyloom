@@ -313,7 +313,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
         </section>
       ))}
       {/* After the proposal it refines: the proposal is on the board first, and the question asks about it (D-452). */}
-      {turn.question === null ? null : <QuestionCard question={turn.question} skipped={questionSkipped(turn)} disabled={busy} onAnswer={onAnswer} />}
+      {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
       {turn.failure === null ? null : (
         <div className="chat-problem chat-problem-inline" role="alert">
           <CircleAlert size={18} aria-hidden="true" />
