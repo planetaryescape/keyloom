@@ -1,6 +1,6 @@
 # Corne per-key colours need hardware position verification
 
-Status: implementation and firmware verification in progress on `feat/corne-per-key-rgb`.
+Status: implemented in `0d57c77d08548af9115c2c9de05addd555316960` on `feat/corne-per-key-rgb`; both firmware build markers observed on USB. Physical colour placement and automatic serial reconnect remain open.
 
 The Corne Choc Pro BT previously admitted only global RGB controls. Its recipe now pins `gudzpoz/zmk-rgb-matrix` at `3166a4ec6801a5726f12a53e82cff92323116025` (MIT) beside ZMK v0.3.0 and the existing Keebart hardware module. Keyloom's existing key-colour picker, layer lighting settings and `setLayerLighting` operation feed this adapter.
 
@@ -49,9 +49,15 @@ The installed local CLI validates the board, checks the colour operations, and g
 
 The broad test run had 3,311 passes, 230 skips and three failures: the documentation field list, a module snapshot read while its header was changing, and an intermittent flash-instruction assertion. All three pass on focused reruns after the final edits; the new lighting and emulation coverage also passes. Both UF2 targets compile and pass Zephyr's initialization-order checker. Inspection of each compiled devicetree confirms all 23 intended LED positions for that half. This verifies selection of the candidate map, not the physical wiring.
 
+## Both images booted; automatic serial verification timed out
+
+The authorized Corne flash wrote both images, and the operating system subsequently reported the expected build marker for each half. The right serial interface appeared roughly 54 seconds after copying completed, beyond the default 45-second deadline. The left USB descriptor reported the new build, but its serial interface did not appear within the extended 180-second check. The flash record remains failed; no rollback occurred because no verified last-good pair was available. USB identity proves which images booted, not physical typing, LED placement or wireless operation. Automatic sync remains off.
+
+`handsFree.verifyWaitMs` lets a board allow a longer bounded reconnect window; the Corne uses 180 seconds. Explicit transport overrides take precedence, and other boards retain 45 seconds. A regression test covers all three cases. This accommodates the observed right-half delay; it does not resolve the missing left serial interface. Do not repeatedly flash matching images just to clear the failed record.
+
 ## Verification to finish
 
-- Flash only the authorized Corne halves and verify their build markers.
+- Investigate the left serial interface and retained failed sync state before claiming hands-free updates work reliably.
 - Physically confirm colour placement, idle/wake, split layer synchronization and the easier encoder access.
 
 Private layouts, firmware logs and renders remain outside the public repository.

@@ -133,6 +133,8 @@ export const HandsFreeSchema = z
   .strictObject({
     /** A close at 1200 baud on a half's USB serial port restarts that half into its UF2 bootloader. */
     trigger: z.literal("cdc-1200"),
+    /** Reconnect deadline for boards whose serial interface appears slowly after USB reset. */
+    verifyWaitMs: z.number().int().positive().max(300_000).optional(),
     /** The board's USB vendor ID while it runs, when known. */
     usbVendorId: usbId.optional(),
     halves: z.array(HandsFreeHalfSchema).min(1),

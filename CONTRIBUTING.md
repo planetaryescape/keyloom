@@ -317,6 +317,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.steps[].target` | `zmk-west-docker` | The build target whose UF2 this step writes. |
 | `revisions[].flash.handsFree` | `uf2-drives`, optional | Present when the ZMK build carries keyloom's module, so a flash after the first needs no keypress (D-095). |
 | `revisions[].flash.handsFree.trigger` | `handsFree` | `cdc-1200`: closing a half's USB serial port at 1200 baud restarts that half into its bootloader. |
+| `revisions[].flash.handsFree.verifyWaitMs` | `uf2-drives`, optional | Per-half reconnect deadline in milliseconds, up to 300000; defaults to 45000. |
 | `revisions[].flash.handsFree.usbVendorId` | `handsFree`, optional | The board's USB vendor ID while it runs, such as `0x16c0`. |
 | `revisions[].flash.handsFree.halves` | `handsFree` | One entry per half. Exactly one is the central. |
 | `revisions[].flash.handsFree.halves[].role` | `handsFree` | `central` or `peripheral`. |

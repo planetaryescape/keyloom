@@ -263,6 +263,7 @@ export function zmkHandsFreeHooks(input: {
   saveLastGood?: (images: ReadonlyMap<HalfLetter, Uint8Array>) => Promise<void>;
   loadLastGood?: (half: HalfLetter) => Promise<Uint8Array | null>;
 }): StepHooks {
+  const verifyDeps = { ...input.deps, verifyWaitMs: input.deps.verifyWaitMs ?? input.handsFree.verifyWaitMs ?? VERIFY_WAIT_MS };
   const targets = halfTargets(input.board, input.handsFree, input.steps, input.foreign);
   const forStep = (step: FlashStep): HalfTarget | undefined => targets.find((t) => t.step === step);
   const before = new Map<HalfTarget, HalfFirmware>();
@@ -300,7 +301,7 @@ export function zmkHandsFreeHooks(input: {
       const target = forStep(step);
       // The recipe schema requires every step to map to a half; never report an unmapped one as verified.
       if (!target) return { ok: false, error: `the ${step.label} was written, but its recipe has no hands-free half to verify it against` };
-      const result = await verifyHalf({ deps: input.deps, target, steps: input.steps, buildId: input.buildId, log: input.log });
+      const result = await verifyHalf({ deps: verifyDeps, target, steps: input.steps, buildId: input.buildId, log: input.log });
       if (result.ok) images.set(target, image);
       return result;
     };
@@ -373,7 +374,7 @@ export function zmkHandsFreeHooks(input: {
         try {
           say(`keyloom: Rolling back the ${t.step.label} to build ${saved.key}.`);
           result = await restore(input.steps.indexOf(t.step), saved.image,
-            () => verifyHalf({ deps: input.deps, target: t, steps: input.steps, key: saved.key, log: say }),
+            () => verifyHalf({ deps: verifyDeps, target: t, steps: input.steps, key: saved.key, log: say }),
             t === failed ? `Restore the ${t.step.label} to build ${saved.key}. ${t.step.enter}` : undefined);
         } catch (err) { result = { ok: false, error: (err as Error).message }; }
         if (!result.ok) return stopped(`Rollback of the ${t.step.label} failed: ${result.error}${shared ? "" : ` Put the ${t.step.label} in its bootloader to restore it: ${t.step.enter}`}`, !shared);

@@ -90,7 +90,8 @@
           ],
           "serialMarker": "usb-sn-override",
           "serialTail": ":0123456789ABCDEF",
-          "usbVendorId": "0x1d50"
+          "usbVendorId": "0x1d50",
+          "verifyWaitMs": 180000
         }
       },
       "detect": {

@@ -2129,3 +2129,5 @@ Keep ZMK v0.3.0. A compatibility header supplies the missing enabled-child count
 The BT board declares 23 LEDs per half without their key order. The candidate order is inferred from Keebart's wired Corne at `4649f864f15ba9f540ee83d66b50cb9fcd4f7e59`; physical confirmation is required before claiming the BT map is verified. [Evidence and remaining checks](../issues/corne-per-key-rgb.md).
 
 Ergonomic access belongs in the person's layout: an encoder tap dance can keep its single-click action and toggle lighting controls on double-click. It requires no simultaneous holds across halves and no additional product-level shortcut mechanism.
+
+The hardware flash exposed a serial reconnect beyond the default 45-second check. `handsFree.verifyWaitMs` permits a board-specific bounded deadline (maximum 300 seconds); the Corne uses 180 seconds, while other boards retain the default. Explicit transport overrides take precedence. This is a waiting policy, not proof of healthy serial transport: both Corne USB build markers were observed, but the left serial interface still missed the extended deadline. The failed flash record is retained.
