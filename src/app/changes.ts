@@ -23,7 +23,7 @@ import type { App } from "./context.ts";
 import { decisionFactsFor, pinnedFor } from "./decisions.ts";
 import { NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
-import { skipQuestionRefining } from "./question-skip.ts";
+import { closeOpenQuestion } from "./question-skip.ts";
 
 /** A change set with its stored validation parsed. */
 export type ChangeSetView = Omit<ChangeSetRow, "validation"> & { validation: ValidationResult };
@@ -206,7 +206,7 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
     });
     markApplied(app.db, cs, result);
     const decisionId = remember(app, view, cs, cs.decisionDraft, resolved);
-    skipQuestionRefining(app, cs);
+    closeOpenQuestion(app, cs);
     return { layoutId: view.layout.id, source: cs.source, outcome: { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId } };
   });
   logApply(app, applied);

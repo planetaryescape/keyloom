@@ -48,7 +48,8 @@ export type TurnOutcome = {
   question?: OpenQuestion;
 };
 
-export type OpenQuestion = AskedQuestion & { toolUseId: string };
+/** `refines` is the proposal the question is about: the last one saved before it, in call order (D-452). Absent when none came before it. */
+export type OpenQuestion = AskedQuestion & { toolUseId: string; refines?: string };
 
 /** Consecutive user messages (a tool result, then BK's reply) are one turn to the API; merging keeps stored history untouched. */
 export function mergeConsecutiveUsers(messages: ModelMessage[]): ModelMessage[] {
@@ -140,6 +141,9 @@ export async function runAgentTurn(input: {
 
   const snapshot = ports.snapshot();
   input.signal?.throwIfAborted();
+  // How many proposals were saved when the model reached its question. A call it made after the question may still run (the Anthropic adapter
+  // runs them), and what it saves is beside the question, not something the question refines.
+  let savedBeforeQuestion: number | undefined;
   const result = await model.run({
     system: assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices(), ports.layouts().filter((l) => l.layoutId !== snapshot.layoutId)),
     messages: mergeConsecutiveUsers(input.history),
@@ -147,11 +151,14 @@ export async function runAgentTurn(input: {
     maxIterations: input.maxIterations ?? DEFAULT_MAX_ITERATIONS,
     ...(callbacks.onText ? { onText: callbacks.onText } : {}),
     onPublicMessage: (message) => callbacks.onObservation?.({ type: "public_message", ...message }),
+    onPause: () => { savedBeforeQuestion ??= proposals.length; },
     ...(input.signal ? { signal: input.signal } : {}),
   });
 
   const status = observer.limited() ? "iteration_limit" : classify(result.stopReason);
   const asked = result.pending === undefined ? undefined : StoredQuestionSchema.safeParse(result.pending.input);
+  // A provider that never says where the question fell leaves everything saved counting as before it.
+  const refines = proposals.slice(0, savedBeforeQuestion ?? proposals.length).flatMap((p) => (p.changeSetId === null ? [] : [p.changeSetId])).at(-1);
   const messages = resumable(result.messages, status);
   return {
     status,
@@ -165,6 +172,6 @@ export async function runAgentTurn(input: {
     iterations: result.iterations,
     toolCalls: recorder.toolCalls,
     validationFailures: recorder.validationFailures,
-    ...(result.pending !== undefined && asked?.success ? { question: { ...asked.data, toolUseId: result.pending.id } } : {}),
+    ...(result.pending !== undefined && asked?.success ? { question: { ...asked.data, toolUseId: result.pending.id, ...(refines === undefined ? {} : { refines }) } } : {}),
   };
 }

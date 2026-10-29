@@ -188,9 +188,9 @@ describe("applying while a question is open", () => {
     expect(JSON.stringify(last).match(/tool_result/g)).toHaveLength(1);
   });
 
-  test("a question asked before anything was proposed refines nothing, and applying an unrelated proposal leaves it open and answerable", async () => {
+  test("a question asked before anything was proposed refines nothing, and applying a proposal of the conversation closes it instead of consuming it", async () => {
     const { app, layoutId } = await commandShiftApp();
-    const { client } = fakeAnthropic([
+    const { client, requests } = fakeAnthropic([
       { blocks: [{ tool: "propose_changes", input: proposal("Option", "F17") }] },
       { blocks: [{ text: "Here it is." }] },
       // Turn 2: a remembered-decision question comes before any proposal, so it belongs to no proposal.
@@ -203,12 +203,17 @@ describe("applying while a question is open", () => {
     expect(second.status).toBe("awaiting_answer");
     expect(second.question?.refines).toBeUndefined();
 
+    // The apply moves the layout head, and an answer asked before that is refused, so the question is closed and not left open.
+    // It is Closed and not Skipped: BK did not apply the proposal it refines, it refines none.
     applyChange(app, first.proposals[0]?.changeSetId ?? "");
-    expect(questionsOf(app, first.conversationId)[0]).toMatchObject({ answer: null });
-    expect(questionsOf(app, first.conversationId)[0]?.skipped).toBeUndefined();
-    // Still answerable.
-    const answered = await sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: second.question?.toolUseId ?? "", text: "Yes" }, model });
-    expect(answered.status).toBe("complete");
+    const closed = questionsOf(app, first.conversationId)[0];
+    expect(closed).toMatchObject({ closed: true, answer: expect.stringContaining('BK applied another proposal ("Option") without answering') });
+    expect(closed?.skipped).toBeUndefined();
+    // The answer is no longer accepted, as the question is no longer open; a message goes through and the model is told.
+    await expect(sendMessage(app, layoutId, { conversationId: first.conversationId, answer: { toolUseId: second.question?.toolUseId ?? "", text: "Yes" }, model })).rejects.toThrow(/not open any more/);
+    const next = await sendMessage(app, layoutId, { conversationId: first.conversationId, message: "thanks", model });
+    expect(next.status).toBe("complete");
+    expect(JSON.stringify(requests.at(-1)?.body.messages.at(-1))).toContain("BK applied another proposal");
   });
 
   test("an apply between the proposal and its question, while the turn is running, stores the question as skipped when the turn is committed", async () => {

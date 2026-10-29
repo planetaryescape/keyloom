@@ -5,14 +5,15 @@
 //
 // For each theme and width it starts scripts/dev-command-shift.ts on a scratch data directory (scripted model, no build or flash routes),
 // asks for one Command–Shift key, answers both questions, and shoots: after-first (one proposal, question 1 of 2), after-revised (the old
-// card superseded, question 2 of 2), after-final, and after-quick (a request with nothing to ask). A last run applies the final
-// proposal and records the decision it wrote, from the scratch database, in journey-transcript.md. Chrome gets its own profile and debugging port; it never touches
+// card superseded, question 2 of 2), after-final, and after-quick (a request with nothing to ask). A run applies the final
+// proposal and records the decision it wrote, from the scratch database, in journey-transcript.md; one applies the proposal question 1
+// refines (after-skipped); one applies a proposal that question 2 does not refine (after-closed). Chrome gets its own profile and debugging port; it never touches
 // another browser, a running keyloom, or a real data directory.
 import { Database } from "bun:sqlite";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ANSWER_1, ANSWER_2, QUICK_REQUEST, REQUEST } from "../test/helpers/refine-journey.ts";
+import { ANSWER_1, ANSWER_2, CLOSE_FOLLOWUP, QUICK_REQUEST, REQUEST } from "../test/helpers/refine-journey.ts";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const OUT = process.argv[2] ?? join(import.meta.dir, "..", "docs", "research", "refine-loop");
@@ -71,9 +72,9 @@ async function shoot(name: string, theme: string, width: number) {
 const transcript: string[] = [];
 
 /** One fresh server and page: ask for the key, answer both questions, and (when `apply`) apply the final proposal and read the decision. */
-async function journey(theme: string, width: number, height: number, record: boolean, apply: boolean, skip = false) {
+async function journey(theme: string, width: number, height: number, record: boolean, apply: boolean, skip = false, close = false) {
   const dataDir = mkdtempSync(join(tmpdir(), "keyloom-refine-"));
-  const server = Bun.spawn(["bun", join(import.meta.dir, "dev-command-shift.ts"), String(APP_PORT), dataDir], { stdout: "pipe", stderr: "inherit" });
+  const server = Bun.spawn(["bun", join(import.meta.dir, "dev-command-shift.ts"), String(APP_PORT), dataDir, ...(close ? ["close"] : [])], { stdout: "pipe", stderr: "inherit" });
   const reader = server.stdout.getReader();
   const started = new TextDecoder().decode((await reader.read()).value);
   if (!started.includes(String(APP_PORT))) throw new Error(`the demo server did not start: ${started}`);
@@ -90,6 +91,22 @@ async function journey(theme: string, width: number, height: number, record: boo
     await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: theme }] });
     await open();
 
+    if (close) {
+      // A proposal, then a question that refines none of the proposals. Applying the proposal closes the question.
+      await say(QUICK_REQUEST);
+      await until("the proposal", "document.body.innerText.includes('F16 is now Command')", 30_000);
+      await until("the reply to end", idle);
+      await say(CLOSE_FOLLOWUP);
+      await until("the question", "document.body.innerText.includes('Backspace was placed on purpose')", 30_000);
+      await until("the reply to end", idle);
+      await clickText("Apply");
+      await sleep(1000);
+      await js("[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Ask keyloom'))?.click()");
+      await until("Closed", "document.body.innerText.includes('Closed, you applied another proposal')", 20_000);
+      await shoot("after-closed", theme, width);
+      transcript.push(`## Applying a proposal that the open question does not refine\n${await chatText()}`);
+      return;
+    }
     await say(REQUEST);
     await until("question 1 of 2", "/question 1 of 2/i.test(document.body.innerText)", 30_000);
     await until("the reply to end", idle);
@@ -163,6 +180,7 @@ for (const theme of ["light", "dark"]) for (const [width, height] of [[1440, 900
 if (only === undefined) {
   await journey("light", 1440, 900, true, true);
   await journey("light", 1440, 900, false, false, true);
+  await journey("light", 1440, 900, false, false, false, true);
 }
 writeFileSync(join(OUT, "journey-transcript.md"), `# The refine journey through the real app\n\nScripted model, scratch data directory, headless Chrome 1440x900, light theme. Text is the chat column's innerText after each step.\n\n${transcript.join("\n\n")}\n`);
 ws.close();

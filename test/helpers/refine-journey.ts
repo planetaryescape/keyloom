@@ -11,6 +11,7 @@ export const REQUEST = "I want one key for Command–Shift. I barely use F16, an
 export const ANSWER_1 = "No, keep them where they are";
 export const ANSWER_2 = "Yes, F16's key is fine";
 export const QUICK_REQUEST = "Make F16 Command–Shift, I never use it.";
+export const CLOSE_FOLLOWUP = "Also move Backspace to my thumb.";
 
 const tab = {
   title: "Command–Shift where Tab is",
@@ -95,5 +96,22 @@ export function quickScript(): ScriptStep[] {
     { blocks: [{ tool: "get_layout", input: { layers: ["layer-0"] } }] },
     { blocks: [{ tool: "propose_changes", input: f16("You never use F16, so Command–Shift went on its key.") }] },
     { blocks: [{ text: "F16 is now Command–Shift. I dropped F16, as you said." }] },
+  ];
+}
+
+/**
+ * A proposal, then a message that gets a question refining none of the proposals (a remembered decision, asked before anything is proposed).
+ * Applying the proposal while that question waits closes it (D-452). Three requests.
+ */
+export function closeScript(): ScriptStep[] {
+  return [
+    { blocks: [{ tool: "propose_changes", input: f16("You never use F16, so Command–Shift went on its key.") }] },
+    { blocks: [{ text: "F16 is now Command–Shift. I dropped F16, as you said." }] },
+    { blocks: [{ tool: "ask_user", input: {
+      question: "Backspace was placed on purpose. Does that still hold?",
+      considerations: ["You asked for it to stay where it is."],
+      step: { n: 1, of: 1 },
+      options: [{ label: "Yes, keep it there", recommended: true }, { label: "No, it can move" }],
+    } }] },
   ];
 }

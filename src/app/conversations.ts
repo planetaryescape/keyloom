@@ -10,14 +10,14 @@ import type { Usage } from "../agent/model.ts";
 import {
   type ConversationRow, type MessageRow, type Selection, findConversation, insertConversation, insertMessage, listConversations, listMessages,
 } from "../persistence/conversations.ts";
-import { type ChangeSetRow, findChangeSet, listConversationChangeSets } from "../persistence/change-sets.ts";
+import { type ChangeSetRow, listConversationChangeSets } from "../persistence/change-sets.ts";
 import { type DecisionRow, type Subject, listConversationPriorities } from "../persistence/decisions.ts";
 import { appendLog } from "../persistence/log.ts";
 import { transact } from "../persistence/transaction.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 import { createAgentPorts } from "./agent-ports.ts";
-import { SKIPPED_ANSWER, openQuestion } from "./question-skip.ts";
+import { SKIPPED_ANSWER, appliedProposalIds, closingResult, isClosedAnswer, openQuestion } from "./question-skip.ts";
 
 export { openQuestion };
 import { type ProposalCard, toCard } from "./proposal-card.ts";
@@ -65,7 +65,9 @@ export type QuestionCard = {
   step?: { n: number; of: number };
   /** BK applied the proposal this question refines instead of answering it (D-452). */
   skipped?: boolean;
-  /** The change set this question refines; applying that one skips it. Absent when it refines nothing. */
+  /** BK applied another proposal of the conversation instead of answering, so the question was closed (D-452). */
+  closed?: boolean;
+  /** The change set this question refines; applying that one skips it, and applying any other closes it. Absent when it refines nothing. */
   refines?: string;
   placeholder?: string;
   targetBoard?: string;
@@ -159,6 +161,7 @@ const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null, refi
     answer,
   };
   if (answer === SKIPPED_ANSWER) card.skipped = true;
+  if (isClosedAnswer(answer)) card.closed = true;
   if (refines !== undefined) card.refines = refines;
   if (q.kind) card.kind = q.kind;
   if (q.considerations) card.considerations = q.considerations;
@@ -265,6 +268,8 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
 export async function runPreparedMessage(app: App, prepared: PreparedMessage, input: SendMessageInput, runId?: string): Promise<ChatOutcome> {
   const { view, selection, conversation, userMessage, resolvedQuestions, model } = prepared;
   answering.set(conversation.id, userMessage.id);
+  // What BK had applied when this turn began, so a question it pauses on can be closed if he applies something while it runs (D-452).
+  const appliedAtStart = appliedProposalIds(app, conversation.id);
   const started = Date.now();
   const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
   try {
@@ -308,15 +313,16 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
 
     return transact(app.db, () => {
       const stored = outcome.messages.map((m) => insertMessage(app.db, { conversationId: conversation.id, role: m.role, content: m.content }));
-      // A question refines the proposal saved earlier in this turn, before it was asked; one asked before anything was proposed refines nothing.
-      // It is recorded here, with the question, and read back from the record, never worked out later from which proposal is newest.
-      const refines = outcome.question === undefined ? undefined : outcome.proposals.flatMap((p) => (p.changeSetId === null ? [] : [p.changeSetId])).at(-1);
-      // BK applied that proposal (or it was otherwise decided) while the turn was still running, so nothing is left to refine: the question is
-      // stored as skipped now, as it would have been had the apply come after, rather than left open and unanswerable.
-      const decided = refines !== undefined && findChangeSet(app.db, refines)?.status !== "proposed";
-      const waiting = outcome.status === "awaiting_answer" && !decided;
-      if (outcome.question !== undefined && decided) {
-        insertMessage(app.db, { conversationId: conversation.id, role: "user", content: [{ type: "tool_result", tool_use_id: outcome.question.toolUseId, content: SKIPPED_ANSWER }] });
+      // A question refines the last proposal saved before it, in the order the model made its calls; one asked before anything was proposed
+      // refines nothing, and a proposal from a call after it is not what it refines. The turn works that out where the order is known; it is
+      // recorded here, with the question, and read back from the record, never worked out later from which proposal is newest.
+      const refines = outcome.question?.refines;
+      // BK applied an agent proposal of this conversation while the turn was still running. The layout head moved, so an answer to this
+      // question would be refused: it is stored as ended now, as it would have been had the apply come after, rather than left open.
+      const closing = outcome.question === undefined ? undefined : closingResult(app, conversation.id, appliedAtStart, refines);
+      const waiting = outcome.status === "awaiting_answer" && closing === undefined;
+      if (outcome.question !== undefined && closing !== undefined) {
+        insertMessage(app.db, { conversationId: conversation.id, role: "user", content: [{ type: "tool_result", tool_use_id: outcome.question.toolUseId, content: closing }] });
       }
       presentation.finish(waiting ? "waiting_user" : outcome.status === "complete" || outcome.status === "awaiting_answer" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId, {
         provider: model.provider, model: model.model, usage: outcome.usage,
@@ -343,7 +349,7 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
       const result: ChatOutcome = {
         conversationId: conversation.id, messageIds, status: waiting || outcome.status !== "awaiting_answer" ? outcome.status : "complete", text: outcome.text, proposals, priorities,
         provider: model.provider, model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
-        ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, decided ? SKIPPED_ANSWER : null, refines) }),
+        ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, closing ?? null, refines) }),
         ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
       };
       if (runId !== undefined) app.db.query("UPDATE agent_runs SET status = ?, outcome_json = ?, finished_at = ?, seq = seq + 1 WHERE id = ?")

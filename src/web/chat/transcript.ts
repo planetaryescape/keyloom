@@ -60,6 +60,9 @@ export type Turn = UserTurn | AssistantTurn;
  */
 export const questionSkipped = (turn: AssistantTurn): boolean => turn.question?.skipped === true;
 
+/** Applying any other proposal of the conversation closes the question (D-452): the layout moved on, so it can no longer be answered. */
+export const questionClosed = (turn: AssistantTurn): boolean => turn.question?.closed === true;
+
 /**
  * The open proposals the board should show: those of the newest reply that holds any, in whatever state that reply is in. A proposal is
  * validated and saved when it arrives, so it is pinned then and not when the reply ends; and a reply cut off after saving one still shows
@@ -283,19 +286,22 @@ export function transcriptReducer(state: Transcript, action: Action): Transcript
     case "loaded":
       return fromConversation(action.detail);
     case "applied": {
-      // Applying the proposal an open question was recorded as refining skips it, as the server stores it; a question that refines nothing,
-      // or another proposal, stays open (D-452).
+      // Applying a proposal of this conversation ends its open question, as the server stores it (D-452): Skipped when it is the proposal the
+      // question refines, Closed for any other. A change set that is not in this thread is another conversation's or a config's, and says
+      // nothing about this question.
+      const inThread = state.turns.some((turn) => turn.kind === "assistant" && turn.proposals.some((p) => p.changeSetId === action.changeSetId));
       return {
         ...state,
         turns: state.turns.map((turn) => {
           if (turn.kind !== "assistant") return turn;
-          const skipped = turn.question?.answer === null && turn.question.refines === action.changeSetId ? { question: { ...turn.question, answer: "Skipped", skipped: true } } : {};
-          if (!turn.proposals.some((p) => p.changeSetId === action.changeSetId)) return { ...turn, ...skipped };
+          const ended = !inThread || turn.question?.answer !== null ? {}
+            : { question: turn.question.refines === action.changeSetId ? { ...turn.question, answer: "Skipped", skipped: true } : { ...turn.question, answer: "Closed", closed: true } };
+          if (!turn.proposals.some((p) => p.changeSetId === action.changeSetId)) return { ...turn, ...ended };
           // What the server sets aside is the rest of this proposal's group; a separate proposal beside it stays open (D-452).
           const group = turn.proposals.find((p) => p.changeSetId === action.changeSetId)?.proposalGroup ?? null;
           return {
             ...turn,
-            ...skipped,
+            ...ended,
             proposals: turn.proposals.map((p) =>
               p.changeSetId === action.changeSetId ? { ...p, status: "applied" as const } : p.status === "proposed" && group !== null && p.proposalGroup === group ? { ...p, status: "superseded" as const } : p,
             ),

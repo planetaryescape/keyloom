@@ -231,7 +231,9 @@ export const QuestionCardSchema = z.object({
   step: z.object({ n: z.number().int().min(1), of: z.number().int().min(1) }).optional(),
   // BK applied the proposal this question refines instead of answering it, so the card reads "Skipped" (D-452).
   skipped: z.boolean().optional(),
-  // The change set this question refines (D-452); absent when it refines nothing. Applying that one skips the question, and no other does.
+  // BK applied another proposal of the conversation instead, so the question was closed and the card reads "Closed" (D-452).
+  closed: z.boolean().optional(),
+  // The change set this question refines (D-452); absent when it refines nothing. Applying that one skips the question, and applying any other closes it.
   refines: z.string().optional(),
   placeholder: z.string().optional(),
   targetBoard: z.string().optional(),

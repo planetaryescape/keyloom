@@ -562,3 +562,49 @@ Skipped, you applied the proposal
 
 $0.0042
 esc
+
+## Applying a proposal that the open question does not refine
+Editing Moonlander · Moonlander daily
+
+You
+
+Make F16 Command–Shift, I never use it.
+
+Moonlander · Moonlander daily
+
+keyloom
+
+1 completed step
+
+F16 is now Command–Shift. I dropped F16, as you said.
+
+keyloom offered 1 option.
+
+Command–Shift on the F16 key
+
+The F16 key on the top row becomes Command–Shift, and nothing else moves.
+
+1 key changes
+·
+A stretch from the home row
+
+Drops F16 · you said you barely use it
+
+Details
+Applied
+$0.0028
+
+You
+
+Also move Backspace to my thumb.
+
+Moonlander · Moonlander daily
+
+keyloom
+
+Backspace was placed on purpose. Does that still hold?
+
+Closed, you applied another proposal
+
+$0.0014
+esc

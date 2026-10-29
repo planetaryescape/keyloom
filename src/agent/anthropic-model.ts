@@ -140,10 +140,16 @@ export function anthropicModel(client: Anthropic, opts: { model?: string; effort
         // The runner appends the assistant message only when it goes on to answer the calls, so the stopped one is added here. The API wants a
         // result for every call before the next message. A call beside the question is run first: a proposal batched with its question must
         // reach the board (D-452), where answering "not run" would leave BK a question over an empty board. A second question is not run.
+        // The calls are walked in the order the model wrote them, and the turn is told where the question falls: a proposal saved before that
+        // point is one the question may refine, and one saved after it never is.
         const uses = pause.message.content as Array<{ type: string; id?: string; name?: string; input?: unknown }>;
-        const others = uses.filter((b) => b.type === "tool_use" && b.id !== pause?.call.id);
         const results = [];
-        for (const b of others) {
+        for (const b of uses) {
+          if (b.type !== "tool_use") continue;
+          if (b.id === pause.call.id) {
+            request.onPause?.();
+            continue;
+          }
           const tool = request.tools.find((candidate) => candidate.name === b.name);
           const base = { type: "tool_result" as const, tool_use_id: b.id as string };
           if (tool === undefined || tool.pauses === true) {

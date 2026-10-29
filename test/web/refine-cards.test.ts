@@ -9,7 +9,7 @@ import { evaluate } from "../../src/validation/validate.ts";
 import { QuestionCard } from "../../src/web/chat/QuestionCard.tsx";
 import { AssistantMessage } from "../../src/web/chat/Turns.tsx";
 import {
-  EMPTY, type AssistantTurn, type Turn, type Transcript, openProposalsOnBoard, questionOpen, questionSkipped, transcriptReducer,
+  EMPTY, type AssistantTurn, type Turn, type Transcript, openProposalsOnBoard, questionClosed, questionOpen, questionSkipped, transcriptReducer,
 } from "../../src/web/chat/transcript.ts";
 import { loadFixture } from "../server/fixture.ts";
 
@@ -59,6 +59,14 @@ describe("the question card", () => {
     expect(skipped).toContain("Skipped, you applied the proposal");
     expect(skipped).not.toContain("<ol");
   });
+
+  test("one closed because another proposal was applied reads as closed, a quiet line with no options", () => {
+    const closed = renderQuestion(question({ step: { n: 1, of: 2 }, answer: 'BK applied another proposal ("Option") without answering.', closed: true }));
+    expect(closed).toContain("Closed, you applied another proposal");
+    expect(closed).not.toContain("Skipped");
+    expect(closed).not.toContain("<ol");
+    expect(closed).not.toContain("BK applied another proposal");
+  });
 });
 
 describe("a question's state in a reply", () => {
@@ -90,16 +98,42 @@ describe("a question's state in a reply", () => {
     expect(asked(later)?.question).toMatchObject({ skipped: true, answer: "Skipped" });
   });
 
-  test("applying a proposal that the question was not recorded as refining leaves it open", () => {
+  test("applying a proposal the question was not recorded as refining closes it, and the one it refines skips it", () => {
     const sentFirst = { type: "sent" as const, userId: "u1", assistantId: "a1", text: "go", selection: null };
     const ev = (event: ChatEvent) => ({ type: "event" as const, event });
     const t = [sentFirst, ev({ type: "proposal", proposal: card("p1", { proposalGroup: "g1" }) }), ev({ type: "proposal", proposal: card("p2", { proposalGroup: "g2" }) }), ev({ type: "done", outcome: { conversationId: "c", messageIds: ["m"], status: "awaiting_answer", text: "", proposals: [], priorities: [], provider: "anthropic", model: "m", effort: "medium", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, question: question({ answer: null, refines: "p2" }) } })].reduce(transcriptReducer, EMPTY);
-    const turnOf = (x: Transcript) => x.turns.find((y): y is AssistantTurn => y.kind === "assistant");
-    expect(turnOf(transcriptReducer(t, { type: "applied", changeSetId: "p1" }))?.question?.answer).toBeNull();
-    expect(turnOf(transcriptReducer(t, { type: "applied", changeSetId: "p2" }))?.question).toMatchObject({ skipped: true });
-    // A question that refines nothing is never skipped by an apply.
+    const turnOf = (x: Transcript): AssistantTurn => {
+      const found = x.turns.find((y): y is AssistantTurn => y.kind === "assistant");
+      if (found === undefined) throw new Error("no reply in the transcript");
+      return found;
+    };
+    // The layout head moved, so the question can't be answered: another proposal's apply closes it rather than leaving it open.
+    const other = turnOf(transcriptReducer(t, { type: "applied", changeSetId: "p1" }));
+    expect(other.question).toMatchObject({ closed: true, answer: "Closed" });
+    expect(other.question?.skipped).toBeUndefined();
+    expect(questionOpen(other)).toBe(false);
+    expect(questionClosed(other)).toBe(true);
+    // The proposal it refines skips it.
+    const refined = turnOf(transcriptReducer(t, { type: "applied", changeSetId: "p2" }));
+    expect(refined.question).toMatchObject({ skipped: true, answer: "Skipped" });
+    expect(refined.question?.closed).toBeUndefined();
+    // A question that refines nothing is closed by any apply of the conversation.
     const none = [sentFirst, ev({ type: "proposal", proposal: card("p1") }), ev({ type: "done", outcome: { conversationId: "c", messageIds: ["m"], status: "awaiting_answer", text: "", proposals: [], priorities: [], provider: "anthropic", model: "m", effort: "medium", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, iterations: 1, question: question({ answer: null }) } })].reduce(transcriptReducer, EMPTY);
-    expect(turnOf(transcriptReducer(none, { type: "applied", changeSetId: "p1" }))?.question?.answer).toBeNull();
+    expect(turnOf(transcriptReducer(none, { type: "applied", changeSetId: "p1" })).question).toMatchObject({ closed: true, answer: "Closed" });
+    // A change set that is not in this thread is another conversation's or a config's, and says nothing about this question.
+    expect(turnOf(transcriptReducer(none, { type: "applied", changeSetId: "cs_elsewhere" })).question?.answer).toBeNull();
+    // A message afterwards leaves it closed and does not turn it into "answered in your own words".
+    const later = transcriptReducer(transcriptReducer(none, { type: "applied", changeSetId: "p1" }), { type: "sent", userId: "u3", assistantId: "a3", text: "thanks", selection: null });
+    expect(turnOf(later).question).toMatchObject({ closed: true, answer: "Closed" });
+  });
+
+  test("an answered question is not touched by a later apply", () => {
+    const answered = turn("a", { question: question({ answer: "Left hand", refines: "p1" }), proposals: [card("p1")] });
+    const [after] = transcriptReducer({ conversationId: "c", pinned: null, turns: [answered] }, { type: "applied", changeSetId: "p1" }).turns;
+    if (after?.kind !== "assistant") throw new Error("the reply went missing");
+    expect(after.question).toMatchObject({ answer: "Left hand" });
+    expect(after.question?.skipped).toBeUndefined();
+    expect(after.question?.closed).toBeUndefined();
   });
 });
 
@@ -109,6 +143,11 @@ describe("the work row of a reply with a skipped question", () => {
     expect(renderTurn(turn("a", { question: question(), proposals: [card("p1")] }), [], waiting)).toContain("Needs your answer");
     const skipped = turn("a", { question: question({ answer: "BK applied the proposal without answering.", skipped: true }), proposals: [card("p1", { status: "applied" })] });
     expect(renderTurn(skipped, [], waiting)).not.toContain("Needs your answer");
+    // Closed by another proposal's apply: the same, and the card says so.
+    const closed = turn("a", { question: question({ answer: 'BK applied another proposal ("Option") without answering.', closed: true }), proposals: [card("p1")] });
+    const html = renderTurn(closed, [], waiting);
+    expect(html).not.toContain("Needs your answer");
+    expect(html).toContain("Closed, you applied another proposal");
   });
 });
 

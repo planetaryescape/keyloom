@@ -1,12 +1,13 @@
 // Runs the real app (database, validator, server) over BK's Oryx fixture with a scripted model that
 // plays the refine loop (D-452), so the cards can be tried or screenshotted without spending API credits:
 //
-//   bun scripts/dev-command-shift.ts [port] [dataDir]       # default 4491, a fresh temp directory
+//   bun scripts/dev-command-shift.ts [port] [dataDir] [close]     # default 4491, a fresh temp directory
 //
 // Conversation 1 ("I want one key for Command–Shift ...") gets one proposal, question 1 of 2, a revised
 // proposal after the answer "No, keep them where they are", question 2 of 2, and the final proposal after
 // "Yes, F16's key is fine". Conversation 2 ("Make F16 Command–Shift ...") gets one proposal and no question.
-// The pair repeats for later conversations. Nothing here can build or flash; the build routes are not served.
+// The pair repeats for later conversations. With `close` the first conversation instead gets a proposal and then, after a second message, a
+// question that refines none of them, so applying the proposal closes it. Nothing here can build or flash; the build routes are not served.
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropicModel } from "../src/agent/anthropic-model.ts";
 import { importLayout, listLayouts, openApp } from "../src/app/index.ts";
@@ -16,7 +17,7 @@ import { type EditorBackend, EditorError } from "../src/server/editor-backend.ts
 import { appLayoutSource } from "../src/cli/serve.ts";
 import { startServer } from "../src/server/start-server.ts";
 import { fakeAnthropic } from "../test/helpers/fake-anthropic.ts";
-import { quickScript, refineScript } from "../test/helpers/refine-journey.ts";
+import { closeScript, quickScript, refineScript } from "../test/helpers/refine-journey.ts";
 import { FIXTURE_DIR } from "../test/helpers/board.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,7 +28,9 @@ const app = openApp({ dataDir: process.argv[3] ?? mkdtempSync(join(tmpdir(), "ke
 if (listLayouts(app).length === 0) await importLayout(app, { board: "zsa/moonlander", source: FIXTURE_DIR, name: "Moonlander daily" });
 
 // The script is the same one the journey tests use (test/helpers/refine-journey.ts).
-const script = Array.from({ length: 6 }, () => [...refineScript(), ...quickScript()]).flat();
+const script = process.argv[4] === "close"
+  ? Array.from({ length: 6 }, () => closeScript()).flat()
+  : Array.from({ length: 6 }, () => [...refineScript(), ...quickScript()]).flat();
 
 const client: Anthropic = fakeAnthropic(script).client;
 const model = anthropicModel(client);

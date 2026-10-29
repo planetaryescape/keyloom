@@ -90,6 +90,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
           }
           const out = await tool.run(raw);
           // A question for the person. Codex is stopped when the call's completed item arrives, which is the id the answer will attach to (D-382).
+          // From here every call throws, so nothing is saved after the question and `onPause` has nothing to tell the turn (D-452).
           if (tool.pauses === true) paused = true;
           return out;
         },

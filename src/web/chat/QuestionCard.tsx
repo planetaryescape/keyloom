@@ -5,7 +5,7 @@ import { optionForKey } from "./question-keys.ts";
 
 interface Props {
   question: Question;
-  /** BK applied the proposal this question refines, so it needs no answer (D-452). */
+  /** BK applied the proposal this question refines, so it needs no answer (D-452). A question closed by another apply says so on the question itself. */
   skipped?: boolean;
   /** A reply is already streaming from this answer, or another is. */
   disabled?: boolean;
@@ -42,7 +42,7 @@ export function QuestionCard({ question, skipped = false, disabled = false, onAn
     return (
       <section className="ask-card ask-card-done" aria-label="Question, answered">
         <p className="ask-question">{question.question}</p>
-        <p className="ask-answer"><Check size={14} aria-hidden="true" />{skipped ? "Skipped, you applied the proposal" : question.answer}</p>
+        <p className="ask-answer"><Check size={14} aria-hidden="true" />{question.closed === true ? "Closed, you applied another proposal" : skipped ? "Skipped, you applied the proposal" : question.answer}</p>
       </section>
     );
   }

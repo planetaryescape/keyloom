@@ -17,7 +17,7 @@ export const PresentationSchema = z.object({
   userMessageId: z.string().min(1),
   accounting: AccountingSchema.optional(),
   questionToolUseId: z.string().min(1).max(128).optional(),
-  // The change set the paused question refines: the last proposal saved earlier in the same turn (D-452). Absent for a question that
+  // The change set the paused question refines: the last proposal saved before it in the same turn, in call order (D-452). Absent for a question that
   // refines nothing, such as a remembered decision asked before anything is proposed. Recorded when the question is stored, never inferred later.
   questionRefines: z.string().min(1).max(80).optional(),
   status: z.enum(["running", "waiting_user", "completed", "incomplete", "failed", "cancelled", "unobserved"]),

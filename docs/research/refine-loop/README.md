@@ -40,6 +40,64 @@ Round 3 skipped the open question when the newest proposal was applied. The veri
 - Reload shows the question the turn paused on: the `ask_user` call with no error result.
 - The eval's checks are in `evals/command-shift-checks.ts`, applied with `.every`, and a placement is judged by Command–Shift keys added, since the fixture's layout already satisfied the old whole-layout test.
 
+## Round 5: no apply leaves a question the guards refuse, and a question refines only what came before it
+
+The verifier blocked `e6ffc81` on two findings. Both reproduced on that commit before any change, with a throwaway test over the in-memory app and a scripted model.
+
+1. Applying an unrelated proposal left the question open and unanswerable. P1 open, a later turn pauses on a remembered-decision question (it refines nothing), BK applies P1. The card still offered its options and the run stayed `waiting_user`. `answerAgentRun` refused with "that question or its target is no longer current" and `startAgentRun` with "that question's target has changed". Two guards do that: `src/app/agent-runs.ts` (`answerAgentRun`) and `src/app/conversations.ts` (`storeMessage`). Both come from `7a98f81` (durable runs, 2026-10-18, D-411), both are on main at `e90ab9e` (`conversations.ts:226`, `agent-runs.ts:148`), and both refuse an answer once the layout head has moved since the run paused. Round 4 stopped an unrelated apply from consuming the question, but every apply moves the head.
+2. A proposal saved after the question became its association. P1 saved, then one reply `[ask_user(Q), propose_changes(P2, supersedes: null)]`: Q was recorded as refining P2, because the association took the last proposal of the whole turn and the Anthropic adapter runs the calls that follow the question. Applying P2 then skipped Q.
+
+### Rule 1: applying any agent proposal of a conversation closes its open question
+
+Both guards stay as they are; durable-run semantics are not loosened in this stage. Instead no apply can leave a question behind for them to refuse. `applyChange` calls `closeOpenQuestion` (`src/app/question-skip.ts`) inside its transaction. For an agent proposal in a conversation with an open question it stores a result for that question, resolves the presented question, and completes the run that paused on it, so nothing waits on an answer that cannot be accepted:
+
+| Applied | Result stored for the question | Card |
+|---|---|---|
+| The proposal the question refines (its recorded `questionRefines`) | `BK applied the proposal without answering.` | Skipped, you applied the proposal |
+| Any other agent proposal of the conversation | `BK applied another proposal ("<title>") without answering. The layout has changed since you asked, so this question is closed; ask again if it still matters.` | Closed, you applied another proposal |
+
+The marker for Closed is the result's fixed opening words, read by `isClosedAnswer`, the way Skipped is read from its fixed text. It travels through `cardOf` as `closed: true`, through the API schema, and into the reducer, so a reload, a later message and the live card say the same thing, and the work row stops reading "Needs your answer" (the stored presentation is resolved to `completed`; the reducer overrides the stale one it holds until the next snapshot). The model reads the result in its next request.
+
+The same rule has to hold when the apply comes while the turn is still running, before the question is stored. A turn that commits a question now compares the conversation's applied agent proposals with those applied when the turn started. If any became applied meanwhile, the question is stored with its result at once: Skipped when one of them is the proposal it refines, otherwise Closed. Round 4 did this only for the proposal the question refines, so an unrelated apply during the turn still produced the unanswerable state. A refined proposal that was only rejected, or revised by a call in the same reply, no longer counts as decided: nothing moved the head, so the question stays open and answerable, and the model is not told that BK applied something he did not.
+
+Not covered, by decision: the head moving by other means while a question waits (an editor edit, an undo, an apply in another conversation; each reproduced). That leaves the same unanswerable state and already does on main. It is logged in `docs/issues/open-question-unanswerable-after-layout-change.md` with the two options (close it on any head change, or accept the answer with a note to the model).
+
+### Where a question sits among the calls
+
+The association is the last proposal saved before the pending `ask_user` call, in call order. Proposals from earlier replies of the turn count, and so do calls before the question in the paused reply. A proposal from a call after it never counts. `runAgentTurn` collects proposals in the order they are saved, so what it lacked was the question's place in that order. An adapter that knows where the question fell tells the turn when it reaches it (`ModelRequest.onPause`), and the turn keeps the proposals saved by then. A provider that does not say leaves the callback uncalled, and everything saved counts as before, which is the old behaviour.
+
+| | Where call order is known | What the adapter does |
+|---|---|---|
+| Anthropic, OpenRouter | `message.content` is in the order the model wrote its blocks (OpenRouter serves the same Messages API, D-107). The adapter pauses on the first `ask_user` that passes the strict schema | It already ran the other calls of that reply after the pause, in content order (round 2, kept). It now walks the calls in content order and signals at the question's place, so a call before it runs first and a call after it runs second. Earlier replies of the turn were run by the SDK's tool runner before the next request, so they are before |
+| Codex | Codex runs the loop and reaches keyloom's tools over the loopback MCP server, through its code mode (S20, finding 3). What was saved is decided by the tool server, which runs calls in the order the requests reach it. The first successful `ask_user` sets `paused`, and every call after it throws "keyloom is waiting for an answer" and saves nothing | Nothing can be saved after the question, so everything saved is before it and the adapter has nothing to signal: it takes the fallback above. A test sends a proposal after the question (its completion reported late, so the call certainly reaches the server while it is paused) and checks it is refused and never saved. The JSONL order only decides which steps are stored (steps after the question's completed item are dropped, as before) |
+
+For Codex, what I did not check is the order Codex sends calls it holds together: `supports_parallel_tool_calls` is a per-server option in the installed codex-cli 0.165.0 (the key is in the binary) and `codexArgs` does not set it, and I did not run Codex. The association does not rest on it, because the tool server's order is the one that saves proposals. One thing I reasoned about and did not reproduce: the server sets `paused` one microtask after the question's work, so a call whose request was already queued could in principle run in that gap. It would still count as before the question, and nothing in the turn depends on it not happening.
+
+### Every way a question can end
+
+A question is open while its `ask_user` call has no result after it (`openQuestion`), its run is `waiting_user` and its presentation is `waiting_user`. These are the ways that ends or fails to. "Run" is the paused run's status afterwards.
+
+| How it ends | Stored for the question | Card (live and after reload) | Work row | Run | In scope |
+|---|---|---|---|---|---|
+| BK answers by option or in the card | his text | his answer | completed | completed; the answer starts a run | yes |
+| BK types a message instead | `BK did not pick an option; he wrote his own message instead.` | "Answered in your own words" live, the stored line after a reload | completed | completed | yes |
+| BK applies the proposal it refines | the Skipped result | Skipped, you applied the proposal | completed | completed | yes |
+| BK applies any other agent proposal of the conversation | the Closed result | Closed, you applied another proposal | completed | completed | yes |
+| Either apply lands while the turn is still running | stored when the turn commits, as above | as above | completed | `completed` at commit, never `waiting_user` | yes |
+| BK rejects the proposal it refines, or a call in the same reply revises it | nothing | stays open, answerable | Needs your answer | `waiting_user` | yes, unchanged: the head did not move |
+| The head moves by other means (editor edit, undo, apply in another conversation) | nothing | stays open; its options are refused with "that question's target has changed" | Needs your answer | `waiting_user` | no, logged; a typed message still goes through |
+| Stop before the question is reached | no question | none | stopped | `cancelled` | yes |
+| Stop as the question arrives | the question, open | open, answerable | Needs your answer | `waiting_user` with the stop recorded | yes, unchanged |
+| The turn fails | no question | none | failed | `failed` | yes |
+
+Each in-scope row has a test: `test/app/question-endings.test.ts` (through `startAgentRun` and `answerAgentRun`, which `sendMessage` does not use and which carry the guards), `test/agent/question-order.test.ts` (Anthropic, OpenRouter, Codex and the `onPause` contract) and `test/web/refine-cards.test.ts` (the card, the reducer, the work row). The real app shows the Closed card in `after-closed-light-1440.png` (`bun scripts/refine-journey.ts`, which now also runs `scripts/dev-command-shift.ts close`); `journey-transcript.md` has the chat text.
+
+### Where this differs from the brief
+
+- The brief put the rule in the apply's transaction. The same rule also has to run when the turn commits, or an unrelated apply during the turn recreates the unanswerable state (a test fails without it).
+- Round 4 treated a refined proposal that was rejected or superseded, not only applied, as decided, and stored "BK applied the proposal without answering" for it. That told the model something false and closed a question nothing had made unanswerable. Only an apply counts now.
+- The brief asked that Codex be checked, not changed. It needs no signal, and a test says why.
+
 ## The turn sequence for "one key for Command–Shift", two questions
 
 A turn is one request from BK to the next pause. A reply is one request to the model inside a turn.
