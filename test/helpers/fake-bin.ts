@@ -19,17 +19,33 @@ export function fakeBinDir(scripts: Record<string, string>): string {
   return dir;
 }
 
-/** Runs `fn` with `dir` first on PATH, then restores it. */
+type Scope = { dir: string; env: Record<string, string> };
+const activeScopes: Scope[] = [];
+// What each variable held before the first scope that touched it. Cleared when the last scope ends.
+const original = new Map<string, string | undefined>();
+
+/**
+ * Runs `fn` with `dir` first on PATH, then removes this scope's changes. A test that times out leaves its `fn` running, so
+ * scopes overlap and end in any order. Restoring a snapshot taken at the start would put a stale fake git back for every
+ * later file, so a variable goes back to the newest scope still active that sets it, or else to its original value.
+ */
 export async function withPath<T>(dir: string, fn: () => Promise<T>, env: Record<string, string> = {}): Promise<T> {
-  const saved = { PATH: process.env.PATH, ...Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]])) };
+  const scope: Scope = { dir, env };
+  for (const k of Object.keys(env)) if (!original.has(k)) original.set(k, process.env[k]);
+  activeScopes.push(scope);
   process.env.PATH = `${dir}:${process.env.PATH}`;
   Object.assign(process.env, env);
   try {
     return await fn();
   } finally {
-    for (const [k, v] of Object.entries(saved)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
+    activeScopes.splice(activeScopes.indexOf(scope), 1);
+    process.env.PATH = (process.env.PATH ?? "").split(":").filter((entry) => entry !== dir).join(":");
+    for (const k of Object.keys(env)) {
+      const owner = activeScopes.findLast((s) => k in s.env);
+      const value = owner ? owner.env[k] : original.get(k);
+      if (!owner) original.delete(k);
+      if (value === undefined) delete process.env[k];
+      else process.env[k] = value;
     }
   }
 }

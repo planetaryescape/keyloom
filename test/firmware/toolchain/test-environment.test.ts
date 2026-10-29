@@ -47,6 +47,31 @@ describe("toolchain test environment", () => {
     expect({ ...process.env }).toEqual(before);
   });
 
+  test("scopes that overlap because an earlier test timed out leave no fake behind, whichever ends first", async () => {
+    const before = { ...process.env };
+    const first = withPath(fakeBinDir({}), () => Bun.sleep(60), { FAKE_MODE: "ok", FAKE_GIT_HEAD: "abc" });
+    // Started while the first is still running, as the next test is after a timeout: it sees the first's fakes as inherited.
+    const second = withPath(fakeBinDir({}), () => Bun.sleep(120), { FAKE_MODE: "compile" });
+    await Promise.all([first, second]);
+    expect({ ...process.env }).toEqual(before);
+  });
+
+  test("the preload starts each test with the baseline PATH, so a leaked fake git cannot reach the next test", async () => {
+    const dir = tempDir();
+    const file = join(dir, "path.test.ts");
+    await Bun.write(file, `
+import { expect, test } from "bun:test";
+const original = process.env.PATH;
+test("leaks a PATH entry", () => { process.env.PATH = "/nonexistent-fake-bin:" + process.env.PATH; });
+test("the next test has the original PATH", () => { expect(process.env.PATH).toBe(original); });
+`);
+    const child = Bun.spawn([process.execPath, "test", "--preload", fileURLToPath(new URL("../../helpers/guard-toolchain-env.ts", import.meta.url)), file], {
+      cwd: dir, env: process.env, stdout: "pipe", stderr: "pipe",
+    });
+    const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    expect({ code, output: stdout + stderr }).toMatchObject({ code: 0 });
+  });
+
   test("the preload fails leaks of new, changed and deleted variables and restores them for the next test", async () => {
     const dir = tempDir();
     const file = join(dir, "leaks.test.ts");

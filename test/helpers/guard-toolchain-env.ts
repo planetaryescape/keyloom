@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeEach } from "bun:test";
 const guarded = (name: string) => name.startsWith("GIT_CONFIG_") || name.startsWith("FAKE_");
 const snapshot = () => new Map(Object.entries(process.env).filter(([name]) => guarded(name)));
 const baseline = snapshot();
+const basePath = process.env.PATH;
 
 function assertRestored(): void {
   const current = snapshot();
@@ -19,6 +20,12 @@ function assertRestored(): void {
   throw new Error(`Test leaked toolchain environment: ${changed.join(", ")}`);
 }
 
-beforeEach(assertRestored);
+// A fake git or docker left on PATH by a test that timed out makes every later `git init` exit silently, so each test starts
+// from the PATH the suite began with. This is a reset, not a failure: some files set PATH themselves and restore it in afterEach.
+beforeEach(() => {
+  if (basePath === undefined) delete process.env.PATH;
+  else process.env.PATH = basePath;
+  assertRestored();
+});
 afterEach(assertRestored);
 afterAll(assertRestored);

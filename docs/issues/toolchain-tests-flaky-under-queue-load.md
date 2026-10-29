@@ -12,7 +12,7 @@ Observed on the PR 145 heads `0f20ab1` and `f0e85dc`, while other agents' jobs s
 
 Run the queued suite with the environment printed in the failing `git` child, to see whether another test file overwrote or cleared the `GIT_CONFIG_*` variables in the shared Bun process. Check whether `awaitMountedFiles`'s settle window reads a clock that a fake can stall. If a test mutates `process.env` without restoring it, scope that change to the child it spawns.
 
-Status: open for the intermittent Git failure. The mounted-file timing failure is fixed in 582b511 (PR 174), released in v0.54.0.
+Status: the Git cascade is fixed on branch fix/open-issues-batch (cause under "A timed-out test left a fake git on PATH"). The mounted-file timing failure is fixed in 582b511 (PR 174), released in v0.54.0. The slow individual tests that start the cascade still time out under heavy load; they now fail alone.
 The successful-retry fixture now allows 3 s for its subprocess probes, with a regression that failed against its old 200 ms budget. A preload guard fails and restores leaked `GIT_CONFIG_*` and `FAKE_*` values; the original Git failure has not reproduced here.
 
 ## The 200 ms fixture expires before a slow fourth probe
@@ -102,3 +102,21 @@ With the preload guard, the 3 s mounted-files budget and the larger property and
 
 On 2026-10-22, on branch `fix/locked-mac-flash`, a loaded run of `test/firmware/zmk test/firmware/toolchain` and two app files (511 tests, 140 s) also timed out at Bun's 5 s default in `test/firmware/zmk/module-c.test.ts` ("the serial number the module writes > a peripheral writes R, a central writes L…") and `test/firmware/toolchain/checkout.test.ts` ("ensureCheckout > a submodule that has not been fetched is fetched on the next use"). Neither file is touched by that branch. Both files now allow 30 s per test, as `test/firmware/zmk/build.test.ts` does (branch `fix/stage-shadow-and-flaky-limits`). Each runs a compiler or Git several times per test; alone, all 16 tests take 3.4 s.
 
+
+## A timed-out test left a fake git on PATH
+
+On 2026-10-28/29, full `bun test` runs through `agent-work` (logs V3-full-final, V4-full-final, A2r4-full-orch) timed out one toolchain test at 5 s, the guard reported "Test leaked toolchain environment: FAKE_DOCKER_LOG, FAKE_GIT_HEAD, …", and then 37 to 44 later tests failed on `git init --quiet -b main` with an empty stderr. Each failing file passed alone.
+
+Reproduced at base `48c2f02` with three tests in one file: a `withPath(fakeGit, () => sleep(600), { FAKE_GIT_HEAD })` test with a 100 ms limit, a second `withPath` test, then `git init` through `test/helpers/git-fixture.ts`. In the failing `git init`, printed from the same process:
+
+```text
+which git -> /var/folders/…/keyloom-bin-BV5Pyp/git      (the fake from FAKE_GIT)
+PATH      -> /var/folders/…/keyloom-bin-BV5Pyp:/var/folders/…/keyloom-no-flash-…:/Users/bhekanik/…
+cwd       -> the repo root (unchanged)
+```
+
+`FAKE_GIT` does `shift 2` and `exit 9` for anything but `rev-parse` and `submodule`, so `git init` fails without printing anything. cwd was not the cause.
+
+A timed-out test does not cancel its `withPath` callback. The next test's `withPath` saved a PATH that still held the first fake directory. When the straggler finished it restored the real PATH, and when the second scope finished it restored its stale snapshot, with the fake directory in it, for the rest of the process. The old guard restored `GIT_CONFIG_*` and `FAKE_*` but never looked at PATH.
+
+Two changes: `withPath` (`test/helpers/fake-bin.ts`) now removes only its own PATH entry and returns each variable to the newest scope still active that sets it, or to its original value, so scopes can end in any order; and the preload guard resets PATH to its starting value before every test. Regressions in `test/firmware/toolchain/test-environment.test.ts` ("scopes that overlap…", "the preload starts each test with the baseline PATH…") both failed before the change.
