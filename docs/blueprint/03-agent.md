@@ -4,7 +4,7 @@ Revision, 2026-10-29: D-452 replaced D-020's alternatives. `propose_changes` tak
 
 Extension, 2026-10-18: [28](28-agent-experience.md), [29](29-agent-app-control.md) and [30](30-agent-keyboard-context.md) broaden the agent into an app-wide keyboard specialist and specify its presentation/runtime. Rung 26a implements observed work, public-message grouping and bounded saved presentation; [compiled acceptance](../screenshots/agent-experience/integrated/README.md) records what was checked. Durable execution and broader app/collection control remain proposals. D-401 proposes replacing the one-conversation-layout write limit; D-403 preserves validated proposals and user approval. The historical provider and post-Apply wording below must not override the current provider chapter or actual auto-sync state.
 
-The agent turns BK's frustrations and goals into proposals (D-004, D-005, D-010). It reads the layout, the board, BK's stated priorities and the remembered decisions. It asks what it needs to know, and it proposes one to three structured change sets (D-020). It never applies a change and never writes firmware source (D-014). Applying is BK's action, in the editor or with `keyloom change apply`.
+The agent turns BK's frustrations and goals into proposals (D-004, D-005, D-010). It reads the layout, the board, BK's stated priorities and the remembered decisions. It asks what it needs to know, puts its best change set on the board, and refines it with questions one at a time, each answer giving a revised proposal (D-452, which replaced D-020's one to three alternatives). It never applies a change and never writes firmware source (D-014). Applying is BK's action, in the editor or with `keyloom change apply`.
 
 ## Model and SDK
 
@@ -19,7 +19,7 @@ The agent turns BK's frustrations and goals into proposals (D-004, D-005, D-010)
 
 The prompt is assembled in this order. The stable parts come first so prompt caching holds across a conversation:
 
-1. **System prompt** (`src/agent/prompts/system.md`): its role, D-014's rule that it proposes and never applies, the principles from [00](00-overview.md), and how to use the tools. It must ask before guessing a priority (D-021). It must offer two or three alternatives when a change displaces something (D-020). It must treat comfort claims as hypotheses (D-018).
+1. **System prompt** (`src/agent/prompts/system.md`): its role, D-014's rule that it proposes and never applies, the principles from [00](00-overview.md), and how to use the tools. It must ask before guessing a priority (D-021). When a change displaces something, it proposes the way that costs least and asks about the choice only where it changes the outcome (D-452; D-020's displacement and reachability rules still hold). It must treat comfort claims as hypotheses (D-018).
 2. **Board context:** the board definition summary (key count, hands, rows, thumb cluster, finger assignment per position) and the board's `SKILL.md`, if it has one ([04](04-boards-and-contributions.md)).
 3. **Firmware capabilities:** what this firmware can and can't express, from [05](05-firmware-qmk.md) or [06](06-firmware-zmk.md), as a short generated list.
 4. **The active decisions and priorities** for this layout, all of them ([08](08-decision-memory.md)). They are short and few, so there's no retrieval step.
@@ -98,7 +98,7 @@ BK's first real problem (D-019, D-025): Option sits on S as a home row mod, ther
 
 - `find_function("mod:LALT")` returns only the hold half of S on the base layer.
 - The agent asks what it needs. Which layer does BK reach most easily with his left hand free? Which app needs Option–Option?
-- It proposes up to three of the remedies from D-019:
+- It proposes the remedy that fits best from D-019, and asks before choosing between them only if nothing BK said decides it (D-452):
   1. On a layer BK already holds with the other hand, make S a plain `modifier` LALT. Then holding that layer and tapping S twice sends Option–Option.
   2. Add a macro `opt-opt` (tap LALT, wait, tap LALT) on a free position or a combo.
   3. Change the shortcut in the app. This has no ops, so it's an explanation only.

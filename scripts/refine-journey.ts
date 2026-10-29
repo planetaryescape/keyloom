@@ -18,16 +18,20 @@ import { ANSWER_1, ANSWER_2, CLOSE_FOLLOWUP, QUICK_REQUEST, REQUEST } from "../t
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const OUT = process.argv[2] ?? join(import.meta.dir, "..", "docs", "research", "refine-loop");
 const APP_PORT = 4493;
-const CDP_PORT = 9334;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 mkdirSync(OUT, { recursive: true });
 
 const profile = mkdtempSync(join(tmpdir(), "refine-journey-chrome-"));
-const chrome = Bun.spawn([CHROME, "--headless=new", `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${profile}`, "--no-first-run", "--disable-gpu", "--hide-scrollbars", "about:blank"], { stdout: "ignore", stderr: "ignore" });
+// Port 0 lets Chrome pick a free debugging port and write it to its own profile, so the script can only reach the Chrome it started,
+// never another browser already listening on a fixed port.
+const chrome = Bun.spawn([CHROME, "--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run", "--disable-gpu", "--hide-scrollbars", "about:blank"], { stdout: "ignore", stderr: "ignore" });
 let targets: Array<{ type: string; webSocketDebuggerUrl: string }> = [];
 for (let i = 0; i < 50 && targets.length === 0; i++) {
   await sleep(200);
-  try { targets = ((await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json()) as typeof targets).filter((t) => t.type === "page"); } catch { /* not up yet */ }
+  try {
+    const port = (await Bun.file(join(profile, "DevToolsActivePort")).text()).split("\n")[0];
+    targets = ((await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as typeof targets).filter((t) => t.type === "page");
+  } catch { /* not up yet */ }
 }
 const ws = new WebSocket(targets[0]?.webSocketDebuggerUrl ?? "");
 await new Promise((r) => (ws.onopen = r));
