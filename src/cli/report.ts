@@ -1,5 +1,6 @@
 // The text form of an import report (05: "Print the import report").
-import type { ImportOutcome } from "../app/index.ts";
+import type { ImportOutcome, SettingView, SettingsView } from "../app/index.ts";
+import { columns } from "./output.ts";
 
 export function importTable(o: ImportOutcome): string {
   const r = o.report;
@@ -26,4 +27,22 @@ export function importTable(o: ImportOutcome): string {
   if (r.warnings.length > 0) lines.push("", "warnings:", ...r.warnings.map((w) => `  ${w}`));
   if (r.instructions) lines.push("", "to do yourself:", ...r.instructions.split("\n").map((l) => `  ${l}`));
   return lines.join("\n");
+}
+
+const show = (s: SettingView, v: number | boolean): string => {
+  if (typeof v === "boolean") return v ? "on" : "off";
+  if (v === 0 && s.zero !== null) return s.zero;
+  return s.unit === "" ? String(v) : `${v} ${s.unit}`;
+};
+
+/** The settings of one layout as the Settings page reads them: value in force, default, whether the layout stores it, and why a value is forced. */
+export function settingsTable(v: SettingsView): string {
+  const head = `${v.layoutId}  ${v.name}  ${v.boardId}  ${v.revisionId}`;
+  if (v.settings.length === 0) return `${head}\n\nno firmware settings for ${v.boardId}`;
+  const rows = v.settings.map((s) => [
+    s.key, s.name, s.sourceText ?? show(s, s.value), show(s, s.default), s.stored ? "stored" : "-",
+    s.forcedBy === null ? "" : `forced: ${s.forcedBy}`,
+  ]);
+  const body = columns([["KEY", "NAME", "VALUE", "DEFAULT", "STORED", "NOTE"], ...rows]);
+  return `${head}\n\n${body.split("\n").map((l) => l.trimEnd()).join("\n")}\n\nread only; change a value with a setFirmwareSetting op (keyloom change propose)`;
 }

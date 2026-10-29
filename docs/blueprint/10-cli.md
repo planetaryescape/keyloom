@@ -1,6 +1,6 @@
 # 10: CLI
 
-Status: CLI built, including layout export, board geometry, provider selection and review-finding controls. The [audit closeout](../research/blueprint-audit-closeout.md) records verification. Use the installed version's `--help` to check availability.
+Status: CLI built, including layout export, layout settings, board geometry, provider selection and review-finding controls. The [audit closeout](../research/blueprint-audit-closeout.md) records verification. Use the installed version's `--help` to check availability.
 
 The CLI is the canonical surface (D-030, taken from spotuify). Everything the web app can do, a `keyloom` subcommand can do, and both call the same core modules ([01](01-architecture.md)). The CLI is how coding agents check their own work while building keyloom, and how BK or an agent scripts it. A feature that exists only in the web app is incomplete.
 
@@ -21,6 +21,7 @@ keyloom
   import --board <board> <file> [--name N] import an existing layout; prints the new layout ID and an import report
   layout list
   layout show <layout> [--layer L] [--rev R]   grid per layer, or the IR with --format json
+  layout settings <layout> [--rev R]       the firmware settings the Settings page offers: value in force, default, stored or not, why forced (read only, D-459)
   layout export <layout> [--rev R] --out <file.json>
   layout upgrade <layout>                 read recognised kept Oryx colours and tap dances into the model
 
@@ -87,6 +88,14 @@ keyloom
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
 
 `layout history` and `layout delete` were planned names, not implemented aliases. Use `version list <config>` for history and `config delete <config> <name>` for guarded deletion. `boards check --offline` checks local files without fetching the pinned geometry.
+
+## Read a layout's firmware settings
+
+```sh
+keyloom --data-dir <scratch> layout settings <layout> [--rev <revision>]
+```
+
+One row per option the Settings page offers for the layout's board: `key`, plain `name`, the `value` the firmware gets (a forced value included), the `default` with no setting from keyloom, whether the layout `stores` it, and `forced_by` when something forces it, such as a Caps Word key turning on `CAPS_WORD_ENABLE`. `--format json` carries `layout_id`, `name`, `board_id`, `revision_id` and `settings`; jsonl prints one option per line; ids prints the keys. The command only reads. To change a value, send a `setFirmwareSetting` op through `change check` and `change propose` ([D-459](14-decision-log.md)).
 
 ## Export a layout and import it as a new config
 
