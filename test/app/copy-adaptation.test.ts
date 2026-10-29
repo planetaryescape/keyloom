@@ -71,6 +71,7 @@ test("whole-config copy owns its proposal, question, answer lineage and applied 
     expect(findRun(app.db, child.id)?.layout_id).toBe(handoff.layoutId);
     const proposed = savedRunOutcome(app, child.id);
     expect(proposed.proposals).toHaveLength(1);
+    expect(listConversationChangeSets(app.db, child.conversationId)[0]?.decisionDraft?.sourceMessageIds.filter((id) => id === child.userMessageId)).toHaveLength(1);
     expect(proposed.question?.refines).toBe(proposed.proposals[0]?.changeSetId);
     expect(listConversationChangeSets(app.db, source.conversationId)).toHaveLength(0);
     expect((await startAgentRun(app, request, { model })).handoff).toEqual(handoff);
@@ -206,30 +207,63 @@ for (const moved of ["source", "target"] as const) test(`a ${moved} edit while t
   } finally { await drainAgentRuns(app); app.db.close(); }
 });
 
-test("Stop during target work and an explicit retry continue the same copied config", async () => {
+for (const route of ["durable", "legacy"] as const) for (const interruption of ["stopped", "failed"] as const) test(`a ${interruption} first child can recover, Apply, then create and copy again (${route})`, async () => {
+  const { sendMessage } = await import("../../src/app/index.ts");
   const { app, layoutId } = await fixture();
   const started = Promise.withResolvers<void>();
   let calls = 0;
+  let failure: unknown;
   const model: AgentModel = { provider: "anthropic", model: "synthetic-retry", effort: "high", classifyError: () => null, async run(request) {
-    if (++calls === 1) { await request.tools.find((tool) => tool.name === "put_config")?.run({ from: layoutId, board: "moergo/glove80", name: "Retry existing copy" }); return done; }
-    expect(request.system).toContain("Keep layer access in my left hand");
-    if (calls === 2) {
-      started.resolve();
-      await new Promise<void>((_resolve, reject) => request.signal?.addEventListener("abort", () => reject(new Error("stopped target")), { once: true }));
-    }
-    return done;
+    try {
+      const tool = (name: string) => { const result = request.tools.find((value) => value.name === name); if (!result) throw new Error(name); return result; };
+      if (++calls === 1) { await tool("put_config").run({ from: layoutId, board: "moergo/glove80", name: "Retry existing copy" }); return done; }
+      if (calls === 2) {
+        started.resolve();
+        if (interruption === "failed") throw new Error("Synthetic failure before proposing");
+        await new Promise<void>((_resolve, reject) => request.signal?.addEventListener("abort", () => reject(new Error("stopped target")), { once: true }));
+      }
+      if (calls === 3) {
+        expect(request.system).toContain("Keep layer access in my left hand");
+        const seed = JSON.parse(request.system.split("Translated seed (not applied or proposed): ")[1] ?? "{}").ops;
+        await tool("propose_changes").run({ title: "Recovered whole setup", ops: seed, explanation: "Continue the same copy after interruption.", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft() });
+      } else if (calls === 4) {
+        expect(request.system).toContain("# Earlier copy provenance (read-only)");
+        await tool("create_config").run({ name: "New task config after recovery", from: "this" });
+        await tool("put_config").run({ from: layoutId, board: "foostan/corne", name: "New copy after recovery" });
+      }
+      return done;
+    } catch (error) { if (calls !== 2) failure = error; throw error; }
   } };
   try {
     const source = await startAgentRun(app, { version: 1, requestId: "retry-source", layoutRef: layoutId, input: { message: "Copy" } }, { model });
     const completed = await waitForAgentRun(app, source.id);
     await started.promise;
     if (!completed.handoff) throw new Error("missing handoff");
-    cancelAgentRun(app, source.id);
-    expect((await waitForAgentRun(app, completed.handoff.runId)).status).toBe("cancelled");
-    const continued = await startAgentRun(app, { version: 1, requestId: "retry-target", layoutRef: completed.handoff.layoutId, input: { conversationId: completed.handoff.conversationId, message: "Continue adapting the copied setup" } }, { model });
-    expect((await waitForAgentRun(app, continued.id)).status).toBe("completed");
+    const handoff = completed.handoff;
+    // Older saved contexts also need the target request restored when the first proposal comes from recovery.
+    app.db.query("UPDATE agent_runs SET request_json = json_remove(request_json, '$.copyContext.provenance') WHERE id = ?").run(handoff.runId);
+    if (interruption === "stopped") cancelAgentRun(app, source.id);
+    expect((await waitForAgentRun(app, handoff.runId)).status).toBe(interruption === "stopped" ? "cancelled" : "failed");
+    const recover = async (message: string, requestId: string) => {
+      if (route === "legacy") return sendMessage(app, handoff.layoutId, { conversationId: handoff.conversationId, message, model });
+      const run = await startAgentRun(app, { version: 1, requestId, layoutRef: handoff.layoutId, input: { conversationId: handoff.conversationId, message } }, { model });
+      await waitForAgentRun(app, run.id);
+      if (failure) throw failure;
+      return savedRunOutcome(app, run.id);
+    };
+    const recovered = await recover("Continue adapting the copied setup", "retry-target");
+    const proposal = recovered.proposals[0];
+    if (!proposal) throw new Error("recovery did not propose");
+    applyChange(app, proposal.changeSetId);
+    const later = await recover("Make a separate config from this and copy my source to the Corne", "fresh-task");
+    if (failure) throw failure;
+    const saved = listConversationChangeSets(app.db, handoff.conversationId).find((change) => change.id === proposal.changeSetId);
+    expect(saved?.decisionDraft?.sourceMessageIds.filter((id) => id === inspectAgentRun(app, handoff.runId).userMessageId)).toHaveLength(1);
+    expect(later.handoff).toBeDefined();
+    if (later.handoff) await waitForAgentRun(app, later.handoff.runId);
     expect(listLayouts(app).filter((layout) => layout.name === "Retry existing copy")).toHaveLength(1);
-    expect(continued.conversationId).toBe(completed.handoff.conversationId);
+    expect(listLayouts(app).filter((layout) => layout.name === "New task config after recovery")).toHaveLength(1);
+    expect(listLayouts(app).filter((layout) => layout.name === "New copy after recovery")).toHaveLength(1);
   } finally { await drainAgentRuns(app); app.db.close(); }
 });
 

@@ -51,7 +51,7 @@ export function conversationCopyContext(app: App, conversationId: string, refini
     const row = z.object({ request_json: z.string(), user_message_id: z.string() }).parse(raw);
     const parsed = z.object({ copyContext: CopyContextSchema }).safeParse(JSON.parse(row.request_json));
     if (parsed.success) {
-      const context = parsed.data.copyContext;
+      const context = { ...parsed.data.copyContext, sourceMessageIds: [...new Set([...parsed.data.copyContext.sourceMessageIds, row.user_message_id])] };
       const lineage = listConversationChangeSets(app.db, conversationId).filter((proposal) => proposal.decisionDraft?.sourceMessageIds.includes(row.user_message_id));
       const active = !lineage.some((proposal) => proposal.status === "applied");
       // Apply ends the task's instructions; an answer refining that task still cannot turn into another copy.

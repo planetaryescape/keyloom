@@ -82,6 +82,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
 
   const run = useCallback(
     async (text: string, selection: ChatSelection | null, begin: Action, onRejected?: (text: string) => void, drafts: ChatDrafts = [], answer?: { toolUseId: string }) => {
+      handoff.current = undefined;
       setProblem(null);
       dispatch(begin);
       const mine = new AbortController();
@@ -197,6 +198,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
   }, [token]);
 
   const newConversation = useCallback(() => {
+    handoff.current = undefined;
     controller.current?.abort();
     controller.current = null;
     savedRun.current = null;
@@ -219,16 +221,18 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
   /** Resolves to an error message, or null once the conversation is showing. */
   const open = useCallback(
     async (id: string): Promise<string | null> => {
+      handoff.current = undefined;
+      controller.current?.abort();
+      const mine = new AbortController();
+      controller.current = mine;
       try {
-        const detail = await fetchConversation(token, id, new AbortController().signal);
-        controller.current?.abort();
-        controller.current = null;
+        const detail = await fetchConversation(token, id, mine.signal);
+        if (controller.current !== mine || mine.signal.aborted) return null;
         setProblem(null);
         dispatch({ type: "loaded", detail });
         conversationId.current = id;
-        const mine = new AbortController();
-        controller.current = mine;
         const saved = await latestSavedRun(token, id, mine.signal);
+        if (controller.current !== mine || mine.signal.aborted) return null;
         if (saved !== null) {
           savedRun.current = saved.id;
           localStorage.setItem(storageKey, saved.id);
@@ -237,6 +241,8 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         } else { savedRun.current = null; controller.current = null; localStorage.removeItem(storageKey); }
         return null;
       } catch (error) {
+        if (controller.current !== mine || mine.signal.aborted) return null;
+        controller.current = null;
         return error instanceof Error ? error.message : "Couldn't open that conversation.";
       }
     },

@@ -286,7 +286,7 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
     try {
       outcome = await runAgentTurn({
         model,
-        ports: createAgentPorts(app, view.layout.id, conversation.id, [...(copyContext?.active ? copyContext.sourceMessageIds : []), userMessage.id], selection, runId, undefined, copy === undefined ? undefined : (value) => {
+        ports: createAgentPorts(app, view.layout.id, conversation.id, [...new Set([...(copyContext?.active ? copyContext.sourceMessageIds : []), userMessage.id])], selection, runId, undefined, copy === undefined ? undefined : (value) => {
           const result = copy(value);
           handoff = result.handoff;
           return result;
