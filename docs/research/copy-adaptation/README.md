@@ -43,7 +43,7 @@ On 2026-10-29, Codex `gpt-6.1-sol` at medium effort passed the synthetic scenari
 
 The scenario is gated and writes its report under `evals/reports/`; the full run report is retained in the orchestration handover. This checks one small synthetic setup. It does not measure comfort, physical keyboard behavior, browser interaction or behavior across other models and boards.
 
-## Source checks pass; release gates remain pending
+## Source and browser checks use synthetic data
 
 | Check | Result |
 |---|---|
@@ -57,7 +57,7 @@ The scenario is gated and writes its report under `evals/reports/`; the full run
 
 The first-config preservation test fails when its unselected-creation fix is disabled. The concurrent-terminal, malformed-pause and later-task regressions fail with their corresponding original source restored, then pass with the fixes.
 
-Browser/screenshots and keyboard-only navigation, verification of the published A3 release, and the required independent-provider review remain pending. A3 remains under verification.
+Computer Use checked the real app's copy handoff, question and answer, superseding proposal, keyboard Apply, remembered reason and saved-result replay on synthetic data. The [browser evidence](../ui-audit/a3-copy-adaptation/README.md) includes both themes at desktop and phone sizes, plus the canceled-open and stale-Retry controls. These source checks do not measure comfort or physical keyboard behavior.
 
 React Doctor reported an ordered `await` and a lookup through the bounded tool list in the Anthropic adapter. The calls must execute in order to preserve question/terminal boundaries, so those diagnostics do not warrant concurrent execution. The TypeScript and simplification review retained the repository's conditional-spread idiom rather than changing adjacent style.
 
@@ -74,3 +74,9 @@ The shared Anthropic/OpenRouter adapter validates an earlier question before giv
 The gated live eval checks Navigation37 and Space38 in the first best proposal before giving any placement answer, and checks ESCAPE, A, LCTL, LEFT and Navigation access in both initial and final layouts. It also requires final completion and at most three questions before Apply, so applying cannot hide a fourth unanswered question.
 
 A copied-config result card omits the outside-chat proposal count when its presentation identifies a target conversation. The actual proposal remains in that chat; direct `keyboard put` and ordinary `create_config` cards retain their counts. A static React render regression checks this distinction. This is component evidence, not browser or screenshot verification.
+
+## Recovery retains provenance without reviving old work
+
+Candidate `418e2cb685d44052c8361aafa4e789d5c6d71225` includes the recovery corrections. A proposal made after the first target turn stopped or failed still carries the initial target message in its lineage; applying it retires the adaptation restriction for a later deliberate task. Starting a new message, New conversation or opening history clears the prior handoff. A canceled or replaced open returns a distinct result, so ChatPanel cannot mistake it for success and submit the initial copy continuation. Normal history opening and Retry of the current handoff still work.
+
+The app regressions exercise stopped and failed first turns in both durable and legacy paths. The actual React hook fixture and failing controls are recorded in the [browser evidence](../ui-audit/a3-copy-adaptation/README.md). These are lifecycle checks; they make no claim about hardware or model ergonomics.
