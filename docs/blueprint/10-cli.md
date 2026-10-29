@@ -95,7 +95,7 @@ keyloom
 keyloom --data-dir <scratch> layout settings <layout> [--rev <revision>]
 ```
 
-One row per option the Settings page offers for the layout's board: `key`, plain `name`, the `value` the firmware gets (a forced value included), the `default` with no setting from keyloom, whether the layout `stores` it, and `forced_by` when something forces it, such as a Caps Word key turning on `CAPS_WORD_ENABLE`. `--format json` carries `layout_id`, `name`, `board_id`, `revision_id` and `settings`; jsonl prints one option per line; ids prints the keys. The command only reads. To change a value, send a `setFirmwareSetting` op through `change check` and `change propose` ([D-459](14-decision-log.md)).
+One row per option the Settings page offers for the layout's board: `key`, plain `name`, the `value` the firmware gets (a forced value included; null, shown as `expression`, when the layout stores text such as `(TAPPING_TERM + 10)`, with the text in `source_text`), the `default` with no setting from keyloom, whether the layout `stores` it, and `forced_by` when something forces it, such as a Caps Word key turning on `CAPS_WORD_ENABLE`. `--format json` carries `layout_id`, `name`, `board_id`, `revision_id` and `settings`; jsonl prints one option per line; ids prints the keys. The command only reads. To change a value, send a `setFirmwareSetting` op through `change check` and `change propose` ([D-459](14-decision-log.md)).
 
 ## Export a layout and import it as a new config
 

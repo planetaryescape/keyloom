@@ -31,7 +31,7 @@ async function cli(args: string[], dataDir: string) {
   return { code, out, err };
 }
 
-type Row = { key: string; name: string; value: number | boolean; default: number | boolean; stored: boolean; forced_by: string | null; source_text: string | null };
+type Row = { key: string; name: string; value: number | boolean | null; default: number | boolean; stored: boolean; forced_by: string | null; source_text: string | null };
 const rows = async (dataDir: string, ref: string, extra: string[] = []): Promise<Record<string, Row>> => {
   const r = await cli(["--format", "json", "layout", "settings", ref, ...extra], dataDir);
   expect(r.code).toBe(0);
@@ -71,6 +71,19 @@ describe("layout settings", () => {
     expect(settings.COMBO_TERM).toMatchObject({ stored: false });
     // --rev reads an older revision: before the change the default was in force.
     expect((await rows(dataDir, "my-moonlander", ["--rev", head.revision.id])).TAPPING_TERM).toMatchObject({ value: 200, stored: false });
+  });
+
+  test("a stored expression has no known value: null in JSON, expression in the table, the text kept", async () => {
+    const { app, dataDir, layoutId } = await world();
+    const head = getLayout(app, layoutId);
+    applyOps(app, layoutId, {
+      baseRevisionId: head.revision.id, summary: "Tapping term as an expression",
+      ops: [{ op: "setFirmwareSetting", setting: { firmware: "qmk", key: "TAPPING_TERM", value: "(TAPPING_TERM + 10)" } }],
+    });
+    const settings = await rows(dataDir, "my-moonlander");
+    expect(settings.TAPPING_TERM).toMatchObject({ value: null, default: 200, stored: true, source_text: "(TAPPING_TERM + 10)" });
+    const line = (await cli(["--format", "table", "layout", "settings", "my-moonlander"], dataDir)).out.split("\n").find((l) => l.startsWith("TAPPING_TERM"));
+    expect(line).toMatch(/^TAPPING_TERM\s+Tapping term\s+expression\s+200 ms\s+stored\s+source: \(TAPPING_TERM \+ 10\)$/);
   });
 
   test("a Caps Word key forces Caps Word on, says why, and wins over a stored off", async () => {

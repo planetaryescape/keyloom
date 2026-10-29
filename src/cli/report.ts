@@ -40,8 +40,8 @@ export function settingsTable(v: SettingsView): string {
   const head = `${v.layoutId}  ${v.name}  ${v.boardId}  ${v.revisionId}`;
   if (v.settings.length === 0) return `${head}\n\nno firmware settings for ${v.boardId}`;
   const rows = v.settings.map((s) => [
-    s.key, s.name, s.sourceText ?? show(s, s.value), show(s, s.default), s.stored ? "stored" : "-",
-    s.forcedBy === null ? "" : `forced: ${s.forcedBy}`,
+    s.key, s.name, s.value === null ? "expression" : show(s, s.value), show(s, s.default), s.stored ? "stored" : "-",
+    [s.sourceText === null ? "" : `source: ${s.sourceText}`, s.forcedBy === null ? "" : `forced: ${s.forcedBy}`].filter(Boolean).join("; "),
   ]);
   const body = columns([["KEY", "NAME", "VALUE", "DEFAULT", "STORED", "NOTE"], ...rows]);
   return `${head}\n\n${body.split("\n").map((l) => l.trimEnd()).join("\n")}\n\nread only; change a value with a setFirmwareSetting op (keyloom change propose)`;

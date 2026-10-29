@@ -11,8 +11,8 @@ export type SettingView = {
   kind: OptionSpec["kind"];
   /** "ms" and so on; empty for a flag or a count. */
   unit: string;
-  /** What the firmware gets now, forced values included. */
-  value: number | boolean;
+  /** What the firmware gets now, forced values included. Null when the stored text is an expression: what it evaluates to is not known here. */
+  value: number | boolean | null;
   /** What the firmware does with no setting from keyloom. */
   default: number | boolean;
   /** The layout writes this option itself. */
@@ -30,18 +30,23 @@ export type SettingsView = { layoutId: string; name: string; boardId: string; re
 export function layoutSettings(app: App, ref: string, revisionId?: string): SettingsView {
   const view = getLayout(app, ref, revisionId);
   const board = view.board.definition;
-  const settings = optionsFor(board).map((spec): SettingView => ({
-    key: spec.key,
-    name: spec.label,
-    group: spec.group,
-    kind: spec.kind,
-    unit: spec.kind === "number" ? spec.unit : "",
-    value: currentValue(spec, view.document, board),
-    default: baselineOf(spec, view.document, board),
-    stored: isSet(spec, view.document),
-    sourceText: sourceText(spec, view.document) ?? null,
-    forcedBy: forcedOn(spec, view.document),
-    zero: spec.kind === "number" ? spec.zero ?? null : null,
-  }));
+  const settings = optionsFor(board).map((spec): SettingView => {
+    const text = sourceText(spec, view.document) ?? null;
+    const forced = forcedOn(spec, view.document);
+    return {
+      key: spec.key,
+      name: spec.label,
+      group: spec.group,
+      kind: spec.kind,
+      unit: spec.kind === "number" ? spec.unit : "",
+      // currentValue would report the baseline for an expression, which is not what the firmware gets.
+      value: text !== null && forced === null ? null : currentValue(spec, view.document, board),
+      default: baselineOf(spec, view.document, board),
+      stored: isSet(spec, view.document),
+      sourceText: text,
+      forcedBy: forced,
+      zero: spec.kind === "number" ? spec.zero ?? null : null,
+    };
+  });
   return { layoutId: view.layout.id, name: view.layout.name, boardId: view.layout.boardId, revisionId: view.revision.id, firmware: board.firmware, settings };
 }
