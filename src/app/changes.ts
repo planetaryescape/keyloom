@@ -8,8 +8,8 @@ import type { ChangeOp, DecisionDraft } from "../layout/change.ts";
 import { recordChoice, restoreChangeSet, subjectOf, supersedeTouched, suspendChangeSet } from "../memory/choices.ts";
 import { type StaleConflict, staleConflicts } from "../layout/stale.ts";
 import {
-  type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, type StoredDraft, type Tradeoffs, findChangeSet, insertChangeSet, listChangeSets, markApplied,
-  markRejected, recordSupersededDecisionIds,
+  type ChangeSetRow, type ChangeSetSource, type ChangeSetStatus, type StoredDraft, type Tradeoffs, findChangeSet, insertChangeSet, listChangeSets, listConversationChangeSets, markApplied,
+  markRejected, markSuperseded, recordSupersededDecisionIds,
 } from "../persistence/change-sets.ts";
 import { type RevisionRow, findRevision, revisionChain } from "../persistence/layouts.ts";
 import { appendLog } from "../persistence/log.ts";
@@ -23,6 +23,7 @@ import type { App } from "./context.ts";
 import { decisionFactsFor, pinnedFor } from "./decisions.ts";
 import { NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
+import { closeOpenQuestion } from "./question-skip.ts";
 
 /** A change set with its stored validation parsed. */
 export type ChangeSetView = Omit<ChangeSetRow, "validation"> & { validation: ValidationResult };
@@ -90,7 +91,38 @@ export type ProposalMeta = {
   title?: string; tradeoffs?: Tradeoffs; conversationId?: string; proposalGroup?: string; selection?: SelectionScope;
   /** What to remember when this is applied, and the messages of BK's it answers (08). */
   decisionDraft?: StoredDraft;
+  /** The proposed change set of this conversation that this one revises (D-452). It is set aside in the same transaction that saves this one. */
+  supersedes?: string;
 };
+
+/** The agent's proposals in this conversation that BK has not decided: what a new proposal could replace or sit beside (D-452). */
+export const openProposals = (app: App, conversationId: string): ChangeSetRow[] =>
+  listConversationChangeSets(app.db, conversationId).filter((cs) => cs.status === "proposed" && cs.source === "agent");
+
+const listOf = (open: readonly ChangeSetRow[]) =>
+  open.length === 0 ? "No proposal is open." : `Open: ${open.map((cs) => `${cs.id} ("${cs.title ?? cs.explanation.slice(0, 40)}")`).join("; ")}.`;
+
+/**
+ * What a revision may replace (D-452): a proposed change set of this conversation and this layout. The message is read by the model, which
+ * decides again, so it says what the state is and what to do about it. Another conversation's id reads as an unknown one.
+ */
+export function requireSupersedable(app: App, layoutId: string, conversationId: string | null, id: string): ChangeSetRow {
+  if (conversationId === null) throw new UsageError("supersedes only works inside a conversation; propose without it");
+  const cs = findChangeSet(app.db, id);
+  const open = openProposals(app, conversationId);
+  if (!cs || cs.conversationId !== conversationId || cs.layoutId !== layoutId) throw new UsageError(`no proposal "${id}" in this conversation. ${listOf(open)}`);
+  if (cs.status === "applied") throw new UsageError(`${id} is applied: BK took it. If the answer still changes something, propose that as a new change against the layout as it is now, with supersedes: null. ${listOf(open)}`);
+  if (cs.status !== "proposed") throw new UsageError(`${id} is ${cs.status}, so it can't be superseded. ${listOf(open)}`);
+  return cs;
+}
+
+/** A proposal made while another is open must say which it is (D-452): the model declares a replacement or that it stands beside, so no old card keeps an Apply by accident. */
+export function requireDeclared(app: App, conversationId: string | null, supersedes: string | null | undefined): void {
+  if (conversationId === null || supersedes !== undefined) return;
+  const open = openProposals(app, conversationId);
+  if (open.length === 0) return;
+  throw new UsageError(`Nothing was saved. ${listOf(open)} Call propose_changes again with supersedes: <id> if this replaces one of them, or supersedes: null if it stands beside them.`);
+}
 
 /** Saves a valid change set against the current head without applying it. Invalid ops are refused, not stored. */
 export function proposeChange(
@@ -102,15 +134,19 @@ export function proposeChange(
   return transact(app.db, () => {
     const view = getLayout(app, ref);
     const { result } = resolveAgainstHead(app, view, view.revision.id, input.ops, input.selection);
-    return toView(insertChangeSet(app.db, {
+    // Checked again inside the transaction: BK may have applied the old one while the model was working.
+    if (input.supersedes !== undefined) requireSupersedable(app, view.layout.id, input.conversationId ?? null, input.supersedes);
+    const saved = toView(insertChangeSet(app.db, {
       layoutId: view.layout.id, baseRevisionId: view.revision.id, source: input.source, ops: input.ops, explanation: input.explanation,
       validation: result, status: "proposed",
       ...(input.title === undefined ? {} : { title: input.title }),
       ...(input.decisionDraft === undefined ? {} : { decisionDraft: input.decisionDraft }),
-      ...(input.tradeoffs === undefined ? {} : { tradeoffs: input.tradeoffs }),
+      ...(input.supersedes === undefined && input.tradeoffs === undefined ? {} : { tradeoffs: { ...(input.tradeoffs ?? { gains: [], costs: [] }), ...(input.supersedes === undefined ? {} : { supersedes: input.supersedes }) } }),
       ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
       ...(input.proposalGroup === undefined ? {} : { proposalGroup: input.proposalGroup }),
     }));
+    if (input.supersedes !== undefined) markSuperseded(app.db, input.supersedes);
+    return saved;
   });
 }
 
@@ -170,6 +206,7 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
     });
     markApplied(app.db, cs, result);
     const decisionId = remember(app, view, cs, cs.decisionDraft, resolved);
+    closeOpenQuestion(app, cs);
     return { layoutId: view.layout.id, source: cs.source, outcome: { revisionId: revision.id, changeSetId: cs.id, validation: result, decisionId } };
   });
   logApply(app, applied);

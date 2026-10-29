@@ -178,8 +178,8 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     const ports = createAgentPorts(app, row.layoutId, null);
     // Counted here, not in the agent: a suggestion's change set exists the moment propose_changes saves it, whatever the review does with it.
     const propose = ports.propose.bind(ports);
-    ports.propose = (alternatives) => {
-      const results = propose(alternatives);
+    ports.propose = (alternatives, options) => {
+      const results = propose(alternatives, options);
       for (const r of results) if (r.changeSetId !== null) proposed.push(r.changeSetId);
       return results;
     };

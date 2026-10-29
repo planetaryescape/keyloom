@@ -10,7 +10,7 @@
   },
   "scripts": {
     "test": "bun test",
-    "evals": "bun test --config ./evals/bunfig.toml ./evals/scenarios",
+    "evals": "cd evals && bun test ./scenarios",
     "typecheck": "tsc --noEmit",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "gen:keycodes": "bun scripts/gen-keycodes.ts",

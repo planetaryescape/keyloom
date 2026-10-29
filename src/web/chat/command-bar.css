@@ -121,6 +121,12 @@
   background: var(--surface-2);
 }
 
+/* A proposal a revision replaced is one line with its own border, so it needs no surface around it (D-452). */
+.chat[data-variant="bar"][data-presentation="panel"] .proposal-bar[data-superseded="true"] {
+  padding: 0;
+  background: none;
+}
+
 .chat[data-variant="bar"][data-presentation="panel"] .proposal-bar-foot {
   position: static;
   margin-inline: 0;
@@ -982,6 +988,60 @@
   flex: none;
   color: var(--ink);
   font-weight: var(--weight-semibold);
+}
+
+/* What the proposal gives up on purpose, with its reason, at rest where Apply is (docs/issues/compact-card-hides-dropped-functions.md). */
+.proposal-drop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.proposal-drop svg {
+  flex: none;
+}
+
+.proposal-drop strong,
+.proposal-line-drop {
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+.proposal-line-drop {
+  flex: none;
+  font-size: var(--text-sm);
+}
+
+/* A proposal a revision replaced: one quiet line with Details, and no Apply (D-452). */
+.proposal-superseded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.proposal-superseded > p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.proposal-superseded strong {
+  color: var(--ink-2);
+  font-weight: var(--weight-medium);
+}
+
+.proposal-superseded > p span {
+  margin-left: auto;
 }
 
 /* A long cost (a copy's list of keys left off) is cut at two lines; Details has all of it. */

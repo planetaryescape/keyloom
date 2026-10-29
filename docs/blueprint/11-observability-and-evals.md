@@ -33,7 +33,7 @@ Proposals are where the model can be wrong in ways the validator can't catch. A 
 | Scenario | Source | Implemented checks |
 |---|---|---|
 | Option–Option | D-019, D-025 | At least one valid alternative, a plain LALT or two-tap Option macro found in the document, and no native/macro replacement of S. This legacy heuristic does not independently prove reachability or reject a modelled tap dance on S |
-| Command–Shift | D-020, D-025 | At least two valid alternatives with Command–Shift, stated Backspace/F16 priorities recorded, displacement shown, an alternative keeps Backspace, and apply/undo restores the document |
+| Command–Shift | D-020, D-025, D-452 | One valid proposal before the first question, at most three questions each with considerations, a step and two or three options with the recommended one first, every answer a revision that supersedes the one before so one proposal stays open, every valid proposal in the chain places Command–Shift, displacement shown, stated Backspace/F16 priorities recorded, the final proposal keeps Backspace and its decision reason carries what BK answered, and apply/undo restores the document |
 | Number layer | D-006 | Synthetic Glove80: digits 1–0 under A–semicolon, shifted digit symbols immediately above on the same reachable non-base layer; Base letters stay intact. Every alternative is revalidated |
 | Home row mods on F and J | D-006 | Synthetic Glove80: F and J keep their taps and hold only LGUI. Each has opposite-hand protection or a surfaced `homerow_same_hand_mods` warning identifying that key. Every alternative is revalidated |
 | Do that here too | D-011, D-012, D-064 | Changes exactly the selected keys whose mirrors have mods (three Moonlander keys, four Glove80 keys), keeps each tap, mirrors modifiers and ZMK trigger positions |
@@ -48,7 +48,7 @@ bun test test/evals/vocabulary-oracles.test.ts
 bun run evals
 ```
 
-The second command safely skips live tests by default. `evals/provider.ts` requires **both** `KEYLOOM_LIVE_EVALS=1` and the selected provider's credential. `KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex` selects it (default Anthropic); the credential is its environment API key, or a successful `codex login status`. `evals/bunfig.toml` keeps real flashing and real data blocked while permitting this explicit live gate; ordinary `bun test` additionally strips credentials.
+The second command safely skips live tests by default. `evals/provider.ts` requires **both** `KEYLOOM_LIVE_EVALS=1` and the selected provider's credential. `KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex` selects it (default Anthropic); the credential is its environment API key, or a successful `codex login status`. `evals/bunfig.toml` keeps real flashing and real data blocked while permitting this explicit live gate; ordinary `bun test` additionally strips credentials. `bun run evals` runs from `evals/`, because Bun applies the `bunfig.toml` of the directory it runs in even beside `--config`, and the root one's preloads would strip the credential; to run one scenario, `cd evals && bun test ./scenarios/<file>`.
 
 Only with separate permission to spend model credits, run through the shared local resource queue:
 

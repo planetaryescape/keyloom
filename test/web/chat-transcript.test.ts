@@ -80,12 +80,12 @@ describe("refusals and retries", () => {
 });
 
 describe("applying a proposal", () => {
-  test("marks it applied and supersedes its still-open siblings, in its own turn only", () => {
+  test("marks it applied and supersedes its still-open siblings in the group, and no other proposal", () => {
     const base = run([
       sent,
-      ev({ type: "proposal", proposal: card("p1") }),
-      ev({ type: "proposal", proposal: card("p2") }),
-      ev({ type: "proposal", proposal: card("p3", "rejected") }),
+      ev({ type: "proposal", proposal: { ...card("p1"), proposalGroup: "g1" } }),
+      ev({ type: "proposal", proposal: { ...card("p2"), proposalGroup: "g1" } }),
+      ev({ type: "proposal", proposal: { ...card("p3", "rejected"), proposalGroup: "g1" } }),
       ev({ type: "done", outcome: outcome() }),
       { type: "sent", userId: "u2", assistantId: "a2", text: "more", selection: null },
       ev({ type: "proposal", proposal: card("q1") }),

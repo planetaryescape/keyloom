@@ -226,6 +226,15 @@ export const QuestionCardSchema = z.object({
   kind: QuestionKindSchema.optional(),
   question: z.string().min(1),
   options: z.array(QuestionOptionSchema).default([]),
+  // What matters for this choice and where it sits in the run (D-452). Absent on a question stored before it, and from an older server.
+  considerations: z.array(z.string()).optional(),
+  step: z.object({ n: z.number().int().min(1), of: z.number().int().min(1) }).optional(),
+  // BK applied the proposal this question refines instead of answering it, so the card reads "Skipped" (D-452).
+  skipped: z.boolean().optional(),
+  // BK applied another proposal of the conversation instead, so the question was closed and the card reads "Closed" (D-452).
+  closed: z.boolean().optional(),
+  // The change set this question refines (D-452); absent when it refines nothing. Applying that one skips the question, and applying any other closes it.
+  refines: z.string().optional(),
   placeholder: z.string().optional(),
   targetBoard: z.string().optional(),
   targetLayer: z.string().optional(),
@@ -255,6 +264,8 @@ export const ProposalCardSchema = z.object({
   changeSetId: z.string().min(1),
   // The alternatives from one propose_changes call share a group, so the panel can compare them. Null for a lone change set.
   proposalGroup: z.string().nullable(),
+  // The change set this one revised, which is now `superseded` (D-452). Null or absent for a first proposal, and absent from an older server.
+  supersedes: z.string().nullable().optional(),
   title: z.string().min(1),
   explanation: z.string(),
   tradeoffs: z.object({ gains: z.array(z.string()), costs: z.array(z.string()) }),
@@ -366,6 +377,7 @@ export const ChatPresentationSchema = z.object({
   // Absent on older recordings and when execution did not return usage.
   accounting: ChatAccountingSchema.optional(),
   questionToolUseId: z.string().min(1).max(128).optional(),
+  questionRefines: z.string().min(1).max(80).optional(),
   status: z.enum(["running", "waiting_user", "completed", "incomplete", "failed", "cancelled", "unobserved"]),
   operations: z.array(z.object({
     id: z.string().min(1), tool: z.string().max(64), label: z.string().max(80),

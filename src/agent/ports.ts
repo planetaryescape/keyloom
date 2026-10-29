@@ -146,8 +146,13 @@ export interface AgentPorts {
   newConfig(input: { name: string; from: "this" | "blank" }): Promise<{ id: string; name: string; boardName: string }> | { id: string; name: string; boardName: string };
   /** Validates against the head without saving anything. */
   check(ops: ChangeOp[]): ValidationResult;
-  /** Validates each alternative and stores the valid ones as proposed change sets sharing one group. */
-  propose(alternatives: Proposal[]): ProposalResult[];
+  /**
+   * Validates each proposal and stores the valid ones as proposed change sets sharing one group. `supersedes` is the declaration D-452 asks
+   * for when this conversation has an open proposal: an id replaces that one (set aside in the transaction that saves the new one, and only
+   * if the new one is valid), `null` says it stands beside. Throws a readable Error when the declaration is missing or names a proposal that
+   * is not open here; nothing is saved then.
+   */
+  propose(alternatives: Proposal[], options?: { supersedes?: string | null }): ProposalResult[];
   /** The active priorities for the layout, for the prompt (03#what-the-agent-sees). */
   priorities(): PriorityFact[];
   /** Stores a priority BK has just stated (08). */

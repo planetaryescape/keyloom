@@ -49,7 +49,7 @@ describe("a Codex turn that asks a question (D-382)", () => {
   test("stops at ask_user, stores the call with no result, and drops what Codex said after it", async () => {
     const { outcome, app } = await run([
       { say: "One thing only you can decide." },
-      { call: "ask_user", input: { question: "Replace it or add a new one?", options: [{ label: "Add a new one" }, { label: "Replace it" }] } },
+      { call: "ask_user", input: { question: "Replace it or add a new one?", options: [{ label: "Add a new one" }, { label: "Replace it" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } } },
       { say: "I went ahead anyway." },
     ]);
     expect(outcome.status).toBe("awaiting_answer");

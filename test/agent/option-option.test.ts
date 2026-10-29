@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { anthropicModel } from "../../src/agent/anthropic-model.ts";
 import {
-  type ChatEvent, applyChange, getLayout, listChanges, sendMessage, showConversation, showChange,
+  type ChatEvent, applyChange, getLayout, listChanges, sendMessage, showConversation,
 } from "../../src/app/index.ts";
 import { bindingFunctions } from "../../src/layout/functions.ts";
 import { fakeAnthropic, type ScriptStep } from "../helpers/fake-anthropic.ts";
@@ -10,7 +10,6 @@ import { S_POSITION, optionOptionApp } from "../helpers/option-option.ts";
 
 const bad = { op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "key", code: "OPTION" } };
 const plainAlt = { op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "modifier", mods: ["LALT"] } };
-const macro = { id: "opt-opt", name: "Option Option", steps: [{ op: "tap", mods: ["LALT"] }, { op: "waitMs", ms: 80 }, { op: "tap", mods: ["LALT"] }] };
 
 const alt = (title: string, ops: unknown[]) => ({
   title, ops, explanation: `${title}: holds the layer with the right hand so Option is a plain key`,
@@ -35,29 +34,16 @@ const script: ScriptStep[] = [
   (seen) => {
     expect(seen.toolResults[0]).toContain("INVALID");
     expect(seen.toolResults[0]).toContain("firmware_unsupported");
-    return {
-      blocks: [{
-        tool: "propose_changes",
-        input: {
-          alternatives: [
-            alt("Plain Option on layer 2", [plainAlt]),
-            alt("Option-Option macro on layer 2", [
-              { op: "upsertMacro", macro },
-              { op: "setBinding", at: { layerId: "layer-2", position: 31 }, binding: { kind: "macro", macroId: "opt-opt" } },
-            ]),
-          ],
-        },
-      }],
-    };
+    return { blocks: [{ tool: "propose_changes", input: alt("Plain Option on layer 2", [plainAlt]) }] };
   },
   (seen) => {
     expect(seen.toolResults[0]).toContain("saved as cs_");
-    return { blocks: [{ text: "Two options. Hold layer 2 and tap S twice, or press the macro key." }] };
+    return { blocks: [{ text: "Hold layer 2 and tap S twice." }] };
   },
 ];
 
 describe("the Option-Option conversation with a scripted model", () => {
-  test("asks, reads, repairs an invalid proposal, and ends with valid alternatives BK can apply", async () => {
+  test("asks, reads, repairs an invalid proposal, and ends with one valid proposal BK can apply", async () => {
     const { app, layoutId } = await optionOptionApp();
     const { client, requests } = fakeAnthropic(script);
     const model = anthropicModel(client);
@@ -75,33 +61,32 @@ describe("the Option-Option conversation with a scripted model", () => {
     });
 
     // Streamed text, tool progress and proposal cards arrive as events, ending with done.
-    expect(events.map((e) => e.type)).toEqual(["start", "tool", "tool", "tool", "tool", "proposal", "proposal", "text", "text", "done"]);
+    expect(events.map((e) => e.type)).toEqual(["start", "tool", "tool", "tool", "tool", "proposal", "text", "text", "done"]);
     expect(second.status).toBe("complete");
     expect(second.iterations).toBe(4);
-    expect(second.proposals).toHaveLength(2);
+    expect(second.proposals).toHaveLength(1);
 
-    // Only valid alternatives were stored, linked to the conversation, in one group.
+    // Only the valid proposal was stored, linked to the conversation.
     const stored = listChanges(app, layoutId, { status: "proposed" });
-    expect(stored).toHaveLength(2);
+    expect(stored).toHaveLength(1);
     expect(stored.every((c) => c.source === "agent" && c.conversationId === second.conversationId && c.proposalGroup !== null)).toBe(true);
     expect(new Set(stored.map((c) => c.proposalGroup)).size).toBe(1);
-    expect(stored.map((c) => c.title).sort()).toEqual(["Option-Option macro on layer 2", "Plain Option on layer 2"]);
+    expect(stored.map((c) => c.title)).toEqual(["Plain Option on layer 2"]);
     expect(stored[0]?.tradeoffs.costs.length).toBeGreaterThan(0);
 
-    // No alternative puts multi-tap behaviour on S.
+    // The proposal puts no multi-tap behaviour on S.
     for (const cs of stored) {
       for (const op of cs.ops) {
         if (op.op === "setBinding" && op.at.layerId === "layer-0" && op.at.position === S_POSITION) throw new Error("touched S");
       }
     }
 
-    // Applying the plain-Option one makes Option a plain modifier; the macro one makes a macro.
+    // Applying it makes Option a plain modifier.
     const plain = stored.find((c) => c.title === "Plain Option on layer 2");
     if (!plain) throw new Error("missing");
     applyChange(app, plain.id);
     const after = getLayout(app, layoutId).document;
     expect(after.layers.flatMap((l) => l.bindings).some((b) => b.kind === "modifier" && bindingFunctions(b).includes("mod:LALT"))).toBe(true);
-    expect(showChange(app, stored.find((c) => c.id !== plain.id)?.id ?? "").status).toBe("superseded");
 
     // The request used the settings the blueprint specifies.
     const body = requests[1]?.body ?? {};
@@ -122,6 +107,6 @@ describe("the Option-Option conversation with a scripted model", () => {
     // The conversation reads back for the chat panel without tool-result plumbing.
     const view = showConversation(app, first.conversationId);
     expect(view.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant", "assistant", "assistant", "assistant"]);
-    expect(view.proposals).toHaveLength(2);
+    expect(view.proposals).toHaveLength(1);
   });
 });

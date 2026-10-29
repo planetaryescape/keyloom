@@ -5,26 +5,44 @@ import { optionForKey } from "./question-keys.ts";
 
 interface Props {
   question: Question;
+  /** BK applied the proposal this question refines, so it needs no answer (D-452). A question closed by another apply says so on the question itself. */
+  skipped?: boolean;
   /** A reply is already streaming from this answer, or another is. */
   disabled?: boolean;
   onAnswer: (toolUseId: string, text: string) => void;
 }
 
+/** "Question n of m" when there is more than one to come, the question, and the few lines on why it matters (D-452). */
+function QuestionHead({ id, question }: { id: string; question: Question }) {
+  const { step, considerations } = question;
+  return (
+    <>
+      {step !== undefined && step.of >= 2 ? <p className="ask-kicker">Question {step.n} of {step.of}</p> : null}
+      <p id={id} className="ask-question">{question.question}</p>
+      {considerations === undefined || considerations.length === 0 ? null : (
+        <ul className="ask-considerations" aria-label="What matters">
+          {considerations.map((line) => <li key={line}>{line}</li>)}
+        </ul>
+      )}
+    </>
+  );
+}
+
 // The agent's question to BK (D-381, Rung 27): interactive question kinds (single/multiple choice, short text, layer, key, keyboard).
 // Once answered it is a quiet, read-only line.
-export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
+export function QuestionCard({ question, skipped = false, disabled = false, onAnswer }: Props) {
   const id = useId();
   const [typing, setTyping] = useState(question.kind === "short_text");
   const [text, setText] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const open = question.answer === null;
+  const open = question.answer === null && !skipped;
   const kind = question.kind ?? "single_choice";
 
   if (!open) {
     return (
       <section className="ask-card ask-card-done" aria-label="Question, answered">
         <p className="ask-question">{question.question}</p>
-        <p className="ask-answer"><Check size={14} aria-hidden="true" />{question.answer}</p>
+        <p className="ask-answer"><Check size={14} aria-hidden="true" />{question.closed === true ? "Closed, you applied another proposal" : skipped ? "Skipped, you applied the proposal" : question.answer}</p>
       </section>
     );
   }
@@ -43,7 +61,7 @@ export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
   if (kind === "short_text") {
     return (
       <section className="ask-card" aria-labelledby={`${id}-q`} tabIndex={0}>
-        <p id={`${id}-q`} className="ask-question">{question.question}</p>
+        <QuestionHead id={`${id}-q`} question={question} />
         <form
           className="ask-other"
           onSubmit={(event) => {
@@ -70,7 +88,7 @@ export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
   if (kind === "multiple_choice") {
     return (
       <section className="ask-card" aria-labelledby={`${id}-q`} tabIndex={0}>
-        <p id={`${id}-q`} className="ask-question">{question.question}</p>
+        <QuestionHead id={`${id}-q`} question={question} />
         <ul className="ask-options">
           {question.options.map((option) => {
             const optVal = option.id ?? option.label;
@@ -110,7 +128,7 @@ export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
   if (kind === "layer") {
     return (
       <section className="ask-card" aria-labelledby={`${id}-q`} tabIndex={0}>
-        <p id={`${id}-q`} className="ask-question">{question.question}</p>
+        <QuestionHead id={`${id}-q`} question={question} />
         <div className="ask-chips" role="group" aria-label="Layers">
           {question.options.map((option) => {
             const optVal = option.id ?? option.label;
@@ -135,7 +153,7 @@ export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
   if (kind === "keyboard_or_config") {
     return (
       <section className="ask-card" aria-labelledby={`${id}-q`} tabIndex={0}>
-        <p id={`${id}-q`} className="ask-question">{question.question}</p>
+        <QuestionHead id={`${id}-q`} question={question} />
         <ol className="ask-options">
           {question.options.map((option, index) => {
             const optVal = option.id ?? option.label;
@@ -163,7 +181,7 @@ export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
   if (kind === "key") {
     return (
       <section className="ask-card" aria-labelledby={`${id}-q`} tabIndex={0}>
-        <p id={`${id}-q`} className="ask-question">{question.question}</p>
+        <QuestionHead id={`${id}-q`} question={question} />
         <p className="ask-instruction">Click a key on the board, or pick one from the options below:</p>
         <ol className="ask-options">
           {question.options.map((option, index) => {
@@ -200,7 +218,7 @@ export function QuestionCard({ question, disabled = false, onAnswer }: Props) {
         }
       }}
     >
-      <p id={`${id}-q`} className="ask-question">{question.question}</p>
+      <QuestionHead id={`${id}-q`} question={question} />
       <ol className="ask-options">
         {question.options.map((option, index) => {
           const optVal = option.id ?? option.label;

@@ -1,6 +1,6 @@
 # The compact proposal card doesn't say which functions a proposal drops
 
-Status: open. Raised by CodeRabbit on PR 193, 2026-10-28, and checked against origin/main `94f9f61`. It predates PR 193; planned for A2, which rebuilds the proposal card.
+Status: fixed by the A2 refine-loop change on branch `feat/refine-loop` (D-452; the squash-merge commit goes here when it lands). The compact card and the folded bar line now name each dropped function and its reason at rest (`src/web/chat/ProposalCard.tsx`), and `test/web/refine-cards.test.ts` renders a proposal that drops two functions and expects both. Raised by CodeRabbit on PR 193, 2026-10-28, and checked against origin/main `94f9f61`. It predates PR 193.
 
 A `dropFunction` op lets a proposal give up a function on purpose ("you said you never use it"). The validator accepts it and records the function and the reason in `validation.diff.dropped` (`src/validation/result.ts`), with no error or warning. So `ProposalNotes` has nothing to show.
 

@@ -44,15 +44,25 @@ const script: ScriptStep[] = [
     expect(seen.toolResults[1]).toContain("Remembered (dec_");
     // Said twice, remembered once.
     expect(seen.toolResults[2]).toContain("Already remembered");
-    return { blocks: [{ tool: "propose_changes", input: { alternatives: [onTab, onF16, onBackspace] } }] };
+    return { blocks: [{ tool: "propose_changes", input: onTab }] };
+  },
+  // One proposal per call (D-452). These stand beside each other, so each later one declares that it replaces none.
+  (seen) => {
+    expect(seen.toolResults[0]).toContain("saved as cs_");
+    expect(seen.toolResults[0]).not.toContain("moved_pinned");
+    return { blocks: [{ tool: "propose_changes", input: onF16 }] };
   },
   (seen) => {
-    const [tab, f16, backspace] = seen.toolResults[0]?.split("\n") ?? [];
-    expect(tab).toContain("saved as cs_");
-    expect(tab).not.toContain("moved_pinned");
-    expect(f16).toContain("saved as cs_");
-    expect(backspace).toContain("moved_pinned");
-    return { blocks: [{ text: "Three options. The third moves Backspace, which you asked me to keep, so I would not pick it." }] };
+    expect(seen.toolResults[0]).toContain("Nothing was saved");
+    return { blocks: [{ tool: "propose_changes", input: { ...onF16, supersedes: null } }] };
+  },
+  (seen) => {
+    expect(seen.toolResults[0]).toContain("saved as cs_");
+    return { blocks: [{ tool: "propose_changes", input: { ...onBackspace, supersedes: null } }] };
+  },
+  (seen) => {
+    expect(seen.toolResults[0]).toContain("moved_pinned");
+    return { blocks: [{ text: "Three proposals. The third moves Backspace, which you asked me to keep, so I would not pick it." }] };
   },
   // Turn 3: BK applies one and comes back; the prompt now carries what he said.
   (seen) => {
@@ -97,9 +107,9 @@ describe("the Command-Shift conversation with a scripted model", () => {
     expect(stored.every((d) => d.conversationId === first.conversationId)).toBe(true);
     expect(showConversation(app, first.conversationId).priorities.map((p) => p.id).sort()).toEqual(stored.map((d) => d.id).sort());
 
-    // Three alternatives in one group; each says what it displaces and where that goes.
+    // Three proposals, each its own group; each says what it displaces and where that goes.
     expect(second.proposals).toHaveLength(3);
-    expect(new Set(second.proposals.map((p) => p.proposalGroup)).size).toBe(1);
+    expect(new Set(second.proposals.map((p) => p.proposalGroup)).size).toBe(3);
     const byTitle = (title: string) => second.proposals.find((p) => p.title === title)?.validation;
     expect(byTitle(onTab.title)?.diff.displaced).toEqual([
       { function: "key:TAB", from: base(TAB_POSITION), to: { layerId: "layer-0", position: 67 } },
@@ -112,7 +122,8 @@ describe("the Command-Shift conversation with a scripted model", () => {
     const chosen = second.proposals.find((p) => p.title === onTab.title);
     if (!chosen) throw new Error("missing");
     const applied = applyChange(app, chosen.changeSetId);
-    expect(listChanges(app, layoutId, { status: "superseded" })).toHaveLength(2);
+    // They were proposed beside each other, so applying one sets none of the others aside.
+    expect(listChanges(app, layoutId, { status: "superseded" })).toHaveLength(0);
     undo(app, layoutId, { revisionId: applied.revisionId });
     expect(deepEqual(getLayout(app, layoutId).document, original)).toBe(true);
 

@@ -11,7 +11,7 @@ import { ProposalCompare } from "./ProposalCompare.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
 import { ProposalTabs } from "./ProposalTabs.tsx";
 import { keyLabel, layerName, optionLabels } from "./proposal-facts.ts";
-import type { AssistantTurn, ConfirmationCard, OutcomeCard, UserTurn } from "./transcript.ts";
+import { type AssistantTurn, type ConfirmationCard, type OutcomeCard, type UserTurn, questionClosed, questionOpen, questionSkipped } from "./transcript.ts";
 import { AgentWorking } from "./AgentWorking.tsx";
 import { ConfigCardList, type ConfigCards } from "./ConfigCards.tsx";
 import type { AgentWorkStatus, AgentWorkView } from "./work-view.ts";
@@ -226,16 +226,20 @@ interface Props {
   motionPaused?: boolean;
   /** The configs this reply made, as cards that open them; absent where the page can't switch config. */
   configCards?: ConfigCards;
+  /** The ids of proposals a later one revised, anywhere in the thread: a superseded card reads "by the revised proposal" only for these (D-452). */
+  revised?: ReadonlySet<string>;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards, revised }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
-  const status: AgentWorkStatus = turn.question?.answer === null ? "waiting" : turn.phase === "streaming" ? "running" : turn.phase === "failed" ? "failed" : turn.phase === "stopped" ? "stopped" : "completed";
+  const status: AgentWorkStatus = questionOpen(turn) ? "waiting" : turn.phase === "streaming" ? "running" : turn.phase === "failed" ? "failed" : turn.phase === "stopped" ? "stopped" : "completed";
   // Existing turns have no correlated lifecycle. Never infer completed calls from their old tool-name hint.
   let work: AgentWorkView = working ?? (turn.presentation === undefined ? { kind: "unavailable", status } : presentationView(turn.presentation, turn.preparations));
-  if (turn.question?.answer === null) work = { ...work, status: "waiting" };
+  if (questionOpen(turn)) work = { ...work, status: "waiting" };
+  // The recorded run paused on this question; skipping or closing it ended the wait, whatever the stored presentation still says (D-452).
+  else if ((questionSkipped(turn) || questionClosed(turn)) && work.status === "waiting") work = { ...work, status: "completed" };
   else if (turn.phase === "stopped") work = { ...work, status: "stopped" };
   else if (turn.failure !== null && work.status !== "disconnected") work = { ...work, status: "failed" };
   return (
@@ -248,7 +252,6 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
         {turn.text === "" ? null : <Markdown source={turn.text} />}
         {turn.phase === "done" && offers > 0 ? <p className="sr-only">keyloom offered {offers} {offers === 1 ? "option" : "options"}.</p> : null}
       </div>
-      {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
       {turn.confirmation ? <ConfirmationCardView confirmation={turn.confirmation} disabled={busy} /> : null}
       {turn.outcome ? <OutcomeCardView outcome={turn.outcome} /> : null}
       {turn.artifacts?.map((artifact, idx) => {
@@ -265,7 +268,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
             const shown = group.find((proposal) => proposal.changeSetId === pinnedId) ?? group.find((proposal) => proposal.status === "applied") ?? group[0];
             if (shown === undefined) return null;
             return (
-              <section className="proposal-group proposal-bar" key={group[0]?.changeSetId} aria-label={group.length > 1 ? `${group.length} options` : "Option"}>
+              <section className="proposal-group proposal-bar" data-superseded={group.length === 1 && shown.status === "superseded"} key={group[0]?.changeSetId} aria-label={group.length > 1 ? `${group.length} options` : "Option"}>
                 {/* Outside the keyed card, so switching options keeps the tab row, and the focus on it, mounted. */}
                 <ProposalTabs group={group} shownId={shown.changeSetId} pinnedId={pinnedId} onPin={onPin} />
                 <ProposalCard
@@ -280,6 +283,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                   onApply={onApply}
                   onAskAgain={onAskAgain}
                   onOpenRelease={onOpenRelease}
+                  revised={revised?.has(shown.changeSetId) ?? false}
                   compact
                 />
               </section>
@@ -308,6 +312,8 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
           </ul>
         </section>
       ))}
+      {/* After the proposal it refines: the proposal is on the board first, and the question asks about it (D-452). */}
+      {turn.question === null ? null : <QuestionCard question={turn.question} skipped={questionSkipped(turn)} disabled={busy} onAnswer={onAnswer} />}
       {turn.failure === null ? null : (
         <div className="chat-problem chat-problem-inline" role="alert">
           <CircleAlert size={18} aria-hidden="true" />

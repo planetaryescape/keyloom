@@ -35,7 +35,7 @@ function scripted(provider: Provider, steps: Step[]): AgentModel {
   return anthropicModel(fakeAnthropic(script, provider === "openrouter" ? { apiKey: null, authToken: "synthetic", baseURL: "https://openrouter.ai/api" } : {}).client, { provider });
 }
 const alternative = (code: string) => ({ title: "Synthetic", explanation: "Synthetic", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(), ops: [{ op: "setBinding", at: { layerId: "layer-2", position: 30 }, binding: { kind: "key", code } }] });
-const question = { question: "Keep or replace?", options: [{ label: "Keep" }, { label: "Replace" }] };
+const question = { question: "Keep or replace?", options: [{ label: "Keep" }, { label: "Replace" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } };
 
 for (const provider of ["anthropic", "openrouter", "codex"] satisfies Provider[]) describe(`${provider} honest activity`, () => {
   test("valid input with prototype-named extra keys cannot change tool routing or pollute activity", async () => {
@@ -76,17 +76,17 @@ for (const provider of ["anthropic", "openrouter", "codex"] satisfies Provider[]
         { say: "Checking." }, { call: "get_layout", input: { layers: ["layer-0"] } },
         { call: "find_function", input: { function: { SECRET_RECORDING: "never expose this" } } },
         { call: "propose_changes", input: { alternatives: [alternative("SECRET_RECORDING")] } },
-        { call: "propose_changes", input: { alternatives: [alternative("SECRET_RECORDING"), alternative("A")] } },
+        { call: "propose_changes", input: { alternatives: [alternative("A")] } },
         { say: "Finished." },
       ]), onEvent: (e) => { if (e.type === "presentation") snapshots.push(ChatPresentationSchema.parse(e.presentation)); },
     });
     const final = snapshots.at(-1);
     if (!final) throw new Error("missing terminal snapshot");
     expect(final?.status).toBe("completed");
-    expect(final?.operations.map((o) => o.status)).toEqual(["succeeded", "failed", "declined", "partial"]);
+    expect(final?.operations.map((o) => o.status)).toEqual(["succeeded", "failed", "declined", "succeeded"]);
     expect(final?.operations.map((o) => o.id)).toEqual(["op_1", "op_2", "op_3", "op_4"]);
     expect(final?.operations[2]?.validationCodes).toContain("firmware_unsupported");
-    expect(final?.operations[3]).toMatchObject({ accepted: 1, declined: 1 });
+    expect(final?.operations[3]).toMatchObject({ accepted: 1, declined: 0 });
     expect(final?.messages.map(({ kind, text }) => ({ kind, text }))).toEqual([{ kind: "working_note", text: "Checking." }, { kind: "answer", text: "Finished." }]);
     expect(final?.messages.every((m) => m.messageId?.startsWith("msg_"))).toBe(true);
     expect(showConversation(app, out.conversationId).presentations).toEqual([final]);

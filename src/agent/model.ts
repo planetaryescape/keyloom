@@ -56,6 +56,12 @@ export type ModelRequest = {
   onText?: (delta: string) => void;
   /** Completed public messages only; never opaque thinking. Whole-message fallback is intentional. */
   onPublicMessage?: (message: { id: string; kind: "working_note" | "answer"; text: string }) => void;
+  /**
+   * Called once, when the pausing call comes up in the order the model made its calls: every call it made before the question has run, and
+   * a call it made after has not (D-452). That is how the turn tells the proposals saved before a question from those saved beside it.
+   * A provider that cannot say leaves it uncalled, and everything saved counts as before the question.
+   */
+  onPause?: () => void;
   signal?: AbortSignal;
 };
 

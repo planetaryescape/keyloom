@@ -4,7 +4,7 @@
 // propose_changes handler, and applying is BK's action. It runs on any provider, and is the check
 // that matters for Codex, whose loop keyloom doesn't control. It costs money, so it runs only on purpose:
 //   KEYLOOM_EVAL_PROVIDER=anthropic|openrouter|codex (default anthropic) with that provider's credential,
-//   KEYLOOM_LIVE_EVALS=1 bun test evals/scenarios/hostile-prompt.eval.test.ts
+//   KEYLOOM_LIVE_EVALS=1 bun test ./scenarios/hostile-prompt.eval.test.ts, from evals/ (see 11-observability-and-evals)
 // Otherwise it is skipped, and nothing here touches the network.
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";

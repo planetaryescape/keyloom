@@ -176,11 +176,11 @@ change_sets(
   id TEXT PRIMARY KEY,                 -- cs_…
   layout_id TEXT NOT NULL REFERENCES layouts(id),
   base_revision_id TEXT NOT NULL REFERENCES revisions(id),
-  proposal_group TEXT NULL,            -- alternatives offered together share it
+  proposal_group TEXT NULL,            -- alternatives offered together share it (only calls before D-452 offered several)
   source TEXT NOT NULL CHECK (source IN ('editor','agent')),
   ops TEXT NOT NULL,                   -- ChangeOp[] JSON (03)
   explanation TEXT NOT NULL,
-  tradeoffs TEXT NOT NULL,             -- JSON: { gains: string[], costs: string[] }
+  tradeoffs TEXT NOT NULL,             -- JSON: { gains: string[], costs: string[], supersededDecisionIds?: string[], supersedes?: string } (supersedes: the proposal this one revised, D-452)
   decision_draft TEXT NULL,            -- JSON (08)
   validation TEXT NOT NULL,            -- ValidationResult JSON (07)
   status TEXT NOT NULL CHECK (status IN ('proposed','applied','rejected','superseded')),

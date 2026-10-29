@@ -26,7 +26,7 @@ import { useConfigCards } from "../configs/useConfigCards.ts";
 import type { ConfigCards } from "./ConfigCards.tsx";
 import { useChat, type ChatDrafts } from "./useChat.ts";
 import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
-import { withoutRepeats, type Turn } from "./transcript.ts";
+import { openProposalsOnBoard, questionOpen, withoutRepeats, type Turn } from "./transcript.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
 import "./chat.css";
 import "./command-bar.css";
@@ -147,6 +147,9 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   const input = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  // Where the log was last scrolled to put a card in view. Text that arrives after the card (a closing line) pushes the card down, and while
+  // the person has not moved the log since, it is put back (D-452: the proposal and its Apply are what the reply is for).
+  const placedAt = useRef<number | null>(null);
   const wasStreaming = useRef(false);
 
   const chips = useMemo<SelectedKeys | null>(
@@ -178,7 +181,9 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   // has proposals or an open question, it stops at the first card instead, so the options are read from the top.
   useEffect(() => {
     const element = log.current;
-    if (element === null || !stick.current) return;
+    if (element === null) return;
+    const ours = placedAt.current !== null && Math.abs(element.scrollTop - placedAt.current) < 2;
+    if (!stick.current && !ours) return;
     const active = document.activeElement;
     if (active !== null && active.closest(".agent-work-disclosure") !== null && element.contains(active)) return;
     const replies = element.querySelectorAll<HTMLElement>(".msg-assistant");
@@ -196,9 +201,13 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
         const cardBottom = cardTop + firstCard.getBoundingClientRect().height + 16;
         const start = asked === undefined ? cardTop : at(asked);
         element.scrollTop = Math.min(cardTop, Math.max(start, cardBottom - element.clientHeight));
+        placedAt.current = element.scrollTop;
       } else {
-        // The final answer leads a successful turn; a question or failure still takes priority.
-        element.scrollTop = attention !== undefined || reply === undefined ? cardTop : at(reply);
+        // The final answer leads a successful turn; a question or failure still takes priority. When the answer and its proposal don't both
+        // fit, the proposal and its Apply win, as in the bar (D-452: the card is what a short reply is for).
+        const cardBottom = cardTop + firstCard.getBoundingClientRect().height + 16;
+        element.scrollTop = attention !== undefined || reply === undefined ? cardTop : Math.min(cardTop, Math.max(at(reply), cardBottom - element.clientHeight));
+        placedAt.current = element.scrollTop;
       }
       stick.current = false;
       return;
@@ -241,8 +250,9 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   // In the bar, a reply with options shows the first one on the board at once; the tabs switch between them (comp d).
   const newest = transcript.turns.at(-1);
   const activeOperation = newest?.kind === "assistant" ? newest.presentation?.operations.findLast((operation) => operation.status === "running") : undefined;
-  const announcement = streaming ? activeOperation?.label ?? "keyloom is replying" : newest?.kind === "assistant" && newest.question?.answer === null ? "keyloom needs your answer" : "";
-  const newestOpen = newest?.kind === "assistant" && newest.phase === "done" ? newest.proposals.filter((proposal) => proposal.status === "proposed") : [];
+  const announcement = streaming ? activeOperation?.label ?? "keyloom is replying" : newest?.kind === "assistant" && questionOpen(newest) ? "keyloom needs your answer" : "";
+  const newestOpen = openProposalsOnBoard(transcript.turns);
+  const revised = useMemo(() => new Set(transcript.turns.flatMap((turn) => (turn.kind === "assistant" ? turn.proposals.flatMap((proposal) => (proposal.supersedes ? [proposal.supersedes] : [])) : []))), [transcript.turns]);
   const newestKey = newestOpen.map((proposal) => proposal.changeSetId).join(",");
   useEffect(() => {
     if (variant !== "bar" || newestOpen.length === 0) return;
@@ -453,6 +463,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
             onScroll={(event) => {
               const el = event.currentTarget;
               stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+              if (placedAt.current !== null && Math.abs(el.scrollTop - placedAt.current) >= 2) placedAt.current = null;
             }}
           >
             {needsModel && chat.problem === null && variant === "bar" && status.providers.some((candidate) => candidate.ready) ? (
@@ -518,6 +529,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                     onSwitch={switchProvider}
                     compact={variant === "bar"}
                     motionPaused={motionPaused}
+                    revised={revised}
                     {...(configCards === undefined ? {} : { configCards })}
                   />
                 ),

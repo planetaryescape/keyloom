@@ -57,6 +57,23 @@ describe("how a turn ends", () => {
     expect(outcome.iterations).toBe(2);
   });
 
+  test("a valid question ends the turn awaiting an answer even when the activity limit was reached beside it or before it", async () => {
+    // 64 calls are the turn's whole budget (observation.ts); the 65th is refused with an error result. That must not turn a turn that asks BK a
+    // question into an iteration_limit, which would leave the question open on a failed run that no answer is accepted for.
+    const listAll = { tool: "list_layouts", input: {} };
+    const spent: ScriptStep[] = Array.from({ length: 8 }, () => ({ blocks: Array.from({ length: 8 }, () => listAll) }));
+    const ask = { tool: "ask_user", input: { question: "Which hand is free?", considerations: ["It matters."], step: { n: 1, of: 1 }, options: [{ label: "Left" }, { label: "Right" }] } };
+    const beside = await run([...spent, { blocks: [ask, listAll] }]);
+    expect(beside.outcome.status).toBe("awaiting_answer");
+    expect(beside.outcome.question).toMatchObject({ question: "Which hand is free?", answer: null });
+    const before = await run([...spent, { blocks: [listAll] }, { blocks: [ask] }]);
+    expect(before.outcome.status).toBe("awaiting_answer");
+    expect(before.outcome.question).toMatchObject({ question: "Which hand is free?", answer: null });
+    // Without a question the limit still ends the turn as it did.
+    const alone = await run([...spent, { blocks: [listAll] }, { blocks: [{ text: "Done." }] }]);
+    expect(alone.outcome.status).toBe("iteration_limit");
+  });
+
   test("after three proposals with nothing valid the tool tells the model to stop and explain", async () => {
     const propose = { blocks: [{ tool: "propose_changes", input: invalidAlt }] };
     const { outcome, requests, app } = await run([

@@ -13,6 +13,11 @@ const TradeoffsSchema = z.object({
   gains: z.array(z.string()),
   costs: z.array(z.string()),
   supersededDecisionIds: z.array(z.string()).optional(),
+  /**
+   * The change set this one revised (D-452). Kept here with the other ids of rows this one displaced, so no column is added: a keyloom
+   * that predates it reads the row and ignores the key, where a migration would make it refuse the data directory (D-455).
+   */
+  supersedes: z.string().optional(),
 });
 export type Tradeoffs = z.infer<typeof TradeoffsSchema>;
 
@@ -127,6 +132,11 @@ export function markApplied(db: Database, cs: ChangeSetRow, validation: unknown,
   if (cs.proposalGroup !== null) {
     db.query("UPDATE change_sets SET status = 'superseded', decided_at = ? WHERE proposal_group = ? AND id != ? AND status = 'proposed'").run(now, cs.proposalGroup, cs.id);
   }
+}
+
+/** Sets a proposed change set aside because a revision replaced it. Only a `proposed` one: anything else was already decided. */
+export function markSuperseded(db: Database, id: string, now = Date.now()): boolean {
+  return db.query("UPDATE change_sets SET status = 'superseded', decided_at = ? WHERE id = ? AND status = 'proposed'").run(now, id).changes === 1;
 }
 
 export function markRejected(db: Database, id: string, now = Date.now()): void {

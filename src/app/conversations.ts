@@ -2,7 +2,7 @@
 import { type AgentModel, type ContentBlock, type ModelMessage } from "../agent/model.ts";
 import { neutralBlock } from "../agent/blocks.ts";
 import type { ProviderId } from "../agent/provider.ts";
-import { type AskedQuestion, AskUserSchema, ASK_USER } from "../agent/tools/ask-user.ts";
+import { type AskedQuestion, StoredQuestionSchema, ASK_USER } from "../agent/tools/ask-user.ts";
 import { type TurnOutcome, type TurnStatus, runAgentTurn } from "../agent/run-turn.ts";
 import { type Draft, typedText, userMessageText } from "../agent/prompt.ts";
 import type { DecisionDraft } from "../layout/change.ts";
@@ -17,6 +17,9 @@ import { transact } from "../persistence/transaction.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 import { createAgentPorts } from "./agent-ports.ts";
+import { SKIPPED_ANSWER, appliedProposalIds, closingResult, isClosedAnswer, openQuestion } from "./question-skip.ts";
+
+export { openQuestion };
 import { type ProposalCard, toCard } from "./proposal-card.ts";
 import { defaultAgentModel } from "./chat-model.ts";
 import type { App } from "./context.ts";
@@ -56,6 +59,16 @@ export type QuestionCard = {
   kind?: AskedQuestion["kind"];
   question: string;
   options: { id?: string; label: string; description?: string; recommended?: boolean }[];
+  /** What matters for this choice (D-452); absent on a question stored before it. */
+  considerations?: string[];
+  /** Where this question sits in the run; absent on a question stored before D-452. The card shows "Question n of m" when `of` is 2 or more. */
+  step?: { n: number; of: number };
+  /** BK applied the proposal this question refines instead of answering it (D-452). */
+  skipped?: boolean;
+  /** BK applied another proposal of the conversation instead of answering, so the question was closed (D-452). */
+  closed?: boolean;
+  /** The change set this question refines; applying that one skips it, and applying any other closes it. Absent when it refines nothing. */
+  refines?: string;
   placeholder?: string;
   targetBoard?: string;
   targetLayer?: string;
@@ -120,24 +133,39 @@ export function conversationTitle(message: string): string {
 const answering = new Map<string, string | null>();
 
 
-const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): QuestionCard => {
+/**
+ * The options in the order BK sees them: the recommended one first and the only one marked, whatever order the model sent (D-452). The
+ * stored call keeps the model's order, because a provider replays it exactly; this is applied each time the question is shown, so a question
+ * stored before D-452 reads the same way. With none marked, the first is the recommendation unless it says it is not.
+ */
+export function recommendedFirst<T extends { recommended?: boolean | undefined }>(options: readonly T[]): T[] {
+  const marked = options.findIndex((o) => o.recommended === true);
+  const at = marked >= 0 ? marked : options.findIndex((o) => o.recommended !== false);
+  if (at < 0) return [...options];
+  const unmarked = options.filter((_, i) => i !== at).map(({ recommended: _dropped, ...rest }) => rest as unknown as T);
+  return [{ ...options[at], recommended: true } as T, ...unmarked];
+}
+
+const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null, refines?: string): QuestionCard => {
   const card: QuestionCard = {
     toolUseId,
     question: q.question,
-    options: (q.options ?? []).map((opt, i) => {
-      const o: { id?: string; label: string; description?: string; recommended?: boolean } = {
-        label: opt.label,
-      };
+    options: recommendedFirst(q.options ?? []).map((opt) => {
+      const o: { id?: string; label: string; description?: string; recommended?: boolean } = { label: opt.label };
       if (opt.id) o.id = opt.id;
       if (opt.description) o.description = opt.description;
-      if (opt.recommended !== undefined) o.recommended = opt.recommended;
-      else if (i === 0) o.recommended = true;
+      if (opt.recommended === true) o.recommended = true;
       return o;
     }),
     allowOther: q.allowOther === true,
     answer,
   };
+  if (answer === SKIPPED_ANSWER) card.skipped = true;
+  if (isClosedAnswer(answer)) card.closed = true;
+  if (refines !== undefined) card.refines = refines;
   if (q.kind) card.kind = q.kind;
+  if (q.considerations) card.considerations = q.considerations;
+  if (q.step) card.step = q.step;
   if (q.placeholder) card.placeholder = q.placeholder;
   if (q.targetBoard) card.targetBoard = q.targetBoard;
   if (q.targetLayer) card.targetLayer = q.targetLayer;
@@ -146,16 +174,6 @@ const cardOf = (q: AskedQuestion, toolUseId: string, answer: string | null): Que
   if (q.allowedKeyboards) card.allowedKeyboards = q.allowedKeyboards;
   return card;
 };
-
-/** The question a conversation is waiting on: an `ask_user` call in the stored messages with no result after it (D-382). */
-export function openQuestion(messages: readonly MessageRow[]): { toolUseId: string } | undefined {
-  const blocks = (m: MessageRow) => m.content.map(neutralBlock);
-  const answered = new Set(messages.flatMap((m) => blocks(m).flatMap((b) => (b.type === "tool_result" ? [b.tool_use_id] : []))));
-  for (const m of messages.toReversed()) {
-    for (const b of blocks(m)) if (b.type === "tool_use" && b.name === ASK_USER && !answered.has(b.id)) return { toolUseId: b.id };
-  }
-  return undefined;
-}
 
 const toPriorityCard = (row: DecisionRow): PriorityCard => ({
   id: row.id,
@@ -250,6 +268,8 @@ export async function sendMessage(app: App, ref: string, input: SendMessageInput
 export async function runPreparedMessage(app: App, prepared: PreparedMessage, input: SendMessageInput, runId?: string): Promise<ChatOutcome> {
   const { view, selection, conversation, userMessage, resolvedQuestions, model } = prepared;
   answering.set(conversation.id, userMessage.id);
+  // What BK had applied when this turn began, so a question it pauses on can be closed if he applies something while it runs (D-452).
+  const appliedAtStart = appliedProposalIds(app, conversation.id);
   const started = Date.now();
   const logBase = { conversationId: conversation.id, provider: model.provider, model: model.model, effort: model.effort };
   try {
@@ -293,10 +313,21 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
 
     return transact(app.db, () => {
       const stored = outcome.messages.map((m) => insertMessage(app.db, { conversationId: conversation.id, role: m.role, content: m.content }));
-      presentation.finish(outcome.status === "awaiting_answer" ? "waiting_user" : outcome.status === "complete" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId, {
+      // A question refines the last proposal saved before it, in the order the model made its calls; one asked before anything was proposed
+      // refines nothing, and a proposal from a call after it is not what it refines. The turn works that out where the order is known; it is
+      // recorded here, with the question, and read back from the record, never worked out later from which proposal is newest.
+      const refines = outcome.question?.refines;
+      // BK applied an agent proposal of this conversation while the turn was still running. The layout head moved, so an answer to this
+      // question would be refused: it is stored as ended now, as it would have been had the apply come after, rather than left open.
+      const closing = outcome.question === undefined ? undefined : closingResult(app, conversation.id, appliedAtStart, refines);
+      const waiting = outcome.status === "awaiting_answer" && closing === undefined;
+      if (outcome.question !== undefined && closing !== undefined) {
+        insertMessage(app.db, { conversationId: conversation.id, role: "user", content: [{ type: "tool_result", tool_use_id: outcome.question.toolUseId, content: closing }] });
+      }
+      presentation.finish(waiting ? "waiting_user" : outcome.status === "complete" || outcome.status === "awaiting_answer" ? "completed" : "incomplete", outcome.messages, stored, outcome.question?.toolUseId, {
         provider: model.provider, model: model.model, usage: outcome.usage,
         ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
-      });
+      }, refines);
       const messageIds = [userMessage.id, ...stored.map((m) => m.id)];
       const ids = new Set(outcome.proposals.flatMap((p) => (p.changeSetId ? [p.changeSetId] : [])));
       const proposals = listConversationChangeSets(app.db, conversation.id).filter((c) => ids.has(c.id)).map(toCard);
@@ -316,13 +347,13 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
       });
 
       const result: ChatOutcome = {
-        conversationId: conversation.id, messageIds, status: outcome.status, text: outcome.text, proposals, priorities,
+        conversationId: conversation.id, messageIds, status: waiting || outcome.status !== "awaiting_answer" ? outcome.status : "complete", text: outcome.text, proposals, priorities,
         provider: model.provider, model: model.model, effort: model.effort, usage: outcome.usage, iterations: outcome.iterations,
-        ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, null) }),
+        ...(outcome.question === undefined ? {} : { question: cardOf(outcome.question, outcome.question.toolUseId, closing ?? null, refines) }),
         ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }),
       };
       if (runId !== undefined) app.db.query("UPDATE agent_runs SET status = ?, outcome_json = ?, finished_at = ?, seq = seq + 1 WHERE id = ?")
-        .run(outcome.status === "awaiting_answer" ? "waiting_user" : outcome.status === "complete" ? "completed" : "failed", JSON.stringify(result), Date.now(), runId);
+        .run(waiting ? "waiting_user" : result.status === "complete" ? "completed" : "failed", JSON.stringify(result), Date.now(), runId);
       input.onEvent?.({ type: "done", outcome: result });
       return result;
     });
@@ -365,6 +396,9 @@ export function showConversation(app: App, id: string): ConversationView {
   const messages: DisplayMessage[] = [];
   const stored = listMessages(app.db, id);
   const answers = new Map(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" ? [[b.tool_use_id, b.content] as const] : []))));
+  // A call that got an error result was refused (invalid input, or "Not run" beside the question that paused the turn), so it is not the question.
+  const refused = new Set(stored.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_result" && b.is_error === true ? [b.tool_use_id] : []))));
+  const refines = new Map(listPresentations(app.db, id).flatMap((p) => (p.questionToolUseId !== undefined && p.questionRefines !== undefined ? [[p.questionToolUseId, p.questionRefines] as const] : [])));
   for (const m of stored) {
     const typed = m.content.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("");
     // The selection travels beside the message, so the bubble shows what BK typed, not the header the model was given.
@@ -372,9 +406,9 @@ export function showConversation(app: App, id: string): ConversationView {
     const text = m.role === "user" && (m.selection || typed.startsWith("Unapplied draft on ")) ? typedText(typed) : typed;
     const toolCalls = m.content.flatMap((b) => (b.type === "tool_use" && typeof b.name === "string" ? [b.name] : []));
     if (text === "" && toolCalls.length === 0) continue;
-    const asked = m.content.map(neutralBlock).find((b) => b.type === "tool_use" && b.name === ASK_USER);
-    const parsed = asked?.type === "tool_use" ? AskUserSchema.safeParse(asked.input) : undefined;
-    const question = asked?.type === "tool_use" && parsed?.success ? cardOf(parsed.data, asked.id, answers.get(asked.id) ?? null) : undefined;
+    const asked = m.content.map(neutralBlock).find((b) => b.type === "tool_use" && b.name === ASK_USER && !refused.has(b.id));
+    const parsed = asked?.type === "tool_use" ? StoredQuestionSchema.safeParse(asked.input) : undefined;
+    const question = asked?.type === "tool_use" && parsed?.success ? cardOf(parsed.data, asked.id, answers.get(asked.id) ?? null, refines.get(asked.id)) : undefined;
     messages.push({ id: m.id, role: m.role, text, toolCalls, selection: m.selection, createdAt: m.createdAt, ...(question === undefined ? {} : { question }) });
   }
   const run = conversationRun(app.db, id);

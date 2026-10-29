@@ -401,7 +401,7 @@ describe("one finding per problem", () => {
       title, ops: positions.map((position) => ({ op: "setBinding", at: { layerId: "layer-0", position }, binding: { kind: "key", code: "F17" } })),
       explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
     });
-    const both = { blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Big fix", [33, 36]), alt("Small fix", [33])] } }] };
+    const both = { blocks: [{ tool: "propose_changes", input: alt("Big fix", [33, 36]) }, { tool: "propose_changes", input: alt("Small fix", [33]) }] };
     const m = scriptedModel([both, (seen) => {
       const ids = [...seen.toolResults.join("\n").matchAll(/"([^"]+)": saved as (cs_\w+)/g)].map((x) => [x[1], x[2]]);
       const id = (t: string) => ids.find((x) => x[0] === t)?.[1] as string;
@@ -436,7 +436,7 @@ describe("a withdrawn duplicate", () => {
       title, ops: positions.map((position) => ({ op: "setBinding", at: { layerId: "layer-0", position }, binding: { kind: "key", code: "F17" } })),
       explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
     });
-    const m = scriptedModel([{ blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Big fix", [33, 36]), alt("Small fix", [33])] } }] }, (seen) => {
+    const m = scriptedModel([{ blocks: [{ tool: "propose_changes", input: alt("Big fix", [33, 36]) }, { tool: "propose_changes", input: alt("Small fix", [33]) }] }, (seen) => {
       const ids = [...seen.toolResults.join("\n").matchAll(/"([^"]+)": saved as (cs_\w+)/g)].map((x) => [x[1], x[2]]);
       return submit([
         { kind: "suggestion", code: "big", title: "Big", body: "Big.", proposalId: ids.find((x) => x[0] === "Big fix")?.[1] as string, fixes: [check] },
@@ -487,7 +487,7 @@ describe("a run that stops at its limit", () => {
       title, ops: positions.map((position) => ({ op: "setBinding", at: { layerId: "layer-0", position }, binding: { kind: "key", code: "F17" } })),
       explanation: `${title}.`, tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
     });
-    const both = { blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Big fix", [33, 36]), alt("Small fix", [33])] } }] };
+    const both = { blocks: [{ tool: "propose_changes", input: alt("Big fix", [33, 36]) }, { tool: "propose_changes", input: alt("Small fix", [33]) }] };
     const done = await runReviewAi(w.app, review.id, scriptedModel([both, ...Array.from({ length: 12 }, () => getLayoutStep)]).deps);
     expect(done.ai.status).toBe("done");
     expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.title)).toEqual(["Small fix"]);

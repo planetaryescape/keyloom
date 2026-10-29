@@ -102,7 +102,7 @@ test("receipt insertion failure rolls back nested config transaction; saved resu
 test("exact answer identity races accept once, replays original continuation, and reloads answered history", async () => {
   const { app, layoutId } = await optionOptionApp();
   let calls = 0;
-  const question = { question: "Which side?", options: [{ label: "Left" }, { label: "Right" }] };
+  const question = { question: "Which side?", options: [{ label: "Left" }, { label: "Right" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } };
   const fake = model(async () => {
     calls++;
     return calls === 1 ? { ...result, stopReason: "awaiting_answer", pending: { id: "exact-question", name: "ask_user", input: question }, messages: [{ role: "assistant", content: [{ type: "tool_use", id: "exact-question", name: "ask_user", input: question }] }] } : result;

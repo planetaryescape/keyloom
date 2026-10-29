@@ -5,11 +5,15 @@ import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import type { DecisionRow } from "../persistence/decisions.ts";
 import { newId } from "../persistence/ids.ts";
+import type { ChangeSetRow } from "../persistence/change-sets.ts";
+import { listMessages } from "../persistence/conversations.ts";
+import { neutralBlock } from "../agent/blocks.ts";
+import { ASK_USER } from "../agent/tools/ask-user.ts";
 import { effectReceipt } from "../persistence/agent-runs.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import type { SelectionScope } from "../validation/selection-rules.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
-import { checkChange, proposeChange } from "./changes.ts";
+import { checkChange, proposeChange, requireDeclared, requireSupersedable } from "./changes.ts";
 import type { App } from "./context.ts";
 import { layoutChoices, layoutPriorities, recordOutcome, recordPriority, showDecision } from "./decisions.ts";
 import { ValidationFailedError } from "./errors.ts";
@@ -32,6 +36,21 @@ export const toChoiceFact = (d: DecisionRow): ChoiceFact => ({
  * `selection` is what he had selected when he sent the message, so a proposal that strays from it is warned about (07).
  * A null `conversationId` is a board review (D-340): its proposals belong to no conversation, so they show in the config's open proposals.
  */
+/**
+ * The messages of BK's a revision answers, so the decision it writes links back to all of them (D-022): what the replaced proposal carried
+ * (which accumulates along the chain), every answer or message of his since it was saved (an answer the model did not revise for must not
+ * drop out of the chain), and this turn's. Without duplicates, in the order they were said.
+ */
+function lineage(replaced: ChangeSetRow | undefined, current: string[], app: App): string[] {
+  if (replaced === undefined) return current;
+  const messages = replaced.conversationId === null ? [] : listMessages(app.db, replaced.conversationId);
+  const asked = new Set(messages.flatMap((m) => m.content.map(neutralBlock).flatMap((b) => (b.type === "tool_use" && b.name === ASK_USER ? [b.id] : []))));
+  const since = messages
+    .filter((m) => m.role === "user" && m.createdAt >= replaced.createdAt && m.content.map(neutralBlock).some((b) => b.type === "text" || (b.type === "tool_result" && asked.has(b.tool_use_id))))
+    .map((m) => m.id);
+  return [...new Set([...(replaced.decisionDraft?.sourceMessageIds ?? []), ...since, ...current])];
+}
+
 export function createAgentPorts(app: App, layoutId: string, conversationId: string | null, sourceMessageIds: string[] = [], selection?: SelectionScope, runId?: string, firmware?: GeometryOptions): AgentPorts {
   const scope = selection ? { selection } : {};
   const snapshotOf = (ref: string): LayoutSnapshot => {
@@ -85,16 +104,21 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
       if (showDecision(app, input.decisionId).layoutId !== layoutId) throw new Error(`"${input.decisionId}" is not a decision on this layout`);
       return toChoiceFact(recordOutcome(app, input.decisionId, { status: input.status, note: input.note }));
     },
-    propose(alternatives: Proposal[]): ProposalResult[] {
+    propose(alternatives: Proposal[], options: { supersedes?: string | null } = {}): ProposalResult[] {
+      const { supersedes } = options;
+      requireDeclared(app, conversationId, supersedes);
+      const replaced = typeof supersedes === "string" ? requireSupersedable(app, layoutId, conversationId, supersedes) : undefined;
       // One group for the alternatives of a call, so applying one supersedes the rest.
       const proposalGroup = newId("pg");
       return alternatives.map((alt) => {
         const validation = checkChange(app, layoutId, { ops: alt.ops, ...scope });
         if (!validation.ok) return { title: alt.title, changeSetId: null, validation };
         try {
+          const from = lineage(replaced, sourceMessageIds, app);
           const cs = proposeChange(app, layoutId, {
             ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
-            decisionDraft: { ...alt.decisionDraft, sourceMessageIds },
+            ...(typeof supersedes === "string" ? { supersedes } : {}),
+            decisionDraft: { ...alt.decisionDraft, sourceMessageIds: from },
           });
           return { title: alt.title, changeSetId: cs.id, validation: cs.validation };
         } catch (err) {
@@ -126,7 +150,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         }),
       );
     },
-    propose: (input) => receipt("propose_changes", input, () => ports.propose(input)),
+    propose: (input, options) => receipt("propose_changes", { input, supersedes: options?.supersedes }, () => ports.propose(input, options)),
     recordPriority: (input) => receipt("record_priority", input, () => ports.recordPriority(input)),
     recordOutcome: (input) => receipt("update_decision_outcome", input, () => ports.recordOutcome(input)),
   };

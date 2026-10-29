@@ -29,8 +29,8 @@ export function toolObserver(ports: AgentPorts, emit: (event: AgentObservation) 
   const observed: AgentPorts = {
     ...ports,
     check: (ops) => { const result = ports.check(ops); validation(result); return result; },
-    propose: (alternatives) => {
-      const results = ports.propose(alternatives);
+    propose: (alternatives, options) => {
+      const results = ports.propose(alternatives, options);
       for (const result of results) {
         validation(result.validation);
         if (result.changeSetId !== null) reference("proposal", result.changeSetId);

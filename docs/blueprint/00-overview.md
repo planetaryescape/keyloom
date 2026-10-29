@@ -22,8 +22,8 @@ keyloom is open source and meant to interest other keyboard owners (D-007). BK s
 1. **Pick the board.** keyloom loads its definition, which includes the firmware (D-002).
 2. **Import the current layout** from the source the board uses today (D-016, [05](05-firmware-qmk.md), [06](06-firmware-zmk.md)).
 3. **Say what's wrong or what you want**, in chat, optionally with keys selected on the picture (D-010, D-012).
-4. **The agent asks what it needs**, such as which functions you barely use and which keys must not move (D-021). Then it proposes one to three alternatives as change sets (D-014, D-020).
-5. **Preview.** The changed and displaced keys are highlighted, with each alternative's explanation and trade-off (D-015).
+4. **The agent asks what it needs**, such as which functions you barely use and which keys must not move (D-021). Then it proposes its best change set first and refines it with questions, one at a time (D-452, which replaced D-020's alternatives) (D-014, D-020).
+5. **Preview.** The changed and displaced keys are highlighted, with the proposal's explanation and trade-off (D-015).
 6. **Accept.** The change set is applied as one revision, and the decision and its reason are recorded (D-022, D-023).
 7. **Build and flash** ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)).
 8. **Use it and report back.** "That fixed the accidental shortcuts, but now holding Command feels slow" starts the next turn, and the outcome is recorded against the decision (D-018).
@@ -52,7 +52,7 @@ v1 covers:
 
 - **Boards:** the ZSA Moonlander on QMK and the MoErgo Glove80 on ZMK (D-027).
 - **Layout vocabulary** (D-006): layers; plain keys; modifiers; mod-tap and hold-tap (home row mods, such as F and J as Command on hold); layer-tap and momentary layers; macros; combos; and the tap-hold timing settings each firmware offers (D-017).
-- **Operations:** import the current layout, view it, edit it by hand, edit it by chat, edit a selection in bulk (D-011), propose alternatives that make room (D-020), undo, build, flash, and remember decisions.
+- **Operations:** import the current layout, view it, edit it by hand, edit it by chat, edit a selection in bulk (D-011), propose a change that makes room and refine it with questions (D-020, D-452), undo, build, flash, and remember decisions.
 - **Platforms:** macOS first, since BK's machine is a Mac. Linux is expected to work, because nothing in the design is Mac-specific beyond flashing tools, but it isn't tested in v1.
 
 ### What each firmware gives keyloom

@@ -5,7 +5,7 @@ import type { AgentModel, ModelMessage, ModelTool, Usage } from "./model.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
 import type { AgentPorts, ProposalResult, RecordedPriority } from "./ports.ts";
 import { type ToolCallTrace, TurnRecorder, type ValidationFailureTrace } from "./recorder.ts";
-import { type AskedQuestion, AskUserSchema } from "./tools/ask-user.ts";
+import { type AskedQuestion, StoredQuestionSchema } from "./tools/ask-user.ts";
 import { createTools } from "./tools/index.ts";
 import { toolObserver, type AgentObservation } from "./observation.ts";
 
@@ -48,7 +48,8 @@ export type TurnOutcome = {
   question?: OpenQuestion;
 };
 
-export type OpenQuestion = AskedQuestion & { toolUseId: string };
+/** `refines` is the proposal the question is about: the last one saved before it, in call order (D-452). Absent when none came before it. */
+export type OpenQuestion = AskedQuestion & { toolUseId: string; refines?: string };
 
 /** Consecutive user messages (a tool result, then BK's reply) are one turn to the API; merging keeps stored history untouched. */
 export function mergeConsecutiveUsers(messages: ModelMessage[]): ModelMessage[] {
@@ -140,6 +141,9 @@ export async function runAgentTurn(input: {
 
   const snapshot = ports.snapshot();
   input.signal?.throwIfAborted();
+  // How many proposals were saved when the model reached its question. A call it made after the question may still run (the Anthropic adapter
+  // runs them), and what it saves is beside the question, not something the question refines.
+  let savedBeforeQuestion: number | undefined;
   const result = await model.run({
     system: assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices(), ports.layouts().filter((l) => l.layoutId !== snapshot.layoutId)),
     messages: mergeConsecutiveUsers(input.history),
@@ -147,11 +151,17 @@ export async function runAgentTurn(input: {
     maxIterations: input.maxIterations ?? DEFAULT_MAX_ITERATIONS,
     ...(callbacks.onText ? { onText: callbacks.onText } : {}),
     onPublicMessage: (message) => callbacks.onObservation?.({ type: "public_message", ...message }),
+    onPause: () => { savedBeforeQuestion ??= proposals.length; },
     ...(input.signal ? { signal: input.signal } : {}),
   });
 
-  const status = observer.limited() ? "iteration_limit" : classify(result.stopReason);
-  const asked = result.pending === undefined ? undefined : AskUserSchema.safeParse(result.pending.input);
+  const asked = result.pending === undefined ? undefined : StoredQuestionSchema.safeParse(result.pending.input);
+  // A valid question is where the turn ends, whatever else happened on the way to it. A call before it or beside it (the Anthropic adapter runs
+  // those) may have reached the activity limit and been refused with an error result; that must not turn the turn into an `iteration_limit`.
+  // Stored with any other status the question would be open on a failed run, which no answer path accepts although the layout never changed.
+  const status = result.pending !== undefined && asked?.success ? "awaiting_answer" : observer.limited() ? "iteration_limit" : classify(result.stopReason);
+  // A provider that never says where the question fell leaves everything saved counting as before it.
+  const refines = proposals.slice(0, savedBeforeQuestion ?? proposals.length).flatMap((p) => (p.changeSetId === null ? [] : [p.changeSetId])).at(-1);
   const messages = resumable(result.messages, status);
   return {
     status,
@@ -165,6 +175,6 @@ export async function runAgentTurn(input: {
     iterations: result.iterations,
     toolCalls: recorder.toolCalls,
     validationFailures: recorder.validationFailures,
-    ...(result.pending !== undefined && asked?.success ? { question: { ...asked.data, toolUseId: result.pending.id } } : {}),
+    ...(result.pending !== undefined && asked?.success ? { question: { ...asked.data, toolUseId: result.pending.id, ...(refines === undefined ? {} : { refines }) } } : {}),
   };
 }
