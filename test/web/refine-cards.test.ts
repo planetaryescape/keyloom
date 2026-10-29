@@ -26,7 +26,7 @@ const question = (over: Partial<Question> = {}): Question => ({
 const turn = (id: string, over: Partial<AssistantTurn> = {}): AssistantTurn => ({
   kind: "assistant", id, text: "", activity: null, proposals: [], priorities: [], question: null, phase: "done", failure: null, ending: "complete", ...over,
 });
-const renderQuestion = (q: Question, skipped = false) => renderToStaticMarkup(createElement(QuestionCard, { question: q, skipped, onAnswer: () => {} }));
+const renderQuestion = (q: Question) => renderToStaticMarkup(createElement(QuestionCard, { question: q, onAnswer: () => {} }));
 const renderTurn = (t: AssistantTurn, revised: string[] = [], working?: Parameters<typeof AssistantMessage>[0]["working"]) => renderToStaticMarkup(createElement(AssistantMessage, {
   ...(working === undefined ? {} : { working }),
   turn: t, layout: fixture.document, board: fixture.board, pinnedId: t.proposals.at(-1)?.changeSetId ?? null, compact: true, revised: new Set(revised),
@@ -55,7 +55,7 @@ describe("the question card", () => {
     const answered = renderQuestion(question({ step: { n: 1, of: 2 }, answer: "Left hand" }));
     expect(answered).toContain("Left hand");
     expect(answered).not.toContain("Question 1 of 2");
-    const skipped = renderQuestion(question({ step: { n: 1, of: 2 } }), true);
+    const skipped = renderQuestion(question({ step: { n: 1, of: 2 }, skipped: true }));
     expect(skipped).toContain("Skipped, you applied the proposal");
     expect(skipped).not.toContain("<ol");
   });
