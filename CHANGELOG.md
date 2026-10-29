@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.59.0](https://github.com/planetaryescape/keyloom/compare/v0.58.0...v0.59.0) (2026-10-29)
+
+
+### Features
+
+* one best proposal first, then questions that refine it (D-452) ([#199](https://github.com/planetaryescape/keyloom/issues/199)) ([e4ca3f5](https://github.com/planetaryescape/keyloom/commit/e4ca3f52d87e37b6624ac4fd01cb0389ede404d3))
+
 ## [0.58.0](https://github.com/planetaryescape/keyloom/compare/v0.57.0...v0.58.0) (2026-10-28)
 
 
