@@ -1,5 +1,5 @@
 import type { Turn } from "./transcript.ts";
-import { Markdown } from "./Markdown.tsx";
+import { Markdown, type DrawReference } from "./Markdown.tsx";
 import { TurnUsage } from "./TurnUsage.tsx";
 import { ConfigCardList, type ConfigCards } from "./ConfigCards.tsx";
 
@@ -14,7 +14,7 @@ export type CarriedThread = {
 // A conversation belongs to one layout: its agent reads and proposes against that layout, so it can't continue on another (D-317).
 // The thread stays in view across the switch, read-only and without its options (they'd apply to the other layout), and the next
 // message starts this layout's conversation.
-export function CarriedThreadView({ thread, boardName, configCards }: { thread: CarriedThread; boardName: string; configCards?: ConfigCards }) {
+export function CarriedThreadView({ thread, boardName, configCards, reference }: { thread: CarriedThread; boardName: string; configCards?: ConfigCards; reference?: DrawReference }) {
   return (
     <div className="carried-thread" aria-label={`Earlier, about ${thread.fromName}`}>
       <p className="carried-head">Earlier, about {thread.fromName}</p>
@@ -27,7 +27,7 @@ export function CarriedThreadView({ thread, boardName, configCards }: { thread: 
         ) : (
           <div key={turn.id} className="msg msg-assistant carried-turn">
             <p className="msg-who">keyloom</p>
-            {turn.text === "" ? null : <Markdown source={turn.text} />}
+            {turn.text === "" ? null : <Markdown source={turn.text} {...(reference === undefined ? {} : { reference })} />}
             <ConfigCardList presentation={turn.presentation} cards={configCards} />
             {turn.proposals.length === 0 ? null : (
               <p className="carried-note">{turn.proposals.length === 1 ? "An option was" : `${turn.proposals.length} options were`} offered for {thread.fromName}; open that to apply them.</p>

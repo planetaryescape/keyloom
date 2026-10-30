@@ -8,6 +8,8 @@ import { SCHEMA_VERSION, columns, print, type Format } from "../output.ts";
 import type { CliContext } from "./context.ts";
 import { opLine } from "../change-report.ts";
 import { transferReportText } from "../transfer-text.ts";
+import { ReplyStream } from "../reference-stream.ts";
+import { replyReferenceReader, replyReferenceRoutes } from "../../app/index.ts";
 import { type AgentArtifact, TransferArtifactSchema } from "../../api/artifacts.ts";
 import { answerAgentRun, cancelAgentRequest, cancelAgentRun, inspectAgentRun, startAgentRun, waitForAgentRun, savedRunOutcome, type AgentRunSnapshot } from "../../app/agent-runs.ts";
 
@@ -176,6 +178,14 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
 
         const turn = async (message: string) => {
           let streamed = false;
+          // The reply as it was printed, with its markers resolved (D-468): routes are worked out from what the reader actually saw, on
+          // the config whose reply it was (a copy's handoff moves the turn on to the new config before any of this is printed).
+          let shown = "";
+          let shownRef = layoutRef;
+          // A marker is named by the id the model just read back, so the conversation has to be known while the reply streams: the
+          // start event says which one before any text arrives.
+          let live = conversationId;
+          const stream = new ReplyStream(replyReferenceReader(app, layoutRef, () => live));
           let outcome = await sendMessage(app, layoutRef, {
             message,
             ...(conversationId ? { conversationId } : {}),
@@ -183,10 +193,13 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
             ...(deps.model ? { model: deps.model } : {}),
             ...(provider ? { provider } : {}),
             onEvent: (e) => {
+              if (e.type === "start") live = e.conversationId;
               if (machine) return;
               if (e.type === "text") {
                 streamed = true;
-                ctx.io.out(e.delta);
+                shown += e.delta;
+                shownRef = layoutRef;
+                ctx.io.out(stream.push(e.delta));
               } else if (e.type === "tool") {
                 ctx.io.err(`[${e.name}]\n`);
               }
@@ -211,7 +224,11 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
           last = outcome;
           lastConfigs = [...made, ...configsMadeInTurn(app, outcome.conversationId, outcome.messageIds[0] ?? "")].filter((config, index, all) => all.findIndex((value) => value.id === config.id) === index);
           if (!machine) {
+            const tail = stream.flush();
+            if (tail !== "") ctx.io.out(tail);
             if (streamed) ctx.io.out("\n");
+            // What a reply named, and the command that reaches each config and proposal: a layer and a key have no terminal equivalent.
+            for (const line of replyReferenceRoutes(app, shownRef, shown, () => live)) ctx.io.out(`${line}\n`);
             for (const p of outcome.priorities) ctx.io.err(`remembered ${p.id} (${p.priorityKind}): ${p.statement}\n`);
             for (const p of outcome.proposals) ctx.io.out(`\n${proposalText(p)}\n`);
             if (lastReport !== undefined) ctx.io.out(`\n${transferReportText(lastReport, { continues: true }).join("\n")}\n`);

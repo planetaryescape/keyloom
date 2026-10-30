@@ -59,6 +59,10 @@ export {
   type ChatEvent, type ChatOutcome, type ConversationView, type DisplayMessage, type PriorityCard, type ProposalCard, type SendMessageInput,
   listConversationSummaries, showConversation,
 } from "./conversations.ts";
+// A reply's typed references, as the terminal reads them (D-468).
+export { replyReferenceReader, replyReferenceRoutes } from "./references.ts";
+// The marker grammar the replies carry, re-exported for the CLI's streaming reader (the module table keeps src/cli off src/layout).
+export { type Reference, type ReferencePart, markerAt, markerText, referenceParts } from "../layout/references.ts";
 export {
   type DecisionRow, type DecisionStatus, type OutcomeQuestion, type OutcomeStatus, dismissOutcome, editDecision, listDecisions, outcomeQuestions,
   recordOutcome, recordPriority, retireDecision, retirePriority, showDecision,
