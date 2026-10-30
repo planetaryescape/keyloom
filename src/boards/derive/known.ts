@@ -10,7 +10,9 @@ const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, ""
 export function boardByUsbId(boards: readonly BoardDefinition[], device: Pick<UsbIdentity, "vendorId" | "productId"> & Partial<Pick<UsbIdentity, "product">>): BoardDefinition | undefined {
   return boards.find((b) =>
     b.revisions.some((r) => {
-      if (r.detect && (r.detect.product === undefined || r.detect.product === device.product) && r.detect.usbProductId.toLowerCase() === device.productId && (r.detect.usbVendorId ?? (b.vendor === "ZSA" ? ZSA_VENDOR_ID : undefined))?.toLowerCase() === device.vendorId) return true;
+      // A board whose halves name themselves apart lists every product string it may report (the Corne's `Corne Choc BT L`).
+      const named = r.detect?.products === undefined || (device.product !== undefined && r.detect.products.includes(device.product));
+      if (r.detect && named && r.detect.usbProductId.toLowerCase() === device.productId && (r.detect.usbVendorId ?? (b.vendor === "ZSA" ? ZSA_VENDOR_ID : undefined))?.toLowerCase() === device.vendorId) return true;
       const free = r.flash.kind === "uf2-drives" ? r.flash.handsFree : undefined;
       return free !== undefined && free.usbVendorId?.toLowerCase() === device.vendorId && free.halves.some((h) => h.usbProductId?.toLowerCase() === device.productId);
     }),

@@ -26,6 +26,9 @@ export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDoc
 /** What a build with keyloom's module adds to `west build`: the module, and the overlay that gives it a serial port (a module can't add an overlay itself). */
 export const moduleFlags = (): string => `-DZMK_EXTRA_MODULES=/work/${MODULE_DIR} -DEXTRA_DTC_OVERLAY_FILE=/work/${MODULE_DIR}/${OVERLAY_FILE}`;
 
+/** The conf fragment that gives one half its own USB product name, written beside the keymap's conf. */
+export const targetConfFile = (id: string): string => `keyloom-${id}.conf`;
+
 /** One shell script for the whole build, so the container starts once. `set -e` stops at the first failing target. */
 export function westScript(build: ZmkWestDockerBuild, withModule = false): string {
   const lines = [
@@ -35,7 +38,7 @@ export function westScript(build: ZmkWestDockerBuild, withModule = false): strin
     "[ -d .west ] || west init -l config",
     "west update --fetch-opt=--filter=tree:0",
     "west zephyr-export",
-    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
+    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
   ];
   return lines.join("\n");
 }
@@ -59,6 +62,9 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       for (const f of await readdir(config)) if (/\.(keymap|conf)$/.test(f)) await rm(join(config, f));
       await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule, build.rgbMatrix));
       for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
+      // A half that names itself gets its own conf: the keymap's conf is shared by both builds.
+      const named = build.targets.filter((t) => t.productName !== undefined);
+      for (const t of named) await writeFresh(join(config, targetConfFile(t.id)), `# Written by keyloom: this half's USB product name.\nCONFIG_USB_DEVICE_PRODUCT="${t.productName}"\n`);
       const handsFree = rev.flash.handsFree !== undefined;
       if (handsFree) await writeModule(input.checkoutDir);
 
@@ -83,6 +89,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
         files: [
           join(config, "west.yml"),
           ...input.source.files.map((f) => join(config, f.path)),
+          ...named.map((t) => join(config, targetConfFile(t.id))),
           ...(handsFree ? Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)) : []),
         ],
         log: input.log,

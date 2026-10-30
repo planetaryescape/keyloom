@@ -22,11 +22,13 @@
         "targets": [
           {
             "id": "left",
-            "board": "corne_choc_pro_left"
+            "board": "corne_choc_pro_left",
+            "productName": "Corne Choc BT L"
           },
           {
             "id": "right",
-            "board": "corne_choc_pro_right"
+            "board": "corne_choc_pro_right",
+            "productName": "Corne Choc BT R"
           }
         ],
         "boardModule": {
@@ -97,7 +99,11 @@
       "detect": {
         "usbVendorId": "0x1d50",
         "usbProductId": "0x615e",
-        "product": "Corne Choc BT"
+        "products": [
+          "Corne Choc BT",
+          "Corne Choc BT L",
+          "Corne Choc BT R"
+        ]
       }
     }
   ],

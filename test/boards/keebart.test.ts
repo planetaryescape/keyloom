@@ -7,11 +7,14 @@ import { generateZmkSource } from "../../src/firmware/zmk/generate.ts";
 import { LayoutSchema } from "../../src/layout/schema.ts";
 const board = await loadBoardDir("boards/keebart/corne-choc-pro-bt");
 
-test("shared ZMK USB IDs require the Corne's product name", () => {
+test("shared ZMK USB IDs require one of the Corne's product names", () => {
   const ids = { vendorId: "0x1d50", productId: "0x615e" };
   expect(boardByUsbId([board.definition], ids)).toBeUndefined();
   expect(boardByUsbId([board.definition], { ...ids, product: "Other keyboard" })).toBeUndefined();
   expect(boardByUsbId([board.definition], { ...ids, product: "Corne Choc BT" })?.id).toBe(board.definition.id);
+  // Each half names itself apart while it runs, so both names still find the board.
+  expect(boardByUsbId([board.definition], { ...ids, product: "Corne Choc BT L" })?.id).toBe(board.definition.id);
+  expect(boardByUsbId([board.definition], { ...ids, product: "Corne Choc BT R" })?.id).toBe(board.definition.id);
 });
 
 test("geometry fetches the hardware module rather than upstream ZMK", async () => {

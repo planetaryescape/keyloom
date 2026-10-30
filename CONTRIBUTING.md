@@ -287,6 +287,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.targets[].id` | `zmk-west-docker` | A short name, such as `left`. Names the half's UF2. |
 | `revisions[].build.targets[].shield` | `zmk-west-docker`, optional | The `-DSHIELD` value, such as `corne_left`. |
 | `revisions[].build.targets[].board` | `zmk-west-docker`, optional | Overrides the recipe's `board` for this half. |
+| `revisions[].build.targets[].productName` | `zmk-west-docker`, optional | The USB product string this half reports while it runs, when the halves should be told apart by name (`Corne Choc BT L`). |
 | `revisions[].build.boardModule` | `zmk-west-docker`, optional | External hardware definitions. Also owns `physicalLayout`. |
 | `revisions[].build.boardModule.repo` | `zmk-west-docker` | Hardware module repository URL. |
 | `revisions[].build.boardModule.sha` | `zmk-west-docker` | Immutable hardware module commit SHA. |
@@ -330,7 +331,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.instructions` | `manual` | What to tell the person: which tool flashes the file, and how to enter the bootloader. |
 | `revisions[].detect` | all | `null`, or an object that names the USB device. |
 | `revisions[].detect.usbProductId` | all | The board's USB product ID, such as `0x1969`. keyloom uses it to tell hardware revisions apart. |
-| `revisions[].detect.product` | optional | Exact USB product string required in addition to IDs; use it for hardware sharing ZMK's default USB IDs. |
+| `revisions[].detect.products` | optional | The USB product strings this board may report while it runs, required in addition to IDs; use it for hardware sharing ZMK's default USB IDs, including a board whose halves name themselves apart. |
 | `revisions[].detect.usbVendorId` | optional | The vendor ID the running firmware reports, such as `0x4653`, when the board is not ZSA's. keyloom assumes ZSA's `0x3297` for a ZSA board without it. |
 | `revisions[].device` | `kanata-config`, optional | How a software remapper finds the keyboard to take. A board with no USB IDs (a laptop's own) has `detect: null` and this. |
 | `revisions[].device.kind` | `device` | `macos-product-name`. |

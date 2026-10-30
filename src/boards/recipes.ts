@@ -43,6 +43,8 @@ export const ZmkWestTargetSchema = z.strictObject({
   shield: z.string().min(1).optional(),
   /** Integrated split boards have a different controller target per half. */
   board: z.string().regex(/^[a-zA-Z0-9_/-]+$/).optional(),
+  /** The USB product string this half reports while it runs, when the board's halves should be told apart by name (the Corne's `Corne Choc BT L`). */
+  productName: z.string().regex(/^[A-Za-z0-9 ._+-]{1,60}$/).optional(),
 });
 
 export const ZmkBoardModuleSchema = z.strictObject({ repo: z.string().url(), sha });
