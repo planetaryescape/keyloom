@@ -45,6 +45,7 @@ keyloom
   provider status [--json]                 active provider/model and credential availability; no generation
   provider use <provider> [--model M]       save the default for new conversations in config.json
   review [layout] [--run] [--force] [--provider P]   show saved review; --run can call a model
+  review fix [layout] [--provider P]        one agent run that fixes what the review found
   review dismiss|restore <item> [--layout L]   hide or restore a finding
 
   decisions list <layout> [--status S] [--kind choice|priority]
@@ -124,6 +125,8 @@ keyloom --data-dir <scratch> agent start <config> 'Explain this layout' --reques
 keyloom --data-dir <scratch> agent answer <run> <question-tool-id> Left --request-id <unique-answer-id>
 ```
 
+A run that stops on a question prints the question, its options and the `keyloom agent answer …` line in table format, whether it is a copy's target or the run the command started; then the turn is BK's to answer.
+
 Stop is explicit and does not roll back saved configs, proposals or memory. `agent cancel <run-or-request>` requests cancellation of accepted work; `--request` can also persist cancellation before acceptance. Its `pending_acceptance` result is an intent, not an invented run. A live foreign owner observes the request; only its recorded terminal result confirms it stopped. The [26b contract](../research/spikes/26b-contract.md) specifies the wire shapes and fail-closed pending-Stop limit. Legacy `chat` retains stream-owned execution for ordinary conversations; copies use the bounded handoff coordinator (D-460).
 
 ## The typing lab records your typing and tunes the board to it
@@ -175,6 +178,8 @@ The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor doe
 ## review shows what keyloom found in a config
 
 `keyloom review [layout]` prints the newest review of the config in plain words: problems, suggestions, hints, what the last revision fixed, what was checked and how the agent's part went. `--run` makes the head's review now and waits for the agent (it needs a model provider; the checks run without one), `--force` runs the agent again on a revision it already looked at, `--provider` picks the model as for `chat`. JSON is `{ layout_id, head_revision_id, stale, review }`, where `review` is null before any, and otherwise `{ id, layout_id, revision_id, trigger, checked_at, checks, ai: { status, reason, model }, items: [{ id, source, kind, severity, code, title, body, keys, layers, proposal_id, fixes, dismissed_at }], fixed }`; `title` and `body` keep the `{key:…}` and `{layer:…}` markers. `--format ids` prints the item ids. [27](27-board-review.md) has the design.
+
+`review fix [layout]` starts one agent run on the config with the same request the review panel's **Fix issues** button sends, and follows it like `agent start`: a run that stops on a question prints the question and the `keyloom agent answer …` line. The findings are not pasted into the request; the agent reads them with its `get_review` tool, so they cannot be out of date with the stored review, and it answers with one validated change that reuses any suggestion still on the board. It refuses before calling a model when the config has no review or nothing is left to fix (hidden findings do not count). `--json` prints the run snapshot; `--provider` picks the model as for `chat`.
 
 `review dismiss <item> --layout <config>` hides a finding; `review restore` shows it again. Neither runs a model. `--layout` may be omitted only when there is one saved config. `review show` is the explicit form of the default read, and `--json` forces JSON output.
 

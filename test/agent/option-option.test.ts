@@ -95,8 +95,8 @@ describe("the Option-Option conversation with a scripted model", () => {
       model: "claude-opus-5-5", stream: true, thinking: { type: "adaptive" }, output_config: { effort: "medium" },
       tool_choice: { type: "auto" }, fallbacks: "default", cache_control: { type: "ephemeral" },
     });
-    expect(body.tools.map((t: any) => t.name)).toEqual(["list_layouts", "get_layout", "find_function", "analyse_change", "record_priority", "update_decision_outcome", "propose_changes", "mirror_keys", "map_keys", "put_config", "get_typing_findings", "ask_user", "create_config"]);
-    expect(body.tools.map((t: any) => t.strict)).toEqual([true, true, true, false, true, true, false, true, true, false, true, true, true]);
+    expect(body.tools.map((t: any) => t.name)).toEqual(["list_layouts", "get_layout", "find_function", "analyse_change", "record_priority", "update_decision_outcome", "propose_changes", "mirror_keys", "map_keys", "put_config", "get_typing_findings", "get_review", "ask_user", "create_config"]);
+    expect(body.tools.map((t: any) => t.strict)).toEqual([true, true, true, false, true, true, false, true, true, false, true, true, true, true]);
     expect(body.tools.every((t: any) => t.eager_input_streaming === true)).toBe(true);
     expect(body.system).toContain("never apply");
     expect(body.system).toContain("zsa/moonlander");

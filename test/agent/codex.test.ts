@@ -210,7 +210,7 @@ describe("the lockdown", () => {
     const { fake } = await run([{ say: "ok" }]);
     const tools = fake.record()?.tools ?? [];
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ["analyse_change", "ask_user", "create_config", "find_function", "get_layout", "get_typing_findings", "list_layouts", "map_keys", "mirror_keys", "propose_changes", "put_config", "record_priority", "update_decision_outcome"],
+      ["analyse_change", "ask_user", "create_config", "find_function", "get_layout", "get_review", "get_typing_findings", "list_layouts", "map_keys", "mirror_keys", "propose_changes", "put_config", "record_priority", "update_decision_outcome"],
     );
     const schema = JSON.stringify(tools.find((t) => t.name === "propose_changes")?.inputSchema);
     expect(schema.length).toBeGreaterThan(5_000);

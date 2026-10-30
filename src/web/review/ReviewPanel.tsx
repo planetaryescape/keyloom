@@ -3,14 +3,16 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { Layout } from "../../layout/schema.ts";
-import type { FixedItem, ReviewItem } from "../../validation/review-item.ts";
+import { fixableFindings, type FixedItem, type ReviewItem } from "../../validation/review-item.ts";
 import { describeKey } from "../../layout/describe.ts";
 import { layerName } from "../chat/proposal-facts.ts";
 import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
+import { activeProviderReady } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
+import { FixIssuesButton } from "./FixIssues.tsx";
 import type { Review } from "./useReview.ts";
 import "./review.css";
 
@@ -45,7 +47,7 @@ const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it conn
 
 // The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
 // a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
-export function ReviewPanel({ token, review: r, layout, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onClose }: {
+export function ReviewPanel({ token, review: r, layout, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onFixIssues, onClose }: {
   token: string;
   review: Review;
   layout: Layout;
@@ -59,6 +61,8 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
   onPin: (card: ProposalCard) => void;
   onApply: (card: ProposalCard) => Promise<void>;
   onShowLayer: (layerId: string) => void;
+  /** Opens the chat on this config with one request that fixes what the review found (D-461). */
+  onFixIssues: () => void;
   onClose: () => void;
 }) {
   const [showHidden, setShowHidden] = useState(false);
@@ -244,6 +248,14 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
           {review.checks.summary.layers} layers, {review.checks.summary.keys} keys, {review.checks.summary.combos} combos checked
           {hidden.length === 0 ? "" : ` · ${hidden.length} hidden`}
         </span>
+        <FixIssuesButton
+          findings={fixableFindings(review.items).length}
+          stale={r.stale}
+          busy={r.busy}
+          reviewing={review.ai.status === "pending" || review.ai.status === "running"}
+          ready={activeProviderReady(provider.status)}
+          onFix={onFixIssues}
+        />
         {hidden.length === 0 ? null : <button type="button" className="sheet-action" onClick={() => setShowHidden((v) => !v)}>{showHidden ? "Hide hidden" : "Show hidden"}</button>}
       </footer>
     </section>

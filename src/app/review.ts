@@ -1,11 +1,8 @@
 // Use cases for the board review (D-340): the checks run at once and are stored; the agent's part runs after and fills in. A revision is
 // reviewed once. The next revision's review says which of the previous one's findings are gone, so the screen can tick them off.
 import type { AgentModel, Usage } from "../agent/model.ts";
-import { keyName } from "../boards/key-names.ts";
-import { layerDisplayName } from "../layout/cap-words.ts";
 import { runReviewAgent } from "../agent/review.ts";
 import { findChangeSet, markRejected } from "../persistence/change-sets.ts";
-import { findLayoutRow } from "../persistence/layouts.ts";
 import { appendLog } from "../persistence/log.ts";
 import {
   type AiStatus, type BoardReviewRow, type ReviewItemRow, type ReviewTrigger, claimAi, dismissItem, dismissals, finishAi, findReview, findReviewOfRevision, insertReview, latestReview,
@@ -19,59 +16,20 @@ import { createAgentPorts } from "./agent-ports.ts";
 import type { App } from "./context.ts";
 import { ModelError, NotFoundError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
+import { type BoardReview, type ReviewView, itemOf, showReview, toReview } from "./review-read.ts";
 
 export type { AiStatus, ReviewTrigger } from "../persistence/reviews.ts";
 export type { FixedItem, ReviewItem } from "../validation/review-item.ts";
+export type { BoardReview, ReviewView } from "./review-read.ts";
+export { reviewWords, showReview } from "./review-read.ts";
 
 /** A run that started this long ago and never finished is taken to have died with its process. */
 export const AI_STALE_MS = 10 * 60_000;
-
-export type BoardReview = {
-  id: string;
-  layoutId: string;
-  revisionId: string;
-  trigger: ReviewTrigger;
-  checkedAt: number;
-  checks: { status: "done"; summary: { layers: number; keys: number; combos: number } };
-  ai: { status: AiStatus; reason: string | null; model: string | null };
-  /** Hidden items are in the list with `dismissedAt` set, so the screen can count them and offer them back. */
-  items: ReviewItem[];
-  /** What the previous review had that this revision no longer produces, each saying which review it was fixed since. */
-  fixed: FixedItem[];
-};
-
-export type ReviewView = {
-  layoutId: string;
-  /** The config's head now. The review is stale while its `revisionId` differs. */
-  headRevisionId: string;
-  /** The newest review of the config, or null when none has run. */
-  review: BoardReview | null;
-};
 
 /** What the screen is told when a review changes. */
 export type ReviewEvent = { type: "review"; layoutId: string; revisionId: string; reviewId: string; aiStatus: AiStatus };
 
 export type ReviewHooks = { emit?: (event: ReviewEvent) => void; now?: () => number };
-
-const itemOf = (row: ReviewItemRow, hidden: ReadonlyMap<string, number>): ReviewItem => ({ ...row, dismissedAt: hidden.get(row.id) ?? null });
-
-function toReview(app: App, row: BoardReviewRow): BoardReview {
-  const hidden = dismissals(app.db, row.layoutId);
-  return {
-    id: row.id, layoutId: row.layoutId, revisionId: row.revisionId, trigger: row.trigger, checkedAt: row.checkedAt,
-    checks: { status: "done", summary: row.summary },
-    ai: { status: row.ai.status, reason: row.ai.reason, model: row.ai.model },
-    items: listReviewItems(app.db, row.id).map((r) => itemOf(r, hidden)),
-    fixed: row.fixed.flatMap((f) => (row.previousReviewId === null ? [] : [{ ...itemOf(f, hidden), fixedSince: row.previousReviewId }])),
-  };
-}
-
-export function showReview(app: App, ref: string): ReviewView {
-  const layout = findLayoutRow(app.db, ref);
-  if (!layout) throw new NotFoundError(`no layout "${ref}"`);
-  const row = latestReview(app.db, layout.id);
-  return { layoutId: layout.id, headRevisionId: layout.headRevisionId, review: row ? toReview(app, row) : null };
-}
 
 /**
  * Items that were findings of the earlier review and are not any more. A finding about keys that is still about some of them (the
@@ -313,15 +271,4 @@ export function dismissReviewItem(app: App, ref: string, itemId: string, now: ()
 export function restoreReviewItem(app: App, ref: string, itemId: string): ReviewView {
   restoreItem(app.db, requireItem(app, ref, itemId).layoutId, itemId);
   return showReview(app, ref);
-}
-
-/** A title or body with its key and layer markers written as words, for the CLI: "S hold ⌥ (left ring, home row, Layer 0)" and "Magic layer". */
-export function reviewWords(app: App, review: BoardReview, text: string): string {
-  const view = getLayout(app, review.layoutId, review.revisionId);
-  return text.replace(/\{(key|layer):([^{}:]+)(?::(\d+))?\}/g, (whole, kind: string, layerId: string, position: string | undefined) => {
-    const layer = view.document.layers.find((l) => l.id === layerId);
-    if (layer === undefined) return whole;
-    if (kind === "layer" || position === undefined) return layerDisplayName(layer.name);
-    return keyName(view.board.definition, view.document, { layerId, position: Number(position) }, { geometry: view.board.geometry });
-  });
 }

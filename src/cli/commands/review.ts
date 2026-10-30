@@ -2,9 +2,11 @@
 // server made (or the last one); with --run it makes the head's review now, agent part included, and waits for it.
 import type { Command } from "commander";
 import {
-  type BoardReview, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, ReviewEngine, UsageError, defaultAgentModel, dismissReviewItem, listLayouts, restoreReviewItem, reviewWords,
+  type BoardReview, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, ReviewEngine, UsageError, defaultAgentModel, dismissReviewItem, fixableFindings, listLayouts, restoreReviewItem, reviewWords, showReview,
 } from "../../app/index.ts";
-import { parseProvider, type ChatDeps } from "./chat.ts";
+import { startAgentRun } from "../../app/agent-runs.ts";
+import { REVIEW_FIX_REQUEST } from "../../api/review.ts";
+import { followAgentRun, parseProvider, type ChatDeps } from "./chat.ts";
 import { type Format, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
 
@@ -91,6 +93,27 @@ export function registerReviewCommand(program: Command, ctx: CliContext, deps: C
         const view = engine.show(ref);
         const name = listLayouts(app).find((l) => l.id === view.layoutId)?.name ?? ref;
         print(ctx.io, format, { json: viewJson(view), table: reviewText(app, view, name), ids: view.review?.items.map((i) => i.id) ?? [] });
+      });
+    });
+
+  review
+    .command("fix")
+    .description("start one agent run that fixes what the review found, then follow it")
+    .argument("[layout]", "config ID or name (optional when there is only one)")
+    .option("--json", "print JSON, whatever the output format")
+    .option("--provider <provider>", `model provider for the run: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
+    .action(async (layoutArg: string | undefined, opts: { json?: boolean; provider?: string }) => {
+      const provider: ProviderId | undefined = opts.provider === undefined ? undefined : parseProvider(opts.provider);
+      const format: Format = opts.json ? "json" : ctx.format();
+      await ctx.withApp(async (app) => {
+        const ref = resolveLayoutArg(app, layoutArg);
+        const view = showReview(app, ref);
+        const name = listLayouts(app).find((l) => l.id === view.layoutId)?.name ?? ref;
+        if (view.review === null) throw new UsageError(`no review of ${name} yet; make one with: keyloom review ${name} --run`);
+        if (fixableFindings(view.review.items).length === 0) throw new UsageError(`${name} has nothing to fix: no problems or hints that you have not hidden`);
+        // The same run and the same fixed request the review panel's Fix issues sends (D-461); the findings are read by the get_review tool.
+        const run = await startAgentRun(app, { version: 1, requestId: crypto.randomUUID(), layoutRef: view.layoutId, input: { message: REVIEW_FIX_REQUEST } }, { ...(deps.model ? { model: deps.model } : {}), ...(provider ? { provider } : {}) });
+        await followAgentRun(ctx, app, run, format);
       });
     });
 

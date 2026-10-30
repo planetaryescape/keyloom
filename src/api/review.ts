@@ -50,3 +50,10 @@ export const ReviewEventSchema = z.object({
   aiStatus: AiStatusSchema,
 });
 export type ReviewEvent = z.infer<typeof ReviewEventSchema>;
+
+/**
+ * What "Fix issues" asks the agent (D-461). One plain sentence, used by the review panel and `keyloom review fix`, so the two surfaces
+ * ask the same thing. It carries no instructions: the system prompt says to read the review with `get_review` and answer with one change,
+ * and the findings themselves are read at run time, so they cannot drift from the stored review and the visible request stays short.
+ */
+export const REVIEW_FIX_REQUEST = "Fix what the board review found in this config.";

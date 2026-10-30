@@ -51,7 +51,7 @@ TypeScript, strict, ESM, on bun (D-029). One package. Folders are grouped by job
 | `src/app/` | Use cases: import, propose, apply, undo, agent turn, generate, build, flash | everything above |
 | `src/api/` | The HTTP wire contract (zod schemas) shared by the server and the browser | `layout`, `boards`, `validation` (schema types) |
 | `src/server/` | HTTP routes, SSE, static web assets | `app`, `api`, `layout`, `boards` and `validation` (schema types), `web` (the bundled HTML entry it serves) |
-| `src/cli/` | Commands ([10](10-cli.md)); `keyloom serve` composes the server | `app`, `server` |
+| `src/cli/` | Commands ([10](10-cli.md)); `keyloom serve` composes the server; the review-fix request text it sends is the web's ([api](27-board-review.md)) | `app`, `server`, `api` |
 | `src/web/` | The React editor ([09](09-web-editor.md)) | `layout` and `validation` (pure; the validator also runs in the browser), `boards` and `api` (schema types); talks to `server` over HTTP |
 | `boards/` (repo root) | Board definitions and skills (data) | n/a |
 
