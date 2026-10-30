@@ -3,12 +3,7 @@ Corne
 
 156 keys came across on 6 layers, 15 of them nearest-place guesses.
 
-Layer 0: 42 carried, 6 guessed, 30 left off
-Layer 1: 33 carried, 27 left off
-Layer 2: 15 carried, 6 left off
-Layer 3: 2 carried, 12 left off
-Layer 4: 42 carried, 6 guessed, 25 left off
-Layer 5: 22 carried, 3 guessed, 12 left off
+Carried by layer
 112 keys did not come across
 
 8 combos copied.

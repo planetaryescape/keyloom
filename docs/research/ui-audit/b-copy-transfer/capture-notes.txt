@@ -1,5 +1,6 @@
-light 1440x900: card 428x599px in 1440x900px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"
-light 390x844: card 358x695px in 390x844px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"
-dark 1440x900: card 428x599px in 1440x900px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"
+light 1440x900: card 428x433px in 1440x900px, card top framed=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across", layers="Carried by layer", layers open=false
+light 390x844: card 358x529px in 390x844px, card top framed=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across", layers="Carried by layer", layers open=false
+dark 1440x900: card 428x433px in 1440x900px, card top framed=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across", layers="Carried by layer", layers open=false
+keyboard: Carried by layer focused, Enter opened it (true) and closed it again (true)
 keyboard: summary focused, Enter opened the details and kept focus = true
-dark 390x844: card 358x695px in 390x844px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"
+dark 390x844: card 358x529px in 390x844px, card top framed=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across", layers="Carried by layer", layers open=false
