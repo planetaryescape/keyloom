@@ -16,12 +16,12 @@ export function FixIssuesButton({ findings, stale, busy, reviewing, ready, onFix
 }) {
   if (findings === 0) return null;
   let blocked: string | null = null;
-  if (stale) blocked = "keyloom is looking over your change; fix from the new review";
-  else if (reviewing) blocked = "keyloom's own look is still coming; fix once it is in";
+  if (stale) blocked = "This review is of an older version; fix from the new one";
+  else if (reviewing) blocked = "The agent's own look is still coming; fix once it is in";
   else if (busy) blocked = "Finish the review action first";
   else if (!ready) blocked = "Set up a model to fix the issues";
   return (
-    <button type="button" className="bar-apply br-fix" disabled={blocked !== null} title={blocked ?? "One change that answers what the review found"} onClick={onFix}>
+    <button type="button" className="bar-apply" disabled={blocked !== null} title={blocked ?? "One change that answers what the review found"} onClick={onFix}>
       Fix issues
     </button>
   );

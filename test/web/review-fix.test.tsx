@@ -31,9 +31,9 @@ describe("Fix issues", () => {
   });
 
   test("is disabled with the reason while the review is stale, being written, busy, or without a ready model", () => {
-    expect(button({ stale: true })).toContain("keyloom is looking over your change");
+    expect(button({ stale: true })).toContain("This review is of an older version; fix from the new one");
     expect(button({ stale: true })).toContain("disabled");
-    expect(button({ reviewing: true })).toContain("keyloom&#x27;s own look is still coming");
+    expect(button({ reviewing: true })).toContain("The agent&#x27;s own look is still coming");
     expect(button({ busy: true })).toContain("Finish the review action first");
     expect(button({ ready: false })).toContain("Set up a model to fix the issues");
     for (const over of [{ stale: true }, { reviewing: true }, { busy: true }, { ready: false }]) expect(button(over)).toContain("disabled");

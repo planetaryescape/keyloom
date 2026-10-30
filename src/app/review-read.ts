@@ -77,7 +77,8 @@ export function reviewWords(app: App, review: BoardReview, text: string): string
 /** A suggestion's change set as the agent can use it: its ops only while it is still the proposal on the board (D-461). */
 function proposalOf(row: ChangeSetRow | undefined, id: string): ReviewFinding["proposal"] {
   if (row === undefined) return { id, title: null, status: "missing", ops: null };
-  const title = row.title ?? row.explanation.slice(0, 100);
+  // The card's fallback title (`toCard`, src/app/proposal-card.ts), so the two never describe one change differently.
+  const title = row.title ?? row.explanation.slice(0, 80);
   if (row.status !== "proposed") return { id, title, status: row.status, ops: null };
   return { id, title, status: null, ops: row.ops };
 }
