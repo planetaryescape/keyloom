@@ -6,9 +6,10 @@ import type { Reference } from "../../src/layout/references.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { evaluate } from "../../src/validation/validate.ts";
 import { Markdown } from "../../src/web/chat/Markdown.tsx";
-import { referenceView, type ReferenceContext } from "../../src/web/chat/reference-view.ts";
+import { referableProposals, referenceView, type ReferenceContext } from "../../src/web/chat/reference-view.ts";
 import { AssistantMessage } from "../../src/web/chat/Turns.tsx";
-import type { AssistantTurn } from "../../src/web/chat/transcript.ts";
+import { ChatPanel } from "../../src/web/chat/ChatPanel.tsx";
+import type { AssistantTurn, Turn } from "../../src/web/chat/transcript.ts";
 import { loadFixture } from "../server/fixture.ts";
 
 const fixture = await loadFixture();
@@ -159,5 +160,52 @@ describe("a reply with all four kinds in it", () => {
     }));
     expect(html).toContain("I saved it on lay_deleted at gone.");
     expect(html).not.toContain("<button");
+  });
+});
+
+describe("a carried thread handed back to its own config (D-317)", () => {
+  const carried = (proposals: ProposalCard[]): Turn[] => [{ kind: "assistant", id: "carried", text: "on it", activity: null, proposals, priorities: [], question: null, phase: "done", failure: null, ending: "complete" }];
+
+  test("keeps its proposal chips: the carried thread's proposals are the thread's own again", () => {
+    const carriedCard = card("cs_carried");
+    const map = referableProposals([], carried([carriedCard]));
+    expect([...map.keys()]).toEqual(["cs_carried"]);
+    // A reply in that carried thread resolves its `{proposal:…}` marker to a chip, not to the change-set id.
+    const view = referenceView({ kind: "proposal", id: "cs_carried" }, context({ proposals: map }));
+    expect(view).toMatchObject({ kind: "chip", label: "Plain Option cs_carried" });
+  });
+
+  test("a thread from another config contributes nothing, and the live turn wins on the same id", () => {
+    // Foreign: ChatPanel passes no carried turns, so a change set only the carried thread holds stays words.
+    expect(referableProposals([], null).size).toBe(0);
+    const older = card("cs_open");
+    const newer = card("cs_open", { status: "applied" });
+    const liveTurn: Turn = { ...turn("live"), proposals: [newer] };
+    const map = referableProposals([liveTurn], carried([older]));
+    // The status the thread shows now is the live one, so the marker reads as applied rather than offering a pin.
+    expect(referenceView({ kind: "proposal", id: "cs_open" }, context({ proposals: map }))).toEqual({ kind: "words", text: "Plain Option cs_open (applied)" });
+  });
+});
+
+describe("the panel draws a carried thread handed back to its own config", () => {
+  const panel = (fromId: string) => renderToStaticMarkup(createElement(ChatPanel, {
+    token: "t", layoutRef: "lay_current", layout: fixture.document, board: fixture.board, revisionId: "rev",
+    onHighlightDecision: () => {}, selection: null, onRemoveKey: () => {}, onClearSelection: () => {}, onRestoreSelection: () => {},
+    pinnedId: null, onPreview: () => {}, onPin: () => {}, onApplied: async () => {}, onOpenRelease: () => {},
+    configNames: new Map([["lay_current", "Moonlander"]]), onOpenConfig: () => {},
+    carried: { fromName: "Moonlander daily", from: { id: fromId, name: "Moonlander daily" }, turns: [turn("and {proposal:cs_open} is waiting")] },
+  }));
+
+  test("keeps the chip: the carried thread's proposal is this config's again", () => {
+    const html = panel("lay_current");
+    expect(html).toContain('class="ref-chip" data-kind="proposal"');
+    expect(html).toContain("Plain Option cs_open");
+    expect(html).not.toContain("cs_open is waiting");
+  });
+
+  test("and reads as words when the thread still belongs to another config", () => {
+    const html = panel("lay_other");
+    expect(html).not.toContain('data-kind="proposal"');
+    expect(html).toContain("that proposal is waiting");
   });
 });

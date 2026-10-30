@@ -58,6 +58,25 @@ describe("a reply streamed with markers in it (D-468)", () => {
     // A backtick that never closes is just a character, so a marker after it is still a marker.
     expect(stream(["half `code {layer:base}"])).toBe("half `code layer base");
   });
+
+  test("a code span split across deltas keeps the marker inside it literal", () => {
+    // The code span opens in one delta and closes in the next, with the marker across the same break: before the fix the opening
+    // backtick went out as a lone character and the marker resolved inside the code.
+    expect(stream(["run `keyloom config use ", "{config:lay_a}` to open it"])).toBe("run `keyloom config use {config:lay_a}` to open it");
+    expect(stream(["run `{config:lay_", "a}`"])).toBe("run `{config:lay_a}`");
+    expect(stream(["`a ", "b` and {layer:base}"])).toBe("`a b` and layer base");
+    // A backtick that never closes still goes out, and the reply behind it is read normally once the hold cap is reached.
+    const open = "`" + "x".repeat(HOLD_CAP - 1);
+    expect(stream([open])).toBe(open);
+    expect(stream([open, " {layer:base}"])).toBe(`${open} layer base`);
+  });
+
+  test("a stray brace before a real marker does not swallow it", () => {
+    expect(stream(["{ {layer:base}"])).toBe("{ layer base");
+    expect(stream(["{oops", " {layer:base} and {key:base:60}"])).toBe("{oops layer base and key 60");
+    // The group that does close is still printed whole, and what follows still reads.
+    expect(stream(["{screen:history} then {layer:base}"])).toBe("{screen:history} then layer base");
+  });
 });
 
 async function cli(args: string[], deps: Parameters<typeof runCli>[2] = {}) {
@@ -125,6 +144,45 @@ describe("keyloom chat resolves what a reply names", () => {
     expect(r.code).toBe(0);
     expect(r.out).toContain("Gone: lay_00000000000000000000000000 and gone and gone, plus half {config:lay_");
     expect(r.out).not.toMatch(/to open it|to review it/);
+  });
+
+  test("a marker written inside a code span stays code, inline and in the routes", async () => {
+    const { app, dir, layoutId } = await optionOptionApp();
+    const other = listConfigs(app).find((config) => config.id !== layoutId);
+    if (other === undefined) throw new Error("the fixture needs a second config to name");
+    // The backticked command is the one BK can paste; the sentence around it names the same config for the chip. Only the marker outside
+    // the code span resolves, and only it prints a route.
+    const text = `Open it with \`keyloom config use {config:${other.id}}\`, or press {config:${other.id}}.`;
+    const r = await cli(["chat", "bk", "--message", "x", "--format", "table", "--data-dir", dir], { model: anthropicModel(fakeAnthropic([{ blocks: [{ text }] }]).client) });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`Open it with \`keyloom config use {config:${other.id}}\`, or press ${other.name}.`);
+    // One route, for the one reference the reader can see.
+    expect(r.out.match(/to open it: keyloom config use \S+/g)).toEqual([`to open it: keyloom config use ${other.id}`]);
+  });
+
+  test("a config the same turn made is named, not printed as its id", async () => {
+    const { app, dir, layoutId } = await optionOptionApp();
+    const other = listConfigs(app).find((config) => config.id !== layoutId);
+    if (other === undefined) throw new Error("the fixture needs a second config to name");
+    let made = "";
+    const script: ScriptStep[] = [
+      // Naming an existing config first fills the reader's config list, so the turn's own new config is only found if the reader looks
+      // again when a marker names something the list does not have.
+      { blocks: [{ text: `Saved on {config:${other.id}} first. ` }, { tool: "create_config", input: { name: "Colemak on this board", from: "this" } }] },
+      (seen) => {
+        const ids = [...seen.toolResults.join("\n").matchAll(/lay_[0-9A-Z]{26}/g)].map((m) => m[0]).filter((id) => id !== other.id);
+        made = ids.at(-1) ?? "";
+        if (made === "") throw new Error(`the create_config result named no config: ${seen.toolResults.join(" | ")}`);
+        return { blocks: [{ text: `The new one is {config:${made}}, a copy of this config.` }] };
+      },
+    ];
+    const r = await cli(["chat", "bk", "--message", "make me a Colemak config", "--format", "table", "--data-dir", dir], { model: anthropicModel(fakeAnthropic(script).client) });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`Saved on ${other.name} first.`);
+    expect(r.out).toContain("The new one is Colemak on this board, a copy of this config.");
+    // The reply the reader sees names it; the id only appears in the routes and in the "made config" block that follows.
+    expect(r.out.split("to open it:")[0]).not.toContain(made);
+    expect(r.out).toContain(`to open it: keyloom config use ${made}`);
   });
 
   test("JSON keeps the reply exactly as the model wrote it, markers included", async () => {

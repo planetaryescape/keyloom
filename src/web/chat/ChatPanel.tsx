@@ -26,7 +26,7 @@ import { useConfigCards } from "../configs/useConfigCards.ts";
 import type { ConfigCards } from "./ConfigCards.tsx";
 import { useChat, type ChatDrafts } from "./useChat.ts";
 import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
-import { referenceView, type ReferenceContext } from "./reference-view.ts";
+import { referableProposals, referenceView, type ReferenceContext } from "./reference-view.ts";
 import type { Reference } from "../../layout/references.ts";
 import { openProposalsOnBoard, questionOpen, withoutRepeats, type Turn } from "./transcript.ts";
 import { createOneShot, sendOnce, type OneShot } from "./one-shot.ts";
@@ -153,12 +153,12 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   const configCards: ConfigCards | undefined = onOpenConfig === undefined ? undefined : { data: cardData, currentId: layoutRef, origin: carried?.from ?? null, onOpen: onOpenConfig, onReview: onReviewProposals ?? (() => {}) };
   // What a reply's own markers can go to (D-468): the configs this page can open, and the proposals of the thread on screen, each
   // through the seam the cards already use. A carried thread's layers, keys and proposals belong to another config, so only a config
-  // it names stays live there.
-  const proposals = useMemo(() => {
-    const byId = new Map<string, ProposalCard>();
-    for (const turn of transcript.turns) if (turn.kind === "assistant") for (const card of turn.proposals) byId.set(card.changeSetId, card);
-    return byId;
-  }, [transcript.turns]);
+  // it names stays live there — unless the thread is about this very config again, when everything it named still exists on the page.
+  const carriedForeign = carried === null || carried.from === undefined || carried.from.id !== layoutRef;
+  const proposals = useMemo(
+    () => referableProposals(transcript.turns, carriedForeign ? null : carried?.turns ?? null),
+    [transcript.turns, carried, carriedForeign],
+  );
   const referenceContext = useMemo<ReferenceContext>(
     () => ({
       layout, currentId: layoutRef, configNames: configNames ?? NO_NAMES, proposals,
@@ -172,9 +172,6 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
     [layout, layoutRef, configNames, proposals, onOpenConfig, onPin, onShowLayer, onFoundKey],
   );
   const drawReference = useCallback((reference: Reference) => referenceView(reference, referenceContext), [referenceContext]);
-  // A carried thread is inert for its layers, keys and proposals unless it is about this very config again (D-317 hands it back by
-  // `from`), in which case everything it named still exists on the page.
-  const carriedForeign = carried === null || carried.from === undefined || carried.from.id !== layoutRef;
   const drawCarriedReference = useCallback(
     (reference: Reference) => referenceView(reference, carriedForeign ? { ...referenceContext, foreign: true } : referenceContext),
     [referenceContext, carriedForeign],

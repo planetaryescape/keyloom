@@ -34,7 +34,11 @@ function worldOf(app: App, layoutRef: string, conversationId: () => string | und
       return binding === undefined ? undefined : legendWords(bindingLegend(binding, { layers: document().layers, macros: document().macros, tapDances: document().tapDances }));
     },
     config: (id) => {
-      if (configs === null) configs = new Map(listConfigs(app).filter((config) => config.archivedAt === null).map((config) => [config.id, config.name]));
+      // The list is read once and re-read only when a marker names something it did not have: a reply that streams `{config:<id>}` after
+      // `create_config` or `put_config` in the same turn has to find the config that turn just made.
+      const known = configs?.get(id);
+      if (known !== undefined) return known;
+      configs = new Map(listConfigs(app).filter((config) => config.archivedAt === null).map((config) => [config.id, config.name]));
       return configs.get(id);
     },
     proposal: (id) => {

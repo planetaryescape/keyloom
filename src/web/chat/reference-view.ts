@@ -7,6 +7,7 @@ import { legendWords } from "../../boards/key-names.ts";
 import { bindingLegend } from "../../layout/legend.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { layerName } from "./proposal-facts.ts";
+import type { Turn } from "./transcript.ts";
 
 /** What a chip can do, each through a seam the page already has. A missing one leaves the reference as words, never a dead chip. */
 export type ReferenceActions = {
@@ -61,6 +62,23 @@ function worldOf(context: ReferenceContext): ReferenceWorld {
       return card === undefined ? undefined : { title: card.title, status: card.status };
     },
   };
+}
+
+/**
+ * The proposals a reply's `{proposal:…}` marker can pin, by change set id.
+ *
+ * The thread on screen is always read. A thread carried from another config (D-317) is added only when it is about this very config
+ * again: then its proposals are this config's, and a reply that came back to its own config keeps its chips live instead of falling
+ * back to the change-set id. The live turns are read last, so a later status (applied, superseded) wins over the carried copy of the
+ * same card.
+ */
+export function referableProposals(live: readonly Turn[], carried: readonly Turn[] | null): ReadonlyMap<string, ProposalCard> {
+  const byId = new Map<string, ProposalCard>();
+  for (const turn of [...(carried ?? []), ...live]) {
+    if (turn.kind !== "assistant") continue;
+    for (const card of turn.proposals) byId.set(card.changeSetId, card);
+  }
+  return byId;
 }
 
 /** One marker as the page draws it: a chip with the name the page resolved, or words when it resolves to nothing live. */

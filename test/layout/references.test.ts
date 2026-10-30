@@ -30,6 +30,8 @@ describe("the reference markers", () => {
       "{layer: Base}", // a name, not an id
       "{config:}", // no id
       "{layer:layer-0:3}", // a position on something that is not a key
+      "{config:lay_a:3}", // and on a config or a proposal either
+      "{proposal:cs_b:2}",
       "{key:layer-0}", // a key with no position
       "{key:layer-0:12:extra}",
       "{layer:layer-0", // no closing brace
@@ -39,6 +41,20 @@ describe("the reference markers", () => {
       expect(refs(text)).toEqual([]);
       expect(referenceParts(text)).toEqual([{ kind: "words", text }]);
     }
+  });
+
+  test("a marker inside a code span is code, so it names nothing and prints no route", () => {
+    const code = "run `keyloom config use {config:lay_a}` to open it";
+    expect(refs(code)).toEqual([]);
+    expect(referenceParts(code)).toEqual([{ kind: "words", text: code }]);
+    // Outside the span it still reads, and the span itself stays whole.
+    expect(referenceParts("on {layer:base}, not `{layer:base}`")).toEqual([
+      { kind: "words", text: "on " },
+      { kind: "reference", reference: { kind: "layer", layerId: "base" } },
+      { kind: "words", text: ", not `{layer:base}`" },
+    ]);
+    // A lone backtick is a character, as the page reads it, so a marker after it is a marker.
+    expect(refs("half `code {layer:base}")).toEqual([{ kind: "layer", layerId: "base" }]);
   });
 
   test("a marker is found where it starts, and says how long it is", () => {

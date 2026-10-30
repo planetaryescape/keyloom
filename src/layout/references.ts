@@ -33,20 +33,36 @@ export function markerAt(text: string, at: number): { reference: Reference; leng
   const id = found[2] ?? "";
   const position = found[3];
   if (id.length > MAX_ID) return null;
-  // A position belongs to a key and to nothing else: `{layer:base:3}` names nothing, so it reads as the text it is.
+  // A position belongs to a key and to nothing else: `{config:lay_a:3}` and `{layer:base:3}` name nothing, so they read as the text
+  // they are. That is also what keeps a version suffix or a clock time in a reply from becoming a reference.
   const reference: Reference | null =
-    kind === "config" ? { kind: "config", id }
-      : kind === "proposal" ? { kind: "proposal", id }
-        : kind === "layer" ? (position === undefined ? { kind: "layer", layerId: id } : null)
-          : position === undefined ? null : { kind: "key", layerId: id, position: Number(position) };
+    kind === "key"
+      ? (position === undefined ? null : { kind: "key", layerId: id, position: Number(position) })
+      : position !== undefined ? null
+        : kind === "config" ? { kind: "config", id }
+          : kind === "proposal" ? { kind: "proposal", id }
+            : { kind: "layer", layerId: id };
   return reference === null ? null : { reference, length: found[0].length };
 }
 
-/** Every reference in a text, in order, with the words around them; a marker that names nothing is left in the words. */
+/**
+ * Every reference in a text, in order, with the words around them; a marker that names nothing is left in the words. A `code span` is
+ * code everywhere a reply is read — the page, the terminal's stream and this scan — so a marker inside backticks stays text here too,
+ * and no command is printed for it.
+ */
 export function referenceParts(text: string): ReferencePart[] {
   const parts: ReferencePart[] = [];
   let words = "";
   for (let i = 0; i < text.length; ) {
+    if (text[i] === "`") {
+      const close = text.indexOf("`", i + 1);
+      // A span with something in it is code; a lone backtick is just a character, as the page reads it.
+      if (close > i + 1) {
+        words += text.slice(i, close + 1);
+        i = close + 1;
+        continue;
+      }
+    }
     const marker = text[i] === "{" ? markerAt(text, i) : null;
     if (marker === null) {
       words += text[i];
