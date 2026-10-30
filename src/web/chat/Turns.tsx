@@ -112,9 +112,9 @@ function OutcomeCardView({ outcome }: { outcome: OutcomeCard }) {
   );
 }
 
-// The copy's card (D-467). It says what came across, what did not and why, and what was never about keys. The drops lead, because what is
-// missing decides whether the copy is usable; the per-layer breakdown and the drops both stay behind a disclosure, so the card is short.
-// It reads as keyloom talking: no success wording, no exclamation, and every count names the plan's own facts.
+// The copy's card (D-467). It says what came across, what did not and why, and what was never about keys. The carried sentence leads, the
+// per-layer breakdown folds under it, and the drops — what decides whether the copy is usable — follow as the next thing, also behind a
+// disclosure, so the card is short. It reads as keyloom talking: no success wording, no exclamation, and every count names the plan's facts.
 function TransferArtifactView({ transfer }: { transfer: Extract<AgentArtifact, { kind: "transfer" }> }) {
   const dropped = transfer.skippedCount ?? transfer.skipped.length;
   const layers = transfer.layers ?? [];
@@ -154,7 +154,7 @@ function TransferArtifactView({ transfer }: { transfer: Extract<AgentArtifact, {
                 {layer.notCarried > 0 ? `, ${layer.notCarried} left off` : ""}
               </li>
             ))}
-            {layerTotal > layers.length ? <li>and {layerTotal - layers.length} more layers</li> : null}
+            {layerTotal > layers.length ? <li>and {layerTotal - layers.length} more {layerTotal - layers.length === 1 ? "layer" : "layers"}</li> : null}
           </ul>
         </details>
       ) : null}
@@ -171,7 +171,7 @@ function TransferArtifactView({ transfer }: { transfer: Extract<AgentArtifact, {
           </ul>
         </details>
       ) : null}
-      {combos === undefined ? null : (
+      {combos === undefined || (combos.copied === 0 && combosSkipped === 0) ? null : (
         <p className="ask-description">
           {combos.copied === 0 ? "No combos copied" : `${combos.copied} ${combos.copied === 1 ? "combo" : "combos"} copied`}
           {combosSkipped === 0

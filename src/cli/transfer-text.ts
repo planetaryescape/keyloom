@@ -28,7 +28,8 @@ export function transferReportText(report: Transfer, opts: { continues: boolean 
   ];
   if (layerTotal > 1) {
     lines.push(...layers.map((layer) => `  ${layer.source}: ${layer.carried} carried${layer.guessed > 0 ? `, ${layer.guessed} guessed` : ""}${layer.notCarried > 0 ? `, ${layer.notCarried} left off` : ""}`));
-    if (layerTotal > layers.length) lines.push(`  and ${layerTotal - layers.length} more layers`);
+    const moreLayers = layerTotal - layers.length;
+    if (moreLayers > 0) lines.push(`  and ${moreLayers} more ${moreLayers === 1 ? "layer" : "layers"}`);
   }
   if (dropped > 0) {
     lines.push(`${dropped} ${dropped === 1 ? "key" : "keys"} did not come across:`);

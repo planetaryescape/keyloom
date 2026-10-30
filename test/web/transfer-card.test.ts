@@ -61,7 +61,7 @@ describe("the copy's report card", () => {
     expect(html).toContain("Moonlander");
     expect(html).toContain("Corne");
     expect(html).toContain("42 keys came across on 2 layers, 5 of them nearest-place guesses.");
-    // The per-layer breakdown is detail, closed: the carried sentence leads and the drops sit above it.
+    // The per-layer breakdown is detail, closed: the carried sentence leads, the detail folds under it, and the drops follow.
     expect(await count(html, "details.transfer-layers-details")).toBe(1);
     expect(await count(html, "details.transfer-layers-details[open]")).toBe(0);
     expect(html).toContain("<summary>Carried by layer</summary>");
@@ -115,6 +115,24 @@ describe("the copy's report card", () => {
     expect(html).toContain("combo-11 (no confident counterpart on the target)");
     expect(html).not.toContain("combo-12 (");
     expect(html).toContain("and 3 more");
+  });
+
+  test("a copy with no combos says nothing about combos", async () => {
+    const none = render([{ ...rich, combos: undefined }]);
+    expect(none).not.toContain("combos copied");
+    expect(none).not.toContain("No combos copied");
+    const empty = render([{ ...rich, combos: { copied: 0, skipped: [], skippedCount: 0 } }]);
+    expect(empty).not.toContain("combos copied");
+    expect(empty).not.toContain("No combos copied");
+  });
+
+  test("a layer list cut by the bound pluralises its overflow line", async () => {
+    const layers = Array.from({ length: 12 }, (_, i) => ({ source: `L${i}`, target: `l${i}`, carried: 1, guessed: 0, notCarried: 0 }));
+    const one = render([{ ...rich, layers, layerCount: 13 }]);
+    expect(one).toContain("and 1 more layer<");
+    expect(one).not.toContain("and 1 more layers");
+    const three = render([{ ...rich, layers, layerCount: 15 }]);
+    expect(three).toContain("and 3 more layers<");
   });
 
   test("a copy whose only losses are not keys says everything came across and still lists them", async () => {
