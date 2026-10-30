@@ -1,0 +1,5 @@
+light 1440x900: card 428x599px in 1440x900px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"
+light 390x844: card 358x695px in 390x844px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"
+dark 1440x900: card 428x599px in 1440x900px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"
+keyboard: summary focused, Enter opened the details and kept focus = true
+dark 390x844: card 358x695px in 390x844px, starts in view=true, overflow=false, failed step=false, banned wording=false, summary="112 keys did not come across"

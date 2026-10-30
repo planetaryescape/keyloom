@@ -59,7 +59,7 @@ This needed a data fix. The Corne's `fingers` was one column off: its outer pink
 - **`behaviours`:** for source `positions` BK or the agent chose. A hold-tap keeps the target key's own letter and takes the source's hold; its modifiers become the hand of the key they land on (one right-hand modifier makes a QMK mod-tap right-handed); a layer key points at the matching layer or is skipped by name; macros and tap dances come along and are reused when the target already has the same steps. The profile is the target's own: the key's current one, else the one its finger uses, else its hand's. Where there is none, a ZMK profile is made per hand that waits for the other hand and the thumbs, with the source's tapping term when it has one. A QMK target reuses what it has. Native code is copied as described under native code below. A copy never replaces something else the target key does.
 - **`combos`:** each combo's keys are mapped, the output binding is carried, layers are mapped, and the id is made unique.
 
-QMK and ZMK hold most behaviours alike, so a copy across them is a copy. What doesn't carry is said in the output and the agent's reply: native code keyloom can't read (D-024), what a target board lacks, layers with no counterpart, keys with no counterpart, and any timing that was a guess.
+QMK and ZMK hold most behaviours alike, so a copy across them is a copy. What doesn't carry is said in the output, in the agent's reply, and — for a whole-config copy — in the report card under both replies (D-467): native code keyloom can't read (D-024), what a target board lacks, layers with no counterpart, keys with no counterpart, and any timing that was a guess.
 
 ### Native code
 
