@@ -119,7 +119,7 @@ export type PeerPresence =
 
 /**
  * What can be said about the half that shares a boot-drive label with the one being flashed. A half that is not on USB at all
- * cannot own the drive, so it no longer blocks the flash; one that is attached but cannot be identified still does (D-464).
+ * cannot own the drive, so it no longer blocks the flash; one that is attached but cannot be identified still does (D-465).
  * A half already sitting in its bootloader is caught before this by the mounted-drive check, which refuses an open shared drive.
  */
 export async function peerPresence(deps: ZmkHandsFreeDeps, t: HalfTarget, ports?: SerialPort[]): Promise<PeerPresence> {

@@ -114,7 +114,7 @@ A `zmk,conditional-layers` container is read into `Layout.conditionalLayers` and
 
 ## Keebart per-key lighting uses an external RGB matrix module
 
-Status: implemented in the adapter, including effect preview on the half opposite lighting controls (D-462, D-463); hardware colour placement is pending.
+Status: implemented in the adapter, including effect preview on the half opposite lighting controls (D-463, D-464); hardware colour placement is pending.
 
 `zmk-west-docker.rgbMatrix` pins the RGB engine and names its LED strip, physical layout, left-half LED count and brightness cap. `lighting.ledPositions` maps chain order to key positions. Generation writes one static overlay for each coloured layer, with a highest-active-layer condition and identical overlay order on both halves. Uncoloured layers show the fallback effect. Existing `&rgb_ug` controls target the new engine’s matrix or effect controller.
 

@@ -1,6 +1,6 @@
 # 27: Board review
 
-Status: engine built (checks, agent part, triggers, routes, events and CLI), 2026-10-17; screens built (marker, marks, review panel, states), 2026-10-17 (D-340). Source baseline: origin/main after v0.34.8.
+Status: engine built (checks, agent part, triggers, routes, events and CLI), 2026-10-17; screens built (marker, marks, review panel, states), 2026-10-17 (D-340); the fix run (panel button, `get_review` tool, `keyloom review fix`), 2026-10-30 (D-461). Source baseline: origin/main after v0.34.8.
 
 BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … and I can just see them somewhere without me needing to ask for them or dig into some menus … it would be nice if it's proactive."
 
@@ -65,6 +65,16 @@ A config nothing touched while its keyboard was away has no review until `POST �
 - A review of a revision lists, in `fixed`, the previous review's problems and hints that the new revision no longer produces, each with `fixedSince: <previous review id>`. A finding still about some of its keys has changed, not gone. A finding BK had hidden is not ticked off. The agent's findings count only when the agent finished in both reviews.
 - Hiding is `review_dismissals`, keyed by config and item id. It follows the finding to later revisions and is lifted by restore.
 - A new review rejects the change sets the previous review's suggestions left open, so the open-proposals list does not fill up with proposals for revisions that are gone.
+
+## Fixing what it found
+
+**Fix issues** in the panel's footer starts one agent run on this config and opens the chat beside the board; `keyloom review fix [layout]` does the same from the terminal (D-030). Both send the same fixed request (`REVIEW_FIX_REQUEST`, `src/api/review.ts`) in a new conversation. The findings are not copied into the message: the run reads them with the read-only `get_review` tool, so the two surfaces cannot format them differently and they cannot drift from the stored review.
+
+- The offer is for the visible problems and hints. A suggestion is already a checked proposal, so it neither adds the offer nor takes it away. There is no button when the review found nothing of those, and it is disabled with its reason while the review is of an older revision, its own look is still being written (`ai.status` `pending` or `running`), another review action is busy, or no model is ready.
+- `get_review` returns the non-hidden items with their plain words (the markers written as key and layer names, as `reviewWords` writes them), the keys by position, and a suggestion's `proposalId` and validated `ops` while its change set is still `proposed`; one that was applied, superseded or rejected is named with that status and no ops. Hidden findings are counted and left out, because hiding is BK's decision (D-340).
+- The prompt asks for one change covering the findings that need changing, because applying a proposal moves the head under the next. Where two findings cannot both be fixed, the agent asks one question that refines the proposal (D-452).
+- A review of an earlier revision is a pointer: the tool says `current: false` with both revision ids, and the agent uses the findings while the validator decides against the current head (D-458). Nothing is applied without BK.
+- The run's proposal, questions and Apply are the chat's ordinary cards; the panel has no proposal of its own, and it closes when the chat opens.
 
 ## API, events and CLI
 

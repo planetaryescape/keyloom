@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import {
   type AgentModel, type App, type ChatOutcome, type ConfigView, configsMadeInTurn, ModelError, PROVIDERS, type ProviderId, UsageError, isProviderId, listConversationSummaries, listLayouts, sendMessage, showConversation,
 } from "../../app/index.ts";
-import { SCHEMA_VERSION, columns, print } from "../output.ts";
+import { SCHEMA_VERSION, columns, print, type Format } from "../output.ts";
 import type { CliContext } from "./context.ts";
 import { opLine } from "../change-report.ts";
 import { answerAgentRun, cancelAgentRequest, cancelAgentRun, inspectAgentRun, startAgentRun, waitForAgentRun, savedRunOutcome, type AgentRunSnapshot } from "../../app/agent-runs.ts";
@@ -86,40 +86,47 @@ export function parseProvider(text: string): ProviderId {
   return text;
 }
 
+const showRun = (ctx: CliContext, run: AgentRunSnapshot, format: Format = ctx.format()) => print(ctx.io, format, { json: run, ids: [run.id], table: `${run.id}: ${run.status}\nConversation ${run.conversationId}\n${run.committedPreparations} saved preparation(s)${run.cancelRequested ? "\nStop requested; preparation remains." : ""}${run.presentation?.warning ? `\n${run.presentation.warning}` : ""}${run.handoff ? `\nContinues on ${run.handoff.layoutId}, conversation ${run.handoff.conversationId}, run ${run.handoff.runId}` : ""}` });
+
+/**
+ * Watches a saved run to its end and prints it; a run that paused prints the question and the command that answers it, and a copy prints
+ * the run it continues in. Shared by `agent start`, `agent answer` and `review fix`, so every way of starting work reports it the same.
+ */
+export async function followAgentRun(ctx: CliContext, app: App, run: AgentRunSnapshot, format: Format = ctx.format()): Promise<void> {
+  const finished = await waitForAgentRun(app, run.id);
+  const last = finished.handoff ? await waitForAgentRun(app, finished.handoff.runId) : finished;
+  if (format === "table") {
+    showRun(ctx, finished, format);
+    if (last !== finished) showRun(ctx, last, format);
+  }
+  // A run that stopped on a question says what it asks and how to answer it, so the next step is one copy away.
+  if (last.status === "waiting_user" && format === "table") {
+    const question = savedRunOutcome(app, last.id).question;
+    if (question) ctx.io.out(`\n${question.question}\n${question.options.map((option) => option.label).join(" / ")}\nAnswer with: keyloom agent answer ${last.id} ${question.toolUseId} <answer> --request-id <unique-id>\n`);
+  }
+  if (format !== "table") showRun(ctx, finished, format);
+}
+
 export function registerChatCommands(program: Command, ctx: CliContext, deps: ChatDeps = {}): void {
   const agent = program.command("agent").description("saved agent work; inspection never replays it");
-  const showRun = (run: AgentRunSnapshot) => print(ctx.io, ctx.format(), { json: run, ids: [run.id], table: `${run.id}: ${run.status}\nConversation ${run.conversationId}\n${run.committedPreparations} saved preparation(s)${run.cancelRequested ? "\nStop requested; preparation remains." : ""}${run.presentation?.warning ? `\n${run.presentation.warning}` : ""}${run.handoff ? `\nContinues on ${run.handoff.layoutId}, conversation ${run.handoff.conversationId}, run ${run.handoff.runId}` : ""}` });
-  agent.command("show").argument("<id>", "run or request identity").action(async (id: string) => showRun(await ctx.withApp((app) => inspectAgentRun(app, id))));
-  const showFinishedRun = async (app: App, run: AgentRunSnapshot) => {
-    const finished = await waitForAgentRun(app, run.id);
-    if (ctx.format() === "table") showRun(finished);
-    if (finished.handoff) {
-      const target = await waitForAgentRun(app, finished.handoff.runId);
-      if (ctx.format() === "table") showRun(target);
-      if (target.status === "waiting_user") {
-        const question = savedRunOutcome(app, target.id).question;
-        if (question && ctx.format() === "table") ctx.io.out(`\n${question.question}\n${question.options.map((option) => option.label).join(" / ")}\nAnswer with: keyloom agent answer ${target.id} ${question.toolUseId} <answer> --request-id <unique-id>\n`);
-      }
-    }
-    if (ctx.format() !== "table") showRun(finished);
-  };
+  agent.command("show").argument("<id>", "run or request identity").action(async (id: string) => showRun(ctx, await ctx.withApp((app) => inspectAgentRun(app, id))));
   agent.command("cancel").argument("<id>").option("--request", "persist Stop for this request identity even before acceptance").action(async (id: string, opts: { request?: boolean }) => {
     const result = await ctx.withApp((app) => opts.request ? cancelAgentRequest(app, id) : cancelAgentRun(app, id));
     if (result.status === "pending_acceptance") print(ctx.io, ctx.format(), { json: result, ids: [], table: `Stop saved for request ${result.requestId}; no run has been accepted yet.` });
-    else showRun(result);
+    else showRun(ctx, result);
   });
   agent.command("start").argument("<layout>").argument("<message>").requiredOption("--request-id <id>", "unique request identity; repeat only with identical input").option("--conversation <id>").option("--provider <provider>")
     .action(async (layoutRef: string, message: string, opts: { requestId: string; conversation?: string; provider?: string }) => {
       await ctx.withApp(async (app) => {
         const run = await startAgentRun(app, { version: 1, requestId: opts.requestId, layoutRef, input: { message, ...(opts.conversation ? { conversationId: opts.conversation } : {}) } }, { ...(deps.model ? { model: deps.model } : {}), ...(opts.provider ? { provider: parseProvider(opts.provider) } : {}) });
-        await showFinishedRun(app, run);
+        await followAgentRun(ctx, app, run);
       });
     });
   agent.command("answer").argument("<run>").argument("<question>").argument("<text>").requiredOption("--request-id <id>", "unique answer identity")
     .action(async (id: string, toolUseId: string, text: string, opts: { requestId: string }) => {
       await ctx.withApp(async (app) => {
         const run = await answerAgentRun(app, id, opts.requestId, { toolUseId, text }, deps.model ? { model: deps.model } : {});
-        await showFinishedRun(app, run);
+        await followAgentRun(ctx, app, run);
       });
     });
   program

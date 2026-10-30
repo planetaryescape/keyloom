@@ -2107,8 +2107,20 @@ The copy-specific restriction ends for fresh requests once a proposal carrying t
 
 No database migration is needed: copy context is in the accepted target request JSON; the source effect receipt and presentation carry the handoff references. Older readers ignore these added JSON fields and can still read the ordinary target proposals and questions. They do not implement handoff continuation. Direct `keyboard put` keeps its deterministic proposal workflow. Tests and limitations are recorded in [the A3 evidence](../research/copy-adaptation/README.md).
 
+### D-461: "Fix issues" starts a new conversation with one fixed request; the agent reads the review with a tool and answers it with one change. Extends D-340 and D-452. (2026-10-30, BK's A4 request)
 
-### D-461: Keebart Corne support pins its hardware module separately from ZMK and renders its encoder presses as rotary controls. (2026-10-29, BK: fix the Corne and show its rotary encoders)
+The review panel's findings could only be applied one suggestion at a time, and each apply moved the head under the next suggestion's base; the only other route was retyping the findings into chat. The panel now has **Fix issues**, and `keyloom review fix` does the same from the terminal (D-030). The proposal, the questions and Apply are the chat's ordinary ones (D-452), beside the board; the panel is not where the proposal lives, and it closes when the chat opens.
+
+- **The request is fixed, shared and short.** The web button and `keyloom review fix` send the same one-sentence request, `REVIEW_FIX_REQUEST` in `src/api/review.ts`: "Fix what the board review found in this config." It carries no instructions of its own; the system prompt's review-fix section says to call `get_review` first, answer with one change and ask only where a real trade-off changes it, and the request is the visible user turn, so it stays as short as BK asked the cards to be (D-456, D-457). The CLI may import `api` for it (module table, [01](01-architecture.md)). A new conversation on this config is started each time, never a post into the open thread and never a run without the button or the command. An open question in the old conversation is untouched: nothing answers it, closes it or loses it.
+- **Findings are read, not embedded.** The new read-only tool `get_review` returns the newest review's non-hidden items with `reviewWords`' plain words (no `{key:…}`/`{layer:…}` markers), the keys by position because ops take positions, and, for a suggestion that is still `proposed`, its validated ops to reuse inside the combined change. A suggestion whose change set was applied, superseded or rejected is named with that status and no ops. The same shape as `get_typing_findings`: the two surfaces cannot format the findings differently, and they cannot drift from the stored review.
+- **One change, not one per finding.** The prompt's review-fix section tells the agent to cover every finding worth changing in one proposal, because applying one moves the layout under the next; where two findings cannot both be fixed, one question asks which matters more.
+- **Dismissed findings are excluded.** Hiding is BK's decision (D-340), so the tool leaves those findings out and counts them. The button is offered for the visible problems and hints; a suggestion is already a proposal, so it neither adds nor removes the offer. It is hidden when there are none, and disabled with its reason when the review is stale, still being written, busy with another review action, or no provider is ready.
+- **A stale review is a pointer, not a refusal.** `get_review` reports `current` with `review.revisionId` and `headRevisionId`; the prompt tells the agent to use findings about an earlier version as a pointer and let the validator decide against the current head (D-458's posture), not to refuse. The validator still decides every op, and Apply still validates again (D-014).
+- **Reads are safe mid-review.** Items are written only when a review's agent part finishes, so a read while `ai.status` is `pending` or `running` sees the checks' items and no half-written ones; the button waits for that look rather than starting beside it. The review's own agent items stay capped at 6 (`MAX_AGENT_ITEMS`); the tool adds no second cap and drops nothing.
+- **CLI:** `keyloom review fix [layout] [--provider P] [--json]` starts that run through `startAgentRun` and follows it like `agent start`, printing the question and the `keyloom agent answer …` line when it stops. It refuses before paying for a model call when the config has no review or nothing is left to fix.
+- **Built in** `src/agent/tools/get-review.ts`, `src/app/review-read.ts`, `src/web/review/FixIssues.tsx` and the review panel, and `src/cli/commands/review.ts`; tests in `test/agent/get-review.test.ts`, `test/web/review-fix.test.tsx` and `test/cli/review-fix.test.ts`.
+
+### D-462: Keebart Corne support pins its hardware module separately from ZMK and renders its encoder presses as rotary controls. (2026-10-29, BK: fix the Corne and show its rotary encoders)
 
 Partially supersedes D-105's encoder deferral for this owned hardware. Encoder turns use fixed board defaults on every layer; per-layer encoder editing remains outside this change. Presses are ordinary editable bindings.
 
@@ -2118,7 +2130,7 @@ The Keebart Corne Choc Pro BT has 46 positions and integrated nRF52840 targets `
 
 ZMK is pinned to v0.3.0 (`edf5c0814fd3ea202e43aad2d68fd32e882a518c`); the hardware module to Keebart/zmk-config `98c5a1181ff7db1f480f684f714126922d55b8f0`. The source module's MIT notices remain upstream; geometry is generated, not a copied hardware implementation. Studio is disabled so its saved dynamic keymap cannot override a newly built layout. The recipe includes keyloom's existing hands-free module; hardware verification remains separate from a successful build. See [the first-flash record](../issues/keebart-corne-first-flash.md).
 
-### D-462: The Keebart Corne uses a pinned RGB matrix module for key and layer colours. (2026-10-29, BK: implement addressable LEDs and make the controls ergonomic)
+### D-463: The Keebart Corne uses a pinned RGB matrix module for key and layer colours. (2026-10-29, BK: implement addressable LEDs and make the controls ergonomic)
 
 Extends D-190's existing colour model to this ZMK board and replaces this board's stock-underglow-only limitation. It does not change the Glove80's firmware or capability claim.
 
@@ -2132,13 +2144,13 @@ Ergonomic access belongs in the person's layout: an encoder tap dance can keep i
 
 The hardware flash exposed a serial reconnect beyond the default 45-second check. `handsFree.verifyWaitMs` permits a board-specific bounded deadline (maximum 300 seconds); the Corne uses 180 seconds, while other boards retain the default. Explicit transport overrides take precedence. This is a waiting policy, not proof of healthy serial transport: both Corne USB build markers were observed, but the left serial interface still missed the extended deadline. The failed flash record is retained.
 
-### D-463: A coloured ZMK layer with effect controls on one half leaves the other half showing the effect. (2026-10-30, BK: keep a mode indicator visible while previewing effects)
+### D-464: A coloured ZMK layer with effect controls on one half leaves the other half showing the effect. (2026-10-30, BK: keep a mode indicator visible while previewing effects)
 
-Partially replaces D-462's full-layer overlays. A fixed colour over both halves hides hue, speed and effect changes. When the native-binding reader recognises effect controls exclusively on one half, the generator targets that half's key positions with the static overlay. The opposite half continues rendering the selected effect. Power and master brightness still affect both halves. Layers without recognised effect controls, or with controls on both halves, retain full-layer colours. Highest-active-layer conditions restore ordinary colours on exit.
+Partially replaces D-463's full-layer overlays. A fixed colour over both halves hides hue, speed and effect changes. When the native-binding reader recognises effect controls exclusively on one half, the generator targets that half's key positions with the static overlay. The opposite half continues rendering the selected effect. Power and master brightness still affect both halves. Layers without recognised effect controls, or with controls on both halves, retain full-layer colours. Highest-active-layer conditions restore ordinary colours on exit.
 
 Use the existing `setLayerLighting` operation to assign the control layer's indicator colour; there is no new shortcut or configuration field. The RGB module's `keys` property resolves the same physical positions independently on each half, preserving identical overlay order for split synchronization. Import validates the entire RGB block after bindings and kept macros have been read. It also accepts the previous full-layer rendering, so existing exports remain readable; edited masks are refused. Generator and import tests cover both control hands, master controls, earlier exports and edited masks. Physical effect preview still requires observing the keyboard.
 
-### D-464: A half that is not on USB cannot own a shared boot drive, so it no longer blocks a flash. (2026-10-30, BK: flash the Corne one half at a time)
+### D-465: A half that is not on USB cannot own a shared boot drive, so it no longer blocks a flash. (2026-10-30, BK: flash the Corne one half at a time)
 
 Replaces the part of D-437 and D-438 that refused a shared-label write whenever the other half was absent, and extends D-438's reading of a half to the serial number in its USB descriptor.
 
@@ -2148,10 +2160,10 @@ A half that is not on USB at all cannot mount a boot drive, so it no longer bloc
 
 A half with no port is read from the marker in its USB serial number, so a half that comes back portless is reported as running the build and verifies instead of failing at `verifyWaitMs`. `doctor` says it is seen by its USB serial number only. The prompt and the wait are unchanged: one half is flashed, then keyloom asks for the other.
 
-### D-465: A ZMK build target may name its half in the USB product string. (2026-10-30, BK: rename the halves so we know which is which)
+### D-466: A ZMK build target may name its half in the USB product string. (2026-10-30, BK: rename the halves so we know which is which)
 
 The boot drive label belongs to the bootloader and cannot differ per half. The product string a half reports while it runs comes from `CONFIG_USB_DEVICE_PRODUCT`, which keyloom sets per build target.
 
 `build.targets[].productName` writes `config/keyloom-<id>.conf` and passes it to that target's west build as `-DEXTRA_CONF_FILE`. The Corne's halves report `Corne Choc BT L` and `Corne Choc BT R`. Detection reads `detect.products`, replacing `detect.product`, and lists the old `Corne Choc BT` beside them so a half still running an earlier build is recognised.
 
-The name shows while a half runs, in System Information and in `keyloom keyboard detect`. It does not appear while a half is in its bootloader, where the Mac sees only the bootloader's drive and name, so it does not replace D-464's attribution.
+The name shows while a half runs, in System Information and in `keyloom keyboard detect`. It does not appear while a half is in its bootloader, where the Mac sees only the bootloader's drive and name, so it does not replace D-465's attribution.

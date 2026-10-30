@@ -27,7 +27,7 @@ HSV channels range from 0 to 255. An empty lighting object deliberately blacks o
 
 Give the setup layer an indicator colour with `setLayerLighting`, then enter it using its encoder double-click. If its recognised effect controls are all on the left, that half shows the fixed colour while the right previews hue, saturation, speed and effect changes. Controls exclusively on the right reverse those roles. Power and master brightness still affect both halves. Leaving the setup layer restores the active typing layer's colours.
 
-The generator uses the RGB module's physical-key mask for the static overlay, keeping the same overlay registry on both halves. Layers without recognised effect controls, or with controls on both halves, retain their full-layer colours. Import checks the mask after reading bindings and kept definitions, accepts earlier full-layer exports, and refuses edited masks. D-463 records the decision. Physical effect preview and indicator placement remain hardware acceptance checks.
+The generator uses the RGB module's physical-key mask for the static overlay, keeping the same overlay registry on both halves. Layers without recognised effect controls, or with controls on both halves, retain their full-layer colours. Import checks the mask after reading bindings and kept definitions, accepts earlier full-layer exports, and refuses edited masks. D-464 records the decision. Physical effect preview and indicator placement remain hardware acceptance checks.
 
 ## The BT LED order is still unverified
 

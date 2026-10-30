@@ -199,6 +199,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const turnsNow = useRef<readonly Turn[]>([]);
   // Where the open conversation reads (D-310): the bar at the stage's foot, or the panel beside the board.
   const [chatPresentation, setChatPresentation] = useState<"bar" | "panel">("bar");
+  // A fresh id each time Fix issues is pressed, so the chat starts exactly one new run for what the review found (D-461).
+  const [fixRequest, setFixRequest] = useState<string | null>(null);
   // The keys in the chips, on one layer, and the proposal being previewed (hovered or pinned).
   const [chatSelection, setChatSelection] = useState<ChatSelection | null>(null);
   const [hoveredProposal, setHoveredProposal] = useState<ProposalCard | null>(null);
@@ -1537,6 +1539,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 drafts={chatDrafts}
                 initialConversation={chrome.arrival?.conversationId}
                 continueCopy={chrome.arrival?.continueCopy}
+                fixRequest={fixRequest ?? undefined}
                 onContinueCopy={(handoff) => {
                   chrome.onCarry?.(handoff.layoutId, { layerName: null, chatOpen: true, thread: threadToCarry(), conversationId: handoff.conversationId, continueCopy: true });
                   chrome.onReload?.(handoff.layoutId);
@@ -2086,6 +2089,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
               }}
               onShowLayer={(id) => setLayerId(id)}
+              onFixIssues={() => {
+                setReviewOpen(false);
+                setChatOpen(true);
+                setFixRequest(crypto.randomUUID());
+              }}
               onClose={() => setReviewOpen(false)}
             />
           </div>

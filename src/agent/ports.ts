@@ -4,6 +4,7 @@ import type { Board } from "../boards/load.ts";
 import type { ChangeOp, DecisionDraft } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
 import type { PriorityKind, Subject } from "../memory/priorities.ts";
+import type { ReviewItem } from "../validation/review-item.ts";
 import type { ValidationResult } from "../validation/result.ts";
 
 /** The head of the layout at the moment of the call; tools read it fresh so an edit mid-conversation is seen. */
@@ -88,6 +89,55 @@ export type TypingFindings = {
   };
 };
 
+/**
+ * A suggestion's change set, as the agent reads it. While it is still the proposal on the board it carries its checked ops, ready to
+ * reuse inside one combined change; once it is applied, superseded or rejected (or gone) it carries why instead of them.
+ */
+export type ReviewFindingProposal =
+  | { id: string; title: string | null; status: null; ops: ChangeOp[] }
+  | { id: string; title: string | null; status: "applied" | "superseded" | "rejected" | "missing"; ops: null };
+
+/**
+ * One finding of the newest board review, for the agent (D-340, D-461). `title` and `body` are the server's plain words: the markers
+ * the screen draws are already written as key and layer names, so the model never parses them. `keys` stays structured because ops
+ * take positions.
+ */
+export type ReviewFinding = {
+  /** Stable while the finding is about the same keys (`itemId`): BK's hiding follows it. */
+  id: string;
+  source: ReviewItem["source"];
+  kind: ReviewItem["kind"];
+  severity: ReviewItem["severity"];
+  title: string;
+  body: string;
+  keys: ReviewItem["keys"];
+  layers: string[];
+  /** The ids of the findings a suggestion fixes, so a combined change covers them. */
+  fixes: string[];
+  /** A suggestion's proposal, or null for a finding that is not a suggestion. */
+  proposal: ReviewFindingProposal | null;
+};
+
+/** The newest board review of a config, with the findings BK has not hidden. Read-only. */
+export type ReviewFindings = {
+  layoutId: string;
+  /** The config's head now. */
+  headRevisionId: string;
+  /** Null when this config has never been reviewed. */
+  review: {
+    id: string;
+    revisionId: string;
+    trigger: "connect" | "apply" | "import" | "manual";
+    checkedAt: number;
+    ai: { status: "pending" | "running" | "done" | "unavailable" | "failed"; reason: string | null };
+    /** False when the head moved after the review was made: use its findings as a pointer, not as a settled base. */
+    current: boolean;
+    items: ReviewFinding[];
+    /** How many findings BK hid; they are left out (D-340). */
+    hidden: number;
+  } | null;
+};
+
 export type PlacementCandidate = { target: number; name: string; replaces?: string };
 export type PlacementProposal = {
   /** Set when no candidate can take the key: the validator would refuse it (a layer it enters has no way back on the new board). */
@@ -166,4 +216,9 @@ export interface AgentPorts {
   recordOutcome(input: OutcomeInput): ChoiceFact;
   /** What BK's recorded typing sessions on this layout found. Aggregated: no text and no trace. */
   typingFindings(): TypingFindings;
+  /**
+   * The newest board review of this layout, its findings in plain words and, for a suggestion still on the board, its checked ops
+   * (D-461). The findings BK hid are left out. Read-only: nothing here makes a review or changes one.
+   */
+  reviewFindings(): ReviewFindings;
 }

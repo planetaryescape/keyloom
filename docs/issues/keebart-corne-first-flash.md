@@ -1,6 +1,6 @@
 # Keebart Corne needs its first manual bootloader entry
 
-Status: board support implemented in `1e6fcdbb3ef675eeb274bd8aac2108c71d72006f` on `fix/keebart-corne`; both firmware targets build successfully. Physical flashing and acceptance remain blocked on manual bootloader entry. Baseline `origin/main` at `e894e6dc25bb1c5f658832107f61eea201a6520c`, 2026-10-29. D-461 records the recipe and encoder scope.
+Status: board support implemented in `1e6fcdbb3ef675eeb274bd8aac2108c71d72006f` on `fix/keebart-corne`; both firmware targets build successfully. Physical flashing and acceptance remain blocked on manual bootloader entry. Baseline `origin/main` at `e894e6dc25bb1c5f658832107f61eea201a6520c`, 2026-10-29. D-462 records the recipe and encoder scope.
 
 The existing `foostan/corne` definition has 42 positions and builds `nice_nano_v2` with `corne_left` and `corne_right` shields. The Keebart Corne Choc Pro BT has 46 positions, with integrated left and right nRF52840 board targets. Its physical layout and targets come from [Keebart/zmk-config at 98c5a118](https://github.com/Keebart/zmk-config/tree/98c5a1181ff7db1f480f684f714126922d55b8f0/boards/arm/corne_choc_pro).
 

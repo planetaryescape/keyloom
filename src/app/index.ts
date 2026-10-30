@@ -51,6 +51,7 @@ export type { Layout } from "../layout/schema.ts";
 export { type ChangeOp, ChangeOpSchema } from "../layout/change.ts";
 export { describeBinding } from "../layout/functions.ts";
 export { type ValidationResult, ValidationResultSchema } from "../validation/result.ts";
+export { fixableFindings } from "../validation/review-item.ts";
 export type { ChangeSetSource, ChangeSetStatus } from "../persistence/change-sets.ts";
 export type { LayoutRow, RevisionRow } from "../persistence/layouts.ts";
 export { dataDir, logsDir } from "../persistence/paths.ts";
