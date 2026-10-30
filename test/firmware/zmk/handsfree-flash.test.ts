@@ -20,6 +20,7 @@ const BUILD = "bld_01M509Z0DJYBG04NY1MKBCK6TY";
 const KEY = "4NY1MKBCK6TY";
 const GLOVE80 = await loadBoardDir(`${import.meta.dir}/../../../boards/moergo/glove80`);
 const CORNE = await loadBoardDir(`${import.meta.dir}/../../../boards/foostan/corne`);
+const KEEBART = await loadBoardDir(`${import.meta.dir}/../../../boards/keebart/corne-choc-pro-bt`);
 
 async function run(board: typeof GLOVE80, artifact: Uint8Array, world: (root: string) => FakeWorld, over: { buildId?: string; wait?: number; foreign?: boolean } = {}) {
   const dir = tempDir();
@@ -35,6 +36,7 @@ async function run(board: typeof GLOVE80, artifact: Uint8Array, world: (root: st
   const findVolume = volumes.volumeFinderAt(root);
   const hooks = zmkHandsFreeHooks({
     deps: w.deps, board: board.definition, handsFree: rev.flash.handsFree as never, steps: rev.flash.steps, artifact, buildId: over.buildId ?? BUILD, findVolume,
+    ...(rev.detect ? { boardProductId: rev.detect.usbProductId } : {}),
     log: (l) => lines.push(l), ...(over.foreign ? { foreign: portOfAnotherBoard(board.definition.id) } : {}), saveLastGood: async (images) => { for (const [half, image] of images) saved.push([half, image.length]); },
   });
   const result = await flashUf2Drives({
@@ -361,6 +363,37 @@ describe("the Corne: two halves under one volume name", () => {
     expect(r.result.error).toContain("Retry starts with the left half");
     expect(r.w.touches).toEqual([]);
     expect(r.w.flashed).toEqual([]);
+  });
+});
+
+describe("the Keebart Corne: a flash with only one half on USB", () => {
+  const bundle = () => zipSync({ "left.uf2": uf2Carrying(serialOf(KEY, "L", ":0123456789ABCDEF"), 0xada52840), "right.uf2": uf2Carrying(serialOf(KEY, "R", ":0123456789ABCDEF"), 0xada52840, 6) });
+  const half = (letter: "L" | "R") => ({ letter, volume: "KEEBART", vendorId: 0x1d50, productId: 0x615e, serial: serialOf(OLD_KEY, letter, ":0123456789ABCDEF") });
+
+  test("flashes the attached half when the other half is not on USB at all", async () => {
+    // BK's desk, 2026-10-30: the right half cabled, the left on Bluetooth only. The left cannot own a KEEBART drive.
+    const r = await run(KEEBART, bundle(), (root) => fakeWorld({ root, halves: [half("R")], portLagMs: 0 }));
+    expect(r.w.touches).toEqual([{ path: "/dev/fake-ttyACM-R", baud: 1200 }]);
+    expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }]);
+    expect(r.lines.some((l) => l.includes("the other half isn't on USB"))).toBe(true);
+    // The left half was never attached, so the run ends waiting for its own boot loader and names it.
+    expect(r.result.error).toContain("The right half was flashed and the left half was not");
+  });
+
+  test("a peer on USB that carries no marker is still not ruled out", async () => {
+    // The left half is attached, but its firmware shows no marker, so the drive could be its bootloader.
+    const r = await run(KEEBART, bundle(), (root) => fakeWorld({ root, halves: [half("R"), { letter: "L", volume: "KEEBART", vendorId: 0x1d50, productId: 0x615e }], portLagMs: 0 }));
+    expect(r.states.some(([, i]) => i?.includes("could belong to either half"))).toBe(true);
+    expect(r.w.touches).toEqual([]);
+    expect(r.w.flashed).toEqual([]);
+  });
+
+  test("a half that comes back on USB with the new marker but no serial port is verified", async () => {
+    // The Corne's left half never brought its CDC port back after the previous flash; its USB descriptor named the build.
+    const r = await run(KEEBART, bundle(), (root) => fakeWorld({ root, halves: [half("L"), half("R")], portLagMs: 0, portlessAfterFlash: ["L"] }));
+    expect(r.result).toMatchObject({ state: "succeeded", error: null });
+    expect(r.w.flashed.map((f) => f.letter)).toEqual(["R", "L"]);
+    expect(r.lines.at(-1)).toContain("Verified");
   });
 });
 

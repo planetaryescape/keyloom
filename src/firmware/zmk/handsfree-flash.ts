@@ -41,15 +41,17 @@ export type HalfTarget = {
   step: FlashStep;
   boardName: string;
   vendorId: string | undefined;
+  /** The board's running USB product ID when its halves share one (the Corne's), so a half with no serial port of its own is still found on USB by the marker in its serial number. */
+  boardProductId?: string;
   /** Ports that belong to another board keyloom knows by USB ID. A board with no IDs of its own would otherwise take any port that carries a marker with its half's letter. */
   foreign?: (port: SerialPort) => boolean;
 };
 
 /** The halves a board's flash recipe names, each with its step, in the board's flashing order. */
-export function halfTargets(board: BoardDefinition, handsFree: HandsFree, steps: readonly FlashStep[], foreign?: (port: SerialPort) => boolean): HalfTarget[] {
+export function halfTargets(board: BoardDefinition, handsFree: HandsFree, steps: readonly FlashStep[], foreign?: (port: SerialPort) => boolean, boardProductId?: string): HalfTarget[] {
   return steps.flatMap((step) => {
     const half = handsFree.halves.find((h) => h.step === step.label);
-    return half ? [{ half, step, boardName: board.name, vendorId: handsFree.usbVendorId, ...(foreign ? { foreign } : {}) }] : [];
+    return half ? [{ half, step, boardName: board.name, vendorId: handsFree.usbVendorId, ...(boardProductId ? { boardProductId } : {}), ...(foreign ? { foreign } : {}) }] : [];
   });
 }
 
@@ -78,9 +80,19 @@ export function portsOfHalf(ports: SerialPort[], t: HalfTarget): { keyloom: Arra
   return { keyloom, other };
 }
 
-export type HalfFirmware = { state: "absent" } | { state: "other"; serial: string | undefined } | { state: "keyloom"; key: string; path: string };
+export type HalfFirmware = { state: "absent" } | { state: "other"; serial: string | undefined } | { state: "keyloom"; key: string; path?: string };
 
-/** What one half is running, from the serial ports and, where the half's product ID is known, from USB. */
+/** The attached USB device that is this half: its own product ID, or the board's shared one when its serial carries this half's marker. */
+async function usbDeviceOf(deps: ZmkHandsFreeDeps, t: HalfTarget): Promise<UsbDevice | undefined> {
+  const own = t.half.usbProductId?.toLowerCase();
+  const shared = own === undefined ? t.boardProductId?.toLowerCase() : undefined;
+  if (own === undefined && shared === undefined) return undefined;
+  const sameBoard = (await deps.usb()).filter((d) => (t.vendorId === undefined || d.vendorId === t.vendorId.toLowerCase()) && d.productId === (own ?? shared));
+  // Shared IDs say only that the device is this board; the marker in its serial number says which half it is.
+  return own !== undefined ? sameBoard[0] : sameBoard.find((d) => parseSerial(d.serial)?.half === t.half.marker);
+}
+
+/** What one half is running, from the serial ports and, where the board's USB IDs are known, from USB. */
 export async function readHalf(deps: ZmkHandsFreeDeps, t: HalfTarget, ports?: SerialPort[]): Promise<HalfFirmware> {
   const list = ports ?? (await (await deps.serial()).list());
   const { keyloom, other } = portsOfHalf(list, t);
@@ -88,12 +100,42 @@ export async function readHalf(deps: ZmkHandsFreeDeps, t: HalfTarget, ports?: Se
   if (first) return { state: "keyloom", key: first.key, path: first.port.path };
   const port = other[0];
   if (port) return { state: "other", serial: port.serial };
-  // Firmware from before keyloom's module has no serial port; USB still shows the half by its product ID.
-  if (t.half.usbProductId !== undefined) {
-    const device = (await deps.usb()).find((d) => d.productId === t.half.usbProductId?.toLowerCase() && (t.vendorId === undefined || d.vendorId === t.vendorId.toLowerCase()));
-    if (device) return { state: "other", serial: device.serial };
-  }
-  return { state: "absent" };
+  // A half with no serial port of its own still names its build in its USB serial number: the Corne's left half came back on USB
+  // with the new marker while its CDC port never appeared, which is a running half, not an absent one.
+  const device = await usbDeviceOf(deps, t);
+  if (device === undefined) return { state: "absent" };
+  const marker = parseSerial(device.serial);
+  if (marker !== undefined && marker.half === t.half.marker) return { state: "keyloom", key: marker.key };
+  return { state: "other", serial: device.serial };
+}
+
+export type PeerPresence =
+  /** The other half is running firmware, so a drive that appears is not its bootloader. */
+  | "running"
+  /** The other half is not on USB at all: it cannot own a boot drive. */
+  | "absent"
+  /** Something on USB could be the other half, but keyloom cannot tell what it is running. */
+  | "unattributable";
+
+/**
+ * What can be said about the half that shares a boot-drive label with the one being flashed. A half that is not on USB at all
+ * cannot own the drive, so it no longer blocks the flash; one that is attached but cannot be identified still does (D-465).
+ * A half already sitting in its bootloader is caught before this by the mounted-drive check, which refuses an open shared drive.
+ */
+export async function peerPresence(deps: ZmkHandsFreeDeps, t: HalfTarget, ports?: SerialPort[]): Promise<PeerPresence> {
+  const list = ports ?? (await (await deps.serial()).list());
+  const { keyloom, other } = portsOfHalf(list, t);
+  if (keyloom.length > 0 || other.length > 0) return "running";
+  const own = t.half.usbProductId?.toLowerCase();
+  const shared = own === undefined ? t.boardProductId?.toLowerCase() : undefined;
+  if (own === undefined && shared === undefined) return "unattributable";
+  const devices = (await deps.usb()).filter((d) => (t.vendorId === undefined || d.vendorId === t.vendorId.toLowerCase()) && d.productId === (own ?? shared));
+  if (own !== undefined) return devices.length > 0 ? "running" : "absent";
+  // Under shared IDs the other half's own device is also in this list: its marker says it is not the peer.
+  const markers = devices.map((d) => parseSerial(d.serial)?.half);
+  if (markers.includes(t.half.marker)) return "running";
+  if (markers.includes(undefined)) return "unattributable";
+  return "absent";
 }
 
 /**
@@ -129,8 +171,12 @@ export async function restartHalf(opts: {
     const transport = await deps.serial();
     const ports = await transport.list();
     const peers = opts.targets.filter((other) => other !== t && other.step.volume === t.step.volume);
-    if (opts.waitForVolume !== false && peers.some((other) => portsOfHalf(ports, other).keyloom.length !== 1)) {
-      return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware` };
+    if (opts.waitForVolume !== false && peers.length > 0) {
+      const presence = await Promise.all(peers.map((other) => peerPresence(deps, other, ports)));
+      if (presence.includes("unattributable")) {
+        return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware` };
+      }
+      if (presence.includes("absent")) log(`keyloom: the other half isn't on USB, so ${t.step.volume} can only be the ${label}'s boot drive`);
     }
     const own = portsOfHalf(ports, t);
     const keys = new Set(own.keyloom.map((k) => k.key));
@@ -171,7 +217,8 @@ export async function restartHalf(opts: {
     for (;;) {
       if (await opts.findVolume(t.step.volume)) {
         const after = peers.length ? await transport.list() : [];
-        if (peers.some((other) => portsOfHalf(after, other).keyloom.length !== 1)) {
+        const stayed = await Promise.all(peers.map((other) => peerPresence(deps, other, after)));
+        if (stayed.includes("unattributable")) {
           return { ok: false, reason: `${t.step.volume} could belong to either half; the other half is no longer confirmed running firmware` };
         }
         log(`keyloom: ${t.step.volume} appeared; the ${label} is in its bootloader`);
@@ -259,11 +306,14 @@ export function zmkHandsFreeHooks(input: {
   log: (line: string) => void;
   screenLocked?: (() => Promise<boolean>) | undefined;
   foreign?: (port: SerialPort) => boolean;
+  /** The board's running USB product ID, from its revision's `detect`; a half without one of its own is found by its marker under these IDs. */
+  boardProductId?: string;
   /** Promotes every half's verified image as one set; the previous set must survive any failure (D-437). */
   saveLastGood?: (images: ReadonlyMap<HalfLetter, Uint8Array>) => Promise<void>;
   loadLastGood?: (half: HalfLetter) => Promise<Uint8Array | null>;
 }): StepHooks {
-  const targets = halfTargets(input.board, input.handsFree, input.steps, input.foreign);
+  const verifyDeps = { ...input.deps, verifyWaitMs: input.deps.verifyWaitMs ?? input.handsFree.verifyWaitMs ?? VERIFY_WAIT_MS };
+  const targets = halfTargets(input.board, input.handsFree, input.steps, input.foreign, input.boardProductId);
   const forStep = (step: FlashStep): HalfTarget | undefined => targets.find((t) => t.step === step);
   const before = new Map<HalfTarget, HalfFirmware>();
   const hooks: StepHooks = {
@@ -272,9 +322,10 @@ export function zmkHandsFreeHooks(input: {
       try {
         const states = await Promise.all(peers.map(async (peer) => {
           const target = forStep(peer);
-          return target ? readHalf(input.deps, target) : { state: "absent" as const };
+          // An unmapped peer cannot be read, so the drive cannot be attributed to this step.
+          return target ? await peerPresence(input.deps, target) : "unattributable" as const;
         }));
-        return states.every((state) => state.state !== "absent");
+        return states.every((state) => state !== "unattributable");
       } catch {
         return false;
       }
@@ -300,7 +351,7 @@ export function zmkHandsFreeHooks(input: {
       const target = forStep(step);
       // The recipe schema requires every step to map to a half; never report an unmapped one as verified.
       if (!target) return { ok: false, error: `the ${step.label} was written, but its recipe has no hands-free half to verify it against` };
-      const result = await verifyHalf({ deps: input.deps, target, steps: input.steps, buildId: input.buildId, log: input.log });
+      const result = await verifyHalf({ deps: verifyDeps, target, steps: input.steps, buildId: input.buildId, log: input.log });
       if (result.ok) images.set(target, image);
       return result;
     };
@@ -373,7 +424,7 @@ export function zmkHandsFreeHooks(input: {
         try {
           say(`keyloom: Rolling back the ${t.step.label} to build ${saved.key}.`);
           result = await restore(input.steps.indexOf(t.step), saved.image,
-            () => verifyHalf({ deps: input.deps, target: t, steps: input.steps, key: saved.key, log: say }),
+            () => verifyHalf({ deps: verifyDeps, target: t, steps: input.steps, key: saved.key, log: say }),
             t === failed ? `Restore the ${t.step.label} to build ${saved.key}. ${t.step.enter}` : undefined);
         } catch (err) { result = { ok: false, error: (err as Error).message }; }
         if (!result.ok) return stopped(`Rollback of the ${t.step.label} failed: ${result.error}${shared ? "" : ` Put the ${t.step.label} in its bootloader to restore it: ${t.step.enter}`}`, !shared);

@@ -1,0 +1,455 @@
+{
+  "schemaVersion": 1,
+  "id": "keebart/corne-choc-pro-bt",
+  "name": "Corne Choc Pro BT",
+  "vendor": "Keebart",
+  "firmware": "zmk",
+  "keyCount": 46,
+  "revisions": [
+    {
+      "id": "default",
+      "source": {
+        "repo": "https://github.com/zmkfirmware/zmk",
+        "ref": "v0.3.0",
+        "sha": "edf5c0814fd3ea202e43aad2d68fd32e882a518c"
+      },
+      "build": {
+        "kind": "zmk-west-docker",
+        "image": "zmkfirmware/zmk-build-arm@sha256:edb1c953438c6f720ddb79c3762f3972013b7fbbaf4fff3592fc869983e7afc5",
+        "board": "corne_choc_pro_left",
+        "keymapName": "corne_choc_pro",
+        "physicalLayout": "boards/arm/corne_choc_pro/corne_choc_pro-layouts.dtsi#default_layout",
+        "targets": [
+          {
+            "id": "left",
+            "board": "corne_choc_pro_left",
+            "productName": "Corne Choc BT L"
+          },
+          {
+            "id": "right",
+            "board": "corne_choc_pro_right",
+            "productName": "Corne Choc BT R"
+          }
+        ],
+        "boardModule": {
+          "repo": "https://github.com/Keebart/zmk-config",
+          "sha": "98c5a1181ff7db1f480f684f714126922d55b8f0"
+        },
+        "config": [
+          "CONFIG_ZMK_STUDIO=n",
+          "CONFIG_ZMK_KEYBOARD_NAME=\"Corne Choc BT\"",
+          "CONFIG_SPI=y",
+          "CONFIG_WS2812_STRIP=y"
+        ],
+        "sensorBindings": [
+          "&inc_dec_kp C_VOL_UP C_VOL_DN",
+          "&inc_dec_kp C_VOL_UP C_VOL_DN",
+          "&inc_dec_kp C_BRI_UP C_BRI_DN",
+          "&inc_dec_kp C_BRI_UP C_BRI_DN"
+        ],
+        "rgbMatrix": {
+          "module": {
+            "repo": "https://github.com/gudzpoz/zmk-rgb-matrix",
+            "sha": "3166a4ec6801a5726f12a53e82cff92323116025"
+          },
+          "strip": "led_strip",
+          "physicalLayout": "default_layout",
+          "leftLedCount": 23,
+          "maxBrightness": 30,
+          "leftTarget": "left"
+        }
+      },
+      "flash": {
+        "kind": "uf2-drives",
+        "steps": [
+          {
+            "volume": "KEEBART",
+            "label": "right half",
+            "target": "right",
+            "enter": "Connect the right half by USB and double-press its underside reset button."
+          },
+          {
+            "volume": "KEEBART",
+            "label": "left half",
+            "target": "left",
+            "enter": "Connect the left half by USB and double-press its underside reset button."
+          }
+        ],
+        "handsFree": {
+          "trigger": "cdc-1200",
+          "halves": [
+            {
+              "role": "central",
+              "step": "left half",
+              "marker": "L"
+            },
+            {
+              "role": "peripheral",
+              "step": "right half",
+              "marker": "R",
+              "relay": true
+            }
+          ],
+          "serialMarker": "usb-sn-override",
+          "serialTail": ":0123456789ABCDEF",
+          "usbVendorId": "0x1d50",
+          "verifyWaitMs": 180000
+        }
+      },
+      "detect": {
+        "usbVendorId": "0x1d50",
+        "usbProductId": "0x615e",
+        "products": [
+          "Corne Choc BT",
+          "Corne Choc BT L",
+          "Corne Choc BT R"
+        ]
+      }
+    }
+  ],
+  "hands": {
+    "left": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      40,
+      41,
+      42
+    ],
+    "right": [
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      43,
+      44,
+      45
+    ]
+  },
+  "fingers": {
+    "0": "left-pinky",
+    "1": "left-pinky",
+    "2": "left-ring",
+    "3": "left-middle",
+    "4": "left-index",
+    "5": "left-index",
+    "6": "left-index",
+    "7": "right-index",
+    "8": "right-index",
+    "9": "right-index",
+    "10": "right-middle",
+    "11": "right-ring",
+    "12": "right-pinky",
+    "13": "right-pinky",
+    "14": "left-pinky",
+    "15": "left-pinky",
+    "16": "left-ring",
+    "17": "left-middle",
+    "18": "left-index",
+    "19": "left-index",
+    "20": "left-index",
+    "21": "right-index",
+    "22": "right-index",
+    "23": "right-index",
+    "24": "right-middle",
+    "25": "right-ring",
+    "26": "right-pinky",
+    "27": "right-pinky",
+    "28": "left-pinky",
+    "29": "left-pinky",
+    "30": "left-ring",
+    "31": "left-middle",
+    "32": "left-index",
+    "33": "left-index",
+    "34": "right-index",
+    "35": "right-index",
+    "36": "right-middle",
+    "37": "right-ring",
+    "38": "right-pinky",
+    "39": "right-pinky",
+    "40": "left-thumb",
+    "41": "left-thumb",
+    "42": "left-thumb",
+    "43": "right-thumb",
+    "44": "right-thumb",
+    "45": "right-thumb"
+  },
+  "rows": {
+    "top": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+    ],
+    "home": [
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27
+    ],
+    "bottom": [
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ],
+    "thumb": [
+      40,
+      41,
+      42,
+      43,
+      44,
+      45
+    ]
+  },
+  "mirror": {
+    "0": 13,
+    "1": 12,
+    "2": 11,
+    "3": 10,
+    "4": 9,
+    "5": 8,
+    "6": 7,
+    "14": 27,
+    "15": 26,
+    "16": 25,
+    "17": 24,
+    "18": 23,
+    "19": 22,
+    "20": 21,
+    "28": 39,
+    "29": 38,
+    "30": 37,
+    "31": 36,
+    "32": 35,
+    "33": 34,
+    "40": 45,
+    "41": 44,
+    "42": 43
+  },
+  "importers": [
+    "zmk-keymap"
+  ],
+  "display": {
+    "shift": [
+      {
+        "positions": [
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          43,
+          44,
+          45
+        ],
+        "dx": 0.8
+      }
+    ],
+    "keyShapes": {
+      "6": {
+        "kind": "rotary-encoder",
+        "x": 6.12,
+        "y": 0.8,
+        "w": 0.78,
+        "h": 0.78
+      },
+      "7": {
+        "kind": "rotary-encoder",
+        "x": 8.1,
+        "y": 0.8,
+        "w": 0.78,
+        "h": 0.78
+      }
+    },
+    "case": [
+      {
+        "hand": "left",
+        "kind": "body",
+        "d": "M-0.18,0.27 Q-0.18,0.2 -0.11,0.2 L1.83,0.2 Q1.9,0.2 1.911,0.131 L1.939,-0.051 Q1.95,-0.12 2.02,-0.12 L5.13,-0.12 Q5.2,-0.12 5.263,-0.089 L5.587,0.069 Q5.65,0.1 5.72,0.1 L7.18,0.1 Q7.25,0.1 7.25,0.17 L7.25,3.33 Q7.25,3.4 7.221,3.464 L6.549,4.966 Q6.52,5.03 6.456,5.002 L5.344,4.508 Q5.28,4.48 5.21,4.48 L3.45,4.48 Q3.38,4.48 3.346,4.419 L2.904,3.611 Q2.87,3.55 2.8,3.55 L-0.11,3.55 Q-0.18,3.55 -0.18,3.48 Z"
+      },
+      {
+        "hand": "left",
+        "kind": "body",
+        "d": "M-0.092,0.295 Q-0.092,0.245 -0.042,0.245 L1.888,0.245 Q1.938,0.245 1.946,0.196 L1.979,-0.013 Q1.987,-0.062 2.037,-0.062 L5.109,-0.062 Q5.159,-0.062 5.204,-0.041 L5.553,0.127 Q5.598,0.149 5.648,0.149 L7.11,0.149 Q7.16,0.149 7.16,0.199 L7.16,3.267 Q7.16,3.317 7.139,3.363 L6.468,4.836 Q6.448,4.882 6.402,4.862 L5.283,4.374 Q5.237,4.354 5.187,4.354 L3.433,4.354 Q3.383,4.354 3.359,4.31 L2.909,3.505 Q2.885,3.461 2.835,3.461 L-0.042,3.461 Q-0.092,3.461 -0.092,3.411 Z"
+      },
+      {
+        "hand": "right",
+        "kind": "body",
+        "d": "M15.98,0.27 Q15.98,0.2 15.91,0.2 L13.97,0.2 Q13.9,0.2 13.889,0.131 L13.861,-0.051 Q13.85,-0.12 13.78,-0.12 L10.67,-0.12 Q10.6,-0.12 10.537,-0.089 L10.213,0.069 Q10.15,0.1 10.08,0.1 L8.62,0.1 Q8.55,0.1 8.55,0.17 L8.55,3.33 Q8.55,3.4 8.579,3.464 L9.251,4.966 Q9.28,5.03 9.344,5.002 L10.456,4.508 Q10.52,4.48 10.59,4.48 L12.35,4.48 Q12.42,4.48 12.454,4.419 L12.896,3.611 Q12.93,3.55 13,3.55 L15.91,3.55 Q15.98,3.55 15.98,3.48 Z"
+      },
+      {
+        "hand": "right",
+        "kind": "body",
+        "d": "M15.892,0.295 Q15.892,0.245 15.842,0.245 L13.912,0.245 Q13.862,0.245 13.854,0.196 L13.821,-0.013 Q13.813,-0.062 13.763,-0.062 L10.691,-0.062 Q10.641,-0.062 10.596,-0.041 L10.247,0.127 Q10.202,0.149 10.152,0.149 L8.69,0.149 Q8.64,0.149 8.64,0.199 L8.64,3.267 Q8.64,3.317 8.661,3.363 L9.332,4.836 Q9.352,4.882 9.398,4.862 L10.517,4.374 Q10.563,4.354 10.613,4.354 L12.367,4.354 Q12.417,4.354 12.441,4.31 L12.891,3.505 Q12.915,3.461 12.965,3.461 L15.842,3.461 Q15.892,3.461 15.892,3.411 Z"
+      }
+    ],
+    "colourways": {
+      "cases": [
+        {
+          "id": "black",
+          "name": "Black",
+          "tone": "dark",
+          "stockCaps": "black"
+        },
+        {
+          "id": "silver",
+          "name": "Silver",
+          "tone": "light",
+          "stockCaps": "black"
+        }
+      ],
+      "caps": [
+        {
+          "id": "black",
+          "name": "Black",
+          "tone": "dark"
+        },
+        {
+          "id": "white",
+          "name": "White",
+          "tone": "light"
+        }
+      ]
+    }
+  },
+  "lightingControls": true,
+  "holdKeyPreference": [
+    41,
+    44,
+    40,
+    45,
+    20,
+    21
+  ],
+  "holdKeyFallback": [
+    19,
+    22
+  ],
+  "lighting": {
+    "ledPositions": [
+      42,
+      33,
+      19,
+      5,
+      4,
+      18,
+      32,
+      41,
+      40,
+      31,
+      17,
+      3,
+      2,
+      16,
+      30,
+      29,
+      15,
+      1,
+      0,
+      14,
+      28,
+      6,
+      20,
+      43,
+      34,
+      22,
+      8,
+      9,
+      23,
+      35,
+      44,
+      45,
+      36,
+      24,
+      10,
+      11,
+      25,
+      37,
+      38,
+      26,
+      12,
+      13,
+      27,
+      39,
+      7,
+      21
+    ]
+  }
+}

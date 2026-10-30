@@ -40,8 +40,14 @@ export const ZmkWestTargetSchema = z.strictObject({
   /** Names the target's UF2 in the build, and the flash step that writes it. */
   id: z.string().regex(/^[a-z0-9-]+$/),
   /** The `-DSHIELD` value, such as `corne_left`. */
-  shield: z.string().min(1),
+  shield: z.string().min(1).optional(),
+  /** Integrated split boards have a different controller target per half. */
+  board: z.string().regex(/^[a-zA-Z0-9_/-]+$/).optional(),
+  /** The USB product string this half reports while it runs, when the board's halves should be told apart by name (the Corne's `Corne Choc BT L`). */
+  productName: z.string().regex(/^[A-Za-z0-9 ._+-]{1,60}$/).optional(),
 });
+
+export const ZmkBoardModuleSchema = z.strictObject({ repo: z.string().url(), sha });
 
 export const ZmkWestDockerBuildSchema = z.strictObject({
   kind: z.literal("zmk-west-docker"),
@@ -53,6 +59,21 @@ export const ZmkWestDockerBuildSchema = z.strictObject({
   keymapName: z.string().regex(/^[a-z0-9_-]+$/),
   /** The file in the firmware tree that holds the `zmk,physical-layout`; geometry.json is generated from it. */
   physicalLayout: z.string().min(1),
+  /** External hardware definitions, fetched by west at an immutable revision; also owns physicalLayout. */
+  boardModule: ZmkBoardModuleSchema.optional(),
+  /** Per-key RGB engine, pinned independently of the board hardware module. */
+  rgbMatrix: z.strictObject({
+    module: ZmkBoardModuleSchema,
+    strip: z.string().regex(/^[a-z][a-z0-9_]*$/),
+    physicalLayout: z.string().regex(/^[a-z][a-z0-9_]*$/),
+    leftLedCount: z.number().int().positive(),
+    leftTarget: z.string().regex(/^[a-z][a-z0-9_-]*$/),
+    maxBrightness: z.number().int().min(1).max(100),
+  }).optional(),
+  /** Board defaults needed when replacing the vendor keymap. */
+  config: z.array(z.string().regex(/^CONFIG_[A-Z0-9_]+=.+$/)).optional(),
+  /** Sensor bindings in the hardware sensor order, retained on every layer. */
+  sensorBindings: z.array(z.string().regex(/^&[a-z][a-z0-9_]*(?: [A-Z][A-Z0-9_]*)*$/)).optional(),
   /** One west build each, in the order given. */
   targets: z.array(ZmkWestTargetSchema).min(1),
 });
@@ -114,6 +135,8 @@ export const HandsFreeSchema = z
   .strictObject({
     /** A close at 1200 baud on a half's USB serial port restarts that half into its UF2 bootloader. */
     trigger: z.literal("cdc-1200"),
+    /** Reconnect deadline for boards whose serial interface appears slowly after USB reset. */
+    verifyWaitMs: z.number().int().positive().max(300_000).optional(),
     /** The board's USB vendor ID while it runs, when known. */
     usbVendorId: usbId.optional(),
     halves: z.array(HandsFreeHalfSchema).min(1),

@@ -51,8 +51,9 @@ export const RevisionSchema = z.strictObject({
   qmkTarget: z.string().min(1).optional(),
   build: BuildRecipeSchema,
   flash: FlashRecipeSchema,
-  // The running firmware's USB product ID, and its vendor ID where the board is not ZSA's (the Moonlander's check assumes ZSA's; D-237).
-  detect: z.object({ usbProductId: z.string().regex(/^0x[0-9a-f]{4}$/i), usbVendorId: z.string().regex(/^0x[0-9a-f]{4}$/i).optional() }).nullable(),
+  // The running firmware's USB product ID, and the product strings that identify it among hardware sharing those IDs,
+  // and its vendor ID where the board is not ZSA's (the Moonlander's check assumes ZSA's; D-237).
+  detect: z.object({ products: z.array(z.string().min(1)).min(1).optional(), usbProductId: z.string().regex(/^0x[0-9a-f]{4}$/i), usbVendorId: z.string().regex(/^0x[0-9a-f]{4}$/i).optional() }).nullable(),
   // How a software remapper finds the keyboard it should take; the built-in keyboard has no USB IDs (21). Absent on firmware boards.
   device: DeviceMatcherSchema.optional(),
 });
@@ -116,6 +117,7 @@ export const BoardDefinitionSchema = z.strictObject({
         .record(
           z.string().regex(/^\d+$/),
           z.strictObject({
+            kind: z.literal("rotary-encoder").optional(),
             x: z.number().optional(),
             y: z.number().optional(),
             w: z.number().positive().optional(),

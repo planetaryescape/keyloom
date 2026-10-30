@@ -35,3 +35,10 @@ config KEYLOOM_TYPING_LAB
     help
       On the central (or an unsplit board), streams every key press and release over the serial port while the host
       has asked for it with "KLTYPE START". Off at power-up and after 10 minutes. Compiles to nothing on a peripheral.
+
+config KEYLOOM_RGB_POWER
+    bool "Enable the RGB matrix's external power rail"
+    depends on KEYPAW_RGB_MATRIX && DT_HAS_ZMK_EXT_POWER_GENERIC_ENABLED
+    help
+      Follows RGB matrix power and idle state, including after settings load.
+      Repaints static colours when the LED supply comes back on.

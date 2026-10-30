@@ -50,7 +50,7 @@ export async function attachedZmkHalves(deps: ZmkHandsFreeDeps): Promise<Attache
     for (const r of board.definition.revisions) {
       const rev = zmkRevision(board.definition, r.id);
       if (!rev.flash.handsFree) continue;
-      for (const target of halfTargets(board.definition, rev.flash.handsFree, rev.flash.steps, portOfAnotherBoard(board.definition.id))) {
+      for (const target of halfTargets(board.definition, rev.flash.handsFree, rev.flash.steps, portOfAnotherBoard(board.definition.id), rev.detect?.usbProductId)) {
         const firmware = await readHalf(deps, target, ports);
         if (firmware.state !== "absent") found.push({ boardId: board.definition.id, boardName: board.definition.name, label: target.step.label, firmware,
           ...(firmware.state === "keyloom" && ports.find((p) => p.path === firmware.path)?.permissionDenied ? { permissionDenied: true as const } : {}),
@@ -98,7 +98,7 @@ export async function rebootKeyboard(opts: { board?: string; half?: string; hand
     if (board.definition.firmware === "zmk") {
       const revision = zmkRevision(board.definition);
       if (!revision.flash.handsFree) throw new UsageError(`${board.definition.name} has no hands-free restart recipe`);
-      const targets = halfTargets(board.definition, revision.flash.handsFree, revision.flash.steps, portOfAnotherBoard(board.definition.id));
+      const targets = halfTargets(board.definition, revision.flash.handsFree, revision.flash.steps, portOfAnotherBoard(board.definition.id), revision.detect?.usbProductId);
       const target = targets.find((t) => t.half.marker.toLowerCase() === opts.half?.toLowerCase() || t.step.label === `${opts.half} half`);
       if (!target) throw new UsageError("with a ZMK board, choose --half left or --half right");
       const result = await restartHalf({ deps: realZmkHandsFreeDeps(opts.handsFree?.zmk), targets, target,

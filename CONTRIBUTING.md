@@ -190,8 +190,12 @@ Use `build.kind: "qmk-docker"` for every QMK board. The firmware tree it builds 
 
 ### ZMK: `zmk-west-docker`
 
+For external hardware definitions, set `boardModule` to their repository URL and immutable commit SHA. `source` still pins ZMK itself. Geometry comes from `physicalLayout` in the hardware module; append `#label` to select its physical layout in the generated keymap. See `boards/keebart/corne-choc-pro-bt/board.json` for an integrated split board with separate targets and rotary encoders.
+
+`config` supplies board defaults before the layout settings in the generated `.conf`. `sensorBindings` supplies one devicetree binding per sensor, in hardware order, on every layer. Encoder presses remain normal key bindings.
+
 - `board` is the `west build -b` board, such as `nice_nano_v2`. A shield whose `.zmk.yml` says `requires: [pro_micro]` fits any Pro Micro–compatible controller; the nice!nano v2 is one.
-- `targets` has one entry per half. `shield` is the `-DSHIELD` value, such as `corne_left`. `id` is a short name, such as `left`.
+- `targets` has one entry per half. `shield` is the optional `-DSHIELD` value, such as `corne_left`. Integrated boards set a per-target `board` instead, such as `corne_choc_pro_left`. `id` is a short name, such as `left`.
 - `keymapName` is the shield name without `_left` or `_right`. keyloom writes `config/<keymapName>.keymap` and `config/<keymapName>.conf`.
 - `physicalLayout` is the file in the ZMK tree that holds the `zmk,physical-layout` node. Look in `app/dts/layouts/` for your board, such as `app/dts/layouts/foostan/corne/6column.dtsi`. Boards with several layouts, such as 5-column and 6-column, have several files. To find which one your shield uses, open the shield's `.dtsi` under `app/boards/shields/<shield>/` and look for `chosen { zmk,physical-layout = &...; }`; the file that defines that label is the one. Its key count must equal `keyCount`.
 - Each flash step has a `target` that names a build target. `volume` is the label of the boot drive. A nice!nano shows up as `NICENANO`. `enter` is how to put that half into its bootloader. For a nice!nano that is a double tap on the reset button.
@@ -281,7 +285,23 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.keymapName` | `zmk-west-docker` | The base name of `config/<name>.keymap` and `.conf`. |
 | `revisions[].build.targets` | `zmk-west-docker` | One west build per half, in the order built. |
 | `revisions[].build.targets[].id` | `zmk-west-docker` | A short name, such as `left`. Names the half's UF2. |
-| `revisions[].build.targets[].shield` | `zmk-west-docker` | The `-DSHIELD` value, such as `corne_left`. |
+| `revisions[].build.targets[].shield` | `zmk-west-docker`, optional | The `-DSHIELD` value, such as `corne_left`. |
+| `revisions[].build.targets[].board` | `zmk-west-docker`, optional | Overrides the recipe's `board` for this half. |
+| `revisions[].build.targets[].productName` | `zmk-west-docker`, optional | The USB product string this half reports while it runs, when the halves should be told apart by name (`Corne Choc BT L`). |
+| `revisions[].build.boardModule` | `zmk-west-docker`, optional | External hardware definitions. Also owns `physicalLayout`. |
+| `revisions[].build.boardModule.repo` | `zmk-west-docker` | Hardware module repository URL. |
+| `revisions[].build.boardModule.sha` | `zmk-west-docker` | Immutable hardware module commit SHA. |
+| `revisions[].build.rgbMatrix` | `zmk-west-docker`, optional | Per-key RGB engine; requires an LED map and the keyloom module. |
+| `revisions[].build.rgbMatrix.module` | `zmk-west-docker` | Pinned RGB module dependency. |
+| `revisions[].build.rgbMatrix.module.repo` | `zmk-west-docker` | RGB module repository URL. |
+| `revisions[].build.rgbMatrix.module.sha` | `zmk-west-docker` | Immutable RGB module commit SHA. |
+| `revisions[].build.rgbMatrix.strip` | `zmk-west-docker` | Devicetree label of the LED strip. |
+| `revisions[].build.rgbMatrix.physicalLayout` | `zmk-west-docker` | Devicetree label of the physical key layout. |
+| `revisions[].build.rgbMatrix.leftLedCount` | `zmk-west-docker` | Number of entries at the start of the LED map belonging to the left half. |
+| `revisions[].build.rgbMatrix.leftTarget` | `zmk-west-docker` | Target ID for the left half; the build supplies a per-half devicetree flag. |
+| `revisions[].build.rgbMatrix.maxBrightness` | `zmk-west-docker` | Hardware brightness cap, 1–100 percent, scaled by the master control. |
+| `revisions[].build.config` | `zmk-west-docker`, optional | `CONFIG_…=…` defaults, emitted before layout settings. |
+| `revisions[].build.sensorBindings` | `zmk-west-docker`, optional | Devicetree sensor bindings in hardware order, emitted on every layer. |
 | `revisions[].build.kanataVersion` | `kanata-config` | The kanata release the generated config targets, such as `1.12.0`. Software-remapper boards only; `source.ref` must be `v<version>`. |
 | `revisions[].flash` | all | The flash recipe. |
 | `revisions[].flash.kind` | all | `zapp`, `uf2-drives`, `dfu-tool`, `manual` or, for a software remapper, `kanata-reload`. |
@@ -298,6 +318,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.steps[].target` | `zmk-west-docker` | The build target whose UF2 this step writes. |
 | `revisions[].flash.handsFree` | `uf2-drives`, optional | Present when the ZMK build carries keyloom's module, so a flash after the first needs no keypress (D-095). |
 | `revisions[].flash.handsFree.trigger` | `handsFree` | `cdc-1200`: closing a half's USB serial port at 1200 baud restarts that half into its bootloader. |
+| `revisions[].flash.handsFree.verifyWaitMs` | `uf2-drives`, optional | Per-half reconnect deadline in milliseconds, up to 300000; defaults to 45000. |
 | `revisions[].flash.handsFree.usbVendorId` | `handsFree`, optional | The board's USB vendor ID while it runs, such as `0x16c0`. |
 | `revisions[].flash.handsFree.halves` | `handsFree` | One entry per half. Exactly one is the central. |
 | `revisions[].flash.handsFree.halves[].role` | `handsFree` | `central` or `peripheral`. |
@@ -310,6 +331,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].flash.instructions` | `manual` | What to tell the person: which tool flashes the file, and how to enter the bootloader. |
 | `revisions[].detect` | all | `null`, or an object that names the USB device. |
 | `revisions[].detect.usbProductId` | all | The board's USB product ID, such as `0x1969`. keyloom uses it to tell hardware revisions apart. |
+| `revisions[].detect.products` | optional | The USB product strings this board may report while it runs, required in addition to IDs; use it for hardware sharing ZMK's default USB IDs, including a board whose halves name themselves apart. |
 | `revisions[].detect.usbVendorId` | optional | The vendor ID the running firmware reports, such as `0x4653`, when the board is not ZSA's. keyloom assumes ZSA's `0x3297` for a ZSA board without it. |
 | `revisions[].device` | `kanata-config`, optional | How a software remapper finds the keyboard to take. A board with no USB IDs (a laptop's own) has `detect: null` and this. |
 | `revisions[].device.kind` | `device` | `macos-product-name`. |
@@ -325,7 +347,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `holdKeyFallback` | optional | Positions a layer may be held from once the preferred ones are used, so no carried layer has no way in; less-used keys such as `;` and `'`. |
 | `importers` | all | The readers keyloom can use to import a layout. `qmk-keymap` or `oryx-source` for QMK, `zmk-keymap` or `zmk-layout-editor-keymap` for ZMK. |
 | `lighting` | qmk | Optional. Present on a board with per-key RGB that keyloom writes layer colours for. |
-| `lighting.ledPositions` | qmk | For each LED number, the key position it sits under. Read it from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates. |
+| `lighting.ledPositions` | qmk, zmk with RGB matrix | For each LED number, the key position it sits under. Read it from the firmware's `rgb_matrix.layout` and keyboard layout by matching matrix coordinates. |
 | `lightingControls` | all | Optional. `true` when the firmware has lighting control keys (RGB underglow or the RGB matrix's controls) but no per-key LED table. Set it only with evidence from the firmware's own config, such as a `CONFIG_*RGB*=y` line in the board's defconfig, and say where in the commit. |
 | `limits` | all | Optional. What the board can't do, in a sentence the agent and the validator can quote. |
 | `limits.lighting` | all | Why the board can't show per-key colours, such as "its lights are underglow, which shows one effect across the whole strip". Set it on a board with no `lighting`. |
@@ -346,7 +368,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.statusLeds[].x` | all | An LED's horizontal position, in key units after `rotate` and `shift`. |
 | `display.statusLeds[].y` | all | The LED's vertical position, in the same units. |
 | `display.caseHug` | all | Optional. Draws a case that hugs the keys, reaching this many key units past each one, instead of one outline around them all. Keys turned about the same point (a thumb fan) get a curved band. The Glove80 uses `0.3`. |
-| `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. Drawing only: binding order never changes. |
+| `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. An optional `kind: "rotary-encoder"` draws a circular knurled control while retaining its editable press binding. Drawing only: binding order never changes. |
 | `display.colourways` | all | Optional. The case and keycap colours the maker sells, so the drawn board can be pinned to the one on the desk in Settings (D-395, D-319). Leave it out and the board follows the theme. |
 | `display.colourways.cases` | all | The case colours, at least two. |
 | `display.colourways.cases[].id` | all | A short id, kept in the browser when it is pinned, such as `black`. |

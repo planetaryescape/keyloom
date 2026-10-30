@@ -300,7 +300,7 @@ export async function runKeyboardChecks(over: HandsFreeOverrides = {}): Promise<
       if (h.firmware.state === "keyloom") {
         checks.push({ name, ok: !h.permissionDenied, detail: h.permissionDenied
           ? "ttyACM read/write permission denied; join the group owning the port (usually dialout or uucp), log out and back in, then retry"
-          : `running keyloom build ${h.firmware.key} (serial port ${h.firmware.path}); the next flash needs no keypress` });
+          : `running keyloom build ${h.firmware.key} (${h.firmware.path === undefined ? "USB serial number only, no serial port" : `serial port ${h.firmware.path}`}); the next flash needs no keypress` });
       } else if (h.firmware.state === "other") {
         checks.push({ name, ok: true, detail: `running firmware without keyloom's module (USB serial ${h.firmware.serial ?? "unavailable"}); the first flash needs the bootloader key, and flashes after it need none` });
       }

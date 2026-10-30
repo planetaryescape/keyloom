@@ -2119,3 +2119,51 @@ The review panel's findings could only be applied one suggestion at a time, and 
 - **Reads are safe mid-review.** Items are written only when a review's agent part finishes, so a read while `ai.status` is `pending` or `running` sees the checks' items and no half-written ones; the button waits for that look rather than starting beside it. The review's own agent items stay capped at 6 (`MAX_AGENT_ITEMS`); the tool adds no second cap and drops nothing.
 - **CLI:** `keyloom review fix [layout] [--provider P] [--json]` starts that run through `startAgentRun` and follows it like `agent start`, printing the question and the `keyloom agent answer …` line when it stops. It refuses before paying for a model call when the config has no review or nothing is left to fix.
 - **Built in** `src/agent/tools/get-review.ts`, `src/app/review-read.ts`, `src/web/review/FixIssues.tsx` and the review panel, and `src/cli/commands/review.ts`; tests in `test/agent/get-review.test.ts`, `test/web/review-fix.test.tsx` and `test/cli/review-fix.test.ts`.
+
+### D-462: Keebart Corne support pins its hardware module separately from ZMK and renders its encoder presses as rotary controls. (2026-10-29, BK: fix the Corne and show its rotary encoders)
+
+Partially supersedes D-105's encoder deferral for this owned hardware. Encoder turns use fixed board defaults on every layer; per-layer encoder editing remains outside this change. Presses are ordinary editable bindings.
+
+The Keebart Corne Choc Pro BT has 46 positions and integrated nRF52840 targets `corne_choc_pro_left` and `corne_choc_pro_right`. The existing 42-position `foostan/corne` builds for a nice!nano and cannot describe it. `zmk-west-docker` now accepts a pinned `boardModule`, an optional per-target `board` and optional `shield`. Geometry is generated from the module's selected `physicalLayout`; the generated keymap selects its label. Board `config` defaults precede layout settings, and `sensorBindings` retains turn actions across layers.
+
+`detect.product` qualifies shared USB IDs with the product name. The Keebart profile matches `Corne Choc BT`, never every device advertising ZMK's `1d50:615e`. `display.keyShapes[position].kind = rotary-encoder` changes only the drawing; it preserves the key's position, editor and keyboard accessibility. The case outline follows the owner's supplied photos.
+
+ZMK is pinned to v0.3.0 (`edf5c0814fd3ea202e43aad2d68fd32e882a518c`); the hardware module to Keebart/zmk-config `98c5a1181ff7db1f480f684f714126922d55b8f0`. The source module's MIT notices remain upstream; geometry is generated, not a copied hardware implementation. Studio is disabled so its saved dynamic keymap cannot override a newly built layout. The recipe includes keyloom's existing hands-free module; hardware verification remains separate from a successful build. See [the first-flash record](../issues/keebart-corne-first-flash.md).
+
+### D-463: The Keebart Corne uses a pinned RGB matrix module for key and layer colours. (2026-10-29, BK: implement addressable LEDs and make the controls ergonomic)
+
+Extends D-190's existing colour model to this ZMK board and replaces this board's stock-underglow-only limitation. It does not change the Glove80's firmware or capability claim.
+
+Reuse `gudzpoz/zmk-rgb-matrix@3166a4ec6801a5726f12a53e82cff92323116025` (MIT) for rendering, layer conditions, split synchronization and saved master controls. The application keeps its existing colour picker, HSV model and validated `setLayerLighting` operations. Generation writes static per-layer overlays in the same order on both halves. Each target explicitly sets `KEYLOOM_RGB_LEFT` during devicetree preprocessing; Kconfig role flags are unavailable at that stage. Missing lighting means fallback effect; an empty object means dark. Metadata is accepted on import only after exact regeneration of the complete RGB block.
+
+Keep ZMK v0.3.0. A compatibility header supplies the missing enabled-child count and variadic concatenation helpers, terminates device declarations for the older Zephyr API, and preserves the RGB module's last-commit settings order through late dynamic registration. Composite binding devices initialize at application priority 80, after the RGB driver and before keymap/scanner initialization, and a linker snippet supplies Zephyr 3.5's iterable-section alignment. The adapted Zephyr declaration macro retains its Apache-2.0 attribution and license. Explicit SPI configuration replaces the default lost when stock underglow is disabled. The switched LED rail needs a keyloom adapter because the RGB module has no external-power integration. It follows logical power and idle state and repaints after power returns.
+
+The BT board declares 23 LEDs per half without their key order. The candidate order is inferred from Keebart's wired Corne at `4649f864f15ba9f540ee83d66b50cb9fcd4f7e59`; physical confirmation is required before claiming the BT map is verified. [Evidence and remaining checks](../issues/corne-per-key-rgb.md).
+
+Ergonomic access belongs in the person's layout: an encoder tap dance can keep its single-click action and toggle lighting controls on double-click. It requires no simultaneous holds across halves and no additional product-level shortcut mechanism.
+
+The hardware flash exposed a serial reconnect beyond the default 45-second check. `handsFree.verifyWaitMs` permits a board-specific bounded deadline (maximum 300 seconds); the Corne uses 180 seconds, while other boards retain the default. Explicit transport overrides take precedence. This is a waiting policy, not proof of healthy serial transport: both Corne USB build markers were observed, but the left serial interface still missed the extended deadline. The failed flash record is retained.
+
+### D-464: A coloured ZMK layer with effect controls on one half leaves the other half showing the effect. (2026-10-30, BK: keep a mode indicator visible while previewing effects)
+
+Partially replaces D-463's full-layer overlays. A fixed colour over both halves hides hue, speed and effect changes. When the native-binding reader recognises effect controls exclusively on one half, the generator targets that half's key positions with the static overlay. The opposite half continues rendering the selected effect. Power and master brightness still affect both halves. Layers without recognised effect controls, or with controls on both halves, retain full-layer colours. Highest-active-layer conditions restore ordinary colours on exit.
+
+Use the existing `setLayerLighting` operation to assign the control layer's indicator colour; there is no new shortcut or configuration field. The RGB module's `keys` property resolves the same physical positions independently on each half, preserving identical overlay order for split synchronization. Import validates the entire RGB block after bindings and kept macros have been read. It also accepts the previous full-layer rendering, so existing exports remain readable; edited masks are refused. Generator and import tests cover both control hands, master controls, earlier exports and edited masks. Physical effect preview still requires observing the keyboard.
+
+### D-465: A half that is not on USB cannot own a shared boot drive, so it no longer blocks a flash. (2026-10-30, BK: flash the Corne one half at a time)
+
+Replaces the part of D-437 and D-438 that refused a shared-label write whenever the other half was absent, and extends D-438's reading of a half to the serial number in its USB descriptor.
+
+Both Corne halves mount `KEEBART`, so keyloom refuses a boot drive it cannot attribute to a half. It used to require the other half to have a keyloom serial port before it would restart or write anything, which meant both halves had to be cabled for any flash. The Corne's left half has not brought its CDC port back since it was flashed, while its USB descriptor does name the new build, so that rule left the board unflashable and the previous flash record failed.
+
+A half that is not on USB at all cannot mount a boot drive, so it no longer blocks a restart or a write. Presence is read from serial ports and USB devices: a device under the board's IDs whose serial carries the other half's marker is running firmware; one that carries no marker cannot be identified and still refuses; no device at all is absent and allowed. A drive already mounted before the prompt is still refused before any of this, which is how a half already sitting in its bootloader is caught.
+
+A half with no port is read from the marker in its USB serial number, so a half that comes back portless is reported as running the build and verifies instead of failing at `verifyWaitMs`. `doctor` says it is seen by its USB serial number only. The prompt and the wait are unchanged: one half is flashed, then keyloom asks for the other.
+
+### D-466: A ZMK build target may name its half in the USB product string. (2026-10-30, BK: rename the halves so we know which is which)
+
+The boot drive label belongs to the bootloader and cannot differ per half. The product string a half reports while it runs comes from `CONFIG_USB_DEVICE_PRODUCT`, which keyloom sets per build target.
+
+`build.targets[].productName` writes `config/keyloom-<id>.conf` and passes it to that target's west build as `-DEXTRA_CONF_FILE`. The Corne's halves report `Corne Choc BT L` and `Corne Choc BT R`. Detection reads `detect.products`, replacing `detect.product`, and lists the old `Corne Choc BT` beside them so a half still running an earlier build is recognised.
+
+The name shows while a half runs, in System Information and in `keyloom keyboard detect`. It does not appear while a half is in its bootloader, where the Mac sees only the bootloader's drive and name, so it does not replace D-465's attribution.

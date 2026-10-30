@@ -1,6 +1,6 @@
 # 04: Boards and contributions
 
-Status: board loading and optional skills built. The audit closeout supplies Moonlander and Glove80 guidance; these notes add no firmware capability.
+Status: board loading, external ZMK hardware modules, per-half controller targets and rotary-encoder rendering built (D-462). The audit closeout supplies Moonlander and Glove80 guidance; these notes add no firmware capability.
 
 BK supports his own boards, and anyone with another board adds it (D-008). A board is data that keyloom can validate, plus an optional skill for the agent (D-009). Adding a board must never mean writing another configurator. There's no plugin system or marketplace: a board is a folder in this repo, added by pull request.
 

@@ -19,22 +19,26 @@ import { MODULE_DIR, MODULE_FILES, OVERLAY_FILE, writeModule } from "./module.ts
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
 
 /** The user config's manifest: ZMK at the pinned SHA, with its own `app/west.yml` for Zephyr and the modules. */
-export function westManifest(repo: string, sha: string): string {
-  return `manifest:\n  projects:\n    - name: zmk\n      url: ${repo}\n      revision: ${sha}\n      import: app/west.yml\n  self:\n    path: config\n`;
+export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDockerBuild["boardModule"], rgbMatrix?: ZmkWestDockerBuild["rgbMatrix"]): string {
+  return `manifest:\n  projects:\n    - name: zmk\n      url: ${repo}\n      revision: ${sha}\n      import: app/west.yml${boardModule ? `\n    - name: board-module\n      url: ${boardModule.repo}\n      revision: ${boardModule.sha}` : ""}${rgbMatrix ? `\n    - name: zmk-rgb-matrix\n      url: ${rgbMatrix.module.repo}\n      revision: ${rgbMatrix.module.sha}` : ""}\n  self:\n    path: config\n`;
 }
 
 /** What a build with keyloom's module adds to `west build`: the module, and the overlay that gives it a serial port (a module can't add an overlay itself). */
 export const moduleFlags = (): string => `-DZMK_EXTRA_MODULES=/work/${MODULE_DIR} -DEXTRA_DTC_OVERLAY_FILE=/work/${MODULE_DIR}/${OVERLAY_FILE}`;
 
+/** The conf fragment that gives one half its own USB product name, written beside the keymap's conf. */
+export const targetConfFile = (id: string): string => `keyloom-${id}.conf`;
+
 /** One shell script for the whole build, so the container starts once. `set -e` stops at the first failing target. */
 export function westScript(build: ZmkWestDockerBuild, withModule = false): string {
   const lines = [
     "set -e",
+    "export CMAKE_BUILD_PARALLEL_LEVEL=5",
     "rm -rf build",
     "[ -d .west ] || west init -l config",
     "west update --fetch-opt=--filter=tree:0",
     "west zephyr-export",
-    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${build.board} -- -DSHIELD=${t.shield} -DZMK_CONFIG=/work/config${withModule ? ` ${moduleFlags()}` : ""}`),
+    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
   ];
   return lines.join("\n");
 }
@@ -56,8 +60,11 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       await mkdir(config, { recursive: true });
       // A keymap or conf left from another layout must not be built.
       for (const f of await readdir(config)) if (/\.(keymap|conf)$/.test(f)) await rm(join(config, f));
-      await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha));
+      await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule, build.rgbMatrix));
       for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
+      // A half that names itself gets its own conf: the keymap's conf is shared by both builds.
+      const named = build.targets.filter((t) => t.productName !== undefined);
+      for (const t of named) await writeFresh(join(config, targetConfFile(t.id)), `# Written by keyloom: this half's USB product name.\nCONFIG_USB_DEVICE_PRODUCT="${t.productName}"\n`);
       const handsFree = rev.flash.handsFree !== undefined;
       if (handsFree) await writeModule(input.checkoutDir);
 
@@ -82,6 +89,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
         files: [
           join(config, "west.yml"),
           ...input.source.files.map((f) => join(config, f.path)),
+          ...named.map((t) => join(config, targetConfFile(t.id))),
           ...(handsFree ? Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)) : []),
         ],
         log: input.log,
@@ -89,7 +97,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       });
 
       const output: string[] = [];
-      say(`keyloom: building ${build.targets.map((t) => t.shield).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads Zephyr and takes a while`);
+      say(`keyloom: building ${build.targets.map((t) => (t.shield ?? t.board ?? build.board)).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads Zephyr and takes a while`);
       const result = await run({
         cmd: [...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
         log: input.log,
@@ -123,13 +131,13 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       const bundle: Record<string, Uint8Array> = {};
       for (const t of build.targets) {
         const file = Bun.file(join(input.checkoutDir, "build", t.id, "zephyr", "zmk.uf2"));
-        if (!(await file.exists())) throw new BuildFailure(`The build finished but ${t.shield} produced no zmk.uf2.`);
+        if (!(await file.exists())) throw new BuildFailure(`The build finished but ${t.shield ?? t.board ?? build.board} produced no zmk.uf2.`);
         const bytes = new Uint8Array(await file.arrayBuffer());
         const problem = uf2Problem(bytes, "single");
-        if (problem) throw new BuildFailure(`The build produced a file for ${t.shield} that can't be flashed: ${problem}.`);
+        if (problem) throw new BuildFailure(`The build produced a file for ${t.shield ?? t.board ?? build.board} that can't be flashed: ${problem}.`);
         bundle[`${t.id}.uf2`] = bytes;
         const info = inspectUf2(bytes);
-        if (!("problem" in info)) say(`keyloom: ${t.shield}: ${bytes.length} bytes, ${describeUf2(info)}`);
+        if (!("problem" in info)) say(`keyloom: ${t.shield ?? t.board ?? build.board}: ${bytes.length} bytes, ${describeUf2(info)}`);
       }
 
       const zip = zipSync(bundle);

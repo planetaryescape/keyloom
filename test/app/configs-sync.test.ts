@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { UsageError, applyOps, getLayout, newConfig } from "../../src/app/index.ts";
 import type { SyncEngine } from "../../src/app/sync-engine.ts";
-import { getBoardConfig, setBoardConfig } from "../../src/persistence/configs.ts";
+import { getBoardConfig, setBoardConfig, setArchivedAt } from "../../src/persistence/configs.ts";
 import { recentSyncs } from "../../src/persistence/syncs.ts";
 import { listVersionRows } from "../../src/persistence/versions.ts";
 import { BOARD, type SyncWorld, gate, syncWorld, waitFor } from "../helpers/fake-sync.ts";
@@ -323,5 +323,29 @@ describe("versions are recorded by verified syncs only", () => {
     edit(w, w.layoutId, "F17");
     await waitFor(() => recentSyncs(w.app.db)[0]?.status === "failed", "the build to fail");
     expect(listVersionRows(w.app.db, w.layoutId)).toEqual([]);
+  });
+});
+
+
+describe("boards with archived configs", () => {
+  test("a board with only archived configs disappears and returns when restored", async () => {
+    const w = await world();
+    w.app.db.query("DELETE FROM board_config WHERE board_id = ?").run(BOARD);
+    setArchivedAt(w.app.db, w.layoutId, Date.now());
+    const e = w.engine();
+    expect((await e.snapshot()).some((b) => b.boardId === BOARD)).toBe(false);
+    expect(w.calls.builds).toEqual([]);
+    expect(w.calls.flashes).toEqual([]);
+    setArchivedAt(w.app.db, w.layoutId, null);
+    expect((await e.snapshot()).find((b) => b.boardId === BOARD)?.layoutId).toBe(w.layoutId);
+  });
+
+  test("the missing-selection fallback never selects a newer archived config", async () => {
+    const w = await world();
+    const other = second(w);
+    setArchivedAt(w.app.db, other, Date.now());
+    w.app.db.query("DELETE FROM board_config WHERE board_id = ?").run(BOARD);
+    const e = w.engine();
+    expect((await e.snapshot()).find((b) => b.boardId === BOARD)?.layoutId).toBe(w.layoutId);
   });
 });

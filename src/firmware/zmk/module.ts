@@ -4,11 +4,15 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { writeFresh } from "../toolchain/write-fresh.ts";
 import CMAKE from "../../../firmware/zmk/keyloom-zmk/CMakeLists.txt" with { type: "text" };
+import ZEPHYR_LICENSE from "../../../firmware/zmk/keyloom-zmk/LICENSE.zephyr" with { type: "text" };
 import KCONFIG from "../../../firmware/zmk/keyloom-zmk/Kconfig" with { type: "text" };
 import OVERLAY from "../../../firmware/zmk/keyloom-zmk/keyloom-cdc-acm.overlay" with { type: "text" };
 import HANDSFREE_C from "../../../firmware/zmk/keyloom-zmk/src/handsfree.c" with { type: "text" };
 import TYPING_C from "../../../firmware/zmk/keyloom-zmk/src/typing.c" with { type: "text" };
 import SERIAL_C from "../../../firmware/zmk/keyloom-zmk/src/serial.c" with { type: "text" };
+import RGB_COMPAT_LD from "../../../firmware/zmk/keyloom-zmk/rgb-compat.ld" with { type: "text" };
+import RGB_COMPAT_H from "../../../firmware/zmk/keyloom-zmk/include/keyloom/rgb_compat.h" with { type: "text" };
+import RGB_POWER_C from "../../../firmware/zmk/keyloom-zmk/src/rgb_power.c" with { type: "text" };
 import MODULE_YML from "../../../firmware/zmk/keyloom-zmk/zephyr/module.yml" with { type: "text" };
 
 /** Folder name of the module inside a build's work folder (`/config/keyloom-zmk` or `/work/keyloom-zmk` in the container). */
@@ -19,9 +23,13 @@ export const OVERLAY_FILE = "keyloom-cdc-acm.overlay";
 export const MODULE_FILES: Readonly<Record<string, string>> = {
   "CMakeLists.txt": CMAKE,
   Kconfig: KCONFIG,
+  "LICENSE.zephyr": ZEPHYR_LICENSE,
   [OVERLAY_FILE]: OVERLAY,
   "src/handsfree.c": HANDSFREE_C,
   "src/serial.c": SERIAL_C,
+  "src/rgb_power.c": RGB_POWER_C,
+  "include/keyloom/rgb_compat.h": RGB_COMPAT_H,
+  "rgb-compat.ld": RGB_COMPAT_LD,
   "src/typing.c": TYPING_C,
   "zephyr/module.yml": MODULE_YML,
 };

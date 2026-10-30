@@ -86,6 +86,8 @@ export function fakeWorld(opts: {
   comeBackMs?: number;
   /** How long after a half comes back its serial port appears; until then it shows only as a USB device, as a real half does. */
   portLagMs?: number;
+  /** Halves whose USB serial port never appears after they are flashed; they show only as a USB device, as the Corne's left half did. */
+  portlessAfterFlash?: HalfLetter[];
 }): FakeWorld {
   const halves: FakeHalf[] = opts.halves.map((h) => ({
     vendorId: GLOVE80_VENDOR, productId: h.letter === "L" ? 0x27db : 0x27d9, path: `/dev/fake-ttyACM-${h.letter}`, cabled: true, mode: "app", ...h,
@@ -106,7 +108,8 @@ export function fakeWorld(opts: {
 
   // When each half's serial port appears after it comes back; a half with no entry has its port.
   const portAt = new Map<HalfLetter, number>();
-  const portUp = (h: FakeHalf) => (portAt.get(h.letter) ?? 0) <= Date.now();
+  const portless = new Set<HalfLetter>();
+  const portUp = (h: FakeHalf) => !portless.has(h.letter) && (portAt.get(h.letter) ?? 0) <= Date.now();
   const transport: SerialTransport = {
     async list() {
       return halves
@@ -160,6 +163,7 @@ export function fakeWorld(opts: {
       setTimeout(() => {
         half.mode = "app";
         if (opts.portLagMs !== undefined) portAt.set(half.letter, Date.now() + opts.portLagMs);
+        if (opts.portlessAfterFlash?.includes(half.letter)) portless.add(half.letter);
         const next = opts.after ? opts.after(half, key) : key === undefined || role === undefined ? undefined : serialOf(key, role);
         if (next === undefined) delete half.serial;
         else half.serial = next;
@@ -174,7 +178,7 @@ export function fakeWorld(opts: {
       // USB shows nothing, so a half is seen only through its port.
       usb: async () =>
         halves
-          .filter((h) => opts.portLagMs !== undefined && h.mode === "app")
+          .filter((h) => (opts.portLagMs !== undefined || opts.portlessAfterFlash !== undefined) && h.mode === "app")
           .map((h) => ({ vendorId: `0x${h.vendorId.toString(16)}`, productId: `0x${h.productId.toString(16)}`, name: `fake ${h.letter}`, maker: "MoErgo", ...(h.serial === undefined ? {} : { serial: h.serial }) })),
       pollMs: 10,
       restartWaitMs: 600,

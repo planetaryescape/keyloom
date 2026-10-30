@@ -302,7 +302,7 @@ export class SyncEngine {
   }
 
   private factsFor(boardId: string, boardName: string, layouts: LayoutRow[], over?: LayoutRow): BoardFacts | null {
-    if (layouts.length === 0) return null;
+    if (!layouts.some((layout) => layout.archivedAt === null)) return null;
     const reading = this.readingOf(boardId);
     const db = this.app.db;
 
@@ -312,7 +312,7 @@ export class SyncEngine {
     if (reading.state === "keyloom" && loaded === undefined) builds = reading.keys.map((k) => findBuildByKey(db, k));
     const known = reading.state === "keyloom" && loaded === undefined && builds.length > 0 && builds.every((b): b is BuildRow => b !== undefined);
     // The board always has a stored config (createLayout and the migration write one); the newest is only a guard for a database edited by hand.
-    const newest = [...layouts].sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? 1 : -1))[0] as LayoutRow;
+    const newest = layouts.filter((layout) => layout.archivedAt === null).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? 1 : -1))[0] as LayoutRow;
     const stored = getBoardConfig(db, boardId);
     const ofRunning = known ? layouts.find((l) => l.id === (builds[0] as BuildRow).layoutId) : loaded === undefined ? undefined : layouts.find((l) => findRevision(db, l.id, loaded) !== undefined);
     const layout = over ?? layouts.find((l) => l.id === stored) ?? newest;
