@@ -10,7 +10,7 @@ import { type ReviewEvent, ReviewEventSchema } from "../../api/review.ts";
  * `onReview`, and ignored when the caller has none. `onLayoutUpdated` is called when a layout's head revision moved (e.g. from CLI).
  */
 export function createEventParser(
-  onBoards: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void,
+  onBoards: (boards: BoardSync[], newKeyboards: DetectedKeyboard[], setupBoards: DetectedKeyboard[]) => void,
   onUnreadable: () => void,
   onReview?: (event: ReviewEvent) => void,
   onLayoutUpdated?: (event: LayoutUpdatedEvent) => void,
@@ -44,7 +44,7 @@ export function createEventParser(
       onUnreadable();
       return;
     }
-    onBoards(parsed.data.boards, parsed.data.newKeyboards ?? []);
+    onBoards(parsed.data.boards, parsed.data.newKeyboards ?? [], parsed.data.setupBoards ?? []);
   };
   return {
     push(chunk) {

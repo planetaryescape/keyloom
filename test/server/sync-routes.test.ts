@@ -193,6 +193,7 @@ describe("writes", () => {
       disableRemapping: async () => [],
       subscribe: () => () => {},
       newKeyboards: () => [],
+      setupBoards: () => [],
       subscribeLayoutUpdated: (listener: (event: { type: "layout.updated"; layoutId: string; revisionId?: string }) => void) => {
         notifyUpdated = listener;
         return () => { notifyUpdated = undefined; };

@@ -27,10 +27,10 @@ export type SyncDeps = {
   remapper?: RemapperDeps;
   readKeyboards(): Promise<Map<string, KeyboardReading>>;
   /**
-   * The keyboards on USB that keyloom has no board for, from the devices the last `readKeyboards` saw (D-336): the new-keyboard card
-   * follows the engine's own reads instead of polling USB again. Read-only.
+   * The keyboards on USB, known and unknown, from the devices the last `readKeyboards` saw (D-336): the new-keyboard card and the
+   * "this board has no config yet" card follow the engine's own reads instead of polling USB again. Read-only.
    */
-  newKeyboards?(): Promise<DetectedKeyboard[]>;
+  detectedKeyboards?(): Promise<DetectedKeyboard[]>;
   /** Builds `revisionId` for `boardRevision`, or reuses a successful build of exactly that. Never throws; aborting `signal` stops the build and leaves the keyboard alone. */
   build(a: { layoutId: string; revisionId: string; boardRevision: string; signal: AbortSignal; onBuildId: (id: string) => void }): Promise<BuildOutcome>;
   /** Flashes a build. Never throws. `verified` is true only when the flasher saw the keyboard come back running the build. */
@@ -50,7 +50,7 @@ export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
     readKeyboards: () => readKeyboards(opts.handsFree ?? {}, (seen) => {
       devices = seen;
     }),
-    newKeyboards: async () => (await detectKeyboards({ usb: async () => devices })).filter((k) => k.status !== "known"),
+    detectedKeyboards: async () => detectKeyboards({ usb: async () => devices }),
 
     remapper: {
       async apply(a) {

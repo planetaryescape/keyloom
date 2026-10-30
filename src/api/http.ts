@@ -15,6 +15,8 @@ export const LayoutSummarySchema = z.object({
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
   revisionId: z.string().min(1),
+  // When it was archived, or null. Optional so older senders still parse; a board's own configs are never archived.
+  archivedAt: z.number().finite().nullable().optional(),
 });
 export type LayoutSummary = z.infer<typeof LayoutSummarySchema>;
 
@@ -593,6 +595,7 @@ export const PauseRequestSchema = z.object({ boardId: z.string().min(1), paused:
 export const DisableRemappingRequestSchema = z.object({ boardId: z.string().min(1) });
 
 // `newKeyboards`: keyboards on USB keyloom has no board for, from the engine's own reads (D-336); absent from older senders.
+// `setupBoards`: boards keyloom knows that are on USB but have no config yet, so the page can offer to put one on (absent from older senders).
 // `menuBar`: what the desktop app's menu-bar extra shows, worded by the server so the app carries no product text (D-325). Absent on older senders.
 export const MenuBarSchema = z.object({
   /** The board that most needs looking at, as the header words it. */
@@ -607,7 +610,11 @@ export const MenuBarSchema = z.object({
   notices: z.array(z.object({ title: z.string(), body: z.string() })),
 });
 export type MenuBar = z.infer<typeof MenuBarSchema>;
-export const SyncEventSchema = z.object({ type: z.literal("sync"), boards: z.array(BoardSyncSchema), newKeyboards: z.array(DetectedKeyboardSchema).optional(), menuBar: MenuBarSchema.optional() });
+export const SyncEventSchema = z.object({
+  type: z.literal("sync"), boards: z.array(BoardSyncSchema), newKeyboards: z.array(DetectedKeyboardSchema).optional(),
+  // Known boards on USB with no config yet: the page offers to put one on, or import one (D-336).
+  setupBoards: z.array(DetectedKeyboardSchema).optional(), menuBar: MenuBarSchema.optional(),
+});
 export type SyncEvent = z.infer<typeof SyncEventSchema>;
 
 export const LayoutUpdatedEventSchema = z.object({

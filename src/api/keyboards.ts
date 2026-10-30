@@ -84,7 +84,7 @@ const PlanSchema = z.object({
   notes: z.array(z.string()),
 });
 
-export const PutPreviewResponseSchema = PlanSchema.extend({ name: z.string(), summary: z.string(), after: LayoutSchema });
+export const PutPreviewResponseSchema = PlanSchema.extend({ name: z.string(), summary: z.string(), after: LayoutSchema, problems: z.array(z.string()) });
 export type PutPreviewResponse = z.infer<typeof PutPreviewResponseSchema>;
 
 export const PutResponseSchema = PlanSchema.extend({
