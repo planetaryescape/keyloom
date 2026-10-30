@@ -26,6 +26,8 @@ import { useConfigCards } from "../configs/useConfigCards.ts";
 import type { ConfigCards } from "./ConfigCards.tsx";
 import { useChat, type ChatDrafts } from "./useChat.ts";
 import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
+import { referableProposals, referenceView, type ReferenceContext } from "./reference-view.ts";
+import type { Reference } from "../../layout/references.ts";
 import { openProposalsOnBoard, questionOpen, withoutRepeats, type Turn } from "./transcript.ts";
 import { createOneShot, sendOnce, type OneShot } from "./one-shot.ts";
 import { REVIEW_FIX_REQUEST } from "../../api/review.ts";
@@ -91,6 +93,12 @@ interface Props {
   onOpenConfig?: (id: string) => void;
   /** Shows the proposals waiting on this config, from a config card's "Review". */
   onReviewProposals?: () => void;
+  /** Shows a layer a reply named (D-468), keeping an open key's draft as the layer strip does. */
+  onShowLayer?: (layerId: string) => void;
+  /** Pulses one key a reply named (D-468), so it can be found on the board. */
+  onFoundKey?: (position: number) => void;
+  /** The names of the configs this page can open, so a reply's `{config:…}` marker draws the name it already knows. */
+  configNames?: ReadonlyMap<string, string>;
   /** Key changes kept on the board and not applied (D-317); sent with each message so the agent knows them. */
   drafts?: ChatDrafts;
   /** ⌘K commands (D-315): what the typed text can just do, offered above "Ask keyloom". */
@@ -98,10 +106,12 @@ interface Props {
 }
 
 const ASK_AGAIN = "The layout changed after you proposed that, so it no longer applies. Please propose it again against the current layout.";
+// A page that hands in no config names still reads a marker as words: the id it carries.
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, fixRequest, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, fixRequest, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
   const chat = useChat(token, layoutRef, onContinueCopy, initialConversation);
   const arrived = useRef(false);
   useEffect(() => {
@@ -141,6 +151,31 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   );
   const cardData = useConfigCards(token, madeIds, `${layoutRef}:${revisionId}`);
   const configCards: ConfigCards | undefined = onOpenConfig === undefined ? undefined : { data: cardData, currentId: layoutRef, origin: carried?.from ?? null, onOpen: onOpenConfig, onReview: onReviewProposals ?? (() => {}) };
+  // What a reply's own markers can go to (D-468): the configs this page can open, and the proposals of the thread on screen, each
+  // through the seam the cards already use. A carried thread's layers, keys and proposals belong to another config, so only a config
+  // it names stays live there — unless the thread is about this very config again, when everything it named still exists on the page.
+  const carriedForeign = carried === null || carried.from === undefined || carried.from.id !== layoutRef;
+  const proposals = useMemo(
+    () => referableProposals(transcript.turns, carriedForeign ? null : carried?.turns ?? null),
+    [transcript.turns, carried, carriedForeign],
+  );
+  const referenceContext = useMemo<ReferenceContext>(
+    () => ({
+      layout, currentId: layoutRef, configNames: configNames ?? NO_NAMES, proposals,
+      actions: {
+        ...(onOpenConfig === undefined ? {} : { onOpenConfig }),
+        onPin,
+        ...(onShowLayer === undefined ? {} : { onShowLayer }),
+        ...(onFoundKey === undefined ? {} : { onFoundKey }),
+      },
+    }),
+    [layout, layoutRef, configNames, proposals, onOpenConfig, onPin, onShowLayer, onFoundKey],
+  );
+  const drawReference = useCallback((reference: Reference) => referenceView(reference, referenceContext), [referenceContext]);
+  const drawCarriedReference = useCallback(
+    (reference: Reference) => referenceView(reference, carriedForeign ? { ...referenceContext, foreign: true } : referenceContext),
+    [referenceContext, carriedForeign],
+  );
   const [draft, setDraft] = useState("");
   const [motionPaused, setMotionPaused] = useState(false);
   // The command rows for what's typed. Enter runs the highlighted one; a short text highlights the first command, a longer one (a
@@ -526,7 +561,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
               />
             ) : (
               <>
-              {carried === null ? null : <CarriedThreadView thread={carried} boardName={board.name.replace(/ keyboard \(ANSI\)$/, "")} {...(configCards === undefined ? {} : { configCards })} />}
+              {carried === null ? null : <CarriedThreadView thread={carried} boardName={board.name.replace(/ keyboard \(ANSI\)$/, "")} {...(configCards === undefined ? {} : { configCards })} reference={drawCarriedReference} />}
               {transcript.turns.map((turn) =>
                 turn.kind === "user" ? (
                   <UserMessage
@@ -557,6 +592,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                     compact={variant === "bar"}
                     motionPaused={motionPaused}
                     revised={revised}
+                    reference={drawReference}
                     {...(configCards === undefined ? {} : { configCards })}
                   />
                 ),

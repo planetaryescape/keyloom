@@ -1292,6 +1292,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   const chatDrafts = useMemo(() => draftsForChat(parked), [parked]);
+  // The config names a reply's `{config:…}` marker can draw (D-468): the list the page already switches between.
+  const configNames = useMemo(() => new Map(chrome.layouts.map((candidate) => [candidate.id, candidate.name])), [chrome.layouts]);
 
   /**
    * Opens another board or config, carrying the layer by name and the chat (D-317). A conversation belongs to one layout, so the thread
@@ -1553,6 +1555,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onReplyCompleted={onReplyCompleted}
                 onOpenConfig={switchLayout}
                 onReviewProposals={() => { setReviewOpen(false); setProposalsOpen(true); }}
+                onShowLayer={chooseLayer}
+                onFoundKey={setFound}
+                configNames={configNames}
               />
             </>
   );

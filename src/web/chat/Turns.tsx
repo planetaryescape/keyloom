@@ -4,7 +4,7 @@ import type { AgentArtifact } from "../../api/artifacts.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { groupProposals } from "./compare.ts";
-import { Markdown } from "./Markdown.tsx";
+import { Markdown, type DrawReference } from "./Markdown.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { PriorityChips } from "./PriorityChips.tsx";
 import { ProposalCompare } from "./ProposalCompare.tsx";
@@ -281,9 +281,11 @@ interface Props {
   configCards?: ConfigCards;
   /** The ids of proposals a later one revised, anywhere in the thread: a superseded card reads "by the revised proposal" only for these (D-452). */
   revised?: ReadonlySet<string>;
+  /** Draws a reference the reply named (D-468): a chip that goes to it, or the words it stands for. */
+  reference?: DrawReference;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards, revised }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards, revised, reference }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -302,7 +304,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
       <AgentWorking view={work} motionPaused={motionPaused} />
       {/* Hidden from the live region until the reply is whole, so a screen reader hears it once, not token by token. */}
       <div aria-hidden={streaming || undefined}>
-        {turn.text === "" ? null : <Markdown source={turn.text} />}
+        {turn.text === "" ? null : <Markdown source={turn.text} {...(reference === undefined ? {} : { reference })} />}
         {turn.phase === "done" && offers > 0 ? <p className="sr-only">keyloom offered {offers} {offers === 1 ? "option" : "options"}.</p> : null}
       </div>
       {turn.confirmation ? <ConfirmationCardView confirmation={turn.confirmation} disabled={busy} /> : null}
