@@ -294,26 +294,36 @@
   background: var(--color-panel);
 }
 
-/* A reference the reply named (D-468): the name the page resolved, sitting inside the sentence. It wraps like a word (a long config
-   name breaks rather than widening the reply past the panel) and keeps the line rhythm, so two chips on one line at phone width read as
-   words with a hairline around them, not as buttons in a row. */
+/* A reference the reply named (D-468): a link inside the sentence, not a box. No border and no fill at rest, the sentence's own colour
+   and font, and a hairline underline, so a reply naming a config, a layer, a key and a proposal still reads as prose rather than a form.
+   It wraps like a word (a long config name breaks instead of widening the reply), hover and focus give it the quiet fill, and focus keeps
+   the visible ring. */
 .ref-chip {
   display: inline;
   max-width: 100%;
-  padding: 0 var(--space-1);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-panel);
-  color: var(--color-text);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
   font: inherit;
   text-align: left;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 2px;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 .ref-chip:hover {
-  border-color: var(--color-border-strong);
   background: var(--color-accent-bg);
+  text-decoration-color: currentColor;
+}
+
+.ref-chip:focus-visible {
+  background: var(--color-accent-bg);
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .proposals {
