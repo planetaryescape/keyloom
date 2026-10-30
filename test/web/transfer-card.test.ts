@@ -61,10 +61,15 @@ describe("the copy's report card", () => {
     expect(html).toContain("Moonlander");
     expect(html).toContain("Corne");
     expect(html).toContain("42 keys came across on 2 layers, 5 of them nearest-place guesses.");
-    // A line per layer.
+    // The per-layer breakdown is detail, closed: the carried sentence leads and the drops sit above it.
+    expect(await count(html, "details.transfer-layers-details")).toBe(1);
+    expect(await count(html, "details.transfer-layers-details[open]")).toBe(0);
+    expect(html).toContain("<summary>Carried by layer</summary>");
     expect(html).toContain("Base");
     expect(html).toContain("30 carried, 5 guessed, 12 left off");
     expect(html).toContain("Navigation");
+    expect(html.indexOf("42 keys came across")).toBeLessThan(html.indexOf("Carried by layer"));
+    expect(html.indexOf("Carried by layer")).toBeLessThan(html.indexOf("15 keys did not come across"));
     // Every dropped key with its own reason, and the count that says more exist.
     expect(html).toContain("15 keys did not come across");
     expect(html).toContain("Esc (Base)");
@@ -84,12 +89,13 @@ describe("the copy's report card", () => {
     expect(html).toContain("<summary");
   });
 
-  test("an older card with only the first fields still reads", () => {
+  test("an older card with only the first fields still reads", async () => {
     const html = render([minimal]);
     expect(html).toContain("Glove80");
     expect(html).toContain("Moonlander");
     expect(html).toContain("All 3 keys came across.");
     expect(html).not.toContain("did not come across");
+    expect(await count(html, "details.transfer-layers-details")).toBe(0);
     expect(html).not.toContain("combos copied");
     expect(html).not.toContain("Left out");
   });
@@ -98,6 +104,7 @@ describe("the copy's report card", () => {
     const html = render([{ ...rich, skipped: [], skippedCount: 0, placementsBlocked: 0 }]);
     expect(html).toContain("All 42 keys came across on 2 layers, 5 of them nearest-place guesses.");
     expect(await count(html, ".transfer-drops")).toBe(0);
+    expect(await count(html, "details.transfer-layers-details")).toBe(1);
     expect(html).not.toContain("did not come across");
   });
 
@@ -127,6 +134,8 @@ describe("the copy's report card", () => {
     expect(html).not.toContain("Key 40 (Base)");
     expect(html).toContain("and 40 more");
     expect(await count(html, ".transfer-drops li")).toBe(41);
+    // One layer has nothing to break down, so no second disclosure.
+    expect(await count(html, "details.transfer-layers-details")).toBe(0);
   });
 
   test("no artifacts render nothing; an artifact kind the page does not know is ignored, not thrown", async () => {

@@ -114,23 +114,33 @@ try {
       await until("the new config", "document.body.innerText.includes('on Corne')");
       // The carry reloads into the new config; its thread is fetched again, so wait for the card to be back before framing it.
       await until("the card in the new config", "!!document.querySelector('.transfer-card')", 30_000);
-      // Bring the card's top into view in the thread, as a reader would scroll to it.
       // Frame the card's top inside whatever scrolls the thread: the page's chat column, or the phone's bottom sheet.
-      const frame = `(() => { const card = document.querySelector('.transfer-card'); let node = card?.parentElement; while (node && node.scrollHeight <= node.clientHeight + 1) node = node.parentElement; const cardRect = card?.getBoundingClientRect(), nodeRect = node?.getBoundingClientRect(); if (node && cardRect && nodeRect) node.scrollTop += cardRect.top - nodeRect.top - 8; })()`;
-      await js(frame);
-      await sleep(300);
-      await sleep(300);
+      // The sheet scrolls itself to the newest message when it settles, so retry until the card's top stays at the thread's top.
+      // A card shorter than the thread is shown whole at the bottom of it; a taller one (the phone sheet) is shown from its top.
+      const frame = `(() => { const card = document.querySelector('.transfer-card'); let node = card?.parentElement; while (node && node.scrollHeight <= node.clientHeight + 1) node = node.parentElement; const a = card?.getBoundingClientRect(), b = node?.getBoundingClientRect(); if (!node || !a || !b) return false; node.scrollTop += a.height <= b.height ? a.bottom - b.bottom + 8 : a.top - b.top - 8; return true; })()`;
+      const aligned = `(() => { const card = document.querySelector('.transfer-card'); let node = card?.parentElement; while (node && node.scrollHeight <= node.clientHeight + 1) node = node.parentElement; const a = card?.getBoundingClientRect(), b = node?.getBoundingClientRect(); if (!a || !b) return false; return a.height <= b.height ? (a.top >= b.top - 1 && a.bottom <= b.bottom + 1) : Math.abs(a.top - b.top) < 24; })()`;
+      let framed = false;
+      for (let i = 0; i < 12 && !framed; i++) {
+        await js(frame);
+        await sleep(150);
+        framed = await js(aligned);
+      }
+      if (!framed) throw new Error(`the card did not settle in the thread's view at ${width}x${height} (${theme})`);
+      await sleep(150);
       await shoot(`card-${theme}-${width}x${height}`);
 
       const facts = await js(`(() => {
         const card = document.querySelector('.transfer-card');
         const details = card?.querySelector('details.transfer-drops');
+        const byLayer = card?.querySelector('details.transfer-layers-details');
         const root = document.documentElement;
         const rect = card?.getBoundingClientRect();
         return {
           text: (card?.innerText ?? '').slice(0, 4000),
           summary: details?.querySelector('summary')?.innerText ?? null,
           open: details?.open ?? false,
+          layerSummary: byLayer?.querySelector('summary')?.innerText ?? null,
+          layerOpen: byLayer?.open ?? false,
           overflow: root.scrollWidth > root.clientWidth,
           startsInView: rect ? rect.top >= 0 && rect.top < innerHeight : false,
           cardWidth: Math.round(rect?.width ?? 0),
@@ -140,7 +150,7 @@ try {
           banned: /unsupported|successfully|!/i.test(card?.innerText ?? ''),
         };
       })()`);
-      findings.push(`${theme} ${width}x${height}: card ${facts.cardWidth}x${facts.cardHeight}px in ${facts.viewport}x${height}px, starts in view=${facts.startsInView}, overflow=${facts.overflow}, failed step=${facts.failed}, banned wording=${facts.banned}, summary=${JSON.stringify(facts.summary)}`);
+      findings.push(`${theme} ${width}x${height}: card ${facts.cardWidth}x${facts.cardHeight}px in ${facts.viewport}x${height}px, card top framed=${framed}, overflow=${facts.overflow}, failed step=${facts.failed}, banned wording=${facts.banned}, summary=${JSON.stringify(facts.summary)}, layers=${JSON.stringify(facts.layerSummary)}, layers open=${facts.layerOpen}`);
       if (facts.overflow) throw new Error(`the card overflows at ${width}x${height} (${theme})`);
       if (facts.banned) throw new Error(`the card reads with banned wording at ${width}x${height} (${theme})`);
       if (facts.failed) throw new Error(`a step failed before the card at ${width}x${height} (${theme})`);
@@ -156,7 +166,17 @@ try {
       }
 
       if (theme === "dark" && width === 1440) {
-        // The disclosure opens from the keyboard: focus the summary and press Enter.
+        // Both disclosures open from the keyboard: focus the summary and press Enter.
+        if (facts.layerSummary === null) throw new Error("no layer disclosure on a multi-layer copy");
+        await js("document.querySelector('details.transfer-layers-details summary').focus()");
+        await press("Enter", "Enter", 13, "\r");
+        await sleep(300);
+        const layersOpened = await js("document.querySelector('details.transfer-layers-details')?.open === true && document.activeElement === document.querySelector('details.transfer-layers-details summary')");
+        await press("Enter", "Enter", 13, "\r");
+        await sleep(200);
+        const layersClosed = await js("document.querySelector('details.transfer-layers-details')?.open === false");
+        findings.push(`keyboard: Carried by layer focused, Enter opened it (${layersOpened}) and closed it again (${layersClosed})`);
+        if (!layersOpened || !layersClosed) throw new Error("the layer disclosure did not open and close from the keyboard");
         await js("document.querySelector('.transfer-drops summary')?.focus()");
         await press("Enter", "Enter", 13, "\r");
         await sleep(400);

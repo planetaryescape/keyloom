@@ -112,8 +112,9 @@ function OutcomeCardView({ outcome }: { outcome: OutcomeCard }) {
   );
 }
 
-// The copy's card (D-467). It says what came across, what did not and why, and what was never about keys; the drops stay behind Details so
-// the card is short. It reads as keyloom talking: no success wording, no exclamation, and every count names the plan's own facts.
+// The copy's card (D-467). It says what came across, what did not and why, and what was never about keys. The drops lead, because what is
+// missing decides whether the copy is usable; the per-layer breakdown and the drops both stay behind a disclosure, so the card is short.
+// It reads as keyloom talking: no success wording, no exclamation, and every count names the plan's own facts.
 function TransferArtifactView({ transfer }: { transfer: Extract<AgentArtifact, { kind: "transfer" }> }) {
   const dropped = transfer.skippedCount ?? transfer.skipped.length;
   const layers = transfer.layers ?? [];
@@ -143,16 +144,19 @@ function TransferArtifactView({ transfer }: { transfer: Extract<AgentArtifact, {
       </p>
       <p className="ask-description">{carriedLine}</p>
       {layerTotal > 1 ? (
-        <ul className="transfer-layers">
-          {layers.map((layer, index) => (
-            <li key={index}>
-              <strong>{layer.source}</strong>: {layer.carried} carried
-              {layer.guessed > 0 ? `, ${layer.guessed} guessed` : ""}
-              {layer.notCarried > 0 ? `, ${layer.notCarried} left off` : ""}
-            </li>
-          ))}
-          {layerTotal > layers.length ? <li>and {layerTotal - layers.length} more layers</li> : null}
-        </ul>
+        <details className="ask-details transfer-layers-details">
+          <summary>Carried by layer</summary>
+          <ul className="transfer-layers">
+            {layers.map((layer, index) => (
+              <li key={index}>
+                <strong>{layer.source}</strong>: {layer.carried} carried
+                {layer.guessed > 0 ? `, ${layer.guessed} guessed` : ""}
+                {layer.notCarried > 0 ? `, ${layer.notCarried} left off` : ""}
+              </li>
+            ))}
+            {layerTotal > layers.length ? <li>and {layerTotal - layers.length} more layers</li> : null}
+          </ul>
+        </details>
       ) : null}
       {dropped > 0 ? (
         <details className="ask-details transfer-drops">

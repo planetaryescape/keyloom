@@ -898,18 +898,19 @@
   font-weight: var(--weight-semibold);
 }
 
-.transfer-drops summary {
+/* Both disclosures — the drops and the per-layer breakdown — open from the keyboard and read alike. */
+.transfer-card summary {
   cursor: pointer;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
 }
 
-.transfer-drops summary:focus-visible {
+.transfer-card summary:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
-.transfer-drops[open] summary {
+.transfer-card details[open] summary {
   margin-bottom: var(--space-1);
 }
 
