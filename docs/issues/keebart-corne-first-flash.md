@@ -1,6 +1,24 @@
 # Keebart Corne needs its first manual bootloader entry
 
-Status: board support implemented in `1e6fcdbb3ef675eeb274bd8aac2108c71d72006f` on `fix/keebart-corne`; both firmware targets build successfully. Physical flashing and acceptance remain blocked on manual bootloader entry. Baseline `origin/main` at `e894e6dc25bb1c5f658832107f61eea201a6520c`, 2026-10-29. D-462 records the recipe and encoder scope.
+Status: first flash and acceptance completed 2026-10-30 with build `bld_01M653RH2SPEFMV8GP0NCBGE0T`; both halves report `Corne Choc BT L` and `Corne Choc BT R` and run that build, and BK confirmed typing and both encoders work. Board support is on `main` at `ce53799` (v0.63.0). The history below is the blocked state it came from. D-462 records the recipe and encoder scope.
+
+## The first flash that completed
+
+`POST /api/sync` on the Corne config reused `bld_01M653RH2SPEFMV8GP0NCBGE0T` and started sync `syn_01M659B8588R3NK1BNHXMA6ZM3`. The flasher restarted the right half over its serial port, wrote `right.uf2`, and took the `ENXIO: no such device or address` copy ending as done once `KEEBART` unmounted. It then restarted the **left** half at 1200 baud, wrote `left.uf2`, and waited for both to return:
+
+```
+KEEBART unmounted; the right half is flashed
+the left half runs keyloom build 7D3VMW2T3ESZ; closing … at 1200 baud restarts it into its bootloader
+KEEBART appeared; the left half is in its bootloader
+KEEBART unmounted; the left half is flashed
+Verified: the right half is running build bld_01M653RH2SPEFMV8GP0NCBGE0T, and the left half is running build bld_01M653RH2SPEFMV8GP0NCBGE0T.
+```
+
+The sync took 197 s to flash and finished `succeeded`; the board's state became `in_sync`. `keyloom keyboard detect` then listed `Corne Choc BT L` and `Corne Choc BT R`, and the layout was exercised on the keyboard: typing and both encoders work.
+
+The earlier failed attempt had left the right half written but unconfirmed within 45 s; the 180 s `verifyWaitMs` and reading a portless half from its USB serial marker are what let this attempt finish (D-465).
+
+## How it was blocked before
 
 The existing `foostan/corne` definition has 42 positions and builds `nice_nano_v2` with `corne_left` and `corne_right` shields. The Keebart Corne Choc Pro BT has 46 positions, with integrated left and right nRF52840 board targets. Its physical layout and targets come from [Keebart/zmk-config at 98c5a118](https://github.com/Keebart/zmk-config/tree/98c5a1181ff7db1f480f684f714126922d55b8f0/boards/arm/corne_choc_pro).
 
@@ -10,9 +28,9 @@ The existing `foostan/corne` definition has 42 positions and builds `nice_nano_v
 
 Keebart's supplied guide specifies double-pressing the underside reset button to mount KEEBART. ZMK Studio's [core protocol](https://github.com/zmkfirmware/zmk-studio-messages/blob/main/proto/zmk/core.proto) exposes device info, lock state, locking and settings reset; it supplies no bootloader request. Settings reset was not attempted. Neither Glove80 half was reset or flashed.
 
-## Continue from the prepared firmware
+## The prepared firmware and the manual entry it needed
 
-Use the installed CLI's `flash --help` to select the successful build, then connect and enter the bootloader on the right half first and left half second. The recipe names both KEEBART drives and assigns the matching UF2 to each. A mounted bootloader must be identified before copying; never select a drive merely because another keyboard has a similar name.
+At that point the instruction was to use the installed CLI's `flash --help` to select the successful build, then connect and enter the bootloader on the right half first and left half second. The recipe names both KEEBART drives and assigns the matching UF2 to each. A mounted bootloader must be identified before copying; never select a drive merely because another keyboard has a similar name.
 
 Acceptance requires both halves to reconnect with the new build markers and the resulting layout to be exercised on the keyboard. A successful compilation or UF2 copy alone does not establish that the layout works. The right half's connection was not independently established from the initial USB inventory.
 
@@ -35,6 +53,6 @@ Local logs: `/tmp/keyloom-corne-tests.log`, `/tmp/keyloom-corne-full-tests.log`,
 
 The installed CLI completed build `bld_01M64EXAEMCSH71ZZM0ZZF68C5` on 2026-10-29 with the committed board support. Its left UF2 is 477,696 bytes (933 blocks); right is 372,224 bytes (727 blocks). Both target nRF52840 family `0xada52840` at application address `0x26000`, pass UF2 validation and contain the same keyloom build marker. The left target enables the central role; the right does not. Both compile the EC11 encoder driver and keyloom's serial/restart module. The final saved layout head still matches the build's revision.
 
-The durable private handover is `~/.local/share/keyloom/keebart-setup/README.md`, with `firmware/left.uf2`, `firmware/right.uf2`, checksums, the bundle, build log, layout export and final renders. No UF2 has been copied to a keyboard, no reconnect with the new markers has been observed, and typing/encoder acceptance is still outstanding. The last volume inventory contained no KEEBART drive.
+The durable private handover is `~/.local/share/keyloom/keebart-setup/README.md`, with `firmware/left.uf2`, `firmware/right.uf2`, checksums, the bundle, build log, layout export and final renders. Those earlier UF2s were not copied; the flash that completed on 2026-10-30 used `bld_01M653RH2SPEFMV8GP0NCBGE0T` as recorded above.
 
-Next action: connect the right half and double-press its underside reset button, then run `keyloom flash --build bld_01M64EXAEMCSH71ZZM0ZZF68C5 --wait 60`. Follow its prompt to connect and double-reset the left half. Confirm the half physically before exposing its boot drive: both halves use the same volume name. The flasher is not left running against an unidentified half.
+Superseded: the first flash completed on 2026-10-30 as recorded above, and typing and both encoders were accepted on the keyboard. The sections above are the blocked state, kept as evidence.
