@@ -221,6 +221,7 @@ const zmk: FirmwareDriver = {
     if (handsFree) {
       const hookInput: Parameters<typeof zmkHandsFreeHooks>[0] = {
         deps: realZmkHandsFreeDeps(a.handsFree?.zmk), board: a.board.definition, handsFree, steps: rev.flash.steps, buildId: a.buildId, findVolume, foreign: portOfAnotherBoard(a.board.definition.id),
+        ...(rev.detect ? { boardProductId: rev.detect.usbProductId } : {}),
         artifact: new Uint8Array(await Bun.file(a.artifactPath).arrayBuffer().catch(() => new ArrayBuffer(0))), log: (line) => a.log.line(line), screenLocked,
       };
       const lastGoodDir = a.lastGoodDir;

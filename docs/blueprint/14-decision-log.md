@@ -2137,3 +2137,21 @@ The hardware flash exposed a serial reconnect beyond the default 45-second check
 Partially replaces D-462's full-layer overlays. A fixed colour over both halves hides hue, speed and effect changes. When the native-binding reader recognises effect controls exclusively on one half, the generator targets that half's key positions with the static overlay. The opposite half continues rendering the selected effect. Power and master brightness still affect both halves. Layers without recognised effect controls, or with controls on both halves, retain full-layer colours. Highest-active-layer conditions restore ordinary colours on exit.
 
 Use the existing `setLayerLighting` operation to assign the control layer's indicator colour; there is no new shortcut or configuration field. The RGB module's `keys` property resolves the same physical positions independently on each half, preserving identical overlay order for split synchronization. Import validates the entire RGB block after bindings and kept macros have been read. It also accepts the previous full-layer rendering, so existing exports remain readable; edited masks are refused. Generator and import tests cover both control hands, master controls, earlier exports and edited masks. Physical effect preview still requires observing the keyboard.
+
+### D-464: A half that is not on USB cannot own a shared boot drive, so it no longer blocks a flash. (2026-10-30, BK: flash the Corne one half at a time)
+
+Replaces the part of D-437 and D-438 that refused a shared-label write whenever the other half was absent, and extends D-438's reading of a half to the serial number in its USB descriptor.
+
+Both Corne halves mount `KEEBART`, so keyloom refuses a boot drive it cannot attribute to a half. It used to require the other half to have a keyloom serial port before it would restart or write anything, which meant both halves had to be cabled for any flash. The Corne's left half has not brought its CDC port back since it was flashed, while its USB descriptor does name the new build, so that rule left the board unflashable and the previous flash record failed.
+
+A half that is not on USB at all cannot mount a boot drive, so it no longer blocks a restart or a write. Presence is read from serial ports and USB devices: a device under the board's IDs whose serial carries the other half's marker is running firmware; one that carries no marker cannot be identified and still refuses; no device at all is absent and allowed. A drive already mounted before the prompt is still refused before any of this, which is how a half already sitting in its bootloader is caught.
+
+A half with no port is read from the marker in its USB serial number, so a half that comes back portless is reported as running the build and verifies instead of failing at `verifyWaitMs`. `doctor` says it is seen by its USB serial number only. The prompt and the wait are unchanged: one half is flashed, then keyloom asks for the other.
+
+### D-465: A ZMK build target may name its half in the USB product string. (2026-10-30, BK: rename the halves so we know which is which)
+
+The boot drive label belongs to the bootloader and cannot differ per half. The product string a half reports while it runs comes from `CONFIG_USB_DEVICE_PRODUCT`, which keyloom sets per build target.
+
+`build.targets[].productName` writes `config/keyloom-<id>.conf` and passes it to that target's west build as `-DEXTRA_CONF_FILE`. The Corne's halves report `Corne Choc BT L` and `Corne Choc BT R`. Detection reads `detect.products`, replacing `detect.product`, and lists the old `Corne Choc BT` beside them so a half still running an earlier build is recognised.
+
+The name shows while a half runs, in System Information and in `keyloom keyboard detect`. It does not appear while a half is in its bootloader, where the Mac sees only the bootloader's drive and name, so it does not replace D-464's attribution.
