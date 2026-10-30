@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.64.0](https://github.com/planetaryescape/keyloom/compare/v0.63.0...v0.64.0) (2026-10-30)
+
+
+### Features
+
+* show what a copy carried ([#212](https://github.com/planetaryescape/keyloom/issues/212)) ([e508d27](https://github.com/planetaryescape/keyloom/commit/e508d279a39f29a962854953eb60fc151f7ef7a4))
+
 ## [0.63.0](https://github.com/planetaryescape/keyloom/compare/v0.62.0...v0.63.0) (2026-10-30)
 
 
