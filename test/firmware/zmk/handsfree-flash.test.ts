@@ -372,7 +372,7 @@ describe("the Keebart Corne: a flash with only one half on USB", () => {
 
   test("flashes the attached half when the other half is not on USB at all", async () => {
     // BK's desk, 2026-10-30: the right half cabled, the left on Bluetooth only. The left cannot own a KEEBART drive.
-    const r = await run(KEEBART, bundle(), (root) => fakeWorld({ root, halves: [half("R")] }));
+    const r = await run(KEEBART, bundle(), (root) => fakeWorld({ root, halves: [half("R")], portLagMs: 0 }));
     expect(r.w.touches).toEqual([{ path: "/dev/fake-ttyACM-R", baud: 1200 }]);
     expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }]);
     expect(r.lines.some((l) => l.includes("the other half isn't on USB"))).toBe(true);

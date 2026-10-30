@@ -130,9 +130,12 @@ export async function peerPresence(deps: ZmkHandsFreeDeps, t: HalfTarget, ports?
   const shared = own === undefined ? t.boardProductId?.toLowerCase() : undefined;
   if (own === undefined && shared === undefined) return "unattributable";
   const devices = (await deps.usb()).filter((d) => (t.vendorId === undefined || d.vendorId === t.vendorId.toLowerCase()) && d.productId === (own ?? shared));
-  if (devices.length === 0) return "absent";
-  if (own !== undefined) return "running";
-  return devices.some((d) => parseSerial(d.serial)?.half === t.half.marker) ? "running" : "unattributable";
+  if (own !== undefined) return devices.length > 0 ? "running" : "absent";
+  // Under shared IDs the other half's own device is also in this list: its marker says it is not the peer.
+  const markers = devices.map((d) => parseSerial(d.serial)?.half);
+  if (markers.includes(t.half.marker)) return "running";
+  if (markers.includes(undefined)) return "unattributable";
+  return "absent";
 }
 
 /**
