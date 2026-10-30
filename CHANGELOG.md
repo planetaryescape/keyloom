@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.63.0](https://github.com/planetaryescape/keyloom/compare/v0.62.0...v0.63.0) (2026-10-30)
+
+
+### Features
+
+* bring the Keebart Corne support onto main ([#210](https://github.com/planetaryescape/keyloom/issues/210)) ([ce53799](https://github.com/planetaryescape/keyloom/commit/ce53799db990d3615d600a35da1e9972c303f28b))
+
 ## [0.62.0](https://github.com/planetaryescape/keyloom/compare/v0.61.0...v0.62.0) (2026-10-30)
 
 
