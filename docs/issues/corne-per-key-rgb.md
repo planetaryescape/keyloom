@@ -23,6 +23,12 @@ keyloom build <config>
 
 HSV channels range from 0 to 255. An empty lighting object deliberately blacks out a layer; `null` removes its override and shows the selected effect. Toggle and brightness controls affect all output. Hue, saturation, speed and effect controls affect the fallback effect; compiled per-key colours remain as chosen in the editor.
 
+## A lighting-control layer leaves the opposite half showing effects
+
+Give the setup layer an indicator colour with `setLayerLighting`, then enter it using its encoder double-click. If its recognised effect controls are all on the left, that half shows the fixed colour while the right previews hue, saturation, speed and effect changes. Controls exclusively on the right reverse those roles. Power and master brightness still affect both halves. Leaving the setup layer restores the active typing layer's colours.
+
+The generator uses the RGB module's physical-key mask for the static overlay, keeping the same overlay registry on both halves. Layers without recognised effect controls, or with controls on both halves, retain their full-layer colours. Import checks the mask after reading bindings and kept definitions, accepts earlier full-layer exports, and refuses edited masks. D-463 records the decision. Physical effect preview and indicator placement remain hardware acceptance checks.
+
 ## The BT LED order is still unverified
 
 Keebart's BT hardware definition declares 23 LEDs per half but no key-to-LED map. The candidate map comes from the manufacturer's **wired** Corne Choc Pro, `Keebart/vial-qmk-corne-choc-pro@4649f864f15ba9f540ee83d66b50cb9fcd4f7e59`, `keyboards/keebart/corne_choc_pro/standard/keyboard.json`, matching matrix coordinates to the 46-position layout in `info.json`. This is an explicit inference across hardware variants, not proof of the BT wiring.

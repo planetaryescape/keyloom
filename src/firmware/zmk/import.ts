@@ -272,6 +272,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
       if (colours) layer.lighting = colours;
     });
   }
+  rgb.verify?.(layout);
 
   return {
     layout,

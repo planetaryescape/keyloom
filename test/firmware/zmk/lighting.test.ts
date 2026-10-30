@@ -35,6 +35,40 @@ test("power and brightness control the matrix, hue and effects control the fallb
   expect(() => matrixControls("&rgb_ug RGB_UNSUPPORTED")).toThrow("does not support");
 });
 
+test.each(["left", "right"] as const)("effect controls on the %s leave the other half available for preview", (hand) => {
+  const layout = fixture();
+  const position = board.hands[hand][0]!;
+  layout.layers[0]!.bindings[position] = { kind: "native", firmware: "zmk", source: "&rgb_ug RGB_HUI", label: "Hue+" };
+  const source = renderZmkLighting(layout, board).join("\n");
+  const overlay = source.slice(source.indexOf("        layer_0 {"), source.indexOf("        layer_1 {"));
+  expect(overlay).toContain(`keys = <${board.hands[hand].join(" ")}>;`);
+  expect(overlay).not.toContain("all-leds;");
+  expect(source).toContain("layer = <0>;\n            only-topmost;");
+});
+
+test("controls on both halves and master brightness keep full-layer colours", () => {
+  const layout = fixture();
+  for (const hand of ["left", "right"] as const) {
+    layout.layers[0]!.bindings[board.hands[hand][0]!] = { kind: "native", firmware: "zmk", source: "&rgb_ug RGB_EFF", label: "Effect" };
+  }
+  expect(renderZmkLighting(layout, board).join("\n")).not.toContain("            keys = <");
+  layout.layers[0]!.bindings.fill({ kind: "native", firmware: "zmk", source: "&rgb_ug RGB_BRI", label: "Bright+" });
+  expect(renderZmkLighting(layout, board).join("\n")).not.toContain("            keys = <");
+});
+
+test("preview masks round-trip and previous full-layer exports remain readable", async () => {
+  const layout = fixture();
+  layout.layers[0]!.bindings[1] = { kind: "native", firmware: "zmk", source: "&rgb_ug RGB_SPI", label: "Speed+" };
+  const source = generate(layout);
+  const keymap = source.files[0]!.content;
+  const read = await importZmk({ name: "preview", keymap, conf: source.files[1]!.content }, board);
+  expect(generate(read.layout).files[0]!.content).toBe(keymap);
+  const previous = keymap.replace(renderZmkLighting(layout, board).join("\n"), renderZmkLighting(layout, board, false).join("\n"));
+  expect(previous).not.toBe(keymap);
+  expect((await importZmk({ name: "previous", keymap: previous }, board)).layout.layers[0]!.lighting).toEqual(layout.layers[0]!.lighting);
+  await expect(importZmk({ name: "edited", keymap: keymap.replace(`keys = <${board.hands.left.join(" ")}>;`, "keys = <0>;" ) }, board)).rejects.toThrow("edited");
+});
+
 test("the build manifest pins the RGB module and generation disables the competing strip driver", () => {
   const build = board.revisions[0]!.build;
   if (build.kind !== "zmk-west-docker") throw Error("west");

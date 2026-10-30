@@ -2118,7 +2118,7 @@ The Keebart Corne Choc Pro BT has 46 positions and integrated nRF52840 targets `
 
 ZMK is pinned to v0.3.0 (`edf5c0814fd3ea202e43aad2d68fd32e882a518c`); the hardware module to Keebart/zmk-config `98c5a1181ff7db1f480f684f714126922d55b8f0`. The source module's MIT notices remain upstream; geometry is generated, not a copied hardware implementation. Studio is disabled so its saved dynamic keymap cannot override a newly built layout. The recipe includes keyloom's existing hands-free module; hardware verification remains separate from a successful build. See [the first-flash record](../issues/keebart-corne-first-flash.md).
 
-### D-461: The Keebart Corne uses a pinned RGB matrix module for key and layer colours. (2026-10-29, BK: implement addressable LEDs and make the controls ergonomic)
+### D-462: The Keebart Corne uses a pinned RGB matrix module for key and layer colours. (2026-10-29, BK: implement addressable LEDs and make the controls ergonomic)
 
 Extends D-190's existing colour model to this ZMK board and replaces this board's stock-underglow-only limitation. It does not change the Glove80's firmware or capability claim.
 
@@ -2131,3 +2131,9 @@ The BT board declares 23 LEDs per half without their key order. The candidate or
 Ergonomic access belongs in the person's layout: an encoder tap dance can keep its single-click action and toggle lighting controls on double-click. It requires no simultaneous holds across halves and no additional product-level shortcut mechanism.
 
 The hardware flash exposed a serial reconnect beyond the default 45-second check. `handsFree.verifyWaitMs` permits a board-specific bounded deadline (maximum 300 seconds); the Corne uses 180 seconds, while other boards retain the default. Explicit transport overrides take precedence. This is a waiting policy, not proof of healthy serial transport: both Corne USB build markers were observed, but the left serial interface still missed the extended deadline. The failed flash record is retained.
+
+### D-463: A coloured ZMK layer with effect controls on one half leaves the other half showing the effect. (2026-10-30, BK: keep a mode indicator visible while previewing effects)
+
+Partially replaces D-462's full-layer overlays. A fixed colour over both halves hides hue, speed and effect changes. When the native-binding reader recognises effect controls exclusively on one half, the generator targets that half's key positions with the static overlay. The opposite half continues rendering the selected effect. Power and master brightness still affect both halves. Layers without recognised effect controls, or with controls on both halves, retain full-layer colours. Highest-active-layer conditions restore ordinary colours on exit.
+
+Use the existing `setLayerLighting` operation to assign the control layer's indicator colour; there is no new shortcut or configuration field. The RGB module's `keys` property resolves the same physical positions independently on each half, preserving identical overlay order for split synchronization. Import validates the entire RGB block after bindings and kept macros have been read. It also accepts the previous full-layer rendering, so existing exports remain readable; edited masks are refused. Generator and import tests cover both control hands, master controls, earlier exports and edited masks. Physical effect preview still requires observing the keyboard.

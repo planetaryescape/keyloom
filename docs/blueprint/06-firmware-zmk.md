@@ -114,8 +114,10 @@ A `zmk,conditional-layers` container is read into `Layout.conditionalLayers` and
 
 ## Keebart per-key lighting uses an external RGB matrix module
 
-Status: implemented in the adapter; hardware colour placement is pending (D-461).
+Status: implemented in the adapter, including effect preview on the half opposite lighting controls (D-462, D-463); hardware colour placement is pending.
 
 `zmk-west-docker.rgbMatrix` pins the RGB engine and names its LED strip, physical layout, left-half LED count and brightness cap. `lighting.ledPositions` maps chain order to key positions. Generation writes one static overlay for each coloured layer, with a highest-active-layer condition and identical overlay order on both halves. Uncoloured layers show the fallback effect. Existing `&rgb_ug` controls target the new engine’s matrix or effect controller.
+
+On a coloured layer whose recognised hue, saturation, speed or effect controls are all on one half, only that half receives the static colours. The other half previews the selected effect. Master power and brightness affect both halves. A layer with controls on both halves, or no recognised effect controls, keeps its full-layer colours. Import verifies this mask against the imported controls and also accepts earlier full-layer exports.
 
 The Corne keeps ZMK v0.3.0; a compatibility header supplies the enabled-child count helper its Zephyr lacks. The keyloom module handles its switched LED supply. The original Glove80 recipe remains unchanged. [Usage, source provenance and verification](../issues/corne-per-key-rgb.md).

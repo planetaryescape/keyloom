@@ -1,11 +1,27 @@
 // Keyloom's existing per-layer colours become static RGB-matrix overlays. Keep the same overlay
 // registry on both halves: the module synchronizes their gates by declaration order.
 import type { BoardDefinition } from "../../boards/schema.ts";
-import type { Layout } from "../../layout/schema.ts";
+import type { Layer, Layout } from "../../layout/schema.ts";
 import { colourAt, hsvToHex } from "../../layout/colour.ts";
+import { keptDefinitions } from "../../layout/kept-behaviours.ts";
+import { readNative } from "../../layout/native-read.ts";
 import { GenerateError } from "./generate-error.ts";
 
-export function renderZmkLighting(layout: Layout, board: BoardDefinition): string[] {
+/** Keep the control half identifiable while the other half previews changes to the effect. */
+function controlPositions(layer: Layer, layout: Layout, board: BoardDefinition): readonly number[] | undefined {
+  const kept = keptDefinitions(layout.passthrough);
+  const controls = layer.bindings.flatMap((binding, position) => {
+    if (binding.kind !== "native") return [];
+    const reading = readNative(binding, kept);
+    const steps = reading.kind === "steps" ? reading.steps : reading.kind === "holdLayer" ? reading.tapSteps : [];
+    return steps.some((step) => step.kind === "lighting" && !["toggle", "briUp", "briDown"].includes(step.op)) ? [position] : [];
+  });
+  if (controls.length === 0) return undefined;
+  return [board.hands.left, board.hands.right].find((positions) => controls.every((position) => positions.includes(position)));
+}
+
+// Import also checks the previous full-layer rendering so existing exports remain readable.
+export function renderZmkLighting(layout: Layout, board: BoardDefinition, effectPreview = true): string[] {
   const build = board.revisions[0]?.build;
   const rgb = build?.kind === "zmk-west-docker" ? build.rgbMatrix : undefined;
   if (!rgb) {
@@ -30,7 +46,7 @@ export function renderZmkLighting(layout: Layout, board: BoardDefinition): strin
     `        ${property} = <${values[1]?.join(" ")}>;`,
     "#endif",
   ];
-  const layers = layout.layers.flatMap((layer, index) => layer.lighting === undefined ? [] : [{ layer, index }]);
+  const layers = layout.layers.flatMap((layer, index) => layer.lighting === undefined ? [] : [{ layer, index, controls: effectPreview ? controlPositions(layer, layout, board) : undefined }]);
   return [
     `// keyloom-rgb-begin ${JSON.stringify(layout.layers.map((layer) => layer.lighting ?? null))}`,
     "#include <dt-bindings/keypaw/rgb_matrix.h>",
@@ -57,11 +73,13 @@ export function renderZmkLighting(layout: Layout, board: BoardDefinition): strin
     '            breathe { compatible = "keypaw,rgb-matrix-breathe"; color = <0x00b8d4>; duration = <2400>; };',
     '            spectrum { compatible = "keypaw,rgb-matrix-spectrum"; duration = <4000>; };',
     "        };",
-    ...layers.flatMap(({ layer, index }) => [
+    ...layers.flatMap(({ layer, index, controls }) => [
       `        layer_${index} {`,
       '            compatible = "keypaw,rgb-overlay";',
       `            condition = <&klcond_${index}>;`,
-      "            all-leds;",
+      controls
+        ? `            keys = <${controls.join(" ")}>;`
+        : "            all-leds;",
       "            colours {",
       '                compatible = "keypaw,rgb-matrix-static";',
       ...perHalf("led-colors", halves.map((ps) => ps.map((p) => hsvToHex(colourAt(layer, p)).replace("#", "0x")))),
