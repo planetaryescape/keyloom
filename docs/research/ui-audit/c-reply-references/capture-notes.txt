@@ -1,0 +1,45 @@
+Stage C captures (D-468). Headless Chrome, device pixel ratio 1, real app on a scratch data directory.
+data dir: /var/folders/3p/n76j7jp14ljcvr1bhf7qmlh00000gn/T/keyloom-test-WkegIv
+layout: lay_01M65M5A285HHC0KY2E4RX8XC2  other config: lay_01M65M5A2APTFP5D0EANHBQ6HH  named layer: layer-2  proposal: cs_01M65M5A3QXDK4NPQMK8RJABA0
+conversation: conv_01M65M5A2DZ1JSJB1SQHST60AH
+
+light 1440x900
+  page overflowX: 0  prose width: 428  line-height: 24px
+  chip heights: [50, 26, 26, 26, 26, 26]  chips sharing a line: 2
+  chips drawn: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2'), ('layer', 'Layer 2'), ('key', 'S hold ⌥')]
+  tab reached: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2')]
+  layer press (Enter): Layer 01 -> Layer 23
+  key press (Enter): pulse {'lit': 1, 'key': '30', 'layer': 'Layer 01'}
+  proposal press (Enter): pinned 0 -> 1
+  config press (Enter): Editing Moonlander · Glove80 (42-key-map) moved onto the Moonlander, second attempt
+
+light 390x844
+  page overflowX: 0  prose width: 358  line-height: 24px
+  chip heights: [50, 26, 26, 26, 26, 26]  chips sharing a line: 2
+  chips drawn: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2'), ('layer', 'Layer 2'), ('key', 'S hold ⌥')]
+  tab reached: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2')]
+  layer press (Enter): Layer 01 -> Layer 23
+  key press (Enter): pulse {'lit': 1, 'key': '30', 'layer': 'Layer 01'}
+  proposal press (Enter): pinned 0 -> 1
+  config press (Enter): Editing Moonlander · Glove80 (42-key-map) moved onto the Moonlander, second attempt
+
+dark 1440x900
+  page overflowX: 0  prose width: 428  line-height: 24px
+  chip heights: [50, 26, 26, 26, 26, 26]  chips sharing a line: 2
+  chips drawn: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2'), ('layer', 'Layer 2'), ('key', 'S hold ⌥')]
+  tab reached: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2')]
+  layer press (Enter): Layer 01 -> Layer 23
+  key press (Enter): pulse {'lit': 1, 'key': '30', 'layer': 'Layer 01'}
+  proposal press (Enter): pinned 0 -> 1
+  config press (Enter): Editing Moonlander · Glove80 (42-key-map) moved onto the Moonlander, second attempt
+
+dark 390x844
+  page overflowX: 0  prose width: 358  line-height: 24px
+  chip heights: [50, 26, 26, 26, 26, 26]  chips sharing a line: 2
+  chips drawn: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2'), ('layer', 'Layer 2'), ('key', 'S hold ⌥')]
+  tab reached: [('config', 'Glove80 (42-key-map) moved onto the Moonlander, second attempt'), ('key', 'S hold ⌥'), ('layer', 'Layer 2'), ('proposal', 'Plain Option on layer 2')]
+  layer press (Enter): Layer 01 -> Layer 23
+  key press (Enter): pulse {'lit': 1, 'key': '30', 'layer': 'Layer 01'}
+  proposal press (Enter): pinned 0 -> 1
+  config press (Enter): Editing Moonlander · Glove80 (42-key-map) moved onto the Moonlander, second attempt
+

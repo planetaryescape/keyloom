@@ -87,6 +87,8 @@ The registry assigns one of these policies. Q32 must be resolved before mutating
 
 Applying to the active config may trigger already enabled auto-sync. The Apply card must say so before confirmation. Do not present it as a harmless local save. Editing an inactive config does not activate it. Preserve first-flash consent, exit-chord proof, typed-name deletion and firmware compatibility checks.
 
+The **Local view** row is now partly shipped without a typed client intent: a reply's reference marker (D-468) draws a chip that BK clicks, and the click opens the config with its thread, pins a proposal, shows a layer or pulses a key — the person acts, so there is no acknowledgement to report and nothing the model claims happened. What stays here is the rest of rung 28: History, the typing lab and Decisions opened by a typed intent with an acknowledgement, and an explicit unavailable-view result. Markers are not a competing protocol: they carry no intent, no acknowledgement and no client-side claim.
+
 Use typed tools for coherent jobs rather than dozens of arbitrary mutations. Existing read/propose/map tools remain. New operations may use a schema-discriminated `prepare_action` over registry action IDs; it cannot name an unregistered handler. The model cannot invoke the confirmation endpoint or mint a user approval.
 
 ```ts

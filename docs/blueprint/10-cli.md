@@ -228,6 +228,7 @@ Use a user-owned, nonsymlink cache that other users cannot write. Reinstall the 
 - Every command that creates something prints its ID first, in table mode and in JSON.
 - `layout show` in table mode prints each layer as a grid placed by the board's physical rows, the same rendering the agent gets from `get_layout` ([03](03-agent.md#tools)). What the agent sees and what a human debugging it sees are the same text.
 - `chat` streams assistant text to stdout as it arrives. With `--format json` it prints one final object: `{ conversationId, messageIds, proposals: [{ changeSetId, title, validation }] }`.
+- A reply may name a config, a proposal, a layer or a key with a typed marker (D-468). `chat` writes the name in table mode and keeps the marker itself in `text` under `--format json`, exactly as stored; see [What a reply names](#what-a-reply-names).
 
 ## Serving beside another keyloom
 
@@ -291,3 +292,17 @@ adapting it continues in the new config's own conversation
 ```
 
 `chat` prints it once, after the copy's own reply, and `--format json` adds it as `transfer_report`. `keyboard put` prints it for the plan it made instead of the old `N keys did not come across (reasons)` line, with the per-key lines bounded to the first eight drops and "and N more"; it has no conversation, so the last line is left out. The JSON for `keyboard put` is unchanged and still carries the plan itself (`layers`, `not_carried`, `combos`, `notes`).
+
+## What a reply names
+
+A reply names a config, a proposal, a layer or a key with a typed marker instead of the name: `{config:<config id>}`, `{proposal:<change set id>}`, `{layer:<layer id>}`, `{key:<layer id>:<position>}` (D-468). The marker carries an id, so the client draws the name; the stored message keeps it, and an older keyloom shows the marker text, which is why it stays short.
+
+In table mode `chat` writes the name on the stream, while the reply arrives: a marker can be split across two deltas, so an open `{` holds the text back until it closes (at most 64 characters; a brace that never closes is printed as it came). What it writes is a layer's name, what the key prints, a config's name, a proposal's title; a marker whose id names nothing keyloom still holds keeps the id as words, and one inside backticks stays as typed. After the reply, one line per reference that has a command, and nothing for a layer or a key, because the board is their surface:
+
+```
+Saved it on Glove80 copy, the Layer 2 layer, and the ⌫ key. The change is on the board.
+to open it: keyloom config use lay_01M65JGHPMH04G6XWDXBKF9QR3
+to review it: keyloom change show cs_01M65JJX62REZ96VCR35FPNRD2
+```
+
+`--format json` is unchanged: `text` is the reply the model wrote, markers included, because a machine reader can resolve them itself and the stored message is the same text. The web draws a chip for each marker that names something live ([28](28-agent-experience.md#results-use-app-owned-views-instead-of-prose-imitations)).
