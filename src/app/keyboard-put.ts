@@ -6,6 +6,7 @@ import type { LayoutSnapshot } from "../agent/ports.ts";
 import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import { newId } from "../persistence/ids.ts";
+import { transact } from "../persistence/transaction.ts";
 import type { ChangeSetSource } from "../persistence/change-sets.ts";
 import { type ChangeSetView, proposeChange } from "./changes.ts";
 import { type ConfigView, blankDocument, newConfig } from "./configs.ts";
@@ -33,8 +34,8 @@ export type PutInput = {
   source?: ChangeSetSource;
 };
 
-/** What a put would make, without making it (D-336): the plan, and the layout the placed proposal would give the board, to draw. */
-export type PutPreview = Omit<PutOutcome, "config" | "proposals"> & { name: string; after: Layout; summary: string };
+/** What a put would make, without making it (D-336): the plan, the layout the placed proposal would give the board, and anything the validator refuses, so the page can say it before a config is made. */
+export type PutPreview = Omit<PutOutcome, "config" | "proposals"> & { name: string; after: Layout; summary: string; problems: string[] };
 
 export type PutProposal = { changeSetId: string; title: string; summary: string; warnings: number; changedKeys: number };
 
@@ -59,10 +60,12 @@ export function previewPut(app: App, input: PutInput): PutPreview {
   const { view, target, plan } = planPut(app, input);
   const blank = blankDocument(target.definition.id);
   const ops = plan.opsWithPlacements.length > 0 ? plan.opsWithPlacements : plan.ops;
-  const after = evaluate(target.definition, blank, ops).after ?? blank;
+  const evaluation = evaluate(target.definition, blank, ops);
   return {
-    name: input.name ?? `${view.layout.name} on ${target.definition.name}`, after, summary: summaryOf(view.layout.name, plan),
+    name: input.name ?? `${view.layout.name} on ${target.definition.name}`, after: evaluation.after ?? blank, summary: summaryOf(view.layout.name, plan),
     placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes,
+    // What the validator would refuse, so the page says it before "Make" makes a config that cannot hold it (D-014).
+    problems: evaluation.result.errors.map((e) => e.message),
   };
 }
 
@@ -117,6 +120,11 @@ export function planPut(app: App, input: PutInput) {
 }
 
 export function putConfig(app: App, input: PutInput): PutOutcome {
+  // One write transaction: when the validator refuses the mapping, the config it was going on is not left behind half made (D-336).
+  return transact(app.db, () => putConfigNow(app, input));
+}
+
+function putConfigNow(app: App, input: PutInput): PutOutcome {
   const { view, target, plan } = planPut(app, input);
 
   const name = input.name ?? `${view.layout.name} on ${target.definition.name}`;

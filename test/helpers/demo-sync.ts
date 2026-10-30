@@ -113,7 +113,7 @@ const handsFree = {
 const base = appSyncDeps(app, { handsFree, volumesRoot: volumes, bootloaderWaitMs: 60_000 });
 const deps = {
   ...base,
-  newKeyboards: async () => (await detectKeyboards({ usb: async () => seen, boards: newBoards() })).filter((k) => k.status !== "known"),
+  detectedKeyboards: async () => detectKeyboards({ usb: async () => seen, boards: newBoards() }),
   // The fake docker's firmware has no marker in it; give each build the one a real build carries, and make the fake keyboard expect it.
   build: async (a: Parameters<typeof base.build>[0]) => {
     const r = await base.build(a);

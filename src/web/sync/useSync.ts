@@ -9,6 +9,8 @@ export interface SyncApi {
   boards: readonly BoardSync[];
   /** Keyboards on USB keyloom has no board for, from the engine's reads (D-336). */
   newKeyboards: readonly DetectedKeyboard[];
+  /** Known boards on USB with no config yet, so the page can offer to put one on (D-336). */
+  setupBoards: readonly DetectedKeyboard[];
   /** The last board review frame (D-340): a review was made or its agent part moved; the page reads that config's review again. */
   lastReview: ReviewEvent | null;
   /** The last layout.updated event received from the server (e.g. CLI write). */
@@ -32,6 +34,7 @@ const RETRY_MAX_MS = 10_000;
 export function useSync(token: string): SyncApi {
   const [boards, setBoards] = useState<readonly BoardSync[]>([]);
   const [newKeyboards, setNewKeyboards] = useState<readonly DetectedKeyboard[]>([]);
+  const [setupBoards, setSetupBoards] = useState<readonly DetectedKeyboard[]>([]);
   const [lastReview, setLastReview] = useState<ReviewEvent | null>(null);
   const [lastLayoutUpdated, setLastLayoutUpdated] = useState<LayoutUpdatedEvent | null>(null);
   const [live, setLive] = useState(false);
@@ -48,12 +51,13 @@ export function useSync(token: string): SyncApi {
         if (response.status === 404 || response.status === 401 || response.body === null) return;
         if (!response.ok) throw new Error(String(response.status));
         const decoder = new TextDecoder();
-        const parser = createEventParser((next, keyboards) => {
+        const parser = createEventParser((next, keyboards, setup) => {
           delay = RETRY_MIN_MS;
           setLive(true);
           setBoards(next);
           // A new array each frame; keep the old one while nothing changed, so the card doesn't reset under a choice being made.
           setNewKeyboards((old) => (JSON.stringify(old) === JSON.stringify(keyboards) ? old : keyboards));
+          setSetupBoards((old) => (JSON.stringify(old) === JSON.stringify(setup) ? old : setup));
         }, () => setLive(false), (event) => setLastReview(event), (event) => setLastLayoutUpdated(event));
         const reader = response.body.getReader();
         for (;;) {
@@ -91,7 +95,7 @@ export function useSync(token: string): SyncApi {
   }, []);
 
   return {
-    boards, newKeyboards, lastReview, lastLayoutUpdated, live, error,
+    boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, error,
     syncNow: (layoutId) => act(async () => (await request("POST", "/api/sync", token, SyncNowResponseSchema, undefined, { layoutId })).boards),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),
     disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),

@@ -13,7 +13,7 @@ import { deepEqual } from "../layout/equal.ts";
 import { sameBuild } from "../layout/conditional-backfill.ts";
 import { withoutLayerNumbers } from "../layout/layer-refs.ts";
 import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash, lastSuccessfulFlashAt } from "../persistence/builds.ts";
-import { getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
+import { boardConfigs, getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
   type BoardSyncRow, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
@@ -136,9 +136,9 @@ export class SyncEngine {
   private chain: Promise<unknown> = Promise.resolve();
   /** Board to the config a manual sync is waiting to put on. Checked again when it starts: BK may have chosen another since. */
   private readonly pendingManual = new Map<string, string>();
-  private readonly listeners = new Set<(boards: BoardSyncView[], newKeyboards: DetectedKeyboard[]) => void>();
-  /** Keyboards on USB keyloom has no board for, from the last read (D-336). */
-  private unknown: DetectedKeyboard[] = [];
+  private readonly listeners = new Set<(boards: BoardSyncView[], newKeyboards: DetectedKeyboard[], setupBoards: DetectedKeyboard[]) => void>();
+  /** Every keyboard on USB from the last read, known and unknown (D-336). */
+  private detected: DetectedKeyboard[] = [];
   private lastPublished = "";
   private readonly sameDocument = new Map<string, boolean>();
 
@@ -193,10 +193,19 @@ export class SyncEngine {
 
   /** The keyboards on USB keyloom has no board for, as of the last read (D-336). */
   newKeyboards(): DetectedKeyboard[] {
-    return this.unknown;
+    return this.detected.filter((k) => k.status !== "known");
   }
 
-  subscribe(listener: (boards: BoardSyncView[], newKeyboards: DetectedKeyboard[]) => void): () => void {
+  /**
+   * Boards keyloom knows that are on USB but have no config yet, as of the last read (D-336). A shipped board with no config is a board
+   * the person still has to set up; without this it is invisible, because the board switch lists only boards that have a config.
+   */
+  setupBoards(): DetectedKeyboard[] {
+    const configured = new Set(boardConfigs(this.app.db).keys());
+    return this.detected.filter((k) => k.status === "known" && k.knownBoard !== null && !configured.has(k.knownBoard.id));
+  }
+
+  subscribe(listener: (boards: BoardSyncView[], newKeyboards: DetectedKeyboard[], setupBoards: DetectedKeyboard[]) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
@@ -245,9 +254,9 @@ export class SyncEngine {
       }
       // Best effort: naming a new keyboard must never stop the engine reading the ones it syncs.
       try {
-        this.unknown = (await this.deps.newKeyboards?.()) ?? [];
+        this.detected = (await this.deps.detectedKeyboards?.()) ?? [];
       } catch {
-        this.unknown = [];
+        this.detected = [];
       }
       this.readAt = this.now();
     })();
@@ -421,10 +430,12 @@ export class SyncEngine {
   private publish(): void {
     if (this.listeners.size === 0) return;
     const boards = this.views();
-    const text = JSON.stringify([boards, this.unknown]);
+    const newKeyboards = this.newKeyboards();
+    const setupBoards = this.setupBoards();
+    const text = JSON.stringify([boards, newKeyboards, setupBoards]);
     if (text === this.lastPublished) return;
     this.lastPublished = text;
-    for (const l of this.listeners) l(boards, this.unknown);
+    for (const l of this.listeners) l(boards, newKeyboards, setupBoards);
   }
 
   /** The current views after a fresh read of the keyboards. */
