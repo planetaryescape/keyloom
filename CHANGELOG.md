@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.61.0](https://github.com/planetaryescape/keyloom/compare/v0.60.0...v0.61.0) (2026-10-30)
+
+
+### Features
+
+* set up a board keyloom knows but has no config for ([#206](https://github.com/planetaryescape/keyloom/issues/206)) ([b95012e](https://github.com/planetaryescape/keyloom/commit/b95012e2b959587b9048b0dcd47ef143bd77a01b))
+
 ## [0.60.0](https://github.com/planetaryescape/keyloom/compare/v0.59.1...v0.60.0) (2026-10-29)
 
 
