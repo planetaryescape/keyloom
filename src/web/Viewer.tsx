@@ -21,6 +21,7 @@ import { ChatStopButton } from "./chat/Composer.tsx";
 import { sidebarAfterUpdate, type Sidebar } from "./shell/sidebars.ts";
 import { useNewKeyboard } from "./keyboards/useNewKeyboard.ts";
 import { NewKeyboardCard } from "./keyboards/NewKeyboardCard.tsx";
+import { SetupCard } from "./keyboards/SetupCard.tsx";
 import { NewBoardPanel, type PutSource } from "./keyboards/NewBoardPanel.tsx";
 import { NewBoardKeyboard } from "./keyboards/NewBoardKeyboard.tsx";
 import { OpenProposals } from "./keyboards/OpenProposals.tsx";
@@ -308,15 +309,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // finger's speed or errors (D-314).
   const labPanelShown = labOpen && lab.phase.kind === "readout" && !narrow;
   // A new keyboard (D-336): the card over the stage, then its board on the stage and its questions in the column beside it.
-  const newBoard = useNewKeyboard(token, sync.newKeyboards);
+  const newBoard = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards);
   const newBoardDrawn = (newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put") && newBoard.preview?.board != null ? newBoard.preview.board : null;
   const newBoardPanel = newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put";
   const putSources = useMemo<PutSource[]>(() => {
     const target = newBoard.step.kind === "put" ? newBoard.step.boardId : null;
     const names = new Map(boardEntries(chrome.layouts, chrome.boardChoices).map((e) => [e.id, e.name]));
+    const onKeyboard = new Set(sync.boards.map((b) => b.layoutId));
     return chrome.layouts
-      .filter((l) => l.boardId !== target)
-      .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, note: sync.boards.some((b) => b.layoutId === l.id) ? "on it now" : null }));
+      // Archived and experiment configs are not a sensible thing to put on a new keyboard; the ones on a keyboard come first.
+      .filter((l) => l.boardId !== target && (l.archivedAt ?? null) === null)
+      .sort((a, b) => Number(onKeyboard.has(b.id)) - Number(onKeyboard.has(a.id)) || b.updatedAt - a.updatedAt)
+      .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, note: onKeyboard.has(l.id) ? "on it now" : null }));
   }, [chrome.layouts, chrome.boardChoices, sync.boards, newBoard.step]);
   // This config's proposals that no conversation shows, such as a put's (D-336); opened by itself when the put brought the page here.
   const proposalsOpen = sidebar === "proposals";
@@ -1656,10 +1660,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
           },
         }}
-        boardsAfter={newBoard.waiting.length === 0 || newBoard.step.kind !== "idle" ? null : (
+        boardsAfter={newBoard.step.kind !== "idle" || (newBoard.waiting.length === 0 && newBoard.setupWaiting.length === 0) ? null : newBoard.waiting.length > 0 ? (
           // A keyboard keyloom hasn't met stays one click away after "Not now" (D-336).
           <button type="button" className="nb-chip" onClick={() => newBoard.reopen(newBoard.waiting[0] as (typeof newBoard.waiting)[number])}>
             <i aria-hidden="true" /><span>New keyboard</span>
+          </button>
+        ) : (
+          // A board keyloom knows but that has no config yet stays one click away too, or it is invisible (D-336).
+          <button type="button" className="nb-chip" onClick={() => newBoard.reopenSetup(newBoard.setupWaiting[0] as (typeof newBoard.setupWaiting)[number])}>
+            <i aria-hidden="true" /><span>{newBoard.setupWaiting[0]?.knownBoard?.name ?? "Set up"}</span>
           </button>
         )}
         sync={
@@ -1835,6 +1844,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setSidebar(null);
             newBoard.confirmCandidate();
           } }} />
+          <SetupCard flow={newBoard} onImport={() => {
+            if (editing !== null) closeEditor(false);
+            setSidebar(null);
+            chrome.onImport();
+          }} onMade={openMadeConfig} />
           {/* A phone shows one half of the new board too, with its own Left and Right, since the caption that holds them steps aside. */}
           {newBoardDrawn !== null && shownHalf !== null ? (
             <div className="nb-half"><HalfSwitcher value={half} onChange={setHalf} hands={newBoardDrawn.hands} /></div>

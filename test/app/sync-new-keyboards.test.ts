@@ -24,7 +24,7 @@ describe("new keyboards on the sync stream", () => {
     current = await syncWorld();
     const w = current;
     let plugged = true;
-    const e = w.engine({}, { ...w.deps, newKeyboards: async () => (plugged ? [corne] : []) });
+    const e = w.engine({}, { ...w.deps, detectedKeyboards: async () => (plugged ? [corne] : []) });
     const seen: DetectedKeyboard[][] = [];
     e.subscribe((_boards, keyboards) => seen.push(keyboards));
     await e.start();
@@ -37,7 +37,7 @@ describe("new keyboards on the sync stream", () => {
   test("a failure to name one leaves the engine reading its own keyboards", async () => {
     current = await syncWorld();
     const w = current;
-    const e = w.engine({}, { ...w.deps, newKeyboards: async () => Promise.reject(new Error("index unreadable")) });
+    const e = w.engine({}, { ...w.deps, detectedKeyboards: async () => Promise.reject(new Error("index unreadable")) });
     await e.start();
     expect(e.newKeyboards()).toEqual([]);
     expect(w.stateOf(e)).toBeDefined();
@@ -48,12 +48,26 @@ describe("new keyboards on the sync stream", () => {
     const devices: UsbDevice[] = [{ vendorId: "0x1d50", productId: "0x615e", name: "Corne", maker: "ZMK Project", serial: "0123456789ABCDEF" }];
     current = await syncWorld();
     const deps = appSyncDeps(current.app, { handsFree: { usb: async () => (reads++, devices) } });
-    expect(await deps.newKeyboards?.()).toEqual([]);
+    expect(await deps.detectedKeyboards?.()).toEqual([]);
     await deps.readKeyboards();
     const before = reads;
-    const found = (await deps.newKeyboards?.()) ?? [];
+    const found = (await deps.detectedKeyboards?.()) ?? [];
     expect(reads).toBe(before);
-    // BK's committed Corne is a board keyloom ships, so the device is known and not offered; nothing else on the bus is a keyboard.
-    expect(found.every((k) => k.status !== "known")).toBe(true);
+    // BK's committed Corne is a board keyloom ships, so the device is named; nothing else on the bus is a keyboard.
+    expect(found.map((k) => k.status)).toEqual(["known"]);
+  });
+
+  test("a known board on USB with no config is offered for setup, and one with a config is not", async () => {
+    current = await syncWorld();
+    const w = current;
+    const known = (id: string, name: string): DetectedKeyboard => ({
+      device: { vendorId: "0x3297", productId: "0x1969", product: name, maker: "ZSA", bcdDevice: null, serial: null },
+      status: "known", knownBoard: { id, name }, candidates: [], ambiguous: false, next: "",
+    });
+    // The world's DB has a config on the Moonlander and none on the Corne.
+    const e = w.engine({}, { ...w.deps, detectedKeyboards: async () => [known("zsa/moonlander", "Moonlander"), known("foostan/corne", "Corne")] });
+    await e.start();
+    expect(e.setupBoards().map((k) => k.knownBoard?.id)).toEqual(["foostan/corne"]);
+    expect(e.newKeyboards()).toEqual([]);
   });
 });

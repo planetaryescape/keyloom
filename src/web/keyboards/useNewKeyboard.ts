@@ -2,28 +2,35 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiCandidate, DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { PreviewResponse, PutPreviewResponse, PutResponse } from "../../api/keyboards.ts";
 import { ApiError } from "../api.ts";
+import { createConfig } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
 
 // The new-keyboard flow (22, D-336): a keyboard keyloom has no board for is plugged in, BK confirms which it is, says where the home row
 // is (and, for a ZMK shield, the controller), sees the board keyloom would add, adds it, and puts one of his configs on it. Nothing here
 // writes to a device; the first flash is BK's, from Build and flash.
+//
+// The same put serves a board keyloom already knows but that has no config yet: the card says so, and offers putting one of BK's configs
+// on it, importing its own export, or starting blank. Without that the board is invisible, because the board switch lists only boards
+// that have a config (D-336).
 export type NewBoardStep =
   | { kind: "idle" }
   /** The stage card: what USB said, the candidates, and a search. */
   | { kind: "card"; keyboard: DetectedKeyboard; choice: string | null }
+  /** A board keyloom knows, on USB, with no config yet: put one on, import one, or start blank. */
+  | { kind: "setup"; keyboard: DetectedKeyboard; boardId: string; boardName: string }
   /** The home row and the controller, with the board drawn. */
   | { kind: "confirm"; keyboard: DetectedKeyboard; candidate: ApiCandidate; homeRow: number | null; controller: string | null }
   /** The board as keyloom would add it: hands, fingers, the flash. */
   | { kind: "review"; keyboard: DetectedKeyboard; candidate: ApiCandidate; homeRow: number; controller: string | null }
-  /** Added: pick a config to put on it, see it mapped, choose where the keys with no place go. */
-  | { kind: "put"; boardId: string; boardName: string; source: string | null; choices: Record<string, number> };
+  /** Added, or already known: pick a config to put on it, see it mapped, choose where the keys with no place go. */
+  | { kind: "put"; boardId: string; boardName: string; source: string | null; choices: Record<string, number>; origin: "new" | "known" };
 
 /** A keyboard is the same one across frames by what it says over USB. */
 export const keyboardKey = (k: DetectedKeyboard): string => `${k.device.vendorId}:${k.device.productId}:${k.device.product}:${k.device.serial ?? ""}`;
 
 const message = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
 
-export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[]) {
+export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = []) {
   const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -34,22 +41,37 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [problem, setProblem] = useState<string | null>(null);
   const waiting = keyboards.filter((k) => k.status !== "known");
   const offered = waiting.filter((k) => !dismissed.has(keyboardKey(k)));
+  const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
 
-  // A keyboard that appears opens the card once; "Not now" leaves it to the chip in the board switch.
+  // A keyboard or a bare board that appears opens its card once; "Not now" leaves it to the chip in the board switch.
   const shown = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
     if (step.kind !== "idle") return;
     const next = offered.find((k) => !shown.current.has(keyboardKey(k)));
-    if (next === undefined) return;
-    shown.current = new Set([...shown.current, keyboardKey(next)]);
-    setStep({ kind: "card", keyboard: next, choice: next.ambiguous ? null : (next.candidates[0]?.id ?? null) });
-  }, [offered, step.kind]);
+    if (next !== undefined) {
+      shown.current = new Set([...shown.current, keyboardKey(next)]);
+      setStep({ kind: "card", keyboard: next, choice: next.ambiguous ? null : (next.candidates[0]?.id ?? null) });
+      return;
+    }
+    const bare = setupWaiting.find((k) => k.knownBoard !== null && !shown.current.has(k.knownBoard.id));
+    if (bare !== undefined && bare.knownBoard !== null) {
+      shown.current = new Set([...shown.current, bare.knownBoard.id]);
+      setStep({ kind: "setup", keyboard: bare, boardId: bare.knownBoard.id, boardName: bare.knownBoard.name });
+    }
+  }, [offered, setupWaiting, step.kind]);
 
   // The card's keyboard was unplugged: the card goes with it, unless BK is already past choosing.
   useEffect(() => {
     if (step.kind !== "card") return;
     if (!waiting.some((k) => keyboardKey(k) === keyboardKey(step.keyboard))) setStep({ kind: "idle" });
   }, [waiting, step]);
+
+  // A bare board that was set up elsewhere, or unplugged, closes its card.
+  useEffect(() => {
+    if (step.kind !== "setup") return;
+    const boardId = step.boardId;
+    if (!knownWithNoConfig.some((k) => k.knownBoard?.id === boardId)) setStep({ kind: "idle" });
+  }, [knownWithNoConfig, step]);
 
   // The board as it would be added, drawn from the pinned firmware tree; again whenever the home row or the controller changes.
   const confirmKey = step.kind === "confirm" || step.kind === "review" ? `${step.candidate.id}|${step.homeRow ?? ""}|${step.controller ?? ""}` : null;
@@ -101,14 +123,22 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const candidateOf = (k: DetectedKeyboard, id: string): ApiCandidate | undefined => k.candidates.find((c) => c.id === id) ?? found.find((c) => c.id === id);
 
   return {
-    step, preview, putPreview, busy, problem, waiting, searchText, found,
+    step, preview, putPreview, busy, problem, waiting, setupWaiting, searchText, found,
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
       setDismissed((d) => new Set([...d].filter((x) => x !== keyboardKey(k))));
       setStep({ kind: "card", keyboard: k, choice: k.ambiguous ? null : (k.candidates[0]?.id ?? null) });
     },
+    /** Opens the setup card again for a known board with no config put off with "Not now". */
+    reopenSetup: (k: DetectedKeyboard) => {
+      if (k.knownBoard === null) return;
+      const board = k.knownBoard;
+      setDismissed((d) => new Set([...d].filter((x) => x !== board.id)));
+      setStep({ kind: "setup", keyboard: k, boardId: board.id, boardName: board.name });
+    },
     notNow: () => {
       if (step.kind === "card" || step.kind === "confirm" || step.kind === "review") setDismissed((d) => new Set([...d, keyboardKey(step.keyboard)]));
+      if (step.kind === "setup") setDismissed((d) => new Set([...d, step.boardId]));
       setStep({ kind: "idle" });
       setPreview(null);
       setProblem(null);
@@ -145,9 +175,32 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setProblem(null);
       try {
         const out = await api.addKeyboard(token, { candidate: step.candidate.id, homeRow: step.homeRow, ...(step.controller === null ? {} : { controller: step.controller }) });
-        setStep({ kind: "put", boardId: out.boardId, boardName: out.displayName, source: null, choices: {} });
+        setStep({ kind: "put", boardId: out.boardId, boardName: out.displayName, source: null, choices: {}, origin: "new" });
       } catch (e) {
         setProblem(message(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    /** "Put one of my configs on it": the put step for a board keyloom already knows. */
+    startPut: () => {
+      if (step.kind !== "setup") return;
+      setPreview(null);
+      setPutPreview(null);
+      setProblem(null);
+      setStep({ kind: "put", boardId: step.boardId, boardName: step.boardName, source: null, choices: {}, origin: "known" });
+    },
+    /** "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. */
+    startBlank: async (name: string): Promise<string | null> => {
+      if (step.kind !== "setup") return null;
+      setBusy(true);
+      setProblem(null);
+      try {
+        const config = await createConfig(token, { from: "blank", name: name.trim(), board: step.boardId });
+        return config.id;
+      } catch (e) {
+        setProblem(message(e));
+        return null;
       } finally {
         setBusy(false);
       }

@@ -30,6 +30,7 @@ export function appSyncBackend(engine: SyncEngine, reviews?: ReviewEngine, watch
     disableRemapping: (boardId) => translate(async () => (await engine.disableRemapping(boardId), engine.views())),
     subscribe: (listener) => engine.subscribe(listener),
     newKeyboards: () => engine.newKeyboards(),
+    setupBoards: () => engine.setupBoards(),
     ...(reviews ? { subscribeReviews: (listener: Parameters<ReviewEngine["subscribe"]>[0]) => reviews.subscribe(listener) } : {}),
     ...(watcher ? { subscribeLayoutUpdated: (listener) => watcher.subscribe(listener) } : {}),
   };

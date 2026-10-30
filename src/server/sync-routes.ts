@@ -42,8 +42,8 @@ async function readJson(request: Request): Promise<unknown | Response> {
 }
 
 // `before` is the previous frame on this stream, so the menu-bar notices are what changed on this connection; the first frame has none.
-const frame = (boards: BoardSync[], newKeyboards: DetectedKeyboard[], before?: BoardSync[]): string =>
-  `event: sync\ndata: ${JSON.stringify(SyncEventSchema.parse({ type: "sync", boards, newKeyboards, menuBar: menuBar(boards, before) }))}\n\n`;
+const frame = (boards: BoardSync[], newKeyboards: DetectedKeyboard[], setupBoards: DetectedKeyboard[], before?: BoardSync[]): string =>
+  `event: sync\ndata: ${JSON.stringify(SyncEventSchema.parse({ type: "sync", boards, newKeyboards, setupBoards, menuBar: menuBar(boards, before) }))}\n\n`;
 
 const reviewFrame = (event: ReviewEvent): string => `event: review\ndata: ${JSON.stringify(ReviewEventSchema.parse(event))}\n\n`;
 
@@ -81,8 +81,8 @@ function events(request: Request, backend: SyncBackend): Response {
         }
       };
       // Subscribed before the snapshot is read, so a change in between is not lost; the browser takes the later frame.
-      unsubscribe = backend.subscribe((boards, newKeyboards) => {
-        send(frame(boards, newKeyboards, previous));
+      unsubscribe = backend.subscribe((boards, newKeyboards, setupBoards) => {
+        send(frame(boards, newKeyboards, setupBoards, previous));
         previous = boards;
       });
       // A review frame carries no snapshot: the page asks for the review when it hears one, and an event missed is caught by that read.
@@ -91,7 +91,7 @@ function events(request: Request, backend: SyncBackend): Response {
       heartbeat = setInterval(() => send(": keepalive\n\n"), EVENTS_HEARTBEAT_MS);
       request.signal.addEventListener("abort", end, { once: true });
       void backend.status().then((boards) => {
-        send(frame(boards, backend.newKeyboards(), previous));
+        send(frame(boards, backend.newKeyboards(), backend.setupBoards(), previous));
         previous = boards;
       }, () => send(": status unavailable\n\n"));
     },

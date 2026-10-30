@@ -14,10 +14,12 @@ export interface SyncBackend {
   setPaused(boardId: string, paused: boolean): Promise<BoardSync[]>;
   /** "Disable remapping": loads the identity map on a software-remapper board, with no sudo (21). */
   disableRemapping(boardId: string): Promise<BoardSync[]>;
-  /** Calls `listener` with every board's state, and the keyboards keyloom has no board for, whenever one changes; returns the unsubscribe. */
-  subscribe(listener: (boards: BoardSync[], newKeyboards: DetectedKeyboard[]) => void): () => void;
+  /** Calls `listener` with every board's state, the keyboards keyloom has no board for, and the known boards with no config yet, whenever one changes; returns the unsubscribe. */
+  subscribe(listener: (boards: BoardSync[], newKeyboards: DetectedKeyboard[], setupBoards: DetectedKeyboard[]) => void): () => void;
   /** The keyboards on USB keyloom has no board for, as of the engine's last read (D-336). */
   newKeyboards(): DetectedKeyboard[];
+  /** Known boards on USB with no config yet, as of the engine's last read (D-336). */
+  setupBoards(): DetectedKeyboard[];
   /** Calls `listener` whenever a board review is made or its agent part changes (D-340), so the events stream carries it beside the sync state. */
   subscribeReviews?(listener: (event: ReviewEvent) => void): () => void;
   /** Calls `listener` whenever a layout's head revision changes (e.g. via CLI write detected by data_version polling). */

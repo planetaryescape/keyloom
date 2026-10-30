@@ -1,4 +1,5 @@
-import { ArrowLeft, LoaderCircle, Zap } from "lucide-react";
+import { ArrowLeft, LoaderCircle, Search, Zap } from "lucide-react";
+import { useState } from "react";
 import type { PreviewResponse, PutPreviewResponse } from "../../api/keyboards.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
@@ -153,31 +154,48 @@ function Review({ flow, preview }: { flow: NewKeyboard; preview: PreviewResponse
 
 function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: readonly PutSource[]; preview: PutPreviewResponse | null; onMade: (configId: string) => void }) {
   const step = flow.step;
+  const [filter, setFilter] = useState("");
   if (step.kind !== "put") return null;
   const behind = preview?.notCarried ?? [];
+  const problems = preview?.problems ?? [];
   const placeable = preview?.placements.filter((p) => p.blocked === undefined && p.candidates.length > 0) ?? [];
   const blocked = preview?.placements.filter((p) => p.blocked !== undefined) ?? [];
   const chosenFor = (source: number, first: number) => step.choices[String(source)] ?? first;
+  const needle = filter.trim().toLowerCase();
+  const shown = needle === "" ? sources : sources.filter((s) => `${s.name} ${s.boardName}`.toLowerCase().includes(needle));
   return (
     <section className="nb-panel" aria-label={`Put a config on the ${step.boardName}`}>
       <header className="nb-panel-head">
-        <p className="nb-eyebrow nb-eyebrow-ok">Added: {step.boardName}</p>
+        <p className="nb-eyebrow nb-eyebrow-ok">{step.origin === "new" ? `Added: ${step.boardName}` : "No config on it yet"}</p>
         <h2>Put a config on the {step.boardName}</h2>
         <p className="nb-lead">keyloom maps it key by key onto the {step.boardName}, as a new config. Your original stays as it is.</p>
       </header>
       <div className="nb-panel-body">
+        {sources.length > 5 ? (
+          <label className="nb-search">
+            <Search size={14} aria-hidden="true" />
+            <input type="search" value={filter} placeholder="Find a config" onChange={(e) => setFilter(e.target.value)} />
+          </label>
+        ) : null}
         <div className="nb-list" role="radiogroup" aria-label="Which config">
-          {sources.map((s) => (
+          {shown.map((s) => (
             <button key={s.id} type="button" role="radio" aria-checked={step.source === s.id} onClick={() => flow.chooseSource(s.id)}>
               <i aria-hidden="true" />{s.name}<small>{s.boardName}{s.note === null ? "" : ` · ${s.note}`}</small>
             </button>
           ))}
         </div>
+        {shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
         {step.source === null ? <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : preview === null ? (
           <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Mapping it…</p>
         ) : (
           <>
             <p className="nb-lead"><b>{preview.summary.charAt(0).toUpperCase() + preview.summary.slice(1)}.</b>{behind.length === 0 ? "" : ` ${plural(behind.length, "key")} stay behind${mostCommon(behind)}.`}</p>
+            {problems.length === 0 ? null : (
+              <div className="nb-problem" role="alert">
+                <b>keyloom can't make this config yet.</b> {problems[0]}
+                {problems.length > 1 ? ` (${problems.length - 1} more problem${problems.length === 2 ? "" : "s"}; pick another config, or change this one and try again.)` : ""}
+              </div>
+            )}
             {behind.length === 0 ? null : (
               // Every key that stays behind, with why, a click away: a list that long would bury the choices below it.
               <details className="nb-behind">
@@ -228,13 +246,13 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
         <button
           type="button"
           className="bar-apply"
-          disabled={preview === null || flow.busy}
+          disabled={preview === null || problems.length > 0 || flow.busy}
           onClick={() => void flow.make().then((out) => {
             if (out !== null) onMade(out.config.id);
           })}
         >
           {flow.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
-          {preview === null ? "Pick a config" : `Make “${preview.name}”`}
+          {preview === null ? "Pick a config" : problems.length > 0 ? "Can't make this config" : `Make “${preview.name}”`}
         </button>
       </footer>
     </section>

@@ -31,6 +31,7 @@ export function appLayoutSource(app: App): LayoutSource {
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         revisionId: r.headRevisionId,
+        archivedAt: r.archivedAt,
       }));
     },
     async get(ref) {

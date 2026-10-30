@@ -14,7 +14,7 @@ export interface KeyboardsBackend {
 /** A failure the browser should see as-is. */
 export class KeyboardsError extends Error {
   constructor(
-    readonly status: 400 | 404,
+    readonly status: 400 | 404 | 409,
     readonly code: string,
     message: string,
   ) {
