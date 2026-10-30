@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.62.0](https://github.com/planetaryescape/keyloom/compare/v0.61.0...v0.62.0) (2026-10-30)
+
+
+### Features
+
+* fix the board review's findings in one agent run ([#208](https://github.com/planetaryescape/keyloom/issues/208)) ([44d2dae](https://github.com/planetaryescape/keyloom/commit/44d2daecb0399282aa309b725b39b6c1584a9615))
+
 ## [0.61.0](https://github.com/planetaryescape/keyloom/compare/v0.60.0...v0.61.0) (2026-10-30)
 
 
