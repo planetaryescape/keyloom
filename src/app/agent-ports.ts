@@ -1,6 +1,6 @@
 // The agent's view of keyloom for one layout and conversation, built from the change use cases so
 // the agent's validation and storage are exactly the editor's and the CLI's (D-014).
-import type { AgentPorts, ChoiceFact, LayoutSnapshot, PriorityFact, Proposal, ProposalResult, PutInput, PutResult } from "../agent/ports.ts";
+import type { AgentPorts, ChoiceFact, LayoutSnapshot, PriorityFact, Proposal, ProposalResult, PutInput, PutResult, ReviewFindings } from "../agent/ports.ts";
 import { upgradeStoredOryx } from "../firmware/qmk/upgrade.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import type { DecisionRow } from "../persistence/decisions.ts";
@@ -21,6 +21,7 @@ import type { GeometryOptions } from "../boards/geometry.ts";
 import { newBlankConfig, newConfig, resolveBlankStart } from "./configs.ts";
 import { putConfig } from "./keyboard-put.ts";
 import { getLayout, listLayouts } from "./layouts.ts";
+import { reviewFindings as readReviewFindings } from "./review-read.ts";
 import { typingFindings } from "./lab.ts";
 
 export const toPriorityFact = (d: DecisionRow): PriorityFact => ({
@@ -104,6 +105,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
     },
     choices: () => layoutChoices(app, layoutId).map(toChoiceFact),
     typingFindings: () => typingFindings(app, layoutId),
+    reviewFindings: (): ReviewFindings => readReviewFindings(app, layoutId),
     recordOutcome(input) {
       // The agent works on one layout; a decision ID from another is as good as a wrong one.
       if (showDecision(app, input.decisionId).layoutId !== layoutId) throw new Error(`"${input.decisionId}" is not a decision on this layout`);

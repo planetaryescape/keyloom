@@ -19,7 +19,7 @@ const ALLOWED = {
   app: ["layout", "validation", "boards", "firmware", "agent", "lab", "memory", "persistence"],
   api: ["layout", "boards", "validation"], // the HTTP wire contract shared by server and web
   server: ["app", "api", "layout", "boards", "validation", "web"], // web: the bundled HTML entry it serves; layout/boards/validation: schema types
-  cli: ["app", "server"], // the CLI entry point composes the server (keyloom serve)
+  cli: ["app", "server", "api"], // the CLI entry point composes the server (keyloom serve) and sends the same agent request text as the web (D-461)
   web: ["layout", "boards", "validation", "api"], // validation runs in the browser for instant feedback
   // Ambient module declarations; nothing imports them.
   types: [],

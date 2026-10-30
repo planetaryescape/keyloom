@@ -27,7 +27,10 @@ import type { ConfigCards } from "./ConfigCards.tsx";
 import { useChat, type ChatDrafts } from "./useChat.ts";
 import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
 import { openProposalsOnBoard, questionOpen, withoutRepeats, type Turn } from "./transcript.ts";
+import { createOneShot, sendOnce, type OneShot } from "./one-shot.ts";
+import { REVIEW_FIX_REQUEST } from "../../api/review.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
+import { activeProviderReady } from "./provider-ready.ts";
 import "./chat.css";
 import "./command-bar.css";
 
@@ -74,6 +77,8 @@ interface Props {
   /** The thread on screen before a board or config switch (D-317), shown read-only above this layout's own. */
   initialConversation?: string | undefined;
   continueCopy?: boolean | undefined;
+  /** A fresh id when the shell asks the chat to start one run that fixes what the board review found (D-461). */
+  fixRequest?: string | undefined;
   onContinueCopy?: (handoff: NonNullable<ChatPresentation["handoff"]>) => void;
   carried?: CarriedThread | null;
   /** Explicit New discards the read-only thread carried from another board, not its saved history. */
@@ -96,7 +101,7 @@ const ASK_AGAIN = "The layout changed after you proposed that, so it no longer a
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals }: Props) {
+export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, fixRequest, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals }: Props) {
   const chat = useChat(token, layoutRef, onContinueCopy, initialConversation);
   const arrived = useRef(false);
   useEffect(() => {
@@ -106,6 +111,17 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
       if (error === null && continueCopy) void chat.send("Continue adapting the copied setup.", null);
     });
   }, [initialConversation, continueCopy, chat.open, chat.send]);
+  // Fix issues (D-461): one new conversation on this config with the fixed request, once per id. A question open in the old conversation
+  // is left alone on the server; nothing here answers it or closes it.
+  const fixGuard = useRef<OneShot | null>(null);
+  fixGuard.current ??= createOneShot();
+  const fixOnce = fixGuard.current;
+  useEffect(() => {
+    sendOnce(fixOnce, fixRequest, () => {
+      chat.newConversation();
+      void chat.send(REVIEW_FIX_REQUEST, null);
+    });
+  }, [fixRequest, fixOnce, chat.newConversation, chat.send]);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.
@@ -310,7 +326,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
   // A new conversation can't start without a credential for the provider it would use, so say so before anything is typed.
   // A conversation already going keeps working on its own provider.
   const status = provider.status;
-  const activeReady = status?.active != null && status.providers.some((p) => p.id === status.active?.provider && p.ready);
+  const activeReady = activeProviderReady(status);
   const needsModel = status !== null && transcript.pinned === null && !activeReady;
   const retryDraft = draft.trim() === "" ? undefined : () => send(draft);
   // A conversation keeps its provider, so switching after an account failure starts a new one with the failed message back in the box.

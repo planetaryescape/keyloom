@@ -28,6 +28,13 @@ export const ReviewItemSchema = z.object({
 });
 export type ReviewItem = z.infer<typeof ReviewItemSchema>;
 
+/**
+ * The findings a fix run works from (D-461): the problems and hints that show. A suggestion is already a proposal BK can apply, and a
+ * hidden finding is his decision, so neither is a reason to build another change.
+ */
+export const fixableFindings = (items: readonly ReviewItem[]): ReviewItem[] =>
+  items.filter((item) => item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"));
+
 /** An item the previous review had and this revision no longer produces. */
 export const FixedItemSchema = ReviewItemSchema.extend({ fixedSince: z.string().min(1) });
 export type FixedItem = z.infer<typeof FixedItemSchema>;
