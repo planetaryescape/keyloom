@@ -33,6 +33,9 @@ export const PresentationSchema = z.object({
     accepted: z.number().int().nonnegative(), declined: z.number().int().nonnegative(),
   })).max(64),
   messages: z.array(z.object({ id: z.string().min(1), kind: z.enum(["working_note", "answer"]), text: z.string(), messageId: z.string().min(1).optional() })).max(64),
+  // Typed result cards under the reply (D-467). Persistence does not own the artifact union (the wire schema does, and the module table
+  // keeps this folder from importing it), so the stored shape is the bounded list; the API validates each card as it is sent.
+  artifacts: z.array(z.unknown()).max(4).optional(),
   effectsMayHaveOccurred: z.boolean(), warning: z.string().nullable(), detailsTruncated: z.boolean(),
 });
 export type Presentation = z.infer<typeof PresentationSchema>;

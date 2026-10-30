@@ -17,15 +17,42 @@ export const ComparisonArtifactSchema = z.object({
   })),
 });
 
+/**
+ * What a copy carried and what it did not (D-467). The first five fields are the whole of the original shape, so an older reader still
+ * parses a newer report and a newer reader shows an older one. The copies of the counts beside each bounded list say what the list left
+ * out. `src/app/copy-report.ts` builds it and repeats these bounds; a contract test holds the two together.
+ */
 export const TransferArtifactSchema = z.object({
   kind: z.literal("transfer"),
-  sourceBoard: z.string().min(1),
-  destinationBoard: z.string().min(1),
+  sourceBoard: z.string().min(1).max(80),
+  destinationBoard: z.string().min(1).max(80),
   mappedCount: z.number().int().nonnegative(),
   skipped: z.array(z.object({
-    key: z.string().min(1),
-    reason: z.string().min(1),
-  })),
+    key: z.string().min(1).max(80),
+    reason: z.string().min(1).max(120),
+  })).max(40),
+  skippedCount: z.number().int().nonnegative().optional(),
+  guessedCount: z.number().int().nonnegative().optional(),
+  layers: z.array(z.object({
+    source: z.string().min(1).max(80),
+    target: z.string().min(1).max(80),
+    carried: z.number().int().nonnegative(),
+    guessed: z.number().int().nonnegative(),
+    notCarried: z.number().int().nonnegative(),
+  })).max(12).optional(),
+  layerCount: z.number().int().nonnegative().optional(),
+  combos: z.object({
+    copied: z.number().int().nonnegative(),
+    skipped: z.array(z.object({
+      id: z.string().min(1).max(40),
+      why: z.string().min(1).max(120),
+    })).max(12),
+    skippedCount: z.number().int().nonnegative().optional(),
+  }).optional(),
+  notes: z.array(z.string().min(1).max(200)).max(8).optional(),
+  noteCount: z.number().int().nonnegative().optional(),
+  placementCount: z.number().int().nonnegative().optional(),
+  placementsBlocked: z.number().int().nonnegative().optional(),
 });
 
 export const KeyboardListArtifactSchema = z.object({

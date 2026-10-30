@@ -1,0 +1,19 @@
+Moonlander
+Corne
+
+156 keys came across on 6 layers, 15 of them nearest-place guesses.
+
+Carried by layer
+112 keys did not come across
+
+8 combos copied.
+
+4 layer keys had nowhere of their own and were placed on free keys.
+
+2 layer keys could not be placed: the layers they enter have no way back on this board.
+
+Left out
+
+LED colours were not carried: Corne can't show per-key hardware LED colours because its lights, where it has any, are ZMK underglow, which shows one effect across the whole strip, and ZMK has no way …
+5 firmware settings on Moonlander daily (timings, features) were not carried; set them for this board once it works
+firmware code keyloom does not model (passthrough) was not carried

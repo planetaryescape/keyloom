@@ -265,3 +265,29 @@ keyloom --data-dir <scratch> agent answer <target-run> <question-tool-id> 'Use t
 A successful copy returns the original source run with `handoff: { layoutId, conversationId, runId, requestId }` identifying its separate target. The command waits for the target's owned work before exiting. Table output names the target question and answer command; JSON stays one source snapshot. Repeating the original request ID returns those same artifacts.
 
 Legacy one-shot `chat` follows the handoff and returns the target outcome, including `question` when waiting and the original `configs_made`. `copy_source` reports the source turn's model, usage and any reported cost separately from the target outcome, so the two turns are not added twice. Interactive chat continues on that target layout and conversation. Ordinary legacy chats retain stream ownership; only a copy enters the durable handoff coordinator. Applying the target proposal and selecting its config for the keyboard remain separate actions.
+
+## The copy report
+
+`chat` on a copy and `keyboard put` print the report the app's card shows, from the same artifact (D-467). `chat` adds one line the card leaves out, because a terminal has no navigation (the card sits in that conversation already):
+
+```
+Moonlander -> Corne
+156 keys came across on 6 layers, 15 of them nearest-place guesses
+  Layer 0: 42 carried, 6 guessed, 30 left off
+  Layer 1: 33 carried, 27 left off
+  ...
+112 keys did not come across:
+  F1 (left pinky, function row, outer) (Layer 0): the new board has no key in this place
+  ...
+  and 104 more
+8 combos copied
+4 layer keys had nowhere of their own and were placed on free keys
+2 layer keys could not be placed: the layer has no way back on this board
+left out:
+  LED colours were not carried: ...
+  5 firmware settings on Moonlander daily (timings, features) were not carried; set them for this board once it works
+  firmware code keyloom does not model (passthrough) was not carried
+adapting it continues in the new config's own conversation
+```
+
+`chat` prints it once, after the copy's own reply, and `--format json` adds it as `transfer_report`. `keyboard put` prints it for the plan it made instead of the old `N keys did not come across (reasons)` line, with the per-key lines bounded to the first eight drops and "and N more"; it has no conversation, so the last line is left out. The JSON for `keyboard put` is unchanged and still carries the plan itself (`layers`, `not_carried`, `combos`, `notes`).

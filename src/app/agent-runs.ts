@@ -17,6 +17,7 @@ import { processAlive } from "../firmware/toolchain/lock.ts";
 import type { App } from "./context.ts";
 import { messageModel, runPreparedMessage, storeMessage, type SendMessageInput, type PreparedMessage, type ChatOutcome } from "./conversations.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
+import { type TransferReport, transferReport } from "./copy-report.ts";
 
 const ownerToken = crypto.randomUUID();
 const deferred = new Map<string, { app: App; parentId: string; prepared: PreparedMessage; input: SendMessageInput }>();
@@ -182,11 +183,16 @@ export function savedRunOutcome(app: App, id: string): ChatOutcome {
   return JSON.parse(row.outcome_json) as ChatOutcome;
 }
 
-function prepareCopy(app: App, parentId: string, prepared: PreparedMessage, input: PutInput): PutResult {
+function prepareCopy(app: App, parentId: string, prepared: PreparedMessage, input: PutInput): PutResult & { report: TransferReport } {
   const history = listMessages(app.db, prepared.conversation.id);
   const asked = new Set(history.flatMap((message) => message.content.map(neutralBlock).flatMap((block) => block.type === "tool_use" && block.name === "ask_user" ? [block.id] : [])));
   const sourceMessages = history.filter((message) => message.role === "user" && message.content.map(neutralBlock).some((block) => block.type === "text" || (block.type === "tool_result" && asked.has(block.tool_use_id))));
   const { context, source, target, plan } = prepareCopyContext(app, prepared.view.layout.id, input, parentId, sourceMessages.map((message) => message.id));
+  // The card's facts come from the plan this copy already computed, never a second run of it (D-467).
+  const report = transferReport(plan, {
+    sourceBoard: source.board.definition.name, destinationBoard: target.definition.name,
+    layerName: (id) => source.document.layers.find((layer) => layer.id === id)?.name ?? id,
+  });
   const config = newConfig(app, { name: input.name ?? `${source.layout.name} on ${target.definition.name}`, from: "blank", board: target.definition.id, selectFirst: false });
   const words = (message: PreparedMessage["userMessage"]) => message.content.map(neutralBlock).flatMap((block) => block.type === "text" ? [typedText(block.text)] : block.type === "tool_result" && asked.has(block.tool_use_id) ? [block.words ?? block.content] : []).join("\n");
   const earlier = sourceMessages.filter((message) => message.id !== prepared.userMessage.id).map(words).join("\n\n");
@@ -195,12 +201,12 @@ function prepareCopy(app: App, parentId: string, prepared: PreparedMessage, inpu
   const child = storeMessage(app, config.id, childInput, prepared.model);
   const id = newId("run");
   const requestId = `copy:${id}`;
-  const request = { version: 1, requestId, layoutRef: config.id, input: { message: childInput.message, conversationId: child.conversation.id }, copyContext: context };
+  const request = { version: 1, requestId, layoutRef: config.id, input: { message: childInput.message, conversationId: child.conversation.id }, copyContext: { ...context, report } };
   app.db.query("INSERT INTO agent_runs (id, request_id, request_json, layout_id, conversation_id, user_message_id, revision_id, owner_pid, owner_token, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)")
     .run(id, requestId, canonical(request), config.id, child.conversation.id, child.userMessage.id, child.view.revision.id, process.pid, ownerToken, Date.now());
   // The outer effect receipt may still roll back. Launch checks that the accepted row survived before touching a provider.
   deferred.set(id, { app, parentId, prepared: child, input: childInput });
-  return { config: { id: config.id, name: config.name, boardName: config.boardName }, handoff: { layoutId: config.id, conversationId: child.conversation.id, runId: id, requestId }, proposals: [], placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes };
+  return { config: { id: config.id, name: config.name, boardName: config.boardName }, handoff: { layoutId: config.id, conversationId: child.conversation.id, runId: id, requestId }, proposals: [], placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes, report };
 }
 
 function settleCopies(app: App, parentId: string, canLaunch: boolean): void {

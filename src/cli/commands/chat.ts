@@ -7,7 +7,20 @@ import {
 import { SCHEMA_VERSION, columns, print, type Format } from "../output.ts";
 import type { CliContext } from "./context.ts";
 import { opLine } from "../change-report.ts";
+import { transferReportText } from "../transfer-text.ts";
+import { type AgentArtifact, TransferArtifactSchema } from "../../api/artifacts.ts";
 import { answerAgentRun, cancelAgentRequest, cancelAgentRun, inspectAgentRun, startAgentRun, waitForAgentRun, savedRunOutcome, type AgentRunSnapshot } from "../../app/agent-runs.ts";
+
+type TransferReport = Extract<AgentArtifact, { kind: "transfer" }>;
+
+/** The copy's card, from the reply that carries it (D-467): the child's own first reply is the one a reader lands on. */
+function copyReport(app: App, conversationId: string, messageId: string): TransferReport | undefined {
+  for (const artifact of showConversation(app, conversationId).presentations.find((p) => p.userMessageId === messageId)?.artifacts ?? []) {
+    const parsed = TransferArtifactSchema.safeParse(artifact);
+    if (parsed.success) return parsed.data;
+  }
+  return undefined;
+}
 
 /** Seams for tests: a scripted model, and lines to read instead of stdin. */
 export type ChatDeps = { model?: AgentModel; lines?: AsyncIterable<string> };
@@ -27,8 +40,10 @@ const proposalJson = (p: ChatOutcome["proposals"][number]) => ({ change_set_id: 
 
 const configJson = (c: ConfigView) => ({ id: c.id, name: c.name, board_id: c.boardId, board_name: c.boardName });
 
-const outcomeJson = (o: ChatOutcome, configs: readonly ConfigView[] = [], copySource?: ChatOutcome) => ({
+const outcomeJson = (o: ChatOutcome, configs: readonly ConfigView[] = [], copySource?: ChatOutcome, report?: TransferReport) => ({
   ...(copySource === undefined ? {} : { copy_source: { conversation_id: copySource.conversationId, model: copySource.model, usage: copySource.usage, ...(copySource.costUsd === undefined ? {} : { cost_usd: copySource.costUsd }) } }),
+  // The copy's report, as the card shows it. Additive: a copy turn without one omits the field.
+  ...(report === undefined ? {} : { transfer_report: report }),
   conversation_id: o.conversationId,
   message_ids: o.messageIds,
   status: o.status,
@@ -157,6 +172,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
         let last: ChatOutcome | undefined;
         let lastConfigs: ConfigView[] = [];
         let lastCopySource: ChatOutcome | undefined;
+        let lastReport: TransferReport | undefined;
 
         const turn = async (message: string) => {
           let streamed = false;
@@ -177,6 +193,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
             },
           });
           lastCopySource = undefined;
+          lastReport = undefined;
           const made = configsMadeInTurn(app, outcome.conversationId, outcome.messageIds[0] ?? "");
           if (outcome.handoff) {
             const handoff = outcome.handoff;
@@ -184,6 +201,8 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
             if (!machine) ctx.io.out(`\nContinuing on the copied config ${handoff.layoutId}.\n`);
             await waitForAgentRun(app, handoff.runId);
             outcome = savedRunOutcome(app, handoff.runId);
+            // The card is on the copy's first reply, where the app lands; the terminal prints the same facts once, here.
+            lastReport = copyReport(app, handoff.conversationId, outcome.messageIds[0] ?? "");
             layoutRef = handoff.layoutId;
             if (!machine && outcome.question) ctx.io.out(`\n${outcome.question.question}\n${outcome.question.options.map((option) => option.label).join(" / ")}\nAnswer with: keyloom agent answer ${handoff.runId} ${outcome.question.toolUseId} <answer> --request-id <unique-id>\n`);
           }
@@ -195,13 +214,14 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
             if (streamed) ctx.io.out("\n");
             for (const p of outcome.priorities) ctx.io.err(`remembered ${p.id} (${p.priorityKind}): ${p.statement}\n`);
             for (const p of outcome.proposals) ctx.io.out(`\n${proposalText(p)}\n`);
+            if (lastReport !== undefined) ctx.io.out(`\n${transferReportText(lastReport, { continues: true }).join("\n")}\n`);
             for (const c of lastConfigs) ctx.io.out(`\n${madeConfigText(c)}\n`);
             const notice = NOTICE[outcome.status];
             if (notice) ctx.io.err(`${notice}\n`);
             if (outcome.status === "refused") ctx.io.err("The model declined to answer.\n");
           }
           if (outcome.status === "refused") {
-            if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(outcome, lastConfigs), table: "" });
+            if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(outcome, lastConfigs, undefined, lastReport), table: "" });
             throw new ModelError("refused", "the model declined to answer, even after the fallback; rephrase and try again");
           }
         };
@@ -218,7 +238,7 @@ export function registerChatCommands(program: Command, ctx: CliContext, deps: Ch
         }
 
         if (last === undefined) return;
-        if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(last, lastConfigs, lastCopySource), table: "", ids: [last.conversationId] });
+        if (machine) print(ctx.io, ctx.format(), { json: outcomeJson(last, lastConfigs, lastCopySource, lastReport), table: "", ids: [last.conversationId] });
         else ctx.io.err(`conversation ${last.conversationId}\n`);
       });
     });

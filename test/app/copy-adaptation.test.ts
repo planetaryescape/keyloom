@@ -1,8 +1,10 @@
-import { expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { AgentModel, ModelMessage, ModelRequest } from "../../src/agent/model.ts";
 import { emptyUsage } from "../../src/agent/model.ts";
 import { answerAgentRun, cancelAgentRun, drainAgentRuns, inspectAgentRun, savedRunOutcome, startAgentRun, waitForAgentRun } from "../../src/app/agent-runs.ts";
-import { applyChange, getLayout, listLayouts, showDecision, proposeChange } from "../../src/app/index.ts";
+import { applyChange, getLayout, listLayouts, showConversation, showDecision, proposeChange } from "../../src/app/index.ts";
+import * as keyboardPut from "../../src/app/keyboard-put.ts";
+import { TransferArtifactSchema } from "../../src/api/artifacts.ts";
 import { newConfig } from "../../src/app/configs.ts";
 import { recordPriority } from "../../src/app/decisions.ts";
 import { findRun } from "../../src/persistence/agent-runs.ts";
@@ -390,4 +392,80 @@ test("an applied copy keeps ordinary config creation available for a later reque
     expect(outcome.status).toBe("complete");
     expect(listLayouts(app).filter((layout) => layout.name === "Later ordinary config")).toHaveLength(1);
   } finally { await drainAgentRuns(app); app.db.close(); }
+});
+
+// The card the reply carries (D-467): the plan's facts, on the reply that made the copy and on the copy's own first reply, built once.
+describe("the copy report", () => {
+  test("both replies carry the same facts from one plan, and a later reply in the copy's conversation carries none", async () => {
+    const { app, layoutId } = await fixture();
+    const spy = spyOn(keyboardPut, "planPut");
+    try {
+      const source = await startAgentRun(app, { version: 1, requestId: "report-copy", layoutRef: layoutId, input: { message: "Copy" } }, { model: scripted(layoutId) });
+      const finished = await waitForAgentRun(app, source.id);
+      if (!finished.handoff) throw new Error("missing handoff");
+      const handoff = finished.handoff;
+      const child = await waitForAgentRun(app, handoff.runId);
+      expect(spy.mock.calls.length).toBe(1);
+
+      const parent = showConversation(app, finished.conversationId).presentations.find((p) => p.userMessageId === source.userMessageId);
+      const target = showConversation(app, handoff.conversationId).presentations.find((p) => p.userMessageId === child.userMessageId);
+      expect(parent?.artifacts).toHaveLength(1);
+      expect(target?.artifacts).toEqual(parent?.artifacts);
+      const report = TransferArtifactSchema.parse(parent?.artifacts?.[0]);
+      expect(report).toMatchObject({ kind: "transfer", sourceBoard: "Moonlander", destinationBoard: "Glove80" });
+      expect(report.mappedCount).toBeGreaterThan(0);
+      expect(report.skippedCount).toBe(report.skipped.length);
+      expect(report.layers?.map((layer) => layer.source)).toContain("Layer 0");
+
+      // A second reply in the copy's conversation is about the adaptation, not the copy: the card stays on the first.
+      const answered = await answerAgentRun(app, child.id, "report-answer", { toolUseId: "target-question", text: "Inner thumb" }, { model: scripted(layoutId) });
+      await waitForAgentRun(app, answered.id);
+      const later = showConversation(app, handoff.conversationId).presentations.find((p) => p.userMessageId === answered.userMessageId);
+      expect(later).toBeDefined();
+      expect(later?.artifacts).toBeUndefined();
+      expect(spy.mock.calls.length).toBe(1);
+    } finally { spy.mockRestore(); await drainAgentRuns(app); app.db.close(); }
+  });
+
+  test("a copy whose child fails still shows what came across, and the reply's own failure is told apart from it", async () => {
+    const { app, layoutId } = await fixture();
+    let calls = 0;
+    const model: AgentModel = { provider: "anthropic", model: "synthetic-failing-child", effort: "high", classifyError: () => null, async run(request) {
+      if (++calls === 1) {
+        await request.tools.find((tool) => tool.name === "put_config")?.run({ from: layoutId, board: "moergo/glove80", name: "Failing child copy" });
+        return done;
+      }
+      throw new Error("synthetic child failure");
+    } };
+    try {
+      const source = await startAgentRun(app, { version: 1, requestId: "failing-child", layoutRef: layoutId, input: { message: "Copy" } }, { model });
+      const finished = await waitForAgentRun(app, source.id);
+      if (!finished.handoff) throw new Error("missing handoff");
+      const child = await waitForAgentRun(app, finished.handoff.runId);
+      expect(child.status).toBe("failed");
+      const target = showConversation(app, finished.handoff.conversationId).presentations.find((p) => p.userMessageId === child.userMessageId);
+      expect(target?.status).toBe("failed");
+      expect(TransferArtifactSchema.parse(target?.artifacts?.[0])).toMatchObject({ kind: "transfer", destinationBoard: "Glove80" });
+      // The config and its proposal were saved before the child ran, so the report is not claiming work that did not happen.
+      expect(listLayouts(app).some((layout) => layout.name === "Failing child copy")).toBe(true);
+    } finally { await drainAgentRuns(app); app.db.close(); }
+  });
+
+  test("a copy stopped after preparation keeps the card beside the warning that preparation may have completed", async () => {
+    const { app, layoutId } = await fixture();
+    const model: AgentModel = { provider: "anthropic", model: "synthetic-stopped-copy", effort: "high", classifyError: () => null, async run(request) {
+      await request.tools.find((tool) => tool.name === "put_config")?.run({ from: layoutId, board: "moergo/glove80", name: "Stopped child copy" });
+      cancelAgentRun(app, "stopped-copy");
+      return done;
+    } };
+    try {
+      const source = await startAgentRun(app, { version: 1, requestId: "stopped-copy", layoutRef: layoutId, input: { message: "Copy" } }, { model });
+      const finished = await waitForAgentRun(app, source.id);
+      expect(finished.status).toBe("cancelled");
+      const presentation = showConversation(app, finished.conversationId).presentations.find((p) => p.userMessageId === source.userMessageId);
+      expect(presentation?.status).toBe("cancelled");
+      expect(presentation?.warning).toContain("inspect configs and proposals");
+      expect(TransferArtifactSchema.parse(presentation?.artifacts?.[0])).toMatchObject({ kind: "transfer", destinationBoard: "Glove80" });
+    } finally { await drainAgentRuns(app); app.db.close(); }
+  });
 });

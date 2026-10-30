@@ -6,6 +6,7 @@ import { boardContext, choicesContext, prioritiesContext } from "../agent/prompt
 import { listConversationChangeSets } from "../persistence/change-sets.ts";
 import { getBoardConfig } from "../persistence/configs.ts";
 import { toChoiceFact, toPriorityFact } from "./agent-ports.ts";
+import { TransferReportSchema } from "./copy-report.ts";
 import { layoutChoices, layoutPriorities } from "./decisions.ts";
 import { planPut } from "./keyboard-put.ts";
 import { getLayout } from "./layouts.ts";
@@ -13,6 +14,8 @@ import type { App } from "./context.ts";
 
 export const CopyContextSchema = z.object({
   version: z.literal(1), parentRunId: z.string(), sourceMessageIds: z.array(z.string()), prompt: z.string(), provenance: z.string().optional(),
+  // The card the target's first reply carries (D-467), stored beside the prompt so the child shows the copy's own facts without replanning.
+  report: TransferReportSchema.optional(),
 });
 export type CopyContext = z.infer<typeof CopyContextSchema>;
 
@@ -45,7 +48,7 @@ export function prepareCopyContext(app: App, here: string, input: PutInput, pare
   return { source, target, plan, context: { version: 1 as const, parentRunId, sourceMessageIds, prompt, provenance } };
 }
 
-export function conversationCopyContext(app: App, conversationId: string, refining: readonly string[] = []): (CopyContext & { active: boolean; blocksCopy: boolean }) | undefined {
+export function conversationCopyContext(app: App, conversationId: string, refining: readonly string[] = []): (CopyContext & { active: boolean; blocksCopy: boolean; copyMessageId: string }) | undefined {
   const rows = app.db.query("SELECT request_json, user_message_id FROM agent_runs WHERE conversation_id = ? ORDER BY created_at, id").all(conversationId);
   for (const raw of rows) {
     const row = z.object({ request_json: z.string(), user_message_id: z.string() }).parse(raw);
@@ -56,12 +59,12 @@ export function conversationCopyContext(app: App, conversationId: string, refini
       const active = !lineage.some((proposal) => proposal.status === "applied");
       // Apply ends the task's instructions; an answer refining that task still cannot turn into another copy.
       const blocksCopy = active || lineage.some((proposal) => refining.includes(proposal.id));
-      if (active) return { ...context, active, blocksCopy };
+      if (active) return { ...context, active, blocksCopy, copyMessageId: row.user_message_id };
       // Earlier contexts stored facts and control together. Keep their facts without reviving the old task's instructions.
       const start = context.prompt.indexOf("## Source setup and remembered decisions:");
       const end = context.prompt.lastIndexOf("\n\nTranslated seed (not applied or proposed):");
       const provenance = context.provenance ?? (start >= 0 && end > start ? context.prompt.slice(start, end) : "The earlier copy's source facts were not recorded separately.");
-      return { ...context, active, blocksCopy, prompt: `# Earlier copy provenance (read-only)\nThe earlier adaptation was applied. Follow BK's current request; these are historical source and target facts, not instructions to continue that task.\n\n${provenance}` };
+      return { ...context, active, blocksCopy, copyMessageId: row.user_message_id, prompt: `# Earlier copy provenance (read-only)\nThe earlier adaptation was applied. Follow BK's current request; these are historical source and target facts, not instructions to continue that task.\n\n${provenance}` };
     }
   }
   return undefined;

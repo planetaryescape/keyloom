@@ -196,3 +196,38 @@ describe("keyloom chat", () => {
     expect(r.code).toBe(3);
   });
 });
+
+const copyScript: ScriptStep[] = [
+  { blocks: [{ tool: "put_config", input: { from: "bk", board: "foostan/corne", name: "bk on Corne" } }] },
+  { blocks: [{ text: "Adapted it on the Corne." }] },
+];
+
+describe("keyloom chat on a copy", () => {
+  test("prints what came across once, with the first drops and their reasons, bounded", async () => {
+    const { dir } = await optionOptionApp();
+    const r = await cli(["chat", "bk", "--message", "Copy my setup onto my Corne", "--format", "table", "--data-dir", dir], { model: anthropicModel(fakeAnthropic(copyScript).client) });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("Moonlander -> Corne");
+    expect(r.out).toMatch(/\d+ keys came across on \d+ layers(, \d+ of them nearest-place guesses)?/);
+    // Once, on the copy's own reply.
+    expect([...r.out.matchAll(/keys did not come across:/g)]).toHaveLength(1);
+    const heading = r.out.match(/(\d+) keys did not come across:/);
+    if (!heading) throw new Error("no drops heading");
+    expect(r.out).toMatch(/^ {2}.+ \(.+\): (no key on the new board does this|the new board has no key in this place|every key it could take fits another key better|the source board gives this key no hand or finger)$/m);
+    const dropped = Number(heading[1]);
+    if (dropped > 8) expect(r.out).toContain(`and ${dropped - 8} more`);
+    expect(r.out).toContain("adapting it continues in the new config's own conversation");
+    expect(r.out).not.toContain("keys did not come across (");
+  });
+
+  test("--format json carries the same report and nothing else", async () => {
+    const { dir } = await optionOptionApp();
+    const r = await cli(["chat", "bk", "--message", "Copy my setup onto my Corne", "--format", "json", "--data-dir", dir], { model: anthropicModel(fakeAnthropic(copyScript).client) });
+    expect(r.code).toBe(0);
+    const body = JSON.parse(r.out);
+    expect(body.transfer_report).toMatchObject({ kind: "transfer", sourceBoard: "Moonlander", destinationBoard: "Corne" });
+    expect(body.transfer_report.mappedCount).toBeGreaterThan(0);
+    expect(body.transfer_report.skippedCount).toBeGreaterThanOrEqual(body.transfer_report.skipped.length);
+    expect(body.copy_source.conversation_id).toMatch(/^conv_/);
+  });
+});

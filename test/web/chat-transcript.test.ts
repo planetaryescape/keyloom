@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatEvent, ChatOutcome, ConversationDetail, PriorityCard, ProposalCard } from "../../src/api/http.ts";
+import type { ChatEvent, ChatOutcome, ConversationDetail, ObservedChatEvent, PriorityCard, ProposalCard } from "../../src/api/http.ts";
 import { EMPTY, fromConversation, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn, type Transcript } from "../../src/web/chat/transcript.ts";
 
 const validation: ProposalCard["validation"] = { ok: true, errors: [], warnings: [], diff: { changed: [], displaced: [], dropped: [], relearnCount: 0, retuned: [], reminders: [] } };
@@ -14,6 +14,7 @@ const outcome = (over: Partial<ChatOutcome> = {}): ChatOutcome => ({
 const run = (actions: Action[], from: Transcript = EMPTY) => actions.reduce(transcriptReducer, from);
 const sent: Action = { type: "sent", userId: "u1", assistantId: "a1", text: "hi", selection: { layerId: "base", positions: [32] } };
 const ev = (event: ChatEvent): Action => ({ type: "event", event });
+const observed = (event: ObservedChatEvent): Action => ({ type: "event", event });
 const assistant = (t: Transcript) => t.turns.findLast((turn): turn is AssistantTurn => turn.kind === "assistant");
 
 describe("a streamed reply", () => {
@@ -209,5 +210,35 @@ describe("the agent's question (D-381, D-382)", () => {
     const asked = run([sent, ev({ type: "done", outcome: outcome({ status: "awaiting_answer", question }) })]);
     const typed = run([{ type: "sent", userId: "u2", assistantId: "a3", text: "keep it", selection: null }], asked);
     expect(typed.turns.find((turn): turn is AssistantTurn => turn.kind === "assistant")?.question?.answer).toBe("Answered in your own words");
+  });
+});
+
+describe("a reply's typed cards", () => {
+  const presentation = (artifacts: unknown[]) => ({
+    userMessageId: "m1", version: 1 as const, status: "completed" as const, operations: [], messages: [],
+    effectsMayHaveOccurred: false, warning: null, detailsTruncated: false, artifacts,
+  });
+
+  test("a copy's report from the presentation becomes the reply's card", () => {
+    const report = { kind: "transfer" as const, sourceBoard: "Moonlander", destinationBoard: "Corne", mappedCount: 3, skipped: [] };
+    const t = run([sent, ev({ type: "start", conversationId: "c1", messageId: "m1" }), observed({ type: "presentation", presentation: presentation([report]) })]);
+    expect(assistant(t)?.artifacts).toEqual([report]);
+  });
+
+  test("a card kind this release does not know is dropped, and the reply is still shown", () => {
+    const t = run([sent, ev({ type: "start", conversationId: "c1", messageId: "m1" }), observed({ type: "presentation", presentation: presentation([{ kind: "a_kind_from_a_later_release" }]) })]);
+    expect(assistant(t)?.artifacts).toBeUndefined();
+    expect(assistant(t)?.phase).toBe("streaming");
+  });
+
+  test("a stored conversation keeps its cards, and a reply without them has none", () => {
+    const detail = {
+      conversation: { id: "c1", layoutId: "l1", title: "t", createdAt: 1, provider: "anthropic" as const, model: "m" },
+      messages: [{ id: "m1", role: "user" as const, text: "copy it", toolCalls: [], selection: null, createdAt: 1 }],
+      proposals: [], priorities: [], preparationReceipts: [],
+      presentations: [presentation([{ kind: "transfer", sourceBoard: "A", destinationBoard: "B", mappedCount: 1, skipped: [] }]), { ...presentation([]), userMessageId: "m2" }],
+    };
+    const t = fromConversation(detail);
+    expect(t.turns.filter((turn): turn is AssistantTurn => turn.kind === "assistant").map((turn) => turn.artifacts?.length ?? 0)).toEqual([1, 0]);
   });
 });

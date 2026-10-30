@@ -21,6 +21,7 @@ import { ValidationResultSchema } from "../validation/result.ts";
 import { createAgentPorts } from "./agent-ports.ts";
 import { answerResult } from "./answer-after-move.ts";
 import { SKIPPED_ANSWER, appliedProposalIds, closingResult, isClosedAnswer, openQuestion } from "./question-skip.ts";
+import type { TransferReport } from "./copy-report.ts";
 
 export { openQuestion };
 import { type ProposalCard, toCard } from "./proposal-card.ts";
@@ -267,7 +268,7 @@ export function storeMessage(app: App, ref: string, input: SendMessageInput, mod
 export type PreparedMessage = ReturnType<typeof storeMessage>;
 
 
-export async function runPreparedMessage(app: App, prepared: PreparedMessage, input: SendMessageInput, runId?: string, copy?: (input: PutInput) => PutResult): Promise<ChatOutcome> {
+export async function runPreparedMessage(app: App, prepared: PreparedMessage, input: SendMessageInput, runId?: string, copy?: (input: PutInput) => PutResult & { report?: TransferReport }): Promise<ChatOutcome> {
   const { view, selection, conversation, userMessage, resolvedQuestions, model } = prepared;
   answering.set(conversation.id, userMessage.id);
   // What BK had applied when this turn began, so a question it pauses on can be closed if he applies something while it runs (D-452).
@@ -283,12 +284,16 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
     let outcome: TurnOutcome;
     let handoff: CopyHandoff | undefined;
     const copyContext = conversationCopyContext(app, conversation.id, resolvedQuestions.flatMap((question) => question.questionRefines === undefined ? [] : [question.questionRefines]));
+    // The copy's first reply in the new config carries the same card the request that made it showed (D-467). A later reply in that
+    // conversation does not: the card belongs to the copy's own message, so it can be shown once and stay with the facts it describes.
+    if (copyContext?.report !== undefined && copyContext.copyMessageId === userMessage.id) presentation.artifacts([copyContext.report]);
     try {
       outcome = await runAgentTurn({
         model,
         ports: createAgentPorts(app, view.layout.id, conversation.id, [...new Set([...(copyContext?.active ? copyContext.sourceMessageIds : []), userMessage.id])], selection, runId, undefined, copy === undefined ? undefined : (value) => {
           const result = copy(value);
           handoff = result.handoff;
+          if (result.report !== undefined) presentation.artifacts([result.report]);
           return result;
         }, copyContext?.blocksCopy === true),
         ...(copyContext === undefined ? {} : { copyContext: copyContext.prompt }),

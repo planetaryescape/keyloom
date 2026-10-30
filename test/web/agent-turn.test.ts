@@ -241,8 +241,11 @@ describe("agent turn composition", () => {
     const html = render(withArtifacts);
     expect(html).toContain("zsa/moonlander");
     expect(html).toContain("moergo/glove80");
-    expect(html).toContain("42 keys mapped successfully.");
+    // The copy's report (D-467): carried, then the dropped key with its reason behind the disclosure.
+    expect(html).toContain("42 keys came across.");
+    expect(html).toContain("1 key did not come across");
     expect(html).toContain("RGB_TOG");
+    expect(html).toContain("Glove80 lacks per-key RGB");
     expect(html).toContain("Locations for KC_ESC");
     expect(html).toContain("ZSA Moonlander");
     expect(html).toContain("Connected");

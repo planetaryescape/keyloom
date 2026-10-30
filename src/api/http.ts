@@ -392,6 +392,9 @@ export const ChatPresentationSchema = z.object({
     accepted: z.number().int().nonnegative(), declined: z.number().int().nonnegative(),
   })).max(64),
   messages: z.array(z.object({ id: z.string().min(1), kind: z.enum(["working_note", "answer"]), text: z.string(), messageId: z.string().min(1).optional() })).max(64),
+  // Typed result cards under the reply (D-467). Absent on older recordings. The list is bounded here; each card is narrowed to
+  // `AgentArtifact` where it is shown (`transcript.ts`), so a stored row and this schema stay interchangeable.
+  artifacts: z.array(z.unknown()).max(4).optional(),
   effectsMayHaveOccurred: z.boolean(), warning: z.string().nullable(), detailsTruncated: z.boolean(),
 });
 export type ChatPresentation = z.infer<typeof ChatPresentationSchema>;

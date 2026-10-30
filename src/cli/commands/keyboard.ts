@@ -6,6 +6,7 @@ import {
   type AddDeps, type App, type CandidateView, type DetectedKeyboard, type HandsFreeOverrides, UsageError, addKeyboard, detectKeyboards, previewKeyboard, putConfig, searchKeyboards,
 } from "../../app/index.ts";
 import { type Format, type Io, SCHEMA_VERSION, columns, print } from "../output.ts";
+import { transferReportText } from "../transfer-text.ts";
 import { configJson } from "./config.ts";
 
 export type KeyboardCommandDeps = {
@@ -185,8 +186,7 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
           : [
               `${out.config.id}  ${out.config.name}`,
               ...out.proposals.map((p) => `proposed ${p.changeSetId}: ${p.title}\n  ${p.summary}`),
-              `${out.notCarried.length} keys did not come across (${[...new Set(out.notCarried.map((n) => n.why))].join("; ")})`,
-              ...out.notes.map((n) => `note: ${n}`),
+              ...transferReportText(out.report, { continues: false }),
               `review: keyloom change show ${out.proposals[0]?.changeSetId}   apply: keyloom change apply ${out.proposals[0]?.changeSetId}`,
               "nothing was applied, built or flashed",
             ].join("\n"),

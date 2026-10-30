@@ -761,7 +761,7 @@ Previously, completed activity is inspectable but a stream interruption may stil
 
 ## Rung 27: I answer on the keyboard and inspect real results
 
-Status: Partly wired. Interactive question kinds, selection reopening and the typed artifact union are built, and the web renders `transfer`, `key_locations` and `keyboard_list` artifacts, but no server or client code produces `turn.artifacts` yet, so none of those three ever shows. The one result that does show is the config card under a reply that made a config (D-450, 2026-10-22), built on the client from operation references. The `transfer` report with the items that did not carry needs a server-built artifact and is not built.
+Status: Partly wired. Interactive question kinds, selection reopening and the typed artifact union are built, and the web renders `transfer`, `key_locations` and `keyboard_list` artifacts. Since D-467 a copy's reply produces the `transfer` report from its own plan: what carried, the guesses, every dropped key with its reason, a line per layer, combos, placed and blocked layer keys, and the notes for what was never about keys. It is stored with the reply (parent and the copy's first reply) and shown by the app and the CLI. `key_locations` and `keyboard_list` still have no producer, so those two never show. The other result that shows is the config card under a reply that made a config (D-450, 2026-10-22), built on the client from operation references.
 
 Previously, questions have a few buttons and free text. Now a key/layer/config/keyboard choice uses the corresponding app control, and tool results use typed cards and existing previews.
 
