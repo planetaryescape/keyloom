@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.0](https://github.com/planetaryescape/keyloom/compare/v0.64.0...v0.65.0) (2026-10-30)
+
+
+### Features
+
+* link a reply's configs, proposals, layers and keys ([#215](https://github.com/planetaryescape/keyloom/issues/215)) ([e6b79e1](https://github.com/planetaryescape/keyloom/commit/e6b79e191cb1087f977dec0c385ec79b5c8b4a59))
+
 ## [0.64.0](https://github.com/planetaryescape/keyloom/compare/v0.63.0...v0.64.0) (2026-10-30)
 
 
