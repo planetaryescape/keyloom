@@ -305,4 +305,4 @@ to open it: keyloom config use lay_01M65JGHPMH04G6XWDXBKF9QR3
 to review it: keyloom change show cs_01M65JJX62REZ96VCR35FPNRD2
 ```
 
-`--format json` is unchanged: `text` is the reply the model wrote, markers included, because a machine reader can resolve them itself and the stored message is the same text. The web draws a chip for each marker that names something live ([28](28-agent-experience.md#results-use-app-owned-views-instead-of-prose-imitations)).
+`--format json` is unchanged: `text` is the reply the model wrote, markers included, because a machine reader can resolve them itself and the stored message is the same text. The web draws a link on each marker that names something live ([28](28-agent-experience.md#results-use-app-owned-views-instead-of-prose-imitations)).
