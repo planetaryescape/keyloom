@@ -857,6 +857,62 @@
   font-size: var(--text-xs);
 }
 
+/* The copy's report (D-467): the question card's quiet surface, one line per layer, and the drops behind a disclosure a keyboard opens. */
+.transfer-card {
+  gap: var(--space-1);
+}
+
+.transfer-card .config-card-title {
+  flex-wrap: wrap;
+}
+
+.transfer-layers,
+.transfer-drops ul,
+.transfer-notes ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.transfer-layers strong,
+.transfer-drops strong {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+.transfer-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transfer-label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.transfer-drops summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.transfer-drops summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.transfer-drops[open] summary {
+  margin-bottom: var(--space-1);
+}
+
 .ask-other {
   display: flex;
   flex-wrap: wrap;

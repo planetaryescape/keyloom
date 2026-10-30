@@ -3,7 +3,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
-import { importLayout, openApp } from "../../src/app/index.ts";
+import { applyChange, importLayout, openApp, proposeChange } from "../../src/app/index.ts";
+import { newConfig } from "../../src/app/configs.ts";
 import { listBoards, setUserBoards } from "../../src/boards/registry.ts";
 import type { UsbDevice } from "../../src/firmware/toolchain/usb.ts";
 import { CORNE_LAYOUT_FIXTURE } from "../helpers/derive-sources.ts";
@@ -136,6 +137,44 @@ describe("keyloom keyboard add and put", () => {
     expect(glove80.layoutId).toMatch(/^lay_/);
     const changes = await cli("change", "list", body.config.id, "--format", "json");
     expect(json(changes).change_sets.map((c: { status: string }) => c.status)).toEqual(["proposed", "proposed"]);
+  });
+
+  test("the table names the drops with their reasons and keeps the notes, instead of an empty count", async () => {
+    const { cli, dataDir } = harness([]);
+    const app = openApp({ dataDir });
+    await importLayout(app, { board: "moergo/glove80", source: STYLE_FIXTURE, name: "source" });
+    app.db.close();
+    const r = await cli("keyboard", "put", "source", "--on", "foostan/corne", "--format", "table");
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain("0 keys did not come across");
+    expect(r.out).toContain("Glove80 -> Corne");
+    expect(r.out).toMatch(/^\d+ keys came across on \d+ layers/m);
+    const heading = r.out.match(/(\d+) keys did not come across:/);
+    if (!heading) throw new Error("no drops heading");
+    expect(r.out).toMatch(/^ {2}.+ \(.+\): .+$/m);
+    const dropped = Number(heading[1]);
+    expect(dropped).toBeGreaterThan(8);
+    expect(r.out).toContain(`and ${dropped - 8} more`);
+    expect(r.out).toContain("left out:");
+    expect(r.out).toContain("firmware settings");
+    expect(r.out).not.toContain("note:");
+    // A config and a proposal, but no conversation continues it.
+    expect(r.out).not.toContain("adapting it continues");
+    expect(r.out).toContain("nothing was applied, built or flashed");
+  });
+
+  test("a put that lost no keys says everything came across and prints no empty drops line", async () => {
+    const { cli, dataDir } = harness([]);
+    const app = openApp({ dataDir });
+    const corne = newConfig(app, { name: "small", from: "blank", board: "foostan/corne" });
+    const change = proposeChange(app, corne.id, { source: "editor", explanation: "One key", ops: [{ op: "setBinding", at: { layerId: "base", position: 5 }, binding: { kind: "key", code: "Q" } }] });
+    applyChange(app, change.id);
+    app.db.close();
+    const r = await cli("keyboard", "put", "small", "--on", "zsa/moonlander", "--format", "table");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("All 1 key came across");
+    expect(r.out).not.toContain("did not come across");
+    expect(r.out).not.toContain("keys did not come across");
   });
 
   test("put on a board that does not exist is not-found (3), and a layout that does not exist too", async () => {

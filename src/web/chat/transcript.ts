@@ -3,6 +3,7 @@
 // tested directly.
 import type { ChatAccounting, ChatMessage, ChatOutcome, ChatPresentation, ChatSelection, ConversationDetail, ObservedChatEvent, PriorityCard, ProposalCard, QuestionCard } from "../../api/http.ts";
 import type { AgentArtifact } from "../../api/artifacts.ts";
+import { AgentArtifactSchema } from "../../api/artifacts.ts";
 import { toolActivity } from "./activity.ts";
 import type { AgentRunSnapshot } from "../../api/agent-runs.ts";
 
@@ -147,6 +148,15 @@ export function interruptPresentation(presentation: ChatPresentation): ChatPrese
   };
 }
 
+/** The cards under a reply: the presentation carries them bounded and unvalidated, so each is narrowed here once (D-467). */
+export function presentedArtifacts(presentation: ChatPresentation): AgentArtifact[] | undefined {
+  const parsed = (presentation.artifacts ?? []).flatMap((value) => {
+    const result = AgentArtifactSchema.safeParse(value);
+    return result.success ? [result.data] : [];
+  });
+  return parsed.length === 0 ? undefined : parsed;
+}
+
 function presentedTurn(turn: AssistantTurn, presentation: ChatPresentation, messages: readonly ChatMessage[] = []): AssistantTurn {
   const question = turn.question;
   const answers = presentation.messages.filter((message) => message.kind === "answer");
@@ -157,8 +167,10 @@ function presentedTurn(turn: AssistantTurn, presentation: ChatPresentation, mess
       const previous = previousAnswers[index];
       return previous?.id === answer.id && previous.text === answer.text && previous.messageId === answer.messageId;
     });
+  const artifacts = presentedArtifacts(presentation);
   return {
     ...turn, userMessageId: presentation.userMessageId, presentation,
+    ...(artifacts === undefined ? {} : { artifacts }),
     ...(presentation.accounting === undefined ? {} : { accounting: presentation.accounting }),
     text: keepFullAnswer ? turn.text : presentationAnswerText(presentation, messages), activity: null,
     // A terminal observation precedes done/error. Keep the current socket busy until that

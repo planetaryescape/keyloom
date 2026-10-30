@@ -126,3 +126,67 @@ test("busy rejection and old-turn retry cannot overwrite the original presentati
   expect(JSON.stringify(presentations)).not.toContain("SECRET_RECORDING");
   app.db.close();
 });
+
+test("a reply's artifacts survive the stored row and the wire, and an older reader keeps the rest of the row", async () => {
+  const { app, layoutId } = await optionOptionApp();
+  const conversation = insertConversation(app.db, { layoutId, title: "Synthetic" });
+  const user = insertMessage(app.db, { conversationId: conversation.id, role: "user", content: [{ type: "text", text: "Copy it" }] });
+  const report = {
+    kind: "transfer" as const, sourceBoard: "Moonlander", destinationBoard: "Corne", mappedCount: 42, guessedCount: 5,
+    skipped: [{ key: "Esc (Base)", reason: "no key on the new board does this" }], skippedCount: 1,
+    layers: [{ source: "Base", target: "Base", carried: 30, guessed: 5, notCarried: 1 }], layerCount: 1,
+    combos: { copied: 1, skipped: [], skippedCount: 0 }, notes: ["LED colours were not carried"], noteCount: 1,
+    placementCount: 2, placementsBlocked: 0,
+  };
+  const projection = chatPresentation(app, conversation.id, user.id);
+  projection.artifacts([report, { kind: "keyboard_list", keyboards: [] }, report, report, report]);
+  projection.finish("completed");
+  const saved = listPresentations(app.db, conversation.id)[0];
+  if (!saved) throw new Error("not saved");
+  // A reply shows at most four cards; the fifth is counted, not kept.
+  expect(saved.artifacts).toEqual([report, { kind: "keyboard_list", keyboards: [] }, report, report]);
+  expect(saved.detailsTruncated).toBe(true);
+  expect(ChatPresentationSchema.parse(saved)).toEqual(PresentationSchema.parse(saved));
+  expect(ChatPresentationSchema.parse(saved).artifacts?.[0]).toEqual(report);
+
+  // A row written before this field existed has no artifacts and still reads.
+  app.db.query("UPDATE chat_presentations SET payload = json_remove(payload, '$.artifacts') WHERE user_message_id = ?").run(user.id);
+  const older = listPresentations(app.db, conversation.id)[0];
+  expect(older?.artifacts).toBeUndefined();
+  expect(older?.status).toBe("completed");
+  expect(ChatPresentationSchema.parse(older)).toEqual(PresentationSchema.parse(older));
+
+  // An older binary's schema does not know the field: it drops it and keeps every field it does know.
+  savePresentation(app.db, conversation.id, saved);
+  const previous = PresentationSchema.omit({ artifacts: true });
+  const row = app.db.query("SELECT payload FROM chat_presentations WHERE user_message_id = ?").get(user.id) as { payload: string };
+  const parsed = previous.parse(JSON.parse(row.payload));
+  expect(parsed.userMessageId).toBe(user.id);
+  expect(parsed.status).toBe("completed");
+  expect(parsed.messages).toEqual([]);
+  expect("artifacts" in parsed).toBe(false);
+
+  // A maximal copy report is still a legal row, well inside the presentation's own budget.
+  const long = "W".repeat(300);
+  const { transferReport } = await import("../../src/app/copy-report.ts");
+  const widest = transferReport({
+    ops: [], opsWithPlacements: [], placements: [],
+    layers: Array.from({ length: 20 }, (_, i) => ({ source: `layer-${i}`, target: `layer-${i}`, carried: i, guessed: i, notCarried: i })),
+    notCarried: Array.from({ length: 81 }, (_, i) => ({ layerName: long, source: i, sourceName: `${long} ${i}`, why: long })),
+    combos: { copied: ["a", "b"], skipped: Array.from({ length: 17 }, (_, i) => ({ id: `${long} ${i}`, why: long })) },
+    notes: Array.from({ length: 11 }, (_, i) => `${long} ${i}`),
+  }, { sourceBoard: "S".repeat(200), destinationBoard: "D".repeat(200), layerName: (id) => long + id });
+  const wide = chatPresentation(app, conversation.id, user.id);
+  wide.artifacts([widest]);
+  wide.finish("completed");
+  const stored = listPresentations(app.db, conversation.id)[0];
+  expect(stored?.artifacts).toHaveLength(1);
+  expect(Buffer.byteLength(JSON.stringify(stored))).toBeLessThan(PRESENTATION_BYTES);
+  // A card writer that ignores the bounds loses its card instead of the reply: the row is not saved over budget, and the loss is flagged.
+  const huge = chatPresentation(app, conversation.id, user.id);
+  huge.artifacts([{ kind: "transfer", notes: [long.repeat(200)] }]);
+  huge.finish("completed");
+  expect(listPresentations(app.db, conversation.id)[0]?.artifacts).toBeUndefined();
+  expect(listPresentations(app.db, conversation.id)[0]?.detailsTruncated).toBe(true);
+  app.db.close();
+});

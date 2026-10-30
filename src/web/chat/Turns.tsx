@@ -112,30 +112,79 @@ function OutcomeCardView({ outcome }: { outcome: OutcomeCard }) {
   );
 }
 
+// The copy's card (D-467). It says what came across, what did not and why, and what was never about keys; the drops stay behind Details so
+// the card is short. It reads as keyloom talking: no success wording, no exclamation, and every count names the plan's own facts.
 function TransferArtifactView({ transfer }: { transfer: Extract<AgentArtifact, { kind: "transfer" }> }) {
+  const dropped = transfer.skippedCount ?? transfer.skipped.length;
+  const layers = transfer.layers ?? [];
+  const layerTotal = transfer.layerCount ?? layers.length;
+  const guessed = transfer.guessedCount ?? 0;
+  const combos = transfer.combos;
+  const combosSkipped = combos === undefined ? 0 : (combos.skippedCount ?? combos.skipped.length);
+  const notes = transfer.notes ?? [];
+  const noteTotal = transfer.noteCount ?? notes.length;
+  const placed = transfer.placementCount ?? 0;
+  const blocked = transfer.placementsBlocked ?? 0;
+  const carried = transfer.mappedCount;
+  const carriedKeys = carried === 1 ? "1 key" : `${carried} keys`;
+  const onLayers = layerTotal > 1 ? ` on ${layerTotal} layers` : "";
+  const guesses = guessed > 0 ? `, ${guessed} of them nearest-place guesses` : "";
+  const carriedLine = carried === 0
+    ? "No keys came across."
+    : dropped === 0
+      ? `All ${carriedKeys} came across${onLayers}${guesses}.`
+      : `${carriedKeys} came across${onLayers}${guesses}.`;
   return (
-    <section className="ask-card ask-card-done" aria-label="Transfer report">
-      <p className="ask-question" style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+    <section className="ask-card ask-card-done transfer-card" aria-label="Transfer report">
+      <p className="ask-question config-card-title">
         <span>{transfer.sourceBoard}</span>
         <ArrowRight size={14} aria-hidden="true" />
         <span>{transfer.destinationBoard}</span>
       </p>
-      <p className="ask-description">
-        {transfer.mappedCount} keys mapped successfully.
-      </p>
-      {transfer.skipped.length > 0 ? (
-        <details className="ask-details" style={{ marginTop: "var(--space-1)" }}>
-          <summary style={{ cursor: "pointer", fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-            {transfer.skipped.length} unsupported or skipped item(s)
-          </summary>
-          <ul style={{ margin: "var(--space-1) 0 0 var(--space-3)", padding: 0, fontSize: "var(--text-xs)" }}>
-            {transfer.skipped.map((s, idx) => (
-              <li key={idx} style={{ color: "var(--color-text-muted)" }}>
-                <strong>{s.key}</strong>: {s.reason}
+      <p className="ask-description">{carriedLine}</p>
+      {layerTotal > 1 ? (
+        <ul className="transfer-layers">
+          {layers.map((layer, index) => (
+            <li key={index}>
+              <strong>{layer.source}</strong>: {layer.carried} carried
+              {layer.guessed > 0 ? `, ${layer.guessed} guessed` : ""}
+              {layer.notCarried > 0 ? `, ${layer.notCarried} left off` : ""}
+            </li>
+          ))}
+          {layerTotal > layers.length ? <li>and {layerTotal - layers.length} more layers</li> : null}
+        </ul>
+      ) : null}
+      {dropped > 0 ? (
+        <details className="ask-details transfer-drops">
+          <summary>{dropped === 1 ? "1 key did not come across" : `${dropped} keys did not come across`}</summary>
+          <ul>
+            {transfer.skipped.map((item, index) => (
+              <li key={index}>
+                <strong>{item.key}</strong>: {item.reason}
               </li>
             ))}
+            {dropped > transfer.skipped.length ? <li>and {dropped - transfer.skipped.length} more</li> : null}
           </ul>
         </details>
+      ) : null}
+      {combos === undefined ? null : (
+        <p className="ask-description">
+          {combos.copied === 0 ? "No combos copied" : `${combos.copied} ${combos.copied === 1 ? "combo" : "combos"} copied`}
+          {combosSkipped === 0
+            ? "."
+            : `; ${combosSkipped} did not: ${combos.skipped.map((combo) => `${combo.id} (${combo.why})`).join("; ")}${combosSkipped > combos.skipped.length ? `, and ${combosSkipped - combos.skipped.length} more` : ""}.`}
+        </p>
+      )}
+      {placed > 0 ? <p className="ask-description">{placed === 1 ? "1 layer key had nowhere of its own and was placed on a free key." : `${placed} layer keys had nowhere of their own and were placed on free keys.`}</p> : null}
+      {blocked > 0 ? <p className="ask-description">{blocked === 1 ? "1 layer key could not be placed: the layer it enters has no way back on this board." : `${blocked} layer keys could not be placed: the layers they enter have no way back on this board.`}</p> : null}
+      {notes.length > 0 ? (
+        <div className="transfer-notes">
+          <p className="transfer-label">Left out</p>
+          <ul>
+            {notes.map((note, index) => <li key={index}>{note}</li>)}
+          </ul>
+          {noteTotal > notes.length ? <p className="ask-description">and {noteTotal - notes.length} more</p> : null}
+        </div>
       ) : null}
     </section>
   );

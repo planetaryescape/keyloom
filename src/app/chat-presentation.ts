@@ -32,6 +32,9 @@ export function clipPublicText(text: string, budget: number): string {
 
 /** A put records its config and up to two proposals; propose_changes saves up to three. A cap of two showed "2 saved proposals" for three and flagged a normal run as truncated. */
 const MAX_REFERENCES = 3;
+/** A reply shows at most this many typed result cards, and this many bytes of them; the wire schema repeats the count. */
+const MAX_ARTIFACTS = 4;
+const MAX_ARTIFACT_BYTES = 32 * 1024;
 
 export function unobservedPresentation(presentation: Presentation): Presentation {
   return { ...presentation, status: "unobserved", warning: UNOBSERVED_WARNING, operations: presentation.operations.map((operation) => operation.status === "running" ? { ...operation, status: "unknown" } : operation) };
@@ -84,6 +87,22 @@ export function chatPresentation(app: App, conversationId: string, userMessageId
       publish();
     },
     handoff(value: NonNullable<Presentation["handoff"]>) { state.handoff = value; },
+    /** A reply's cards share one budget, well under the stored row's, so no card writer can push the row past what the store keeps. */
+    artifacts(value: readonly unknown[]) {
+      if (value.length === 0) return;
+      const kept: unknown[] = [];
+      let bytes = 0;
+      for (const item of value.slice(0, MAX_ARTIFACTS)) {
+        const size = Buffer.byteLength(JSON.stringify(item) ?? "null");
+        if (bytes + size > MAX_ARTIFACT_BYTES) { state.detailsTruncated = true; break; }
+        kept.push(item);
+        bytes += size;
+      }
+      if (value.length > MAX_ARTIFACTS) state.detailsTruncated = true;
+      if (kept.length === 0) return;
+      state.artifacts = kept;
+      publish();
+    },
     finish(status: Presentation["status"], models?: ModelMessage[], stored?: MessageRow[], questionToolUseId?: string, accounting?: Presentation["accounting"], questionRefines?: string) {
       if (accounting !== undefined) state.accounting = accounting;
       if (questionToolUseId !== undefined) {

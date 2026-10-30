@@ -10,12 +10,14 @@ import { transact } from "../persistence/transaction.ts";
 import type { ChangeSetSource } from "../persistence/change-sets.ts";
 import { type ChangeSetView, proposeChange } from "./changes.ts";
 import { type ConfigView, blankDocument, newConfig } from "./configs.ts";
+import { type TransferReport, transferReport } from "./copy-report.ts";
 import { evaluate } from "../validation/validate.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
+import type { Board } from "../boards/load.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
-import { getLayout } from "./layouts.ts";
+import { getLayout, type LayoutView } from "./layouts.ts";
 import { showBoard } from "./boards.ts";
 import type { LayerReport, NotCarried, PlacementCandidate, PlacementProposal } from "../agent/put-plan.ts";
 
@@ -48,9 +50,20 @@ export type PutOutcome = {
   notCarried: NotCarried[];
   combos: { copied: string[]; skipped: Array<{ id: string; why: string }> };
   notes: string[];
+  /** The same plan, bounded for the reply's card and the CLI's lines (D-467). */
+  report: TransferReport;
 };
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** The report the card reads, from the plan the put already made: the copy never runs the plan a second time. */
+function reportOf(view: LayoutView, target: Board, plan: PutPlan): TransferReport {
+  const names = new Map(view.document.layers.map((layer) => [layer.id, layer.name]));
+  return transferReport(plan, {
+    sourceBoard: view.board.definition.name, destinationBoard: target.definition.name,
+    layerName: (id) => names.get(id) ?? id,
+  });
+}
 
 function choicesOf(input: PutInput): Map<number, number> {
   return new Map(Object.entries(input.placements ?? {}).map(([source, target]) => [Number(source), target]));
@@ -63,7 +76,7 @@ export function previewPut(app: App, input: PutInput): PutPreview {
   const evaluation = evaluate(target.definition, blank, ops);
   return {
     name: input.name ?? `${view.layout.name} on ${target.definition.name}`, after: evaluation.after ?? blank, summary: summaryOf(view.layout.name, plan),
-    placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes,
+    placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes, report: reportOf(view, target, plan),
     // What the validator would refuse, so the page says it before "Make" makes a config that cannot hold it (D-014).
     problems: evaluation.result.errors.map((e) => e.message),
   };
@@ -163,5 +176,5 @@ function putConfigNow(app: App, input: PutInput): PutOutcome {
     });
     proposals.push(asProposal(alt, alt.title ?? "", text));
   }
-  return { config, proposals, placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes };
+  return { config, proposals, placements: plan.placements, layers: plan.layers, notCarried: plan.notCarried, combos: plan.combos, notes: plan.notes, report: reportOf(view, target, plan) };
 }
