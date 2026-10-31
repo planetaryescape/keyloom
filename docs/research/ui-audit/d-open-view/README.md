@@ -22,6 +22,8 @@ Pending browser checks: all four destinations and render-before-ack ordering; re
 
 `test/cli/open-view.test.ts` drives both command families through the real SDK tool loop. The scripted provider asserts that `unavailable/unsupported` reaches its next request before answering; ordinary inspection retains a declined operation and no pending intent.
 
+`test/web/open-view-ack.test.ts` checks that a stalled acknowledgement fetch is aborted with its initiating intent. The same deadline/cancellation signal bounds both rendering and the acknowledgement transport; a lost acknowledgement is never retried as a new action.
+
 For a task-local installed production candidate:
 
 ```sh

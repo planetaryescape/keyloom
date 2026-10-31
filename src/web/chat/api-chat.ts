@@ -28,8 +28,8 @@ export async function startSavedChat(token: string, ref: string, requestId: stri
   }
 }
 
-export function acknowledgeView(token: string, id: string, ack: ViewAck) {
-  return request("POST", `/api/agent/v1/runs/${encodeURIComponent(id)}/view-ack`, token, ViewResultSchema, undefined, ack);
+export function acknowledgeView(token: string, id: string, ack: ViewAck, signal: AbortSignal) {
+  return request("POST", `/api/agent/v1/runs/${encodeURIComponent(id)}/view-ack`, token, ViewResultSchema, signal, ack);
 }
 
 export function fetchSavedRun(token: string, id: string, signal: AbortSignal): Promise<AgentRunSnapshot> {

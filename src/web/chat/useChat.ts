@@ -144,7 +144,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
                   // Never upgrade a rendered result after this send lost ownership or its deadline.
                   if (life.signal.aborted || controller.current !== mine) result = { version: 1, status: "unavailable", reason: "cancelled" };
                   else if (Date.now() >= intent.expiresAt) result = { version: 1, status: "unavailable", reason: "timeout" };
-                  await acknowledgeView(token, accepted.id, { version: 1, owner, configId: layoutRef, intentId: intent.id, result });
+                  await acknowledgeView(token, accepted.id, { version: 1, owner, configId: layoutRef, intentId: intent.id, result }, pendingView.signal);
                 } finally {
                   clearTimeout(timeout);
                   life.signal.removeEventListener("abort", abort);
