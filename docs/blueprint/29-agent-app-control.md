@@ -1,5 +1,7 @@
 # 29: The agent operates the same app as the user
 
+Candidate update, 2026-10-31: D-469 implements only `open_view` for `history|lab|decisions|settings`, with a per-send owner and bounded render acknowledgement. It adds no registry, router, migration, arbitrary command or setting mutation. Browser/visual acceptance is pending; [stage D evidence](../research/ui-audit/d-open-view/README.md).
+
 Status: 26a observation and 26b durable execution are released in v0.42.0 and v0.43.0. App-wide capabilities remain proposals. The [26b contract](../research/spikes/26b-contract.md) specifies the released versioned routes, CLI commands and receipt boundaries; [public-client evidence](../screenshots/agent-experience/26b-published-0.43.0/README.md) records their tested scope. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`. Product requirement: D-396 and D-400; execution/presentation direction: D-399, D-403 to D-406 and D-411.
 
 Reconciled with origin/main at `72370d0494497ae4bdd6036106fcec9d3f6c1aab`: the coverage inventory includes the separate case/keycap controls (D-319), and renderers inherit the current no-stripe/no-sparkle rule.
@@ -9,6 +11,16 @@ Released 26a: `presentationVersion: 1` negotiates replacement snapshots on the e
 The agent must be able to complete app workflows, not just explain how BK could complete them. It needs a current view of Keyloom, a bounded set of capabilities over existing use cases, and results the UI can render. It must not become a second implementation of the app.
 
 ## Reuse the current domain services and provider seam
+
+### Implemented finite view contract (D-469 candidate)
+
+For a new durable `POST /api/agent/v1/runs`, the browser may add `viewClient: { version: 1, owner: <fresh UUID> }` beside the existing input. The snapshot echoes `viewProtocol: 1` only when the server accepted that capability. Older clients omit it; an older server strips it and echoes nothing. Neither case can wait for or execute navigation. The legacy streaming fallback never advertises it.
+
+The existing optional presentation carries at most eight `viewIntents`, one pending at a time: `{ version: 1, id, runId, requestId, configId, expiresAt, view, status: "pending" }`, replaced by `status: "resolved", result` after settlement. The five-second deadline is checked by server and browser. A concurrent call returns `unavailable/busy`; a ninth returns `unavailable/limit`. The owner stays in private accepted-request metadata, not prompts, tool input/results, snapshots, URLs or public activity.
+
+`POST /api/agent/v1/runs/:id/view-ack` accepts `{ version: 1, owner, configId, intentId, result }` under the existing Host/token guards. `result` is exclusively `{ version: 1, status: "opened" | "already-open" }` or `{ version: 1, status: "unavailable", reason }`. Reasons are `unsupported`, `busy`, `timeout`, `cancelled`, `background`, `draft`, `recording`, `moved`, `disconnected` or `limit`. Wrong scope/owner/intent, expired pending intents and contradictory duplicates are refused. An exact saved duplicate returns its original result, including after the run finishes.
+
+Only this mount's new send supplies the action observer; historical reads, reload recovery and another tab do not. It validates accepted protocol, run/request/config identity, foreground focus, cancellation and deadline. Existing shell/editor activity and composer changes invalidate its permission. The shell opens idempotently and resolves after React commits the destination; Decisions commits its existing chat subview separately. Hiding chat does not stop observation, and the existing Stop controls remain. A timed-out or stopped waiter cannot become successful through a late acknowledgement. A restarted process marks pending presentation intents inert and never reconstructs a waiter. No database migration is needed.
 
 [The baseline reading](../research/agent-native-baseline.md) records the code at the named SHA. The app already has a provider-neutral `AgentModel`, injectable `AgentPorts`, validated proposals, questions, config creation, cross-board mapping, a pure transcript reducer and real sync states. Extend these seams.
 

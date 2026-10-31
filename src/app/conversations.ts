@@ -1,5 +1,7 @@
 // Use cases for talking to the agent: send a message, list and show conversations (03, 10).
 import { conversationCopyContext, copyHandoff } from "./copy-context.ts";
+import type { AgentView, ViewResult } from "../agent/open-view.ts";
+import type { ViewIntent } from "../persistence/chat-presentations.ts";
 import type { CopyHandoff, PutInput, PutResult } from "../agent/ports.ts";
 import { type AgentModel, type ContentBlock, type ModelMessage } from "../agent/model.ts";
 import { neutralBlock } from "../agent/blocks.ts";
@@ -104,6 +106,7 @@ export type ChatOutcome = {
 };
 
 export type SendMessageInput = {
+  openView?: (view: AgentView, publish: (intent: ViewIntent) => void) => Promise<ViewResult>;
   presentationVersion?: 1;
   /** BK's words. Exactly one of this and `answer`. */
   message?: string;
@@ -287,15 +290,18 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
     // The copy's first reply in the new config carries the same card the request that made it showed (D-467). A later reply in that
     // conversation does not: the card belongs to the copy's own message, so it can be shown once and stay with the facts it describes.
     if (copyContext?.report !== undefined && copyContext.copyMessageId === userMessage.id) presentation.artifacts([copyContext.report]);
+    const ports = createAgentPorts(app, view.layout.id, conversation.id, [...new Set([...(copyContext?.active ? copyContext.sourceMessageIds : []), userMessage.id])], selection, runId, undefined, copy === undefined ? undefined : (value) => {
+      const result = copy(value);
+      handoff = result.handoff;
+      if (result.report !== undefined) presentation.artifacts([result.report]);
+      return result;
+    }, copyContext?.blocksCopy === true);
+    const openView = input.openView;
+    if (openView !== undefined) ports.openView = (destination) => openView(destination, presentation.viewIntent);
     try {
       outcome = await runAgentTurn({
         model,
-        ports: createAgentPorts(app, view.layout.id, conversation.id, [...new Set([...(copyContext?.active ? copyContext.sourceMessageIds : []), userMessage.id])], selection, runId, undefined, copy === undefined ? undefined : (value) => {
-          const result = copy(value);
-          handoff = result.handoff;
-          if (result.report !== undefined) presentation.artifacts([result.report]);
-          return result;
-        }, copyContext?.blocksCopy === true),
+        ports,
         ...(copyContext === undefined ? {} : { copyContext: copyContext.prompt }),
         history,
         ...(input.maxIterations === undefined ? {} : { maxIterations: input.maxIterations }),
@@ -329,9 +335,9 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
       throw err;
     }
 
-    if (handoff !== undefined && (input.signal?.aborted || conversationRun(app.db, conversation.id)?.cancel_requested)) {
+    if ((handoff !== undefined || input.openView !== undefined) && (input.signal?.aborted || conversationRun(app.db, conversation.id)?.cancel_requested)) {
       presentation.finish("cancelled");
-      throw new DOMException("Copy stopped after preparation; saved config remains", "AbortError");
+      throw new DOMException("Agent stopped; saved preparation remains", "AbortError");
     }
     return transact(app.db, () => {
       const stored = outcome.messages.map((m) => insertMessage(app.db, { conversationId: conversation.id, role: m.role, content: m.content }));

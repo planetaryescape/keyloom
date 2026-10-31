@@ -1,5 +1,7 @@
 import { Eye, MousePointerClick, Repeat2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import type { AgentView, ViewResult } from "../api/open-view.ts";
+import type { OpenRequestedView } from "./chat/useChat.ts";
 import { isOnePiece } from "../boards/one-piece.ts";
 import type { GeometryKey } from "../boards/schema.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
@@ -1492,12 +1494,56 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     toasts.show({ kind: "success", message: "Applied", detail: summaryText });
   }
 
-  if (layer === undefined) return null;
   // The sheet's height is also the room the board keeps below it, so a key opened under it can be scrolled up (18#phones).
   const workbenchStyle = { "--sheet-h": `${sheetHeight(sheet, viewportHeight)}px` } as CSSProperties;
   const chips = chatSelection?.positions.length ?? 0;
   // The chat: the command bar at the stage's foot on a wide screen (23#chrome-recedes, P3), the bottom sheet on a narrow one. It stays
   // mounted while closed, so a reply that is streaming survives closing the bar.
+  // A send captures this screen's generation. User navigation/editing invalidates that send's
+  // navigation permission, even if the user later returns. Agent-owned opens renew only their own lease.
+  const viewSignature = JSON.stringify([sidebar, busyHere, editing, comboDraft, lab.phase.kind, layerId, revision.id]);
+  const viewGeneration = useRef({ signature: viewSignature, n: 0 });
+  useLayoutEffect(() => {
+    if (viewGeneration.current.signature !== viewSignature) viewGeneration.current = { signature: viewSignature, n: viewGeneration.current.n + 1 };
+  }, [viewSignature]);
+  const [viewRequest, setViewRequest] = useState<{ target: Sidebar; signal: AbortSignal; already: boolean; resolve: (result: ViewResult) => void } | null>(null);
+  const viewState = useRef<{ blocked: "draft" | "recording" | null; sidebar: Sidebar | null; open: (view: AgentView) => void }>({ blocked: null, sidebar, open: () => {} });
+  useLayoutEffect(() => { viewState.current = {
+    blocked: lab.phase.kind === "listening" || lab.phase.kind === "reading" ? "recording" : busyHere ? "draft" : null,
+    sidebar,
+    open: (destination) => {
+      if (destination === "lab") { if (!labOpen) toggleLab(); }
+      else if (destination === "history") setHistoryOpen(true);
+      else if (destination === "settings") setSettingsOpen(true);
+      else setChatOpen(true);
+    },
+  }; });
+  const beginViewRequest = (): OpenRequestedView => {
+    let expected = viewGeneration.current.n;
+    return async (destination, signal) => {
+      if (signal.aborted) return { version: 1, status: "unavailable", reason: "cancelled" };
+      if (viewState.current.blocked) return { version: 1, status: "unavailable", reason: viewState.current.blocked };
+      if (viewGeneration.current.n !== expected) return { version: 1, status: "unavailable", reason: "moved" };
+      const target = destination === "decisions" ? "chat" : destination;
+      const result = await new Promise<ViewResult>((resolve) => {
+        const abort = () => resolve({ version: 1, status: "unavailable", reason: "cancelled" });
+        signal.addEventListener("abort", abort, { once: true });
+        setViewRequest({ target, signal, already: viewState.current.sidebar === target, resolve: (value) => { signal.removeEventListener("abort", abort); resolve(value); } });
+        viewState.current.open(destination);
+      });
+      expected = viewGeneration.current.n;
+      return result;
+    };
+  };
+  useLayoutEffect(() => {
+    if (!viewRequest) return;
+    const reason = viewRequest.signal.aborted ? "cancelled" : viewState.current.blocked ?? (sidebar !== viewRequest.target ? "moved" : null);
+    viewRequest.resolve(reason ? { version: 1, status: "unavailable", reason } : { version: 1, status: viewRequest.already ? "already-open" : "opened" });
+    setViewRequest(null);
+  }, [viewRequest, sidebar]);
+  useEffect(() => () => viewRequest?.resolve({ version: 1, status: "unavailable", reason: "cancelled" }), [viewRequest]);
+
+  if (layer === undefined) return null;
   const chatContent = (
             <>
               {reminders.length === 0 ? null : (
@@ -1514,6 +1560,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 </div>
               )}
               <ChatPanel
+                beginViewRequest={beginViewRequest}
                 variant="bar"
                 sheet={narrow}
                 onClose={() => setChatOpen(false)}

@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { ChatPresentationSchema, ChatRequestSchema, PreparationSummarySchema, CopyHandoffSchema } from "./http.ts";
+import { ViewClientSchema } from "./open-view.ts";
 
 export const AgentRunRequestSchema = z.object({
+  viewClient: ViewClientSchema.optional(),
   version: z.literal(1), requestId: z.string().min(1).max(128), layoutRef: z.string().min(1).max(256), input: ChatRequestSchema,
 });
 export type AgentRunRequest = z.infer<typeof AgentRunRequestSchema>;
 export const AgentRunSnapshotSchema = z.object({
+  viewProtocol: z.literal(1).optional(),
   handoff: CopyHandoffSchema.optional(),
   version: z.literal(1), id: z.string(), requestId: z.string(), conversationId: z.string(), userMessageId: z.string(),
   status: z.enum(["running", "waiting_user", "completed", "failed", "cancelled", "interrupted"]),

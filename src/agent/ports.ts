@@ -6,6 +6,7 @@ import type { Layout } from "../layout/schema.ts";
 import type { PriorityKind, Subject } from "../memory/priorities.ts";
 import type { ReviewItem } from "../validation/review-item.ts";
 import type { ValidationResult } from "../validation/result.ts";
+import type { AgentView, ViewResult } from "./open-view.ts";
 
 /** The head of the layout at the moment of the call; tools read it fresh so an edit mid-conversation is seen. */
 export type LayoutSnapshot = {
@@ -182,6 +183,7 @@ export type PutResult = {
 };
 
 export interface AgentPorts {
+  openView?: (view: AgentView) => Promise<ViewResult>;
   snapshot(): LayoutSnapshot;
   /** The head of every layout keyloom holds, this conversation's included. Read-only: a proposal can only target `snapshot()` (D-014, D-220). */
   layouts(): LayoutSnapshot[];
