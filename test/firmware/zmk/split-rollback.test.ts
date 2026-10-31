@@ -265,16 +265,16 @@ test("Flash again refuses a failed right half's shared drive when its first step
   const r = await flash({ ...await corneInput(), prepare: async (w) => { w.press("R"); await Bun.sleep(50); } });
   expect(r.w.flashed).toEqual([]);
   expect(r.result.error).toContain("left half");
-  expect(r.result.error).toContain("right half must be running firmware on USB");
+  expect(r.result.error).toContain("If the right half is on USB it must be running firmware keyloom can identify");
 });
 
 test("an absent shared-drive half's remedy distinguishes manual recovery from the retry's first step", async () => {
   const input = await corneInput();
   const r = await flash({ ...input, world: { ...input.world, after: (h, key) => h.letter === "R" && key === KEY ? undefined : serialOf(key!, h.letter) } });
   expect(r.result.error).not.toContain("Put it in its bootloader and flash again");
-  expect(r.result.error).toContain("recover it on its own with only that half connected");
-  expect(r.result.error).toContain("The left half must be running firmware on USB");
-  expect(r.result.error).toContain("Before retrying in keyloom, return both halves to running firmware");
+  expect(r.result.error).toContain("connect only that half and put it in its bootloader");
+  expect(r.result.error).toContain("If the left half is on USB it must be running firmware keyloom can identify");
+  expect(r.result.error).toContain("a half that is not attached needs nothing");
   expect(r.result.error).toContain("Retry starts with the left half");
   expect(r.w.flashed).toEqual([{ letter: "L", key: KEY }, { letter: "R", key: KEY }]);
 });
@@ -301,7 +301,7 @@ test("a delayed peer boot drive after the retry's pre-prompt check is refused wi
   expect(writes).toBe(0);
   expect(r.w.flashed).toEqual([]);
   expect(r.result.error).toContain("keyloom can't tell which half this drive belongs to");
-  expect(r.result.error).toContain("must be running firmware on USB");
+  expect(r.result.error).toContain("must be running firmware keyloom can identify");
 });
 
 test("a manually opened shared drive is refused when its peer is absent", async () => {
@@ -312,7 +312,7 @@ test("a manually opened shared drive is refused when its peer is absent", async 
     write: async (path, image) => { writes++; await writeFile(path, image); },
   });
   expect(writes).toBe(0);
-  expect(r.result.error).toContain("recover it on its own with only that half connected");
+  expect(r.result.error).toContain("connect only that half and put it in its bootloader");
 });
 
 test("a first manual shared-drive flash accepts peers visibly running other firmware", async () => {

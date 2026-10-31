@@ -130,7 +130,12 @@ export const retryRemedy = (steps: readonly FlashStep[]): string =>
 
 export function sharedDriveRemedy(step: FlashStep, steps: readonly FlashStep[]): string {
   const others = steps.filter((s) => s !== step && s.volume === step.volume).map((s) => s.label).join(" and ");
-  return `keyloom can't tell which half this drive belongs to. The ${others} must be running firmware on USB, either keyloom's or other firmware. If it isn't, recover it on its own with only that half connected first. Before retrying in keyloom, return both halves to running firmware. ${retryRemedy(steps)} For recovery through keyloom, keyloom must restart the target itself and observe its drive appear while the other half stays running.`;
+  return `keyloom can't tell which half this drive belongs to, because both halves use the same boot-drive name. If the ${others} is on USB it must be running firmware keyloom can identify, either its own or another build's; a half that is not attached needs nothing. To recover a half on its own, connect only that half and put it in its bootloader. ${retryRemedy(steps)} For a keyloom recovery, keyloom must restart the target itself and see its drive appear while the other half is running or unplugged.`;
+}
+
+/** What to do when a shared label's drive never appeared: that half has to be connected and put in its bootloader, and the other half can stay unplugged. */
+export function missingSharedDriveRemedy(step: FlashStep, steps: readonly FlashStep[]): string {
+  return `${step.enter} The other half does not need to be connected. ${retryRemedy(steps)}`;
 }
 
 export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult> {
@@ -230,7 +235,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       // The Mac can lock after the last poll; probe once more so the timeout names the real reason.
       if (lockWasReported || await screenLocked()) return failed(`${SCREEN_LOCK_MESSAGE} ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`}`);
       return failed(
-        `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? sharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
+        `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? missingSharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
       );
     }
 
