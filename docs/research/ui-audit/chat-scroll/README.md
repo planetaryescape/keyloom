@@ -1,5 +1,14 @@
 # Verify long replies without losing the keyboard
 
+Install the external browser runner and its compatible Chromium once:
+
+```sh
+npm install -g agent-browser
+agent-browser install
+```
+
+Use the repository's Bun version for the commands below. The runner is not a project dependency and is not part of `bun test`.
+
 Run the synthetic server in one terminal:
 
 ```sh
