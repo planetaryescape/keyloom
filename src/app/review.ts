@@ -344,7 +344,16 @@ function onePerProblem(app: App, items: ReviewItem[]): { items: ReviewItem[]; wi
     if (i.fixes.every((f) => claimed.has(f))) dropped.add(i);
     else i.fixes.forEach((f) => claimed.add(f));
   }
-  const kept = items.filter((i) => !dropped.has(i));
+  // Grounding can collapse distinct model-supplied locations onto the same real finding. Withdraw the hidden duplicate's proposal too.
+  const identities = new Set<string>();
+  const proposals = new Set<string>();
+  const kept = items.filter((i) => {
+    if (dropped.has(i)) return false;
+    if (identities.has(i.id) || (i.proposalId !== null && proposals.has(i.proposalId))) { dropped.add(i); return false; }
+    identities.add(i.id);
+    if (i.proposalId !== null) proposals.add(i.proposalId);
+    return true;
+  });
   const stillShown = new Set(kept.map((i) => i.proposalId));
   return { items: kept, withdrawn: [...dropped].flatMap((i) => (i.proposalId === null || stillShown.has(i.proposalId) ? [] : [i.proposalId])) };
 }

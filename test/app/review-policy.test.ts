@@ -65,6 +65,29 @@ test("the published review cannot reintroduce the model's false explanation afte
   } finally { w.app.db.close(); }
 });
 
+test("two model findings that resolve to the same real affected key cannot leave an invisible proposal open", async () => {
+  const layout = groundedLayout();
+  layout.holdTapProfiles = [{ id: "hrm", name: "Home row", firmware: "zmk", options: { "tapping-term-ms": 200 } }];
+  layout.layers[0]!.bindings[1] = { kind: "holdTap", tap: { code: "G" }, hold: { mods: ["LGUI"] }, profileId: "hrm" };
+  const w = workloadApp(layout);
+  try {
+    const propose = (term: number) => ({ tool: "propose_changes", input: {
+      title: `Term ${term}`, ops: [{ op: "upsertHoldTapProfile", profile: { ...layout.holdTapProfiles[0]!, options: { "tapping-term-ms": term } } }],
+      explanation: "A source-only test candidate", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
+    } });
+    const m = scriptedModel([{ blocks: [propose(180), propose(190)] }, (seen) => {
+      const ids = [...seen.toolResults.join("\n").matchAll(/saved as (cs_\w+)/g)].map((match) => match[1]!);
+      return submit(ids.map((proposalId, i) => ({ kind: "suggestion", code: "same-profile", title: "Timing", body: "Timing", proposalId,
+        keys: [{ layerId: "base", position: i * 2 }] })));
+    }, finished]);
+    const done = await runReviewAi(w.app, createReview(w.app, w.layoutId, "manual").review.id, m.deps);
+    const suggestions = done.items.filter((i) => i.kind === "suggestion");
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]!.keys).toEqual([{ layerId: "base", position: 1 }]);
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestions[0]!.proposalId!]);
+  } finally { w.app.db.close(); }
+});
+
 test("keeping a modifier elsewhere does not license stripping the hold from its existing tap/hold key", () => {
   const layout = groundedLayout();
   layout.holdTapProfiles = [{ id: "hrm", name: "Home row", firmware: "zmk", options: { flavor: "tap-preferred", "tapping-term-ms": 200 } }];
