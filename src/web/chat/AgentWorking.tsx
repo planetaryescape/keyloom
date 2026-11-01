@@ -12,7 +12,7 @@ export interface AgentWorkingProps {
 const STATUS_WORDS = {
   running: "Working…",
   waiting: "Needs your answer",
-  completed: "Reply complete · some steps need attention",
+  completed: "Some steps need attention",
   failed: "Work stopped with a problem",
   stopped: "Stopped",
   disconnected: "Connection lost · outcome not confirmed",
@@ -41,14 +41,19 @@ function ObservedWorking({ view, motionPaused }: { view: Extract<AgentWorkView, 
   const hasDetails = work.routine.length > 0 || work.notes.length > 0;
   return (
     <div className="agent-working" data-motion-paused={motionPaused}>
-      {view.status === "completed" && work.attention.length === 0 ? null : <WorkStatus status={view.status} label={view.label} />}
+      {view.status === "completed" ? null : <WorkStatus status={view.status} label={view.label} />}
       {view.warning ? <p className="agent-work-incomplete">{view.warning}</p> : null}
       {!view.detailsTruncated ? null : <p className="agent-work-incomplete">Some working details were not retained. The final reply and saved proposals remain separate.</p>}
       {work.omitted === 0 && work.omittedNotes === 0 ? null : (
         <p className="agent-work-incomplete">Earlier working details are not shown ({work.omitted} steps, {work.omittedNotes} notes). Their outcomes are not confirmed here.</p>
       )}
-      {/* Running, failed, cancelled and uncertain calls never disappear inside routine working. */}
-      <OperationList operations={work.attention} />
+      {/* A failure stays explicit, separate from successful working; detail never precedes the answer at rest. */}
+      {view.status === "completed" && work.attention.length > 0 && work.attention.every((operation) => operation.status === "failed") ? (
+        <details className="agent-work-failures">
+          <summary><ChevronRight size={14} aria-hidden="true" />{work.attention.length} {work.attention.length === 1 ? "step failed" : "steps failed"}</summary>
+          <OperationList operations={work.attention} />
+        </details>
+      ) : <OperationList operations={work.attention} />}
       {!hasDetails ? null : (
         <div
           className="agent-work-disclosure"

@@ -5,6 +5,7 @@
   "vendor": "Keebart",
   "firmware": "zmk",
   "keyCount": 46,
+  "sensorPositions": [6, 6, 7, 7],
   "revisions": [
     {
       "id": "default",

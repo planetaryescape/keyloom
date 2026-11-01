@@ -50,6 +50,12 @@ const slotsEqual = (a: Slot, b: Slot) => a.layerId === b.layerId && a.position =
 
 function applyOp(doc: Layout, op: ChangeOp): void {
   switch (op.op) {
+    case "setSensorBindings": {
+      const layer = layerOf(doc, op.layerId);
+      if (op.sensorBindings === null) delete layer.sensorBindings;
+      else layer.sensorBindings = structuredClone(op.sensorBindings);
+      return;
+    }
     case "setBinding": {
       checkSlot(doc, op.at).bindings[op.at.position] = structuredClone(op.binding);
       return;
@@ -95,7 +101,9 @@ function applyOp(doc: Layout, op: ChangeOp): void {
       if (doc.layers.some((l) => l.id === op.layer.id)) throw new OpFailure("schema", `layer "${op.layer.id}" already exists`);
       // The copy has its own name and look; only what the keys do is copied. It goes last: a layer inserted
       // earlier would move every layer after it, and custom code that numbers layers would point at the wrong ones.
-      doc.layers.push({ id: op.layer.id, name: op.layer.name, bindings: structuredClone(source.bindings) });
+      const copy: Layer = { id: op.layer.id, name: op.layer.name, bindings: structuredClone(source.bindings) };
+      if (source.sensorBindings !== undefined) copy.sensorBindings = structuredClone(source.sensorBindings);
+      doc.layers.push(copy);
       return;
     }
     case "moveLayer": {

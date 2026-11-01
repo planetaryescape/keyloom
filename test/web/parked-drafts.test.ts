@@ -36,4 +36,18 @@ describe("kept drafts", () => {
     const drafts = park(park(new Map(), entry(30, { kind: "key", code: "Q" })), entry(31, null));
     expect(draftsForChat(drafts)).toEqual([{ layerId: "base", position: 30, binding: { kind: "key", code: "Q" } }]);
   });
+
+  test("encoder drafts reach the agent and cannot overwrite turns changed while the card was closed", () => {
+    const kept = entry(30, S);
+    kept.panel.sensorBindings = [{ kind: "rotation", clockwise: { kind: "key", code: "A" }, counterclockwise: { kind: "none" } }];
+    kept.panel.sensorBindingsOriginal = null;
+    const drafts = park(new Map(), kept);
+    expect(draftsForChat(drafts)[0]?.sensorBindings).toEqual(kept.panel.sensorBindings);
+    expect(stillApplying(drafts, layout(S)).kept.size).toBe(1);
+    const changed = layout(S);
+    changed.layers[0]!.sensorBindings = [{ kind: "rotation", clockwise: { kind: "key", code: "B" }, counterclockwise: { kind: "none" } }];
+    const checked = stillApplying(drafts, changed);
+    expect(checked.kept.size).toBe(0);
+    expect(checked.dropped).toEqual([kept]);
+  });
 });

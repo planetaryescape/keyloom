@@ -3,6 +3,8 @@
 // Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
 import { hasLightingControls, lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
 import { keyPlace } from "../boards/key-names.ts";
+import { boardSensorDefaults } from "../boards/sensors.ts";
+import { isZmkMouseBinding, sensorActions } from "../layout/sensors.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { keptDefinitions } from "../layout/kept-behaviours.ts";
@@ -31,6 +33,7 @@ function* bindingsOf(doc: Layout): Generator<{ binding: Binding; slot?: Slot; wh
     for (const [position, binding] of layer.bindings.entries()) {
       yield { binding, slot: { layerId: layer.id, position }, where: `layer "${layer.id}", position ${position}` };
     }
+    for (const binding of sensorActions(layer.sensorBindings ?? [])) yield { binding, where: `encoder turn on layer "${layer.id}"` };
   }
   for (const combo of doc.combos) yield { binding: combo.output, where: `output of combo "${combo.id}"` };
 }
@@ -250,6 +253,7 @@ export function lightingSupport(board: BoardDefinition, doc: Layout): Issue[] {
 
 /** The rules that look at one document; the relational ones below also need the document before. */
 export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
+  ...sensorRules(board, doc),
   ...duplicateIds(doc),
   ...bindingCount(board, doc),
   ...unknownRefs(board, doc),
@@ -267,6 +271,15 @@ export const documentRules = (board: BoardDefinition, doc: Layout): Issue[] => [
   ...kanataProfileOptions(doc),
   ...remapperLockout(board, doc),
 ];
+
+function sensorRules(board: BoardDefinition, doc: Layout): Issue[] {
+  const count = boardSensorDefaults(board).length;
+  return doc.layers.flatMap((layer) => {
+    if (layer.sensorBindings === undefined) return [];
+    if (doc.firmware !== "zmk" || count === 0 || layer.sensorBindings.length !== count) return [issue("firmware_unsupported", `layer ${layer.id}: ${layer.sensorBindings.length} sensor bindings; ${board.id} supports ${count}`, `${layer.name} needs ${count} encoder sensor bindings in firmware order.`)];
+    return [];
+  });
+}
 
 // The layer numbers are part of what a kept key is: one written without them would not follow its layers.
 const nativeKey = (b: Extract<Binding, { kind: "native" }>) => JSON.stringify([b.firmware, b.source, b.label, b.layerRefs ?? null]);
@@ -288,13 +301,17 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   // A kanata native is its own source, admitted only in the forms keyloom writes and with no layer refs to rewrite. A QMK or ZMK one is
   // admitted when keyloom reads it and its layer refs are the ones its reading needs (admittedLayerRefs).
   const understood = (b: Extract<Binding, { kind: "native" }>) =>
-    b.firmware === after.firmware && (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) && (b.layerRefs ?? []).length === 0 : admittedLayerRefs(b, kept));
+    b.firmware === after.firmware && (isZmkMouseBinding(b) || (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) && (b.layerRefs ?? []).length === 0 : admittedLayerRefs(b, kept)));
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
     if (b.kind === "native" && !known.has(nativeKey(b)) && !understood(b)) {
       out.push(issue("native_edit", `${where}: ${b.source} is firmware source keyloom did not import; replace the key with a modelled binding instead`,
         `${slot ? keyOn(after, slot) : "A key"} would get custom behaviour keyloom didn't import and can't write. Use a regular key instead.`, slotOf(slot)));
     }
+  }
+  const importedSensors = new Set(before.layers.flatMap((l) => (l.sensorBindings ?? []).flatMap((s) => s.kind === "native" ? [s.source] : [])));
+  for (const layer of after.layers) for (const sensor of layer.sensorBindings ?? []) {
+    if (sensor.kind === "native" && !importedSensors.has(sensor.source) && !["&trans", "&none"].includes(sensor.source)) out.push(issue("native_edit", `encoder turn on ${layer.id}: ${sensor.source} was not imported`, "Use clockwise and counterclockwise actions instead of inventing a sensor behaviour."));
   }
   if (!deepEqual(before.passthrough, after.passthrough)) out.push(issue("native_edit", "a change touched a passthrough block; keyloom keeps those verbatim", "This change touches custom code that keyloom keeps exactly as it is."));
   return out;
@@ -404,7 +421,10 @@ export function nativeLighting(board: BoardDefinition, before: Layout, after: La
  * passes, removing the last layers passes unless a pinned block names a removed layer's number, and anything else is refused.
  */
 export function passthroughLayerIndex(before: Layout, after: Layout): Issue[] {
-  return [...legacyLayerIndex(before, after), ...keptLayerNumbers(before, after)];
+  const changedOrder = before.layers.some((l, i) => after.layers[i]?.id !== l.id);
+  const opaqueSensorParameters = after.layers.some((l) => l.sensorBindings?.some((s) => s.kind === "native" && /\s/.test(s.source.trim())));
+  const sensors = changedOrder && opaqueSensorParameters ? [issue("passthrough_layer_index", "an imported sensor call has parameters whose layer references are not modelled", "Custom encoder behaviour may refer to layer numbers. Replace it with clockwise and counterclockwise actions before reordering or removing layers.")] : [];
+  return [...legacyLayerIndex(before, after), ...keptLayerNumbers(before, after), ...sensors];
 }
 
 type KeptSite = { label: string; refs: LayerRef[]; unprovable: { line: number; text: string }[]; slot?: Slot; source: string };

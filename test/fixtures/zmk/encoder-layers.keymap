@@ -1,0 +1,26 @@
+// Synthetic two-layer Corne: media encoder presses, board-default turns.
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+        base {
+            display-name = "Base";
+            bindings = <
+                &kp A &kp A &kp A &kp A &kp A &kp A &kp C_MUTE &kp C_PP &kp A &kp A &kp A &kp A &kp A &kp A
+                &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A
+                &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A &kp A
+                &mo 1 &kp A &kp A &kp A &kp A &kp A
+            >;
+        };
+        numbers {
+            display-name = "Numbers";
+            bindings = <
+                &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans &trans &trans &trans
+            >;
+        };
+    };
+};

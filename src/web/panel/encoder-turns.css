@@ -1,0 +1,30 @@
+.encoder-turns {
+  display: grid;
+  gap: var(--space-2);
+  margin-block: var(--space-3);
+}
+
+.encoder-turn {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.encoder-turn > span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.encoder-turn select {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}

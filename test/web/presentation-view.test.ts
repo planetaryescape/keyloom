@@ -30,7 +30,16 @@ test("declined and partial outcomes remain visible and distinct from success", (
   expect(projectWork(view).attention.map((item) => operationStatusWords(item.status))).toEqual(["Not accepted", "Partly accepted"]);
   expect(view.operations[0]?.summary).toContain("Validation: layer_trap");
   expect(view.operations[1]?.summary).toContain("1 saved proposal");
-  expect(projectWork(view).canFold).toBe(false);
+  // Only routine working folds; both attention rows remain outside it.
+  expect(projectWork(view).canFold).toBe(true);
+});
+
+test("lookup failures carry safe reasons and a recovery, including legacy missing reasons", () => {
+  const view = presentationView({ ...presentation(), operations: [{ ...operation("failed"), tool: "find_function", failureCode: "function_id" }, { ...operation("failed"), id: "old" }] });
+  if (view.kind !== "observed") throw new Error("missing observed view");
+  expect(view.operations[0]?.summary).toContain("not recognised");
+  expect(view.operations[0]?.summary).toContain("does not establish a keyboard limitation");
+  expect(view.operations[1]?.summary).toContain("No failure reason was recorded");
 });
 
 test("incomplete histories keep their warning and cannot look like clean folded work", () => {

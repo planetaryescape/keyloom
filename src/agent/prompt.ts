@@ -150,12 +150,13 @@ export function userMessageText(text: string, selection: Selection | undefined, 
     const key = keyName(board.definition, document, { layerId: d.layerId, position: d.position }, { geometry: board.geometry, withLayer: false });
     const ctx = { layers: document.layers, macros: document.macros, tapDances: document.tapDances };
     lines.push(`Unapplied draft on ${layer?.name ?? d.layerId} (layer id ${d.layerId}), ${key} at position ${d.position}: would become ${bindingLabel(d.binding, ctx)} ${JSON.stringify(d.binding)}`);
+    if (d.sensorBindings !== undefined) lines.push(`Encoder turns in that draft: ${JSON.stringify(d.sensorBindings)} (null restores board defaults).`);
   }
   return lines.length === 0 ? text : `${lines.join("\n")}\n\n${text}`;
 }
 
 /** A key change BK has drafted but not applied (D-317). */
-export type Draft = { layerId: string; position: number; binding: Binding };
+export type Draft = { layerId: string; position: number; binding: Binding; sensorBindings?: Layout["layers"][number]["sensorBindings"] | null };
 
 /** What BK typed, without the selection and draft header `userMessageText` put in front of it. */
 export function typedText(stored: string): string {

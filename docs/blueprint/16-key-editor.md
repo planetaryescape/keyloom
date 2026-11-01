@@ -1,5 +1,7 @@
 # 16: Key editor: everything about a key is built on the key
 
+Source update, 2026-11-01: ZMK encoder turns are editable per layer on the encoder's key card (D-471). This replaces the encoder deferral in D-105, not the other deferred features below. [The encoder recipe](../encoder-layers.md) covers availability, the UI and checked CLI path; compilation passed for both Keebart halves, with no new hardware test.
+
 Status: built in v0.11.0 to v0.19.0 (rungs 9, 11, 14, 15, 16 and 18), as of v0.36.1. That covers changing any key, the key panel, tap dance slots, macros, combos from a selection, layer management, moving and copying keys, history, the settings page and per-key and per-layer lights. Conditional layers were added afterwards (D-385 to D-389). Not built: the features in "What keyloom doesn't take, and why" (D-105). The hardware checks in the rungs' "done when" lines are mostly unrecorded; see [13](13-roadmap.md). Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
 
 This chapter adds what keyloom's web editor lacks compared with keymap-editor, Oryx and Vial. BK asked us to "go through every feature of nickcoutsos' configurator and every feature of oryx" and "do the same for vial", "so that we can build those features into keyloom". It replaces the binding editor in [09](09-web-editor.md#interactions) with a key panel. It also adds tap dance, macros made on the key, combos made from a selection, layer management and moving keys. How a change reaches the keyboard is in [17](17-keyboard-sync.md). How it all looks is in [18](18-visual-design.md).
@@ -65,6 +67,16 @@ Clicking a key opens its panel beside the board ([18](18-visual-design.md#the-bo
 - **Keeping values.** Moving between kinds keeps whatever matches. Adding a hold to A keeps A as the tap. Adding a double-tap to a mod-tap keeps both. keyloom's current editor already does this, and so does the live keymap-editor.
 - **Timing on the key.** A key with a hold shows its timing profile in one plain sentence. Tune opens the profile editor that rung 6 built (D-057). Per-key timing is set here, not on a settings page; Oryx sends people to its settings page for this (D-103).
 - **Where else.** The panel says where else the key's function lives, so dropping it is never a surprise (see [dropping a function](#replacing-a-key-whose-function-exists-nowhere-else-asks-in-plain-words)).
+
+### Encoder turns and presses share a card
+
+Select a layer, then click its encoder press. Clockwise and Counterclockwise controls appear before the ordinary press slots, including on phones. Choose a key, mouse movement, scrolling or Nothing. Edit the press below; mouse buttons can use the Any picker with exact ZMK calls such as `&mkp LCLK`.
+
+Turns and the press share Apply, Discard and the preserved-draft lifecycle. If another edit changes the key or the layer's sensor bindings, the parked draft is discarded rather than overwriting newer work. Use board defaults on this layer resets turns only, through the same validated Apply.
+
+On the Keebart Corne, each physical knob has two alternative firmware sensor footprints. The card changes both together and leaves the other knob and other layers alone. An opaque imported sensor call reads Custom encoder behaviour; replacing it with a direction choice creates an editable pair, with Nothing for the other direction until selected. Use a keyloom JSON export to retain typed pairs; firmware-source reimport may preserve them as opaque calls instead.
+
+To check this without a keyboard, run `bun scripts/dev-encoders.ts 4493` and open its printed URL. Click the left encoder, change a turn, then Discard; repeat with Apply and switch to Numbers to check its turns stayed unchanged. [Light/dark desktop/phone captures](../screenshots/encoder-layers/README.md) record the tested states.
 
 ### Macros are made in the picker, and each pick adds a step
 
@@ -200,7 +212,6 @@ A panel beside the layer tabs lists the layout's macros, tap dances, combos and 
 |---|---|---|
 | Accounts, cloud layouts, search, tags, tours, embeds, layer templates | Oryx | keyloom is local, with no accounts (D-007, D-028). Deferred, not rejected (D-105) |
 | GitHub OAuth app and commit-to-branch | keymap-editor | It needs a hosted OAuth server. keyloom writes local files and builds the firmware itself (D-028) |
-| Encoders and sensor bindings | keymap-editor, Vial | None of BK's three boards has an encoder. Added when a contributed board needs it (D-105) |
 | Key overrides, alt repeat, MIDI, stenography, audio keys | Vial, Oryx | No validated need. They're reachable through Any as `native` bindings (D-105) |
 | Matrix tester | Vial | It needs a firmware-side matrix report that keyloom doesn't build. A hardware fault is rare enough to use Vial or QMK's console (D-105) |
 | `.vil` import and export | Vial | Only useful if keyloom adopts Vial firmware, which it doesn't (D-097). Revisit with that |

@@ -30,9 +30,10 @@ export function TurnUsage({ accounting }: { accounting: ChatAccounting | undefin
   ].join(" · ") + " tokens" : "Token usage not reported";
   // At rest only the dollars; "reported" or "estimated" is in the expanded text, so an unknown cost never reads as a number.
   const atRest = cost !== undefined ? dollars(cost) : estimate !== undefined ? dollars(estimate) : "Cost not reported";
+  if (cost === undefined && estimate === undefined && !hasTokens) return null;
   return (
     <div className="msg-usage">
-      <button type="button" className="msg-usage-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>{atRest}</button>
+      <button type="button" className="msg-usage-toggle" aria-label={atRest === "Cost not reported" ? "Usage details; cost not reported" : undefined} aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>{atRest === "Cost not reported" ? "Usage" : atRest}</button>
       <p id={panelId} hidden={!open}><span className="sr-only">Turn usage and cost: </span>{tokens}{" "}<span>{costText}</span></p>
     </div>
   );

@@ -69,6 +69,8 @@ export const BoardDefinitionSchema = z.strictObject({
   vendor: z.string().min(1),
   firmware: FirmwareSchema,
   keyCount: z.number().int().positive(),
+  // Each firmware sensor's press position. Alternative footprints may share one knob.
+  sensorPositions: z.array(z.number().int().nonnegative()).optional(),
   revisions: z.array(RevisionSchema).min(1),
   hands: z.object({ left: positions, right: positions }),
   fingers: z.record(z.string(), z.string().min(1)),

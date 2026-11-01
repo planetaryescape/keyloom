@@ -22,7 +22,8 @@ import {
 import { useOpsCheck } from "../editor/useCheck.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { advancedLegend } from "../keyboard/advanced-legend.ts";
-import type { KeycapColour } from "../../boards/schema.ts";
+import type { BoardDefinition, KeycapColour } from "../../boards/schema.ts";
+import { EncoderTurns } from "./EncoderTurns.tsx";
 import { layerDisplayName } from "../../layout/cap-words.ts";
 import { applyWords, cardTitle, keyPhrase, macMeaning, slotPhrase } from "../card/card-words.ts";
 import { layerLight } from "../light/layer-light.ts";
@@ -72,6 +73,7 @@ export interface KeyPanelHandle {
 }
 
 interface Props {
+  board?: BoardDefinition;
   token: string;
   layoutRef: string;
   layout: Layout;
@@ -188,7 +190,7 @@ export function KeyPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draft, layout, slot, original, placements],
   );
-  const changed = planned !== null && planned.after !== null && !deepEqual(planned.after, layout) && !(macroAsKey !== null && draftBinding !== null && deepEqual(draftBinding, macroAsKey));
+  const changed = planned !== null && planned.after !== null && !deepEqual(planned.after, layout) && !(draft?.sensorBindings === undefined && macroAsKey !== null && draftBinding !== null && deepEqual(draftBinding, macroAsKey));
   const binding = changed && planned !== null ? planned.binding : null;
   const after = changed && planned !== null ? planned.after : null;
   const replacedBy = useMemo(
@@ -234,7 +236,11 @@ export function KeyPanel(props: Props) {
   const update = (next: Draft | ((previous: Draft) => Draft)) => {
     setApplyError(null);
     setConfirmingNative(false);
-    setDraft((previous) => (previous === null ? previous : typeof next === "function" ? next(previous) : next));
+    setDraft((previous) => {
+      if (previous === null) return previous;
+      const updated = typeof next === "function" ? next(previous) : next;
+      return previous.sensorBindings !== undefined && updated.sensorBindings === undefined ? { ...previous, ...updated } : updated;
+    });
   };
 
   function closePicker(): boolean {
@@ -325,7 +331,8 @@ export function KeyPanel(props: Props) {
   if (draft === null || layer === undefined || original === undefined) return null;
 
   const incomplete = incompleteReason(draft, layout);
-  const summary = binding === null ? null : withChoices(changeSummary(after ?? layout, layerId, position, binding, layout), after ?? layout, placements, drops);
+  const turnsOnly = draft.sensorBindings !== undefined && binding !== null && deepEqual(binding, original);
+  const summary = binding === null ? null : withChoices(turnsOnly ? `Encoder turns on ${layer.name}` : `${draft.sensorBindings === undefined ? "" : `Encoder turns on ${layer.name}; `}${changeSummary(after ?? layout, layerId, position, binding, layout)}`, after ?? layout, placements, drops);
   const result = check.state.status === "done" ? check.state.result : null;
   const canApply = binding !== null && result !== null && result.ok && !applying;
   const warnings = result?.warnings.length ?? 0;
@@ -347,7 +354,8 @@ export function KeyPanel(props: Props) {
         summary,
         ...(reason.trim() === "" ? {} : { reason: reason.trim() }),
       });
-      await onApplied(summary, { before: original, after: binding });
+      if (turnsOnly) await onTuned(summary);
+      else await onApplied(summary, { before: original, after: binding });
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale")) {
         onStale();
@@ -552,10 +560,11 @@ export function KeyPanel(props: Props) {
   const extras = draft.kind !== "macro" && draft.kind !== "native" && (canAddExtraSlot(draft) || isDance(draft));
   const doubleRegion = !extras ? null : draft.doubleTap === null ? { text: null, ghost: "2×", name: "When double-tapped" } : { text: `2× ${shownLegend.double ?? ""}`.trim(), name: "When double-tapped" };
   const thenHoldRegion = !extras ? null : draft.tapThenHold === null ? { text: null, ghost: "tap+hold", name: "When tapped, then held" } : { text: "tap+hold ●", name: "When tapped, then held" };
-  const title = cardTitle(shownBinding ?? original, drawn);
+  const isEncoder = props.board?.sensorPositions?.includes(position) === true;
+  const title = isEncoder ? `${props.board?.hands.left.includes(position) ? "Left" : "Right"} encoder` : cardTitle(shownBinding ?? original, drawn);
   const where2 = [finger === undefined ? undefined : `${finger.replace("-", " ")} finger`, layerDisplayName(layer.name)].filter(Boolean).join(" · ");
   const showFoot = dirty || blocked || applyError !== null || confirmingNative || applying;
-  const applyText = applying ? "Applying" : confirmingNative ? "Replace and apply" : binding === null ? "Apply" : applyWords(original, binding, drawn);
+  const applyText = applying ? "Applying" : confirmingNative ? "Replace and apply" : turnsOnly ? "Apply encoder turns" : binding === null ? "Apply" : applyWords(original, binding, drawn);
   const before = current?.headline ?? "";
   const lowered = `${before.charAt(0).toLowerCase()}${before.slice(1)}`;
   // A firmware-only key and a macro say what they do in their own words; their headlines quote firmware names (D-270).
@@ -613,6 +622,7 @@ export function KeyPanel(props: Props) {
 
       <div className="card-scroll">
       <fieldset className="card-body" disabled={applying}>
+        {props.board === undefined ? null : <EncoderTurns board={props.board} layer={layer} position={position} draft={draft.sensorBindings} onChange={(sensorBindings) => update((previous) => ({ ...previous, sensorBindings, sensorBindingsOriginal: previous.sensorBindingsOriginal === undefined ? layer.sensorBindings ?? null : previous.sensorBindingsOriginal }))} />}
         <div className="card-hero">
           <HeroCap
             legend={advancedText ?? shownLegend}
@@ -783,7 +793,9 @@ export function KeyPanel(props: Props) {
               className="card-discard"
               disabled={applying}
               onClick={() => {
-                update(initial as Draft);
+                setDraft(initial);
+                setApplyError(null);
+                setConfirmingNative(false);
                 setPicker(null);
               }}
             >

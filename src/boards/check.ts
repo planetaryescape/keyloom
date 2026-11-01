@@ -123,6 +123,12 @@ function checkHandAuthored(board: Board, issues: CheckIssue[]): void {
 function checkFacts(board: Board, dir: string, issues: CheckIssue[]): void {
   const { definition: def, geometry } = board;
   const err = (message: string) => issues.push({ level: "error", message });
+  if (def.sensorPositions !== undefined) {
+    for (const position of def.sensorPositions) if (position >= def.keyCount) err(`sensorPositions refers to position ${position}, but keyCount is ${def.keyCount}`);
+    for (const revision of def.revisions) {
+      if (def.firmware !== "zmk" || revision.build.kind !== "zmk-west-docker" || revision.build.sensorBindings?.length !== def.sensorPositions.length) err(`revision "${revision.id}": sensorPositions must match the ZMK sensorBindings defaults`);
+    }
+  }
 
   const folder = `${basename(dirname(resolve(dir)))}/${basename(resolve(dir))}`;
   if (folder !== def.id) err(`board id "${def.id}" must equal the folder path "${folder}"`);

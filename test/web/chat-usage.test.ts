@@ -57,8 +57,7 @@ describe("per-turn cost wording", () => {
   test("legacy, interrupted and all-zero sentinel usage never become a free-turn estimate", () => {
     for (const value of [undefined, { ...accounting, usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 } }]) {
       const html = render(value);
-      expect(html).toContain("Token usage not reported");
-      expect(html).toContain("Cost not reported · estimate unavailable");
+      expect(html).toBe("");
       expect(html).not.toContain("$");
       expect(html).not.toContain("0 input");
     }
@@ -135,10 +134,10 @@ describe("fresh, saved-run and reopened usage parity", () => {
     expect(replies(loaded).map((reply) => reply.userMessageId)).toEqual([id(1), id(3), id(5)]);
     expect(replies(loaded).map((reply) => reply.accounting)).toEqual([first, second, undefined]);
     const carried = renderToStaticMarkup(createElement(CarriedThreadView, { thread: { fromName: "Earlier config", turns: loaded.turns }, boardName: "Moonlander" }));
-    expect(carried.match(/class="msg-usage"/g)).toHaveLength(3);
+    expect(carried.match(/class="msg-usage"/g)).toHaveLength(2);
     expect(carried).toContain("$0.0100 USD reported");
     expect(carried).toContain("$0.0200 USD reported");
-    expect(carried).toContain("Token usage not reported");
+    expect(carried).not.toContain("Token usage not reported");
   });
 });
 

@@ -3,7 +3,7 @@
 import type { BoardDefinition } from "../boards/schema.ts";
 import { conditionsThatTurnOn } from "../layout/conditional-layers.ts";
 import { bindingFunctions, tapDanceSlots } from "../layout/functions.ts";
-import { isKeyCode } from "../layout/keycodes.ts";
+import { fromQmk, fromZmk, isKeyCode, KEYCODES } from "../layout/keycodes.ts";
 import { type GridContext, bindingLabel } from "../layout/render-grid.ts";
 import { type Binding, type Layout, type Mod, ModSchema } from "../layout/schema.ts";
 
@@ -31,6 +31,12 @@ export type Occurrence = {
  */
 export function normalizeFunction(input: string): string | null {
   const text = input.trim();
+  const code = text.startsWith("key:") ? text.slice(4) : text;
+  const media = new Map([["volume up", "AUDIO_VOL_UP"], ["volume down", "AUDIO_VOL_DOWN"], ["brightness up", "BRIGHTNESS_UP"], ["brightness down", "BRIGHTNESS_DOWN"], ["playback", "MEDIA_PLAY_PAUSE"], ["play/pause", "MEDIA_PLAY_PAUSE"]]);
+  const alias = media.get(code.toLowerCase());
+  if (alias) return `key:${alias}`;
+  const info = fromQmk(code.toUpperCase()) ?? fromZmk(code.toUpperCase()) ?? KEYCODES.find((k) => k.name.toLowerCase() === code.toLowerCase() || k.label.toLowerCase() === code.toLowerCase());
+  if (info) return `key:${info.name}`;
   if (/^(mod|key|layer|macro|native):/.test(text)) return text;
   if (ModSchema.safeParse(text).success) return `mod:${text}`;
   if (isKeyCode(text)) return `key:${text}`;

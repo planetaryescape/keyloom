@@ -2,12 +2,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { ModelTool } from "./model.ts";
 import type { AgentPorts } from "./ports.ts";
 import type { ValidationResult } from "../validation/result.ts";
+import { PublicToolError } from "./tools/public-error.ts";
 
 export type OperationReference = { kind: "config" | "proposal" | "priority" | "decision"; id: string };
 export type OperationResult = { accepted: number; declined: number; validationCodes: string[]; references: OperationReference[] };
 export type AgentObservation =
   | { type: "operation_started"; operationId: string; tool: string }
-  | ({ type: "operation_finished"; operationId: string; status: "succeeded" | "failed" | "declined" | "partial"; durationMs: number } & OperationResult)
+  | ({ type: "operation_finished"; operationId: string; status: "succeeded" | "failed" | "declined" | "partial"; durationMs: number; failureCode?: "invalid_input" | "function_id" | "unknown_layer" | "tool_error" } & OperationResult)
   | { type: "limit_reached" }
   | { type: "public_message"; id: string; kind: "working_note" | "answer"; text: string };
 
@@ -86,7 +87,7 @@ export function toolObserver(ports: AgentPorts, emit: (event: AgentObservation) 
             emit({ type: "operation_finished", operationId, status: result.declined ? result.accepted ? "partial" : "declined" : "succeeded", durationMs: Math.round(performance.now() - started), ...result });
             return out;
           } catch (error) {
-            emit({ type: "operation_finished", operationId, status: "failed", durationMs: Math.round(performance.now() - started), ...result });
+            emit({ type: "operation_finished", operationId, status: "failed", durationMs: Math.round(performance.now() - started), failureCode: error instanceof PublicToolError ? error.publicCode : "tool_error", ...result });
             throw error;
           }
         });

@@ -4,6 +4,8 @@ This profile is the six-column Keebart Corne Choc Pro BT with one rotary encoder
 
 Positions 6 and 7 are the left and right encoder presses. Position 20 is the key below the left encoder; 21 is below the right encoder. The three left thumbs are 40–42, outer to inner; the right thumbs are 43–45, inner to outer. Keep the large inner thumb keys available for the person's most frequent actions.
 
+Turns can differ by layer. `get_layout` exposes four firmware sensor slots: 0/1 belong to the left knob, 2/3 to the right, because each side has alternative encoder footprints. Set each pair alike with `setSensorBindings`; use ordinary `setBinding` for the presses. Mouse movement, scroll and mouse-button presses need no hardware-module fork; keyloom generates pointing support. Keep displaced media/brightness functions on a reachable layer in the same proposal.
+
 Encoder turns are board defaults on every layer: left volume up/down, right brightness up/down. Presses are ordinary editable bindings. The extra sensor slots in Keebart's hardware definition retain the same controls for each side.
 
 The first flash needs physical bootloader entry on each half: connect it by USB, double-press the underside reset button, then copy the matching half's UF2 to KEEBART. Flash the right half before the left. Never use a nice!nano UF2. The keyloom module is included for subsequent hands-free flashing, but first-flash and reconnect verification must still be observed on hardware.

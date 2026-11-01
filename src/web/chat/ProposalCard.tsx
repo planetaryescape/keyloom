@@ -58,7 +58,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   const [chips] = useState(() => {
     const after = previewProposal(board, layout, proposal, "").layout;
     return proposal.validation.diff.changed.flatMap((slot) => {
-      const words = changeWords(layout, after, slot);
+      const words = changeWords(layout, after, slot, board);
       return words === null ? [] : [{ key: slotKey(slot), ...words }];
     });
   });

@@ -608,7 +608,6 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                     key={turn.id}
                     turn={turn}
                     layout={layout}
-                    context={`${board.name} · ${configName ?? layoutRef}`}
                     onSelectKeys={onRestoreSelection}
                   />
                 ) : (

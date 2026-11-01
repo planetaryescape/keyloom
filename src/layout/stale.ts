@@ -23,6 +23,7 @@ const presenceTouch = (layerId: string): Touch => ({
 });
 const wholeLayerTouches = (layerId: string, base: Layout): Touch[] => [
   nameTouch(layerId),
+  { label: `layer ${layerId} (encoder turns)`, read: (d) => d.layers.find((l) => l.id === layerId)?.sensorBindings },
   // The base's size is the one the op was proposed against; a head with more or fewer slots differs on the extras.
   ...(base.layers.find((l) => l.id === layerId)?.bindings ?? []).map((_, position) => slotTouch({ layerId, position })),
   { label: `layer ${layerId} (size)`, read: (d) => d.layers.find((l) => l.id === layerId)?.bindings.length },
@@ -31,6 +32,7 @@ const itemTouch = (kind: string, id: string, read: (d: Layout) => unknown): Touc
 
 function touchesOf(op: ChangeOp, base: Layout): Touch[] {
   switch (op.op) {
+    case "setSensorBindings": return [presenceTouch(op.layerId), { label: `layer ${op.layerId} (encoder turns)`, read: (d) => d.layers.find((l) => l.id === op.layerId)?.sensorBindings }];
     case "setBinding": return [slotTouch(op.at)];
     case "moveBinding": return [slotTouch(op.from), slotTouch(op.to)];
     case "swapBindings": return [slotTouch(op.a), slotTouch(op.b)];

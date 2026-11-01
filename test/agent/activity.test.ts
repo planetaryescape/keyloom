@@ -84,6 +84,7 @@ for (const provider of ["anthropic", "openrouter", "codex"] satisfies Provider[]
     if (!final) throw new Error("missing terminal snapshot");
     expect(final?.status).toBe("completed");
     expect(final?.operations.map((o) => o.status)).toEqual(["succeeded", "failed", "declined", "succeeded"]);
+    expect(final?.operations[1]?.failureCode).toBe("invalid_input");
     expect(final?.operations.map((o) => o.id)).toEqual(["op_1", "op_2", "op_3", "op_4"]);
     expect(final?.operations[2]?.validationCodes).toContain("firmware_unsupported");
     expect(final?.operations[3]).toMatchObject({ accepted: 1, declined: 0 });

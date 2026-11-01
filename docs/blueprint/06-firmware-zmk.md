@@ -1,5 +1,15 @@
 # 06: Firmware: ZMK (Glove80 and the Corne)
 
+Status update, 2026-11-01: layer-specific encoder turns and mouse presses are implemented (D-471); generation/import, the compiled scratch-CLI journey and a real firmware build for both Keebart halves are checked. After the initial Docker blocker, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced verified left/right UF2 images. No new hardware flash or pointer-motion observation is claimed.
+
+## Per-layer encoder turns
+
+ZMK's `sensor-bindings` belongs to each layer, not the board as a whole. D-462's repeated board defaults were a keyloom limitation, not a firmware limitation. `setSensorBindings` replaces one layer's array. The Keebart module has four sensor slots for two knobs: `sensorPositions: [6, 6, 7, 7]` associates alternative footprints with the same editable press. The key card edits both footprints together. Old layouts retain their existing defaults until edited.
+
+Key pairs emit `&inc_dec_kp`; other pairs get generated `zmk,behavior-sensor-rotate` nodes. Pointer movement and scroll use dedicated constant-speed `zmk,behavior-input-two-axis` devices and input listeners, with a 5 ms trigger and a 20 ms sensor press. ZMK's ordinary 5 ms sensor press ends before its default 16 ms mouse tick, so merely assigning `&mmv` would not suffice. The dedicated devices do not retune ordinary mouse keys. Pointing headers and `CONFIG_ZMK_POINTING=y` are generated when needed. Clicks use `&mkp LCLK` / `RCLK` at the existing press positions.
+
+The importer preserves each layer's sensor calls and kept definitions instead of dropping them. Unsupported calls stay opaque; parameterized opaque calls conservatively block layer renumbering. Generated custom rotation definitions reimport as native sensor calls, not editable pairs; keyloom JSON exports preserve the typed pairs. The real build compiled pointer turns and mouse clicks on Base with media turns/presses on Numbers; physical movement still needs an explicitly authorized hardware test. Build receipts are in [the encoder evidence](../screenshots/encoder-layers/README.md). To try it on synthetic data, use [the encoder recipe](../encoder-layers.md).
+
 The Glove80 and the Keebart Corne Choc Pro BT are BK's ZMK boards (D-027, D-462). This document covers importing their layouts, generating a `.keymap`, building firmware locally and flashing both halves. Most of it is the Glove80; the Keebart Corne's hardware module, per-half targets and RGB adapter are at the end. Every Glove80 fact here is in [../research/zmk-and-glove80.md](../research/zmk-and-glove80.md), checked 2026-10-15. Pinned commits: `moergo-sc/zmk` `ce69e85f585c724142aae37ddf8a7e019ff19e93` (tag `v26.09`), `moergo-sc/glove80-zmk-config` `34888be8c9d9a3d5b168a502b8b191ba43b4a1f3`, upstream `zmkfirmware/zmk` `4dd95d7840eb3d5a3f59bb29fbf1ab054715ef85`.
 
 ## The firmware tree is MoErgo's fork, pinned to a release tag
@@ -26,7 +36,7 @@ BK's current Glove80 layout lives in MoErgo's Layout Editor at my.glove80.com. I
     - Anything else, such as mod-morphs, sticky keys with options, RGB, Bluetooth and MoErgo's magic-layer behaviours, becomes a `native` binding with the source text as written. Behaviour definitions keyloom doesn't model become `Passthrough` blocks (D-024).
 4. Report what was imported: layer count, binding counts by kind, and every `native` and `Passthrough` item, so BK can see what keyloom treats as opaque.
 
-The round trip must be exact in meaning: import, then generate, then import again gives an identical IR. That's a test, and it's rung 5's completion check ([13](13-roadmap.md)). Whether the Layout Editor's export compiles unmodified against the pinned fork is spike S6.
+For the modelled rung-5 fixtures, import, generate and reimport gives identical IR ([13](13-roadmap.md)). That is not a universal editable-round-trip guarantee: generated helper behaviours, including custom encoder rotations, can reimport as opaque calls with preserved definitions. Use keyloom JSON exports when you need to retain their typed editing model. Whether the Layout Editor's export compiles unmodified against the pinned fork is spike S6.
 
 ## Generation writes `glove80.keymap` and `glove80.conf`
 

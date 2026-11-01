@@ -14,6 +14,8 @@
 
 **Later releases (annotated 2026-11-01, v0.65.0).** v0.58.0 replaced alternatives with one best proposal plus refining questions (D-452). v0.60.0 made a whole-config copy continue in the target config's conversation (D-460). v0.61.0 added the setup card for a known board with no config and made a refused put leave no config (D-336). v0.62.0 added the review panel's Fix issues run (D-461). v0.63.0 brought the Keebart Corne support and the half-by-half flash fixes onto main (D-462 to D-466). v0.64.0 showed what a copy carried, and v0.65.0 added reply-reference links. The rung statuses below keep the release that built them and carry a "Later" note where hardware changed.
 
+**Source follow-up (verified 2026-11-01).** D-471 adds layer-specific ZMK encoder editing, including mouse turns and ordinary editable presses. D-472 puts completed results before working details and separates failure recovery from routine success. Synthetic editor/agent checks and the compiled scratch CLI passed; real build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced valid UF2s for both Keebart halves. No new flash or physical pointer test was performed. [Recipe](../encoder-layers.md) and [verification evidence](../screenshots/encoder-layers/README.md).
+
 ## Phase 0: accounts and spikes (before product code)
 
 Only BK can do these. The coding agent asks which are done and doesn't create accounts, keys or repos itself.

@@ -1638,6 +1638,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const keyCard = (
             editing === null ? null : (
               <KeyPanel
+                board={board}
                 key={`${revision.id}:${editing.layerId}:${editing.position}`}
                 resume={editing.resume}
                 handle={panel}

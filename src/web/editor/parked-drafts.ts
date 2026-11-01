@@ -2,7 +2,7 @@
 // unapplied change. Each is kept by its key until it is applied or discarded, drawn on the board as a dashed amber draft, and sent to
 // the agent with the next message. Pure, so the rules are tested without a browser.
 import type { Slot } from "../../layout/change.ts";
-import type { Binding, Layout } from "../../layout/schema.ts";
+import type { Binding, Layout, SensorBinding } from "../../layout/schema.ts";
 import { deepEqual } from "../../layout/equal.ts";
 import type { Draft } from "./draft.ts";
 
@@ -38,8 +38,10 @@ export function stillApplying(drafts: ParkedDrafts, layout: Layout): { kept: Par
   const dropped: Parked[] = [];
   const kept = new Map<string, Parked>();
   for (const [key, entry] of drafts) {
-    const now = layout.layers.find((l) => l.id === entry.slot.layerId)?.bindings[entry.slot.position];
-    if (now !== undefined && deepEqual(now, entry.original)) kept.set(key, entry);
+    const layer = layout.layers.find((l) => l.id === entry.slot.layerId);
+    const now = layer?.bindings[entry.slot.position];
+    const turnsUnchanged = entry.panel.sensorBindings === undefined || deepEqual(entry.panel.sensorBindingsOriginal, layer?.sensorBindings ?? null);
+    if (now !== undefined && deepEqual(now, entry.original) && turnsUnchanged) kept.set(key, entry);
     else dropped.push(entry);
   }
   return dropped.length === 0 ? { kept: drafts, dropped } : { kept, dropped };
@@ -50,5 +52,10 @@ export const draftsOn = (drafts: ParkedDrafts, layerId: string): number[] =>
   [...drafts.values()].filter((d) => d.slot.layerId === layerId).map((d) => d.slot.position);
 
 /** The complete drafts, as the chat sends them to the agent (D-317). */
-export const draftsForChat = (drafts: ParkedDrafts): Array<{ layerId: string; position: number; binding: Binding }> =>
-  [...drafts.values()].flatMap((d) => (d.binding === null ? [] : [{ layerId: d.slot.layerId, position: d.slot.position, binding: d.binding }]));
+export const draftsForChat = (drafts: ParkedDrafts): Array<{ layerId: string; position: number; binding: Binding; sensorBindings?: SensorBinding[] | null }> =>
+  [...drafts.values()].flatMap((d) => {
+    if (d.binding === null) return [];
+    const draft: ReturnType<typeof draftsForChat>[number] = { layerId: d.slot.layerId, position: d.slot.position, binding: d.binding };
+    if (d.panel.sensorBindings !== undefined) draft.sensorBindings = d.panel.sensorBindings;
+    return [draft];
+  });

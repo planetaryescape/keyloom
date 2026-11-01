@@ -2,6 +2,13 @@ import type { ChatPresentation } from "../../api/http.ts";
 import type { AgentRunSnapshot } from "../../api/agent-runs.ts";
 import type { AgentOperationView, AgentWorkStatus, AgentWorkView } from "./work-view.ts";
 
+const FAILURE_WORDS = {
+  invalid_input: "The step's input was invalid. keyloom needs to correct it and retry.",
+  function_id: "The function name was not recognised. Retry with a key name or read the layout; this does not establish a keyboard limitation.",
+  unknown_layer: "That layer was not found. Read the current layout before retrying.",
+  tool_error: "The step could not finish. Ask keyloom to retry; its result is not confirmed.",
+};
+
 const STATUS = {
   running: "running", waiting_user: "waiting", completed: "completed", incomplete: "failed",
   failed: "failed", cancelled: "stopped", unobserved: "disconnected",
@@ -23,6 +30,7 @@ export function presentationView(presentation: ChatPresentation, preparations: A
     notes: presentation.messages.filter((message) => message.kind === "working_note"),
     operations: [...presentation.operations.map((operation) => {
       const facts: string[] = [];
+      if (operation.status === "failed") facts.push(operation.failureCode === undefined ? "No failure reason was recorded. Ask keyloom to retry this step." : FAILURE_WORDS[operation.failureCode]);
       if (operation.accepted > 0) facts.push(`${operation.accepted} accepted`);
       if (operation.declined > 0) facts.push(`${operation.declined} not accepted`);
       if (operation.validationCodes.length > 0) facts.push(`Validation: ${operation.validationCodes.join(", ")}`);

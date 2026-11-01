@@ -301,7 +301,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
     <div className="msg msg-assistant" data-phase={turn.phase}>
       <p className="msg-who">keyloom</p>
       <PriorityChips priorities={turn.priorities} layout={layout} onRemove={onRemovePriority} />
-      <AgentWorking view={work} motionPaused={motionPaused} />
+      {streaming ? <AgentWorking view={work} motionPaused={motionPaused} /> : null}
       {/* Hidden from the live region until the reply is whole, so a screen reader hears it once, not token by token. */}
       <div aria-hidden={streaming || undefined}>
         {turn.text === "" ? null : <Markdown source={turn.text} {...(reference === undefined ? {} : { reference })} />}
@@ -394,6 +394,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
           </div>
         </div>
       )}
+      {streaming ? null : <AgentWorking view={work} motionPaused={motionPaused} />}
       {streaming ? null : <TurnUsage accounting={turn.accounting} />}
     </div>
   );

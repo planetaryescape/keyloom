@@ -31,14 +31,13 @@ export function rowsOf(geometry: Geometry | undefined, keyCount: number): number
   return Array.from({ length: Math.ceil(keyCount / 10) }, (_, r) => Array.from({ length: Math.min(10, keyCount - r * 10) }, (_, i) => r * 10 + i));
 }
 
-export function renderLayers(layout: Layout, board: BoardDefinition, geometry: Geometry | undefined, ctx: EmitContext): string[] {
-  const build = board.revisions[0]?.build;
-  const sensors = build?.kind === "zmk-west-docker" ? build.sensorBindings : undefined;
+export function renderLayers(layout: Layout, board: BoardDefinition, geometry: Geometry | undefined, ctx: EmitContext, sensorBindings: ReadonlyMap<string, string[]>): string[] {
   const rows = rowsOf(geometry, board.keyCount);
   const left = new Set(board.hands.left);
   const nodeNames = new Set<string>();
   const out: string[] = [];
   layout.layers.forEach((layer, li) => {
+    const sensors = sensorBindings.get(layer.id);
     if (layer.bindings.length !== board.keyCount) {
       throw new GenerateError(`layer ${layer.id} has ${layer.bindings.length} bindings, but ${board.id} has ${board.keyCount} keys`);
     }
@@ -76,7 +75,7 @@ export function renderLayers(layout: Layout, board: BoardDefinition, geometry: G
     out.push(
       `${name} {`,
       `    // layer ${li}`,
-      ...(sensors ? [`    sensor-bindings = <${sensors.join(" ")}>;`] : []),
+      ...(sensors?.length ? [`    sensor-bindings = <${sensors.join(" ")}>;`] : []),
       `    display-name = ${quote(layer.name)};`,
       "    bindings = <",
       ...lines.map((l) => `        ${l}`),

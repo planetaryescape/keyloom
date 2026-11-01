@@ -1,6 +1,7 @@
 // The validator (07): a pure function from a board, a layout and ops to a result. The agent
 // and the editor both call it, and apply calls it again against the head (D-014).
 import type { BoardDefinition } from "../boards/schema.ts";
+import { effectiveSensors, withSensorDefaults } from "../boards/sensors.ts";
 import { applyOps } from "../layout/apply-ops.ts";
 import { type ChangeOp, ChangeOpSchema, type Slot } from "../layout/change.ts";
 import { deepEqual } from "../layout/equal.ts";
@@ -96,11 +97,13 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
       warnings.push({ ...i, plain: `${i.plain ?? i.message} Add a key that switches to it before you rely on it.` });
     } else errors.push(i);
   }
-  errors.push(...nativeEdit(before, after), ...passthroughLayerIndex(before, after));
+  const analyzedBefore = withSensorDefaults(board, before);
+  const analyzedAfter = withSensorDefaults(board, after);
+  errors.push(...nativeEdit(analyzedBefore, analyzedAfter), ...passthroughLayerIndex(before, after));
   errors.push(...nativeLighting(board, before, after));
   warnings.push(...riskyNatives(board, before, after));
 
-  const lost = functionLost(before, after, clean);
+  const lost = functionLost(analyzedBefore, analyzedAfter, clean);
   errors.push(...lost.errors);
   // Only a tap dance this change adds or moves is news; one already in the layout isn't the change's doing.
   const knownDances = new Set(doubledLetterTapdance(before).map(issueKey));
@@ -115,8 +118,19 @@ export function evaluate(board: BoardDefinition, before: Layout, ops: readonly C
   warnings.push(...conditionalLayerWarnings(after).filter((i) => !knownConditions.has(issueKey(i))));
 
   const changed = changedSlots(before, after);
-  const beforeHomes = functionHomes(before, reachableLayers(before));
-  const afterHomes = functionHomes(after, reachableLayers(after));
+  const previousLayers = new Map(before.layers.map((layer) => [layer.id, layer]));
+  for (const layer of after.layers) {
+    const was = previousLayers.get(layer.id);
+    if (!was) continue;
+    const oldSensors = effectiveSensors(board, was);
+    const newSensors = effectiveSensors(board, layer);
+    newSensors.forEach((sensor, index) => {
+      const position = board.sensorPositions?.[index];
+      if (position !== undefined && !deepEqual(oldSensors[index], sensor) && !changed.some((s) => s.layerId === layer.id && s.position === position)) changed.push({ layerId: layer.id, position });
+    });
+  }
+  const beforeHomes = functionHomes(analyzedBefore, reachableLayers(before));
+  const afterHomes = functionHomes(analyzedAfter, reachableLayers(after));
   const relearnCount = relearned(beforeHomes, afterHomes);
   warnings.push(...movedPinned(before, changed, beforeHomes, afterHomes, context.pinned ?? []), ...largeRelearn(relearnCount));
   if (context.selection) warnings.push(...outsideSelection(before, changed, context.selection));

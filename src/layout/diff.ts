@@ -18,6 +18,7 @@ export type LayoutDiff = {
   layersReordered: boolean;
   /** Layers whose per-key LED colours differ. */
   lighting: string[];
+  encoderTurns: string[];
   macros: NamedChange;
   tapDances: NamedChange;
   combos: NamedChange;
@@ -63,12 +64,14 @@ export function diffLayouts(from: Layout, to: Layout): LayoutDiff {
   const toLayers = new Map(to.layers.map((l) => [l.id, l]));
   const keys: KeyDiff[] = [];
   const lighting: string[] = [];
+  const encoderTurns: string[] = [];
   const layersRenamed: LayoutDiff["layersRenamed"] = [];
   for (const layer of to.layers) {
     const was = fromLayers.get(layer.id);
     if (!was) continue;
     if (was.name !== layer.name) layersRenamed.push({ id: layer.id, from: was.name, to: layer.name });
     if (!deepEqual(was.lighting, layer.lighting)) lighting.push(layer.id);
+    if (!deepEqual(was.sensorBindings, layer.sensorBindings)) encoderTurns.push(layer.id);
     const length = Math.max(was.bindings.length, layer.bindings.length);
     for (let position = 0; position < length; position++) {
       const before = was.bindings[position];
@@ -96,7 +99,7 @@ export function diffLayouts(from: Layout, to: Layout): LayoutDiff {
     keys,
     layersAdded: to.layers.filter((l) => !fromLayers.has(l.id)).map((l) => ({ id: l.id, name: l.name })),
     layersRemoved: from.layers.filter((l) => !toLayers.has(l.id)).map((l) => ({ id: l.id, name: l.name })),
-    layersRenamed, layersReordered, lighting,
+    layersRenamed, layersReordered, lighting, encoderTurns,
     macros: namedChange(from.macros, to.macros),
     tapDances: namedChange(from.tapDances, to.tapDances),
     combos: namedChange(from.combos, to.combos),

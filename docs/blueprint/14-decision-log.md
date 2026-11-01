@@ -11,6 +11,26 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-01 follow-up
+
+These entries were numbered D-469/D-470 on the unmerged encoder branch. They are D-471/D-472 here to preserve the already-merged D-469 view-opening decision.
+
+### D-471: Encoder turns belong to each layer, with ordinary editable presses. Replaces D-462's fixed-turn limit and the relevant part of D-105. (BK: fix the encoder request and investigate changing the build)
+
+ZMK already dispatches `sensor-bindings` per active layer; repeating defaults was keyloom's generator policy, not a keyboard restriction. Optional `Layer.sensorBindings` and `setSensorBindings` now carry rotation pairs or whole imported calls. Null resets to board defaults; old documents retain their defaults. The Corne's four sensor slots map to press positions `[6, 6, 7, 7]`, so editing one knob changes its alternative footprints together. Presses still use `setBinding`.
+
+The validator checks count, keycodes, understood native mouse actions, function loss and stale bases; an edit cannot silently drop the last reachable media control. Turn edits highlight the encoder press and appear in proposal/history details. The key card shares one draft and Apply with its press, and the CLI uses the same ops. Import preserves sensor calls and definitions instead of dropping them; parameterized opaque sensor calls block layer renumbering. Generated rotation helpers reimport conservatively as opaque calls; JSON exports preserve their typed pairs.
+
+Mouse turns need dedicated timing: the pinned ZMK's 5 ms sensor tap ends before its 16 ms mouse tick. Generated constant-speed input devices use 5 ms ticks and 20 ms taps, leaving ordinary mouse keys unchanged; scroll uses a whole-unit-per-tick speed. Headers, listeners and pointing Kconfig are generated, with no hardware-module fork. Generation/import, adversarial validation, scripted-agent apply and a compiled scratch-CLI proposal/apply/generate journey passed. The first firmware build stopped because Docker was not running. On BK's retry, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` compiled both Keebart halves and produced verified single-image UF2s (family `0xada52840`); the final devicetree keeps different sensor tables on Base and Numbers, and pointing/input-two-axis/sensor-rotate support is enabled. Physical pointer movement and a hardware flash are not claimed.
+
+### D-472: A completed reply leads with the result; lookup failures stay explicit without expanding successful working. Supersedes D-412's ordering; refines D-398, D-409 and D-456. (BK: fix the screenshot's failures, hierarchy and dead end)
+
+While streaming, observed work leads. At rest the answer and saved proposals lead, then working details. A separate failure-count disclosure keeps failed steps explicit, with allowlisted error codes translated into a reason and next action. Raw exception messages and tool inputs never enter presentation. Unknown, declined and partial outcomes remain outside routine success. A failed step no longer forces successful steps and working notes open; incomplete-history warnings remain visible.
+
+The agent corrects and retries invalid calls rather than treating them as evidence of hardware limits. Function lookup accepts canonical codes, firmware aliases and common media labels, and includes encoder turns. If still blocked, its reply must say what remains unchanged and give a concrete next action or useful checked partial proposal. This prompt guidance is not a deterministic guarantee of model compliance.
+
+The active editing context appears once, rather than below every current-thread user message. Known costs retain the dollar footer; token-only accounting is behind Usage, and wholly unreported cost/usage produces no footer. No success status is inferred from a finished reply or from recovered tool calls.
+
 ## The arc, briefly
 
 1. BK pitched the idea on 2026-09-28. He's a keyboard enthusiast who owns several ergonomic boards. He wants "one configurator to rule them all" for QMK and ZMK, with a chat agent he can describe his habits and layout to, which "is able to just go rip and build the thing for me" and suggest improvements.

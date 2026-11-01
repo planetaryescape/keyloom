@@ -41,6 +41,7 @@ export const PresentationSchema = z.object({
     id: z.string().min(1), tool: z.string().max(64), label: z.string().max(80),
     status: z.enum(["running", "succeeded", "failed", "declined", "partial", "unknown"]),
     durationMs: z.number().int().nonnegative(),
+    failureCode: z.enum(["invalid_input", "function_id", "unknown_layer", "tool_error"]).optional(),
     validationCodes: z.array(z.string().max(64)).max(8),
     references: z.array(z.object({ kind: z.enum(["config", "proposal", "priority", "decision"]), id: z.string().max(80) })).max(8),
     accepted: z.number().int().nonnegative(), declined: z.number().int().nonnegative(),

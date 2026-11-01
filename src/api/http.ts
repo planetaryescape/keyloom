@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { BoardDefinitionSchema, GeometrySchema } from "../boards/schema.ts";
 import { ChangeOpSchema, DecisionDraftSchema, SlotSchema } from "../layout/change.ts";
-import { BindingSchema, LayoutSchema } from "../layout/schema.ts";
+import { BindingSchema, LayerSchema, LayoutSchema } from "../layout/schema.ts";
 import { DetectedKeyboardSchema } from "./detected-keyboards.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 
@@ -258,7 +258,7 @@ export const ChatRequestSchema = z.object({
   // The keys selected in the editor when the message was sent (D-012).
   selection: ChatSelectionSchema.optional(),
   // Key changes kept on the board but not applied (D-317), so the agent knows what BK is in the middle of.
-  drafts: z.array(z.object({ layerId: z.string().min(1), position: z.number().int().nonnegative(), binding: BindingSchema })).max(100).optional(),
+  drafts: z.array(z.object({ layerId: z.string().min(1), position: z.number().int().nonnegative(), binding: BindingSchema, sensorBindings: LayerSchema.shape.sensorBindings.unwrap().nullable().optional() })).max(100).optional(),
 }).refine((r) => (r.message === undefined) !== (r.answer === undefined), { message: "send either a message or an answer to the open question" });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
@@ -389,6 +389,7 @@ export const ChatPresentationSchema = z.object({
     id: z.string().min(1), tool: z.string().max(64), label: z.string().max(80),
     status: z.enum(["running", "succeeded", "failed", "declined", "partial", "unknown"]),
     durationMs: z.number().int().nonnegative(), validationCodes: z.array(z.string().max(64)).max(8),
+    failureCode: z.enum(["invalid_input", "function_id", "unknown_layer", "tool_error"]).optional(),
     references: z.array(z.object({ kind: z.enum(["config", "proposal", "priority", "decision"]), id: z.string().max(80) })).max(8),
     accepted: z.number().int().nonnegative(), declined: z.number().int().nonnegative(),
   })).max(64),
