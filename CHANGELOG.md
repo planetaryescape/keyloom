@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.67.0](https://github.com/planetaryescape/keyloom/compare/v0.66.0...v0.67.0) (2026-11-01)
+
+
+### Features
+
+* evaluate keyboard configs against deterministic workloads ([223268d](https://github.com/planetaryescape/keyloom/commit/223268ded12f941a7ddbf8b47fc033c4dc2a895b))
+* support per-layer encoders and recoverable agent replies ([0a28060](https://github.com/planetaryescape/keyloom/commit/0a2806000485743d59217584a46846091cbee86d))
+
 ## [0.66.0](https://github.com/planetaryescape/keyloom/compare/v0.65.0...v0.66.0) (2026-11-01)
 
 
