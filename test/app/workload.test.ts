@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { compareStoredWorkload, evaluateStoredWorkload, readWorkloadSuite, workloadHash, type WorkloadDeps } from "../../src/app/workload.ts";
+import { compareStoredWorkload, evaluateStoredWorkload, readWorkloadSuite, resolveWorkloadSuite, workloadHash, type WorkloadDeps } from "../../src/app/workload.ts";
+import { EmulateFailedError } from "../../src/app/firmware-errors.ts";
 import { getLayout } from "../../src/app/layouts.ts";
 import { recordPriority } from "../../src/app/decisions.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
@@ -121,4 +122,74 @@ test("suite file resource limits and hashes preserve all own keys and passthroug
   expect(workloadHash({ b: 2, a: 1 })).toBe(workloadHash({ a: 1, b: 2 }));
   expect(workloadHash(JSON.parse('{"__proto__":"a"}'))).not.toBe(workloadHash(JSON.parse('{"__proto__":"b"}')));
   expect(workloadHash({ passthrough: ["a"] })).not.toBe(workloadHash({ passthrough: ["b"] }));
+});
+
+test("literal null is an invalid suite input, not an omitted default", async () => {
+  expect(() => resolveWorkloadSuite(null)).toThrow("invalid workload suite");
+  expect(resolveWorkloadSuite(undefined).id).toBe("prose");
+  const { app, layoutId } = workloadApp();
+  let calls = 0;
+  try {
+    await expect(evaluateStoredWorkload(app, layoutId, { suite: null }, { replay: async () => { calls++; return replayResult([]); } })).rejects.toThrow("invalid workload suite");
+    expect(calls).toBe(0);
+  } finally { app.db.close(); }
+});
+
+test("a suite file containing literal null is rejected", async () => {
+  const path = `${tempDir()}/null.json`;
+  await Bun.write(path, "null");
+  await expect(readWorkloadSuite(path)).rejects.toThrow("invalid workload suite");
+});
+
+test("stored duplicate layer IDs are fatal schema issues before replay, without mutation", async () => {
+  const layout = tinyLayout([key("E"), none, none, none], [none, none, none, none]);
+  layout.layers[1]!.id = "base";
+  const { app, layoutId } = workloadApp(layout);
+  let calls = 0;
+  try {
+    const before = getLayout(app, layoutId);
+    await expect(evaluateStoredWorkload(app, layoutId, { suite: suiteText("e") }, { replay: async () => { calls++; return replayResult(stroke(0, "E")); } })).rejects.toThrow("layout cannot be evaluated safely");
+    expect(calls).toBe(0);
+    expect(getLayout(app, layoutId)).toEqual(before);
+  } finally { app.db.close(); }
+});
+
+test("a pre-aborted workload never replays and rejects with a classified emulation error", async () => {
+  const { app, layoutId } = workloadApp();
+  const controller = new AbortController(); controller.abort();
+  let calls = 0; const diagnostics: string[] = [];
+  try {
+    await expect(evaluateStoredWorkload(app, layoutId, { suite: suiteText("s"), signal: controller.signal, onDiagnostic: (message) => diagnostics.push(message) }, { replay: async () => { calls++; return replayResult(stroke(0, "S")); } })).rejects.toBeInstanceOf(EmulateFailedError);
+    expect(calls).toBe(0); expect(diagnostics).toEqual([]);
+  } finally { app.db.close(); }
+});
+
+for (const failed of [false, true]) {
+  test(`abort during a ${failed ? "failed" : "successful"} replay stops the next task and diagnostics`, async () => {
+    const { app, layoutId } = workloadApp();
+    const controller = new AbortController();
+    const suite = suiteText("s"); suite.tasks.push({ id: "second", kind: "text", text: "s" });
+    let calls = 0; const diagnostics: string[] = [];
+    try {
+      await expect(evaluateStoredWorkload(app, layoutId, { suite, signal: controller.signal, onDiagnostic: (message) => diagnostics.push(message) }, { replay: async () => {
+        calls++; controller.abort();
+        if (failed) throw new Error("backend cancelled");
+        return replayResult(stroke(0, "S"));
+      } })).rejects.toThrow("cancelled");
+      expect(calls).toBe(1); expect(diagnostics).toEqual([]);
+    } finally { app.db.close(); }
+  });
+}
+
+test("comparison cancellation stops before candidate replay", async () => {
+  const { app, layoutId } = workloadApp();
+  const controller = new AbortController();
+  let calls = 0;
+  try {
+    const before = getLayout(app, layoutId);
+    await expect(compareStoredWorkload(app, layoutId, directPatch, { suite: suiteText("s"), signal: controller.signal }, { replay: async () => {
+      calls++; controller.abort(); return replayResult(stroke(0, "S"));
+    } })).rejects.toBeInstanceOf(EmulateFailedError);
+    expect(calls).toBe(1); expect(getLayout(app, layoutId)).toEqual(before);
+  } finally { app.db.close(); }
 });

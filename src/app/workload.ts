@@ -12,6 +12,7 @@ import { evaluate, standingIssues } from "../validation/validate.ts";
 import type { App } from "./context.ts";
 import { pinnedFor, decisionFactsFor } from "./decisions.ts";
 import { emulateEvents, type EmulateEventsOptions } from "./emulate.ts";
+import { EmulateFailedError } from "./firmware-errors.ts";
 import { UsageError, ValidationFailedError } from "./errors.ts";
 import { sourceFor } from "./firmware.ts";
 import { getLayout, type LayoutView } from "./layouts.ts";
@@ -26,7 +27,7 @@ export type WorkloadDeps = { replay?: (app: App, view: LayoutView, events: reado
 
 export function resolveWorkloadSuite(input?: unknown, builtin?: string): WorkloadSuite {
   if (input !== undefined && builtin !== undefined) throw new UsageError("pass --suite or --builtin, not both");
-  const raw = input ?? builtinWorkloadSuites().find((s) => s.id === (builtin ?? "prose"));
+  const raw = input === undefined ? builtinWorkloadSuites().find((s) => s.id === (builtin ?? "prose")) : input;
   if (raw === undefined) throw new UsageError(`unknown workload suite ${builtin}; use workload list`);
   const result = WorkloadSuiteSchema.safeParse(raw);
   if (!result.success) throw new UsageError(`invalid workload suite: ${result.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
@@ -67,19 +68,34 @@ export type WorkloadReport = WorkloadEvidence & {
   identity: { layoutId: string; revisionId: string; layoutHash: string; boardHash: string; boardRevision: string; suiteHash: string; policyHash: string; sourceHash: string | null; evaluator: string; planner: string; host: string; generator: string; firmwarePin: string; buildRecipeHash: string };
   suite: WorkloadSuite; policy: WorkloadPolicy; structuralWarnings: string[]; assumptions: string[];
 };
+function requireNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new EmulateFailedError("The workload evaluation was cancelled.");
+}
 async function evaluateView(app: App, view: LayoutView, prepared: ReturnType<typeof prepare>, opts: WorkloadOptions, deps: WorkloadDeps): Promise<WorkloadReport> {
+  requireNotAborted(opts.signal);
   const { suite, policy, boardRevision } = prepared;
   const issues = standingIssues(view.board.definition, view.document);
-  const fatal = issues.filter((i) => ["binding_count", "unknown_ref", "layer_limit"].includes(i.code));
+  const fatal = issues.filter((i) => ["schema", "binding_count", "unknown_ref", "layer_limit"].includes(i.code));
   if (fatal.length) throw new ValidationFailedError("layout cannot be evaluated safely", { errors: fatal });
   const source = view.document.firmware === "kanata" ? null : sourceFor(view, boardRevision);
   const revision = view.board.definition.revisions.find((r) => r.id === boardRevision);
   if (!revision) throw new UsageError(`unknown board revision ${boardRevision}`);
   const evidence = await evaluateWorkload(view.board.definition, view.document, suite, policy,
-    (events) => (deps.replay ?? emulateEvents)(app, view, events, {
-      boardRevision, cache: false, leadMs: 1000,
-      ...(opts.onProgress ? { onProgress: opts.onProgress } : {}), ...(opts.signal ? { signal: opts.signal } : {}),
-    }), (error) => (opts.onDiagnostic ?? opts.onProgress)?.(error instanceof Error ? error.message : "firmware replay failed"));
+    async (events) => {
+      requireNotAborted(opts.signal);
+      const result = await (deps.replay ?? emulateEvents)(app, view, events, {
+        boardRevision, cache: false, leadMs: 1000,
+        ...(opts.onProgress ? { onProgress: opts.onProgress } : {}), ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+      requireNotAborted(opts.signal);
+      return result;
+    }, (error) => {
+      // Cancellation must leave the task loop, not become recoverable execution-error evidence.
+      requireNotAborted(opts.signal);
+      (opts.onDiagnostic ?? opts.onProgress)?.(error instanceof Error ? error.message : "firmware replay failed");
+      requireNotAborted(opts.signal);
+    });
+  requireNotAborted(opts.signal);
   return { schemaVersion: 1, identity: {
     layoutId: view.layout.id, revisionId: view.revision.id, layoutHash: workloadHash(view.document), boardHash: workloadHash(view.board), boardRevision,
     suiteHash: workloadHash(suite), policyHash: workloadHash(policy), sourceHash: source === null ? null : workloadHash(source),

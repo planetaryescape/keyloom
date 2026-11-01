@@ -108,7 +108,8 @@ export function planTask(layout: Layout, task: WorkloadTask, policy: WorkloadPol
           { position: route.position, action: "press" as const }, { position: route.position, action: "release" as const },
         ];
         const events = [...state.events, ...actions.map((e, i) => ({ ...e, at: (state.events.length + i) * policy.eventMs }))];
-        if (events.length + route.controls.length > WORKLOAD_LIMITS.events || (events.length + route.controls.length) * policy.eventMs > WORKLOAD_LIMITS.durationMs) { truncated = true; continue; }
+        const lastEventAt = (events.length + route.controls.length - 1) * policy.eventMs;
+        if (events.length + route.controls.length > WORKLOAD_LIMITS.events || lastEventAt > WORKLOAD_LIMITS.durationMs) { truncated = true; continue; }
         const candidate: State = { controls: route.controls, events, entries: [...state.entries, ...pressed], presses: state.presses + pressed.length + 1, peak: Math.max(state.peak, route.controls.length + 1) };
         const id = controlKey(route.controls);
         const prior = next.get(id);

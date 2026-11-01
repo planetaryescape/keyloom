@@ -5,7 +5,7 @@ import { ModSchema } from "../../layout/schema.ts";
 export const WORKLOAD_LIMITS = { fileBytes: 65_536, tasks: 32, outputsPerTask: 512, outputs: 4096, events: 4096, durationMs: 120_000 } as const;
 const id = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 export const WorkloadStrokeSchema = z.strictObject({
-  key: z.string().refine((key) => isKeyCode(key) && !["modifier", "media", "mouse"].includes(keyCodeInfo(key).category), "use a canonical keyboard key, not a modifier, mouse or consumer key"),
+  key: z.string().refine((key) => isKeyCode(key) && !["modifier", "media", "mouse", "system"].includes(keyCodeInfo(key).category), "use a canonical non-modifier keyboard usage, not a system, mouse or consumer usage"),
   mods: z.array(ModSchema).max(8).refine((mods) => new Set(mods).size === mods.length, "duplicate modifiers"),
 });
 const witness = z.array(z.strictObject({

@@ -149,3 +149,41 @@ test("schema rejects empty, oversized, duplicate and prototype-key shapes before
   expect(WorkloadSuiteSchema.safeParse({ ...valid, tasks }).success).toBe(true);
   expect(WorkloadSuiteSchema.safeParse({ ...valid, tasks: [...tasks, { id: "overflow", kind: "text", text: "e" }] }).success).toBe(false);
 });
+
+for (const code of ["SYSTEM_POWER", "SYSTEM_SLEEP", "SYSTEM_WAKE"]) {
+  test(`HID stroke schema rejects non-keyboard system usage ${code}`, () => {
+    expect(WorkloadSuiteSchema.safeParse({ schemaVersion: 1, id: "system", host: "us-ansi", tasks: [{ id: "key", kind: "hid", strokes: [{ key: code, mods: [] }] }] }).success).toBe(false);
+  });
+}
+
+for (const overLimit of [false, true]) {
+  test(`planner uses the last event timestamp at the duration ${overLimit ? "overflow" : "boundary"}`, () => {
+    const mods = ["LCTL", "LSFT", "LALT", "LGUI", "RCTL", "RSFT", "RALT", "RGUI"] as const;
+    const layout = tinyLayout([key("E"), ...mods.map((mod) => ({ kind: "modifier" as const, mods: [mod] }))]);
+    const strokes = Array.from({ length: 176 }, () => [{ key: "E", mods: [...mods] }, { key: "E", mods: [] }]).flat();
+    strokes.push({ key: "E", mods: mods.slice(0, 4) });
+    if (overLimit) strokes.push({ key: "E", mods: [] });
+    const suite = WorkloadSuiteSchema.parse({ schemaVersion: 1, id: "boundary", host: "us-ansi", tasks: [{ id: "task", kind: "hid", strokes }] });
+    const result = planTask(layout, suite.tasks[0]!, { ...policy, eventMs: 34 });
+    expect(result.status).toBe(overLimit ? "search-limit" : "planned");
+    if (!overLimit) {
+      expect(result.events).toHaveLength(3530);
+      expect(result.events.at(-1)?.at).toBe(119986);
+      expect(result.events.filter((e) => e.action === "press")).toHaveLength(1765);
+      expect(result.events.filter((e) => e.action === "release")).toHaveLength(1765);
+    } else expect(result.events).toEqual([]);
+  });
+}
+
+test("task protection is policy, while assessment completeness is separate", async () => {
+  const layout = tinyLayout([key("E"), none, none, none]);
+  const verified = await evaluateWorkload(tinyBoard(), layout, suiteText("e"), policy, async () => replayResult(stroke(0, "E")));
+  const incomplete = await evaluateWorkload(tinyBoard(), layout, suiteText("e"), policy, async () => replayResult([]));
+  expect(compareWorkloadEvidence(verified, incomplete)).toMatchObject({ allTasksProtected: true, allTasksAssessed: false, verdict: "inconclusive" });
+  const moreCostly = structuredClone(verified);
+  moreCostly.tasks[0]!.costs!.physicalKeydowns = 2;
+  expect(compareWorkloadEvidence(verified, moreCostly)).toMatchObject({ allTasksProtected: true, allTasksAssessed: true, verdict: "regression" });
+  const extra = structuredClone(verified);
+  extra.tasks.push({ ...extra.tasks[0]!, id: "extra" });
+  expect(compareWorkloadEvidence(verified, extra)).toMatchObject({ allTasksProtected: true, allTasksAssessed: false, verdict: "inconclusive" });
+});

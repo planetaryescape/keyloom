@@ -69,3 +69,18 @@ test("build/replay failure retains deterministic evidence, puts diagnostics on s
     expect(JSON.parse(r.out).tasks[0]).toMatchObject({ status: "execution-error", costsVerified: false });
   } finally { app.db.close(); }
 });
+
+test("CLI cancellation is a typed exit 7 and does not replay another task", async () => {
+  const { app, dir, layoutId } = workloadApp();
+  let calls = 0;
+  try {
+    const suite = suiteText("s"); suite.tasks.push({ id: "second", kind: "text", text: "s" });
+    await Bun.write(`${dir}/suite.json`, JSON.stringify(suite));
+    const r = await cli(["--data-dir", dir, "workload", "evaluate", layoutId, "--suite", `${dir}/suite.json`], { replay: async () => {
+      calls++; process.emit("SIGINT"); return replayResult(stroke(0, "S"));
+    } });
+    expect(r.code).toBe(7); expect(calls).toBe(1);
+    expect(JSON.parse(r.err).error).toMatchObject({ code: "emulate_failed", message: expect.stringContaining("cancelled") });
+    expect(r.err).not.toContain("unexpected error"); expect(r.out).toBe("");
+  } finally { app.db.close(); }
+});

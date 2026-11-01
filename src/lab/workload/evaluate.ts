@@ -11,9 +11,9 @@ export const SCOPE_WARNINGS = [
   "Oryx's RGB, layer LED and raw HID code is replaced by no-ops. It never changes what keys send.",
 ] as const;
 // Reproduction identities: bump these when matching, candidate grammar or cost definitions change.
-export const EVALUATOR_ID = "keyloom-workload-v1.0.0";
+export const EVALUATOR_ID = "keyloom-workload-v1.0.1";
 export const HOST_ID = "us-ansi-sequential-hid-v1";
-export const PLANNER_ID = "direct-tap-side-modifiers-single-momentary-v1";
+export const PLANNER_ID = "direct-tap-side-modifiers-single-momentary-v1.0.1";
 
 export type WorkloadCosts = {
   physicalKeydowns: number; physicalReleases: number; maxSimultaneousKeys: number;
@@ -124,7 +124,8 @@ export function compareWorkloadEvidence(baseline: WorkloadEvidence, candidate: W
   const complete = baseline.tasks.length > 0 && baseline.tasks.length === candidate.tasks.length && deltas.every((d) => d.physicalKeydowns !== null && d.maxSimultaneousKeys !== null);
   const better = deltas.some((d) => (d.physicalKeydowns ?? 0) < 0 || (d.maxSimultaneousKeys ?? 0) < 0);
   const worse = deltas.some((d) => (d.physicalKeydowns ?? 0) > 0 || (d.maxSimultaneousKeys ?? 0) > 0);
-  return { objectives: ["physicalKeydowns", "maxSimultaneousKeys"], allTasksProtected: true,
+  // Protection is the gate's policy: missing evidence blocks improvement; it does not remove a task's protection.
+  return { objectives: ["physicalKeydowns", "maxSimultaneousKeys"], allTasksProtected: true, allTasksAssessed: complete,
     verdict: !complete ? "inconclusive" : better && !worse ? "verified-improvement" : worse && better ? "tradeoff" : worse ? "regression" : "equivalent",
     deltas };
 }
