@@ -126,6 +126,13 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   const finish = (status: "done" | "unavailable" | "failed", reason: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = []) => {
     transact(app.db, () => {
       for (const id of rejectedProposals) if (findChangeSet(app.db, id)?.status === "proposed") markRejected(app.db, id, now());
+      if (status === "failed") {
+        const evidence = reviewWorkload(app.db, row.id);
+        if (evidence) {
+          evidence.comparisons = [];
+          saveReviewWorkload(app.db, row.id, evidence);
+        }
+      }
       const kept = items.map(({ dismissedAt: _, ...r }) => r);
       finishAi(app.db, row.id, { status, reason, model, items: kept, fixedAgent: status === "done" ? agentGone(app, row, kept) : [] });
     });

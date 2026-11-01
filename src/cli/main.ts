@@ -27,7 +27,7 @@ import { DESKTOP_PROTOCOL } from "../server/server-compat.ts";
 import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, print } from "./output.ts";
 import { importTable, settingsTable } from "./report.ts";
 import pkg from "../../package.json" with { type: "json" };
-import { ReviewActivitiesSchema } from "../api/review.ts";
+import { REVIEW_ACTIVITIES, ReviewActivitiesSchema } from "../api/review.ts";
 
 const stdIo = (): Io => ({
   out: (t) => void process.stdout.write(t),
@@ -79,7 +79,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .requiredOption("--board <board>", "board ID, such as zsa/moonlander or moergo/glove80")
     .argument("<file>", "Oryx source zip or its folder (Moonlander), a QMK keymap folder or its keymap.json, a Layout Editor .keymap file (Glove80), a karabiner.json (MacBook; read only), or a keyloom layout export")
     .option("--name <name>", "layout name (default: taken from the source)")
-    .option("--activities <ids>", "remember comma-separated workload activities for automatic board review (needs Docker when reviewed)")
+    .option("--activities <ids>", `remember comma-separated workload activities for automatic board review (${REVIEW_ACTIVITIES.join(",")}; none starts without tests; needs Docker when reviewed)`)
     .action(async (file: string, opts: { board: string; name?: string; activities?: string }) => {
       const parsed = opts.activities === undefined ? undefined : ReviewActivitiesSchema.safeParse(opts.activities === "none" ? [] : opts.activities.split(",").map((s) => s.trim()));
       if (parsed && !parsed.success) throw new UsageError(`invalid review activities: ${parsed.error.issues[0]?.message}`);

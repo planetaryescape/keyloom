@@ -202,6 +202,7 @@ test("the workload deadline during candidate replay withdraws proposals instead 
     expect(calls).toBe(2);
     expect(done.ai.status).toBe("failed");
     expect(done.items.some((item) => item.kind === "suggestion")).toBe(false);
+    expect(done.workload?.comparisons).toEqual([]);
     expect(w.app.db.query("SELECT count(*) AS n FROM change_sets WHERE status = 'proposed'").get()).toEqual({ n: 0 });
   } finally { timeout.mockRestore(); w.app.db.close(); }
 });
