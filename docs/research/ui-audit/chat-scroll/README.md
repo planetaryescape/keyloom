@@ -12,7 +12,7 @@ In another terminal, run the browser regression and regenerate these screenshots
 bun test/web/chat-scroll.browser.ts docs/research/ui-audit/chat-scroll
 ```
 
-The fixture streams a 30-paragraph reply and three proposals through the real App/Viewer. It uses no credentials, database or physical keyboard. It never applies a proposal.
+The fixture streams a 30-paragraph reply and three proposals through the real App/Viewer. Each viewport/theme clears its saved thread before navigation and asserts that exactly one assistant reply is present. It uses no credentials, database or physical keyboard. It never applies a proposal.
 
 ## Reproduction and repair
 
@@ -31,6 +31,6 @@ This restores the existing board-beside-conversation design in D-310/D-318; it d
 - Before shipping, the browser regression, typecheck and dependency check passed again on `dac458eb` (v0.68.0) plus this repair; `bun test test/web test/server` passed 747 tests there.
 - `bunx tsc --noEmit`, `git diff --check` and the scoped anti-slop check passed.
 - `bun run depcruise` reported no violations, with its existing TypeScript 7 compatibility warning.
-- Full `bun test` did not finish within the initial 120-second timeout. A longer retry was stopped during CLI firmware tests; a complete suite pass is not claimed.
+- Local full `bun test` did not finish within the initial 120-second timeout. A longer retry was stopped during CLI firmware tests. GitHub CI on `4313baf1` subsequently completed the full suite: 3,562 passed, 250 skipped and 0 failed across 387 files.
 
 Evidence is from the source-served Chromium app, not a released desktop build. The installed CLI reports 0.66.0; its version check does not verify this UI repair. No hardware flash or real-data server was used.

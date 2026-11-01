@@ -20,9 +20,12 @@ function check(name: string, body: string): void {
 }
 
 try {
+  // Establish the fixture origin so each case can clear its saved thread before navigation.
+  browser("open", "http://127.0.0.1:4517/?t=dev-editor-token");
   for (const [width, height] of [[1440, 900], [1100, 577], [390, 844]] as const) {
     for (const theme of ["light", "dark"]) {
       browser("set", "viewport", String(width), String(height));
+      browser("eval", "localStorage.removeItem('keyloom.agent.current.moonlander-daily')");
       browser("open", "http://127.0.0.1:4517/?t=dev-editor-token");
       browser("wait", ".workbench");
       check(`${width} ${theme}: editor ready`, "");
@@ -36,6 +39,7 @@ try {
       browser("wait", "--fn", "document.querySelector('.chat')?.dataset.streaming==='false' && !!document.querySelector('.chat-log .sr-only')");
       check(`${width} ${theme}: long reply stays inside the viewport`, `
         const log=document.querySelector('.chat-log'), page=document.scrollingElement;
+        if(log.querySelectorAll('.msg-assistant').length!==1) throw Error('case reused a previous conversation');
         if(!log.textContent.includes('Paragraph 30:') || log.scrollHeight<log.clientHeight*3) throw Error('long reply fixture missing');
         window.scrollTo(0,page.scrollHeight);
         const board=document.querySelector('.keyboard').getBoundingClientRect(), input=document.querySelector('.chat textarea').getBoundingClientRect();
