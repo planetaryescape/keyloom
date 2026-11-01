@@ -1,0 +1,40 @@
+{
+  "release": "v0.68.1",
+  "releaseCommit": "8b802d4aa1bee9068512c66fcc8c63f211b56e28",
+  "implementationHead": "08c6afab53f17847a612ae30ca07e6040c8d01a6",
+  "releasePrHead": "61f40ccbd876306d4f689516a24c58a76b9ec05e",
+  "releasePrCi": 41359631203,
+  "releaseBuildRun": 41360226065,
+  "desktopArchive": "keyloom-0.68.1-darwin-arm64.app.zip",
+  "desktopArchiveSha256": "e9c648f5eb3e77e5ef72182c1907ca30978cab1d4a8c58aa2222c0bd75446d23",
+  "publishedCliSha256": "48b05af1e480534286a34bb860208ece87c2ada2b7e590e08f10871eb9d59628",
+  "verifiedSigningTeam": "WAVMJLFY95",
+  "gatekeeperAssessment": "accepted; Notarized Developer ID",
+  "offlineScriptedJourneysPassed": [
+    "published Apple Silicon CLI installed into scratch prefix",
+    "downloaded signed desktop sidecar",
+    "installed desktop sidecar after replacement"
+  ],
+  "verifiedJourneyOutcomes": [
+    "source behavior facts exposed",
+    "destructive automatic patch rejected",
+    "complete source-preserving retarget saved",
+    "unsupported model claims replaced by source-derived effects",
+    "untested firmware coverage stated explicitly",
+    "stale direct Apply refused",
+    "offline source-check refresh succeeded",
+    "scratch config heads and documents unchanged"
+  ],
+  "installedDesktopVersion": "0.68.1",
+  "previousDesktopVersion": "0.68.0",
+  "previousBundlePreserved": true,
+  "installedManifestMatchesDownloadedBundle": true,
+  "guiLaunchedByVerification": false,
+  "normalStandaloneCliChanged": false,
+  "realConfigsChanged": false,
+  "additionalLiveProviderCalls": 0,
+  "keyboardAccessed": false,
+  "keyboardFlashed": false,
+  "fullFirmwareReadbackClaimed": false,
+  "humanPerformanceClaimed": false
+}
