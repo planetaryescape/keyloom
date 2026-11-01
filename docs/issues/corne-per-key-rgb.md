@@ -1,6 +1,6 @@
 # Corne per-key colours need hardware position verification
 
-Status: implemented in `0d57c77d08548af9115c2c9de05addd555316960` on `feat/corne-per-key-rgb`; both firmware build markers observed on USB, both halves verified after the 2026-10-30 flash, and the amber indicator with the opposite-half effect preview accepted on the keyboard. Physical colour placement remains open.
+Status: shipped on `main` in `ce53799` (v0.63.0), from `0d57c77d08548af9115c2c9de05addd555316960`; both firmware build markers observed on USB, both halves verified after the 2026-10-30 flash, and the amber indicator with the opposite-half effect preview accepted on the keyboard. Physical colour placement remains open.
 
 The Corne Choc Pro BT previously admitted only global RGB controls. Its recipe now pins `gudzpoz/zmk-rgb-matrix` at `3166a4ec6801a5726f12a53e82cff92323116025` (MIT) beside ZMK v0.3.0 and the existing Keebart hardware module. Keyloom's existing key-colour picker, layer lighting settings and `setLayerLighting` operation feed this adapter.
 

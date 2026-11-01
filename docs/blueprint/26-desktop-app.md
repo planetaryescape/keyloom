@@ -1,6 +1,6 @@
 # 26: keyloom as a desktop app
 
-Status: built, 2026-10-17 (rung 24, PR from `rung24/desktop-app`); signed and installed on BK's Mac, not yet notarised (needs BK's credentials). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
+Status: built, 2026-10-17 (rung 24, PR from `rung24/desktop-app`); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 

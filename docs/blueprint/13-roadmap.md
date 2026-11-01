@@ -12,6 +12,8 @@
 - **Each rung opens with a status line.** It names the release that built it, then says whether its done-when check was observed. "Not recorded" means no spike, decision, log or ledger in this repo shows the check, which is different from showing it failed. Written at v0.36.1, 2026-10-17.
 - **Tests pass, but that isn't done.** Every rung is done only when its completion check is observed on the **installed release binary** against BK's real layout and, from rung 2, his real keyboard. Its demo must also have been run.
 
+**Later releases (annotated 2026-11-01, v0.65.0).** v0.58.0 replaced alternatives with one best proposal plus refining questions (D-452). v0.60.0 made a whole-config copy continue in the target config's conversation (D-460). v0.61.0 added the setup card for a known board with no config and made a refused put leave no config (D-336). v0.62.0 added the review panel's Fix issues run (D-461). v0.63.0 brought the Keebart Corne support and the half-by-half flash fixes onto main (D-462 to D-466). v0.64.0 showed what a copy carried, and v0.65.0 added reply-reference links. The rung statuses below keep the release that built them and carry a "Later" note where hardware changed.
+
 ## Phase 0: accounts and spikes (before product code)
 
 Only BK can do these. The coding agent asks which are done and doesn't create accounts, keys or repos itself.
@@ -218,7 +220,7 @@ Spikes that gate rungs are listed with their `Blocks` column in [15](15-open-que
 
 ## Rung 8: Car: someone else can add their keyboard
 
-**Status:** Built in v0.5.0. Done when: partly observed. The Corne went in as a data-only board in PR #6 with the board check in CI (Q10). Building and flashing it end to end is not recorded, and S13 has not run.
+**Status:** Built in v0.5.0. Done when: partly observed. The Corne went in as a data-only board in PR #6 with the board check in CI (Q10). Building and flashing it end to end is not recorded, and S13 has not run. Later: the Keebart Corne was added as a data-only board and its first flash and acceptance completed on 2026-10-30; see [the first-flash record](../issues/keebart-corne-first-flash.md).
 
 **Previously:** BK's two boards. **Now:** the board format is documented, `keyloom boards check` validates a contribution, and a contributor can add a board with a pull request containing only data and an optional skill.
 
@@ -306,7 +308,7 @@ Only BK can do these:
 
 ## Rung 12: Bicycle: flash my Glove80 and Corne without touching them
 
-**Status:** Built in v0.12.0 (the `keyloom-zmk` module and the host flasher), with proof reporting in v0.14.0. Done when: partly observed on the Glove80, not on the Corne. keyloom restarted both halves at 1200 baud with no keypress and verified both on one build (S12, 2026-10-16). It took three attempts and two fixes (v0.34.6, v0.34.7), and two fault-free hands-free flashes in a row have not been observed. S13 (the Corne) has not run.
+**Status:** Built in v0.12.0 (the `keyloom-zmk` module and the host flasher), with proof reporting in v0.14.0. Done when: partly observed on the Glove80, not on the Corne. keyloom restarted both halves at 1200 baud with no keypress and verified both on one build (S12, 2026-10-16). It took three attempts and two fixes (v0.34.6, v0.34.7), and two fault-free hands-free flashes in a row have not been observed. Later: S13 ran on 2026-10-30; keyloom restarted both Corne halves, flashed them, and verified one build, and typing and both encoders were accepted.
 
 **Previously:** ZMK flashes need a key combo on each half. **Now:** after one more manual flash, keyloom restarts each half into its bootloader itself.
 
@@ -468,7 +470,7 @@ Only BK can do these:
 
 ## Rung 21: Car: connect a new keyboard and put my config on it
 
-**Status:** Built in v0.33.0 (engine and CLI), v0.34.0 (screens) and v0.36.1 (gaps the add-keyboard tests found). Done when: not observed. Detection named the Glove80 on the real bus (S42), and the README says the screens have run on fake keyboards only.
+**Status:** Built in v0.33.0 (engine and CLI), v0.34.0 (screens) and v0.36.1 (gaps the add-keyboard tests found). Done when: not observed. Detection named the Glove80 on the real bus (S42); the screens had only run on fake keyboards then. Later: the setup card for a known board with no config shipped in v0.61.0. The Keebart Corne and the Moonlander went from connected to a config through the app flow on 2026-10-29 and 30.
 
 **Previously:** a board needs a contributed definition. **Now:** keyloom recognises a QMK or ZMK keyboard on USB, builds its definition, and puts BK's config on it.
 
@@ -532,7 +534,7 @@ Only BK can do these:
 
 ## Rung 24: Car: keyloom is an app on my Mac
 
-**Status:** Not built at v0.36.1. The desktop shell is being built on another branch, and chapter 26 is still a proposal.
+**Status:** Not built at v0.36.1. The desktop shell is being built on another branch, and chapter 26 is still a proposal. Later: the desktop app shipped in v0.46.1 and is the current install surface (chapter 26).
 
 **Previously:** a browser tab. **Now:** a desktop app with its own window, shortcuts, and a menu-bar sync status.
 
@@ -546,7 +548,7 @@ Only BK can do these:
 
 **Demo:** install from the cask, launch, edit and apply, and watch the menu bar go amber then green.
 
-**Done when:** a signed, notarised `.app` from a release is installed on BK's Mac and used for a full edit, apply and sync.
+**Done when:** a signed, notarised `.app` from a release is installed on BK's Mac and used for a full edit, apply and sync. Later: the notarised release app was installed and used for a Corne apply and sync on 2026-10-30; an edit through the installed app is not recorded.
 
 **Left out:** Windows and Linux builds.
 

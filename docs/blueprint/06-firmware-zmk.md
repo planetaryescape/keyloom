@@ -1,6 +1,6 @@
-# 06: Firmware: ZMK (Glove80)
+# 06: Firmware: ZMK (Glove80 and the Corne)
 
-The Glove80 is BK's ZMK board (D-027). This document covers importing its current layout, generating a `.keymap`, building firmware locally and flashing both halves. Every fact here is in [../research/zmk-and-glove80.md](../research/zmk-and-glove80.md), checked 2026-10-15. Pinned commits: `moergo-sc/zmk` `ce69e85f585c724142aae37ddf8a7e019ff19e93` (tag `v26.09`), `moergo-sc/glove80-zmk-config` `34888be8c9d9a3d5b168a502b8b191ba43b4a1f3`, upstream `zmkfirmware/zmk` `4dd95d7840eb3d5a3f59bb29fbf1ab054715ef85`.
+The Glove80 and the Keebart Corne Choc Pro BT are BK's ZMK boards (D-027, D-462). This document covers importing their layouts, generating a `.keymap`, building firmware locally and flashing both halves. Most of it is the Glove80; the Keebart Corne's hardware module, per-half targets and RGB adapter are at the end. Every Glove80 fact here is in [../research/zmk-and-glove80.md](../research/zmk-and-glove80.md), checked 2026-10-15. Pinned commits: `moergo-sc/zmk` `ce69e85f585c724142aae37ddf8a7e019ff19e93` (tag `v26.09`), `moergo-sc/glove80-zmk-config` `34888be8c9d9a3d5b168a502b8b191ba43b4a1f3`, upstream `zmkfirmware/zmk` `4dd95d7840eb3d5a3f59bb29fbf1ab054715ef85`.
 
 ## The firmware tree is MoErgo's fork, pinned to a release tag
 
