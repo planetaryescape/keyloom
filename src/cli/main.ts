@@ -81,8 +81,8 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .option("--name <name>", "layout name (default: taken from the source)")
     .option("--activities <ids>", "remember comma-separated workload activities for automatic board review (needs Docker when reviewed)")
     .action(async (file: string, opts: { board: string; name?: string; activities?: string }) => {
-      const parsed = opts.activities === undefined ? undefined : ReviewActivitiesSchema.safeParse(opts.activities.split(",").map((s) => s.trim()));
-      if (parsed && !parsed.success) throw new UsageError("invalid review activities");
+      const parsed = opts.activities === undefined ? undefined : ReviewActivitiesSchema.safeParse(opts.activities === "none" ? [] : opts.activities.split(",").map((s) => s.trim()));
+      if (parsed && !parsed.success) throw new UsageError(`invalid review activities: ${parsed.error.issues[0]?.message}`);
       const outcome: ImportOutcome = await withApp((app) => importLayout(app, { board: opts.board, source: file, ...(opts.name === undefined ? {} : { name: opts.name }), ...(parsed?.data === undefined ? {} : { reviewActivities: parsed.data }) }));
       const quiet = globals().quiet === true;
       print(io, format(), {

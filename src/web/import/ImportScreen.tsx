@@ -91,7 +91,7 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
   const [copied, setCopied] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const titleId = useId();
-  const command = importCommand(board);
+  const command = importCommand(board, activities);
 
   async function take(files: FileList | null) {
     const file = files?.[0];

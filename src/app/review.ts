@@ -161,7 +161,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       return false;
     }) : items;
     const measured = await measureReviewSuggestions(app, row, bounded, baseline, workloadSignal, deps.workload ?? {});
-    if (hooks.signal?.aborted || getLayout(app, row.layoutId).revision.id !== row.revisionId) {
+    if (hooks.signal?.aborted || (workloadSignal.aborted && reviewWorkload(app.db, row.id)) || getLayout(app, row.layoutId).revision.id !== row.revisionId) {
       finish("failed", "The review stopped or the layout changed while its suggestions were being tested.", model.model, [], proposed);
     } else finish("done", reason, model.model, measured, withdrawn);
   };

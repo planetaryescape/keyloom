@@ -140,6 +140,7 @@ export class ReviewEngine {
   /**
    * The checks for the head now, returned as soon as they are stored; `done` settles when the agent's part has too. A revision
    * that has a review keeps it: only an agent part that was missing or failed runs again, or any with `force`.
+   * Supplying `activities` saves that profile ([] disables tests) and forces a rerun even when unchanged; omitting it keeps the profile.
    */
   review(ref: string, trigger: ReviewTrigger, opts: { force?: boolean; activities?: ReviewActivity[]; signal?: AbortSignal } = {}): { review: BoardReview; done: Promise<BoardReview> } {
     if (opts.activities !== undefined) saveReviewActivities(this.app, ref, opts.activities);

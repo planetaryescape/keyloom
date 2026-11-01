@@ -2,16 +2,13 @@
 // server made (or the last one); with --run it makes the head's review now, agent part included, and waits for it.
 import type { Command } from "commander";
 import {
-  type BoardReview, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, ReviewEngine, UsageError, defaultAgentModel, dismissReviewItem, fixableFindings, listLayouts, restoreReviewItem, reviewWords, showReview,
+  type BoardReview, EmulateFailedError, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, type WorkloadDeps, ReviewEngine, UsageError, defaultAgentModel, dismissReviewItem, fixableFindings, listLayouts, restoreReviewItem, reviewWords, showReview,
 } from "../../app/index.ts";
 import { startAgentRun } from "../../app/agent-runs.ts";
-import { REVIEW_FIX_REQUEST } from "../../api/review.ts";
+import { REVIEW_FIX_REQUEST, REVIEW_ACTIVITIES, ReviewActivitiesSchema, workloadVerdictWords } from "../../api/review.ts";
 import { followAgentRun, parseProvider, type ChatDeps } from "./chat.ts";
 import { type Format, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
-import { ReviewActivitiesSchema, workloadVerdictWords } from "../../api/review.ts";
-import type { WorkloadDeps } from "../../app/workload.ts";
-import { EmulateFailedError } from "../../app/firmware-errors.ts";
 import { untilInterrupted } from "./firmware.ts";
 
 const itemJson = (i: ReviewItem) => ({
@@ -91,7 +88,7 @@ export function registerReviewCommand(program: Command, ctx: CliContext, deps: C
     .argument("[layout]", "config ID or name (optional when there is only one)")
     .option("--run", "make the review of the head now and wait for the agent's part")
     .option("--force", "with --run, run the agent again even when it already looked at this version")
-    .option("--activities <ids>", "with --run, remember comma-separated workloads: prose,typescript,python,json,shell,shortcuts; none disables tests (needs Docker)")
+    .option("--activities <ids>", `with --run, remember comma-separated workloads: ${REVIEW_ACTIVITIES.join(",")}; none disables tests (needs Docker)`)
     .option("--json", "print JSON, whatever the output format")
     .option("--provider <provider>", `model provider for the agent's look: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
     .action(async (layoutArg: string | undefined, opts: { run?: boolean; force?: boolean; activities?: string; json?: boolean; provider?: string }) => {

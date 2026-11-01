@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ActivityChoices, SuggestionTestResults, WorkloadTests } from "../../src/web/review/WorkloadTests.tsx";
 import { ReviewWorkloadSchema } from "../../src/layout/review-workload.ts";
 
-const baseline = { id: "prose-prose", status: "verified", requestedOutputs: 21, physicalKeydowns: 22, maxSimultaneousKeys: 2, layerEntries: 1, modifierEntries: 0, busyKeys: [] };
+const baseline = { id: "prose-prose", status: "verified" as const, requestedOutputs: 21, physicalKeydowns: 22, maxSimultaneousKeys: 2, layerEntries: 1, modifierEntries: 0, busyKeys: [] };
 const candidate = { ...baseline, physicalKeydowns: 21, maxSimultaneousKeys: 1, layerEntries: 0 };
 
 test("activity choices do not preselect a use case and remain native labeled checkboxes", () => {
@@ -13,6 +13,11 @@ test("activity choices do not preselect a use case and remain native labeled che
   expect(html).not.toContain("checked");
   expect(html).toContain("What will you use this board for?");
   for (const text of ["Writing", "TypeScript", "Python", "JSON", "Terminal", "Shortcuts"]) expect(html).toContain(text);
+});
+
+test("review evidence rejects an unknown task status", () => {
+  expect(ReviewWorkloadSchema.safeParse({ status: "done", activities: ["prose"], reason: null, identity: null,
+    baseline: [{ ...baseline, status: "verifed" }], comparisons: [] }).success).toBe(false);
 });
 
 test("no selection explains the opt-in, Docker cost and test limits", () => {
@@ -28,6 +33,17 @@ test("a selected profile awaiting its first review is not reported as unselected
   const html = renderToStaticMarkup(createElement(WorkloadTests, { activities: ["prose"], evidence: undefined, busy: false, onRun: () => {} }));
   expect(html).toContain("Selected activities will be tested");
   expect(html).not.toContain("No activities assumed");
+});
+
+test("orphaned pending/running evidence does not announce active testing", () => {
+  for (const status of ["pending", "running"] as const) {
+    const evidence = ReviewWorkloadSchema.parse({ status, activities: ["prose"], reason: null, identity: null, baseline: [], comparisons: [] });
+    const stopped = renderToStaticMarkup(createElement(WorkloadTests, { activities: ["prose"], evidence, busy: false, onRun: () => {} }));
+    expect(stopped).not.toContain("Testing this version");
+    expect(stopped).toContain("not running");
+    const active = renderToStaticMarkup(createElement(WorkloadTests, { activities: ["prose"], evidence, busy: true, onRun: () => {} }));
+    expect(active).toContain("Testing this version");
+  }
 });
 
 test("persisted profiles fold choices, show verified coverage and retain unavailable tasks", () => {

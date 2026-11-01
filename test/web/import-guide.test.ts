@@ -24,6 +24,7 @@ describe("the import cards", () => {
 
   test("the command under a card names the board", () => {
     expect(importCommand(board("moergo/glove80", ["zmk-layout-editor-keymap"]))).toBe("keyloom import --board moergo/glove80 <file>");
+    expect(importCommand(board("moergo/glove80", ["zmk-layout-editor-keymap"]), ["prose", "shortcuts"])).toBe("keyloom import --board moergo/glove80 --activities prose,shortcuts <file>");
   });
 
   test("every importer the boards declare has a guide", async () => {

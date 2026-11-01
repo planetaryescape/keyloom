@@ -113,7 +113,7 @@ export async function measureReviewSuggestions(app: App, row: BoardReviewRow, it
     if (item.kind !== "suggestion" || item.proposalId === null) continue;
     const proposal = findChangeSet(app.db, item.proposalId);
     const result: ReviewWorkloadComparison = {
-      proposalId: item.proposalId, patchHash: null, verdict: "not-tested", reason: "The baseline could not be measured.", tasks: [], deltas: [],
+      proposalId: item.proposalId, patchHash: null, verdict: "not-tested", reason: baseline ? "The proposal is no longer available for testing." : "The baseline could not be measured.", tasks: [], deltas: [],
     };
     if (proposal?.status === "proposed") {
       result.patchHash = workloadHash(proposal.ops);

@@ -1342,7 +1342,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   /** After "Make": open the new config with its proposals beside the board (D-336). */
   function openMadeConfig(configId: string) {
-    const carry: Arrival = { layerName: null, chatOpen: false, thread: null, proposals: true, ...(newBoard.step.kind === "setup" ? { review: true } : {}) };
+    const carry: Arrival = { layerName: null, chatOpen: false, thread: null, proposals: true,
+      ...(newBoard.step.kind === "setup" || (newBoard.step.kind === "put" && newBoard.step.origin === "known") ? { review: true } : {}) };
     if (chrome.onCarry !== undefined) chrome.onCarry(configId, carry);
     chrome.onReload?.(configId);
   }

@@ -11,7 +11,7 @@ export const REVIEW_ACTIVITY_LABELS: Record<ReviewActivity, string> = {
 };
 const count = z.number().int().nonnegative();
 export const ReviewWorkloadTaskSchema = z.object({
-  id: z.string(), status: z.string(), requestedOutputs: count,
+  id: z.string(), status: z.enum(["unsupported", "no-route-within-supported-subset", "search-limit", "verified", "output-mismatch", "warning-tainted", "execution-error"]), requestedOutputs: count,
   physicalKeydowns: count.nullable(), maxSimultaneousKeys: count.nullable(),
   layerEntries: count.nullable(), modifierEntries: count.nullable(),
   busyKeys: z.array(z.object({ position: count, keydowns: count })).max(6),

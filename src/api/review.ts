@@ -43,7 +43,7 @@ export const ReviewResponseSchema = z.object({
 });
 export type ReviewResponse = z.infer<typeof ReviewResponseSchema>;
 
-/** `force` runs the agent's part again even when it finished; without it only a missing or failed part runs. */
+/** `activities` saves the profile ([] disables tests); like `force`, supplying it reruns a finished review. Omit it to keep the profile. */
 export const RunReviewRequestSchema = z.object({ force: z.boolean().optional(), activities: ReviewActivitiesSchema.optional() }).strict();
 
 export const ReviewEventSchema = z.object({

@@ -136,7 +136,7 @@ export function App({ token }: { token: string }) {
     if (selectId !== undefined) setSelectedId(selectId);
     setAttempt((count) => count + 1);
   };
-  const menu = { layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setSelectedId(id); }, onImport: () => setImporting(true), onReload: reload, boardChoices };
+  const menu = { layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setCarry(null); setSelectedId(id); }, onImport: () => setImporting(true), onReload: reload, boardChoices };
   if (importing) {
     return (
       <Shell menu={menu}>

@@ -354,7 +354,7 @@ describe("history, boards and import", () => {
     expect((await send("gaming")).status).toBe(400);
     expect((await send("prose,prose")).status).toBe(400);
     expect(selected).toEqual([]);
-    expect((await send("prose,shortcuts")).status).toBe(201);
+    expect((await send("prose, shortcuts ")).status).toBe(201);
     expect(selected).toEqual([["prose", "shortcuts"]]);
   });
 

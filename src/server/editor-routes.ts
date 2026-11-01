@@ -206,7 +206,7 @@ async function importUpload(backend: EditorBackend, request: Request): Promise<R
   const name = query.get("name")?.trim();
   if (!board || !filename) return fail(400, "schema", "Name the board and the file: ?board=...&filename=...");
   const selection = query.get("activities");
-  const activities = selection === null ? undefined : ReviewActivitiesSchema.safeParse(selection.split(","));
+  const activities = selection === null ? undefined : ReviewActivitiesSchema.safeParse(selection.split(",").map((id) => id.trim()));
   if (activities && !activities.success) return fail(400, "schema", "Choose activities from prose, typescript, python, json, shell or shortcuts, without duplicates.");
   const bytes = new Uint8Array(await request.arrayBuffer());
   if (bytes.length > MAX_IMPORT_BYTES) return fail(413, "too_large", "That file is too large to be a layout export.");

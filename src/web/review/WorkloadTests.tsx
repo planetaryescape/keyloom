@@ -24,15 +24,15 @@ export function WorkloadTests({ activities, evidence, busy, onRun }: { activitie
   </>;
   return <section className="br-workloads" aria-label="Activity tests">
     {activities.length ? <details className="br-test-results"><summary>Activity tests · {activities.map((id) => REVIEW_ACTIVITY_LABELS[id]).join(", ")}</summary>{choices}</details> : choices}
-    {evidence ? <BaselineResults evidence={evidence} /> : <p>{activities.length ? "Selected activities will be tested when this config is reviewed." : "No activities assumed. Choose the samples that matter to you."}</p>}
+    {evidence ? <BaselineResults evidence={evidence} active={busy} /> : <p>{activities.length ? "Selected activities will be tested when this config is reviewed." : "No activities assumed. Choose the samples that matter to you."}</p>}
     <p>These are selected routes, not a whole-layout score or a prediction of speed or comfort.</p>
   </section>;
 }
 
-function BaselineResults({ evidence }: { evidence: ReviewWorkload }) {
+function BaselineResults({ evidence, active }: { evidence: ReviewWorkload; active: boolean }) {
   const verified = evidence.baseline.filter((task) => task.status === "verified").length;
   const progress = evidence.status === "pending" || evidence.status === "running"
-    ? "Testing this version…"
+    ? active ? "Testing this version…" : "Activity testing is not running. Run the review to test this version."
     : evidence.baseline.length ? `${verified} of ${evidence.baseline.length} tasks verified` : "Tasks have not been verified.";
   return <div className="br-test-results" aria-live="polite">
     <p>{progress}</p>

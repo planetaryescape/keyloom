@@ -4,7 +4,7 @@ import type { ReviewActivity } from "../api/review.ts";
 // The server's board review interface (D-340). Like the other backends, the CLI injects the app-backed implementation.
 export interface ReviewBackend {
   show(ref: string): Promise<ReviewResponse>;
-  /** The checks of the head, stored and returned at once; the agent's part continues and is announced by `subscribe`. */
+  /** Returns head checks at once; the agent continues via `subscribe`. `activities` saves a profile ([] disables tests) and, like `force`, reruns a finished review. Omit it to keep the profile. */
   run(ref: string, opts: { force: boolean; activities?: ReviewActivity[] }): Promise<ReviewResponse>;
   dismiss(ref: string, itemId: string): Promise<ReviewResponse>;
   restore(ref: string, itemId: string): Promise<ReviewResponse>;

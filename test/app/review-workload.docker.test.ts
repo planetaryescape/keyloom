@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { getLayout } from "../../src/app/layouts.ts";
 import { createReview, runReviewAi } from "../../src/app/review.ts";
-import { saveReviewActivities } from "../../src/app/review-workloads.ts";
+import { REVIEW_WORKLOAD_TIMEOUT_MS, saveReviewActivities } from "../../src/app/review-workloads.ts";
 import { findChangeSet } from "../../src/persistence/change-sets.ts";
 import { draft } from "../helpers/ops.ts";
 import { finished, savedId, scriptedModel, submit } from "../helpers/review-world.ts";
@@ -39,5 +39,5 @@ for (const [firmware, boardId] of [["qmk", "zsa/moonlander"], ["zmk", "moergo/gl
       expect(findChangeSet(app.db, done.workload!.comparisons[0]!.proposalId)?.status).toBe("proposed");
       expect(getLayout(app, layoutId)).toEqual(before);
     } finally { app.db.close(); }
-  }, 300_000);
+  }, REVIEW_WORKLOAD_TIMEOUT_MS + 60_000);
 }

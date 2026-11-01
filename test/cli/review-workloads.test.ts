@@ -6,6 +6,7 @@ import { finished, scriptedModel, submit } from "../helpers/review-world.ts";
 import { key, replayResult, tinyLayout, workloadApp } from "../helpers/workload.ts";
 import type { WorkloadDeps } from "../../src/app/workload.ts";
 import { importLayout } from "../../src/app/layouts.ts";
+import { saveReviewActivities } from "../../src/app/review-workloads.ts";
 
 async function cli(dir: string, args: string[], workload?: WorkloadDeps) {
   let out = ""; let err = "";
@@ -55,6 +56,25 @@ test("import can select activities before the first automatic review", async () 
     const imported = JSON.parse(result.out);
     expect(reviewActivities(w.app.db, imported.layout_id)).toEqual(["prose", "shortcuts"]);
     expect(w.app.db.query("SELECT count(*) AS n FROM board_reviews").get()).toEqual({ n: 0 });
+  } finally { w.app.db.close(); }
+});
+
+test("import and keyboard put accept none without starting tests or inheriting a source profile", async () => {
+  const w = workloadApp();
+  try {
+    const path = `${w.dir}/none.json`;
+    await Bun.write(path, JSON.stringify(layoutExportDocument(w.app, w.layoutId)));
+    const imported = await cli(w.dir, ["import", "--board", "zsa/moonlander", "--name", "No activities", "--activities", "none", path]);
+    expect(imported.code).toBe(0);
+    expect(reviewActivities(w.app.db, JSON.parse(imported.out).layout_id)).toEqual([]);
+    saveReviewActivities(w.app, w.layoutId, ["prose"]);
+    const copied = await cli(w.dir, ["keyboard", "put", w.layoutId, "--on", "moergo/glove80", "--activities", "none"]);
+    expect(copied.code).toBe(0);
+    expect(reviewActivities(w.app.db, JSON.parse(copied.out).config.id)).toEqual([]);
+    expect(w.app.db.query("SELECT count(*) AS n FROM board_reviews").get()).toEqual({ n: 0 });
+    const invalid = await cli(w.dir, ["import", "--board", "zsa/moonlander", "--activities", "shortcut", path]);
+    expect(invalid.code).toBe(2);
+    expect(invalid.err).toContain("shortcuts");
   } finally { w.app.db.close(); }
 });
 

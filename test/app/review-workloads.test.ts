@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { createReview, runReviewAi, showReview } from "../../src/app/review.ts";
 import { getLayout } from "../../src/app/layouts.ts";
 import { applyChange, applyOps } from "../../src/app/changes.ts";
@@ -185,6 +185,25 @@ test("cancellation during baseline stops before model calls or proposals", async
     expect(done.ai.status).toBe("failed");
     expect(done.workload?.status).toBe("failed");
   } finally { w.app.db.close(); }
+});
+
+test("the workload deadline during candidate replay withdraws proposals instead of completing the review", async () => {
+  const w = world();
+  const deadline = new AbortController();
+  const timeout = spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+  try {
+    saveReviewActivities(w.app, w.layoutId, ["prose"]);
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    let calls = 0;
+    const done = await runReviewAi(w.app, review.id, { ...model().deps, workload: { replay: async () => {
+      if (++calls === 2) deadline.abort();
+      return reports();
+    } } });
+    expect(calls).toBe(2);
+    expect(done.ai.status).toBe("failed");
+    expect(done.items.some((item) => item.kind === "suggestion")).toBe(false);
+    expect(w.app.db.query("SELECT count(*) AS n FROM change_sets WHERE status = 'proposed'").get()).toEqual({ n: 0 });
+  } finally { timeout.mockRestore(); w.app.db.close(); }
 });
 
 test("candidate regressions are reported instead of being relabeled as improvements", async () => {
