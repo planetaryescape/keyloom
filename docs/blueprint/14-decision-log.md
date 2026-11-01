@@ -2197,9 +2197,19 @@ The reply that made a config told BK where to find it, and a later reply that na
 - **Screens stay out.** History, the typing lab and Decisions have no marker, no client-intent protocol and no acknowledgement: rung 28's typed client intents (29) are a later stage, and this decision adds no wire field, no migration and no server behaviour.
 - **Built in** `src/layout/references.ts`, `src/app/references.ts`, `src/cli/reference-stream.ts`, `src/cli/commands/chat.ts`, `src/web/chat/markdown.ts`, `src/web/chat/Markdown.tsx`, `src/web/chat/reference-view.ts`, `src/web/chat/ChatPanel.tsx`, `src/web/chat/Turns.tsx`, `src/web/chat/CarriedThread.tsx`, `src/web/chat/chat.css`, `src/web/Viewer.tsx` and `src/agent/prompts/system.md`; tests in `test/layout/references.test.ts`, `test/web/chat-markdown.test.ts`, `test/web/chat-references.test.ts`, `test/cli/reply-references.test.ts` and `test/agent/reply-references.test.ts`. Captures and the keyboard check are in [the stage C evidence](../research/ui-audit/c-reply-references/README.md).
 
+### D-469: Open one of four existing views through the initiating send's browser, and report success only after its React render acknowledgement. Extends D-403 and D-468. (2026-10-31, stage D)
+
+`open_view` accepts only `history|lab|decisions|settings` on the current config. History is layout version history. There is no screen marker, generic navigation registry, URL, selector, setting change, recording or hardware action. The model receives `opened`, `already-open` or a bounded `unavailable` result before answering; it must not turn navigation into a claim that data loaded or anything was saved.
+
+A browser opts in on each new durable request with a fresh owner UUID. Accepted snapshots echo protocol 1, but never the owner. Only that send's live observer may consume its run/request/config-bound intent. Reload, history and foreign tabs are read-only observers. CLI, legacy streams, automatic reviews and copied configs' autonomous child runs return unavailable immediately.
+
+Use one process-local waiter per capable run and the existing bounded presentation row, with at most eight intent receipts, one pending action and a five-second deadline. React acknowledges the actual committed destination. Editor/composer drafts, recording, navigation away, foreground loss, Stop, New and unmount prevent further actions. Exact duplicate acknowledgements return the saved result; wrong ownership, contradictory duplicates and late replies cannot upgrade timeout/cancellation. Restart makes saved pending intents inert, never executable. The wider chapter 29 capability proposal is not implemented by this decision.
+
+Release approval, 2026-11-01: BK explicitly waived the unfinished independent review and Computer Use/visual checks after local tests and CI passed. Those checks remain unverified, not passed. [Stage D evidence](../research/ui-audit/d-open-view/README.md) records the limits.
+
 ## Deterministic workload evaluation (2026-11-01)
 
-### D-469: Test an existing config against named workloads, and verify proposed gains independently of the AI. (BK's request; first implementation slice)
+### D-470: Test an existing config against named workloads, and verify proposed gains independently of the AI. (BK's request; first implementation slice)
 
 - **The question:** how much physical work does this config require for a particular activity, and does a small change reduce it without breaking another required task? A prose or programming workload is not a universal ideal layout.
 - **Separate planning from proof.** A deterministic, bounded planner proposes physical key events. The existing QMK/ZMK emulators establish what those events send (D-075); there is no second firmware interpreter. Unsupported mechanisms and exhausted search do not prove that a task is impossible.

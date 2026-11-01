@@ -1,6 +1,6 @@
 # 24: Typing lab: keyloom watches you type and tunes the board to your hands
 
-Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens and `/api/lab` routes built on a scripted fake keyboard (D-314), 2026-10-16. Deterministic workload CLI evaluation/comparison is built separately (D-469, rung 22a), without automatic board-review integration. QMK and ZMK capture own bounded write/close waits (D-446). ZMK capture now persists serial interruption warnings and refuses analysis on the legacy stty/polling transport (24d TS half). The native Rust serial backend and physical S59 serial evidence remain pending; S50/S51 remain unrun hardware runbooks.
+Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens and `/api/lab` routes built on a scripted fake keyboard (D-314), 2026-10-16. Deterministic workload CLI evaluation/comparison is built separately (D-470, rung 22a), without automatic board-review integration. QMK and ZMK capture own bounded write/close waits (D-446). ZMK capture now persists serial interruption warnings and refuses analysis on the legacy stty/polling transport (24d TS half). The native Rust serial backend and physical S59 serial evidence remain pending; S50/S51 remain unrun hardware runbooks.
 
 BK: "timings are quite tricky for home row mods and stuff. I'd love a feature where I can set up a key config, then tell the software to listen/watch me type for a bit (you can make a quick typing test or something) and then notice things that go wrong like rolls, typos and timings and stuff and then use that knowledge to make suggestions about what to improve … Maybe we could even create a test that checks how fast each of my fingers is so instead of saying this is your typing speed it can say your typing slows down on keys that you need to press with your index finger or something or most typos come from your pinky."
 
@@ -77,7 +77,7 @@ Sessions start only by BK's action, show a recording indicator, stay in keyloom'
 
 ## Workload tests do not record the user
 
-[D-469](14-decision-log.md#deterministic-workload-evaluation-2026-11-01) adds a different question beside the recorded typing lab: how much physical work does the existing config require to perform a named task? See the [workload CLI reference](10-cli.md#test-a-config-against-a-workload) for the entry point and supported subset.
+[D-470](14-decision-log.md#deterministic-workload-evaluation-2026-11-01) adds a different question beside the recorded typing lab: how much physical work does the existing config require to perform a named task? See the [workload CLI reference](10-cli.md#test-a-config-against-a-workload) for the entry point and supported subset.
 
 A task is board-independent text or an exact key/modifier sequence under a declared US host mapping. The planner chooses physical positions on each board separately; the existing firmware emulator checks what that route sends. A route that cannot be established is not proof that the character is missing from the firmware. Unknown and failed tasks stay visible in coverage.
 

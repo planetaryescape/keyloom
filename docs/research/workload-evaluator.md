@@ -1,6 +1,6 @@
 # Deterministic workload evaluator
 
-The workload evaluator implements [D-469](../blueprint/14-decision-log.md#deterministic-workload-evaluation-2026-11-01). It tests named activities against the existing config rather than prescribing a replacement layout. This record separates implementation checks from real-firmware and hardware evidence.
+The workload evaluator implements [D-470](../blueprint/14-decision-log.md#deterministic-workload-evaluation-2026-11-01). It tests named activities against the existing config rather than prescribing a replacement layout. This record separates implementation checks from real-firmware and hardware evidence.
 
 ## Design evidence
 

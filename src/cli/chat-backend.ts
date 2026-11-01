@@ -4,7 +4,7 @@ import {
   type AgentModel, type App, BusyError, ModelError, NotFoundError, type ProviderId, UsageError, chooseNextProvider, providerStatus, listConversationSummaries, retirePriority, sendMessage, showConversation,
 } from "../app/index.ts";
 import { type ChatBackend, ChatError } from "../server/chat-backend.ts";
-import { answerAgentRun, cancelAgentRequest, cancelAgentRun, drainAgentRuns, inspectAgentRun, latestAgentRun, reconcileAgentRuns, startAgentRun } from "../app/agent-runs.ts";
+import { acknowledgeAgentView, answerAgentRun, cancelAgentRequest, cancelAgentRun, drainAgentRuns, inspectAgentRun, latestAgentRun, reconcileAgentRuns, startAgentRun } from "../app/agent-runs.ts";
 
 const MODEL_STATUS: Record<string, 402 | 429 | 502 | 503> = { missing_key: 503, rate_limit: 429, connection: 502, overloaded: 503, no_credits: 402 };
 
@@ -21,6 +21,7 @@ export function toChatError(err: unknown): unknown {
 export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: ProviderId } = {}): ChatBackend {
   return {
     runs: {
+      async acknowledgeView(id, ack) { try { return acknowledgeAgentView(app, id, ack); } catch (err) { throw toChatError(err); } },
       async start(request) { try { return await startAgentRun(app, request, opts); } catch (err) { throw toChatError(err); } },
       async get(id) { try { return inspectAgentRun(app, id); } catch (err) { throw toChatError(err); } },
       async latest(id) { return latestAgentRun(app, id); },

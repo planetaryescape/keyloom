@@ -7,6 +7,7 @@ import type { App } from "./context.ts";
 export type { Presentation } from "../persistence/chat-presentations.ts";
 
 const LABELS: Readonly<Record<string, string>> = {
+  open_view: "Open view",
   list_layouts: "List configs", get_layout: "Read layout", find_function: "Find function",
   analyse_change: "Check changes", propose_changes: "Prepare proposals", mirror_keys: "Match mirrored keys",
   map_keys: "Match keys", put_config: "Prepare copied config", get_typing_findings: "Read typing findings",
@@ -68,6 +69,15 @@ export function chatPresentation(app: App, conversationId: string, userMessageId
   };
   publish();
   return {
+    viewIntent(value: NonNullable<Presentation["viewIntents"]>[number]) {
+      const intents = state.viewIntents ?? [];
+      const index = intents.findIndex((intent) => intent.id === value.id);
+      if (index >= 0) intents[index] = value;
+      else if (intents.length < 8) intents.push(value);
+      else throw new Error("view intent limit reached");
+      state.viewIntents = intents;
+      publish();
+    },
     observe(event: AgentObservation) {
       if (event.type === "operation_started") {
         const known = Object.hasOwn(LABELS, event.tool);
