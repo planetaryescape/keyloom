@@ -45,6 +45,11 @@ export {
 export { BuildFailedError, EmulateFailedError, FlashFailedError, RebootFailedError, ToolchainUnavailableError } from "./firmware-errors.ts";
 export { type AgentConfig, CONFIG_FILE, readAgentConfig, writeAgentConfig } from "./agent-config.ts";
 export { type EmulateOptions, type EmulateOutcome, emulateLayout } from "./emulate.ts";
+export {
+  type WorkloadOptions, type WorkloadDeps, type WorkloadReport, type WorkloadSuite, type WorkloadPolicy, type WorkloadEvidence,
+  WorkloadSuiteSchema, WorkloadPolicySchema, WORKLOAD_LIMITS, DEFAULT_WORKLOAD_POLICY, builtinWorkloadSuites,
+  resolveWorkloadSuite, readWorkloadSuite, evaluateStoredWorkload, compareStoredWorkload,
+} from "./workload.ts";
 export { SCRIPT_HELP } from "../firmware/emulate/script.ts";
 export type { ImportReport } from "../layout/import-report.ts";
 export type { Layout } from "../layout/schema.ts";

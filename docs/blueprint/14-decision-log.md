@@ -2206,3 +2206,14 @@ A browser opts in on each new durable request with a fresh owner UUID. Accepted 
 Use one process-local waiter per capable run and the existing bounded presentation row, with at most eight intent receipts, one pending action and a five-second deadline. React acknowledges the actual committed destination. Editor/composer drafts, recording, navigation away, foreground loss, Stop, New and unmount prevent further actions. Exact duplicate acknowledgements return the saved result; wrong ownership, contradictory duplicates and late replies cannot upgrade timeout/cancellation. Restart makes saved pending intents inert, never executable. The wider chapter 29 capability proposal is not implemented by this decision.
 
 Release approval, 2026-11-01: BK explicitly waived the unfinished independent review and Computer Use/visual checks after local tests and CI passed. Those checks remain unverified, not passed. [Stage D evidence](../research/ui-audit/d-open-view/README.md) records the limits.
+
+## Deterministic workload evaluation (2026-11-01)
+
+### D-470: Test an existing config against named workloads, and verify proposed gains independently of the AI. (BK's request; first implementation slice)
+
+- **The question:** how much physical work does this config require for a particular activity, and does a small change reduce it without breaking another required task? A prose or programming workload is not a universal ideal layout.
+- **Separate planning from proof.** A deterministic, bounded planner proposes physical key events. The existing QMK/ZMK emulators establish what those events send (D-075); there is no second firmware interpreter. Unsupported mechanisms and exhausted search do not prove that a task is impossible.
+- **Separate the measurements.** Report physical activations, control use and concurrent keys for the same witnessed route. Do not turn them into a claim about human speed, comfort or injury risk. The declared host layout and synthetic timing are assumptions, not observations of the user.
+- **Compare without applying.** Validate supplied change ops, evaluate the original and candidate snapshots under the same workload, and keep correctness regressions and tradeoffs visible. Comparison never writes a revision or starts sync. Ordinary Apply remains governed by D-014.
+- **Start narrow.** The first slice is CLI diagnosis and supplied-patch comparison with original short US-layout workloads. Automatic redesign, application/editor outcomes, other locales, Kanata production emulation and integration into automatic board review remain later work. No model sees workload text or traces.
+- **Keep evidence scoped.** Emulator limitations remain in the report; an unknown output-affecting warning prevents a verified claim. A result describes its snapshot and evaluator version, not an approval that survives later config changes.

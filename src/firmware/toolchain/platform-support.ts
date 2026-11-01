@@ -25,6 +25,7 @@ export function requireCommandSupport(command: string, options: { offline?: bool
   const root = command.split(" ")[0];
   if (!windowsDevicesUnavailable(platform, backend) && (root === "lab" || (command === "flash" && options.rebootOnly))) return;
   if (["build", "flash", "sync", "autosync", "lab", "remap", "keyboard", "emulate", "serve"].includes(root ?? "")
+    || command === "workload evaluate" || command === "workload compare"
     || command === "config use" || command === "boards geometry" || (command === "boards check" && !options.offline)) {
     throw new PlatformUnavailableError(`keyloom ${command}`);
   }
