@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.66.0](https://github.com/planetaryescape/keyloom/compare/v0.65.0...v0.66.0) (2026-11-01)
+
+
+### Features
+
+* let the agent open existing app views ([f0aed75](https://github.com/planetaryescape/keyloom/commit/f0aed75df6797e4e748e820fe70381c67dd530ab))
+
+
+### Bug Fixes
+
+* say how to finish a shared-drive flash when a half is unplugged ([#217](https://github.com/planetaryescape/keyloom/issues/217)) ([5812213](https://github.com/planetaryescape/keyloom/commit/5812213635d3d093465e3ca59e36b747a4f1c6f8))
+
 ## [0.65.0](https://github.com/planetaryescape/keyloom/compare/v0.64.0...v0.65.0) (2026-10-30)
 
 
