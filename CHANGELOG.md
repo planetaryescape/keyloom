@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.0](https://github.com/planetaryescape/keyloom/compare/v0.67.0...v0.68.0) (2026-11-01)
+
+
+### Features
+
+* independently test activity-based board review suggestions ([88c96ab](https://github.com/planetaryescape/keyloom/commit/88c96ab7448b78d8d0ff2a88f8b6de92d9738b90))
+
 ## [0.67.0](https://github.com/planetaryescape/keyloom/compare/v0.66.0...v0.67.0) (2026-11-01)
 
 
