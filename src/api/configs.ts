@@ -115,6 +115,7 @@ export const CompareResponseSchema = z.object({
     layersRenamed: z.array(z.object({ id: z.string(), from: z.string(), to: z.string() })),
     layersReordered: z.boolean(),
     lighting: z.array(z.string()),
+    encoderTurns: z.array(z.string()).default([]),
     macros: NamedChangeSchema,
     tapDances: NamedChangeSchema,
     combos: NamedChangeSchema,

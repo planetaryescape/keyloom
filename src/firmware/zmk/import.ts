@@ -2,11 +2,13 @@
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { ImportReport, NativeItem } from "../../layout/import-report.ts";
 import {
-  type Binding, type Combo, type ConditionalLayer, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough, type TapDance,
+  type Binding, type Combo, type ConditionalLayer, type HoldTapProfile, type Layout, LayoutSchema, type Macro, type Passthrough, type TapDance, type Layer,
 } from "../../layout/schema.ts";
 import { type KeptBehavior, type MapContext, mapBinding } from "./bindings.ts";
 import { BUILTIN_NAMES, BUILTIN_OPTIONS, BUILTIN_PROFILES, type HoldKind } from "./builtins.ts";
 import { type BehaviorCall, parseCalls } from "./cells.ts";
+import { callText } from "./cells.ts";
+import { sensorFromSource } from "../../layout/sensors.ts";
 import { parseConf } from "./conf.ts";
 import { type DtItem, type DtNode, parseDts } from "./dts.ts";
 import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
@@ -157,7 +159,7 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
       throw new ZmkImportError(`layer ${n.name} has ${calls.length} bindings, but ${board.id} has ${board.keyCount}`);
     }
     for (const p of n.props) {
-      if (!["bindings", "display-name", "label"].includes(p.name)) warnings.push(`layer ${n.name}: ${p.name} isn't imported and will be dropped`);
+      if (!["bindings", "sensor-bindings", "display-name", "label"].includes(p.name)) warnings.push(`layer ${n.name}: ${p.name} isn't imported and will be dropped`);
     }
     const bindings: Binding[] = calls.map((call, position) => {
       const mapped = mapBinding(call, ctx);
@@ -168,7 +170,10 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
       }
       return mapped.binding;
     });
-    return { id: layerId, name: stringOf(n, "display-name") ?? stringOf(n, "label") ?? n.name, bindings };
+    const sensors = n.props.some((p) => p.name === "sensor-bindings") ? cellsOf(n, "sensor-bindings").flatMap((c) => parseCalls(c).calls).map((c) => sensorFromSource(callText(c))) : undefined;
+    const layer: Layer = { id: layerId, name: stringOf(n, "display-name") ?? stringOf(n, "label") ?? n.name, bindings };
+    if (sensors !== undefined) layer.sensorBindings = sensors;
+    return layer;
   });
 
   // Built-ins are profiles only once something uses or adjusts them.

@@ -17,11 +17,11 @@ describe("observed working, not inferred tool success", () => {
     const work = projectWork(observed("completed", [operation("succeeded"), operation("running", "check")]));
     expect(work.routine.map((op) => op.id)).toEqual(["read-keys"]);
     expect(work.attention.map((op) => [op.id, op.status])).toEqual([["check", "unknown"]]);
-    expect(work.canFold).toBe(false);
+    expect(work.canFold).toBe(true);
     const rendered = html(observed("completed", [operation("running")]));
     expect(rendered).toContain("Outcome not confirmed");
     expect(rendered).not.toContain("Completed");
-    expect(rendered).toContain("some steps need attention");
+    expect(rendered).not.toContain("Reply complete");
     expect(rendered).not.toContain('data-active="true"');
   });
 
@@ -38,11 +38,11 @@ describe("observed working, not inferred tool success", () => {
     expect(rendered.indexOf('data-state="failed"')).toBeLessThan(toggle);
     expect(rendered.indexOf('data-state="unknown"')).toBeLessThan(toggle);
     expect(rendered.indexOf('data-state="cancelled"')).toBeLessThan(toggle);
-    expect(rendered).toContain('aria-expanded="true"');
+    expect(rendered).toContain('aria-expanded="false"');
     expect(rendered).not.toContain("On your keyboard");
   });
 
-  test("only a fully observed successful completion folds by default", () => {
+  test("successful work folds after the answer without implying the whole request succeeded", () => {
     expect(html(observed("completed", [operation("succeeded")]))).toContain('aria-expanded="false"');
     expect(html(observed("running", [operation("succeeded")]))).toContain('aria-expanded="true"');
     expect(html(observed("waiting", [operation("succeeded")]))).toContain("Needs your answer");
@@ -77,9 +77,17 @@ describe("observed working, not inferred tool success", () => {
     expect(work.attention[0]?.target).toHaveLength(160);
     expect(work.attention[0]?.summary).toHaveLength(600);
     for (const invalid of [null, -1, NaN, Infinity]) expect(observedDuration(invalid)).toBeNull();
-    expect(observedDuration(0)).toBe("0 ms");
+    expect(observedDuration(0)).toBe("<1 ms");
     expect(observedDuration(1_200)).toBe("1.2 s");
     expect(operationStatusWords("succeeded")).toBe("Completed");
+  });
+
+  test("failed lookups have their own visible summary, with successful working closed", () => {
+    const rendered = html(observed("completed", [operation("failed", "first"), operation("failed", "second"), operation("succeeded")]));
+    expect(rendered).toContain("2 steps failed");
+    expect(rendered).toContain('<details class="agent-work-failures">');
+    expect(rendered).toContain('aria-expanded="false"');
+    expect(rendered).not.toContain("Reply complete");
   });
 });
 

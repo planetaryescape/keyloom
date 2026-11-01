@@ -48,6 +48,7 @@ export function keyChange(input: {
 }): KeyChange {
   const { layout, slot, draft, original, placements, drops } = input;
   const pre: ChangeOp[] = [];
+  if (draft.sensorBindings !== undefined) pre.push({ op: "setSensorBindings", layerId: slot.layerId, sensorBindings: draft.sensorBindings });
   const wanted = macroIdsOf(draft);
   // Only macros a slot points at are saved: one built and then swapped away is not.
   for (const macro of draft.pendingMacros) if (wanted.has(macro.id)) pre.push({ op: "upsertMacro", macro });

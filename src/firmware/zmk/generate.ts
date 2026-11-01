@@ -16,6 +16,8 @@ import { BASE_INCLUDES, CONF_FILE, KEYMAP_FILE, MAX_LAYERS } from "./files.ts";
 import { GenerateError } from "./generate-error.ts";
 import { matrixControls, renderZmkLighting } from "./emit-lighting.ts";
 import { macroHoldTaps } from "./macro-hold-taps.ts";
+import { renderSensors } from "./emit-sensors.ts";
+import { isZmkMouseBinding, sensorActions } from "../../layout/sensors.ts";
 
 export { GenerateError } from "./generate-error.ts";
 
@@ -116,12 +118,16 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
   const kept = (section: (typeof SECTIONS)[number]) => layout.passthrough.filter((p) => p.file === KEYMAP_FILE && sectionOf(p) === section);
   const sources = (section: (typeof SECTIONS)[number]): string[][] => kept(section).map((p) => p.source.split("\n"));
   const extraIncludes = kept("include").map((p) => p.source).filter((s) => !BASE_INCLUDES.includes(s));
+  const usesMouse = layout.layers.some((l) => [...l.bindings, ...sensorActions(l.sensorBindings ?? [])].some(isZmkMouseBinding)) || layout.combos.some((c) => isZmkMouseBinding(c.output)) || layout.passthrough.some((p) => /&(?:mmv|msc|mkp)\b|zmk,behavior-input-two-axis/.test(p.source));
+  if (usesMouse && !extraIncludes.includes("#include <dt-bindings/zmk/pointing.h>")) extraIncludes.push("#include <dt-bindings/zmk/pointing.h>");
 
   const nodes = (parts: string[][]) => parts.flatMap((p, i) => (i === 0 ? p : ["", ...p]));
   const container = (name: string, head: string[], parts: string[][]): string[] =>
     parts.length === 0 ? [] : [`${name} {`, ...indent([...head, ...(head.length > 0 ? [""] : []), ...nodes(parts)], 4), "};"];
 
+  const sensors = renderSensors(layout, board, ctx);
   const behaviors = container("behaviors", [], [
+    ...sensors.behaviors,
     ...layout.holdTapProfiles.filter((p) => !BUILTIN_PROFILES.has(p.id)).map((p) => renderProfile(p, layerHold.has(p.id))),
     ...macroTaps.nodes,
     ...layout.tapDances.map((t) => renderTapDance(t, ctx)),
@@ -155,7 +161,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     "keymap {",
     '    compatible = "zmk,keymap";',
     "",
-    ...indent(renderLayers(layout, board, input.geometry, ctx), 4),
+    ...indent(renderLayers(layout, board, input.geometry, ctx, sensors.bindings), 4),
     "};",
   ];
 
@@ -163,7 +169,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
   const physicalLabel = build?.kind === "zmk-west-docker" && build.boardModule ? build.physicalLayout.split("#")[1] : undefined;
   const hasChosenLayout = kept("root").some((p) => /\bzmk,physical-layout\s*=/.test(p.source));
   const chosen = physicalLabel && !hasChosenLayout ? [`chosen { zmk,physical-layout = <&${physicalLabel}>; };`] : [];
-  const root = ["/ {", ...indent(blocks([chosen, behaviors, macros, ...sources("root"), combos, conditionals, keymap]), 4), "};"];
+  const root = ["/ {", ...indent(blocks([chosen, behaviors, macros, ...sensors.roots, ...sources("root"), combos, conditionals, keymap]), 4), "};"];
   const overrides = layout.holdTapProfiles.filter((p) => BUILTIN_PROFILES.has(p.id)).map(renderBuiltinOverride);
 
   const lighting = renderZmkLighting(layout, board);
@@ -186,6 +192,7 @@ export function generateZmkSource(input: GenerateInput): GeneratedSource {
     ...layout.passthrough.filter((p) => p.file === CONF_FILE).map((p) => p.source),
     ...(marker?.shared ?? []),
     ...(lighting.length ? ["CONFIG_ZMK_RGB_UNDERGLOW=n", "CONFIG_KEYLOOM_RGB_POWER=y"] : []),
+    ...(usesMouse ? ["CONFIG_ZMK_POINTING=y"] : []),
   ];
 
   // KEYMAP_FILE and CONF_FILE label the layout's passthrough (they are stored in saved layouts); the

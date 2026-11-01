@@ -41,8 +41,14 @@ export const UnprovableLineSchema = z.object({ line: z.number().int().positive()
 export type UnprovableLine = z.infer<typeof UnprovableLineSchema>;
 const layerNumberFields = { layerRefs: z.array(LayerRefSchema).optional(), unprovable: z.array(UnprovableLineSchema).optional() };
 
+const KeyBindingSchema = z.object({ kind: z.literal("key"), code: KeyCodeNameSchema, mods: mods.optional() });
+const NoneBindingSchema = z.object({ kind: z.literal("none") });
+const NativeBindingSchema = z.object({
+  kind: z.literal("native"), firmware: FirmwareSchema, source: z.string().min(1), label: z.string().min(1), ...layerNumberFields,
+});
+
 export const BindingSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("key"), code: KeyCodeNameSchema, mods: mods.optional() }),
+  KeyBindingSchema,
   z.object({ kind: z.literal("modifier"), mods }),
   z.object({
     kind: z.literal("holdTap"),
@@ -58,17 +64,24 @@ export const BindingSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("macro"), macroId: z.string().min(1) }),
   z.object({ kind: z.literal("tapDance"), tapDanceId: z.string().min(1) }),
   z.object({ kind: z.literal("transparent") }),
-  z.object({ kind: z.literal("none") }),
+  NoneBindingSchema,
   // Escape hatch for anything keyloom doesn't model (D-024).
-  z.object({
-    kind: z.literal("native"),
-    firmware: FirmwareSchema,
-    source: z.string().min(1),
-    label: z.string().min(1),
-    ...layerNumberFields,
-  }),
+  NativeBindingSchema,
 ]);
 export type Binding = z.infer<typeof BindingSchema>;
+
+// A detent briefly presses and releases each action. Stateful hold-taps and layer holds
+// are deliberately not offered as turn actions. Unknown imported sensor calls stay whole.
+export const SensorActionSchema = z.union([
+  KeyBindingSchema,
+  NoneBindingSchema,
+  NativeBindingSchema,
+]);
+export const SensorBindingSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("rotation"), clockwise: SensorActionSchema, counterclockwise: SensorActionSchema }),
+  z.object({ kind: z.literal("native"), source: z.string().min(1) }),
+]);
+export type SensorBinding = z.infer<typeof SensorBindingSchema>;
 
 // What one slot of a tap dance does (16#tap-dance-is-a-key-with-a-double-tap-slot, D-093). Nothing nests:
 // a slot can't be a hold-tap or another tap dance, so the firmware's state machine stays flat.
@@ -114,6 +127,8 @@ export const LayerSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
   name: z.string().min(1),
   bindings: z.array(BindingSchema),
+  // In firmware sensor order, not key order. Absent keeps the board's legacy defaults.
+  sensorBindings: z.array(SensorBindingSchema).optional(),
   // What layer keys print on their caps; absent means the first letters of the name (16#layers-are-managed-in-their-tabs, D-180).
   shortLabel: z.string().min(1).max(4).optional(),
   // One of the six layer colours (1 to 6); absent means the layer's position picks one. Display only: no firmware reads it.

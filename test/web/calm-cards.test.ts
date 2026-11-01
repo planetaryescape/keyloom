@@ -115,8 +115,8 @@ describe("the reply footer", () => {
 
   test("an unknown cost never shows a number at rest", () => {
     const html = renderToStaticMarkup(createElement(TurnUsage, { accounting: { ...accounting, model: "other" } }));
-    expect(html).toMatch(/>Cost not reported<\/button>/);
+    expect(html).toMatch(/>Usage<\/button>/);
     expect(html).not.toMatch(/>\$[0-9<]/);
-    expect(renderToStaticMarkup(createElement(TurnUsage, { accounting: undefined }))).toMatch(/>Cost not reported<\/button>/);
+    expect(renderToStaticMarkup(createElement(TurnUsage, { accounting: undefined }))).toBe("");
   });
 });

@@ -2,7 +2,7 @@
 // switching Key to Hold-tap and back keeps what was typed (keymap-editor issue #225, 09-web-editor).
 // Pure, so the rules are tested without a browser.
 import { macroWords } from "../card/card-words.ts";
-import type { Binding, Layout, Macro, Mod, SlotAction, TapDance } from "../../layout/schema.ts";
+import type { Binding, Layout, Macro, Mod, SlotAction, TapDance, SensorBinding } from "../../layout/schema.ts";
 import { modsWords } from "../../layout/describe.ts";
 import { keyCodeLabel } from "../../layout/keycodes.ts";
 import { keyOn } from "../../validation/words.ts";
@@ -13,6 +13,9 @@ export type TapDanceBinding = Extract<Binding, { kind: "tapDance" }>;
 export type KeyChoice = { code: string | null; mods: Mod[] };
 
 export type Draft = {
+  /** Turns share the press's draft, Apply, undo and preserved-draft lifecycle. */
+  sensorBindings?: SensorBinding[] | null;
+  sensorBindingsOriginal?: SensorBinding[] | null;
   kind: Binding["kind"];
   key: KeyChoice;
   modifier: Mod[];

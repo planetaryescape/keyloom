@@ -6,6 +6,8 @@ import { type GridContext, bindingLabel, renderLayerGrid } from "../../layout/re
 import type { Layer } from "../../layout/schema.ts";
 import type { AgentPorts, LayoutSnapshot } from "../ports.ts";
 import { defineTool } from "./define.ts";
+import { effectiveSensors } from "../../boards/sensors.ts";
+import { PublicToolError } from "./public-error.ts";
 
 const InputSchema = z.object({
   layout: z.string().min(1).optional().describe("Another layout's id or name from list_layouts, to read it. Omit for this conversation's layout. Read-only: you cannot propose changes to another layout."),
@@ -17,7 +19,7 @@ function pickLayers(snapshot: LayoutSnapshot, wanted: string[] | undefined): Lay
   if (!wanted?.length) return layers;
   return wanted.map((w) => {
     const hit = layers.find((l, i) => l.id === w || l.name === w || String(i) === w);
-    if (!hit) throw new Error(`no layer "${w}"; layers are: ${layers.map((l) => l.id).join(", ")}`);
+    if (!hit) throw new PublicToolError("unknown_layer", `no layer "${w}"; layers are: ${layers.map((l) => l.id).join(", ")}`);
     return hit;
   });
 }
@@ -85,6 +87,11 @@ export const getLayoutTool = (ports: AgentPorts) =>
           positionTable(snapshot, layer),
           "JSON:",
           JSON.stringify(layer),
+          ...(effectiveSensors(snapshot.board.definition, layer).length ? [
+            "Encoder turns (setSensorBindings replaces this layer's array in firmware sensor order; presses use setBinding):",
+            JSON.stringify(effectiveSensors(snapshot.board.definition, layer)),
+            `Sensor press positions: ${JSON.stringify(snapshot.board.definition.sensorPositions ?? [])}. Sensors sharing a press position are alternative footprints for that knob; edit them together. Layers can have different turn actions.`,
+          ] : []),
         ].join("\n");
       });
       const macros = snapshot.document.macros.map((m) => `${m.id}: ${m.name}`).join("; ") || "none";

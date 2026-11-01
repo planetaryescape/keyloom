@@ -81,6 +81,7 @@ export function chatPresentation(app: App, conversationId: string, userMessageId
           validationCodes: [...new Set(event.validationCodes.map((code) => CODES.has(code) ? code : "validation_declined"))].slice(0, 4),
           references: event.references.filter((ref) => ID.test(ref.id)).slice(0, MAX_REFERENCES),
         });
+        if (operation && event.failureCode !== undefined) operation.failureCode = event.failureCode;
         if (event.validationCodes.length > 4 || event.references.length > MAX_REFERENCES) state.detailsTruncated = true;
       } else if (event.type === "limit_reached") state.detailsTruncated = true;
       else message({ id: event.id, kind: event.kind, text: event.text });

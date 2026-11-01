@@ -227,9 +227,10 @@ describe("tolerance", () => {
     expect(r.layout.layers[0]?.bindings.slice(0, 3).map((b) => b.kind)).toEqual(["native", "native", "native"]);
   });
 
-  test("a property a layer has beyond bindings is reported as dropped", async () => {
+  test("sensor bindings are imported rather than silently dropped", async () => {
     const r = await importZmk({ name: "x", keymap: small().replace("base { bindings", "base { sensor-bindings = <&inc_dec_kp C_VOL_UP C_VOL_DN>; bindings") }, board);
-    expect(r.report.warnings).toContain("layer base: sensor-bindings isn't imported and will be dropped");
+    expect(r.report.warnings).not.toContain("layer base: sensor-bindings isn't imported and will be dropped");
+    expect(r.layout.layers[0]?.sensorBindings).toEqual([{ kind: "rotation", clockwise: { kind: "key", code: "AUDIO_VOL_UP" }, counterclockwise: { kind: "key", code: "AUDIO_VOL_DOWN" } }]);
   });
 });
 

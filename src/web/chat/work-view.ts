@@ -51,7 +51,7 @@ export function operationStatusWords(status: OperationStatus): string {
 
 export function observedDuration(milliseconds: number | null): string | null {
   if (milliseconds === null || !Number.isFinite(milliseconds) || milliseconds < 0) return null;
-  return milliseconds < 1_000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1_000).toFixed(1)} s`;
+  return milliseconds < 1 ? "<1 ms" : milliseconds < 1_000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1_000).toFixed(1)} s`;
 }
 
 export function projectWork(view: Extract<AgentWorkView, { kind: "observed" }>) {
@@ -70,8 +70,8 @@ export function projectWork(view: Extract<AgentWorkView, { kind: "observed" }>) 
     notes: view.notes.slice(-MAX_WORK_NOTES).map((note) => ({ ...note, text: note.text.slice(0, 1_200) })),
     omittedNotes: Math.max(0, view.notes.length - MAX_WORK_NOTES),
     // Missing earlier observations must not become an apparently clean success.
-    canFold: view.status === "completed" && !view.detailsTruncated && omitted === 0 && view.notes.length <= MAX_WORK_NOTES
-      && view.operations.every((operation) => operation.status === "succeeded"),
+    // Attention has its own visible summary. It must not force successful steps open.
+    canFold: view.status === "completed" && !view.detailsTruncated && omitted === 0 && view.notes.length <= MAX_WORK_NOTES,
   };
 }
 

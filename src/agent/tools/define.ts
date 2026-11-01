@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { ModelTool } from "../model.ts";
+import { PublicToolError } from "./public-error.ts";
 
 /** A typed tool: the schema both advertises the input to the model and parses what comes back, so `run` sees a checked value. */
 export function defineTool<S extends z.ZodObject>(def: {
@@ -23,7 +24,7 @@ export function defineTool<S extends z.ZodObject>(def: {
       const parsed = def.inputSchema.safeParse(raw);
       if (!parsed.success) {
         const problems = parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ");
-        throw new Error(`invalid input for ${def.name}: ${problems}`);
+        throw new PublicToolError("invalid_input", `invalid input for ${def.name}: ${problems}`);
       }
       return def.run(parsed.data);
     },

@@ -8,6 +8,10 @@ import { keyIn } from "../../validation/words.ts";
 import { legendWords } from "../../boards/key-names.ts";
 import { bindingLegend } from "../../layout/legend.ts";
 import type { Binding, Layout } from "../../layout/schema.ts";
+import type { BoardDefinition } from "../../boards/schema.ts";
+import { effectiveSensors } from "../../boards/sensors.ts";
+import { deepEqual } from "../../layout/equal.ts";
+import { keyCodeLabel } from "../../layout/keycodes.ts";
 
 export const slotKey = (slot: Slot): string => `${slot.layerId}:${slot.position}`;
 
@@ -33,7 +37,17 @@ export function keyLabel(layout: Layout, slot: Slot): string {
  * A changed key as one chip in legend glyphs (P3 review): "S hold ⌥ → plain S", "⌃← hold → ⌥", "⌫ → Nav once". The key is named by
  * what it printed; the board shows which one.
  */
-export function changeWords(before: Layout, after: Layout, slot: Slot): { from: string; to: string } | null {
+export function changeWords(before: Layout, after: Layout, slot: Slot, board?: BoardDefinition): { from: string; to: string } | null {
+  const wasLayer = before.layers.find((l) => l.id === slot.layerId);
+  const nowLayer = after.layers.find((l) => l.id === slot.layerId);
+  const sensorIndex = board?.sensorPositions?.indexOf(slot.position) ?? -1;
+  if (board && wasLayer && nowLayer && sensorIndex >= 0 && !deepEqual(effectiveSensors(board, wasLayer)[sensorIndex], effectiveSensors(board, nowLayer)[sensorIndex])) {
+    const sensor = effectiveSensors(board, nowLayer)[sensorIndex];
+    const words = (b: Binding) => b.kind === "native" ? b.label : b.kind === "key" ? keyCodeLabel(b.code) : "nothing";
+    const pressChanged = !deepEqual(wasLayer.bindings[slot.position], nowLayer.bindings[slot.position]);
+    const press = pressChanged && nowLayer.bindings[slot.position] ? `press: ${words(nowLayer.bindings[slot.position]!)}, ` : "";
+    return { from: `Encoder · ${layerName(after, slot.layerId)}`, to: `${press}${sensor?.kind === "rotation" ? `↻ ${words(sensor.clockwise)}, ↺ ${words(sensor.counterclockwise)}` : "custom turns"}` };
+  }
   const legendAt = (layout: Layout) => {
     const binding = layout.layers.find((layer) => layer.id === slot.layerId)?.bindings[slot.position];
     return binding === undefined ? null : bindingLegend(binding, { layers: layout.layers, macros: layout.macros, tapDances: layout.tapDances });

@@ -4,6 +4,7 @@ import type { Slot } from "../layout/change.ts";
 import { bindingFunctions, tapDanceSlots } from "../layout/functions.ts";
 import { renumber, withLayerNumbers } from "../layout/layer-refs.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
+import { sensorActions } from "../layout/sensors.ts";
 
 export type LayerAction = "momentary" | "toggle" | "to" | "oneShot";
 
@@ -205,6 +206,8 @@ export function functionHomes(doc: Layout, reachable: Set<string> = reachableLay
   for (const layer of doc.layers) {
     if (!reachable.has(layer.id)) continue;
     for (const [position, b] of layer.bindings.entries()) for (const fn of bindingFunctions(b, doc.tapDances)) add(fn, { layerId: layer.id, position });
+    for (const b of sensorActions(layer.sensorBindings ?? [])) for (const fn of bindingFunctions(b, doc.tapDances)) add(fn);
+    for (const s of layer.sensorBindings ?? []) if (s.kind === "native" && !["&none", "&trans"].includes(s.source)) add(`sensor:zmk:${s.source}`);
   }
   for (const combo of doc.combos) {
     if (comboLayers(doc, combo.layerIds).some((id) => reachable.has(id))) for (const fn of bindingFunctions(combo.output, doc.tapDances)) add(fn);

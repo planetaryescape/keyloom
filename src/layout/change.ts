@@ -2,7 +2,7 @@
 // validator all speak this one vocabulary; src/layout/apply-ops.ts applies it.
 import { z } from "zod";
 import {
-  BindingSchema, ComboSchema, ConditionalLayerSchema, FirmwareSettingSchema, FirmwareSchema, HoldTapProfileSchema, LayerLightingSchema, LayerSchema, MacroSchema, TapDanceSchema,
+  BindingSchema, ComboSchema, ConditionalLayerSchema, FirmwareSettingSchema, FirmwareSchema, HoldTapProfileSchema, LayerLightingSchema, LayerSchema, MacroSchema, TapDanceSchema, SensorBindingSchema,
 } from "./schema.ts";
 
 export const SlotSchema = z.object({
@@ -13,6 +13,7 @@ export type Slot = z.infer<typeof SlotSchema>;
 
 export const ChangeOpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("setBinding"), at: SlotSchema, binding: BindingSchema }),
+  z.object({ op: z.literal("setSensorBindings"), layerId: z.string().min(1), sensorBindings: z.array(SensorBindingSchema).nullable() }).describe("Replace encoder turns for one layer in firmware sensor order. Read get_layout for the sensor count and encoder press positions. Each rotation has clockwise and counterclockwise key/none/native actions. null restores board defaults. Presses use setBinding."),
   // What was at `to` is displaced; `from` becomes transparent on non-base layers and none on the base layer.
   z.object({ op: z.literal("moveBinding"), from: SlotSchema, to: SlotSchema }),
   z.object({ op: z.literal("swapBindings"), a: SlotSchema, b: SlotSchema }),

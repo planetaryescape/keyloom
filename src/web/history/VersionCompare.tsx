@@ -37,6 +37,7 @@ export function otherChanges(diff: Diff, layerName: (id: string) => string = (id
   named("Conditional layer", diff.conditionalLayers);
   named("Timing", diff.holdTapProfiles);
   if (diff.lighting.length > 0) out.push(`Lighting changed on ${diff.lighting.map(layerName).join(", ")}`);
+  if (diff.encoderTurns.length > 0) out.push(`Encoder turns changed on ${diff.encoderTurns.map(layerName).join(", ")}`);
   if (diff.passthrough) out.push("Firmware code passed through as-is changed");
   return out;
 }

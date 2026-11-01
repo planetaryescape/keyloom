@@ -568,7 +568,6 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
                     key={turn.id}
                     turn={turn}
                     layout={layout}
-                    context={`${board.name} · ${configName ?? layoutRef}`}
                     onSelectKeys={onRestoreSelection}
                   />
                 ) : (

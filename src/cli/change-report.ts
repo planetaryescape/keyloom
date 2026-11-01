@@ -6,6 +6,7 @@ const slot = (s: { layerId: string; position: number }) => `${s.layerId}:${s.pos
 /** One line per op, in the vocabulary of the layout grid (`layer-0:6` is layer-0, position 6). */
 export function opLine(op: ChangeOp): string {
   switch (op.op) {
+    case "setSensorBindings": return `${op.sensorBindings === null ? "reset" : "set"} encoder turns on layer ${op.layerId}`;
     case "setBinding": return `set ${slot(op.at)} to ${describeBinding(op.binding)}`;
     case "moveBinding": return `move ${slot(op.from)} to ${slot(op.to)}`;
     case "swapBindings": return `swap ${slot(op.a)} and ${slot(op.b)}`;

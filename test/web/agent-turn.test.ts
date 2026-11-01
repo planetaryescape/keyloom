@@ -49,7 +49,7 @@ describe("agent turn composition", () => {
       .on(".msg-assistant > .agent-working", { element: () => { order.push("working"); } })
       .on(".msg-assistant > div > .prose", { element: () => { order.push("answer"); } })
       .transform(new Response(html)).text();
-    expect(order).toEqual(["working", "answer"]);
+    expect(order).toEqual(reply.phase === "streaming" ? ["working", "answer"] : ["answer", "working"]);
     expect(await count(html, ".agent-work-details .agent-working-note")).toBe(1);
     expect(await count(html, ".agent-work-details .prose")).toBe(0);
     expect(await count(html, `.agent-work-toggle[aria-expanded="${!folded}"]`)).toBe(1);
@@ -57,7 +57,7 @@ describe("agent turn composition", () => {
     expect(await count(html, '.msg-assistant > div[aria-hidden="true"] > .prose')).toBe(reply.phase === "streaming" ? 1 : 0);
   }
 
-  test("completed working folds before the answer when a real saved presentation is reloaded", async () => {
+  test("completed working folds below the answer when a real saved presentation is reloaded", async () => {
     const detail: ConversationDetail = {
       conversation: { id: "conversation", title: "Colours", createdAt: 1, layoutId: "layout", provider: "anthropic", model: "synthetic" },
       messages: [
@@ -71,7 +71,7 @@ describe("agent turn composition", () => {
     await expectWorkingBeforeAnswer(reply, true);
   });
 
-  test("streaming and completed projections keep working above the separately announced final answer", async () => {
+  test("live working leads while streaming, then yields to the separately announced final answer", async () => {
     let state = transcriptReducer(EMPTY, { type: "sent", userId: "request", assistantId: "reply", text: "Colour my layers", selection: null });
     state = transcriptReducer(state, { type: "event", event: { type: "start", conversationId: "conversation", messageId: "request" } });
     state = transcriptReducer(state, { type: "event", event: { type: "presentation", presentation: { ...completed, status: "running" } } });
@@ -155,7 +155,7 @@ describe("agent turn composition", () => {
     expect(html.indexOf('class="msg-usage"')).toBeGreaterThan(html.indexOf('class="proposal-group"'));
     expect(await count(render({ ...turn, accounting, phase: "streaming" }), ".msg-usage")).toBe(0);
     for (const phase of ["stopped", "failed"] as const) {
-      expect(await count(render({ ...turn, phase }), ".msg-usage")).toBe(1);
+      expect(await count(render({ ...turn, phase }), ".msg-usage")).toBe(0);
     }
   });
 
