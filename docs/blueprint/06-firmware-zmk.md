@@ -1,6 +1,6 @@
 # 06: Firmware: ZMK (Glove80 and the Corne)
 
-Status update, 2026-11-01: layer-specific encoder turns and mouse presses are implemented in the working tree, not yet released (D-469); generation/import, the compiled scratch-CLI journey and a real firmware build for both Keebart halves are checked. After the initial Docker blocker, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced verified left/right UF2 images. No new hardware flash or pointer-motion observation is claimed.
+Status update, 2026-11-01: layer-specific encoder turns and mouse presses are implemented (D-469); generation/import, the compiled scratch-CLI journey and a real firmware build for both Keebart halves are checked. After the initial Docker blocker, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced verified left/right UF2 images. No new hardware flash or pointer-motion observation is claimed.
 
 ## Per-layer encoder turns
 

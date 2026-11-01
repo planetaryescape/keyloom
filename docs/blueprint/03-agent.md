@@ -1,6 +1,6 @@
 # 03: Agent
 
-Working-tree update, 2026-11-01 (not yet released): encoder edits use the same checked proposals as key edits (D-469). `get_layout` includes effective per-layer sensor bindings and their press positions; `find_function` includes understood encoder turns and accepts firmware aliases and media labels. Invalid calls carry public failure codes, not proof of a keyboard limitation (D-470).
+Source update, 2026-11-01: encoder edits use the same checked proposals as key edits (D-469). `get_layout` includes effective per-layer sensor bindings and their press positions; `find_function` includes understood encoder turns and accepts firmware aliases and media labels. Invalid calls carry public failure codes, not proof of a keyboard limitation (D-470).
 
 Revision, 2026-10-29: D-452 replaced D-020's alternatives. `propose_changes` takes one proposal and `supersedes`, and `ask_user` takes considerations and a step; the tool table and the loop below say how. D-458 lets a question be answered after the layout head moves, behind a note to the model. D-460 implements whole-config adaptation in a target-owned conversation, keeping ordinary writes scoped to one layout.
 

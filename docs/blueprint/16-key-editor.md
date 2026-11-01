@@ -1,6 +1,6 @@
 # 16: Key editor: everything about a key is built on the key
 
-Working-tree update, 2026-11-01 (not yet released): ZMK encoder turns are editable per layer on the encoder's key card (D-469). This replaces the encoder deferral in D-105, not the other deferred features below. [The encoder recipe](../encoder-layers.md) covers the UI and checked CLI path; compilation passed for both Keebart halves, with no new hardware test.
+Source update, 2026-11-01: ZMK encoder turns are editable per layer on the encoder's key card (D-469). This replaces the encoder deferral in D-105, not the other deferred features below. [The encoder recipe](../encoder-layers.md) covers availability, the UI and checked CLI path; compilation passed for both Keebart halves, with no new hardware test.
 
 Status: built in v0.11.0 to v0.19.0 (rungs 9, 11, 14, 15, 16 and 18), as of v0.36.1. That covers changing any key, the key panel, tap dance slots, macros, combos from a selection, layer management, moving and copying keys, history, the settings page and per-key and per-layer lights. Conditional layers were added afterwards (D-385 to D-389). Not built: the features in "What keyloom doesn't take, and why" (D-105). The hardware checks in the rungs' "done when" lines are mostly unrecorded; see [13](13-roadmap.md). Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1).
 

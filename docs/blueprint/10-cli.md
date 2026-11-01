@@ -6,7 +6,7 @@ The CLI is the canonical surface (D-030, taken from spotuify). Everything the we
 
 ## Command tree
 
-Encoder turns use `setSensorBindings` through `change check`, `change propose` and `change apply`, not a separate encoder command. See [the scratch mouse/media recipe](../encoder-layers.md) for the working-tree feature (not yet released).
+Encoder turns use `setSensorBindings` through `change check`, `change propose` and `change apply`, not a separate encoder command. See [the scratch mouse/media recipe](../encoder-layers.md) for availability and a complete example.
 
 ```
 keyloom
