@@ -1,6 +1,6 @@
 # 28: The agent works beside the keyboard
 
-Candidate update, 2026-10-31: D-469 implements finite acknowledged opens of History, the typing lab, Decisions and settings. Source, app and CLI checks are recorded in [stage D evidence](../research/ui-audit/d-open-view/README.md); real-browser journeys and the four-size/theme screenshot gate are still pending.
+Implementation update, 2026-11-01: D-469 adds finite acknowledged opens of History, the typing lab, Decisions and settings. App/CLI tests and CI pass. BK approved release with independent review and the Computer Use/screenshot gate waived, not passed; [stage D evidence](../research/ui-audit/d-open-view/README.md) records what remains unverified.
 
 Status: partly implemented, 2026-10-20. Rung 26a shipped in v0.42.0. Rung 27 interactive question kinds (single/multiple choice, short text, layer, key, keyboard_or_config), explicit recommendation, reopened selection actions, typed artifacts, and confirmation/outcome cards are built on feat/rung27-interactive-questions. Agent-made configs open themselves and the reply carries a config card (D-450, 2026-10-22). Proposal, config, question and footer cards were made calmer (D-456, D-457, 2026-10-28). The agent proposes one best proposal first and refines it with questions, each answer superseding the proposal before (D-452, built on feat/refine-loop). Cross-keyboard target plans below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
 

@@ -1,6 +1,6 @@
 # 03: Agent
 
-Status update, 2026-10-31: the D-469 candidate adds `open_view` for four existing views. Browser and visual acceptance remain pending; [evidence and limits](../research/ui-audit/d-open-view/README.md).
+Status update, 2026-11-01: D-469 adds `open_view` for four existing views. App/CLI tests and CI pass. BK approved release with independent review and Computer Use/visual checks waived, not passed; [evidence and limits](../research/ui-audit/d-open-view/README.md).
 
 Revision, 2026-10-29: D-452 replaced D-020's alternatives. `propose_changes` takes one proposal and `supersedes`, and `ask_user` takes considerations and a step; the tool table and the loop below say how. D-458 lets a question be answered after the layout head moves, behind a note to the model. D-460 implements whole-config adaptation in a target-owned conversation, keeping ordinary writes scoped to one layout.
 

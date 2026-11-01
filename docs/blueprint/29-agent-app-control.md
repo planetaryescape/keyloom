@@ -1,6 +1,6 @@
 # 29: The agent operates the same app as the user
 
-Candidate update, 2026-10-31: D-469 implements only `open_view` for `history|lab|decisions|settings`, with a per-send owner and bounded render acknowledgement. It adds no registry, router, migration, arbitrary command or setting mutation. Browser/visual acceptance is pending; [stage D evidence](../research/ui-audit/d-open-view/README.md).
+Implementation update, 2026-11-01: D-469 adds only `open_view` for `history|lab|decisions|settings`, with a per-send owner and bounded render acknowledgement. It adds no registry, router, migration, arbitrary command or setting mutation. BK approved release with independent review and Computer Use/visual checks waived, not passed; [stage D evidence](../research/ui-audit/d-open-view/README.md).
 
 Status: 26a observation and 26b durable execution are released in v0.42.0 and v0.43.0. App-wide capabilities remain proposals. The [26b contract](../research/spikes/26b-contract.md) specifies the released versioned routes, CLI commands and receipt boundaries; [public-client evidence](../screenshots/agent-experience/26b-published-0.43.0/README.md) records their tested scope. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`. Product requirement: D-396 and D-400; execution/presentation direction: D-399, D-403 to D-406 and D-411.
 
@@ -12,7 +12,7 @@ The agent must be able to complete app workflows, not just explain how BK could 
 
 ## Reuse the current domain services and provider seam
 
-### Implemented finite view contract (D-469 candidate)
+### Implemented finite view contract (D-469)
 
 For a new durable `POST /api/agent/v1/runs`, the browser may add `viewClient: { version: 1, owner: <fresh UUID> }` beside the existing input. The snapshot echoes `viewProtocol: 1` only when the server accepted that capability. Older clients omit it; an older server strips it and echoes nothing. Neither case can wait for or execute navigation. The legacy streaming fallback never advertises it.
 

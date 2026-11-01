@@ -1,6 +1,8 @@
 # D: acknowledged view opens
 
-Candidate implementation originally based on `a82b9f9955f70b32de0d6aeeaa953d3d5c5c4953` (v0.65.0), rebased onto `5812213635d3d093465e3ca59e36b747a4f1c6f8` (the shared-drive recovery-copy fix). Runtime: macOS arm64, Bun 1.3.14, React 19.3.0, TypeScript 7.0.2, Zod 4. The candidate report records the final commit and frozen-tree checks. This is not browser or hardware acceptance.
+Implementation source `ac3b3f9ffbf7bda85fdaaa8dc3f53935fa4527d3`, based on `a39b7ae0f06348f0ca25f6574574290f623d3608`. Runtime: macOS arm64, Bun 1.3.14, React 19.3.0, TypeScript 7.0.2, Zod 4. Frozen checks: 3,480 tests passed, 231 skipped, zero failures; typecheck, dependency checks, production compile and scratch CLI journeys passed. All eight jobs in PR CI run `41260424221` passed on that exact source. This is not browser or hardware acceptance.
+
+Release approval, 2026-11-01: BK explicitly chose to waive unfinished independent review and Computer Use/visual checks and ship with passing local tests and CI. Computer Use could import its runtime but refused Safari access. Independent review did not produce an accepted complete verdict: unsupported source claims were rejected, and the replacement review was interrupted and then quota-blocked. Neither gate is represented as passed. The remaining browser checks below are unverified and waived for this release, not evidence of observed behavior.
 
 ## Run the synthetic app for Computer Use
 
@@ -12,9 +14,9 @@ Open the printed localhost URL. The fixture serves the real Viewer, ChatPanel, u
 
 Send `Open History`, `Open the typing lab`, `Show my Decisions` and `Open settings`. Reopen chat to inspect the saved result. History must be layout versions, not Conversations. Lab must show its existing start screen with recording disabled. Settings must open without saving anything. Decisions must show the existing subview. The existing Stop button must remain reachable while a view replaces chat. Send `delay Open History` to leave 1.5 seconds for Stop, New, editing or a config switch before the tool is called.
 
-Computer Use journeys and captures at 1440×900 and 390×844, both themes, are **pending parent execution**. The user explicitly chose Computer Use. This child has no Computer Use or `node_repl` tool; the parent has since found a Codex runtime exposing `node_repl` and owns verification of its Computer Use integration and the GUI gate. No agent-browser, CDP, Playwright, osascript or alternative UI automation was used by this child. HTTP 200 for the fixture page proves asset compilation/serving only, not UI behavior.
+Computer Use journeys and captures at 1440×900 and 390×844, both themes, were **not performed; the release gate was explicitly waived**. No agent-browser, CDP, Playwright, osascript or alternative UI automation substituted for them. HTTP 200 for the fixture page proves asset compilation/serving only, not UI behavior.
 
-Pending browser checks: all four destinations and render-before-ack ordering; repeated open; historical/reload/foreign-tab and duplicate snapshots; Stop, New, config switch/unmount; dirty key/combo/composer, recording and user navigation; delayed or obsolete observer replies; keyboard-only Stop/recovery; both themes and viewport sizes. The real app fixture is ready for that gate, not evidence it passed.
+Unverified browser checks: all four destinations and render-before-ack ordering; repeated open; historical/reload/foreign-tab and duplicate snapshots; Stop, New, config switch/unmount; dirty key/combo/composer, recording and user navigation; delayed or obsolete observer replies; keyboard-only Stop/recovery; both themes and viewport sizes. The real app fixture can run those journeys; it is not evidence they passed.
 
 ## Verified non-browser scope
 
