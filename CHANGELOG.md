@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.68.1](https://github.com/planetaryescape/keyloom/compare/v0.68.0...v0.68.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* close review migration and verification edge cases ([a9d582c](https://github.com/planetaryescape/keyloom/commit/a9d582cf09699a6d1837e14cd52142805e1f6328))
+* detect keyboard changes across review engine restarts ([188b504](https://github.com/planetaryescape/keyloom/commit/188b50489d4585f68808705db71b3775f7a9da2f))
+* distinguish complete review fixes and refresh switched configs ([08c6afa](https://github.com/planetaryescape/keyloom/commit/08c6afab53f17847a612ae30ca07e6040c8d01a6))
+* ground keyboard reviews and refresh changed keyboards ([ac09564](https://github.com/planetaryescape/keyloom/commit/ac095642884559f89814df34a3e93ef04b5b6eaa))
+* ground keyboard reviews and refresh recommendations on reconnect ([edfff14](https://github.com/planetaryescape/keyloom/commit/edfff146a7f132257da0ef5a97c1492f7855dc84))
+* keep the keyboard visible while reading long replies ([5c71e45](https://github.com/planetaryescape/keyloom/commit/5c71e456546b8af800ef5d8fc76e347a5d772d52))
+* withdraw duplicate grounded review proposals ([e60c800](https://github.com/planetaryescape/keyloom/commit/e60c800187022515c9e90fe7b2a8aeec985d105b))
+
 ## [0.68.0](https://github.com/planetaryescape/keyloom/compare/v0.67.0...v0.68.0) (2026-11-01)
 
 
