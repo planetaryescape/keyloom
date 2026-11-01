@@ -1,6 +1,6 @@
 # The stage cuts off the board's shadow along a straight line
 
-Status: fixed on branch `fix/stage-shadow-and-flaky-limits`. In windows wider than 900 px, the well only scrolls when the board is wider or taller than the stage (`fitUnit`'s `overflowing` now checks both sides). A board that fits gets `overflow: visible`, so nothing clips its shadows. Narrow windows keep the scroll box, because they scroll the edited key above the sheet.
+Status: fixed in `ef5643f7` (#188, v0.56.0). In windows wider than 900 px, the well only scrolls when the board is wider or taller than the stage (`fitUnit`'s `overflowing` now checks both sides). A board that fits gets `overflow: visible`, so nothing clips its shadows. Narrow windows keep the scroll box, because they scroll the edited key above the sheet.
 
 The board's shadow on the stage stops at a hard horizontal edge a little below the board, instead of fading out. It is faint in the light theme with the board following the theme. It shows clearly under a dark case on the light stage, such as a Glove80 pinned to Grey or a Moonlander pinned to Black (D-395). There the light stage reads as a pale band, with the shadow above it.
 

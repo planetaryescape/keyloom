@@ -1,4 +1,4 @@
-# Keebart Corne needs its first manual bootloader entry
+# Keebart Corne first flash and acceptance
 
 Status: first flash and acceptance completed 2026-10-30 with build `bld_01M653RH2SPEFMV8GP0NCBGE0T`; both halves report `Corne Choc BT L` and `Corne Choc BT R` and run that build, and BK confirmed typing and both encoders work. Board support is on `main` at `ce53799` (v0.63.0). The history below is the blocked state it came from. D-462 records the recipe and encoder scope.
 

@@ -1,8 +1,8 @@
 # keyloom: project context for AI agents
 
-keyloom is an open-source, local-first keyboard configurator. You describe a frustration with your layout, an agent proposes validated changes you can preview on the keys, and keyloom builds the firmware and puts it on the keyboard. It runs on QMK boards (ZSA Moonlander), ZMK boards (MoErgo Glove80, foostan Corne) and the MacBook's built-in keyboard through kanata. It is a bun web app on localhost plus a CLI. There is no hosted backend.
+keyloom is an open-source, local-first keyboard configurator. You describe a frustration with your layout, an agent proposes validated changes you can preview on the keys, and keyloom builds the firmware and puts it on the keyboard. It runs on QMK boards (ZSA Moonlander), ZMK boards (MoErgo Glove80, foostan Corne, Keebart Corne Choc Pro BT) and the MacBook's built-in keyboard through kanata. It is a bun web app on localhost plus a CLI. There is no hosted backend.
 
-The code is built and released (v0.36.1 at the time of writing). The blueprint in `docs/blueprint/` is the design it follows and the record of why. `docs/blueprint/13-roadmap.md` says what each rung shipped in and what was checked on hardware. If the code and a document disagree, the code is current. Fix the document.
+The code is built and released (v0.65.0 at the time of writing). The blueprint in `docs/blueprint/` is the design it follows and the record of why. `docs/blueprint/13-roadmap.md` says what each rung shipped in and what was checked on hardware. If the code and a document disagree, the code is current. Fix the document.
 
 ## Where to start
 
@@ -18,7 +18,7 @@ The code is built and released (v0.36.1 at the time of writing). The blueprint i
 - TypeScript (strict, ESM) on bun 1.3.14. React 19 served through Bun's HTML imports. `bun:sqlite`, zod, commander, ulid, fflate.
 - `web-tree-sitter` with the C and devicetree grammars, to import Oryx's C and ZMK keymaps.
 - The agent runs on one of three providers behind `AgentModel`: Anthropic (`@anthropic-ai/sdk` Tool Runner, `claude-opus-5-5`), OpenRouter, or the Codex CLI through a loopback MCP server (`@modelcontextprotocol/sdk`).
-- QMK firmware builds in Docker from ZSA's fork, and flashes with Zapp (Moonlander). ZMK builds in Docker, either MoErgo's template (Glove80) or `west build` against upstream ZMK (Corne and derived boards). UF2 boards flash by copying to each half's boot drive.
+- QMK firmware builds in Docker from ZSA's fork, and flashes with Zapp (Moonlander). ZMK builds in Docker, either MoErgo's template (Glove80), `west build` against upstream ZMK (foostan Corne and derived boards), or a pinned hardware module (Keebart Corne). UF2 boards flash by copying to each half's boot drive.
 - Apple Silicon release CLI and desktop sidecar use one paired Rust helper for HID and serial, including 1200/1201-baud touch. Intel Macs and Linux keep the legacy TypeScript transports and diagnostics-only helper (D-433).
 - Hands-free flashing: the Moonlander restarts into its bootloader over raw HID. ZMK boards run keyloom's `keyloom-zmk` module (`firmware/zmk/keyloom-zmk`), which restarts a half when its serial port is closed at 1200 baud.
 - The MacBook keyboard is a board whose "firmware" is a kanata config. Apply writes it and reloads kanata over TCP.

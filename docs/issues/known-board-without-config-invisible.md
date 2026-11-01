@@ -1,6 +1,6 @@
 # A board keyloom knows but has no config for was invisible
 
-Status: fixed in `c13f929` on `fix/keyboard-setup`, 2026-10-30.
+Status: fixed in `b95012e` (PR 206, v0.61.0), 2026-10-30.
 
 Removing the Moonlander's configs to test setting it up from scratch left the keyboard plugged in, recognised, and impossible to set up from the app. The new-keyboard card only fires for boards keyloom has no definition for, and the board switch is built from configs (`boardEntries` in `src/web/shell/Header.tsx`), so a known board with no config appeared nowhere. Plugging it in produced no card, no switch entry and no prompt. The CLI's `keyloom keyboard add` at least answered "already a board … Put a config on it with `keyloom keyboard put <layout> --on <board>`"; the app said nothing.
 
