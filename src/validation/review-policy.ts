@@ -12,6 +12,13 @@ export function automaticReviewErrors(before: Layout, ops: readonly ChangeOp[]):
   if (!applied.ok) return [];
   const after = applied.layout;
   const errors: Issue[] = [];
+  for (const combo of before.combos) {
+    const next = after.combos.find((c) => c.id === combo.id);
+    if (!preservesCompoundBehavior(before, combo.output, after, next?.output)
+      || (combo.output.kind === "native" && !preservesNativeBehavior(before, combo.output, after, next?.output))) {
+      errors.push({ code: "review_behavior_loss", message: `Automatic review must preserve combo ${combo.id}'s output and referenced actions.`, plain: "This suggestion changes an existing combo's behavior without your request." });
+    }
+  }
   if (before.combos.some((combo) => !deepEqual(combo, after.combos.find((next) => next.id === combo.id)))
     || !deepEqual(before.conditionalLayers, after.conditionalLayers)
     || !deepEqual(before.settings, after.settings)
@@ -54,12 +61,26 @@ export function automaticProposalDescription(before: Layout, ops: readonly Chang
   const after = applied.layout;
   const lines: string[] = [];
   let title = "Review a source-checked config change";
-  for (const layer of after.layers) for (const [position, next] of layer.bindings.entries()) {
-    const old = before.layers.find((l) => l.id === layer.id)?.bindings[position];
-    if (!deepEqual(old, next)) {
-      if (!lines.length) title = next.kind === "key" ? `Set ${next.code} on ${layer.name}` : next.kind === "native" ? `Retarget a custom key on ${layer.name}` : `Change a key on ${layer.name}`;
-      lines.push(`{key:${layer.id}:${position}}: ${behaviorDescription(before, old)} → ${behaviorDescription(after, next)}.`);
+  const layerIds = new Set([...before.layers, ...after.layers].map((l) => l.id));
+  for (const id of layerIds) {
+    const oldLayer = before.layers.find((l) => l.id === id);
+    const newLayer = after.layers.find((l) => l.id === id);
+    const layer = newLayer ?? oldLayer!;
+    if (!oldLayer || !newLayer) lines.push(`${newLayer ? "Add" : "Remove"} layer ${layer.name}.`);
+    for (let position = 0; position < Math.max(oldLayer?.bindings.length ?? 0, newLayer?.bindings.length ?? 0); position++) {
+      const old = oldLayer?.bindings[position];
+      const next = newLayer?.bindings[position];
+      if (!deepEqual(old, next)) {
+        if (!lines.length) title = next?.kind === "key" ? `Set ${next.code} on ${layer.name}` : next?.kind === "native" ? `Retarget a custom key on ${layer.name}` : `Change a key on ${layer.name}`;
+        lines.push(`{key:${layer.id}:${position}}: ${behaviorDescription(before, old)} → ${behaviorDescription(after, next)}.`);
+      }
     }
+  }
+  for (const combo of after.combos) if (!deepEqual(before.combos.find((c) => c.id === combo.id), combo)) {
+    lines.push(`Combo ${combo.name} (${combo.positions.join("+")}): ${behaviorDescription(after, combo.output)}; layers ${combo.layerIds === "all" ? "all" : combo.layerIds.join(", ")}.`);
+  }
+  for (const collection of ["macros", "tapDances", "conditionalLayers", "settings", "passthrough"] as const) {
+    if (!deepEqual(before[collection], after[collection])) lines.push(`${collection}: ${JSON.stringify(before[collection])} → ${JSON.stringify(after[collection])}.`);
   }
   for (const profile of after.holdTapProfiles) {
     const previous = before.holdTapProfiles.find((p) => p.id === profile.id);
@@ -68,11 +89,10 @@ export function automaticProposalDescription(before: Layout, ops: readonly Chang
       lines.push(`Tap/hold profile ${profile.id}: ${JSON.stringify(previous?.options ?? {})} → ${JSON.stringify(profile.options)}. These are source settings, not proof of better rolls or chords.`);
     }
   }
-  const explanation = `${lines.join(" ") || "Update the declared config settings."} Source-derived change only; consult the separate runtime-test coverage.`;
+  const explanation = `${lines.join(" ") || `Declared operations: ${JSON.stringify(ops)}.`} Source-derived change only; consult the separate runtime-test coverage.`;
   return {
     title: title.slice(0, 100),
     explanation,
     tradeoffs: { gains: ["The declared changes are shown from the source, not inferred from a legend."], costs: ["Runtime behavior, typing speed and comfort are not established by this source check."] },
-    decisionDraft: { goal: "Review an automatic config suggestion.", choice: explanation.slice(0, 300), reason: "This automatic proposal describes source-derived effects; it does not record an unstated user preference or a proven runtime benefit.", scope: { apps: [], habits: [] } },
   };
 }

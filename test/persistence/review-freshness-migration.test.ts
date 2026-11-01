@@ -9,6 +9,7 @@ import { createLayout } from "../../src/persistence/layouts.ts";
 import { findChangeSet, insertChangeSet } from "../../src/persistence/change-sets.ts";
 import { groundedLayout } from "../helpers/grounded-review.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { insertConversation } from "../../src/persistence/conversations.ts";
 
 test("upgrading withdraws legacy recommendations without changing configs or unrelated editor proposals", () => {
   const dir = tempDir();
@@ -22,7 +23,10 @@ test("upgrading withdraws legacy recommendations without changing configs or unr
   const layout = createLayout(db, { name: "Legacy synthetic", layout: doc, summary: "Fixture", origin: "import" });
   const input = { layoutId: layout.layout.id, baseRevisionId: layout.revision.id, ops: [], explanation: "Synthetic fixture", validation: {}, status: "proposed" as const };
   const suggestion = insertChangeSet(db, { ...input, source: "agent" });
+  const unpublished = insertChangeSet(db, { ...input, source: "agent" });
   const editor = insertChangeSet(db, { ...input, source: "editor" });
+  const conversation = insertConversation(db, { layoutId: layout.layout.id, title: "Explicit request" });
+  const chat = insertChangeSet(db, { ...input, source: "agent", conversationId: conversation.id });
   db.query("INSERT INTO board_reviews (id, layout_id, revision_id, trigger, checked_at, summary, ai_status) VALUES ('rvw_legacy', ?, ?, 'manual', 0, ?, 'done')")
     .run(layout.layout.id, layout.revision.id, JSON.stringify({ layers: 3, keys: 4, combos: 0 }));
   for (const [position, source, proposalId] of [[0, "check", null], [1, "agent", suggestion.id]] as const) {
@@ -37,7 +41,9 @@ test("upgrading withdraws legacy recommendations without changing configs or unr
     expect(review.freshness?.reason).toContain("checks have changed");
     expect(review.items.map((item) => item.id)).toEqual(["legacy-check"]);
     expect(findChangeSet(app.db, suggestion.id)?.status).toBe("rejected");
+    expect(findChangeSet(app.db, unpublished.id)?.status).toBe("rejected");
     expect(findChangeSet(app.db, editor.id)?.status).toBe("proposed");
+    expect(findChangeSet(app.db, chat.id)?.status).toBe("proposed");
     expect(getLayout(app, layout.layout.id).document).toEqual(doc);
     expect(getLayout(app, layout.layout.id).revision.id).toBe(layout.revision.id);
     expect(app.db.query("PRAGMA foreign_key_check").all()).toEqual([]);

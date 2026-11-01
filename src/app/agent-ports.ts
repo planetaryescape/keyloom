@@ -138,7 +138,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
           const cs = proposeChange(app, layoutId, {
             ops: alt.ops, explanation: description.explanation, source: "agent", title: description.title, tradeoffs: description.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
             ...(typeof supersedes === "string" ? { supersedes } : {}),
-            decisionDraft: { ...description.decisionDraft, sourceMessageIds: from },
+            ...(conversationId === null ? {} : { decisionDraft: { ...alt.decisionDraft, sourceMessageIds: from } }),
           });
           return { title: alt.title, changeSetId: cs.id, validation: cs.validation };
         } catch (err) {

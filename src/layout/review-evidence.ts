@@ -6,3 +6,8 @@ export const BehaviorEvidenceSchema = z.object({
   limitations: z.array(z.string()),
 });
 export type BehaviorEvidence = z.infer<typeof BehaviorEvidenceSchema>;
+
+/** Recommendations require both the current head and an explicitly current input snapshot. */
+export function isReviewCurrent(review: { revisionId: string; freshness?: { current: boolean } } | null, headRevisionId: string): boolean {
+  return review !== null && review.revisionId === headRevisionId && review.freshness?.current === true;
+}

@@ -242,7 +242,7 @@ describe("the agent's part", () => {
     expect(openProposalsOutsideChat(w.app, w.layoutId)).toEqual([]);
   });
 
-  test("the next review withdraws the earlier one's open suggestions and carries the agent's fixed findings", async () => {
+  test("the next review withdraws earlier suggestions without inventing fixed agent diagnoses", async () => {
     const w = await reviewWorld();
     const first = createReview(w.app, w.layoutId, "apply").review;
     const m1 = scriptedModel([proposeStep, (seen) => submit([
@@ -274,15 +274,15 @@ describe("the agent's part", () => {
 });
 
 describe("the agent repeating the checks", () => {
-  test("an item about the same kind, layers and keys as a check is dropped whatever code the model gave it", async () => {
+  test("standalone model diagnoses are suppressed, including both same-kind and different-kind restatements", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
     const both = [{ layerId: "layer-0", position: 36 }, { layerId: "layer-0", position: 33 }];
     const m = scriptedModel([
       submit([
         { kind: "hint", code: "empty-function-row", title: "Empty keys", body: "Two keys are empty.", keys: both, layers: [] },
-        { kind: "hint", code: "one-empty-key", title: "One empty key", body: "One is empty.", keys: [both[1] as (typeof both)[number]] },
-        { kind: "problem", code: "empty-keys-problem", title: "Same keys, other kind", body: "Kept.", keys: both },
+        { kind: "hint", code: "one-empty-key", title: "One empty key", body: "One is empty.", keys: [both[1]!] },
+        { kind: "problem", code: "empty-keys-problem", title: "Same keys, other kind", body: "Unsupported diagnosis.", keys: both },
       ]),
       finished,
     ]);

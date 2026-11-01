@@ -39,7 +39,9 @@ export class ReviewEngine {
   private connected = new Set<string>();
   private readonly freshConnections = new Set<string>();
   private deviceKeys = new Map<string, string | undefined>();
+  private readonly observed = new Set<string>();
   private readonly controllers = new Map<string, AbortController>();
+  private readonly active = new Map<string, { reviewId: string; done: Promise<BoardReview> }>();
   private unwatch: (() => void) | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private chain: Promise<unknown> = Promise.resolve();
@@ -67,7 +69,8 @@ export class ReviewEngine {
       const next = new Set(boards.filter((b) => b.state.kind !== "not_connected").map((b) => b.layoutId));
       for (const board of boards) {
         const id = board.layoutId;
-        const changed = next.has(id) && (!this.connected.has(id) || this.deviceKeys.get(id) !== board.reviewDeviceKey);
+        const changed = this.observed.has(id) && next.has(id) && (!this.connected.has(id) || this.deviceKeys.get(id) !== board.reviewDeviceKey);
+        this.observed.add(id);
         const disconnected = this.connected.has(id) && !next.has(id);
         if (changed || disconnected) {
           if (changed) this.freshConnections.add(id);
@@ -187,15 +190,22 @@ export class ReviewEngine {
     const force = opts.force === true || opts.activities !== undefined;
     const hooks = { emit: this.emit, now: this.now };
     const { review } = createReview(this.app, ref, trigger, hooks);
+    const active = this.active.get(review.layoutId);
+    if (active?.reviewId === review.id && review.ai.status === "running" && !this.controllers.get(review.layoutId)?.signal.aborted) return { review, done: active.done };
     if (review.ai.status === "done" && !force) return { review, done: Promise.resolve(review) };
+    this.controllers.get(review.layoutId)?.abort();
     const controller = new AbortController();
     this.controllers.set(review.layoutId, controller);
     const signal = AbortSignal.any([this.abort.signal, controller.signal, ...(opts.signal ? [opts.signal] : [])]);
     const done = runReviewAi(this.app, review.id, this.deps, { ...hooks, ...(force ? { force: true } : {}), signal });
+    this.active.set(review.layoutId, { reviewId: review.id, done });
     this.running.add(done);
     void done.finally(() => {
       this.running.delete(done);
-      if (this.controllers.get(review.layoutId) === controller) this.controllers.delete(review.layoutId);
+      if (this.controllers.get(review.layoutId) === controller) {
+        this.controllers.delete(review.layoutId);
+        this.active.delete(review.layoutId);
+      }
     }).catch(() => undefined);
     return { review, done };
   }

@@ -4,6 +4,7 @@ import { getLayoutTool } from "../../src/agent/tools/get-layout.ts";
 import { groundedWorld } from "../helpers/grounded-review.ts";
 import { groundedLayout } from "../helpers/grounded-review.ts";
 import { workloadApp } from "../helpers/workload.ts";
+import { retargetLayerHoldTool } from "../../src/agent/tools/retarget-layer-hold.ts";
 
 test("the reviewer sees the actual custom hold/tap and transitive macro source, not just a misleading label", async () => {
   const w = groundedWorld();
@@ -15,6 +16,16 @@ test("the reviewer sees the actual custom hold/tap and transitive macro source, 
     expect(output).toContain('"displayNumber":3');
     expect(output).toContain('"firmwareIndex":2');
     expect(output).toContain("not a runtime test");
+  } finally { w.app.db.close(); }
+});
+
+for (const failingPort of ["snapshot", "check"] as const) test(`retarget tool does not misclassify an internal ${failingPort} failure as model input`, () => {
+  const w = groundedWorld();
+  try {
+    const ports = createAgentPorts(w.app, w.layoutId, null);
+    const internal = new Error("Internal failure");
+    ports[failingPort] = () => { throw internal; };
+    expect(() => retargetLayerHoldTool(ports).run({ at: { layerId: "base", position: 0 }, layerId: "tools" })).toThrow(internal);
   } finally { w.app.db.close(); }
 });
 

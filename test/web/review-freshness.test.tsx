@@ -14,9 +14,9 @@ test("an invalidated review offers one fresh-review action rather than pretendin
     }, layout: tinyLayout(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: [], pinnedId: null,
     onPin() {}, onApply: async () => {}, onShowLayer() {}, onFixIssues() {}, onClose() {},
   }));
-  expect(html).toContain("A fresh review is needed");
+  expect(html).toContain("Review out of date");
   expect(html).toContain("The keyboard reconnected. A fresh analysis is required.");
   expect(html.match(/Run a fresh review/g)).toHaveLength(1);
   expect(html).not.toContain("Try again");
-  expect(html).not.toContain("Looking over your change");
+  expect(html).not.toContain("br-nothing");
 });

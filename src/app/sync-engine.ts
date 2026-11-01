@@ -80,7 +80,7 @@ export type BoardSyncView = {
   state: SyncState;
   auto: SyncAutoView;
   last: SyncRunView | null;
-  /** Stable observed firmware identity for review invalidation, not a keymap readback. Internal subscribers only. */
+  /** Observed firmware/build or remapper revision marker, not a full keymap readback. Internal subscribers only. */
   reviewDeviceKey?: string;
 };
 

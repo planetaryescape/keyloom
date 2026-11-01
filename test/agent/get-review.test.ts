@@ -8,6 +8,7 @@ import { createAgentPorts } from "../../src/app/agent-ports.ts";
 import { applyChange, getLayout, rejectChange } from "../../src/app/index.ts";
 import { createReview, dismissReviewItem, runReviewAi } from "../../src/app/review.ts";
 import { findChangeSet } from "../../src/persistence/change-sets.ts";
+import { invalidateReview } from "../../src/persistence/reviews.ts";
 import { EMPTY_KEYS_ID, finished, proposeStep, reviewWorld, savedId, scriptedModel, submit, touch } from "../helpers/review-world.ts";
 
 const getLayoutStep = { blocks: [{ tool: "get_layout", input: { layers: ["layer-0"] } }] };
@@ -84,11 +85,11 @@ describe("get_review", () => {
     expect(findings.headRevisionId).toBe(head);
     expect(findings.headRevisionId).not.toBe(findings.review?.revisionId);
     // Deterministic checks remain as historical pointers; old recommendations are no longer actionable.
-    expect(findings.review?.items.map((i) => i.kind)).toEqual(["hint"]);
+    expect(findings.review?.items.map((i) => i.id)).toEqual(before.review?.items.filter((i) => i.source === "check").map((i) => i.id));
     expect(await w.tool()).toContain("It is the review of an earlier version");
   });
 
-  test("a suggestion whose change set was applied or rejected keeps its id and says why there are no ops", async () => {
+  test("a rejected suggestion keeps its id without ops; applying it hides the old recommendation", async () => {
     const refused = await reviewed();
     rejectChange(refused.app, refused.suggestion?.proposalId ?? "");
     const rejected = createAgentPorts(refused.app, refused.layoutId, null).reviewFindings().review?.items.find((i) => i.id === refused.suggestion?.id);
@@ -100,6 +101,18 @@ describe("get_review", () => {
     const suggestion = findings.review?.items.find((i) => i.id === w.suggestion?.id);
     expect(suggestion).toBeUndefined(); // Applying changed the snapshot, so its old recommendation is hidden.
     expect(await w.tool()).toContain("earlier version");
+  });
+
+  test("a same-head invalidation reports its reason and withholds old suggestions", async () => {
+    const w = await reviewed();
+    const head = getLayout(w.app, w.layoutId).revision.id;
+    invalidateReview(w.app.db, w.review.id, "The keyboard reconnected. Run a fresh review.");
+    const findings = createAgentPorts(w.app, w.layoutId, null).reviewFindings();
+    expect(findings.headRevisionId).toBe(head);
+    expect(findings.review?.revisionId).toBe(head);
+    expect(findings.review?.current).toBe(false);
+    expect(await w.tool()).toContain("The keyboard reconnected");
+    expect(findings.review?.items.some((i) => i.kind === "suggestion")).toBe(false);
   });
 
   test("a review still being written reads as its checks, never as half-written agent findings", async () => {

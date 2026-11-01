@@ -140,9 +140,9 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
 
   const started = now();
   const finish = (status: "done" | "unavailable" | "failed", reason: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = []) => {
-    transact(app.db, () => {
+    const updated = transact(app.db, () => {
       for (const id of rejectedProposals) if (findChangeSet(app.db, id)?.status === "proposed") markRejected(app.db, id, now());
-      if (!ownsReviewRun(app.db, row)) return;
+      if (!ownsReviewRun(app.db, row)) return false;
       if (status === "failed") {
         const evidence = reviewWorkload(app.db, row.id);
         if (evidence) {
@@ -152,8 +152,9 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       }
       const kept = items.map(({ dismissedAt: _, ...r }) => r);
       finishAi(app.db, row.id, { status, reason, model, items: kept, fixedAgent: status === "done" ? agentGone(app, row, kept) : [] });
+      return true;
     });
-    announce(status);
+    if (updated) announce(status);
   };
 
   const workloadSignal = hooks.signal ? AbortSignal.any([hooks.signal, AbortSignal.timeout(REVIEW_WORKLOAD_TIMEOUT_MS)]) : AbortSignal.timeout(REVIEW_WORKLOAD_TIMEOUT_MS);
@@ -215,7 +216,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       return results;
     };
     if (!current()) {
-      finish("failed", "Your layout changed before keyloom could look at it; it will look at the new version.", model.model, []);
+      finish("failed", hooks.signal?.aborted ? "keyloom was closed while it was looking. It will look again after your next change." : "Your layout changed before keyloom could look at it; it will look at the new version.", model.model, []);
     } else {
       const signal = reviewWorkload(app.db, row.id) ? workloadSignal : hooks.signal;
       const outcome = await runReviewAgent({ model, ports, checks, workload: reviewWorkloadRequest(reviewWorkload(app.db, row.id)), ...(signal ? { signal } : {}) });
@@ -226,17 +227,17 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       // The review is about the revision it was made for. If the layout moved while the model worked, its suggestions are against a
       // head that is gone; the newer revision gets its own review.
       if (!current()) {
-        finish("failed", "Your layout changed while keyloom was looking; it will look at the new version.", model.model, [], proposed);
+        finish("failed", hooks.signal?.aborted ? "keyloom was closed while it was looking. It will look again after your next change." : "Your layout changed while keyloom was looking; it will look at the new version.", model.model, [], proposed);
       } else if (outcome.status === "done") {
         const attached = attachProposals(app, outcome.items, proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
-        const single = onePerProblem(app, groundedItems(app, row, attached.items));
+        const single = onePerProblem(app, groundedItems(app, row, attached.items, now));
         await finishSuggestions(single.items, [...attached.withdrawn, ...single.withdrawn], null);
       }
       else {
         // Out of steps (or cut off) after saving a fix: that fix is still worth showing, so it is attached the same way and the review
         // is done, with the reason in words. It is failed only when nothing usable was saved.
         const attached = attachProposals(app, [], proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
-        const single = onePerProblem(app, groundedItems(app, row, attached.items));
+        const single = onePerProblem(app, groundedItems(app, row, attached.items, now));
         const withdrawn = [...attached.withdrawn, ...single.withdrawn];
         if (single.items.length === 0) finish("failed", outcome.reason, model.model, [], [...proposed]);
         else await finishSuggestions(single.items, withdrawn, outcome.limit ? "Stopped at its step limit; showing what it found." : `${outcome.reason.replace(/\.$/, "")}; showing what it found.`);
@@ -264,14 +265,14 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
 const MAX_AGENT_ITEMS = 6;
 
 /** The model searches for patches; the app states their actual effects. Unsupported standalone diagnoses are not published as facts. */
-function groundedItems(app: App, row: BoardReviewRow, items: ReviewItem[]): ReviewItem[] {
+function groundedItems(app: App, row: BoardReviewRow, items: ReviewItem[], now: () => number): ReviewItem[] {
   const view = getLayout(app, row.layoutId, row.revisionId);
   return items.flatMap((item) => {
     if (item.kind !== "suggestion" || item.proposalId === null) return [];
     const proposal = findChangeSet(app.db, item.proposalId);
     if (!proposal || proposal.status !== "proposed" || proposal.baseRevisionId !== row.revisionId) return [];
     const errors = automaticReviewErrors(view.document, proposal.ops);
-    if (errors.length) { markRejected(app.db, proposal.id, Date.now()); return []; }
+    if (errors.length) { markRejected(app.db, proposal.id, now()); return []; }
     const description = automaticProposalDescription(view.document, proposal.ops);
     const diff = ValidationResultSchema.parse(proposal.validation).diff;
     const slots = [...new Map([...diff.changed, ...diff.retuned].map((at) => [`${at.layerId}:${at.position}`, at])).values()];

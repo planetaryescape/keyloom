@@ -10,6 +10,7 @@ const item = (over: Partial<ReviewItem>): ReviewItem => ({
 const review = (items: ReviewItem[]): BoardReview => ({
   id: "rev", layoutId: "lay", revisionId: "r1", trigger: "connect", checkedAt: 0, checks: { status: "done", summary: { layers: 6, keys: 80, combos: 8 } },
   ai: { status: "done", reason: null, model: null }, items, fixed: [],
+  freshness: { current: true, reason: null },
 });
 
 describe("segments", () => {

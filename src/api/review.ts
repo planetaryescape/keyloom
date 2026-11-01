@@ -10,6 +10,7 @@ import { z } from "zod";
 import { FixedItemSchema, ReviewItemSchema } from "../validation/review-item.ts";
 import { ReviewActivitiesSchema, ReviewWorkloadSchema } from "../layout/review-workload.ts";
 import { BehaviorEvidenceSchema } from "../layout/review-evidence.ts";
+export { isReviewCurrent } from "../layout/review-evidence.ts";
 export { ReviewActivitiesSchema, REVIEW_ACTIVITIES, REVIEW_ACTIVITY_LABELS, workloadVerdictWords, type ReviewActivity } from "../layout/review-workload.ts";
 
 export const AiStatusSchema = z.enum(["pending", "running", "done", "unavailable", "failed"]);
@@ -29,7 +30,7 @@ export const BoardReviewSchema = z.object({
     model: z.string().nullable(),
   }),
   workload: ReviewWorkloadSchema.optional(),
-  freshness: z.object({ current: z.boolean(), reason: z.string().nullable() }).optional(),
+  freshness: z.object({ current: z.boolean(), reason: z.string().nullable() }),
   behavior: z.array(BehaviorEvidenceSchema.extend({ proposalId: z.string() })).optional(),
   /** Every item, hidden ones included with `dismissedAt` set. Checks first, then the agent's. */
   items: z.array(ReviewItemSchema),

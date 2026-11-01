@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReviewActivity, ReviewEvent, ReviewResponse } from "../../api/review.ts";
+import { isReviewCurrent } from "../../api/review.ts";
 import type { FixedItem } from "../../validation/review-item.ts";
 import { ApiError } from "../api.ts";
 import * as api from "./api-review.ts";
@@ -39,11 +40,11 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
   }, [load, headRevisionId]);
 
   // A frame for this config: a review was made or its agent part moved.
-  const eventKey = lastEvent !== null && lastEvent.layoutId === layoutId ? `${lastEvent.reviewId}:${lastEvent.aiStatus}` : null;
+  const event = lastEvent?.layoutId === layoutId ? lastEvent : null;
   useEffect(() => {
-    if (eventKey === null) return;
+    if (event === null) return;
     void load();
-  }, [eventKey, load]);
+  }, [event, load]);
 
   const act = async (run: () => Promise<ReviewResponse>) => {
     setBusy(true);
@@ -62,7 +63,7 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     review,
     activities: response?.workloadActivities ?? [],
     /** The revision or other inputs changed; old recommendations are withheld. */
-    stale: review !== null && response !== null && (review.revisionId !== response.headRevisionId || review.freshness?.current === false),
+    stale: review !== null && response !== null && !isReviewCurrent(review, response.headRevisionId),
     loaded: response !== null,
     problem,
     busy,

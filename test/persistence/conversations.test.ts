@@ -28,7 +28,7 @@ function databaseAtVersion3(): { db: Database; layoutId: string; changeSetId: st
   const changeSetId = "cs_old";
   db.query(
     `INSERT INTO change_sets (id, layout_id, base_revision_id, proposal_group, source, ops, explanation, tradeoffs, validation, status, created_at, decided_at)
-     VALUES (?, ?, ?, 'pg_x', 'agent', '[]', 'kept', '{"gains":["g"],"costs":[]}', '{"ok":true}', 'proposed', 5, NULL)`,
+     VALUES (?, ?, ?, 'pg_x', 'editor', '[]', 'kept', '{"gains":["g"],"costs":[]}', '{"ok":true}', 'proposed', 5, NULL)`,
   ).run(changeSetId, created.layout.id, created.revision.id);
   // A revision that points at a change set, so the rebuild has an inbound foreign key to keep.
   db.query("UPDATE revisions SET change_set_id = ? WHERE id = ?").run(changeSetId, created.revision.id);

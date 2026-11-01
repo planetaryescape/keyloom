@@ -50,7 +50,7 @@ export function preservesNativeBehavior(before: Layout, old: Extract<Binding, { 
 
 /** Literal effects only. No claimed diagnosis, comfort, frequency or runtime result comes from a model. */
 export function behaviorDescription(layout: Layout, binding: Binding | undefined): string {
-  if (!binding) return "removed";
+  if (!binding) return "absent";
   switch (binding.kind) {
     case "none": return "empty";
     case "transparent": return "fall through to a lower layer";
@@ -79,6 +79,7 @@ export function preservesCompoundBehavior(before: Layout, old: Binding, after: L
     if (next?.kind !== "tapDance") return false;
     const was = before.tapDances.find((t) => t.id === old.tapDanceId);
     const now = after.tapDances.find((t) => t.id === next.tapDanceId);
+    if (!was || !now) return false;
     return ["tap", "hold", "doubleTap", "tapThenHold"].every((name) => {
       const slot = name as "tap" | "hold" | "doubleTap" | "tapThenHold";
       const a = was?.[slot]; const b = now?.[slot];

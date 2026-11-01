@@ -203,7 +203,7 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
     if (cs.status !== "proposed") throw new UsageError(`change set ${cs.id} is ${cs.status}, not proposed`);
     const automatic = proposalReview(app.db, cs.id);
     if (automatic && (automatic.review.runId !== automatic.runId || automatic.review.ai.status !== "done" || !reviewFreshness(app, automatic.review).current)) {
-      throw new UsageError("This automatic recommendation is no longer current. Run a fresh review before applying it.");
+      throw new StaleBaseError("This automatic recommendation is no longer current. Run a fresh review before applying it.", []);
     }
     const view = getLayout(app, cs.layoutId);
     if (automatic && automaticReviewErrors(view.document, cs.ops).length) throw new UsageError("This automatic recommendation no longer preserves the config. Run a fresh review.");

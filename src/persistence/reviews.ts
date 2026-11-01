@@ -127,7 +127,7 @@ export function claimAi(db: Database, reviewId: string, now: number, staleMs: nu
   const retry = opts.force ? "'pending', 'unavailable', 'failed', 'done'" : "'pending', 'unavailable', 'failed'";
   return db.query(
     `UPDATE board_reviews SET ai_status = 'running', ai_reason = NULL, ai_started_at = ?, ai_run_id = ?
-     WHERE id = ? AND (ai_status IN (${retry}) OR (ai_status = 'running' AND ai_started_at < ?))`,
+     WHERE id = ? AND invalidated_reason IS NULL AND (ai_status IN (${retry}) OR (ai_status = 'running' AND ai_started_at < ?))`,
   ).run(now, newId("run"), reviewId, now - staleMs).changes > 0;
 }
 
@@ -149,7 +149,7 @@ export function resetReview(db: Database, row: BoardReviewRow, input: { snapshot
   db.query("DELETE FROM review_items WHERE review_id = ?").run(row.id);
   insertItems(db, row.id, input.items, 0);
   db.query(`UPDATE board_reviews SET contract_version = ?, snapshot_key = ?, invalidated_reason = NULL,
-    trigger = ?, checked_at = ?, summary = ?, ai_status = 'pending', ai_reason = NULL, ai_model = NULL, ai_started_at = NULL WHERE id = ?`)
+     trigger = ?, checked_at = ?, summary = ?, fixed = '[]', ai_status = 'pending', ai_reason = NULL, ai_model = NULL, ai_started_at = NULL WHERE id = ?`)
     .run(REVIEW_CONTRACT_VERSION, input.snapshotKey, input.trigger, input.checkedAt, JSON.stringify(input.summary), row.id);
   return findReview(db, row.id)!;
 }

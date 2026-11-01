@@ -59,6 +59,48 @@ function reviewer(w: SyncWorld, model = emptyReviews()) {
 const reviews = (w: SyncWorld) => (w.app.db.query("SELECT trigger, revision_id, ai_status FROM board_reviews ORDER BY checked_at").all() as Array<{ trigger: string; revision_id: string; ai_status: string }>);
 
 describe("connect", () => {
+  test("duplicate review calls retain the original controller and share its cancellation", async () => {
+    const w = await world();
+    const reached = Promise.withResolvers<void>();
+    const released = Promise.withResolvers<void>();
+    let captured: AbortSignal | undefined;
+    let calls = 0;
+    const base = emptyReviews();
+    const run = base.model.run.bind(base.model);
+    base.model.run = async (request) => {
+      calls++;
+      captured = request.signal;
+      reached.resolve();
+      await released.promise;
+      return run(request);
+    };
+    const r = reviewer(w, base);
+    const first = r.engine.review(w.layoutId, "manual");
+    await reached.promise;
+    const second = r.engine.review(w.layoutId, "manual");
+    expect(calls).toBe(1);
+    await r.start();
+    recordPriority(w.app, w.layoutId, { priorityKind: "pinned", statement: "Keep", subject: { slots: [{ layerId: "layer-0", position: 33 }] } });
+    await r.engine.tick();
+    expect(captured?.aborted).toBe(true);
+    released.resolve();
+    await Promise.all([first.done, second.done]);
+  });
+
+  for (const legacy of [false, true]) test(`startup does not re-review an already reviewed connected board (legacy=${legacy})`, async () => {
+    const w = await world();
+    const r = reviewer(w);
+    await r.engine.review(w.layoutId, "manual").done;
+    if (legacy) w.app.db.query("UPDATE board_reviews SET contract_version = 0").run();
+    w.flashed();
+    const sync = w.engine({ tickMs: 600_000, pollMs: 0 });
+    await r.start(sync);
+    await sync.start();
+    r.clock.advance(QUIET);
+    await r.engine.tick();
+    expect(r.model.requests).toHaveLength(2);
+  });
+
   test("a constraint change withdraws recommendations while the keyboard is away, without starting a model", async () => {
     const w = await world();
     applyOps(w.app, w.layoutId, { baseRevisionId: getLayout(w.app, w.layoutId).revision.id, summary: "Empty fixture key", ops: [{ op: "setBinding", at: { layerId: "layer-0", position: 33 }, binding: { kind: "none" } }] });
@@ -156,6 +198,7 @@ describe("connect", () => {
     w.world.reading = { state: "absent" };
     await sync.tick();
     expect(openProposalsOutsideChat(w.app, w.layoutId)).toEqual([]);
+    expect(r.model.requests).toHaveLength(3);
     const disconnected = r.engine.show(w.layoutId).review!;
     expect(disconnected.freshness?.current).toBe(false);
     expect(disconnected.items.filter((i) => i.source === "agent")).toEqual([]);

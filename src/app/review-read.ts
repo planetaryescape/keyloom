@@ -16,6 +16,7 @@ import { NotFoundError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
 import { reviewFreshness } from "./review-freshness.ts";
 import type { BehaviorEvidence } from "../layout/review-evidence.ts";
+import { isReviewCurrent } from "../layout/review-evidence.ts";
 
 export type BoardReview = {
   id: string;
@@ -26,7 +27,7 @@ export type BoardReview = {
   checks: { status: "done"; summary: { layers: number; keys: number; combos: number } };
   ai: { status: AiStatus; reason: string | null; model: string | null };
   workload?: ReviewWorkload;
-  freshness?: { current: boolean; reason: string | null };
+  freshness: { current: boolean; reason: string | null };
   behavior?: Array<BehaviorEvidence & { proposalId: string }>;
   /** Hidden items are in the list with `dismissedAt` set, so the screen can count them and offer them back. */
   items: ReviewItem[];
@@ -57,7 +58,7 @@ export function toReview(app: App, row: BoardReviewRow): BoardReview {
     ...(freshness.current ? { behavior: reviewBehavior(app.db, row) } : {}),
     ...(workload && freshness.current ? { workload } : {}),
     items: listReviewItems(app.db, row.id).filter((r) => freshness.current || r.source === "check").map((r) => itemOf(r, hidden)),
-    fixed: row.fixed.flatMap((f) => (row.previousReviewId === null || f.source !== "check" ? [] : [{ ...itemOf(f, hidden), fixedSince: row.previousReviewId }])),
+    fixed: row.fixed.flatMap((f) => (row.previousReviewId === null || (!freshness.current && f.source !== "check") ? [] : [{ ...itemOf(f, hidden), fixedSince: row.previousReviewId }])),
   };
 }
 
@@ -117,7 +118,7 @@ export function reviewFindings(app: App, ref: string): ReviewFindings {
       trigger: review.trigger,
       checkedAt: review.checkedAt,
       ai: { status: review.ai.status, reason: review.ai.reason },
-      current: review.revisionId === view.headRevisionId && review.freshness?.current !== false,
+      current: isReviewCurrent(review, view.headRevisionId),
       freshnessReason: review.freshness?.reason ?? null,
       items: shown.map((item) => ({
         id: item.id,

@@ -80,7 +80,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
     <header className="br-head">
       <div>
         <p className="br-eyebrow"><FileText size={13} aria-hidden="true" />
-          {review === null ? "Not looked over yet" : r.stale ? "A fresh review is needed" : `keyloom looked it over · ${TRIGGER[review.trigger]}, ${formatWhen(review.checkedAt, now).replace(/^(Today|Yesterday|Just now)/, (w) => w.toLowerCase())}`}
+          {review === null ? "Not looked over yet" : r.stale ? "Review out of date" : `keyloom looked it over · ${TRIGGER[review.trigger]}, ${formatWhen(review.checkedAt, now).replace(/^(Today|Yesterday|Just now)/, (w) => w.toLowerCase())}`}
         </p>
         <h2>Your {boardName}, looked over</h2>
         <p className="br-lead">
@@ -119,10 +119,10 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
         <SuggestionTestResults baseline={review.workload?.baseline ?? []} result={review.workload?.comparisons.find((c) => c.proposalId === item.proposalId)} />
         {review.behavior?.filter((b) => b.proposalId === item.proposalId).map((b) => <details key={b.proposalId}>
           <summary>Affected behavior · {b.status === "not-tested" ? "not tested" : b.status}</summary>
-          {b.checks.map((check) => <p key={check.name}>{check.name}: {check.status}{check.reason ? ` — ${check.reason}` : ""}</p>)}
+          {b.checks.map((check) => <p key={check.name}><ReviewText text={check.name} layout={layout} rows={rows} />: {check.status}{check.reason ? ` — ${check.reason}` : ""}</p>)}
           {b.limitations.map((limit) => <p key={limit}>{limit}</p>)}
         </details>)}
-        <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>source checked · see test coverage above</span>}</div>
+        <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>source checked</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
             <button type="button" className="sheet-action" aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
@@ -192,7 +192,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
       {head}
       <div className="br-body">
         {r.stale ? <div className="br-actions"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run(true)}>Run a fresh review</button></div> : null}
-        {nothing && fixedNow.length === 0 ? (
+        {!r.stale && nothing && fixedNow.length === 0 ? (
           <p className="br-quiet br-nothing">
             <Check size={14} aria-hidden="true" /> No findings from these source checks of {review.checks.summary.layers} layers, {review.checks.summary.keys} keys and {review.checks.summary.combos} combos. This does not establish runtime behavior or better typing.
           </p>

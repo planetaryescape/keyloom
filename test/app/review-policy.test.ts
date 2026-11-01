@@ -132,6 +132,6 @@ test("a source-preserving retarget is allowed but the app, not the model, descri
     expect(saved.explanation).not.toContain("Sticky");
     expect(saved.explanation).not.toContain("faster");
     expect(saved.tradeoffs.costs.join(" ")).not.toContain("Sticky");
-    expect(saved.decisionDraft?.reason).toContain("source");
+    expect(saved.decisionDraft).toBeNull();
   } finally { w.app.db.close(); }
 });

@@ -155,7 +155,7 @@ test("selected suites are a deterministic union with distinct task IDs", () => {
   expect(suite.tasks.map((t) => t.id)).toEqual(["prose-prose", "shortcuts-copy-control", "shortcuts-command-palette", "shortcuts-navigation"]);
 });
 
-test("a proposal touching a pin is withdrawn before candidate replay", async () => {
+test("a proposal touching a pin is refused before it can be saved or replayed", async () => {
   const w = world();
   try {
     recordPriority(w.app, w.layoutId, { priorityKind: "pinned", statement: "Leave the spare key empty", subject: { slots: [{ layerId: "base", position: 11 }] } });
@@ -166,7 +166,7 @@ test("a proposal touching a pin is withdrawn before candidate replay", async () 
     const done = await runReviewAi(w.app, review.id, { ...m.deps, workload: { replay: async () => { calls++; return reports(); } } });
     expect(calls).toBe(1);
     expect(done.items.some((i) => i.kind === "suggestion")).toBe(false);
-    expect(done.workload?.comparisons).toEqual([]); // Pins are now refused before a proposal can be saved.
+    expect(done.workload?.comparisons).toEqual([]); // No saved candidate exists to compare.
     expect(m.requests.flatMap((r) => r.toolResults).join(" ")).toContain("pinned");
     expect(w.app.db.query("SELECT count(*) AS n FROM change_sets WHERE status = 'proposed'").get()).toEqual({ n: 0 });
   } finally { w.app.db.close(); }

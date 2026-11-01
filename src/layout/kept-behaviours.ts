@@ -10,7 +10,7 @@ export type KeptCall = { name: string; params: string[] };
  * A kept node: its `compatible`, its `bindings` (one cell per `<...>`, with the calls in that cell), and its `#binding-cells`, which is
  * how many parameters a call of it takes. Undefined when the node doesn't declare one, so no call of it reads.
  */
-export type KeptDefinition = { compatible: string | undefined; cells: KeptCall[][]; bindingCells: number | undefined };
+export type KeptDefinition = { compatible: string | undefined; cells: KeptCall[][]; bindingCells: number | undefined; tappingTermMs?: number };
 
 /** Labels defined twice (behaviour and macro, or two of one kind) map to null: nothing resolves through an ambiguous name. */
 export function keptDefinitions(passthrough: readonly Passthrough[]): ReadonlyMap<string, KeptDefinition | null> {
@@ -38,7 +38,10 @@ export function parseKeptNode(source: string): KeptDefinition | null {
     cells.push(calls);
   }
   const declared = /#binding-cells\s*=\s*<\s*(\d+)\s*>/.exec(text)?.[1];
-  return { compatible, cells, bindingCells: declared === undefined ? undefined : Number(declared) };
+  const terms = [...text.matchAll(/\btapping-term-ms\s*=\s*<\s*(\d+)\s*>\s*;/g)];
+  const definition: KeptDefinition = { compatible, cells, bindingCells: declared === undefined ? undefined : Number(declared) };
+  if (terms.length === 1) definition.tappingTermMs = Number(terms[0]![1]);
+  return definition;
 }
 
 /**
