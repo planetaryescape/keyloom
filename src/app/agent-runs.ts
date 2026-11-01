@@ -1,4 +1,7 @@
 import { prepareCopyContext, CopyContextSchema, copyHandoff, conversationCopyContext } from "./copy-context.ts";
+import { openViewWaiter } from "./open-view.ts";
+import type { ViewResult } from "../agent/open-view.ts";
+import type { ViewIntent } from "../persistence/chat-presentations.ts";
 import { newConfig } from "./configs.ts";
 import type { PutInput, PutResult, CopyHandoff } from "../agent/ports.ts";
 import { listMessages } from "../persistence/conversations.ts";
@@ -22,8 +25,12 @@ import { type TransferReport, transferReport } from "./copy-report.ts";
 const ownerToken = crypto.randomUUID();
 const deferred = new Map<string, { app: App; parentId: string; prepared: PreparedMessage; input: SendMessageInput }>();
 const owned = new Map<string, { app: App; abort: AbortController; done: Promise<void> }>();
+type ViewWaiterEntry = { app: App; waiter: ReturnType<typeof openViewWaiter>; intentId: string | null; publishResult: ((result: ViewResult) => void) | null };
+const viewWaiters = new Map<string, ViewWaiterEntry>();
+const viewClientSchema = z.object({ viewClient: z.object({ version: z.literal(1), owner: z.string().uuid() }).optional() });
 
 export type AgentRunRequest = {
+  viewClient?: { version: 1; owner: string } | undefined;
   version: 1; requestId: string; layoutRef: string;
   input: {
     message?: string | undefined; conversationId?: string | undefined;
@@ -33,6 +40,7 @@ export type AgentRunRequest = {
   };
 };
 export type AgentRunSnapshot = {
+  viewProtocol?: 1;
   version: 1; id: string; requestId: string; conversationId: string; userMessageId: string; status: RunRow["status"];
   handoff?: CopyHandoff;
   seq: number; cancelRequested: boolean; committedPreparations: number; preparations: EffectSummary[]; presentation: Presentation | null;
@@ -59,6 +67,7 @@ export function reconcileAgentRuns(app: App): void {
       const presentation = listPresentations(app.db, row.conversation_id).find((p) => p.userMessageId === row.user_message_id);
       if (presentation) savePresentation(app.db, row.conversation_id, {
         ...presentation, status: "unobserved", warning: "Execution was interrupted. Saved preparation remains; nothing was automatically rerun. Stop is not rollback.",
+        ...(presentation.viewIntents === undefined ? {} : { viewIntents: presentation.viewIntents.map((intent): ViewIntent => intent.status === "pending" ? { ...intent, status: "resolved", result: { version: 1, status: "unavailable", reason: "cancelled" } } : intent) }),
         operations: presentation.operations.map((operation) => operation.status === "running" ? { ...operation, status: "unknown" } : operation),
       });
     });
@@ -71,6 +80,7 @@ export function inspectAgentRun(app: App, id: string): AgentRunSnapshot {
   const count = z.object({ count: z.number() }).parse(app.db.query("SELECT count(*) AS count FROM agent_effects WHERE run_id = ?").get(row.id));
   const handoff = copyHandoff(app, row.id);
   const snapshot: AgentRunSnapshot = {
+    ...(viewClientSchema.parse(JSON.parse(row.request_json)).viewClient === undefined ? {} : { viewProtocol: 1 }),
     version: 1, id: row.id, requestId: row.request_id, conversationId: row.conversation_id, userMessageId: row.user_message_id,
     status: row.status, seq: row.seq, cancelRequested: row.cancel_requested !== 0, committedPreparations: count.count,
     preparations: effectSummaries(app.db, row.id),
@@ -96,8 +106,9 @@ function duplicate(app: App, request: AgentRunRequest): RunRow | undefined {
   return prior;
 }
 
-export async function startAgentRun(app: App, raw: AgentRunRequest, opts: { model?: AgentModel; provider?: ProviderId } = {}): Promise<AgentRunSnapshot> {
+export async function startAgentRun(app: App, raw: AgentRunRequest, opts: { model?: AgentModel; provider?: ProviderId; viewTimeoutMs?: number } = {}): Promise<AgentRunSnapshot> {
   const request = raw;
+  viewClientSchema.parse(request);
   if (request.version !== 1 || !request.requestId.trim() || request.requestId.length > 128) throw new UsageError("unsupported run version or invalid request identity");
   reconcileAgentRuns(app);
   const prior = duplicate(app, request);
@@ -131,7 +142,7 @@ export async function startAgentRun(app: App, raw: AgentRunRequest, opts: { mode
     }
     return { row: requireRun(app, id), prepared };
   });
-  if (accepted.prepared !== undefined) launch(app, accepted.row.id, accepted.prepared, input);
+  if (accepted.prepared !== undefined) launch(app, accepted.row.id, accepted.prepared, input, request.viewClient, opts.viewTimeoutMs);
 
   return inspectAgentRun(app, accepted.row.id);
 }
@@ -220,10 +231,14 @@ function settleCopies(app: App, parentId: string, canLaunch: boolean): void {
   }
 }
 
-function launch(app: App, id: string, prepared: PreparedMessage, input: SendMessageInput): void {
+function launch(app: App, id: string, prepared: PreparedMessage, input: SendMessageInput, viewClient?: AgentRunRequest["viewClient"], viewTimeoutMs?: number): void {
   const abort = new AbortController();
   const entry = { app, abort, done: Promise.resolve() };
   owned.set(id, entry);
+  const waiter = viewClient === undefined ? undefined : openViewWaiter(abort.signal, viewTimeoutMs);
+  const viewEntry: ViewWaiterEntry | undefined = waiter === undefined ? undefined : { app, waiter, intentId: null, publishResult: null };
+  if (viewEntry) viewWaiters.set(id, viewEntry);
+  let viewCount = 0;
   const stop = () => { cancelAgentRun(app, id); };
   input.signal?.addEventListener("abort", stop, { once: true });
   if (input.signal?.aborted) abort.abort();
@@ -231,6 +246,20 @@ function launch(app: App, id: string, prepared: PreparedMessage, input: SendMess
   const copyContext = conversationCopyContext(app, prepared.conversation.id, prepared.resolvedQuestions.flatMap((question) => question.questionRefines === undefined ? [] : [question.questionRefines]));
   entry.done = runPreparedMessage(app, prepared, {
     ...input, signal: abort.signal,
+    ...(viewEntry === undefined ? {} : { openView: async (view, publish) => {
+      if (viewEntry.intentId !== null) return { version: 1, status: "unavailable", reason: "busy" };
+      if (viewCount >= 8) return { version: 1, status: "unavailable", reason: "limit" };
+      if (abort.signal.aborted || requireRun(app, id).cancel_requested) return { version: 1, status: "unavailable", reason: "cancelled" };
+      const intent: ViewIntent = { version: 1, id: crypto.randomUUID(), runId: id, requestId: requireRun(app, id).request_id, configId: prepared.view.layout.id, expiresAt: Date.now() + (viewTimeoutMs ?? 5_000), view, status: "pending" };
+      viewEntry.intentId = intent.id;
+      viewEntry.publishResult = (result) => publish({ ...intent, status: "resolved", result });
+      viewCount++;
+      try {
+        const result = await viewEntry.waiter.wait(() => publish(intent));
+        publish({ ...intent, status: "resolved", result });
+        return result;
+      } finally { viewEntry.intentId = null; viewEntry.publishResult = null; }
+    } }),
     onEvent: (event) => {
       if (event.type === "presentation") app.db.query("UPDATE agent_runs SET seq = seq + 1 WHERE id = ?").run(id);
       input.onEvent?.(event);
@@ -239,11 +268,33 @@ function launch(app: App, id: string, prepared: PreparedMessage, input: SendMess
     app.db.query("UPDATE agent_runs SET status = ?, finished_at = ?, seq = seq + 1 WHERE id = ? AND status = 'running'")
       .run(abort.signal.aborted ? "cancelled" : "failed", Date.now(), id);
   }).finally(() => {
+    waiter?.close();
+    viewWaiters.delete(id);
     clearInterval(cancelCheck);
     input.signal?.removeEventListener("abort", stop);
     settleCopies(app, id, !abort.signal.aborted && findRun(app.db, id)?.status === "completed");
     owned.delete(id);
   });
+}
+
+/** Ownership is private request metadata, never public presentation or model input. */
+export function acknowledgeAgentView(app: App, id: string, ack: { version: 1; owner: string; configId: string; intentId: string; result: ViewResult }): ViewResult {
+  reconcileAgentRuns(app);
+  const row = requireRun(app, id);
+  const owner = viewClientSchema.parse(JSON.parse(row.request_json)).viewClient?.owner;
+  if (ack.version !== 1 || owner === undefined || ack.owner !== owner || ack.configId !== row.layout_id) throw new UsageError("view acknowledgement does not belong to this request");
+  const intent = listPresentations(app.db, row.conversation_id).find((p) => p.userMessageId === row.user_message_id)?.viewIntents?.find((item) => item.id === ack.intentId);
+  if (!intent || intent.runId !== row.id || intent.configId !== ack.configId) throw new UsageError("unknown view intent");
+  if (intent.status === "resolved") {
+    if (canonical(intent.result) === canonical(ack.result)) return intent.result;
+    throw new UsageError("view intent already resolved differently");
+  }
+  const pending = viewWaiters.get(row.id);
+  if (row.status !== "running" || row.cancel_requested || Date.now() >= intent.expiresAt || pending?.app !== app || pending.intentId !== intent.id || !pending.waiter.ack(ack.result)) throw new UsageError("view intent is no longer pending");
+  // Publish into the owning presentation state synchronously: another tool's observation
+  // must not overwrite this receipt with the former pending snapshot before the await resumes.
+  pending.publishResult?.(ack.result);
+  return ack.result;
 }
 
 export async function answerAgentRun(app: App, id: string, requestId: string, answer: { toolUseId: string; text: string }, opts: { model?: AgentModel; provider?: ProviderId } = {}): Promise<AgentRunSnapshot> {
