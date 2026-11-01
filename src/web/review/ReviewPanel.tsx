@@ -80,11 +80,11 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
     <header className="br-head">
       <div>
         <p className="br-eyebrow"><FileText size={13} aria-hidden="true" />
-          {review === null ? "Not looked over yet" : r.stale ? "keyloom is looking again · your change" : `keyloom looked it over · ${TRIGGER[review.trigger]}, ${formatWhen(review.checkedAt, now).replace(/^(Today|Yesterday|Just now)/, (w) => w.toLowerCase())}`}
+          {review === null ? "Not looked over yet" : r.stale ? "A fresh review is needed" : `keyloom looked it over · ${TRIGGER[review.trigger]}, ${formatWhen(review.checkedAt, now).replace(/^(Today|Yesterday|Just now)/, (w) => w.toLowerCase())}`}
         </p>
         <h2>Your {boardName}, looked over</h2>
         <p className="br-lead">
-          {r.stale ? "Checking the new version. What's below is from the one before, so it may already be out of date." : `What keyloom noticed about ${configName}, without being asked. It looks again after every change.`}
+          {r.stale ? review?.freshness?.reason ?? "These checks cover an earlier version. Run a fresh review before using suggestions." : `Source checks for ${configName}. It looks again after changes and reconnects; this is not a readback of the keyboard's full firmware.`}
         </p>
       </div>
       <button type="button" className="sheet-close" aria-label="Close the review" onClick={onClose}><X size={16} aria-hidden="true" /></button>
@@ -117,7 +117,12 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
         <p><ReviewText text={bodyOf(item, rows)} layout={layout} rows={rows} /></p>
         <SuggestionTestResults baseline={review.workload?.baseline ?? []} result={review.workload?.comparisons.find((c) => c.proposalId === item.proposalId)} />
-        <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>checked against your layout</span>}</div>
+        {review.behavior?.filter((b) => b.proposalId === item.proposalId).map((b) => <details key={b.proposalId}>
+          <summary>Affected behavior · {b.status === "not-tested" ? "not tested" : b.status}</summary>
+          {b.checks.map((check) => <p key={check.name}>{check.name}: {check.status}{check.reason ? ` — ${check.reason}` : ""}</p>)}
+          {b.limitations.map((limit) => <p key={limit}>{limit}</p>)}
+        </details>)}
+        <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>source checked · see test coverage above</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
             <button type="button" className="sheet-action" aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
@@ -186,17 +191,18 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
     <section className="br-panel" aria-label="Board review">
       {head}
       <div className="br-body">
-        {workloadTests}
+        {r.stale ? <div className="br-actions"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run(true)}>Run a fresh review</button></div> : null}
         {nothing && fixedNow.length === 0 ? (
           <p className="br-quiet br-nothing">
-            <Check size={14} aria-hidden="true" /> Nothing to note. keyloom checked {review.checks.summary.layers} layers, {review.checks.summary.keys} keys and {review.checks.summary.combos} combos: every layer can be reached, nothing is lost, and the timings agree.
+            <Check size={14} aria-hidden="true" /> No findings from these source checks of {review.checks.summary.layers} layers, {review.checks.summary.keys} keys and {review.checks.summary.combos} combos. This does not establish runtime behavior or better typing.
           </p>
         ) : null}
         {g.problems.length === 0 && fixedNow.length === 0 ? null : group("Problems", g.problems.length, <>{fixedNow.filter((f) => f.kind === "problem").map(fixed)}{g.problems.map(finding)}</>)}
         {loose.length === 0 ? null : group("Suggestions", loose.length, loose.map(suggestion))}
         {g.hints.length === 0 ? null : group("Hints", g.hints.length, <>{fixedNow.filter((f) => f.kind === "hint").map(fixed)}{g.hints.map(finding)}</>)}
+        {workloadTests}
 
-        {review.ai.status === "pending" || review.ai.status === "running" ? (
+        {r.stale ? null : review.ai.status === "pending" || review.ai.status === "running" ? (
           <p className="br-quiet br-ai-coming"><LoaderCircle size={13} className="spin" aria-hidden="true" /> keyloom's own look is on its way; the checks above are already in.</p>
         ) : review.ai.status === "done" && review.ai.reason !== null ? (
           // A look that stopped early still shows what it found; say so, quietly, so a short list isn't read as all there is.
@@ -251,6 +257,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
         <span>
           {review.ai.status === "done" ? "" : "Checks only · "}
           {review.checks.summary.layers} layers, {review.checks.summary.keys} keys, {review.checks.summary.combos} combos checked
+          {g.suggestions.length ? ` · ${g.suggestions.length} ${g.suggestions.length === 1 ? "suggestion" : "suggestions"}` : ""}
           {hidden.length === 0 ? "" : ` · ${hidden.length} hidden`}
         </span>
         <FixIssuesButton
@@ -274,7 +281,7 @@ export function ReviewMarker({ review: r, open, onToggle }: { review: Review; op
   if (review === null) {
     return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}><i data-tone="hint" aria-hidden="true" />Not looked over yet</button>;
   }
-  if (r.stale) return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}><i data-tone="busy" aria-hidden="true" />Looking over your change…</button>;
+  if (r.stale) return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}><i data-tone="hint" aria-hidden="true" />Fresh review needed</button>;
   const g = grouped(review);
   const tone = g.problems.length > 0 ? "problem" : g.hints.length > 0 || g.suggestions.length > 0 ? "hint" : "ok";
   const text = markerWords(review) ?? "Looked over · nothing to note";

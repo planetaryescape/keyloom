@@ -61,8 +61,8 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
   return {
     review,
     activities: response?.workloadActivities ?? [],
-    /** The review is of an older revision: the head's is being made. */
-    stale: review !== null && response !== null && review.revisionId !== response.headRevisionId,
+    /** The revision or other inputs changed; old recommendations are withheld. */
+    stale: review !== null && response !== null && (review.revisionId !== response.headRevisionId || review.freshness?.current === false),
     loaded: response !== null,
     problem,
     busy,

@@ -8,12 +8,14 @@ import { type ChangeSetRow, findChangeSet } from "../persistence/change-sets.ts"
 import { findLayoutRow } from "../persistence/layouts.ts";
 import { reviewActivities, reviewWorkload } from "../persistence/review-workloads.ts";
 import {
-  type AiStatus, type BoardReviewRow, type ReviewItemRow, type ReviewTrigger, dismissals, latestReview, listReviewItems,
+   type AiStatus, type BoardReviewRow, type ReviewItemRow, type ReviewTrigger, dismissals, latestReview, listReviewItems, reviewBehavior,
 } from "../persistence/reviews.ts";
 import { type FixedItem, type ReviewItem } from "../validation/review-item.ts";
 import type { App } from "./context.ts";
 import { NotFoundError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
+import { reviewFreshness } from "./review-freshness.ts";
+import type { BehaviorEvidence } from "../layout/review-evidence.ts";
 
 export type BoardReview = {
   id: string;
@@ -24,6 +26,8 @@ export type BoardReview = {
   checks: { status: "done"; summary: { layers: number; keys: number; combos: number } };
   ai: { status: AiStatus; reason: string | null; model: string | null };
   workload?: ReviewWorkload;
+  freshness?: { current: boolean; reason: string | null };
+  behavior?: Array<BehaviorEvidence & { proposalId: string }>;
   /** Hidden items are in the list with `dismissedAt` set, so the screen can count them and offer them back. */
   items: ReviewItem[];
   /** What the previous review had that this revision no longer produces, each saying which review it was fixed since. */
@@ -44,13 +48,16 @@ export const itemOf = (row: ReviewItemRow, hidden: ReadonlyMap<string, number>):
 export function toReview(app: App, row: BoardReviewRow): BoardReview {
   const hidden = dismissals(app.db, row.layoutId);
   const workload = reviewWorkload(app.db, row.id);
+  const freshness = reviewFreshness(app, row);
   return {
     id: row.id, layoutId: row.layoutId, revisionId: row.revisionId, trigger: row.trigger, checkedAt: row.checkedAt,
     checks: { status: "done", summary: row.summary },
     ai: { status: row.ai.status, reason: row.ai.reason, model: row.ai.model },
-    ...(workload ? { workload } : {}),
-    items: listReviewItems(app.db, row.id).map((r) => itemOf(r, hidden)),
-    fixed: row.fixed.flatMap((f) => (row.previousReviewId === null ? [] : [{ ...itemOf(f, hidden), fixedSince: row.previousReviewId }])),
+    freshness,
+    ...(freshness.current ? { behavior: reviewBehavior(app.db, row) } : {}),
+    ...(workload && freshness.current ? { workload } : {}),
+    items: listReviewItems(app.db, row.id).filter((r) => freshness.current || r.source === "check").map((r) => itemOf(r, hidden)),
+    fixed: row.fixed.flatMap((f) => (row.previousReviewId === null || f.source !== "check" ? [] : [{ ...itemOf(f, hidden), fixedSince: row.previousReviewId }])),
   };
 }
 
@@ -110,7 +117,8 @@ export function reviewFindings(app: App, ref: string): ReviewFindings {
       trigger: review.trigger,
       checkedAt: review.checkedAt,
       ai: { status: review.ai.status, reason: review.ai.reason },
-      current: review.revisionId === view.headRevisionId,
+      current: review.revisionId === view.headRevisionId && review.freshness?.current !== false,
+      freshnessReason: review.freshness?.reason ?? null,
       items: shown.map((item) => ({
         id: item.id,
         source: item.source,

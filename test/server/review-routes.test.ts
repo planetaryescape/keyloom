@@ -8,7 +8,8 @@ import { appSyncBackend } from "../../src/cli/sync-backend.ts";
 import { handleReviewRoute } from "../../src/server/review-routes.ts";
 import { handleSyncRoute } from "../../src/server/sync-routes.ts";
 import { type SyncWorld, gate, syncWorld, waitFor } from "../helpers/fake-sync.ts";
-import { finished, scriptedModel, submit } from "../helpers/review-world.ts";
+import { finished, proposeStep, savedId, scriptedModel, submit } from "../helpers/review-world.ts";
+import { applyOps, getLayout } from "../../src/app/index.ts";
 import type { WorkloadDeps } from "../../src/app/workload.ts";
 import { replayResult } from "../helpers/workload.ts";
 
@@ -28,11 +29,13 @@ afterEach(async () => {
 async function serve(opts: { held?: boolean; workload?: WorkloadDeps } = {}) {
   const w = await syncWorld();
   worlds.push(w);
+  applyOps(w.app, w.layoutId, { baseRevisionId: getLayout(w.app, w.layoutId).revision.id, summary: "An empty key for the route fixture", ops: [{ op: "setBinding", at: { layerId: "layer-0", position: 33 }, binding: { kind: "none" } }] });
   w.flashed();
   const sync = w.engine();
   await sync.start();
   const model = scriptedModel([
-    submit([{ kind: "hint", code: "layer-order", title: "Two layers are alike", body: "{layer:layer-0} and {layer:layer-1} share most keys.", layers: ["layer-0", "layer-1"] }]),
+    proposeStep,
+    (seen) => submit([{ kind: "suggestion", code: "use-empty", title: "Use it", body: "Use it", proposalId: savedId(seen.toolResults), keys: [{ layerId: "layer-0", position: 33 }] }]),
     finished,
   ]);
   const held = gate();
@@ -102,7 +105,7 @@ describe("the review", () => {
     await waitFor(() => (w.app.db.query("SELECT ai_status FROM board_reviews").get() as { ai_status: string }).ai_status === "done", "the agent's part");
     const done = await read(base);
     expect(done.review?.ai.status).toBe("done");
-    expect(done.review?.items.at(-1)).toMatchObject({ source: "agent", kind: "hint", id: "agent:layer-order:layer-0,layer-1:", title: "Two layers are alike" });
+    expect(done.review?.items.at(-1)).toMatchObject({ source: "agent", kind: "suggestion", title: "Set F17 on Layer 0" });
   });
 
   test("it is found by name as well as by ID", async () => {

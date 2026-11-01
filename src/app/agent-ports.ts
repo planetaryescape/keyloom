@@ -23,6 +23,7 @@ import { putConfig } from "./keyboard-put.ts";
 import { getLayout, listLayouts } from "./layouts.ts";
 import { reviewFindings as readReviewFindings } from "./review-read.ts";
 import { typingFindings } from "./lab.ts";
+import { automaticProposalDescription, automaticReviewErrors } from "../validation/review-policy.ts";
 
 export const toPriorityFact = (d: DecisionRow): PriorityFact => ({
   id: d.id, priorityKind: d.priorityKind ?? "pinned", statement: d.goal, reason: d.reason, subject: d.subject,
@@ -72,6 +73,17 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
   const requireConfigCreation = () => {
     if (restrictConfigCreation) throw new UsageError("Continue adapting this config; do not create another copy.");
   };
+  const check = (ops: Parameters<AgentPorts["check"]>[0]) => {
+    const result = checkChange(app, layoutId, { ops, ...scope });
+    if (conversationId === null && result.ok) {
+      result.errors.push(...automaticReviewErrors(getLayout(app, layoutId).document, ops));
+      if (result.warnings.some((w) => w.code === "moved_pinned") || result.diff.reminders.some((r) => r.status === "tried_helpful")) {
+        result.errors.push({ code: "review_priority", message: "Automatic review cannot override a pinned key or a tried-and-helpful decision. Keep it unchanged or ask in a conversation.", plain: "This suggestion needs your decision before it can override a saved priority." });
+      }
+      result.ok = result.errors.length === 0;
+    }
+    return result;
+  };
   const ports: AgentPorts = {
     snapshot: () => snapshotOf(layoutId),
     layouts: () => listLayouts(app).map((row) => viewOf(row.id)),
@@ -96,7 +108,7 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         id: made.id, name: made.name, boardName: made.boardName,
       }));
     },
-    check: (ops) => checkChange(app, layoutId, { ops, ...scope }),
+    check,
     priorities: () => layoutPriorities(app, layoutId).map(toPriorityFact),
     recordPriority(input) {
       if (conversationId === null) throw new Error("a priority is recorded from what BK says, and a review is not a conversation");
@@ -118,14 +130,15 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
       // One group for the alternatives of a call, so applying one supersedes the rest.
       const proposalGroup = newId("pg");
       return alternatives.map((alt) => {
-        const validation = checkChange(app, layoutId, { ops: alt.ops, ...scope });
+        const validation = check(alt.ops);
         if (!validation.ok) return { title: alt.title, changeSetId: null, validation };
         try {
           const from = lineage(replaced, sourceMessageIds, app);
+          const description = conversationId === null ? automaticProposalDescription(getLayout(app, layoutId).document, alt.ops) : alt;
           const cs = proposeChange(app, layoutId, {
-            ops: alt.ops, explanation: alt.explanation, source: "agent", title: alt.title, tradeoffs: alt.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
+            ops: alt.ops, explanation: description.explanation, source: "agent", title: description.title, tradeoffs: description.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
             ...(typeof supersedes === "string" ? { supersedes } : {}),
-            decisionDraft: { ...alt.decisionDraft, sourceMessageIds: from },
+            decisionDraft: { ...description.decisionDraft, sourceMessageIds: from },
           });
           return { title: alt.title, changeSetId: cs.id, validation: cs.validation };
         } catch (err) {

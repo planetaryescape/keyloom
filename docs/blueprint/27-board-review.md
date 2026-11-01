@@ -1,12 +1,12 @@
 # 27: Board review
 
-Status: engine built (checks, agent part, triggers, routes, events and CLI), 2026-10-17; screens built (D-340); the fix run built 2026-10-30 (D-461). Explicit activity profiles, baseline measurement and independently tested review suggestions are built in source (D-473), 2026-11-01. [Source/runtime evidence](../research/workload-board-review.md) includes real QMK/ZMK comparisons, a compiled CLI journey and UI checks. This does not establish published availability or hardware acceptance.
+Status: engine and screens built (D-340), with the fix run (D-461) and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation are built in source (D-474), 2026-11-01. [Grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. Published availability and hardware acceptance are separate gates.
 
 BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … and I can just see them somewhere without me needing to ask for them or dig into some menus … it would be nice if it's proactive."
 
 ## What it is
 
-A board review is what keyloom found in one revision of a config. It is made without being asked, stored, and read from `GET /api/layouts/:ref/review`. There is one per revision (`board_reviews`, unique on config and revision), so a revision is never reviewed twice.
+A board review is what keyloom found in a saved config under a particular set of constraints and board inputs. Read it from `GET /api/layouts/:ref/review`. Storage retains one row per config/revision, but a fresh analysis replaces its contents when inputs change or the keyboard reconnects. An unchanged revision alone does not make recommendations current.
 
 The checks fill in at once and need nothing. The agent's part arrives after, on whichever model provider is set up, and the page hears about it on the events stream. If there is no provider, or the run fails, the review says so in words and the checks still show.
 
@@ -20,6 +20,8 @@ type BoardReview = {
   checks: { status: "done"; summary: { layers; keys; combos } };
   ai: { status: "pending" | "running" | "done" | "unavailable" | "failed"; reason: string | null; model: string | null };
   workload?: ReviewWorkload;
+  freshness?: { current: boolean; reason: string | null };
+  behavior?: (BehaviorEvidence & { proposalId: string })[];
   items: ReviewItem[];   // hidden ones included, with dismissedAt
   fixed: FixedItem[];    // the previous review's items this revision no longer produces
 };
@@ -44,7 +46,15 @@ type ReviewItem = {
 
 ## The agent's part
 
-One run per revision, with the conversation's own tools (`get_layout`, `find_function`, `analyse_change`, `get_typing_findings`, `propose_changes`) and no tool that needs BK, plus `submit_review`, which is how it hands the structure back.
+One run per current snapshot, using `get_layout`, `retarget_layer_hold`, `find_function`, `analyse_change`, `get_typing_findings` and `propose_changes`, plus `submit_review`. No tool asks BK a question or applies a change.
+
+`get_layout` includes custom behavior definitions and their macro dependencies, modeled macro/tap-dance/combo actions, and separate firmware indices and display numbers. These are source facts, not runtime observations. A legend does not establish intent, and an empty native `tapSteps` array does not establish a no-op.
+
+Automatic proposals must preserve existing functions and each custom or compound key's actions. A model-written `dropFunction` reason is not permission to discard a tap, hold, macro or tap dance. Existing combos, encoder actions, conditional layers and unmodeled firmware source/settings stay unchanged. Pins and tried-and-helpful decisions are hard constraints. Explicit editor/chat choices retain ordinary validation.
+
+For an understood native hold-layer key, `retarget_layer_hold` prepares a narrowly checked layer-argument edit while retaining its tap, source definition and other arguments. It saves nothing; the complete proposal must still preserve access to the old target's functions.
+
+The app generates the saved proposal's effects, tradeoffs and decision draft from the actual ops. It also regenerates the displayed suggestion and recomputes which source checks it fixes. Unsupported standalone model diagnoses are not published. With no supported improvement, an empty review is valid.
 
 - A suggestion is a real change set saved by `propose_changes` outside any conversation, validated against the head (D-014). It shows in the config's open proposals (D-336). A suggestion whose `proposalId` the run didn't save is dropped. Nothing is ever applied.
 - The budget is 10 requests and 14 tool calls. A model past its tool calls is told to submit. The run takes the review first (`claimAi`), so the server and `keyloom review --run` never both pay for one.
@@ -56,10 +66,16 @@ One run per revision, with the conversation's own tools (`get_layout`, `find_fun
 
 The review engine (`src/app/review-engine.ts`) is level-triggered, like the sync engine. Every second it looks for a head with no review that should have one:
 
-- **connect:** the config on a board's keyboard, when the sync engine's last view shows that keyboard connected;
+- **connect/reconnect:** every genuine connection, even at the same config head, and changes to observed firmware identity or attached halves. Stable polling does not rerun a review;
 - **apply** and **import:** a head made since the server started, once the quiet time (3 s, as the sync engine's) has passed with no further change, so a burst of Applies is one review of the last of them.
 
 A config nothing touched while its keyboard was away has no review until `POST …/review/run` or `keyloom review --run`.
+
+Disconnect or observed device change immediately withdraws the old recommendations and revokes the active writer's lease. A superseded run cannot save or publish proposals over its replacement. Saved config, board, constraints and activity-profile changes also invalidate freshness. Apply independently checks the automatic proposal's snapshot and completed run; an old proposal ID cannot bypass the panel's disabled button.
+
+A genuine reconnect requests a new model review even when the saved config is identical. It uses the chosen provider under that provider's normal billing or subscription terms; stable polling makes no new request.
+
+Migration 0016 withdraws legacy model recommendations and marks their review contract outdated without calling a provider or changing configs. Choose **Run a fresh review**, use `keyloom review my-layout --run`, or reconnect the keyboard. The sync identity is not a full firmware/keymap readback: changes the device does not expose cannot be verified by this review.
 
 ## Test suggestions against your activities
 
@@ -85,6 +101,14 @@ Open **Baseline results** or a suggestion's **Test results · current → sugges
 
 These short US-ANSI transcription and HID samples do not measure editor behavior, typing speed or comfort. A measured suggestion is still a preview. Apply revalidates against the current head; an old review's evidence never approves a later change.
 
+### Check affected behavior separately
+
+Selected activity tests also enable bounded affected-behavior checks on the actual saved candidate. The app asserts modeled modifier hold-taps' tap, sustained chord, rolling tap and release behavior through the production firmware emulator. A supported base-layer hold retarget gets a distinct target-layer witness followed by a base-layer release witness. Assertions come from the declared actions, not model claims or emulator-rendered text.
+
+Open **Affected behavior** on the suggestion, or read `review.behavior` in CLI/API JSON. Each case is `verified`, `failed` or `unsupported`; the overall result can also be `not-tested` or `partial`. A failed affected-behavior check withdraws the proposal. Missing context, unsupported warnings, non-HID custom taps and case limits remain explicit gaps. With no activities selected, no new firmware replay starts and the result is `not-tested`.
+
+Passing these cases does not establish all timing interactions, lighting effects, physical keyboard behavior or human comfort. Workload improvement, source preservation and affected-behavior coverage are separate results.
+
 ## Fixed, hidden and replaced
 
 - A review of a revision lists, in `fixed`, the previous review's problems and hints that the new revision no longer produces, each with `fixedSince: <previous review id>`. A finding still about some of its keys has changed, not gone. A finding BK had hidden is not ticked off. The agent's findings count only when the agent finished in both reviews.
@@ -103,7 +127,7 @@ These short US-ANSI transcription and HID samples do not measure editor behavior
 
 ## API, events and CLI
 
-- `GET /api/layouts/:ref/review` gives `{ layoutId, headRevisionId, review }`, the newest review of the config. The review is stale while its `revisionId` is not `headRevisionId`.
+- `GET /api/layouts/:ref/review` gives `{ layoutId, headRevisionId, review }`, the newest review of the config. It is stale when revisions differ **or** `review.freshness.current` is false. Stale model recommendations and their measurements are withheld; historical source checks remain visible as such.
 - `POST /api/layouts/:ref/review/run` (202) stores the head's checks and answers with them; measurement and the agent's part continue. Body `{ force?: boolean, activities?: ("prose"|"typescript"|"python"|"json"|"shell"|"shortcuts")[] }`. Supplying activities remembers the profile and reruns the same revision; `[]` disables tests. Unknown/duplicate IDs fail schema validation before writes. The response's optional `workloadActivities` names the current profile, while `review.workload.activities` names the profile that produced that evidence.
 - `POST /api/layouts/:ref/review/items/:id/dismiss` and `…/restore` (`:id` URL-encoded). 404 for an id the latest review doesn't have.
 - `GET /api/events` carries `event: review` frames (`{ type: "review", layoutId, revisionId, reviewId, aiStatus }`) when a review is made and each time its agent part moves. The frame holds no review; the page reads it again.

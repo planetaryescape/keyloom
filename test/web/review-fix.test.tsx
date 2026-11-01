@@ -31,7 +31,7 @@ describe("Fix issues", () => {
   });
 
   test("is disabled with the reason while the review is stale, being written, busy, or without a ready model", () => {
-    expect(button({ stale: true })).toContain("This review is of an older version; fix from the new one");
+    expect(button({ stale: true })).toContain("This review is no longer current; run a fresh review");
     expect(button({ stale: true })).toContain("disabled");
     expect(button({ reviewing: true })).toContain("The agent&#x27;s own look is still coming");
     expect(button({ busy: true })).toContain("Finish the review action first");

@@ -15,6 +15,7 @@ import { findFunctionTool } from "./tools/find-function.ts";
 import { getLayoutTool } from "./tools/get-layout.ts";
 import { getTypingFindingsTool } from "./tools/get-typing-findings.ts";
 import { proposeChangesTool } from "./tools/propose-changes.ts";
+import { retargetLayerHoldTool } from "./tools/retarget-layer-hold.ts";
 
 /** Requests to the model, and tool calls across them: the review's budget, since one run is all a revision gets. */
 export const REVIEW_MAX_ITERATIONS = 10;
@@ -82,7 +83,7 @@ export async function runReviewAgent(input: { model: AgentModel; ports: AgentPor
     },
   });
   const tools = [
-    getLayoutTool(ports), findFunctionTool(ports), analyseChangeTool(ports, recorder), getTypingFindingsTool(ports),
+    getLayoutTool(ports), retargetLayerHoldTool(ports), findFunctionTool(ports), analyseChangeTool(ports, recorder), getTypingFindingsTool(ports),
     proposeChangesTool(ports, recorder, (p: ProposalResult) => {
       if (p.changeSetId !== null) proposed.add(p.changeSetId);
     }),

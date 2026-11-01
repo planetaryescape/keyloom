@@ -1,13 +1,14 @@
-// The board review's triggers (D-340). Like the sync engine it is level-triggered: every tick it asks, from the database and the
-// sync engine's last reading of USB, "which head has no review and should?", so a burst of Applies, a restart and a keyboard that
-// comes back are the same question with different answers. A revision with a review is never asked about again.
-//   - connect: the config on a board's keyboard, when that keyboard is connected and the head has no review;
+// The board review's triggers (D-340, D-474). Every tick checks saved input freshness; device observations also invalidate immediately.
+// A revision can be analyzed again after a genuine reconnect or changed inputs. Stable polling reuses only the current snapshot.
+//   - connect: the config on a board's keyboard when it connects, reconnects, or its observed firmware identity changes;
 //   - apply / import: a head made since the engine started, once the quiet time has passed with no further change.
 // A config that was not touched and whose keyboard is away is left alone; `POST /review/run` and `keyloom review --run` cover it.
 import { findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import { listChangeSets } from "../persistence/change-sets.ts";
 import { reviewActivities } from "../persistence/review-workloads.ts";
-import { failOrphanedRuns, findReviewOfRevision } from "../persistence/reviews.ts";
+import { failOrphanedRuns, findReviewOfRevision, invalidateReview, latestReview, REVIEW_CONTRACT_VERSION } from "../persistence/reviews.ts";
+import { transact } from "../persistence/transaction.ts";
+import { reviewFreshness } from "./review-freshness.ts";
 import type { App } from "./context.ts";
 import type { ReviewActivity } from "../layout/review-workload.ts";
 import { saveReviewActivities } from "./review-workloads.ts";
@@ -36,6 +37,9 @@ export class ReviewEngine {
   private readonly listeners = new Set<(event: ReviewEvent) => void>();
   /** Config IDs whose board has its keyboard connected, from the sync engine's last view. */
   private connected = new Set<string>();
+  private readonly freshConnections = new Set<string>();
+  private deviceKeys = new Map<string, string | undefined>();
+  private readonly controllers = new Map<string, AbortController>();
   private unwatch: (() => void) | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private chain: Promise<unknown> = Promise.resolve();
@@ -60,7 +64,24 @@ export class ReviewEngine {
     // A run that was going when the last process died will never finish; saying so ends the screen's waiting.
     failOrphanedRuns(this.app.db, "keyloom was closed while it was looking. It will look again after your next change.");
     this.unwatch = watch?.subscribe((boards) => {
-      this.connected = new Set(boards.filter((b) => b.state.kind !== "not_connected").map((b) => b.layoutId));
+      const next = new Set(boards.filter((b) => b.state.kind !== "not_connected").map((b) => b.layoutId));
+      for (const board of boards) {
+        const id = board.layoutId;
+        const changed = next.has(id) && (!this.connected.has(id) || this.deviceKeys.get(id) !== board.reviewDeviceKey);
+        const disconnected = this.connected.has(id) && !next.has(id);
+        if (changed || disconnected) {
+          if (changed) this.freshConnections.add(id);
+          else this.freshConnections.delete(id);
+          this.invalidate(id, disconnected ? "The keyboard disconnected. Recommendations will be reanalyzed when it reconnects."
+            : "The keyboard connected or its observed firmware changed. A fresh analysis is required.");
+        }
+      }
+      for (const id of this.connected) if (!boards.some((board) => board.layoutId === id)) {
+        this.freshConnections.delete(id);
+        this.invalidate(id, "The keyboard or its active config changed. Run a fresh review.");
+      }
+      this.deviceKeys = new Map(boards.map((b) => [b.layoutId, b.reviewDeviceKey]));
+      this.connected = next;
       void this.tick();
     });
     this.schedule();
@@ -84,6 +105,14 @@ export class ReviewEngine {
     for (const l of this.listeners) l(event);
   };
 
+  private invalidate(layoutId: string, reason: string): void {
+    this.controllers.get(layoutId)?.abort();
+    const review = latestReview(this.app.db, layoutId);
+    if (!review) return;
+    transact(this.app.db, () => invalidateReview(this.app.db, review.id, reason));
+    this.emit({ type: "review", layoutId, revisionId: review.revisionId, reviewId: review.id, aiStatus: "failed" });
+  }
+
   private schedule(): void {
     if (this.stopping) return;
     this.timer = setTimeout(() => void this.tick().finally(() => this.schedule()), this.tickMs);
@@ -97,9 +126,15 @@ export class ReviewEngine {
       try {
         for (const layout of listLayoutRows(this.app.db)) {
           if (this.stopping) return;
+          const previous = latestReview(this.app.db, layout.id);
+          if (previous && previous.invalidatedReason === null) {
+            const freshness = reviewFreshness(this.app, previous);
+            if (!freshness.current) this.invalidate(layout.id, freshness.reason ?? "Review inputs changed.");
+          }
           const trigger = this.triggerFor(layout);
           if (trigger === undefined) continue;
-          const { done } = this.review(layout.id, trigger);
+          const force = this.freshConnections.delete(layout.id);
+          const { done } = this.review(layout.id, trigger, { force });
           // One at a time: a model call per tick keeps a burst of imports from becoming a burst of bills.
           await done;
         }
@@ -116,7 +151,12 @@ export class ReviewEngine {
 
   private triggerFor(layout: ReturnType<typeof listLayoutRows>[number]): ReviewTrigger | undefined {
     if (layout.archivedAt !== null) return undefined;
-    if (findReviewOfRevision(this.app.db, layout.id, layout.headRevisionId)) return undefined;
+    const existing = findReviewOfRevision(this.app.db, layout.id, layout.headRevisionId);
+    if (existing && !this.freshConnections.has(layout.id)) {
+      if (reviewFreshness(this.app, existing).current) return undefined;
+      // An upgrade alone does not authorize a provider call. Connect or an explicit rerun does.
+      if (existing.contractVersion !== REVIEW_CONTRACT_VERSION || (!this.connected.has(layout.id) && existing.invalidatedReason !== null)) return undefined;
+    }
     // Wait for the change to settle: a run of Applies is one review, of the last of them.
     if (this.now() - layout.updatedAt < this.quietMs) return undefined;
     // A head made since the server started was caused by the change, even when the keyboard is connected; "connect" is for a head that
@@ -138,8 +178,8 @@ export class ReviewEngine {
   }
 
   /**
-   * The checks for the head now, returned as soon as they are stored; `done` settles when the agent's part has too. A revision
-   * that has a review keeps it: only an agent part that was missing or failed runs again, or any with `force`.
+   * The current snapshot's checks, returned as soon as stored; `done` settles when the agent's part has too. Changed inputs revoke
+   * the old review first. An unchanged finished snapshot is reused unless `force` requests another look.
    * Supplying `activities` saves that profile ([] disables tests) and forces a rerun even when unchanged; omitting it keeps the profile.
    */
   review(ref: string, trigger: ReviewTrigger, opts: { force?: boolean; activities?: ReviewActivity[]; signal?: AbortSignal } = {}): { review: BoardReview; done: Promise<BoardReview> } {
@@ -148,10 +188,15 @@ export class ReviewEngine {
     const hooks = { emit: this.emit, now: this.now };
     const { review } = createReview(this.app, ref, trigger, hooks);
     if (review.ai.status === "done" && !force) return { review, done: Promise.resolve(review) };
-    const signal = opts.signal ? AbortSignal.any([this.abort.signal, opts.signal]) : this.abort.signal;
+    const controller = new AbortController();
+    this.controllers.set(review.layoutId, controller);
+    const signal = AbortSignal.any([this.abort.signal, controller.signal, ...(opts.signal ? [opts.signal] : [])]);
     const done = runReviewAi(this.app, review.id, this.deps, { ...hooks, ...(force ? { force: true } : {}), signal });
     this.running.add(done);
-    void done.finally(() => this.running.delete(done)).catch(() => undefined);
+    void done.finally(() => {
+      this.running.delete(done);
+      if (this.controllers.get(review.layoutId) === controller) this.controllers.delete(review.layoutId);
+    }).catch(() => undefined);
     return { review, done };
   }
 

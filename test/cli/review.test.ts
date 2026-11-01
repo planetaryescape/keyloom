@@ -44,7 +44,7 @@ describe("keyloom review", () => {
     ]);
     const table = await cli(["review", "bk", "--run", "--format", "table", "--data-dir", dir], { model: anthropicModel(fake.client) });
     expect(table.out).toContain("bk: 1 suggestion, 1 hint");
-    expect(table.out).toMatch(/Suggestions\n {2}Use an empty key {2}\(keyloom\)\n {4}blank \(.*Layer 0\) does nothing on Layer 0\./s);
+    expect(table.out).toMatch(/Suggestions\n {2}Set F17 on Layer 0 {2}\(keyloom\)\n {4}blank \(.*Layer 0\): empty → key F17\./s);
     expect(table.out).toMatch(/Proposed change: cs_\w+\. See it with: keyloom change show cs_/);
     expect(table.out).toContain("keyloom looked it over.");
 

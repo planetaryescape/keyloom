@@ -5,7 +5,8 @@ import { ReviewActivitiesSchema, ReviewWorkloadComparisonSchema, workloadVerdict
 import { dockerStatus } from "../firmware/toolchain/docker.ts";
 import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 import { findChangeSet, markRejected } from "../persistence/change-sets.ts";
-import { findReview, latestReview, REVIEW_AI_STALE_MS, type BoardReviewRow } from "../persistence/reviews.ts";
+import { latestReview, ownsReviewRun, REVIEW_AI_STALE_MS, type BoardReviewRow } from "../persistence/reviews.ts";
+import { reviewFreshness } from "./review-freshness.ts";
 import { clearReviewWorkload, reviewActivities, reviewWorkload, saveReviewWorkload, setReviewActivities } from "../persistence/review-workloads.ts";
 import { transact } from "../persistence/transaction.ts";
 import type { ReviewItem } from "../validation/review-item.ts";
@@ -73,16 +74,17 @@ export async function measureReviewBaseline(app: App, row: BoardReviewRow, signa
       if (!docker.ok) throw new UsageError(`Workload tests need Docker: ${docker.reason}`);
     }
     const report = await evaluateStoredWorkload(app, row.layoutId, { revisionId: row.revisionId, suite: selectedReviewSuite(activities), signal }, deps);
+    if (!current(app, row)) return;
     evidence.status = "done";
     evidence.identity = report.identity;
     evidence.baseline = report.tasks.map(taskSummary);
     if (report.tasks.some((t) => t.status !== "verified")) evidence.reason = "Some tasks are unverified. This review cannot establish an improvement across all selected tasks.";
-    saveReviewWorkload(app.db, row.id, evidence);
+    if (current(app, row)) saveReviewWorkload(app.db, row.id, evidence);
     return report;
   } catch (error) {
     evidence.status = signal.aborted ? "failed" : "unavailable";
     evidence.reason = signal.aborted ? "Workload testing stopped or reached its time limit." : error instanceof Error ? error.message : "Workload testing could not start.";
-    saveReviewWorkload(app.db, row.id, evidence);
+    if (current(app, row)) saveReviewWorkload(app.db, row.id, evidence);
     return;
   }
 }
@@ -101,7 +103,7 @@ export function reviewWorkloadRequest(evidence: ReviewWorkload | undefined): str
 }
 
 function current(app: App, row: BoardReviewRow): boolean {
-  return getLayout(app, row.layoutId).revision.id === row.revisionId && findReview(app.db, row.id)?.ai.status === "running";
+  return ownsReviewRun(app.db, row) && reviewFreshness(app, row).current;
 }
 
 export async function measureReviewSuggestions(app: App, row: BoardReviewRow, items: ReviewItem[], baseline: WorkloadReport | undefined, signal: AbortSignal, deps: WorkloadDeps): Promise<ReviewItem[]> {
@@ -142,10 +144,10 @@ export async function measureReviewSuggestions(app: App, row: BoardReviewRow, it
     evidence.comparisons.push(result);
     // Measurement claims come from the app, not the model's submission. The proposal still has its original rationale for inspection.
     item.title = item.keys.length ? `Try a change on ${item.keys.slice(0, 3).map((k) => `{key:${k.layerId}:${k.position}}`).join(", ")}` : "Try this config change";
-    item.body = `${workloadVerdictWords[result.verdict]}.${result.reason ? ` ${result.reason}` : ""} These are firmware-test costs, not a claim about speed or comfort.`;
+    item.body += ` ${workloadVerdictWords[result.verdict]}.${result.reason ? ` ${result.reason}` : ""} These are firmware-test costs, not a claim about speed or comfort.`;
     if (!current(app, row)) throw new UsageError("The layout changed while its suggestions were being tested.");
   }
-  saveReviewWorkload(app.db, row.id, evidence);
+  if (current(app, row)) saveReviewWorkload(app.db, row.id, evidence);
   const verdicts = new Map(evidence.comparisons.map((c) => [c.proposalId, c.verdict]));
   return items.filter((item) => item.proposalId === null || !rejected.has(item.proposalId)).sort((a, b) =>
     Number(b.proposalId !== null && verdicts.get(b.proposalId) === "verified-improvement") - Number(a.proposalId !== null && verdicts.get(a.proposalId) === "verified-improvement"));

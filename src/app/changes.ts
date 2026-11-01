@@ -2,6 +2,9 @@
 // (02#applying-undoing-and-stale-bases, 07). The agent proposes and the validator decides (D-014):
 // every path that writes a revision runs `evaluate` against the head it is about to extend.
 import { plainSummary } from "../layout/history-summary.ts";
+import { proposalReview } from "../persistence/reviews.ts";
+import { reviewFreshness } from "./review-freshness.ts";
+import { automaticReviewErrors } from "../validation/review-policy.ts";
 import { type ProposalCard, toCard } from "./proposal-card.ts";
 import { type Layout } from "../layout/schema.ts";
 import type { ChangeOp, DecisionDraft } from "../layout/change.ts";
@@ -198,7 +201,12 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
     const cs = findChangeSet(app.db, changeSetId);
     if (!cs) throw new NotFoundError(`no change set "${changeSetId}"`);
     if (cs.status !== "proposed") throw new UsageError(`change set ${cs.id} is ${cs.status}, not proposed`);
+    const automatic = proposalReview(app.db, cs.id);
+    if (automatic && (automatic.review.runId !== automatic.runId || automatic.review.ai.status !== "done" || !reviewFreshness(app, automatic.review).current)) {
+      throw new UsageError("This automatic recommendation is no longer current. Run a fresh review before applying it.");
+    }
     const view = getLayout(app, cs.layoutId);
+    if (automatic && automaticReviewErrors(view.document, cs.ops).length) throw new UsageError("This automatic recommendation no longer preserves the config. Run a fresh review.");
     const resolved = resolveAgainstHead(app, view, cs.baseRevisionId, cs.ops);
     const { result, after } = resolved;
     const revision = appendRevision(app.db, {

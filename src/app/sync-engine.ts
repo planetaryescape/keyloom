@@ -80,6 +80,8 @@ export type BoardSyncView = {
   state: SyncState;
   auto: SyncAutoView;
   last: SyncRunView | null;
+  /** Stable observed firmware identity for review invalidation, not a keymap readback. Internal subscribers only. */
+  reviewDeviceKey?: string;
 };
 
 export type SyncOptions = {
@@ -418,6 +420,7 @@ export class SyncEngine {
     const last = lastSyncOfBoard(this.app.db, b.boardId);
     return {
       boardId: b.boardId, boardName: b.boardName, remapper: isRemapper(b.boardId), layoutId: b.layout.id, layoutName: b.layout.name, headRevisionId: b.layout.headRevisionId,
+      reviewDeviceKey: JSON.stringify(b.reading.state === "keyloom" ? { ...b.reading, keys: [...b.reading.keys].sort(), missingHalves: [...(b.reading.missingHalves ?? [])].sort() } : b.reading),
       otherLayouts: b.layouts.filter((l) => l.id !== b.layout.id && l.archivedAt === null).length, state,
       auto: {
         on: b.facts.auto.on && !b.facts.auto.paused, choice: bs.autoSync, paused: bs.paused, proven: bs.provenAt !== null, provenAt: bs.provenAt,

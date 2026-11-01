@@ -34,10 +34,12 @@ export function reviewFindingsText(f: ReviewFindings): string {
     return n === 0 ? [] : [plural(n, kind)];
   });
   const lines = [`The newest board review of this config (${WHEN[review.trigger]}): ${tally.length === 0 ? "nothing to note" : tally.join(", ")}.`];
-  if (!review.current) {
+  if (!review.current && review.revisionId !== f.headRevisionId) {
     lines.push(
       `It is the review of an earlier version: the config changed after it was made (review ${review.revisionId}, head ${f.headRevisionId}). Use its findings as a pointer and let the validator decide against the current head; do not refuse.`,
     );
+  } else if (!review.current) {
+    lines.push(`This review is no longer current even though the saved revision is unchanged: ${review.freshnessReason ?? "review inputs changed"} Old recommendations are withheld. Treat only the source checks as historical pointers, not current firmware evidence.`);
   }
   if (review.ai.status === "pending" || review.ai.status === "running") {
     lines.push("keyloom's own look has not finished, so these are the checks' findings only.");

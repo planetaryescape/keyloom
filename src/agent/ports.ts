@@ -131,8 +131,9 @@ export type ReviewFindings = {
     trigger: "connect" | "apply" | "import" | "manual";
     checkedAt: number;
     ai: { status: "pending" | "running" | "done" | "unavailable" | "failed"; reason: string | null };
-    /** False when the head moved after the review was made: use its findings as a pointer, not as a settled base. */
+    /** False after any review-input change, not just a new revision. */
     current: boolean;
+    freshnessReason?: string | null;
     items: ReviewFinding[];
     /** How many findings BK hid; they are left out (D-340). */
     hidden: number;
