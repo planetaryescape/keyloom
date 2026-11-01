@@ -5,7 +5,7 @@ import {
   type BoardReview, EmulateFailedError, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, type WorkloadDeps, ReviewEngine, UsageError, defaultAgentModel, dismissReviewItem, fixableFindings, listLayouts, restoreReviewItem, reviewWords, showReview,
 } from "../../app/index.ts";
 import { startAgentRun } from "../../app/agent-runs.ts";
-import { REVIEW_FIX_REQUEST, REVIEW_ACTIVITIES, ReviewActivitiesSchema, workloadVerdictWords } from "../../api/review.ts";
+import { REVIEW_FIX_REQUEST, REVIEW_ACTIVITIES, ReviewActivitiesSchema, workloadVerdictWords, isReviewCurrent } from "../../api/review.ts";
 import { followAgentRun, parseProvider, type ChatDeps } from "./chat.ts";
 import { type Format, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
@@ -20,10 +20,11 @@ const reviewJson = (r: BoardReview) => ({
   id: r.id, layout_id: r.layoutId, revision_id: r.revisionId, trigger: r.trigger, checked_at: r.checkedAt,
   checks: { status: r.checks.status, summary: r.checks.summary }, ai: r.ai,
   ...(r.workload ? { workload: r.workload } : {}),
+  freshness: r.freshness, behavior: r.behavior,
   items: r.items.map(itemJson), fixed: r.fixed.map((f) => ({ ...itemJson(f), fixed_since: f.fixedSince })),
 });
 
-export const viewJson = (v: ReviewView) => ({ layout_id: v.layoutId, head_revision_id: v.headRevisionId, stale: v.review !== null && v.review.revisionId !== v.headRevisionId, review: v.review && reviewJson(v.review), ...(v.workloadActivities ? { workload_activities: v.workloadActivities } : {}) });
+export const viewJson = (v: ReviewView) => ({ layout_id: v.layoutId, head_revision_id: v.headRevisionId, stale: v.review !== null && !isReviewCurrent(v.review, v.headRevisionId), review: v.review && reviewJson(v.review), ...(v.workloadActivities ? { workload_activities: v.workloadActivities } : {}) });
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -57,7 +58,9 @@ export function reviewText(app: Parameters<typeof reviewWords>[0], v: ReviewView
   return [
     `${name}: ${shown.length === 0 ? "nothing to note" : tally.join(", ")}`,
     ...(v.headRevisionId !== r.revisionId ? ["This is the review of an earlier version of the config; run it again for the latest."] : []),
+    ...(r.freshness?.current === false ? [r.freshness.reason ?? "Run a fresh review."] : []),
     ...section("Problems", "problem"), ...section("Suggestions", "suggestion"), ...section("Hints", "hint"),
+    ...(r.behavior ?? []).filter((e) => shown.some((i) => i.proposalId === e.proposalId)).flatMap((e) => ["", `Affected behavior ${e.proposalId}: ${e.status}`, ...e.checks.map((c) => words(`  ${c.name}: ${c.status}${c.reason ? `; ${c.reason}` : ""}`)), ...e.limitations.map(words)]),
     ...(r.workload ? ["", `Workload tests: ${r.workload.activities.join(", ")} · ${r.workload.status}`,
       ...r.workload.baseline.map((t) => `  ${t.id}: ${t.status}; ${t.physicalKeydowns ?? "?"} keydowns, peak ${t.maxSimultaneousKeys ?? "?"}`),
       ...r.workload.comparisons.flatMap((c) => [`  ${c.proposalId}: ${workloadVerdictWords[c.verdict]}${c.reason ? `; ${c.reason}` : ""}`,

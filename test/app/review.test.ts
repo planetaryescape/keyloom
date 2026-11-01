@@ -117,10 +117,10 @@ describe("the agent's part", () => {
     expect(done.ai).toMatchObject({ status: "done", reason: null, model: m.model.model });
     const suggestion = done.items.find((i) => i.kind === "suggestion");
     expect(suggestion).toMatchObject({
-      id: "agent:empty-key-use:layer-0:layer-0/33", source: "agent", severity: "info", fixes: [EMPTY_KEYS_ID], keys: [{ layerId: "layer-0", position: 33 }],
+      id: "agent:empty-key-use:layer-0:layer-0/33", source: "agent", severity: "info", fixes: [], keys: [{ layerId: "layer-0", position: 33 }],
     });
     // Checks first, then the agent's.
-    expect(done.items.map((i) => i.source)).toEqual(["check", "agent", "agent"]);
+    expect(done.items.map((i) => i.source)).toEqual(["check", "agent"]);
     const cs = findChangeSet(w.app.db, suggestion?.proposalId as string);
     expect(cs).toMatchObject({ status: "proposed", source: "agent", conversationId: null, baseRevisionId: head });
     expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestion?.proposalId as string]);
@@ -141,7 +141,7 @@ describe("the agent's part", () => {
 
     const forced = await runReviewAi(w.app, review.id, m.deps, { force: true });
     expect(m.requests).toHaveLength(4);
-    expect(forced.items.map((i) => i.code)).toEqual(["keys_do_nothing", "second-look"]);
+    expect(forced.items.map((i) => i.code)).toEqual(["keys_do_nothing"]); // A model-only claim is not a source finding.
   });
 
   test("what the model gets wrong is dropped, not shown", async () => {
@@ -157,9 +157,7 @@ describe("the agent's part", () => {
       finished,
     ]);
     const done = await runReviewAi(w.app, review.id, m.deps);
-    expect(done.items.filter((i) => i.source === "agent").map((i) => i.code)).toEqual(["keys-do-nothing", "bad-refs"]);
-    const problem = done.items.find((i) => i.code === "bad-refs");
-    expect(problem).toMatchObject({ kind: "problem", severity: "warning", title: "ghost is odd", body: "ghost and key 901 on Layer 0", keys: [{ layerId: "layer-0", position: 5 }], layers: ["layer-0"] });
+    expect(done.items.filter((i) => i.source === "agent")).toEqual([]);
   });
 
   test("a suggestion whose change was refused by the validator never reaches the review", async () => {
@@ -244,7 +242,7 @@ describe("the agent's part", () => {
     expect(openProposalsOutsideChat(w.app, w.layoutId)).toEqual([]);
   });
 
-  test("the next review withdraws the earlier one's open suggestions and carries the agent's fixed findings", async () => {
+  test("the next review withdraws earlier suggestions without inventing fixed agent diagnoses", async () => {
     const w = await reviewWorld();
     const first = createReview(w.app, w.layoutId, "apply").review;
     const m1 = scriptedModel([proposeStep, (seen) => submit([
@@ -260,8 +258,8 @@ describe("the agent's part", () => {
 
     const m2 = scriptedModel([submit([]), finished]);
     const done = await runReviewAi(w.app, second.id, m2.deps);
-    // The suggestion goes quietly with its revision; the hint the agent no longer makes is ticked off.
-    expect(done.fixed.map((f) => [f.code, f.fixedSince])).toEqual([["layer-order", first.id]]);
+    // Neither withdrawn suggestions nor unsupported model claims become alleged fixes.
+    expect(done.fixed).toEqual([]);
   });
 
   test("a failed look is not a fix: findings are only ticked off by an agent that finished", async () => {
@@ -276,20 +274,20 @@ describe("the agent's part", () => {
 });
 
 describe("the agent repeating the checks", () => {
-  test("an item about the same kind, layers and keys as a check is dropped whatever code the model gave it", async () => {
+  test("standalone model diagnoses are suppressed, including both same-kind and different-kind restatements", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
     const both = [{ layerId: "layer-0", position: 36 }, { layerId: "layer-0", position: 33 }];
     const m = scriptedModel([
       submit([
         { kind: "hint", code: "empty-function-row", title: "Empty keys", body: "Two keys are empty.", keys: both, layers: [] },
-        { kind: "hint", code: "one-empty-key", title: "One empty key", body: "One is empty.", keys: [both[1] as (typeof both)[number]] },
-        { kind: "problem", code: "empty-keys-problem", title: "Same keys, other kind", body: "Kept.", keys: both },
+        { kind: "hint", code: "one-empty-key", title: "One empty key", body: "One is empty.", keys: [both[1]!] },
+        { kind: "problem", code: "empty-keys-problem", title: "Same keys, other kind", body: "Unsupported diagnosis.", keys: both },
       ]),
       finished,
     ]);
     const done = await runReviewAi(w.app, review.id, m.deps);
-    expect(done.items.filter((i) => i.source === "agent").map((i) => i.code)).toEqual(["one-empty-key", "empty-keys-problem"]);
+    expect(done.items.filter((i) => i.source === "agent")).toEqual([]);
   });
 
   test("the model is given the checks with their ids and codes and told not to restate them", async () => {
@@ -309,14 +307,14 @@ describe("the agent repeating the checks", () => {
 describe("every proposal a run saves is shown or withdrawn", () => {
   const openIds = (w: Awaited<ReturnType<typeof reviewWorld>>) => openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId);
 
-  test("one the model never referenced becomes a suggestion with its own title and summary, tied to the check it touches", async () => {
+  test("one the model never referenced becomes a source-described suggestion without overstating a partial fix", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
     const m = scriptedModel([proposeStep, submit([]), finished]);
     const done = await runReviewAi(w.app, review.id, m.deps);
     const suggestion = done.items.find((i) => i.kind === "suggestion");
     expect(suggestion).toMatchObject({
-      source: "agent", code: "proposed-change", title: "Put F17 on the empty key", body: "That key does nothing now.", fixes: [EMPTY_KEYS_ID], keys: [{ layerId: "layer-0", position: 33 }],
+      source: "agent", code: "proposed-change", title: "Set F17 on Layer 0", body: expect.stringContaining("empty → key F17"), fixes: [], keys: [{ layerId: "layer-0", position: 33 }],
     });
     expect(openIds(w)).toEqual([suggestion?.proposalId as string]);
   });
@@ -330,14 +328,16 @@ describe("every proposal a run saves is shown or withdrawn", () => {
     expect(done.items.find((i) => i.kind === "suggestion")?.code).toBe("empty-key-use");
   });
 
-  test("one that cannot be shown, because the review is full, is withdrawn and not left open", async () => {
+  test("unsupported model hints do not crowd out a source-checked saved proposal", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
     const hints = Array.from({ length: 6 }, (_, i) => ({ kind: "hint" as const, code: `note-${i}`, title: `Note ${i}`, body: "A note.", layers: ["layer-0"], keys: [{ layerId: "layer-0", position: i }] }));
     const m = scriptedModel([proposeStep, submit(hints), finished]);
     const done = await runReviewAi(w.app, review.id, m.deps);
-    expect(done.items.filter((i) => i.kind === "suggestion")).toEqual([]);
-    expect(openIds(w)).toEqual([]);
+    const suggestions = done.items.filter((i) => i.kind === "suggestion");
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]?.body).toContain("empty → key F17");
+    expect(openIds(w)).toEqual([suggestions[0]!.proposalId!]);
   });
 });
 
@@ -392,7 +392,7 @@ describe("one finding per problem", () => {
       finished,
     ]);
     const done = await runReviewAi(w.app, review.id, m.deps);
-    expect(done.items.filter((i) => i.source === "agent").map((i) => i.code)).toEqual(["other"]);
+    expect(done.items.filter((i) => i.source === "agent")).toEqual([]);
   });
 
   test("of two suggestions for one problem the one with fewer warnings, then the smaller change, stays; the other's change set is withdrawn", async () => {
@@ -412,10 +412,10 @@ describe("one finding per problem", () => {
       ]);
     }, finished]);
     const done = await runReviewAi(w.app, review.id, m.deps);
-    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.code)).toEqual(["small", "elsewhere"]);
-    const open = openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.title);
-    // Big fix is still shown by the suggestion that fixes nothing in particular, so only a proposal no item shows is withdrawn.
-    expect(open.sort()).toEqual(["Big fix", "Small fix"]);
+    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.code)).toEqual(["small"]);
+    expect(done.items.find((i) => i.code === "small")?.fixes).toEqual([]);
+    expect(done.items.find((i) => i.code === "small")?.fixes).not.toContain(check?.id); // It did not repair the unreachable layer.
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.ops)).toEqual([[{ op: "setBinding", at: { layerId: "layer-0", position: 33 }, binding: { kind: "key", code: "F17" } }]]);
   });
 
   test("the prompt asks for one fix per problem", async () => {
@@ -444,17 +444,17 @@ describe("a withdrawn duplicate", () => {
       ]);
     }, finished]);
     await runReviewAi(w.app, review.id, m.deps);
-    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.title)).toEqual(["Small fix"]);
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.ops.length)).toEqual([1]);
   });
 });
 
 describe("a suggestion the model left without fixes", () => {
-  test("still fixes the checks its change touches", async () => {
+  test("does not claim a whole finding is fixed merely because it touches one affected key", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
     const m = scriptedModel([proposeStep, (seen) => submit([{ kind: "suggestion", code: "use-it", title: "Use it", body: "Use it.", proposalId: savedId(seen.toolResults) }]), finished]);
     const done = await runReviewAi(w.app, review.id, m.deps);
-    expect(done.items.find((i) => i.code === "use-it")?.fixes).toEqual([EMPTY_KEYS_ID]);
+    expect(done.items.find((i) => i.code === "use-it")?.fixes).toEqual([]);
   });
 });
 
@@ -467,7 +467,7 @@ describe("a run that stops at its limit", () => {
     expect(m.requests).toHaveLength(10);
     expect(done.ai).toMatchObject({ status: "done", reason: "Stopped at its step limit; showing what it found." });
     const suggestion = done.items.find((i) => i.kind === "suggestion");
-    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Put F17 on the empty key", fixes: [EMPTY_KEYS_ID] });
+    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Set F17 on Layer 0", fixes: [] });
     expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestion?.proposalId as string]);
   });
 
@@ -490,7 +490,7 @@ describe("a run that stops at its limit", () => {
     const both = { blocks: [{ tool: "propose_changes", input: alt("Big fix", [33, 36]) }, { tool: "propose_changes", input: alt("Small fix", [33]) }] };
     const done = await runReviewAi(w.app, review.id, scriptedModel([both, ...Array.from({ length: 12 }, () => getLayoutStep)]).deps);
     expect(done.ai.status).toBe("done");
-    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.title)).toEqual(["Small fix"]);
-    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.title)).toEqual(["Small fix"]);
+    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.title)).toEqual(["Set F17 on Layer 0"]);
+    expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.ops.length)).toEqual([1]);
   });
 });

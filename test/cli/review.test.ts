@@ -7,6 +7,9 @@ import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { withoutCredentials } from "../helpers/no-credentials.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
 import { finished, proposeStep, savedId, submit } from "../helpers/review-world.ts";
+import { reviewText } from "../../src/cli/commands/review.ts";
+import { groundedWorld } from "../helpers/grounded-review.ts";
+import { createReview, showReview } from "../../src/app/review.ts";
 
 async function cli(args: string[], deps: Parameters<typeof runCli>[2] = {}) {
   let out = "";
@@ -16,6 +19,23 @@ async function cli(args: string[], deps: Parameters<typeof runCli>[2] = {}) {
 }
 
 describe("keyloom review", () => {
+  test("affected behavior uses key words and hides details for dismissed proposals", () => {
+    const w = groundedWorld();
+    try {
+      createReview(w.app, w.layoutId, "manual");
+      const view = showReview(w.app, w.layoutId);
+      const item = { ...view.review!.items[0]!, id: "suggestion", source: "agent" as const, kind: "suggestion" as const, proposalId: "cs_fixture", dismissedAt: null };
+      view.review!.items = [item];
+      view.review!.behavior = [{ proposalId: "cs_fixture", status: "partial", checks: [{ name: "{key:base:1}: tap", status: "verified", reason: null }], limitations: [] }];
+      const shown = reviewText(w.app, view, "Fixture");
+      expect(shown).toContain("\n\nAffected behavior cs_fixture");
+      expect(shown).toContain("A (left pinky");
+      expect(shown).not.toContain("{key:");
+      view.review!.items = [{ ...item, dismissedAt: 1 }];
+      expect(reviewText(w.app, view, "Fixture")).not.toContain("Affected behavior");
+    } finally { w.app.db.close(); }
+  });
+
   test("before any review it says how to make one", async () => {
     const { dir } = await optionOptionApp();
     const r = await cli(["review", "bk", "--format", "table", "--data-dir", dir]);
@@ -44,7 +64,7 @@ describe("keyloom review", () => {
     ]);
     const table = await cli(["review", "bk", "--run", "--format", "table", "--data-dir", dir], { model: anthropicModel(fake.client) });
     expect(table.out).toContain("bk: 1 suggestion, 1 hint");
-    expect(table.out).toMatch(/Suggestions\n {2}Use an empty key {2}\(keyloom\)\n {4}blank \(.*Layer 0\) does nothing on Layer 0\./s);
+    expect(table.out).toMatch(/Suggestions\n {2}Set F17 on Layer 0 {2}\(keyloom\)\n {4}blank \(.*Layer 0\): empty → key F17\./s);
     expect(table.out).toMatch(/Proposed change: cs_\w+\. See it with: keyloom change show cs_/);
     expect(table.out).toContain("keyloom looked it over.");
 

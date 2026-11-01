@@ -5,10 +5,12 @@
 //   POST /api/layouts/:ref/review/items/:id/dismiss {}   -> ReviewResponse (404 for an id the latest review doesn't have)
 //   POST /api/layouts/:ref/review/items/:id/restore {}   -> ReviewResponse
 //   GET  /api/events: besides `event: sync` frames, an `event: review` frame (ReviewEvent) whenever a review is made or its agent part changes
-// A review is stale while `review.revisionId` differs from `headRevisionId`. `:id` is an item's stable id, URL-encoded.
+// A review is stale when revisions differ or `review.freshness.current` is false. `:id` is a stable item id, URL-encoded.
 import { z } from "zod";
 import { FixedItemSchema, ReviewItemSchema } from "../validation/review-item.ts";
 import { ReviewActivitiesSchema, ReviewWorkloadSchema } from "../layout/review-workload.ts";
+import { BehaviorEvidenceSchema } from "../layout/review-evidence.ts";
+export { isReviewCurrent } from "../layout/review-evidence.ts";
 export { ReviewActivitiesSchema, REVIEW_ACTIVITIES, REVIEW_ACTIVITY_LABELS, workloadVerdictWords, type ReviewActivity } from "../layout/review-workload.ts";
 
 export const AiStatusSchema = z.enum(["pending", "running", "done", "unavailable", "failed"]);
@@ -16,7 +18,7 @@ export const AiStatusSchema = z.enum(["pending", "running", "done", "unavailable
 export const BoardReviewSchema = z.object({
   id: z.string().min(1),
   layoutId: z.string().min(1),
-  /** The revision it is about; one review per revision. */
+  /** The revision it is about; its storage row can be refreshed after other input changes. */
   revisionId: z.string().min(1),
   trigger: z.enum(["connect", "apply", "import", "manual"]),
   checkedAt: z.number().finite(),
@@ -28,6 +30,8 @@ export const BoardReviewSchema = z.object({
     model: z.string().nullable(),
   }),
   workload: ReviewWorkloadSchema.optional(),
+  freshness: z.object({ current: z.boolean(), reason: z.string().nullable() }),
+  behavior: z.array(BehaviorEvidenceSchema.extend({ proposalId: z.string() })).optional(),
   /** Every item, hidden ones included with `dismissedAt` set. Checks first, then the agent's. */
   items: z.array(ReviewItemSchema),
   /** What the previous review had that this revision no longer produces; each says which review it is fixed since. */

@@ -29,16 +29,16 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 /** The items that show: not hidden. */
 export const shownItems = (review: BoardReview): ReviewItem[] => review.items.filter((i) => i.dismissedAt === null);
 
-/** "1 problem · 2 hints", "2 hints", or null when there is nothing to note (suggestions are counted under the item they fix). */
+/** Counts every visible item, including suggestions nested under findings. */
 export function markerWords(review: BoardReview): string | null {
   const shown = shownItems(review);
   const problems = shown.filter((i) => i.kind === "problem").length;
   const hints = shown.filter((i) => i.kind === "hint").length;
-  const loose = shown.filter((i) => i.kind === "suggestion" && i.fixes.length === 0).length;
+  const suggestions = shown.filter((i) => i.kind === "suggestion").length;
   const parts = [
     ...(problems > 0 ? [plural(problems, "problem", "problems")] : []),
     ...(hints > 0 ? [plural(hints, "hint", "hints")] : []),
-    ...(loose > 0 ? [plural(loose, "suggestion", "suggestions")] : []),
+    ...(suggestions > 0 ? [plural(suggestions, "suggestion", "suggestions")] : []),
   ];
   return parts.length === 0 ? null : parts.join(" · ");
 }

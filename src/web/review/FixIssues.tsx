@@ -4,7 +4,7 @@
 export function FixIssuesButton({ findings, stale, busy, reviewing, ready, onFix }: {
   /** Visible problems and hints, the findings a fix run works from (`fixableFindings`). Hidden ones are not counted. */
   findings: number;
-  /** The review is of an older revision; the head's is being made. */
+  /** The revision or other review inputs changed. */
   stale: boolean;
   /** The panel is running a review action (dismiss, restore, look again). */
   busy: boolean;
@@ -16,7 +16,7 @@ export function FixIssuesButton({ findings, stale, busy, reviewing, ready, onFix
 }) {
   if (findings === 0) return null;
   let blocked: string | null = null;
-  if (stale) blocked = "This review is of an older version; fix from the new one";
+  if (stale) blocked = "This review is no longer current; run a fresh review";
   else if (reviewing) blocked = "The agent's own look is still coming; fix once it is in";
   else if (busy) blocked = "Finish the review action first";
   else if (!ready) blocked = "Set up a model to fix the issues";

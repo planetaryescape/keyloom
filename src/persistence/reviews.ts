@@ -3,10 +3,23 @@
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import { newId } from "./ids.ts";
+import { BehaviorEvidenceSchema, type BehaviorEvidence } from "../layout/review-evidence.ts";
 
 export type ReviewTrigger = "connect" | "apply" | "import" | "manual";
 export type AiStatus = "pending" | "running" | "done" | "unavailable" | "failed";
 export const REVIEW_AI_STALE_MS = 10 * 60_000;
+export const REVIEW_CONTRACT_VERSION = 1;
+
+export function reviewDevice(db: Database, layoutId: string): { identity: string | null; connected: boolean } | undefined {
+  const row = db.query("SELECT identity, connected FROM review_devices WHERE layout_id = ?").get(layoutId) as { identity: string | null; connected: number } | null;
+  return row ? { identity: row.identity, connected: row.connected === 1 } : undefined;
+}
+
+export function saveReviewDevice(db: Database, layoutId: string, identity: string | undefined, connected: boolean): void {
+  db.query(`INSERT INTO review_devices (layout_id, identity, connected) VALUES (?, ?, ?)
+    ON CONFLICT(layout_id) DO UPDATE SET identity = excluded.identity, connected = excluded.connected
+    WHERE identity IS NOT excluded.identity OR connected != excluded.connected`).run(layoutId, identity ?? null, Number(connected));
+}
 
 export type ReviewItemRow = {
   id: string;
@@ -33,11 +46,16 @@ export type BoardReviewRow = {
   previousReviewId: string | null;
   /** The previous review's items that this revision no longer produces, as they were. */
   fixed: ReviewItemRow[];
+  contractVersion: number;
+  snapshotKey: string | null;
+  invalidatedReason: string | null;
+  runId: string | null;
 };
 
 type ReviewDb = {
   id: string; layout_id: string; revision_id: string; trigger: ReviewTrigger; checked_at: number; summary: string;
   ai_status: AiStatus; ai_reason: string | null; ai_model: string | null; ai_started_at: number | null; previous_review_id: string | null; fixed: string;
+  contract_version: number; snapshot_key: string | null; invalidated_reason: string | null; ai_run_id: string | null;
 };
 type ItemDb = {
   id: string; source: ReviewItemRow["source"]; kind: ReviewItemRow["kind"]; severity: ReviewItemRow["severity"]; code: string; title: string; body: string;
@@ -56,6 +74,7 @@ const toReview = (r: ReviewDb): BoardReviewRow => ({
   id: r.id, layoutId: r.layout_id, revisionId: r.revision_id, trigger: r.trigger, checkedAt: r.checked_at, summary: SummarySchema.parse(JSON.parse(r.summary)),
   ai: { status: r.ai_status, reason: r.ai_reason, model: r.ai_model, startedAt: r.ai_started_at },
   previousReviewId: r.previous_review_id, fixed: z.array(ItemRowSchema).parse(JSON.parse(r.fixed)),
+  contractVersion: r.contract_version, snapshotKey: r.snapshot_key, invalidatedReason: r.invalidated_reason, runId: r.ai_run_id,
 });
 
 const toItem = (r: ItemDb): ReviewItemRow => ({
@@ -95,6 +114,7 @@ const insertItems = (db: Database, reviewId: string, items: readonly ReviewItemR
 export type InsertReview = {
   layoutId: string; revisionId: string; trigger: ReviewTrigger; checkedAt: number; summary: BoardReviewRow["summary"];
   items: ReviewItemRow[]; previousReviewId: string | null; fixed: ReviewItemRow[];
+  snapshotKey?: string;
 };
 
 /** The review of a revision, or the one already there: two writers racing for the same revision both get the same row. Call it inside `transact`. */
@@ -106,6 +126,7 @@ export function insertReview(db: Database, input: InsertReview): { review: Board
     "INSERT INTO board_reviews (id, layout_id, revision_id, trigger, checked_at, summary, ai_status, previous_review_id, fixed) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
   ).run(id, input.layoutId, input.revisionId, input.trigger, input.checkedAt, JSON.stringify(input.summary), input.previousReviewId, JSON.stringify(input.fixed));
   insertItems(db, id, input.items, 0);
+  if (input.snapshotKey) db.query("UPDATE board_reviews SET contract_version = ?, snapshot_key = ? WHERE id = ?").run(REVIEW_CONTRACT_VERSION, input.snapshotKey, id);
   return { review: findReview(db, id) as BoardReviewRow, created: true };
 }
 
@@ -116,9 +137,54 @@ export function insertReview(db: Database, input: InsertReview): { review: Board
 export function claimAi(db: Database, reviewId: string, now: number, staleMs: number, opts: { force?: boolean } = {}): boolean {
   const retry = opts.force ? "'pending', 'unavailable', 'failed', 'done'" : "'pending', 'unavailable', 'failed'";
   return db.query(
-    `UPDATE board_reviews SET ai_status = 'running', ai_reason = NULL, ai_started_at = ?
-     WHERE id = ? AND (ai_status IN (${retry}) OR (ai_status = 'running' AND ai_started_at < ?))`,
-  ).run(now, reviewId, now - staleMs).changes > 0;
+    `UPDATE board_reviews SET ai_status = 'running', ai_reason = NULL, ai_started_at = ?, ai_run_id = ?
+     WHERE id = ? AND invalidated_reason IS NULL AND (ai_status IN (${retry}) OR (ai_status = 'running' AND ai_started_at < ?))`,
+  ).run(now, newId("run"), reviewId, now - staleMs).changes > 0;
+}
+
+export const ownsReviewRun = (db: Database, row: BoardReviewRow): boolean => {
+  const saved = findReview(db, row.id);
+  return row.runId !== null && saved?.runId === row.runId && saved.ai.status === "running" && saved.invalidatedReason === null;
+};
+
+/** Withdraw both published and not-yet-published proposals and revoke the writer's lease immediately. */
+export function invalidateReview(db: Database, reviewId: string, reason: string): void {
+  db.query(`UPDATE change_sets SET status = 'rejected', decided_at = ? WHERE status = 'proposed' AND id IN
+    (SELECT change_set_id FROM review_proposals WHERE review_id = ? UNION SELECT proposal_id FROM review_items WHERE review_id = ? AND source = 'agent')`).run(Date.now(), reviewId, reviewId);
+  clearReviewAgentItems(db, reviewId);
+  db.query("UPDATE board_reviews SET ai_status = 'failed', ai_reason = ?, invalidated_reason = ?, ai_run_id = NULL WHERE id = ?").run(reason, reason, reviewId);
+}
+
+export function resetReview(db: Database, row: BoardReviewRow, input: { snapshotKey: string; trigger: ReviewTrigger; checkedAt: number; summary: BoardReviewRow["summary"]; items: ReviewItemRow[] }): BoardReviewRow {
+  invalidateReview(db, row.id, "Review inputs changed.");
+  db.query("DELETE FROM review_items WHERE review_id = ?").run(row.id);
+  insertItems(db, row.id, input.items, 0);
+  db.query(`UPDATE board_reviews SET contract_version = ?, snapshot_key = ?, invalidated_reason = NULL,
+     trigger = ?, checked_at = ?, summary = ?, fixed = '[]', ai_status = 'pending', ai_reason = NULL, ai_model = NULL, ai_started_at = NULL WHERE id = ?`)
+    .run(REVIEW_CONTRACT_VERSION, input.snapshotKey, input.trigger, input.checkedAt, JSON.stringify(input.summary), row.id);
+  return findReview(db, row.id)!;
+}
+
+export function linkReviewProposal(db: Database, row: BoardReviewRow, changeSetId: string): void {
+  if (!ownsReviewRun(db, row)) throw new Error("The review run was superseded.");
+  db.query("INSERT INTO review_proposals (change_set_id, review_id, run_id) VALUES (?, ?, ?)").run(changeSetId, row.id, row.runId);
+}
+
+export function proposalReview(db: Database, id: string): { review: BoardReviewRow; runId: string } | undefined {
+  const link = db.query("SELECT review_id, run_id FROM review_proposals WHERE change_set_id = ?").get(id) as { review_id: string; run_id: string } | null;
+  const review = link && findReview(db, link.review_id);
+  return review ? { review, runId: link!.run_id } : undefined;
+}
+
+export function saveReviewBehavior(db: Database, row: BoardReviewRow, proposalId: string, evidence: BehaviorEvidence): void {
+  if (!ownsReviewRun(db, row)) return;
+  db.query("UPDATE review_proposals SET behavior_evidence = ? WHERE change_set_id = ? AND review_id = ? AND run_id = ?")
+    .run(JSON.stringify(evidence), proposalId, row.id, row.runId);
+}
+
+export function reviewBehavior(db: Database, row: BoardReviewRow): Array<BehaviorEvidence & { proposalId: string }> {
+  const rows = db.query("SELECT change_set_id, behavior_evidence FROM review_proposals WHERE review_id = ? AND run_id = ? AND behavior_evidence IS NOT NULL").all(row.id, row.runId) as Array<{ change_set_id: string; behavior_evidence: string }>;
+  return rows.map((r) => ({ proposalId: r.change_set_id, ...BehaviorEvidenceSchema.parse(JSON.parse(r.behavior_evidence)) }));
 }
 
 /** Ends a run that claimed the review. `items` replace whatever the agent found before; the checks' items stay. */

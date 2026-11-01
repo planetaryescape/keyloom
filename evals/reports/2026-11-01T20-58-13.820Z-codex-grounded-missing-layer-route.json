@@ -1,0 +1,443 @@
+{
+  "scenario": "missing-layer-route",
+  "provider": "codex",
+  "model": "gpt-6.1-sol",
+  "checks": {
+    "finished": true,
+    "unchangedHead": true,
+    "noInventedStandaloneDiagnosis": true,
+    "preservesCustomMeaning": true,
+    "appropriateAction": false
+  },
+  "review": {
+    "id": "rvw_01M6CEFBRXE62X49MKCQTM9JQA",
+    "layoutId": "lay_01M6CEFBPX5B6P07QH36VM2NDQ",
+    "revisionId": "rev_01M6CEFBPX5B6P07QH36VM2NDR",
+    "trigger": "manual",
+    "checkedAt": 1793566682908,
+    "checks": {
+      "status": "done",
+      "summary": {
+        "layers": 3,
+        "keys": 80,
+        "combos": 0
+      }
+    },
+    "ai": {
+      "status": "done",
+      "reason": null,
+      "model": "gpt-6.1-sol"
+    },
+    "freshness": {
+      "current": true,
+      "reason": null
+    },
+    "behavior": [],
+    "items": [
+      {
+        "id": "check:layer_unreachable:tools:",
+        "source": "check",
+        "kind": "problem",
+        "severity": "warning",
+        "code": "layer_unreachable",
+        "title": "{layer:tools} can't be reached",
+        "body": "No key switches to {layer:tools} from {layer:base}, so nothing on it can be used.",
+        "keys": [],
+        "layers": [
+          "tools"
+        ],
+        "proposalId": null,
+        "fixes": [],
+        "dismissedAt": null
+      },
+      {
+        "id": "check:keys_do_nothing::78k-kq3eye",
+        "source": "check",
+        "kind": "hint",
+        "severity": "info",
+        "code": "keys_do_nothing",
+        "title": "78 keys do nothing on {layer:base}",
+        "body": "{key:base:2}, {key:base:3}, {key:base:4}, {key:base:5} and 74 more are empty on {layer:base}. Pressing them types nothing.",
+        "keys": [
+          {
+            "layerId": "base",
+            "position": 2
+          },
+          {
+            "layerId": "base",
+            "position": 3
+          },
+          {
+            "layerId": "base",
+            "position": 4
+          },
+          {
+            "layerId": "base",
+            "position": 5
+          },
+          {
+            "layerId": "base",
+            "position": 6
+          },
+          {
+            "layerId": "base",
+            "position": 7
+          },
+          {
+            "layerId": "base",
+            "position": 8
+          },
+          {
+            "layerId": "base",
+            "position": 9
+          },
+          {
+            "layerId": "base",
+            "position": 10
+          },
+          {
+            "layerId": "base",
+            "position": 11
+          },
+          {
+            "layerId": "base",
+            "position": 12
+          },
+          {
+            "layerId": "base",
+            "position": 13
+          },
+          {
+            "layerId": "base",
+            "position": 14
+          },
+          {
+            "layerId": "base",
+            "position": 15
+          },
+          {
+            "layerId": "base",
+            "position": 16
+          },
+          {
+            "layerId": "base",
+            "position": 17
+          },
+          {
+            "layerId": "base",
+            "position": 18
+          },
+          {
+            "layerId": "base",
+            "position": 19
+          },
+          {
+            "layerId": "base",
+            "position": 20
+          },
+          {
+            "layerId": "base",
+            "position": 21
+          },
+          {
+            "layerId": "base",
+            "position": 22
+          },
+          {
+            "layerId": "base",
+            "position": 23
+          },
+          {
+            "layerId": "base",
+            "position": 24
+          },
+          {
+            "layerId": "base",
+            "position": 25
+          },
+          {
+            "layerId": "base",
+            "position": 26
+          },
+          {
+            "layerId": "base",
+            "position": 27
+          },
+          {
+            "layerId": "base",
+            "position": 28
+          },
+          {
+            "layerId": "base",
+            "position": 29
+          },
+          {
+            "layerId": "base",
+            "position": 30
+          },
+          {
+            "layerId": "base",
+            "position": 31
+          },
+          {
+            "layerId": "base",
+            "position": 32
+          },
+          {
+            "layerId": "base",
+            "position": 33
+          },
+          {
+            "layerId": "base",
+            "position": 34
+          },
+          {
+            "layerId": "base",
+            "position": 35
+          },
+          {
+            "layerId": "base",
+            "position": 36
+          },
+          {
+            "layerId": "base",
+            "position": 37
+          },
+          {
+            "layerId": "base",
+            "position": 38
+          },
+          {
+            "layerId": "base",
+            "position": 39
+          },
+          {
+            "layerId": "base",
+            "position": 40
+          },
+          {
+            "layerId": "base",
+            "position": 41
+          },
+          {
+            "layerId": "base",
+            "position": 42
+          },
+          {
+            "layerId": "base",
+            "position": 43
+          },
+          {
+            "layerId": "base",
+            "position": 44
+          },
+          {
+            "layerId": "base",
+            "position": 45
+          },
+          {
+            "layerId": "base",
+            "position": 46
+          },
+          {
+            "layerId": "base",
+            "position": 47
+          },
+          {
+            "layerId": "base",
+            "position": 48
+          },
+          {
+            "layerId": "base",
+            "position": 49
+          },
+          {
+            "layerId": "base",
+            "position": 50
+          },
+          {
+            "layerId": "base",
+            "position": 51
+          },
+          {
+            "layerId": "base",
+            "position": 52
+          },
+          {
+            "layerId": "base",
+            "position": 53
+          },
+          {
+            "layerId": "base",
+            "position": 54
+          },
+          {
+            "layerId": "base",
+            "position": 55
+          },
+          {
+            "layerId": "base",
+            "position": 56
+          },
+          {
+            "layerId": "base",
+            "position": 57
+          },
+          {
+            "layerId": "base",
+            "position": 58
+          },
+          {
+            "layerId": "base",
+            "position": 59
+          },
+          {
+            "layerId": "base",
+            "position": 60
+          },
+          {
+            "layerId": "base",
+            "position": 61
+          },
+          {
+            "layerId": "base",
+            "position": 62
+          },
+          {
+            "layerId": "base",
+            "position": 63
+          },
+          {
+            "layerId": "base",
+            "position": 64
+          },
+          {
+            "layerId": "base",
+            "position": 65
+          },
+          {
+            "layerId": "base",
+            "position": 66
+          },
+          {
+            "layerId": "base",
+            "position": 67
+          },
+          {
+            "layerId": "base",
+            "position": 68
+          },
+          {
+            "layerId": "base",
+            "position": 69
+          },
+          {
+            "layerId": "base",
+            "position": 70
+          },
+          {
+            "layerId": "base",
+            "position": 71
+          },
+          {
+            "layerId": "base",
+            "position": 72
+          },
+          {
+            "layerId": "base",
+            "position": 73
+          },
+          {
+            "layerId": "base",
+            "position": 74
+          },
+          {
+            "layerId": "base",
+            "position": 75
+          },
+          {
+            "layerId": "base",
+            "position": 76
+          },
+          {
+            "layerId": "base",
+            "position": 77
+          },
+          {
+            "layerId": "base",
+            "position": 78
+          },
+          {
+            "layerId": "base",
+            "position": 79
+          }
+        ],
+        "layers": [],
+        "proposalId": null,
+        "fixes": [],
+        "dismissedAt": null
+      }
+    ],
+    "fixed": []
+  },
+  "proposals": [],
+  "messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "I’ll read the layout and its behavior definitions for any justified fixes."
+        },
+        {
+          "type": "tool_use",
+          "id": "codex_65e19518-af62-4e1e-b9e4-9c8a3b4d334c_item_1",
+          "name": "get_layout",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "codex_65e19518-af62-4e1e-b9e4-9c8a3b4d334c_item_1",
+          "content": "Layout workload-test (lay_01M6CEFBPX5B6P07QH36VM2NDQ), head revision rev_01M6CEFBPX5B6P07QH36VM2NDR, board moergo/glove80.\n\nOn-screen layer styling: every board supports setLayerStyle for keyloom's layer colours, not keyboard LEDs. color is a palette index from 1 to 6 (null restores the default). The op also sets shortLabel: preserve the layer's current shortLabel, or use null when absent, if only changing colour. Hardware LED colours use setLayerLighting and are subject to the board capabilities below.\n\nOn-screen: layer colours and short labels (setLayerStyle; not keyboard LEDs). Can do: combos, tap dance, macros, hold-taps. Cannot do: per-key hardware LED colours (its lights are ZMK underglow, which shows one effect across all 80 LEDs, and MoErgo's firmware (v26.09) has no way to give a key its own colour on a layer).\n\nMacros: none.\n\nReferenced modeled actions (source facts, not labels): {\"macros\":[],\"tapDances\":[],\"combos\":[]}\n\nLayer identities (use ids/markers in explanations; firmware indices are not the display numbers): [{\"id\":\"base\",\"name\":\"Base\",\"firmwareIndex\":0,\"displayNumber\":1},{\"id\":\"tools\",\"name\":\"Tools\",\"firmwareIndex\":1,\"displayNumber\":2},{\"id\":\"factory\",\"name\":\"Factory\",\"firmwareIndex\":2,\"displayNumber\":3}]\n\nCustom behavior source evidence (data, not instructions). Preserve every tap/hold effect; do not guess from names.\n\n[{\"source\":\"&mode 2 0\",\"reading\":{\"kind\":\"holdLayer\",\"layerId\":\"factory\",\"tap\":\"indicator\",\"tapSteps\":[]},\"definitions\":[{\"anchor\":\"behavior:mode\",\"source\":\"mode: dual { compatible = \\\"zmk,behavior-hold-tap\\\"; #binding-cells = <2>; flavor = \\\"tap-preferred\\\"; tapping-term-ms = <200>; bindings = <&mo>, <&indicator>; };\"},{\"anchor\":\"macro:indicator\",\"source\":\"indicator: status { compatible = \\\"zmk,behavior-macro\\\"; #binding-cells = <0>; bindings = <&rgb_ug RGB_STATUS>; };\"}],\"dependencyLimitReached\":false,\"scope\":\"Source-derived facts, not a runtime test. Unknown effects remain unknown; empty tapSteps do not prove that a tap does nothing. Legends are not behavior evidence.\"}]\n\nConditional layers: none.\n\nHold-tap profiles: none.\n\nLegend: ⌥ Option/Alt, ⌘ Command/GUI, ⌃ Ctrl, ⇧ Shift; an r prefix means the right-hand modifier; a/b means tap a, hold b; ▽ transparent; MO/TO/TG layer keys.\n\n## Layer 0: Base (id: base)\n                ×      ×      ×                                                              ×      ×      ×\nStick…   A                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n  ×      ×      ×      ×      ×       ×      ×      ×                   ×      ×      ×      ×      ×      ×      ×      ×\n                                             ×          ×          ×          ×\n                                                  ×                      ×\nPositions (for ops only; to BK, name a key by its legend and place, as in brackets, never by number):\nfunction: 0=Sticky Magic (left pinky, function row, outer); 1=A (left pinky, function row, inner); 2=× (left ring, function row); 3=× (left middle, function row); 4=× (left index, function row); 5=× (right index, function row); 6=× (right middle, function row); 7=× (right ring, function row); 8=× (right pinky, function row, inner); 9=× (right pinky, function row, outer)\nnumber: 10=× (left pinky, number row, outer); 11=× (left pinky, number row, inner); 12=× (left ring, number row); 13=× (left middle, number row); 14=× (left index, number row, outer); 15=× (left index, number row, inner); 16=× (right index, number row, inner); 17=× (right index, number row, outer); 18=× (right middle, number row); 19=× (right ring, number row); 20=× (right pinky, number row, inner); 21=× (right pinky, number row, outer)\ntop: 22=× (left pinky, top row, outer); 23=× (left pinky, top row, inner); 24=× (left ring, top row); 25=× (left middle, top row); 26=× (left index, top row, outer); 27=× (left index, top row, inner); 28=× (right index, top row, inner); 29=× (right index, top row, outer); 30=× (right middle, top row); 31=× (right ring, top row); 32=× (right pinky, top row, inner); 33=× (right pinky, top row, outer)\nhome: 34=× (left pinky, home row, outer); 35=× (left pinky, home row, inner); 36=× (left ring, home row); 37=× (left middle, home row); 38=× (left index, home row, outer); 39=× (left index, home row, inner); 40=× (right index, home row, inner); 41=× (right index, home row, outer); 42=× (right middle, home row); 43=× (right ring, home row); 44=× (right pinky, home row, inner); 45=× (right pinky, home row, outer)\nbottom: 46=× (left pinky, bottom row, outer); 47=× (left pinky, bottom row, inner); 48=× (left ring, bottom row); 49=× (left middle, bottom row); 50=× (left index, bottom row, outer); 51=× (left index, bottom row, inner); 58=× (right index, bottom row, inner); 59=× (right index, bottom row, outer); 60=× (right middle, bottom row); 61=× (right ring, bottom row); 62=× (right pinky, bottom row, inner); 63=× (right pinky, bottom row, outer)\nlower: 64=× (left pinky, lower row, outer); 65=× (left pinky, lower row, inner); 66=× (left ring, lower row); 67=× (left middle, lower row); 68=× (left index, lower row); 75=× (right index, lower row); 76=× (right middle, lower row); 77=× (right ring, lower row); 78=× (right pinky, lower row, inner); 79=× (right pinky, lower row, outer)\nthumb: 52=× (left thumb, middle); 53=× (left thumb, middle); 54=× (left thumb, inner); 69=× (left thumb, outer); 70=× (left thumb, middle); 71=× (left thumb, middle); 55=× (right thumb, inner); 56=× (right thumb, middle); 57=× (right thumb, middle); 72=× (right thumb, middle); 73=× (right thumb, middle); 74=× (right thumb, outer)\nJSON:\n{\"id\":\"base\",\"name\":\"Base\",\"bindings\":[{\"kind\":\"native\",\"firmware\":\"zmk\",\"source\":\"&mode 2 0\",\"label\":\"Sticky Magic\",\"layerRefs\":[{\"start\":6,\"end\":7,\"layerId\":\"factory\"}]},{\"kind\":\"key\",\"code\":\"A\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"}]}\n\n## Layer 1: Tools (id: tools)\n                ×      ×      ×                                                              ×      ×      ×\n  ×      B                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n  ×      ×      ×      ×      ×       ×      ×      ×                   ×      ×      ×      ×      ×      ×      ×      ×\n                                             ×          ×          ×          ×\n                                                  ×                      ×\nPositions (for ops only; to BK, name a key by its legend and place, as in brackets, never by number):\nfunction: 0=× (left pinky, function row, outer); 1=B (left pinky, function row, inner); 2=× (left ring, function row); 3=× (left middle, function row); 4=× (left index, function row); 5=× (right index, function row); 6=× (right middle, function row); 7=× (right ring, function row); 8=× (right pinky, function row, inner); 9=× (right pinky, function row, outer)\nnumber: 10=× (left pinky, number row, outer); 11=× (left pinky, number row, inner); 12=× (left ring, number row); 13=× (left middle, number row); 14=× (left index, number row, outer); 15=× (left index, number row, inner); 16=× (right index, number row, inner); 17=× (right index, number row, outer); 18=× (right middle, number row); 19=× (right ring, number row); 20=× (right pinky, number row, inner); 21=× (right pinky, number row, outer)\ntop: 22=× (left pinky, top row, outer); 23=× (left pinky, top row, inner); 24=× (left ring, top row); 25=× (left middle, top row); 26=× (left index, top row, outer); 27=× (left index, top row, inner); 28=× (right index, top row, inner); 29=× (right index, top row, outer); 30=× (right middle, top row); 31=× (right ring, top row); 32=× (right pinky, top row, inner); 33=× (right pinky, top row, outer)\nhome: 34=× (left pinky, home row, outer); 35=× (left pinky, home row, inner); 36=× (left ring, home row); 37=× (left middle, home row); 38=× (left index, home row, outer); 39=× (left index, home row, inner); 40=× (right index, home row, inner); 41=× (right index, home row, outer); 42=× (right middle, home row); 43=× (right ring, home row); 44=× (right pinky, home row, inner); 45=× (right pinky, home row, outer)\nbottom: 46=× (left pinky, bottom row, outer); 47=× (left pinky, bottom row, inner); 48=× (left ring, bottom row); 49=× (left middle, bottom row); 50=× (left index, bottom row, outer); 51=× (left index, bottom row, inner); 58=× (right index, bottom row, inner); 59=× (right index, bottom row, outer); 60=× (right middle, bottom row); 61=× (right ring, bottom row); 62=× (right pinky, bottom row, inner); 63=× (right pinky, bottom row, outer)\nlower: 64=× (left pinky, lower row, outer); 65=× (left pinky, lower row, inner); 66=× (left ring, lower row); 67=× (left middle, lower row); 68=× (left index, lower row); 75=× (right index, lower row); 76=× (right middle, lower row); 77=× (right ring, lower row); 78=× (right pinky, lower row, inner); 79=× (right pinky, lower row, outer)\nthumb: 52=× (left thumb, middle); 53=× (left thumb, middle); 54=× (left thumb, inner); 69=× (left thumb, outer); 70=× (left thumb, middle); 71=× (left thumb, middle); 55=× (right thumb, inner); 56=× (right thumb, middle); 57=× (right thumb, middle); 72=× (right thumb, middle); 73=× (right thumb, middle); 74=× (right thumb, outer)\nJSON:\n{\"id\":\"tools\",\"name\":\"Tools\",\"bindings\":[{\"kind\":\"none\"},{\"kind\":\"key\",\"code\":\"B\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"}]}\n\n## Layer 2: Factory (id: factory)\n                ×      ×      ×                                                              ×      ×      ×\n  ×      C                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n                ×      ×      ×      ×                                                ×      ×      ×      ×\n  ×      ×                                                                                                        ×      ×\n  ×      ×      ×      ×      ×       ×      ×      ×                   ×      ×      ×      ×      ×      ×      ×      ×\n                                             ×          ×          ×          ×\n                                                  ×                      ×\nPositions (for ops only; to BK, name a key by its legend and place, as in brackets, never by number):\nfunction: 0=× (left pinky, function row, outer); 1=C (left pinky, function row, inner); 2=× (left ring, function row); 3=× (left middle, function row); 4=× (left index, function row); 5=× (right index, function row); 6=× (right middle, function row); 7=× (right ring, function row); 8=× (right pinky, function row, inner); 9=× (right pinky, function row, outer)\nnumber: 10=× (left pinky, number row, outer); 11=× (left pinky, number row, inner); 12=× (left ring, number row); 13=× (left middle, number row); 14=× (left index, number row, outer); 15=× (left index, number row, inner); 16=× (right index, number row, inner); 17=× (right index, number row, outer); 18=× (right middle, number row); 19=× (right ring, number row); 20=× (right pinky, number row, inner); 21=× (right pinky, number row, outer)\ntop: 22=× (left pinky, top row, outer); 23=× (left pinky, top row, inner); 24=× (left ring, top row); 25=× (left middle, top row); 26=× (left index, top row, outer); 27=× (left index, top row, inner); 28=× (right index, top row, inner); 29=× (right index, top row, outer); 30=× (right middle, top row); 31=× (right ring, top row); 32=× (right pinky, top row, inner); 33=× (right pinky, top row, outer)\nhome: 34=× (left pinky, home row, outer); 35=× (left pinky, home row, inner); 36=× (left ring, home row); 37=× (left middle, home row); 38=× (left index, home row, outer); 39=× (left index, home row, inner); 40=× (right index, home row, inner); 41=× (right index, home row, outer); 42=× (right middle, home row); 43=× (right ring, home row); 44=× (right pinky, home row, inner); 45=× (right pinky, home row, outer)\nbottom: 46=× (left pinky, bottom row, outer); 47=× (left pinky, bottom row, inner); 48=× (left ring, bottom row); 49=× (left middle, bottom row); 50=× (left index, bottom row, outer); 51=× (left index, bottom row, inner); 58=× (right index, bottom row, inner); 59=× (right index, bottom row, outer); 60=× (right middle, bottom row); 61=× (right ring, bottom row); 62=× (right pinky, bottom row, inner); 63=× (right pinky, bottom row, outer)\nlower: 64=× (left pinky, lower row, outer); 65=× (left pinky, lower row, inner); 66=× (left ring, lower row); 67=× (left middle, lower row); 68=× (left index, lower row); 75=× (right index, lower row); 76=× (right middle, lower row); 77=× (right ring, lower row); 78=× (right pinky, lower row, inner); 79=× (right pinky, lower row, outer)\nthumb: 52=× (left thumb, middle); 53=× (left thumb, middle); 54=× (left thumb, inner); 69=× (left thumb, outer); 70=× (left thumb, middle); 71=× (left thumb, middle); 55=× (right thumb, inner); 56=× (right thumb, middle); 57=× (right thumb, middle); 72=× (right thumb, middle); 73=× (right thumb, middle); 74=× (right thumb, outer)\nJSON:\n{\"id\":\"factory\",\"name\":\"Factory\",\"bindings\":[{\"kind\":\"none\"},{\"kind\":\"key\",\"code\":\"C\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"},{\"kind\":\"none\"}]}"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "codex_65e19518-af62-4e1e-b9e4-9c8a3b4d334c_item_2",
+          "name": "submit_review",
+          "input": {
+            "items": []
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "codex_65e19518-af62-4e1e-b9e4-9c8a3b4d334c_item_2",
+          "content": "Review received. Stop here."
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Review complete. No additional findings or justified changes beyond the existing checks."
+        }
+      ]
+    }
+  ]
+}

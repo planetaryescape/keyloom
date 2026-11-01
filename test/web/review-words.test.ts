@@ -10,6 +10,7 @@ const item = (over: Partial<ReviewItem>): ReviewItem => ({
 const review = (items: ReviewItem[]): BoardReview => ({
   id: "rev", layoutId: "lay", revisionId: "r1", trigger: "connect", checkedAt: 0, checks: { status: "done", summary: { layers: 6, keys: 80, combos: 8 } },
   ai: { status: "done", reason: null, model: null }, items, fixed: [],
+  freshness: { current: true, reason: null },
 });
 
 describe("segments", () => {
@@ -24,12 +25,12 @@ describe("segments", () => {
 });
 
 describe("the marker and the groups", () => {
-  test("count problems and hints that show; a suggestion is counted with what it fixes; nothing is null", () => {
+  test("count every visible suggestion even when it is nested under the finding it fixes", () => {
     const r = review([
       item({ id: "p" }), item({ id: "h", kind: "hint", severity: "info" }), item({ id: "h2", kind: "hint", severity: "info", dismissedAt: 5 }),
       item({ id: "s", kind: "suggestion", severity: "info", fixes: ["p"], proposalId: "cs" }),
     ]);
-    expect(markerWords(r)).toBe("1 problem · 1 hint");
+    expect(markerWords(r)).toBe("1 problem · 1 hint · 1 suggestion");
     expect(grouped(r).hints.map((i) => i.id)).toEqual(["h"]);
     expect(markerWords(review([item({ dismissedAt: 1 })]))).toBeNull();
   });

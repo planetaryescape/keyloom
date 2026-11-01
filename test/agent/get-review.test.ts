@@ -8,6 +8,7 @@ import { createAgentPorts } from "../../src/app/agent-ports.ts";
 import { applyChange, getLayout, rejectChange } from "../../src/app/index.ts";
 import { createReview, dismissReviewItem, runReviewAi } from "../../src/app/review.ts";
 import { findChangeSet } from "../../src/persistence/change-sets.ts";
+import { invalidateReview } from "../../src/persistence/reviews.ts";
 import { EMPTY_KEYS_ID, finished, proposeStep, reviewWorld, savedId, scriptedModel, submit, touch } from "../helpers/review-world.ts";
 
 const getLayoutStep = { blocks: [{ tool: "get_layout", input: { layers: ["layer-0"] } }] };
@@ -54,8 +55,8 @@ describe("get_review", () => {
     // Markers the screen draws are words here, so the model never parses them.
     expect(text).not.toContain("{key:");
     expect(text).not.toContain("{layer:");
-    expect(text).toContain("Use the empty key blank (left index, home row, middle, Layer 0)");
-    expect(text).toContain("blank (left index, home row, middle, Layer 0) does nothing on Layer 0.");
+    expect(text).toContain("Set F17 on Layer 0");
+    expect(text).toContain("blank (left index, home row, middle, Layer 0): empty → key F17.");
     expect(text).toContain("Positions: layer-0/33");
     expect(text).toContain(`Already a checked proposal: ${w.suggestion?.proposalId}`);
     const cs = findChangeSet(w.app.db, w.suggestion?.proposalId ?? "");
@@ -83,12 +84,12 @@ describe("get_review", () => {
     expect(findings.review).toMatchObject({ current: false, revisionId: w.review.revisionId, hidden: 0 });
     expect(findings.headRevisionId).toBe(head);
     expect(findings.headRevisionId).not.toBe(findings.review?.revisionId);
-    // Its findings still read against the version they were about.
-    expect(findings.review?.items.map((i) => i.title)).toEqual(before.review?.items.map((i) => i.title));
+    // Deterministic checks remain as historical pointers; old recommendations are no longer actionable.
+    expect(findings.review?.items.map((i) => i.id)).toEqual(before.review?.items.filter((i) => i.source === "check").map((i) => i.id));
     expect(await w.tool()).toContain("It is the review of an earlier version");
   });
 
-  test("a suggestion whose change set was applied or rejected keeps its id and says why there are no ops", async () => {
+  test("a rejected suggestion keeps its id without ops; applying it hides the old recommendation", async () => {
     const refused = await reviewed();
     rejectChange(refused.app, refused.suggestion?.proposalId ?? "");
     const rejected = createAgentPorts(refused.app, refused.layoutId, null).reviewFindings().review?.items.find((i) => i.id === refused.suggestion?.id);
@@ -98,8 +99,20 @@ describe("get_review", () => {
     applyChange(w.app, w.suggestion?.proposalId ?? "");
     const findings = createAgentPorts(w.app, w.layoutId, null).reviewFindings();
     const suggestion = findings.review?.items.find((i) => i.id === w.suggestion?.id);
-    expect(suggestion?.proposal).toMatchObject({ id: w.suggestion?.proposalId, status: "applied", ops: null });
-    expect(await w.tool()).toContain(`no longer applies (applied)`);
+    expect(suggestion).toBeUndefined(); // Applying changed the snapshot, so its old recommendation is hidden.
+    expect(await w.tool()).toContain("earlier version");
+  });
+
+  test("a same-head invalidation reports its reason and withholds old suggestions", async () => {
+    const w = await reviewed();
+    const head = getLayout(w.app, w.layoutId).revision.id;
+    invalidateReview(w.app.db, w.review.id, "The keyboard reconnected. Run a fresh review.");
+    const findings = createAgentPorts(w.app, w.layoutId, null).reviewFindings();
+    expect(findings.headRevisionId).toBe(head);
+    expect(findings.review?.revisionId).toBe(head);
+    expect(findings.review?.current).toBe(false);
+    expect(await w.tool()).toContain("The keyboard reconnected");
+    expect(findings.review?.items.some((i) => i.kind === "suggestion")).toBe(false);
   });
 
   test("a review still being written reads as its checks, never as half-written agent findings", async () => {

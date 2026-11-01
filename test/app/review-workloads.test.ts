@@ -155,7 +155,7 @@ test("selected suites are a deterministic union with distinct task IDs", () => {
   expect(suite.tasks.map((t) => t.id)).toEqual(["prose-prose", "shortcuts-copy-control", "shortcuts-command-palette", "shortcuts-navigation"]);
 });
 
-test("a proposal touching a pin is withdrawn before candidate replay", async () => {
+test("a proposal touching a pin is refused before it can be saved or replayed", async () => {
   const w = world();
   try {
     recordPriority(w.app, w.layoutId, { priorityKind: "pinned", statement: "Leave the spare key empty", subject: { slots: [{ layerId: "base", position: 11 }] } });
@@ -166,7 +166,8 @@ test("a proposal touching a pin is withdrawn before candidate replay", async () 
     const done = await runReviewAi(w.app, review.id, { ...m.deps, workload: { replay: async () => { calls++; return reports(); } } });
     expect(calls).toBe(1);
     expect(done.items.some((i) => i.kind === "suggestion")).toBe(false);
-    expect(done.workload?.comparisons[0]).toMatchObject({ verdict: "not-tested", reason: expect.stringContaining("pinned") });
+    expect(done.workload?.comparisons).toEqual([]); // No saved candidate exists to compare.
+    expect(m.requests.flatMap((r) => r.toolResults).join(" ")).toContain("pinned");
     expect(w.app.db.query("SELECT count(*) AS n FROM change_sets WHERE status = 'proposed'").get()).toEqual({ n: 0 });
   } finally { w.app.db.close(); }
 });
@@ -241,6 +242,20 @@ test("activity selection reruns the same revision and disabling tests clears old
   } finally { await engine.stop(); w.app.db.close(); }
 });
 
+test("resetting a changed review snapshot never exposes the previous activity measurements as current", async () => {
+  const w = world();
+  try {
+    saveReviewActivities(w.app, w.layoutId, ["prose"]);
+    const first = createReview(w.app, w.layoutId, "manual").review;
+    const measured = await runReviewAi(w.app, first.id, { ...noModel, workload: { replay: async () => reports() } });
+    expect(measured.workload?.baseline[0]?.status).toBe("verified");
+    saveReviewActivities(w.app, w.layoutId, ["shortcuts"]);
+    const reset = createReview(w.app, w.layoutId, "manual").review;
+    expect(reset.freshness?.current).toBe(true);
+    expect(reset.workload).toMatchObject({ status: "pending", activities: ["shortcuts"], baseline: [], comparisons: [] });
+  } finally { w.app.db.close(); }
+});
+
 test("the automatic import trigger runs selected workloads once without a connected keyboard", async () => {
   const w = world();
   let calls = 0;
@@ -260,12 +275,12 @@ test("the automatic import trigger runs selected workloads once without a connec
 test("a bounded review tests every visible suggestion and withdraws surplus proposals", async () => {
   const w = world();
   try {
-    applyOps(w.app, w.layoutId, { baseRevisionId: w.revisionId, summary: "Three independent spare function keys", ops: [11, 12, 13].map((position, i) => ({ op: "setBinding" as const, at: { layerId: "base", position }, binding: key(`F${17 + i}`) })) });
+    applyOps(w.app, w.layoutId, { baseRevisionId: w.revisionId, summary: "Independent duplicates retain every original function", ops: ["base", "symbols"].flatMap((layerId) => [11, 12, 13].map((position, i) => ({ op: "setBinding" as const, at: { layerId, position }, binding: key(`F${17 + i}`) }))) });
     saveReviewActivities(w.app, w.layoutId, ["prose"]);
     const { review } = createReview(w.app, w.layoutId, "manual");
     const ids: string[] = [];
     const duplicate = (code: string, position: number) => ({ blocks: [{ tool: "propose_changes", input: {
-      title: `Duplicate ${code}`, ops: [{ op: "setBinding", at: { layerId: "base", position }, binding: key(code) }, { op: "dropFunction", function: `key:F${position + 6}`, reason: "Explicit synthetic replacement" }],
+      title: `Duplicate ${code}`, ops: [{ op: "setBinding", at: { layerId: "base", position }, binding: key(code) }],
       explanation: "Synthetic independent candidate.", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(), supersedes: null,
     } }] });
     const m = scriptedModel([duplicate("E", 11),
