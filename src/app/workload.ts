@@ -71,15 +71,24 @@ export type WorkloadReport = WorkloadEvidence & {
 function requireNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new EmulateFailedError("The workload evaluation was cancelled.");
 }
+function workloadIdentity(view: LayoutView, prepared: ReturnType<typeof prepare>): WorkloadReport["identity"] {
+  const { suite, policy, boardRevision } = prepared;
+  const revision = view.board.definition.revisions.find((r) => r.id === boardRevision);
+  if (!revision) throw new UsageError(`unknown board revision ${boardRevision}`);
+  const source = view.document.firmware === "kanata" ? null : sourceFor(view, boardRevision);
+  return {
+    layoutId: view.layout.id, revisionId: view.revision.id, layoutHash: workloadHash(view.document), boardHash: workloadHash(view.board), boardRevision,
+    suiteHash: workloadHash(suite), policyHash: workloadHash(policy), sourceHash: source === null ? null : workloadHash(source),
+    evaluator: EVALUATOR_ID, planner: PLANNER_ID, host: HOST_ID, generator: `keyloom-${packageJson.version}`, firmwarePin: revision.source.sha, buildRecipeHash: workloadHash(revision.build),
+  };
+}
 async function evaluateView(app: App, view: LayoutView, prepared: ReturnType<typeof prepare>, opts: WorkloadOptions, deps: WorkloadDeps): Promise<WorkloadReport> {
   requireNotAborted(opts.signal);
   const { suite, policy, boardRevision } = prepared;
   const issues = standingIssues(view.board.definition, view.document);
   const fatal = issues.filter((i) => ["schema", "binding_count", "unknown_ref", "layer_limit"].includes(i.code));
   if (fatal.length) throw new ValidationFailedError("layout cannot be evaluated safely", { errors: fatal });
-  const source = view.document.firmware === "kanata" ? null : sourceFor(view, boardRevision);
-  const revision = view.board.definition.revisions.find((r) => r.id === boardRevision);
-  if (!revision) throw new UsageError(`unknown board revision ${boardRevision}`);
+  const identity = workloadIdentity(view, prepared);
   const evidence = await evaluateWorkload(view.board.definition, view.document, suite, policy,
     async (events) => {
       requireNotAborted(opts.signal);
@@ -96,11 +105,7 @@ async function evaluateView(app: App, view: LayoutView, prepared: ReturnType<typ
       requireNotAborted(opts.signal);
     });
   requireNotAborted(opts.signal);
-  return { schemaVersion: 1, identity: {
-    layoutId: view.layout.id, revisionId: view.revision.id, layoutHash: workloadHash(view.document), boardHash: workloadHash(view.board), boardRevision,
-    suiteHash: workloadHash(suite), policyHash: workloadHash(policy), sourceHash: source === null ? null : workloadHash(source),
-    evaluator: EVALUATOR_ID, planner: PLANNER_ID, host: HOST_ID, generator: `keyloom-${packageJson.version}`, firmwarePin: revision.source.sha, buildRecipeHash: workloadHash(revision.build),
-  }, suite, policy, ...evidence, structuralWarnings: issues.map((i) => `${i.code}: ${i.message}`), assumptions: [
+  return { schemaVersion: 1, identity, suite, policy, ...evidence, structuralWarnings: issues.map((i) => `${i.code}: ${i.message}`), assumptions: [
     "Selected best-found witness in a restricted grammar; not exhaustive firmware reachability or a human strategy.",
     "Fresh firmware process and host state per task, US-ANSI with Caps Lock off, no repeat, compose, editor assistance or application outcomes.",
     "Only released physical keys and empty final HID are checked; hidden firmware state and hardware fidelity are not established.",
@@ -115,10 +120,38 @@ export async function evaluateStoredWorkload(app: App, ref: string, opts: Worklo
 }
 
 export async function compareStoredWorkload(app: App, ref: string, ops: readonly ChangeOp[], opts: WorkloadOptions = {}, deps: WorkloadDeps = {}) {
-  if (!Array.isArray(ops) || ops.length === 0 || ops.length > 256) throw new UsageError("workload comparison needs 1 to 256 change ops");
-  for (const op of ops) if (!ChangeOpSchema.safeParse(op).success) throw new UsageError("invalid workload comparison change op");
+  return compareCandidate(app, ref, ops, opts, deps);
+}
+
+/** A review reuses its own in-memory baseline; identity must still match every configured input. Never a saved approval. */
+export async function compareWorkloadToBaseline(app: App, ref: string, ops: readonly ChangeOp[], baseline: WorkloadReport, opts: WorkloadOptions = {}, deps: WorkloadDeps = {}) {
+  return compareCandidate(app, ref, ops, opts, deps, baseline);
+}
+
+async function compareCandidate(app: App, ref: string, ops: readonly ChangeOp[], opts: WorkloadOptions, deps: WorkloadDeps, measured?: WorkloadReport) {
+  requireNotAborted(opts.signal);
+  requireWorkloadOps(ops);
   const view = getLayout(app, ref, opts.revisionId);
   const prepared = prepare(view, opts);
+  if (measured && !deepEqual(measured.identity, workloadIdentity(view, prepared))) throw new UsageError("workload baseline no longer matches the snapshot, suite or evaluator");
+  const checked = checkCandidate(app, view, ops);
+  const baseline = measured ?? await evaluateView(app, view, prepared, opts, deps);
+  const candidate = await evaluateView(app, { ...view, document: checked.after }, prepared, opts, deps);
+  return { schemaVersion: 1, patchHash: workloadHash(ops), validation: checked.result, baseline, candidate, comparison: compareWorkloadEvidence(baseline, candidate), saved: false, applied: false };
+}
+
+/** Review proposals must respect pins even when firmware measurement is unavailable. */
+export function validateWorkloadPatch(app: App, ref: string, ops: readonly ChangeOp[], revisionId?: string): void {
+  requireWorkloadOps(ops);
+  checkCandidate(app, getLayout(app, ref, revisionId), ops);
+}
+
+function requireWorkloadOps(ops: readonly ChangeOp[]): void {
+  if (!Array.isArray(ops) || ops.length === 0 || ops.length > 256) throw new UsageError("workload comparison needs 1 to 256 change ops");
+  for (const op of ops) if (!ChangeOpSchema.safeParse(op).success) throw new UsageError("invalid workload comparison change op");
+}
+
+function checkCandidate(app: App, view: LayoutView, ops: readonly ChangeOp[]) {
   const pins = pinnedFor(app, view.layout.id);
   const checked = evaluate(view.board.definition, view.document, ops, { pinned: pins, decisions: decisionFactsFor(app, view.layout.id) });
   if (!checked.result.ok || !checked.after) throw new ValidationFailedError("invalid workload comparison patch", checked.result);
@@ -130,7 +163,5 @@ export async function compareStoredWorkload(app: App, ref: string, ops: readonly
     const movedFunction = pin.functions.some((fn) => (beforeHomes.get(fn) ?? []).some((s) => !(afterHomes.get(fn) ?? []).some((t) => s.layerId === t.layerId && s.position === t.position)));
     if (changedSlot || movedFunction) throw new ValidationFailedError("workload comparison refuses a pinned binding or function move", { decisionId: pin.decisionId });
   }
-  const baseline = await evaluateView(app, view, prepared, opts, deps);
-  const candidate = await evaluateView(app, { ...view, document: after }, prepared, opts, deps);
-  return { schemaVersion: 1, patchHash: workloadHash(ops), validation: checked.result, baseline, candidate, comparison: compareWorkloadEvidence(baseline, candidate), saved: false, applied: false };
+  return { result: checked.result, after };
 }

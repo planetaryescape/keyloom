@@ -15,6 +15,7 @@ keyloom is a local-first configurator for QMK and ZMK keyboards, and for the Mac
 - Keep several configs per board, with a version history you can go back to.
 - Use the typing lab. It records you typing, measures each finger, and tests home-row-mod timings on the recording.
 - Plug in a new keyboard and put your config on it.
+- Choose activity tests during import or new-board copying, then see measured before/after costs on review suggestions. Tests need Docker on macOS or Linux and a QMK or ZMK config; Windows and the MacBook's Kanata config are not supported yet. Tests never flash a keyboard.
 
 ## The main screens
 

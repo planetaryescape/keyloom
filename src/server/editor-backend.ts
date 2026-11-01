@@ -2,6 +2,7 @@ import type {
   ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, ImportResponse, LayoutExportDocument, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse, UpgradeResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
+import type { ReviewActivity } from "../api/review.ts";
 
 // The server's write interface (rung 2). Like LayoutSource, the CLI injects the app-backed
 // implementation, so the server knows nothing about storage, Docker or Zapp.
@@ -22,7 +23,7 @@ export interface EditorBackend {
   /** The boards keyloom can import a layout for. */
   boards(): Promise<BoardChoice[]>;
   /** Imports an uploaded export (a .zip or a .keymap); the same use case as `keyloom import`. */
-  importUpload(request: { board: string; filename: string; bytes: Uint8Array; name?: string | undefined }): Promise<ImportResponse>;
+  importUpload(request: { board: string; filename: string; bytes: Uint8Array; name?: string | undefined; reviewActivities?: ReviewActivity[] }): Promise<ImportResponse>;
   startBuild(ref: string, request: BuildRequest): Promise<Build>;
   getBuild(id: string): Promise<Build | null>;
   startFlash(buildId: string): Promise<Flash>;

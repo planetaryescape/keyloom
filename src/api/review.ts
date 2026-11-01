@@ -8,6 +8,8 @@
 // A review is stale while `review.revisionId` differs from `headRevisionId`. `:id` is an item's stable id, URL-encoded.
 import { z } from "zod";
 import { FixedItemSchema, ReviewItemSchema } from "../validation/review-item.ts";
+import { ReviewActivitiesSchema, ReviewWorkloadSchema } from "../layout/review-workload.ts";
+export { ReviewActivitiesSchema, REVIEW_ACTIVITIES, REVIEW_ACTIVITY_LABELS, workloadVerdictWords, type ReviewActivity } from "../layout/review-workload.ts";
 
 export const AiStatusSchema = z.enum(["pending", "running", "done", "unavailable", "failed"]);
 
@@ -25,6 +27,7 @@ export const BoardReviewSchema = z.object({
     reason: z.string().nullable(),
     model: z.string().nullable(),
   }),
+  workload: ReviewWorkloadSchema.optional(),
   /** Every item, hidden ones included with `dismissedAt` set. Checks first, then the agent's. */
   items: z.array(ReviewItemSchema),
   /** What the previous review had that this revision no longer produces; each says which review it is fixed since. */
@@ -36,11 +39,12 @@ export const ReviewResponseSchema = z.object({
   layoutId: z.string().min(1),
   headRevisionId: z.string().min(1),
   review: BoardReviewSchema.nullable(),
+  workloadActivities: ReviewActivitiesSchema.optional(),
 });
 export type ReviewResponse = z.infer<typeof ReviewResponseSchema>;
 
-/** `force` runs the agent's part again even when it finished; without it only a missing or failed part runs. */
-export const RunReviewRequestSchema = z.object({ force: z.boolean().optional() }).strict();
+/** `activities` saves the profile ([] disables tests); like `force`, supplying it reruns a finished review. Omit it to keep the profile. */
+export const RunReviewRequestSchema = z.object({ force: z.boolean().optional(), activities: ReviewActivitiesSchema.optional() }).strict();
 
 export const ReviewEventSchema = z.object({
   type: z.literal("review"),

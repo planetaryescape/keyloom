@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { GeometryKeySchema } from "../boards/schema.ts";
 import { LayoutSchema } from "../layout/schema.ts";
+import { ReviewActivitiesSchema } from "../layout/review-workload.ts";
 import { ConfigSchema } from "./configs.ts";
 import { CandidateSchema, DetectedKeyboardSchema } from "./detected-keyboards.ts";
 
@@ -65,6 +66,7 @@ export const PutRequestSchema = z.object({
   placements: z.record(z.string(), z.number().int().nonnegative()).optional(),
   // Source layers to carry over; omitted means all non-test layers.
   layers: z.array(z.string().min(1)).optional(),
+  reviewActivities: ReviewActivitiesSchema.optional(),
 });
 export type PutRequest = z.infer<typeof PutRequestSchema>;
 

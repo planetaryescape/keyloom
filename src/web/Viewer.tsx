@@ -129,7 +129,7 @@ interface ViewerProps {
 }
 
 /** What a board or config switch carries to the next layout (D-317). */
-export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean; conversationId?: string; continueCopy?: boolean };
+export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean; review?: boolean; conversationId?: string; continueCopy?: boolean };
 
 // `resume` is a draft kept from an earlier visit to this key (D-317); the card opens on it.
 type Editing = { layerId: string; position: number; focus: boolean; resume?: Draft };
@@ -193,7 +193,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [undoing, setUndoing] = useState(false);
   // The chat drawer. Open, a click on a key adds it to the "Asking about" chips; closed, it opens the key's panel (D-099).
   // The chat stays open across a switch, with the thread that was on screen carried above this layout's own (D-317).
-  const [sidebar, setSidebar] = useState<Sidebar | null>(() => chrome.arrival?.proposals === true ? "proposals" : chrome.arrival?.chatOpen === true ? "chat" : null);
+  const [sidebar, setSidebar] = useState<Sidebar | null>(() => chrome.arrival?.review === true ? "review" : chrome.arrival?.proposals === true ? "proposals" : chrome.arrival?.chatOpen === true ? "chat" : null);
   const chatOpen = sidebar === "chat";
   const setChatOpen = sidebarSetter("chat");
   const [chatActivity, setChatActivity] = useState<{ stop: () => void } | null>(null);
@@ -1342,7 +1342,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   /** After "Make": open the new config with its proposals beside the board (D-336). */
   function openMadeConfig(configId: string) {
-    const carry: Arrival = { layerName: null, chatOpen: false, thread: null, proposals: true };
+    const carry: Arrival = { layerName: null, chatOpen: false, thread: null, proposals: true,
+      ...(newBoard.step.kind === "setup" || (newBoard.step.kind === "put" && newBoard.step.origin === "known") ? { review: true } : {}) };
     if (chrome.onCarry !== undefined) chrome.onCarry(configId, carry);
     chrome.onReload?.(configId);
   }

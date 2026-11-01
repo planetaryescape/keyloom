@@ -6,17 +6,21 @@ import { findChangeSet, markRejected } from "../persistence/change-sets.ts";
 import { appendLog } from "../persistence/log.ts";
 import {
   type AiStatus, type BoardReviewRow, type ReviewItemRow, type ReviewTrigger, claimAi, dismissItem, dismissals, finishAi, findReview, findReviewOfRevision, insertReview, latestReview,
-  listReviewItems, restoreItem,
+  listReviewItems, restoreItem, clearReviewAgentItems,
+  REVIEW_AI_STALE_MS,
 } from "../persistence/reviews.ts";
 import { transact } from "../persistence/transaction.ts";
+import { reviewActivities, reviewWorkload, saveReviewWorkload } from "../persistence/review-workloads.ts";
 import { type FixedItem, type ReviewItem, itemId } from "../validation/review-item.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 import { reviewChecks } from "../validation/review-checks.ts";
 import { createAgentPorts } from "./agent-ports.ts";
 import type { App } from "./context.ts";
-import { ModelError, NotFoundError } from "./errors.ts";
+import { ModelError, NotFoundError, UsageError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
 import { type BoardReview, type ReviewView, itemOf, showReview, toReview } from "./review-read.ts";
+import { measureReviewBaseline, measureReviewSuggestions, pendingReviewWorkload, reviewWorkloadRequest, REVIEW_WORKLOAD_MAX_PROPOSALS, REVIEW_WORKLOAD_TIMEOUT_MS } from "./review-workloads.ts";
+import type { WorkloadDeps } from "./workload.ts";
 
 export type { AiStatus, ReviewTrigger } from "../persistence/reviews.ts";
 export type { FixedItem, ReviewItem } from "../validation/review-item.ts";
@@ -24,7 +28,7 @@ export type { BoardReview, ReviewView } from "./review-read.ts";
 export { reviewWords, showReview } from "./review-read.ts";
 
 /** A run that started this long ago and never finished is taken to have died with its process. */
-export const AI_STALE_MS = 10 * 60_000;
+export const AI_STALE_MS = REVIEW_AI_STALE_MS;
 
 /** What the screen is told when a review changes. */
 export type ReviewEvent = { type: "review"; layoutId: string; revisionId: string; reviewId: string; aiStatus: AiStatus };
@@ -61,6 +65,8 @@ export function createReview(app: App, ref: string, trigger: ReviewTrigger, hook
       items: checks.items.map(({ dismissedAt: _, ...row }) => row), previousReviewId: previous?.id ?? null,
       fixed: goneSince(earlier, checks.items.map(({ dismissedAt: _, ...r }) => r), hidden, "check"),
     });
+    const activities = reviewActivities(app.db, view.layout.id);
+    if (inserted.created && activities.length) saveReviewWorkload(app.db, inserted.review.id, pendingReviewWorkload(activities));
     // The earlier review's suggestions were about its revision. A change set still open for it would sit in the config's proposals
     // for ever, so it is rejected now that a newer review replaces the suggestion.
     if (inserted.created) {
@@ -78,6 +84,7 @@ export function createReview(app: App, ref: string, trigger: ReviewTrigger, hook
 export type ReviewAiDeps = {
   /** The model the agent runs on; throws a ModelError when none is set up. */
   model(): Promise<AgentModel>;
+  workload?: WorkloadDeps;
 };
 
 // ModelError's own text for these says how to start a chat; a review is not one.
@@ -106,6 +113,12 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   const row = findReview(app.db, reviewId);
   if (!row) throw new NotFoundError(`no review "${reviewId}"`);
   if (!claimAi(app.db, row.id, now(), AI_STALE_MS, hooks.force ? { force: true } : {})) return toReview(app, row);
+  if (hooks.force) transact(app.db, () => {
+    for (const item of listReviewItems(app.db, row.id)) {
+      if (item.proposalId !== null && findChangeSet(app.db, item.proposalId)?.status === "proposed") markRejected(app.db, item.proposalId, now());
+    }
+    clearReviewAgentItems(app.db, row.id);
+  });
   const announce = (status: AiStatus) => hooks.emit?.({ type: "review", layoutId: row.layoutId, revisionId: row.revisionId, reviewId: row.id, aiStatus: status });
   announce("running");
 
@@ -113,11 +126,27 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   const finish = (status: "done" | "unavailable" | "failed", reason: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = []) => {
     transact(app.db, () => {
       for (const id of rejectedProposals) if (findChangeSet(app.db, id)?.status === "proposed") markRejected(app.db, id, now());
+      if (status === "failed") {
+        const evidence = reviewWorkload(app.db, row.id);
+        if (evidence) {
+          evidence.comparisons = [];
+          saveReviewWorkload(app.db, row.id, evidence);
+        }
+      }
       const kept = items.map(({ dismissedAt: _, ...r }) => r);
       finishAi(app.db, row.id, { status, reason, model, items: kept, fixedAgent: status === "done" ? agentGone(app, row, kept) : [] });
     });
     announce(status);
   };
+
+  const workloadSignal = hooks.signal ? AbortSignal.any([hooks.signal, AbortSignal.timeout(REVIEW_WORKLOAD_TIMEOUT_MS)]) : AbortSignal.timeout(REVIEW_WORKLOAD_TIMEOUT_MS);
+  const baseline = await measureReviewBaseline(app, row, workloadSignal, deps.workload ?? {});
+  if (hooks.signal?.aborted || (workloadSignal.aborted && reviewActivities(app.db, row.layoutId).length > 0) || getLayout(app, row.layoutId).revision.id !== row.revisionId) {
+    finish("failed", "The review stopped or the layout changed while its workload was being tested.", null, []);
+    const stopped = findReview(app.db, row.id);
+    if (!stopped) throw new NotFoundError(`no review "${row.id}"`);
+    return toReview(app, stopped);
+  }
 
   let model: AgentModel;
   try {
@@ -131,6 +160,18 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   }
 
   const proposed: string[] = [];
+  const finishSuggestions = async (items: ReviewItem[], withdrawn: string[], reason: string | null) => {
+    let suggestions = 0;
+    const bounded = reviewWorkload(app.db, row.id) ? items.filter((item) => {
+      if (item.kind !== "suggestion" || ++suggestions <= REVIEW_WORKLOAD_MAX_PROPOSALS) return true;
+      if (item.proposalId) withdrawn.push(item.proposalId);
+      return false;
+    }) : items;
+    const measured = await measureReviewSuggestions(app, row, bounded, baseline, workloadSignal, deps.workload ?? {});
+    if (hooks.signal?.aborted || (workloadSignal.aborted && reviewWorkload(app.db, row.id)) || getLayout(app, row.layoutId).revision.id !== row.revisionId) {
+      finish("failed", "The review stopped or the layout changed while its suggestions were being tested.", model.model, [], proposed);
+    } else finish("done", reason, model.model, measured, withdrawn);
+  };
   try {
     const checks = listReviewItems(app.db, row.id).filter((i) => i.source === "check").map((i) => itemOf(i, new Map()));
     const ports = createAgentPorts(app, row.layoutId, null);
@@ -144,7 +185,8 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     if (getLayout(app, row.layoutId).revision.id !== row.revisionId) {
       finish("failed", "Your layout changed before keyloom could look at it; it will look at the new version.", model.model, []);
     } else {
-      const outcome = await runReviewAgent({ model, ports, checks, ...(hooks.signal ? { signal: hooks.signal } : {}) });
+      const signal = reviewWorkload(app.db, row.id) ? workloadSignal : hooks.signal;
+      const outcome = await runReviewAgent({ model, ports, checks, workload: reviewWorkloadRequest(reviewWorkload(app.db, row.id)), ...(signal ? { signal } : {}) });
       appendLog(app.dataDir, {
         event: "board_review", reviewId: row.id, layoutId: row.layoutId, revisionId: row.revisionId, provider: model.provider, model: model.model, status: outcome.status,
         iterations: outcome.iterations, usage: usageLine(outcome.usage), ...(outcome.costUsd === undefined ? {} : { costUsd: outcome.costUsd }), durationMs: now() - started,
@@ -156,7 +198,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       } else if (outcome.status === "done") {
         const attached = attachProposals(app, outcome.items, proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
         const single = onePerProblem(app, attached.items);
-        finish("done", null, model.model, single.items, [...attached.withdrawn, ...single.withdrawn]);
+        await finishSuggestions(single.items, [...attached.withdrawn, ...single.withdrawn], null);
       }
       else {
         // Out of steps (or cut off) after saving a fix: that fix is still worth showing, so it is attached the same way and the review
@@ -165,13 +207,19 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
         const single = onePerProblem(app, attached.items);
         const withdrawn = [...attached.withdrawn, ...single.withdrawn];
         if (single.items.length === 0) finish("failed", outcome.reason, model.model, [], [...proposed]);
-        else finish("done", outcome.limit ? "Stopped at its step limit; showing what it found." : `${outcome.reason.replace(/\.$/, "")}; showing what it found.`, model.model, single.items, withdrawn);
+        else await finishSuggestions(single.items, withdrawn, outcome.limit ? "Stopped at its step limit; showing what it found." : `${outcome.reason.replace(/\.$/, "")}; showing what it found.`);
       }
     }
   } catch (err) {
-    if (hooks.signal?.aborted) {
-      finish("failed", "keyloom was closed while it was looking. It will look again after your next change.", model.model, [], proposed);
+    if (hooks.signal?.aborted || (workloadSignal.aborted && reviewWorkload(app.db, row.id))) {
+      finish("failed", hooks.signal?.aborted ? "keyloom was closed while it was looking. It will look again after your next change." : "The activity review reached its time limit. Try fewer activities, then run it again.", model.model, [], proposed);
       return toReview(app, findReview(app.db, row.id) as BoardReviewRow);
+    }
+    if (err instanceof UsageError) {
+      finish("failed", err.message, model.model, [], proposed);
+      const failed = findReview(app.db, row.id);
+      if (!failed) throw new NotFoundError(`no review "${row.id}"`);
+      return toReview(app, failed);
     }
     const known = model.classifyError(err);
     // A model API failure is something BK can act on, in words. Anything else is a bug: it is logged with its stack and shown plainly.

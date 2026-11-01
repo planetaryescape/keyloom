@@ -1,4 +1,5 @@
 import type { BoardChoice } from "../../api/http.ts";
+import type { ReviewActivity } from "../../api/review.ts";
 
 export type ExportGuide = { tool: string; steps: string; accepts: string; extensions: readonly string[] };
 
@@ -48,7 +49,7 @@ export function guideFor(board: BoardChoice): ExportGuide {
   return FALLBACK;
 }
 
-export const importCommand = (board: BoardChoice): string => `keyloom import --board ${board.id} <file>`;
+export const importCommand = (board: BoardChoice, activities: readonly ReviewActivity[] = []): string => `keyloom import --board ${board.id}${activities.length ? ` --activities ${activities.join(",")}` : ""} <file>`;
 
 export function acceptsFile(guide: ExportGuide, filename: string): boolean {
   const name = filename.toLowerCase();

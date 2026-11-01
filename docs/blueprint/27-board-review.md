@@ -1,6 +1,6 @@
 # 27: Board review
 
-Status: engine built (checks, agent part, triggers, routes, events and CLI), 2026-10-17; screens built (marker, marks, review panel, states), 2026-10-17 (D-340); the fix run (panel button, `get_review` tool, `keyloom review fix`), 2026-10-30 (D-461). Source baseline: origin/main after v0.34.8.
+Status: engine built (checks, agent part, triggers, routes, events and CLI), 2026-10-17; screens built (D-340); the fix run built 2026-10-30 (D-461). Explicit activity profiles, baseline measurement and independently tested review suggestions are built in source (D-473), 2026-11-01. [Source/runtime evidence](../research/workload-board-review.md) includes real QMK/ZMK comparisons, a compiled CLI journey and UI checks. This does not establish published availability or hardware acceptance.
 
 BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … and I can just see them somewhere without me needing to ask for them or dig into some menus … it would be nice if it's proactive."
 
@@ -19,6 +19,7 @@ type BoardReview = {
   checkedAt;
   checks: { status: "done"; summary: { layers; keys; combos } };
   ai: { status: "pending" | "running" | "done" | "unavailable" | "failed"; reason: string | null; model: string | null };
+  workload?: ReviewWorkload;
   items: ReviewItem[];   // hidden ones included, with dismissedAt
   fixed: FixedItem[];    // the previous review's items this revision no longer produces
 };
@@ -60,6 +61,30 @@ The review engine (`src/app/review-engine.ts`) is level-triggered, like the sync
 
 A config nothing touched while its keyboard was away has no review until `POST …/review/run` or `keyloom review --run`.
 
+## Test suggestions against your activities
+
+```sh
+keyloom review my-layout --run --activities prose,shortcuts
+keyloom review my-layout --json
+keyloom review my-layout --run --activities none
+```
+
+Choose activities before dropping a layout on the import screen, while copying a config to a new board, or under **Activity tests** in its review. The CLI also accepts `import --activities prose,shortcuts` and `keyboard put … --activities prose,shortcuts`; omitting the flag or passing `none` starts the new config without tests. Supported IDs are `prose`, `typescript`, `python`, `json`, `shell` and `shortcuts`; selection is explicit and starts empty. Choosing activities permits the selected tests to run on later automatic reviews of this config. Disable them with **Turn off tests** or `review my-layout --run --activities none`. You cannot change the profile in the middle of an active review.
+
+Tests need Docker and can download pinned firmware sources and images. They run before the model, so baseline results still arrive when no provider is configured. Suggestions still need a provider. Neither path applies a change or accesses the keyboard. Windows and Kanata retain the review's ordinary checks while workload replay reports unavailable.
+
+A new-board copy starts as an empty config with its mapping waiting for Apply. Automatic activity review waits for that mapping to be applied instead of reviewing the temporary blank. An explicitly requested manual review can still test the current head before Apply.
+
+The model sees aggregated costs and physical-key use, never sample text or traces. It can propose at most two visible changes for independent testing. The app reuses one in-memory baseline, validates each actual saved patch and refuses pin changes before candidate replay. Results are stored under the review's optional `workload` field:
+
+- `activities`, `status`, `reason` and `identity` describe the selected tests and their snapshot/evaluator inputs.
+- `baseline` contains each task's status, requested output count, verified physical keydowns, peak simultaneous keys, layer/modifier entries and bounded physical-key-use counts. Unknown costs are null, not zero.
+- `comparisons` ties a proposal ID and patch hash to its candidate task results, deltas and verdict. `verified-improvement` needs complete verified evidence for every selected task, an improvement in keydowns or peak simultaneous keys, and no worsening in either. Other outcomes are `equivalent`, `regression`, `tradeoff`, `inconclusive` and `not-tested`.
+
+Open **Baseline results** or a suggestion's **Test results · current → suggested** to see the numbers and coverage gaps. A missing route only means the bounded planner did not find one in its supported subset. An unverified baseline blocks an improvement claim even when the candidate gains a verified route. The eight-minute review deadline can leave tests incomplete; reduce the selected activities and rerun rather than treating incomplete evidence as success.
+
+These short US-ANSI transcription and HID samples do not measure editor behavior, typing speed or comfort. A measured suggestion is still a preview. Apply revalidates against the current head; an old review's evidence never approves a later change.
+
 ## Fixed, hidden and replaced
 
 - A review of a revision lists, in `fixed`, the previous review's problems and hints that the new revision no longer produces, each with `fixedSince: <previous review id>`. A finding still about some of its keys has changed, not gone. A finding BK had hidden is not ticked off. The agent's findings count only when the agent finished in both reviews.
@@ -79,10 +104,10 @@ A config nothing touched while its keyboard was away has no review until `POST �
 ## API, events and CLI
 
 - `GET /api/layouts/:ref/review` gives `{ layoutId, headRevisionId, review }`, the newest review of the config. The review is stale while its `revisionId` is not `headRevisionId`.
-- `POST /api/layouts/:ref/review/run` (202) stores the head's checks and answers with them; the agent's part continues. Body `{ force?: boolean }`.
+- `POST /api/layouts/:ref/review/run` (202) stores the head's checks and answers with them; measurement and the agent's part continue. Body `{ force?: boolean, activities?: ("prose"|"typescript"|"python"|"json"|"shell"|"shortcuts")[] }`. Supplying activities remembers the profile and reruns the same revision; `[]` disables tests. Unknown/duplicate IDs fail schema validation before writes. The response's optional `workloadActivities` names the current profile, while `review.workload.activities` names the profile that produced that evidence.
 - `POST /api/layouts/:ref/review/items/:id/dismiss` and `…/restore` (`:id` URL-encoded). 404 for an id the latest review doesn't have.
 - `GET /api/events` carries `event: review` frames (`{ type: "review", layoutId, revisionId, reviewId, aiStatus }`) when a review is made and each time its agent part moves. The frame holds no review; the page reads it again.
-- `keyloom review [layout] [--run] [--force] [--json]` prints the review in plain words, or the JSON with `schema_version`. `--run` makes the head's review now and waits for the agent.
+- `keyloom review [layout] [--run] [--force] [--activities <ids|none>] [--json]` prints the review in plain words, or the JSON with `schema_version`. `--run` makes the head's review now and waits for the agent; `--activities` requires `--run`.
 
 ## The screens
 

@@ -1,5 +1,7 @@
 import { ArrowLeft, LoaderCircle, Search, Zap } from "lucide-react";
 import { useState } from "react";
+import { ActivityChoices } from "../review/WorkloadTests.tsx";
+import "../review/review.css";
 import type { PreviewResponse, PutPreviewResponse } from "../../api/keyboards.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
@@ -238,6 +240,10 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
             )}
           </>
         )}
+        <div className="br-workloads">
+          <ActivityChoices value={flow.activities} onChange={flow.setActivities} disabled={flow.busy} />
+          <p className="nb-note">Optional: after you apply the copied keys, test these US-ANSI samples and check suggestions against them. Needs Docker; may download firmware and take several minutes. Nothing is flashed by a test.</p>
+        </div>
         {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
       </div>
       <footer className="nb-panel-foot">

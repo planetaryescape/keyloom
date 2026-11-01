@@ -46,7 +46,8 @@ keyloom
   agent cancel <request-id> --request       save Stop even before the request is accepted
   provider status [--json]                 active provider/model and credential availability; no generation
   provider use <provider> [--model M]       save the default for new conversations in config.json
-  review [layout] [--run] [--force] [--provider P]   show saved review; --run can call a model
+  review [layout] [--run] [--force] [--provider P] [--activities prose,shortcuts|none]
+                                             show saved review; selected tests need Docker; --run can call a model
   review fix [layout] [--provider P]        one agent run that fixes what the review found
   review dismiss|restore <item> [--layout L]   hide or restore a finding
 
@@ -241,6 +242,10 @@ The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor doe
 ## review shows what keyloom found in a config
 
 `keyloom review [layout]` prints the newest review of the config in plain words: problems, suggestions, hints, what the last revision fixed, what was checked and how the agent's part went. `--run` makes the head's review now and waits for the agent (it needs a model provider; the checks run without one), `--force` runs the agent again on a revision it already looked at, `--provider` picks the model as for `chat`. JSON is `{ layout_id, head_revision_id, stale, review }`, where `review` is null before any, and otherwise `{ id, layout_id, revision_id, trigger, checked_at, checks, ai: { status, reason, model }, items: [{ id, source, kind, severity, code, title, body, keys, layers, proposal_id, fixes, dismissed_at }], fixed }`; `title` and `body` keep the `{key:…}` and `{layer:…}` markers. `--format ids` prints the item ids. [27](27-board-review.md) has the design.
+
+`review --run --activities prose,shortcuts` remembers explicit workload activities and independently tests the review's suggestions (D-473). Choices are `prose`, `typescript`, `python`, `json`, `shell`, `shortcuts`; no activities are assumed. `--activities` requires `--run`, implies a fresh look at this revision, and `none` turns tests off. A config with activities also runs them on later automatic reviews. Baseline tests need Docker but not a model; suggestions still need one. Invalid/duplicate IDs exit 2. Execution availability and coverage are review evidence, not a process-success proof of improvement: inspect `review.workload.status`, each task and each comparison's verdict.
+
+CLI JSON adds optional `workload_activities` at the root and `workload` in the review. The latter contains `activities`, `status`, `reason`, `identity`, `baseline` and `comparisons`; task fields use camelCase to match the standalone workload report. Tables show baseline counts, per-proposal verdicts and candidate-minus-baseline deltas. Unknown costs stay null in JSON. See [the activity-test contract](27-board-review.md#test-suggestions-against-your-activities). Both `import --activities …` and `keyboard put … --activities …` remember the choice before automatic review without running tests inside those creation commands. No test applies or flashes anything.
 
 `review fix [layout]` starts one agent run on the config with the same request the review panel's **Fix issues** button sends, and follows it like `agent start`: a run that stops on a question prints the question and the `keyloom agent answer …` line. The findings are not pasted into the request; the agent reads them with its `get_review` tool, so they cannot be out of date with the stored review, and it answers with one validated change that reuses any suggestion still on the board. It refuses before calling a model when the config has no review or nothing is left to fix (hidden findings do not count). `--json` prints the run snapshot; `--provider` picks the model as for `chat`.
 

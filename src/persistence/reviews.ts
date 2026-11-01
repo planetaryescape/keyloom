@@ -6,6 +6,7 @@ import { newId } from "./ids.ts";
 
 export type ReviewTrigger = "connect" | "apply" | "import" | "manual";
 export type AiStatus = "pending" | "running" | "done" | "unavailable" | "failed";
+export const REVIEW_AI_STALE_MS = 10 * 60_000;
 
 export type ReviewItemRow = {
   id: string;
@@ -132,6 +133,11 @@ export function finishAi(
   const next = (db.query("SELECT COALESCE(MAX(position) + 1, 0) AS n FROM review_items WHERE review_id = ?").get(reviewId) as { n: number }).n;
   insertItems(db, reviewId, outcome.items, next);
   db.query("UPDATE board_reviews SET ai_status = ?, ai_reason = ?, ai_model = ? WHERE id = ?").run(outcome.status, outcome.reason, outcome.model, reviewId);
+}
+
+/** A forced look replaces old suggestions immediately, before another measurement could be read beside them. */
+export function clearReviewAgentItems(db: Database, reviewId: string): void {
+  db.query("DELETE FROM review_items WHERE review_id = ? AND source = 'agent'").run(reviewId);
 }
 
 /** At start-up: a review left `running` by a process that is gone is failed, so its screen stops waiting. */

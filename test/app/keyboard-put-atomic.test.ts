@@ -5,6 +5,7 @@ import { getLayout, importLayout, listConfigs } from "../../src/app/index.ts";
 import { putConfig } from "../../src/app/keyboard-put.ts";
 import { createLayout } from "../../src/persistence/layouts.ts";
 import { type SyncWorld, syncWorld } from "../helpers/fake-sync.ts";
+import { reviewActivities } from "../../src/persistence/review-workloads.ts";
 
 let current: SyncWorld | undefined;
 afterEach(async () => {
@@ -13,6 +14,14 @@ afterEach(async () => {
 });
 
 describe("a put the validator refuses", () => {
+  test("the new board remembers only the explicitly selected review activities", async () => {
+    current = await syncWorld();
+    const out = putConfig(current.app, { from: current.layoutId, board: "foostan/corne", reviewActivities: ["shortcuts", "prose"] });
+    expect(reviewActivities(current.app.db, out.config.id)).toEqual(["prose", "shortcuts"]);
+    expect(reviewActivities(current.app.db, current.layoutId)).toEqual([]);
+    expect(current.calls.flashes).toEqual([]);
+    expect(current.calls.builds).toEqual([]);
+  });
   test("leaves no config behind, so the same put can be tried again", async () => {
     current = await syncWorld();
     const w = current;

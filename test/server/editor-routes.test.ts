@@ -342,6 +342,22 @@ describe("history, boards and import", () => {
     expect((await call("GET", "/api/import")).status).toBe(405);
   });
 
+  test("upload validates activity choices before handing file bytes to the importer", async () => {
+    const editor: EditorBackend = quick();
+    const original = editor.importUpload.bind(editor);
+    const selected: unknown[] = [];
+    editor.importUpload = async (input) => { selected.push(input.reviewActivities); return original(input); };
+    const { port } = start(editor);
+    const send = (activities: string) => fetch(`http://127.0.0.1:${port}/api/import?board=zsa/moonlander&filename=a.zip&activities=${encodeURIComponent(activities)}`, {
+      method: "POST", headers: { "x-keyloom-token": TOKEN, "content-type": "application/octet-stream" }, body: new Uint8Array([80, 75, 3, 4]),
+    });
+    expect((await send("gaming")).status).toBe(400);
+    expect((await send("prose,prose")).status).toBe(400);
+    expect(selected).toEqual([]);
+    expect((await send("prose, shortcuts ")).status).toBe(201);
+    expect(selected).toEqual([["prose", "shortcuts"]]);
+  });
+
   test("a form post can't import: only the token and octet-stream together get through", async () => {
     const { port } = start(quick());
     const res = await fetch(`http://127.0.0.1:${port}/api/import?board=zsa/moonlander&filename=a.zip`, { method: "POST", headers: { "content-type": "multipart/form-data; boundary=x" }, body: "x" });

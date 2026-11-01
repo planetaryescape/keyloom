@@ -6,8 +6,9 @@ import { join } from "node:path";
 import type { App } from "./context.ts";
 import { type ImportOutcome, importLayout } from "./layouts.ts";
 import { UsageError } from "./errors.ts";
+import type { ReviewActivity } from "../layout/review-workload.ts";
 
-export type UploadInput = { board: string; filename: string; bytes: Uint8Array; name?: string | undefined };
+export type UploadInput = { board: string; filename: string; bytes: Uint8Array; name?: string | undefined; reviewActivities?: ReviewActivity[] };
 
 // The importers decide what a file is from its extension, so it is kept; everything else about the name is not trusted.
 const EXTENSIONS = new Set([".zip", ".keymap", ".json"]);
@@ -28,7 +29,7 @@ export async function importUpload(app: App, input: UploadInput): Promise<Import
   try {
     const path = join(dir, filename);
     await writeFile(path, input.bytes);
-    return await importLayout(app, { board: input.board, source: path, ...(input.name === undefined ? {} : { name: input.name }) });
+    return await importLayout(app, { board: input.board, source: path, ...(input.name === undefined ? {} : { name: input.name }), ...(input.reviewActivities === undefined ? {} : { reviewActivities: input.reviewActivities }) });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

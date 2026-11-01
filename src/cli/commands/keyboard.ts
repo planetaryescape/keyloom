@@ -8,6 +8,7 @@ import {
 import { type Format, type Io, SCHEMA_VERSION, columns, print } from "../output.ts";
 import { transferReportText } from "../transfer-text.ts";
 import { configJson } from "./config.ts";
+import { REVIEW_ACTIVITIES, ReviewActivitiesSchema } from "../../api/review.ts";
 
 export type KeyboardCommandDeps = {
   io: Io;
@@ -157,7 +158,10 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
     .option("--name <name>", "the new config's name (default: <layout> on <board>)")
     .option("--placements <pairs...>", "layer key placements, as source=target (e.g. 4=10 5=11)")
     .option("--layers <layers...>", "source layers to carry (default: all non-test layers)")
-    .action(async (layout: string, opts: { on: string; name?: string; placements?: string[]; layers?: string[] }) => {
+    .option("--activities <ids>", `remember comma-separated workload activities for the new config (${REVIEW_ACTIVITIES.join(",")}; none starts without tests)`)
+    .action(async (layout: string, opts: { on: string; name?: string; placements?: string[]; layers?: string[]; activities?: string }) => {
+      const parsed = opts.activities === undefined ? undefined : ReviewActivitiesSchema.safeParse(opts.activities === "none" ? [] : opts.activities.split(",").map((s) => s.trim()));
+      if (parsed && !parsed.success) throw new UsageError(`invalid review activities: ${parsed.error.issues[0]?.message}`);
       const placements = opts.placements === undefined ? undefined : parsePlacements(opts.placements);
       let layers: string[] | undefined;
       if (opts.layers) {
@@ -169,6 +173,7 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
         ...(opts.name === undefined ? {} : { name: opts.name }),
         ...(placements === undefined ? {} : { placements }),
         ...(layers === undefined ? {} : { layers }),
+        ...(parsed?.data === undefined ? {} : { reviewActivities: parsed.data }),
       }));
       print(io, format(), {
         json: {
