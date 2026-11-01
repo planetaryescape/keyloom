@@ -1,6 +1,6 @@
 # 27: Board review
 
-Status: engine and screens built (D-340), with the fix run (D-461) and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation are built in source (D-474), 2026-11-01. [Grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. Published availability and hardware acceptance are separate gates.
+Status: engine and screens built (D-340), with the fix run (D-461) and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation shipped in v0.68.1 (D-474), 2026-11-01. Published CLI and installed desktop-sidecar verification passed on synthetic scratch data; [grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. No real config was applied or keyboard flashed; hardware acceptance is separate.
 
 BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … and I can just see them somewhere without me needing to ask for them or dig into some menus … it would be nice if it's proactive."
 

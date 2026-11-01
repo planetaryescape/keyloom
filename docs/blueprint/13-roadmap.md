@@ -528,6 +528,8 @@ Only BK can do these:
 
 **Follow-up built in source (D-473):** choose activities during import/new-board copying or in the review panel. Automatic review measures a baseline, gives the model aggregate costs, and independently compares up to two saved suggestions, preserving pins and exposing gaps/tradeoffs. [Board review](27-board-review.md#test-suggestions-against-your-activities) documents the UI, API and CLI contract. No activity selection means no workload builds.
 
+**Grounded-review follow-up shipped in v0.68.1 (D-474):** preserve existing actions independently of model narratives; publish source-derived effects and separate runtime coverage; withdraw stale suggestions on reconnects, observed identity changes and changed review inputs. Persisted device markers also detect changes made while keyloom was closed. Published CLI and installed desktop-sidecar journeys passed with synthetic scratch data, without changing a real config or accessing a keyboard. [Verification evidence and remaining limits](../research/grounded-board-review.md) distinguish this release proof from firmware readback or human-performance acceptance.
+
 **Left out:** automatic search, Kanata production replay, other host layouts, editor assistance and predictions of human speed or comfort. These need separate increments rather than hidden assumptions in the score.
 
 ## Rung 23: Car: several configs per board, and versions I can go back to
