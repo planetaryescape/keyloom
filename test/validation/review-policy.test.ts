@@ -11,8 +11,10 @@ test("macro and tap-dance definitions used only by combos cannot silently change
     layout.combos = [{ id: "c", name: "Chord", positions: [1, 2], layerIds: "all", output }];
     const errors = automaticReviewErrors(layout, [{ op: "upsertMacro", macro: { ...layout.macros[0]!, steps: [{ op: "tap", code: "B" }] } }]);
     expect(errors.some((e) => e.code === "review_behavior_loss")).toBe(true);
+    expect(automaticReviewErrors(layout, [{ op: "upsertMacro", macro: layout.macros[0]! }]).some((e) => e.code === "review_behavior_loss")).toBe(false);
   }
   expect(automaticReviewErrors(layout, [{ op: "upsertTapDance", tapDance: { ...layout.tapDances[0]!, tap: { kind: "key", code: "B" } } }]).some((e) => e.code === "review_behavior_loss")).toBe(true);
+  expect(automaticReviewErrors(layout, [{ op: "upsertTapDance", tapDance: layout.tapDances[0]! }]).some((e) => e.code === "review_behavior_loss")).toBe(false);
 });
 
 test("a missing dance definition is not preserved, while tuning its term is allowed", () => {

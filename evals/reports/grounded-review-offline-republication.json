@@ -1,0 +1,144 @@
+{
+  "mode": "offline scripted republication of captured operations, not a new live evaluation",
+  "liveProviderCalls": 0,
+  "firmwareReplays": 0,
+  "hardwareAccess": false,
+  "results": [
+    {
+      "originalReport": "2026-11-01T20-56-31.796Z-codex-grounded-misleading-legend.json",
+      "originalSha256": "75b70e0dcddb6d78ecfe8cd33934ae059d4afcb2663498d5b997781c43bc4fde",
+      "capturedCandidates": 0,
+      "proposalPreservation": "not-exercised; captured model abstained",
+      "suggestions": [],
+      "sourceFindings": [
+        {
+          "id": "check:keys_do_nothing::77k-mz0e7y",
+          "code": "keys_do_nothing"
+        }
+      ]
+    },
+    {
+      "originalReport": "2026-11-01T20-56-44.871Z-codex-grounded-missing-layer-route.json",
+      "originalSha256": "b985377d1a483257febc6b1ca95c87d44985ac9d3d8d5e1edaa267f833b845f4",
+      "capturedCandidates": 0,
+      "proposalPreservation": "not-exercised; captured model abstained",
+      "suggestions": [],
+      "sourceFindings": [
+        {
+          "id": "check:layer_unreachable:tools:",
+          "code": "layer_unreachable"
+        },
+        {
+          "id": "check:keys_do_nothing::78k-kq3eye",
+          "code": "keys_do_nothing"
+        }
+      ]
+    },
+    {
+      "originalReport": "2026-11-01T20-56-57.860Z-codex-grounded-unknown-custom-effect.json",
+      "originalSha256": "27b8e4f887673a341afbc9bf702faf04e2d478cbe9c9f02dc1620da1543651fd",
+      "capturedCandidates": 0,
+      "proposalPreservation": "not-exercised; captured model abstained",
+      "suggestions": [],
+      "sourceFindings": [
+        {
+          "id": "check:keys_do_nothing::76k-198dwl3",
+          "code": "keys_do_nothing"
+        }
+      ]
+    },
+    {
+      "originalReport": "2026-11-01T20-57-05.789Z-codex-grounded-pinned-keys.json",
+      "originalSha256": "5bb5c39275e34750c406714b2b88cac837a52409613a03163cab109aecb9f45f",
+      "capturedCandidates": 0,
+      "proposalPreservation": "not-exercised; captured model abstained",
+      "suggestions": [],
+      "sourceFindings": [
+        {
+          "id": "check:keys_do_nothing::77k-mz0e7y",
+          "code": "keys_do_nothing"
+        }
+      ]
+    },
+    {
+      "originalReport": "2026-11-01T20-58-13.820Z-codex-grounded-missing-layer-route.json",
+      "originalSha256": "2922343db6467487dd1f19155fa15bb48f5314e0f4bea34ab0e76a42fb98dd29",
+      "capturedCandidates": 0,
+      "proposalPreservation": "not-exercised; captured model abstained",
+      "suggestions": [],
+      "sourceFindings": [
+        {
+          "id": "check:layer_unreachable:tools:",
+          "code": "layer_unreachable"
+        },
+        {
+          "id": "check:keys_do_nothing::78k-kq3eye",
+          "code": "keys_do_nothing"
+        }
+      ]
+    },
+    {
+      "originalReport": "2026-11-01T21-00-10.406Z-codex-grounded-missing-layer-route.json",
+      "originalSha256": "80e640f47e68acf9d91f8db07ae2cc1ec380dc0bb9bae855953e2593ef117cd2",
+      "capturedCandidates": 1,
+      "proposalPreservation": "source-gate-exercised",
+      "suggestions": [
+        {
+          "title": "Change a key on Base",
+          "body": "{key:base:2}: empty → momentary {layer:tools}. Source-derived change only; consult the separate runtime-test coverage. Affected behavior: not tested; no firmware checks were run.",
+          "fixes": [
+            "check:layer_unreachable:tools:"
+          ]
+        }
+      ],
+      "sourceFindings": [
+        {
+          "id": "check:layer_unreachable:tools:",
+          "code": "layer_unreachable"
+        },
+        {
+          "id": "check:keys_do_nothing::78k-kq3eye",
+          "code": "keys_do_nothing"
+        }
+      ]
+    },
+    {
+      "originalReport": "2026-11-01T21-04-56.784Z-codex-grounded-misleading-legend.json",
+      "originalSha256": "2f1f48c4dc17dc5b4d23473f74a2419103d1d4466c1eeb0fee5e063dd0d7a40f",
+      "capturedCandidates": 0,
+      "proposalPreservation": "not-exercised; captured model abstained",
+      "suggestions": [],
+      "sourceFindings": [
+        {
+          "id": "check:keys_do_nothing::77k-mz0e7y",
+          "code": "keys_do_nothing"
+        }
+      ]
+    },
+    {
+      "originalReport": "2026-11-01T21-05-21.913Z-codex-grounded-missing-layer-route.json",
+      "originalSha256": "d9f1382977f2dd660c820b87942f28b7434f7905e804c7ec74efc5b66a9a92e6",
+      "capturedCandidates": 1,
+      "proposalPreservation": "source-gate-exercised",
+      "suggestions": [
+        {
+          "title": "Change a key on Base",
+          "body": "{key:base:2}: empty → momentary {layer:tools}. Source-derived change only; consult the separate runtime-test coverage. Affected behavior: not tested; no firmware checks were run.",
+          "fixes": [
+            "check:layer_unreachable:tools:"
+          ]
+        }
+      ],
+      "sourceFindings": [
+        {
+          "id": "check:layer_unreachable:tools:",
+          "code": "layer_unreachable"
+        },
+        {
+          "id": "check:keys_do_nothing::78k-kq3eye",
+          "code": "keys_do_nothing"
+        }
+      ]
+    }
+  ]
+}

@@ -6,7 +6,8 @@ import { groundedWorld, retargetMode } from "../helpers/grounded-review.ts";
 import { draft } from "../helpers/ops.ts";
 import { applyChange, listChanges, showChange } from "../../src/app/changes.ts";
 import type { AgentModel } from "../../src/agent/model.ts";
-import { deleteConfig } from "../../src/app/configs.ts";
+import { deleteConfig, newConfig } from "../../src/app/configs.ts";
+import { setBoardConfig } from "../../src/persistence/configs.ts";
 import { getLayout } from "../../src/app/layouts.ts";
 import { claimAi, findReview, invalidateReview, saveReviewDevice } from "../../src/persistence/reviews.ts";
 import { Database } from "bun:sqlite";
@@ -45,7 +46,9 @@ test("a config with linked automatic proposals can still be deleted", async () =
     } }] }, submit([]), finished]).deps);
     expect(listChanges(w.app, w.layoutId)).toHaveLength(1);
     saveReviewDevice(w.app.db, w.layoutId, "synthetic-marker", true);
-    w.app.db.query("DELETE FROM board_config WHERE layout_id = ?").run(w.layoutId);
+    expect(() => deleteConfig(w.app, w.layoutId, "workload-test")).toThrow("config on your");
+    const replacement = newConfig(w.app, { name: "Replacement", from: "config", config: w.layoutId });
+    setBoardConfig(w.app.db, getLayout(w.app, w.layoutId).layout.boardId, replacement.id);
     expect(deleteConfig(w.app, w.layoutId, "workload-test").id).toBe(w.layoutId);
     expect(() => getLayout(w.app, w.layoutId)).toThrow("no layout");
   } finally { w.app.db.close(); }

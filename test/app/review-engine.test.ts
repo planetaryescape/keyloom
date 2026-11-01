@@ -6,11 +6,13 @@ import type { ReviewEvent } from "../../src/app/review.ts";
 import { ReviewEngine } from "../../src/app/review-engine.ts";
 import { findRevision } from "../../src/persistence/layouts.ts";
 import { failOrphanedRuns, findReviewOfRevision, latestReview } from "../../src/persistence/reviews.ts";
-import { claimAi, insertReview } from "../../src/persistence/reviews.ts";
+import { claimAi, insertReview, saveReviewDevice } from "../../src/persistence/reviews.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
 import { type SyncWorld, skewedClock, syncWorld } from "../helpers/fake-sync.ts";
 import { finished, noModel, proposeStep, scriptedModel, submit } from "../helpers/review-world.ts";
 import { recordPriority } from "../../src/app/decisions.ts";
+import { newConfig } from "../../src/app/configs.ts";
+import { setBoardConfig } from "../../src/persistence/configs.ts";
 
 setDefaultTimeout(20_000);
 
@@ -59,6 +61,26 @@ function reviewer(w: SyncWorld, model = emptyReviews()) {
 const reviews = (w: SyncWorld) => (w.app.db.query("SELECT trigger, revision_id, ai_status FROM board_reviews ORDER BY checked_at").all() as Array<{ trigger: string; revision_id: string; ai_status: string }>);
 
 describe("connect", () => {
+  for (const oldObservation of [false, true]) test(`switching the active config reanalyzes a fresh saved review (oldObservation=${oldObservation})`, async () => {
+    const w = await world();
+    w.flashed();
+    const other = newConfig(w.app, { name: "Other", from: "config", config: w.layoutId });
+    const r = reviewer(w);
+    await r.engine.review(other.id, "manual").done;
+    const sync = w.engine({ tickMs: 600_000, pollMs: 0 });
+    await r.start(sync);
+    await sync.start();
+    r.clock.advance(QUIET);
+    await r.engine.tick();
+    const before = r.model.requests.length;
+    if (oldObservation) saveReviewDevice(w.app.db, other.id, sync.views().find((b) => b.layoutId === w.layoutId)?.reviewDeviceKey, true);
+    setBoardConfig(w.app.db, getLayout(w.app, w.layoutId).layout.boardId, other.id);
+    await sync.tick();
+    await r.engine.tick();
+    expect(r.model.requests).toHaveLength(before + 2);
+    expect(r.engine.show(other.id).review?.ai.status).toBe("done");
+  });
+
   test("a firmware change made while keyloom was closed is not hidden by the startup baseline", async () => {
     const w = await world();
     w.flashed();

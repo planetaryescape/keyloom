@@ -197,7 +197,8 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       saveReviewBehavior(app.db, row, proposal.id, behavior);
       if (behavior.status === "failed") { withdrawn.push(proposal.id); continue; }
       const passed = behavior.checks.filter((c) => c.status === "verified").length;
-      item.body += ` Affected behavior: ${passed} firmware checks passed${behavior.status === "verified" ? "" : "; remaining effects are unverified"}.`;
+      item.body += behavior.status === "not-tested" ? " Affected behavior: not tested; no firmware checks were run."
+        : ` Affected behavior: ${passed} firmware checks passed${behavior.status === "verified" ? "" : "; remaining effects are unverified"}.`;
       verified.push(item);
     }
     if (!current() || (workloadSignal.aborted && reviewWorkload(app.db, row.id))) {
@@ -230,14 +231,14 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
         finish("failed", hooks.signal?.aborted ? "keyloom was closed while it was looking. It will look again after your next change." : "Your layout changed while keyloom was looking; it will look at the new version.", model.model, [], proposed);
       } else if (outcome.status === "done") {
         const attached = attachProposals(app, outcome.items, proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
-        const single = onePerProblem(app, groundedItems(app, row, attached.items, now));
+        const single = onePerProblem(app, groundedItems(app, row, attached.items, now), listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
         await finishSuggestions(single.items, [...attached.withdrawn, ...single.withdrawn], null);
       }
       else {
         // Out of steps (or cut off) after saving a fix: that fix is still worth showing, so it is attached the same way and the review
         // is done, with the reason in words. It is failed only when nothing usable was saved.
         const attached = attachProposals(app, [], proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
-        const single = onePerProblem(app, groundedItems(app, row, attached.items, now));
+        const single = onePerProblem(app, groundedItems(app, row, attached.items, now), listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
         const withdrawn = [...attached.withdrawn, ...single.withdrawn];
         if (single.items.length === 0) finish("failed", outcome.reason, model.model, [], [...proposed]);
         else await finishSuggestions(single.items, withdrawn, outcome.limit ? "Stopped at its step limit; showing what it found." : `${outcome.reason.replace(/\.$/, "")}; showing what it found.`);
@@ -264,6 +265,10 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
 
 const MAX_AGENT_ITEMS = 6;
 
+/** Association for ranking alternatives is not a claim that an aggregate finding is fully fixed. */
+const touchedChecks = (checks: readonly ReviewItemRow[], changed: readonly { layerId: string; position: number }[]) =>
+  checks.filter((c) => c.kind !== "suggestion" && (c.keys.length > 0 ? c.keys.some((k) => changed.some((s) => s.layerId === k.layerId && s.position === k.position)) : c.layers.some((l) => changed.some((s) => s.layerId === l)))).map((c) => c.id);
+
 /** The model searches for patches; the app states their actual effects. Unsupported standalone diagnoses are not published as facts. */
 function groundedItems(app: App, row: BoardReviewRow, items: ReviewItem[], now: () => number): ReviewItem[] {
   const view = getLayout(app, row.layoutId, row.revisionId);
@@ -279,7 +284,7 @@ function groundedItems(app: App, row: BoardReviewRow, items: ReviewItem[], now: 
     const applied = applyOps(view.document, proposal.ops);
     if (!applied.ok) return [];
     const afterChecks = reviewChecks(view.board.definition, applied.layout).items;
-    const fixes = listReviewItems(app.db, row.id).filter((check) => check.source === "check" && !afterChecks.some((next) => next.id === check.id)).map((check) => check.id);
+    const fixes = goneSince(listReviewItems(app.db, row.id), afterChecks, new Map(), "check").map((check) => check.id);
     const layers = [...new Set(slots.map((at) => at.layerId))];
     return [{ ...item, id: itemId({ source: "agent", code: item.code, layers, keys: slots }), title: description.title, body: description.explanation, keys: slots, layers, fixes }];
   });
@@ -287,22 +292,15 @@ function groundedItems(app: App, row: BoardReviewRow, items: ReviewItem[], now: 
 
 /**
  * A proposal saved in the run must show as a suggestion or not stay open. One the model didn't reference (or whose suggestion was dropped)
- * becomes a suggestion with the change set's own title and explanation, tied to the checks it touches; one past the cap is withdrawn.
+ * becomes a suggestion with the change set's own title and explanation; grounding derives its real effects and fixed findings.
  */
 function attachProposals(app: App, items: ReviewItem[], proposed: readonly string[], checks: readonly ReviewItemRow[]): { items: ReviewItem[]; withdrawn: string[] } {
   const changedBy = (id: string) => {
     const cs = findChangeSet(app.db, id);
     return cs?.status === "proposed" ? { cs, changed: ValidationResultSchema.parse(cs.validation).diff.changed } : undefined;
   };
-  // The checks a change touches: those about keys it changes, or, for a check about a layer alone, a key on that layer.
-  const touched = (changed: readonly { layerId: string; position: number }[]) =>
-    checks.filter((c) => c.kind !== "suggestion" && (c.keys.length > 0 ? c.keys.some((k) => changed.some((s) => s.layerId === k.layerId && s.position === k.position)) : c.layers.some((l) => changed.some((s) => s.layerId === l)))).map((c) => c.id);
-  // A suggestion the model left without `fixes` still fixes what its change touches, or the screen can't put it under its problem.
   // Unsupported standalone diagnoses must not spend the publication budget or crowd out a checked patch.
-  const out = items.filter((i) => i.kind === "suggestion").map((i) => {
-    const found = i.kind === "suggestion" && i.fixes.length === 0 && i.proposalId !== null ? changedBy(i.proposalId) : undefined;
-    return found ? { ...i, fixes: touched(found.changed) } : i;
-  });
+  const out = items.filter((i) => i.kind === "suggestion");
   const referenced = new Set(out.map((i) => i.proposalId));
   const withdrawn: string[] = [];
   const taken = new Set([...checks.map((c) => c.id), ...out.map((i) => i.id)]);
@@ -321,7 +319,7 @@ function attachProposals(app: App, items: ReviewItem[], proposed: readonly strin
     taken.add(suggestionId);
     out.push({
       id: suggestionId, source: "agent", kind: "suggestion", severity: "info", code: "proposed-change", title: (cs.title ?? cs.explanation).slice(0, 100), body: cs.explanation.slice(0, 400),
-      keys, layers, proposalId: id, fixes: touched(changed), dismissedAt: null,
+      keys, layers, proposalId: id, fixes: [], dismissedAt: null,
     });
   }
   return { items: out, withdrawn };
@@ -331,19 +329,20 @@ function attachProposals(app: App, items: ReviewItem[], proposed: readonly strin
  * Several suggestions for one problem are a choice BK did not ask to make. The best one stays (fewest warnings, then the smallest
  * change, then the model's order) and the others' change sets are withdrawn. A suggestion that fixes nothing in particular stays.
  */
-function onePerProblem(app: App, items: ReviewItem[]): { items: ReviewItem[]; withdrawn: string[] } {
+function onePerProblem(app: App, items: ReviewItem[], checks: readonly ReviewItemRow[]): { items: ReviewItem[]; withdrawn: string[] } {
   const cost = (i: ReviewItem) => {
     const cs = i.proposalId === null ? undefined : findChangeSet(app.db, i.proposalId);
     const v = cs ? ValidationResultSchema.parse(cs.validation) : undefined;
     return [v?.warnings.length ?? 0, v?.diff.changed.length ?? 0];
   };
-  const ranked = items.filter((i) => i.kind === "suggestion" && i.fixes.length > 0)
-    .map((i, order) => ({ i, c: cost(i), order })).sort((a, b) => a.c[0]! - b.c[0]! || a.c[1]! - b.c[1]! || a.order - b.order);
+  const ranked = items.filter((i) => i.kind === "suggestion")
+    .map((i, order) => ({ i, problems: [...new Set([...i.fixes, ...touchedChecks(checks, i.keys)])], c: cost(i), order }))
+    .filter((entry) => entry.problems.length > 0).sort((a, b) => a.c[0]! - b.c[0]! || a.c[1]! - b.c[1]! || a.order - b.order);
   const claimed = new Set<string>();
   const dropped = new Set<ReviewItem>();
-  for (const { i } of ranked) {
-    if (i.fixes.every((f) => claimed.has(f))) dropped.add(i);
-    else i.fixes.forEach((f) => claimed.add(f));
+  for (const { i, problems } of ranked) {
+    if (problems.every((f) => claimed.has(f))) dropped.add(i);
+    else problems.forEach((f) => claimed.add(f));
   }
   // Grounding can collapse distinct model-supplied locations onto the same real finding. Withdraw the hidden duplicate's proposal too.
   const identities = new Set<string>();

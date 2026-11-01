@@ -48,6 +48,8 @@ The first positive fixture omitted user intent but expected a route anyway. Two 
 
 These runs exercised Codex `gpt-6.1-sol`. They do not establish recommendation quality for every provider or config. The preservation and publication gates apply independently of the model.
 
+Read the [report interpretation and corrections](../../evals/reports/grounded-review-2026-11-01-notes.md) alongside the original artifacts. Abstention does not exercise proposal-preservation or narrative-publication paths. An offline republication of captured operations records corrected aggregate-finding links and explicit `not tested` wording without making new model calls or rewriting the historical reports.
+
 ## UI and remaining gates
 
 Synthetic scratch UI captures at [1440×900](../screenshots/grounded-review/review-desktop.png) and [390×844](../screenshots/grounded-review/review-phone.png) show source-derived changes, visible unverified coverage, activity tests below findings and counts that include nested suggestions. The [stale phone state](../screenshots/grounded-review/stale-phone.png) hides old suggestions and offers one fresh-review action. That action was driven through to current source checks. No sync engine or real provider was started for these captures.

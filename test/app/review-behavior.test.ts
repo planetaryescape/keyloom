@@ -55,16 +55,15 @@ for (const term of [2000, 6000]) test(`a custom hold term of ${term}ms is bounde
   layout.passthrough[0]!.source = `/* tapping-term-ms = <5>; */ ${layout.passthrough[0]!.source.replace("<200>", `< ${term} >`)}`;
   const w = workloadApp(layout);
   try {
-    let called = 0;
+    const timings: number[] = [];
     const evidence = await assessAffectedBehavior(w.app, getLayout(w.app, w.layoutId), retargetMode(), {
       enabled: true, signal: new AbortController().signal,
       replay: async (_app, _view, events) => {
-        called++;
-        expect(events[1]!.at).toBe(term + 150);
+        timings.push(events[1]!.at);
         return { ...replayResult([...stroke(term + 150, "B"), ...stroke(term + 350, "A")]), firmware: "zmk" };
       },
     });
-    expect(called).toBe(term <= 5000 ? 1 : 0);
+    expect(timings).toEqual(term <= 5000 ? [term + 150] : []);
     expect(evidence.status).toBe("partial");
     if (term > 5000) expect(evidence.checks.some((c) => c.reason?.includes("tapping term"))).toBe(true);
   } finally { w.app.db.close(); }

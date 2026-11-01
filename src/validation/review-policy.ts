@@ -14,17 +14,16 @@ export function automaticReviewErrors(before: Layout, ops: readonly ChangeOp[]):
   const errors: Issue[] = [];
   for (const combo of before.combos) {
     const next = after.combos.find((c) => c.id === combo.id);
-    if (!preservesCompoundBehavior(before, combo.output, after, next?.output)
+    if (!deepEqual(combo, next) || !preservesCompoundBehavior(before, combo.output, after, next?.output)
       || (combo.output.kind === "native" && !preservesNativeBehavior(before, combo.output, after, next?.output))) {
       errors.push({ code: "review_behavior_loss", message: `Automatic review must preserve combo ${combo.id}'s output and referenced actions.`, plain: "This suggestion changes an existing combo's behavior without your request." });
     }
   }
-  if (before.combos.some((combo) => !deepEqual(combo, after.combos.find((next) => next.id === combo.id)))
-    || !deepEqual(before.conditionalLayers, after.conditionalLayers)
+  if (!deepEqual(before.conditionalLayers, after.conditionalLayers)
     || !deepEqual(before.settings, after.settings)
     || !deepEqual(before.passthrough, after.passthrough)
     || before.layers.some((layer) => !deepEqual(layer.sensorBindings, after.layers.find((next) => next.id === layer.id)?.sensorBindings))) {
-    errors.push({ code: "review_behavior_loss", message: "Automatic review must preserve existing combos, encoder actions, conditional layers and unmodeled firmware settings/source. Changes to these require an explicit user request.",
+    errors.push({ code: "review_behavior_loss", message: "Automatic review must preserve encoder actions, conditional layers and unmodeled firmware settings/source. Changes to these require an explicit user request.",
       plain: "This automatic suggestion changes existing behavior outside its supported preservation checks. Ask for it explicitly in a conversation." });
   }
   const retargeted = new Set<string>();

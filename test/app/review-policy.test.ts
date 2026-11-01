@@ -65,6 +65,25 @@ test("the published review cannot reintroduce the model's false explanation afte
   } finally { w.app.db.close(); }
 });
 
+for (const complete of [false, true]) test(`aggregate findings are fixed only when all affected empty keys are filled (complete=${complete})`, async () => {
+  const layout = groundedLayout();
+  if (complete) layout.layers[0]!.bindings = Array.from({ length: 80 }, (_, i) => i < 3 ? layout.layers[0]!.bindings[i]! : { kind: "key", code: "A" });
+  const w = workloadApp(layout);
+  try {
+    const first = createReview(w.app, w.layoutId, "manual").review;
+    const empty = first.items.find((i) => i.code === "keys_do_nothing")!;
+    const m = scriptedModel([{ blocks: [{ tool: "propose_changes", input: {
+      title: "Add route", ops: [{ op: "setBinding", at: { layerId: "base", position: 2 }, binding: { kind: "layer", action: "momentary", layerId: "tools" } }],
+      explanation: "Route", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
+    } }] }, submit([]), finished]);
+    const done = await runReviewAi(w.app, first.id, m.deps);
+    const suggestion = done.items.find((i) => i.kind === "suggestion")!;
+    expect(suggestion.fixes).toContain("check:layer_unreachable:tools:");
+    expect(suggestion.fixes.includes(empty.id)).toBe(complete);
+    expect(suggestion.body).toContain("not tested; no firmware checks were run");
+  } finally { w.app.db.close(); }
+});
+
 test("two model findings that resolve to the same real affected key cannot leave an invisible proposal open", async () => {
   const layout = groundedLayout();
   layout.holdTapProfiles = [{ id: "hrm", name: "Home row", firmware: "zmk", options: { "tapping-term-ms": 200 } }];

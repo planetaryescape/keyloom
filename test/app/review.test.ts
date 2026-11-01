@@ -117,7 +117,7 @@ describe("the agent's part", () => {
     expect(done.ai).toMatchObject({ status: "done", reason: null, model: m.model.model });
     const suggestion = done.items.find((i) => i.kind === "suggestion");
     expect(suggestion).toMatchObject({
-      id: "agent:empty-key-use:layer-0:layer-0/33", source: "agent", severity: "info", fixes: [EMPTY_KEYS_ID], keys: [{ layerId: "layer-0", position: 33 }],
+      id: "agent:empty-key-use:layer-0:layer-0/33", source: "agent", severity: "info", fixes: [], keys: [{ layerId: "layer-0", position: 33 }],
     });
     // Checks first, then the agent's.
     expect(done.items.map((i) => i.source)).toEqual(["check", "agent"]);
@@ -307,14 +307,14 @@ describe("the agent repeating the checks", () => {
 describe("every proposal a run saves is shown or withdrawn", () => {
   const openIds = (w: Awaited<ReturnType<typeof reviewWorld>>) => openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId);
 
-  test("one the model never referenced becomes a suggestion with its own title and summary, tied to the check it touches", async () => {
+  test("one the model never referenced becomes a source-described suggestion without overstating a partial fix", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
     const m = scriptedModel([proposeStep, submit([]), finished]);
     const done = await runReviewAi(w.app, review.id, m.deps);
     const suggestion = done.items.find((i) => i.kind === "suggestion");
     expect(suggestion).toMatchObject({
-      source: "agent", code: "proposed-change", title: "Set F17 on Layer 0", body: expect.stringContaining("empty → key F17"), fixes: [EMPTY_KEYS_ID], keys: [{ layerId: "layer-0", position: 33 }],
+      source: "agent", code: "proposed-change", title: "Set F17 on Layer 0", body: expect.stringContaining("empty → key F17"), fixes: [], keys: [{ layerId: "layer-0", position: 33 }],
     });
     expect(openIds(w)).toEqual([suggestion?.proposalId as string]);
   });
@@ -413,7 +413,7 @@ describe("one finding per problem", () => {
     }, finished]);
     const done = await runReviewAi(w.app, review.id, m.deps);
     expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.code)).toEqual(["small"]);
-    expect(done.items.find((i) => i.code === "small")?.fixes).toEqual([EMPTY_KEYS_ID]);
+    expect(done.items.find((i) => i.code === "small")?.fixes).toEqual([]);
     expect(done.items.find((i) => i.code === "small")?.fixes).not.toContain(check?.id); // It did not repair the unreachable layer.
     expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.ops)).toEqual([[{ op: "setBinding", at: { layerId: "layer-0", position: 33 }, binding: { kind: "key", code: "F17" } }]]);
   });
@@ -449,12 +449,12 @@ describe("a withdrawn duplicate", () => {
 });
 
 describe("a suggestion the model left without fixes", () => {
-  test("still fixes the checks its change touches", async () => {
+  test("does not claim a whole finding is fixed merely because it touches one affected key", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
     const m = scriptedModel([proposeStep, (seen) => submit([{ kind: "suggestion", code: "use-it", title: "Use it", body: "Use it.", proposalId: savedId(seen.toolResults) }]), finished]);
     const done = await runReviewAi(w.app, review.id, m.deps);
-    expect(done.items.find((i) => i.code === "use-it")?.fixes).toEqual([EMPTY_KEYS_ID]);
+    expect(done.items.find((i) => i.code === "use-it")?.fixes).toEqual([]);
   });
 });
 
@@ -467,7 +467,7 @@ describe("a run that stops at its limit", () => {
     expect(m.requests).toHaveLength(10);
     expect(done.ai).toMatchObject({ status: "done", reason: "Stopped at its step limit; showing what it found." });
     const suggestion = done.items.find((i) => i.kind === "suggestion");
-    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Set F17 on Layer 0", fixes: [EMPTY_KEYS_ID] });
+    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Set F17 on Layer 0", fixes: [] });
     expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestion?.proposalId as string]);
   });
 

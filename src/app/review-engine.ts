@@ -37,6 +37,7 @@ export class ReviewEngine {
   private readonly listeners = new Set<(event: ReviewEvent) => void>();
   /** Config IDs whose board has its keyboard connected, from the sync engine's last view. */
   private connected = new Set<string>();
+  private observedDevices = false;
   private readonly freshConnections = new Set<string>();
   private readonly controllers = new Map<string, AbortController>();
   private readonly active = new Map<string, { reviewId: string; done: Promise<BoardReview> }>();
@@ -64,11 +65,14 @@ export class ReviewEngine {
     // A run that was going when the last process died will never finish; saying so ends the screen's waiting.
     failOrphanedRuns(this.app.db, "keyloom was closed while it was looking. It will look again after your next change.");
     this.unwatch = watch?.subscribe((boards) => {
+      const baseline = !this.observedDevices;
+      this.observedDevices = true;
       const next = new Set(boards.filter((b) => b.state.kind !== "not_connected").map((b) => b.layoutId));
       for (const board of boards) {
         const id = board.layoutId;
         const stored = reviewDevice(this.app.db, id);
-        const changed = stored !== undefined && next.has(id) && (!stored.connected || (stored.identity ?? undefined) !== board.reviewDeviceKey);
+        const newConnection = !baseline && !this.connected.has(id);
+        const changed = next.has(id) && (newConnection || (stored !== undefined && (!stored.connected || (stored.identity ?? undefined) !== board.reviewDeviceKey)));
         const disconnected = stored?.connected === true && !next.has(id);
         if (changed || disconnected) {
           if (changed) this.freshConnections.add(id);

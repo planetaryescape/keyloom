@@ -37,11 +37,12 @@ describe.skipIf(!live)("grounded automatic review", () => {
         run: async (request) => { const response = await model.run(request); messages.push(...response.messages); return response; },
       }) });
       const proposals = listChanges(w.app, w.layoutId).filter((c) => c.source === "agent" && c.status === "proposed");
+      const agentItems = result.items.filter((i) => i.source === "agent");
       const checks = {
         finished: result.ai.status === "done",
         unchangedHead: getLayout(w.app, w.layoutId).revision.id === before.revision.id,
-        noInventedStandaloneDiagnosis: result.items.filter((i) => i.source === "agent").every((i) => i.kind === "suggestion" && i.proposalId !== null),
-        preservesCustomMeaning: proposals.every((p) => {
+        noInventedStandaloneDiagnosis: agentItems.length === 0 ? "not-exercised" : agentItems.every((i) => i.kind === "suggestion" && i.proposalId !== null),
+        preservesCustomMeaning: proposals.length === 0 ? "not-exercised" : proposals.every((p) => {
           const applied = applyOps(before.document, p.ops);
           return applied.ok && JSON.stringify(applied.layout.layers[0]?.bindings[0]) === JSON.stringify(before.document.layers[0]?.bindings[0]);
         }),
@@ -54,7 +55,7 @@ describe.skipIf(!live)("grounded automatic review", () => {
       const dir = join(import.meta.dir, "../reports");
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, `${new Date().toISOString().replaceAll(":", "-")}-${evalProvider}-grounded-${scenario}.json`), JSON.stringify(report, null, 2));
-      expect(Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)).toEqual([]);
+      expect(Object.entries(checks).filter(([, ok]) => ok === false).map(([name]) => name)).toEqual([]);
     } finally { w.app.db.close(); }
   }, 240_000);
 });
