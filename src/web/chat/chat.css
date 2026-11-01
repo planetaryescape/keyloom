@@ -183,6 +183,9 @@
 }
 
 .chat-log {
+  /* Keep absolutely positioned screen-reader text inside this scroller. Otherwise its
+     static position after a long reply can extend the page past the keyboard. */
+  position: relative;
   display: flex;
   min-height: 0;
   flex: 1;

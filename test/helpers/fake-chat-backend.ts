@@ -11,6 +11,8 @@ import { evaluate } from "../../src/validation/validate.ts";
 import type { FakeEditor, StoredProposal } from "./fake-editor-backend.ts";
 
 export interface FakeChatOptions {
+  /** Synthetic reply text for browser layout regressions. */
+  replyText?: string;
   /** Delay between streamed words. */
   tokenDelayMs?: number;
   /** Pause around each tool call and proposal. */
@@ -87,7 +89,7 @@ export class FakeChat implements ChatBackend {
     private readonly layoutId = "moonlander-daily",
     options: FakeChatOptions = {},
   ) {
-    this.options = { tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, ...options };
+    this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, ...options };
   }
 
   async provider(): Promise<ChatProviderStatus> {
@@ -166,13 +168,13 @@ export class FakeChat implements ChatBackend {
     };
 
     if (this.options.failMidStream) {
-      await stream(PROPOSAL_INTRO, 14);
+      await stream(this.options.replyText, 14);
       throw new ChatError(502, "model_connection", "The connection to the model dropped before the reply finished.");
     }
 
     const cards: ProposalCard[] = [];
     {
-      await stream(PROPOSAL_INTRO);
+      await stream(this.options.replyText);
       if (!signal.aborted) {
         await tool("propose_changes");
         const group = `grp_${++this.counter}`;
