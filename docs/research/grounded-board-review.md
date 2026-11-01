@@ -31,6 +31,8 @@ agent-work run -- env KEYLOOM_DOCKER_TESTS=1 bun test \
 
 Observed: four tests passed, zero failures, 18 assertions. Each production QMK/ZMK core passed the new tap, sustained hold/chord, rolling tap and release cases, and the existing baseline/candidate workload comparison. These are synthetic timings and configs, not observations of a person's typing. Native RGB effects, physical switches, wireless and USB behavior were not verified.
 
+Review-fix verification reran those four tests successfully, then expanded affected-behavior acceptance to both tap-preferred and hold-on-interrupt settings: four real-core tests passed, zero failures, 12 assertions. This covers ZMK `hold-preferred` and QMK's global `HOLD_ON_OTHER_KEY_PRESS`. Unknown interrupt settings, changed actions without an oracle, and custom hold terms outside the bounded suite are recorded as unsupported rather than marked verified or incorrectly failed.
+
 ## Live recommendation quality
 
 BK authorized at most eight Codex-subscription evaluations, synthetic layouts only. Eight runs were used, with no paid API key or device access. The scenarios are in `evals/scenarios/grounded-review.test.ts`:
@@ -42,7 +44,7 @@ BK authorized at most eight Codex-subscription evaluations, synthetic layouts on
 | Pinned base keys | Leave the user's pinned keys unchanged | Passed |
 | Unreachable layer with explicit saved intent | Add the requested route without changing the custom key | Passed, including final rerun |
 
-The first positive fixture omitted user intent but expected a route anyway. Two runs abstained; the captured public transcript said there was no justified change beyond the source checks. The fixture was corrected to state the desired route as a saved priority. This was an oracle/fixture correction, not a prompt change to make the model guess intent. The earlier failed expectations remain part of the local evidence.
+The first positive fixture omitted user intent but expected a route anyway. Two runs abstained; the captured public transcript said there was no justified change beyond the source checks. The fixture was corrected to state the desired route as a saved priority. This was an oracle/fixture correction, not a prompt change to make the model guess intent. All eight original per-run JSON reports, including the two failed expectations, are committed under [`evals/reports/`](../../evals/reports/) with the prefix `2026-11-01` and `codex-grounded` in their filenames. Reports captured after the first batch also include public messages; the first four contain the checks, resulting review and proposals only. These are synthetic inputs and no additional live runs were made for review fixes.
 
 These runs exercised Codex `gpt-6.1-sol`. They do not establish recommendation quality for every provider or config. The preservation and publication gates apply independently of the model.
 

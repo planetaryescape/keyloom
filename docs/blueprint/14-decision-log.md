@@ -1364,6 +1364,8 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
 - Every commit is BK's, so he can relicense. Releases up to v0.34.7 stay MIT for whoever has them. "or-later" is GNU's standard form, and it sits with the GPL-2.0-or-later QMK keycode data in `src/layout/keycodes.ts` (see the entry on generated keycodes), which MIT did not.
 
 ### D-340: A board review is made without being asked, once per revision, with the checks at once and the agent after, and shown as a calm marker, marks and a review in the side column. (Engine and screens, Claude; comps approved by the coordinator for BK)
+
+**Once-per-revision reuse replaced by D-474.**
 - BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … it would be nice if it's proactive."
 - A review belongs to one revision of one config and is stored (`board_reviews`, `review_items`), unique on config and revision, so it is read, not recomputed, and survives a restart. [27](27-board-review.md) has the shape, routes and states.
 - The checks are the validator's standing warnings plus one new check, `keys_do_nothing`. They are cheap and need no model, so they show even when the agent's part is unavailable or failed.
@@ -1378,12 +1380,16 @@ The brief for this part named D-240 to D-249, which the MacBook rung already hol
   - **Not counted twice.** The caption's "proposals waiting" no longer counts the review's own suggestions.
 
 ### D-343: Triggers are level-triggered from the database and the sync engine's last reading, and a revision with a review is never asked about again. (Engine, Claude, from D-160)
+
+**Cached-run and reconnect rules replaced by D-474.**
 - Every second the review engine asks which head has no review and should. Connect is the config on a board's keyboard while that keyboard is connected. Apply and import are a head made since the server started, once the sync engine's quiet time has passed with no further change.
 - The same shape as the sync engine, for the same reason: a burst of Applies, a restart and a keyboard that comes back are one question with different answers, and there is no event queue to get out of step.
 - A config nothing touched while its keyboard was away has no review until it is asked for (`POST …/review/run`, `keyloom review --run`). Reviewing every config at start-up would spend a model call on each of them for nothing BK did.
 - `source` is `agent`, not the comps' `ai`, so the word in the data is the word in the code.
 
 ### D-344: The agent's review is one run with the conversation's tools, hands its structure back through `submit_review`, and can only suggest what `propose_changes` saved. (Engine, Claude, from D-014)
+
+**One cached run per revision replaced by D-474.**
 - No tool that needs BK (no priority or outcome recording), a budget of 10 requests and 14 tool calls, and one run per revision, cached. `force` runs it again on purpose.
 - A suggestion whose `proposalId` the run didn't save is dropped, so every suggestion shown has been through the validator against the head, outside any conversation, and sits in the config's open proposals (D-336). Nothing is applied.
 - Keys and layers the model names are checked against the layout, and an item that repeats a check is dropped.
@@ -2248,15 +2254,15 @@ Release approval, 2026-11-01: BK explicitly waived the unfinished independent re
 
 Automatic optimization, representative corpora, editor/application outcomes, non-US locales and real human performance remain outside this integration. The validator and explicit Apply remain unchanged (D-014).
 
-### D-474: Ground automatic recommendations in source facts, preserve existing behavior, and invalidate them at reconnects and input changes. Replaces D-340's once-per-revision reuse; extends D-473. (2026-11-01, BK: "fix all this. fully to completion" and "Let's not cache recommendations if the keyboard has changed")
+### D-474: Ground automatic recommendations in source facts, preserve existing behavior, and invalidate them at reconnects and input changes. Replaces D-340's once-per-revision reuse, D-343's cached-run/reconnect rules and D-344's one cached run per revision; extends D-473. (2026-11-01, BK: "fix all this. fully to completion" and "Let's not cache recommendations if the keyboard has changed")
 
 The failure was not just poor wording. The reviewer lacked the custom tap's definition, ordinary validation accepted a model-authored permission to drop it, and an old review stayed current because its revision still matched. A prompt warning alone would leave those paths open.
 
 - `get_layout` exposes source-derived custom behavior and transitive macro definitions, modeled actions and explicit unknowns. A misleading legend is not intent. `retarget_layer_hold` prepares only a proven layer-argument edit; it does not approximate a custom key with a plain layer hold.
 - Automatic review has a stricter preservation policy than explicit editing. Existing functions, custom/compound key actions, combos, encoder actions and unmodeled source/settings cannot be removed on the model's authority. Pins and tried-and-helpful decisions are hard gates, with or without activity tests. Ordinary editor/chat validation still permits explicit choices.
-- The app writes proposal effects, tradeoffs, decision drafts and published suggestion text from the actual patch. It independently derives links to source checks that changed. Unsupported free-form diagnoses are withheld rather than displayed as facts.
+- The app writes proposal effects, tradeoffs and published suggestion text from the actual patch. Automatic proposals carry no decision draft, so Apply cannot supersede a user's saved reason with a generic hypothesis. It independently derives links to source checks that changed. Unsupported free-form diagnoses are withheld rather than displayed as facts.
 - Source preservation, affected-behavior verification and workload improvement are separate evidence. Explicitly selected activity tests permit bounded real-core tap/hold/roll/release and layer-target witnesses. A failed behavior assertion withdraws the candidate. Unsupported custom effects remain unknown; no HID report proves an RGB-status tap works. None of these results measures human speed or comfort.
-- Freshness covers the review contract and saved config, board, decision constraints and activity profile. Every genuine reconnect and observed firmware-identity/half change starts a fresh analysis. Disconnect/change immediately withdraws recommendations, revokes the old writer and prevents stale Apply. Stable polling makes no new model call. Hardware changes not observable through the existing sync identity are disclosed, not inferred.
+- Freshness covers the review contract and saved config, board, decision constraints and activity profile, not outcome-question timestamps. Every genuine reconnect and observed firmware-identity/half change starts a fresh analysis. Startup's first observation is a baseline, not a reconnect. Disconnect/change immediately withdraws recommendations, revokes the old writer and prevents stale Apply. Stable polling makes no new model call. Kanata's changed loaded-revision marker counts as an observed change, even after our own reload; replacing a review that started before the reload can make another provider request. Hardware changes not observable through the existing sync identity are disclosed, not inferred.
 - Migration 0016 retires old recommendations without a provider call or config edit. A deliberate rerun or genuine connection can request current suggestions. One row per revision remains a storage detail, not a recommendation cache guarantee.
 
 The tests and explicit limits are in [grounded board review](../research/grounded-board-review.md). No permission to sync or flash hardware follows from this decision.

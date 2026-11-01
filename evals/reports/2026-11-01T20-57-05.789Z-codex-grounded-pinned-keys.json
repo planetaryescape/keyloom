@@ -1,0 +1,364 @@
+{
+  "scenario": "pinned-keys",
+  "provider": "codex",
+  "model": "gpt-6.1-sol",
+  "checks": {
+    "finished": true,
+    "unchangedHead": true,
+    "noInventedStandaloneDiagnosis": true,
+    "preservesCustomMeaning": true,
+    "appropriateAction": true
+  },
+  "review": {
+    "id": "rvw_01M6CEDC9HQ83ZM51RJ4HWB5HX",
+    "layoutId": "lay_01M6CEDC8KVK7JYGEXZVXD2KA9",
+    "revisionId": "rev_01M6CEDC8KVK7JYGEXZVXD2KAA",
+    "trigger": "manual",
+    "checkedAt": 1793566617905,
+    "checks": {
+      "status": "done",
+      "summary": {
+        "layers": 3,
+        "keys": 80,
+        "combos": 0
+      }
+    },
+    "ai": {
+      "status": "done",
+      "reason": null,
+      "model": "gpt-6.1-sol"
+    },
+    "freshness": {
+      "current": true,
+      "reason": null
+    },
+    "behavior": [],
+    "items": [
+      {
+        "id": "check:keys_do_nothing::77k-mz0e7y",
+        "source": "check",
+        "kind": "hint",
+        "severity": "info",
+        "code": "keys_do_nothing",
+        "title": "77 keys do nothing on {layer:base}",
+        "body": "{key:base:3}, {key:base:4}, {key:base:5}, {key:base:6} and 73 more are empty on {layer:base}. Pressing them types nothing.",
+        "keys": [
+          {
+            "layerId": "base",
+            "position": 3
+          },
+          {
+            "layerId": "base",
+            "position": 4
+          },
+          {
+            "layerId": "base",
+            "position": 5
+          },
+          {
+            "layerId": "base",
+            "position": 6
+          },
+          {
+            "layerId": "base",
+            "position": 7
+          },
+          {
+            "layerId": "base",
+            "position": 8
+          },
+          {
+            "layerId": "base",
+            "position": 9
+          },
+          {
+            "layerId": "base",
+            "position": 10
+          },
+          {
+            "layerId": "base",
+            "position": 11
+          },
+          {
+            "layerId": "base",
+            "position": 12
+          },
+          {
+            "layerId": "base",
+            "position": 13
+          },
+          {
+            "layerId": "base",
+            "position": 14
+          },
+          {
+            "layerId": "base",
+            "position": 15
+          },
+          {
+            "layerId": "base",
+            "position": 16
+          },
+          {
+            "layerId": "base",
+            "position": 17
+          },
+          {
+            "layerId": "base",
+            "position": 18
+          },
+          {
+            "layerId": "base",
+            "position": 19
+          },
+          {
+            "layerId": "base",
+            "position": 20
+          },
+          {
+            "layerId": "base",
+            "position": 21
+          },
+          {
+            "layerId": "base",
+            "position": 22
+          },
+          {
+            "layerId": "base",
+            "position": 23
+          },
+          {
+            "layerId": "base",
+            "position": 24
+          },
+          {
+            "layerId": "base",
+            "position": 25
+          },
+          {
+            "layerId": "base",
+            "position": 26
+          },
+          {
+            "layerId": "base",
+            "position": 27
+          },
+          {
+            "layerId": "base",
+            "position": 28
+          },
+          {
+            "layerId": "base",
+            "position": 29
+          },
+          {
+            "layerId": "base",
+            "position": 30
+          },
+          {
+            "layerId": "base",
+            "position": 31
+          },
+          {
+            "layerId": "base",
+            "position": 32
+          },
+          {
+            "layerId": "base",
+            "position": 33
+          },
+          {
+            "layerId": "base",
+            "position": 34
+          },
+          {
+            "layerId": "base",
+            "position": 35
+          },
+          {
+            "layerId": "base",
+            "position": 36
+          },
+          {
+            "layerId": "base",
+            "position": 37
+          },
+          {
+            "layerId": "base",
+            "position": 38
+          },
+          {
+            "layerId": "base",
+            "position": 39
+          },
+          {
+            "layerId": "base",
+            "position": 40
+          },
+          {
+            "layerId": "base",
+            "position": 41
+          },
+          {
+            "layerId": "base",
+            "position": 42
+          },
+          {
+            "layerId": "base",
+            "position": 43
+          },
+          {
+            "layerId": "base",
+            "position": 44
+          },
+          {
+            "layerId": "base",
+            "position": 45
+          },
+          {
+            "layerId": "base",
+            "position": 46
+          },
+          {
+            "layerId": "base",
+            "position": 47
+          },
+          {
+            "layerId": "base",
+            "position": 48
+          },
+          {
+            "layerId": "base",
+            "position": 49
+          },
+          {
+            "layerId": "base",
+            "position": 50
+          },
+          {
+            "layerId": "base",
+            "position": 51
+          },
+          {
+            "layerId": "base",
+            "position": 52
+          },
+          {
+            "layerId": "base",
+            "position": 53
+          },
+          {
+            "layerId": "base",
+            "position": 54
+          },
+          {
+            "layerId": "base",
+            "position": 55
+          },
+          {
+            "layerId": "base",
+            "position": 56
+          },
+          {
+            "layerId": "base",
+            "position": 57
+          },
+          {
+            "layerId": "base",
+            "position": 58
+          },
+          {
+            "layerId": "base",
+            "position": 59
+          },
+          {
+            "layerId": "base",
+            "position": 60
+          },
+          {
+            "layerId": "base",
+            "position": 61
+          },
+          {
+            "layerId": "base",
+            "position": 62
+          },
+          {
+            "layerId": "base",
+            "position": 63
+          },
+          {
+            "layerId": "base",
+            "position": 64
+          },
+          {
+            "layerId": "base",
+            "position": 65
+          },
+          {
+            "layerId": "base",
+            "position": 66
+          },
+          {
+            "layerId": "base",
+            "position": 67
+          },
+          {
+            "layerId": "base",
+            "position": 68
+          },
+          {
+            "layerId": "base",
+            "position": 69
+          },
+          {
+            "layerId": "base",
+            "position": 70
+          },
+          {
+            "layerId": "base",
+            "position": 71
+          },
+          {
+            "layerId": "base",
+            "position": 72
+          },
+          {
+            "layerId": "base",
+            "position": 73
+          },
+          {
+            "layerId": "base",
+            "position": 74
+          },
+          {
+            "layerId": "base",
+            "position": 75
+          },
+          {
+            "layerId": "base",
+            "position": 76
+          },
+          {
+            "layerId": "base",
+            "position": 77
+          },
+          {
+            "layerId": "base",
+            "position": 78
+          },
+          {
+            "layerId": "base",
+            "position": 79
+          }
+        ],
+        "layers": [],
+        "proposalId": null,
+        "fixes": [],
+        "dismissedAt": null
+      }
+    ],
+    "fixed": []
+  },
+  "proposals": []
+}

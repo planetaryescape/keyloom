@@ -52,9 +52,11 @@ One run per current snapshot, using `get_layout`, `retarget_layer_hold`, `find_f
 
 Automatic proposals must preserve existing functions and each custom or compound key's actions. A model-written `dropFunction` reason is not permission to discard a tap, hold, macro or tap dance. Existing combos, encoder actions, conditional layers and unmodeled firmware source/settings stay unchanged. Pins and tried-and-helpful decisions are hard constraints. Explicit editor/chat choices retain ordinary validation.
 
+Timing changes to modeled hold-tap profiles and tap dances are allowed; preservation protects their actions rather than freezing every timing value. A timing-only candidate still needs separate runtime and workload evidence before any improvement can be claimed.
+
 For an understood native hold-layer key, `retarget_layer_hold` prepares a narrowly checked layer-argument edit while retaining its tap, source definition and other arguments. It saves nothing; the complete proposal must still preserve access to the old target's functions.
 
-The app generates the saved proposal's effects, tradeoffs and decision draft from the actual ops. It also regenerates the displayed suggestion and recomputes which source checks it fixes. Unsupported standalone model diagnoses are not published. With no supported improvement, an empty review is valid.
+The app generates the saved proposal's effects and tradeoffs from the actual ops. Automatic proposals carry no decision draft: applying one must not replace the user's saved reasons with a generic model hypothesis. It also regenerates the displayed suggestion and recomputes which source checks it fixes. Unsupported standalone model diagnoses are not published. With no supported improvement, an empty review is valid.
 
 - A suggestion is a real change set saved by `propose_changes` outside any conversation, validated against the head (D-014). It shows in the config's open proposals (D-336). A suggestion whose `proposalId` the run didn't save is dropped. Nothing is ever applied.
 - The budget is 10 requests and 14 tool calls. A model past its tool calls is told to submit. The run takes the review first (`claimAi`), so the server and `keyloom review --run` never both pay for one.
@@ -64,18 +66,18 @@ The app generates the saved proposal's effects, tradeoffs and decision draft fro
 
 ## Triggers
 
-The review engine (`src/app/review-engine.ts`) is level-triggered, like the sync engine. Every second it looks for a head with no review that should have one:
+The review engine (`src/app/review-engine.ts`) is level-triggered, like the sync engine. Every second it checks for missing or outdated reviews and eligible triggers:
 
 - **connect/reconnect:** every genuine connection, even at the same config head, and changes to observed firmware identity or attached halves. Stable polling does not rerun a review;
 - **apply** and **import:** a head made since the server started, once the quiet time (3 s, as the sync engine's) has passed with no further change, so a burst of Applies is one review of the last of them.
 
-A config nothing touched while its keyboard was away has no review until `POST …/review/run` or `keyloom review --run`.
+A config whose keyboard stays away is not automatically reanalyzed just because its saved constraints changed. Its old recommendations are withdrawn; use `POST …/review/run`, `keyloom review --run`, or reconnect the keyboard. Each genuine reconnect can call the chosen model provider under its normal billing or subscription terms.
 
 Disconnect or observed device change immediately withdraws the old recommendations and revokes the active writer's lease. A superseded run cannot save or publish proposals over its replacement. Saved config, board, constraints and activity-profile changes also invalidate freshness. Apply independently checks the automatic proposal's snapshot and completed run; an old proposal ID cannot bypass the panel's disabled button.
 
-A genuine reconnect requests a new model review even when the saved config is identical. It uses the chosen provider under that provider's normal billing or subscription terms; stable polling makes no new request.
+A genuine reconnect requests a new model review even when the saved config is identical. The first device observation after server startup is a baseline, not a reconnect; a fresh existing review is reused, and an outdated legacy contract alone does not authorize a model call. Stable polling makes no new request. A changed kanata loaded-revision marker also requests a fresh review, including after keyloom's own reload. If the Apply review started before that reload, it is revoked and replaced; this can make a second provider request. This deliberately favors reanalysis of observed device changes over reusing the saved-head review.
 
-Migration 0016 withdraws legacy model recommendations and marks their review contract outdated without calling a provider or changing configs. Choose **Run a fresh review**, use `keyloom review my-layout --run`, or reconnect the keyboard. The sync identity is not a full firmware/keymap readback: changes the device does not expose cannot be verified by this review.
+Migration 0016 withdraws legacy model recommendations, including unpublished standalone agent proposals, and marks their review contract outdated without calling a provider or changing configs. Legacy attribution cannot distinguish other standalone agent proposals, so those are conservatively withdrawn too; chat and editor proposals remain. Choose **Run a fresh review**, use `keyloom review my-layout --run`, or reconnect the keyboard. The sync identity is not a full firmware/keymap readback: changes the device does not expose cannot be verified by this review.
 
 ## Test suggestions against your activities
 
