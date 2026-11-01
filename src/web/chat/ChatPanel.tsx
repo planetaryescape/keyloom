@@ -228,7 +228,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
       const result = await new Promise<ViewResult>((resolve) => {
         const abort = () => resolve({ version: 1, status: "unavailable", reason: "cancelled" });
         signal.addEventListener("abort", abort, { once: true });
-        setDecisionRequest({ signal, already: viewNow.current === "decisions", resolve: (value) => { signal.removeEventListener("abort", abort); resolve(value); } });
+        setDecisionRequest({ signal, already: opened.status === "already-open" && viewNow.current === "decisions", resolve: (value) => { signal.removeEventListener("abort", abort); resolve(value); } });
         setView("decisions");
       });
       expected = viewEpoch.current;
