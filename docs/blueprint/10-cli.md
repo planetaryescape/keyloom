@@ -1,6 +1,6 @@
 # 10: CLI
 
-Status: CLI built, including layout export, layout settings, board geometry, provider selection and review-finding controls. The [audit closeout](../research/blueprint-audit-closeout.md) records verification. Use the installed version's `--help` to check availability.
+Status: CLI built, including layout export, layout settings, board geometry, provider selection, review-finding controls and deterministic workload evaluation/comparison (D-469). The [audit closeout](../research/blueprint-audit-closeout.md) records earlier verification, and [workload evidence](../research/workload-evaluator.md) covers the new evaluator. Use the installed version's `--help` to check availability.
 
 The CLI is the canonical surface (D-030, taken from spotuify). Everything the web app can do, a `keyloom` subcommand can do, and both call the same core modules ([01](01-architecture.md)). The CLI is how coding agents check their own work while building keyloom, and how BK or an agent scripts it. A feature that exists only in the web app is incomplete.
 
@@ -67,6 +67,11 @@ keyloom
   lab analyse <session> [--no-propose] [--max-runs N] [--show]  replay it, say what went wrong per finger, try other settings on it
   lab sessions [layout]                    recorded sessions, newest first
   lab delete <session>                     delete a session with its recording and what you typed
+  workload list                            list built-in deterministic typing workloads
+  workload evaluate <layout> [--builtin S | --suite <file>] [--rev R] [--board-rev B]
+                                           test an existing config without recording or changing it
+  workload compare <layout> --ops <file|-> [--builtin S | --suite <file>] [--rev R] [--board-rev B]
+                                           compare a supplied patch in memory
   flash ... --wait <minutes>                how long to wait for a bootloader key press (1 to 60, default 2)
   flash --reboot-only [--board B]          only restart the attached keyboard into its bootloader (keyloom firmware only)
   flash --reboot-only --board B --half H  ZMK: ask one half (left|right) to restart; the bootloader is not verified
@@ -134,6 +139,62 @@ Stop is explicit and does not roll back saved configs, proposals or memory. `age
 When a saved session has an interruption warning, `keyloom lab sessions` shows `incomplete` and `warnings` in JSON/JSONL and marks the table row `incomplete`; analysis refuses the partial trace before replay or proposals. The native-helper candidate verified this interruption path for QMK. ZMK capture gives the same guarantee on the legacy serial transport (D-429); the Rust serial backend and physical S59 serial evidence remain 24d work.
 
 `keyloom lab start g80` prints what it records (which key, when, and what you type in this terminal), that it stays on this Mac, and how to delete it, then shows the passage and your typed text until Ctrl-C. It needs a keyboard running a keyloom build (the Moonlander over raw HID, the ZMK boards over the module's serial port), and says what to do when there is none. In JSON and JSONL formats the notice is printed on stdout with the passage, before capture starts, so stderr holds only an error document and the result is the one JSON document at the end of stdout. Table mode keeps the notice on stderr. `keyloom lab analyse typ_…` replays the recording through the layout's firmware logic in Docker, prints what went wrong per finger, and stores each setting change that clearly helps as a proposed change set with the counts from the recording; `--no-propose` prints them without storing. JSON has the counts, findings, per-finger rows and each suggestion's evidence and ops, never the passage or the typed text. [24](24-typing-lab.md) has the design.
+
+## Test a config against a workload
+
+```sh
+keyloom workload list
+keyloom --data-dir <scratch> workload evaluate <layout> --builtin prose
+keyloom --data-dir <scratch> workload evaluate <layout> --builtin typescript
+keyloom --data-dir <scratch> workload compare <layout> --suite tasks.json --ops patch.json
+```
+
+Workload evaluation tests named activities against the config you already have. It does not record your typing, call an AI, save a revision, start sync or access a keyboard. The existing real-core QMK/ZMK emulators need Docker and pinned firmware sources; first use can fetch those sources and images. Kanata production replay is not supported.
+
+`--builtin` accepts `prose` (the default), `typescript`, `python`, `json`, `shell` or `shortcuts`. These are tiny original test samples, not measured activity frequencies. `--suite` instead reads a strict version-1 JSON file; passing both flags refuses. `--rev` selects a stored revision, and `--board-rev` selects a board revision without detecting a connected device. The default board revision is the first declared. Comparison reads a ChangeOp array or `{ "ops": [...] }`, with `--ops -` reading stdin as for `change check`.
+
+Example `tasks.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "letters-and-symbols",
+  "host": "us-ansi",
+  "tasks": [
+    { "id": "letters", "kind": "text", "text": "see" },
+    { "id": "braces", "kind": "text", "text": "{}" },
+    { "id": "copy", "kind": "hid", "strokes": [{ "key": "C", "mods": ["LCTL"] }] }
+  ]
+}
+```
+
+Task IDs are unique lowercase slugs. Text preserves case, whitespace and order; characters outside the US literal mapping are unsupported, not normalized or omitted. A `hid` stroke names a canonical keyboard key and the exact modifier sides required at keydown; receiving Control-C does not establish that an application performed Copy. Each task starts in a fresh firmware process with the declared host state, Caps Lock off and no repeat, compose, editor completion or application effects.
+
+The planner searches direct keys, short taps of modeled hold-tap key sides, explicit modifier controls, and one base-accessed momentary layer with transparent fallback. It keeps shared controls down across adjacent outputs where useful. Search uses fixed budgets and stable tie-breaking, not a claim of globally optimal or habitual execution. The timing policy uses 10 ms between physical events and a 1000 ms firmware lead; a different human timing can produce a different result.
+
+For a route the planner cannot discover, add `witness` to that task: an ordered array of `{ "at": 0, "position": 0, "action": "press" }` / `release` events. Times are milliseconds and positions are **zero-based**, unlike the one-based `emulate --keys` script. Every pressed position must be released, and no position can be pressed twice while held. A supplied witness must still pass firmware-output verification. Its physical costs are counted, but `layerEntries` and `modifierEntries` are null rather than inferred from opaque behavior.
+
+Input limits are 65,536 bytes per suite file, 32 tasks, 512 text UTF-16 code units or HID strokes per task, 4096 requested outputs per suite, and 4096 witness events / 120 seconds per task. Invalid schema, duplicate IDs, bad witness events and invalid revisions refuse before replay. Existing pinned slots/functions are hard constraints for workload comparison, even though ordinary change validation keeps pins as warnings.
+
+JSON evaluation carries `schema_version`, `schemaVersion`, `identity`, `suite`, `policy`, `coverage`, `tasks`, `structuralWarnings` and `assumptions`. Identity includes hashes of layout, board, suite, policy, generated source and build recipe, plus configured firmware and evaluator versions; it is not a measured running-container digest. Each task retains its physical trace, received reports, expected/actual keydowns, warnings, search bounds, costs and `costsVerified`. Costs include keydowns/releases, peak simultaneous physical keys, control entries, per-hand/finger activations and transition counts. Finger attribution comes from board metadata, not measured motion.
+
+| Task status | Meaning |
+|---|---|
+| `verified` | Exact sequential HID output matched and final HID was released; costs describe that witness |
+| `unsupported` | Goal, backend or required route semantics are not supported |
+| `no-route-within-supported-subset` | No route was found in the narrow grammar; not a proof of unreachability |
+| `search-limit` | The planning/event budget prevented a complete route |
+| `output-mismatch` | The chosen witness produced wrong, extra, partial or held output |
+| `warning-tainted` | Output matched, but an unrecognized emulator warning prevents a verified claim |
+| `execution-error` | Firmware build or replay failed; inspect stderr diagnostics |
+
+Coverage retains all tasks and requested outputs, including unsupported and failed ones. The two exact QMK scan/hardware-output fidelity disclosures are retained without tainting matching; other warnings prevent verification. No result proves hidden firmware neutrality, hardware fidelity, speed or comfort.
+
+Comparison adds `patchHash`, `validation`, `baseline`, `candidate`, `comparison`, `saved: false` and `applied: false`. Its verdict is `verified-improvement`, `equivalent`, `regression`, `tradeoff` or `inconclusive`, using keydown count and peak simultaneous keys as the two explicitly minimized objectives, protecting every task. Any incomplete task makes the verdict inconclusive. Per-task deltas also expose release and control-entry costs; there is no whole-layout ergonomic score.
+
+`--format jsonl` writes one complete evaluation/comparison object, not one line per task. `--format ids` is supported by `workload list` only. Build/replay errors retain the result document on stdout, put diagnostics on stderr and exit 7; invalid input exits 2 and rejected patches/pins exit 4. Other assessment statuses exit 0 because the assessment completed: inspect coverage/status rather than treating process success as proof of a usable config. Reports are printed, not saved as approvals. Replay-result caching is disabled, while existing local build artifacts and diagnostic logs can remain.
+
+The [design and limitations](24-typing-lab.md#workload-tests-do-not-record-the-user) explain the boundary between this test and the recorded typing lab.
 
 ## Emulate prints what a layout types for a sequence of key presses
 

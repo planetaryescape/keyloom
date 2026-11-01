@@ -32,7 +32,7 @@ keyloom is built; the [latest release](https://github.com/planetaryescape/keyloo
 | 21 | [MacBook keyboard](21-macbook-keyboard.md) | The built-in keyboard as a board through kanata: apply by reload, safety, importing BK's Karabiner rules |
 | 22 | [New keyboard](22-new-keyboard.md) | Recognising a QMK or ZMK board on USB, building its definition, and putting BK's config on it |
 | 23 | [Design concept](23-design-concept.md) | The keyboard under the light: what keyloom is to BK, how the whole fits together, the moments, the visual language and the design gate |
-| 24 | [Typing lab](24-typing-lab.md) | Recording a typing session, replaying it through the emulators, per-finger findings and proven timing suggestions |
+| 24 | [Typing lab](24-typing-lab.md) | Recording/replay, per-finger findings, timing suggestions, and deterministic config workload tests |
 | 25 | [Configs and versions](25-configs-and-versions.md) | Several configs per board with one on the keyboard, and versions as milestones you can go back to |
 | 26 | [Desktop app](26-desktop-app.md) | Tauri shell around the server, menu-bar sync status, shipping and signing |
 | 27 | [Board review](27-board-review.md) | What keyloom finds in a revision without being asked: checks at once, the agent after, triggers, hiding and the fixed tick |

@@ -130,6 +130,7 @@ Everything the web app does has a CLI command. Output is a table in a terminal a
 | `keyloom remap` | Set up and manage the MacBook keyboard through kanata |
 | `keyloom keyboard` | Detect, add and put a config on a new keyboard |
 | `keyloom lab` | Record typing, analyse it, and turn suggestions into proposed changes |
+| `keyloom workload` | Test a config against deterministic typing tasks and compare supplied changes without applying them |
 | `keyloom emulate` | Print what a layout would send for a sequence of key presses, using the real firmware logic |
 | `keyloom doctor` | Check the database, installed device helper, Docker, Zapp and firmware checkouts |
 

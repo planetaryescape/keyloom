@@ -2,7 +2,7 @@
 // keyloom CLI (10). Every command is a thin call into src/app.
 import { Command, CommanderError, Option } from "commander";
 import {
-  requireCommandSupport, type App, type ImportOutcome, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, layoutSettings, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
+  requireCommandSupport, type App, type ImportOutcome, type WorkloadDeps, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, layoutSettings, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
   loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
@@ -10,6 +10,7 @@ import { registerConfigCommands } from "./commands/config.ts";
 import { type ChatDeps, parseProvider, registerChatCommands } from "./commands/chat.ts";
 import { registerDecisionCommands } from "./commands/decisions.ts";
 import { registerEmulateCommand } from "./commands/emulate.ts";
+import { registerWorkloadCommands } from "./commands/workload.ts";
 import { type KeyboardCliDeps, registerKeyboardCommands } from "./commands/keyboard.ts";
 import { type LabCliDeps, registerLabCommands } from "./commands/lab.ts";
 import { registerFirmwareCommands } from "./commands/firmware.ts";
@@ -36,7 +37,7 @@ const stdIo = (): Io => ({
 type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: boolean };
 
 /** `handsFree` replaces how USB, raw HID and serial ports are read, and `syncDeps` how `sync` builds and flashes; tests pass fakes. */
-export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps): Command {
+export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps, workload?: WorkloadDeps): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
     .version(pkg.version, "-V, --version", "print the keyloom version")
@@ -335,6 +336,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   registerRemapCommands(program, { io, format, withApp, ...(handsFree ? { handsFree } : {}) });
   registerKeyboardCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(handsFree ? { handsFree } : {}), ...(keyboards ? { keyboards } : {}) });
   registerEmulateCommand(program, { io, format, quiet: () => globals().quiet === true, withApp });
+  registerWorkloadCommands(program, { io, format, withApp, ...(workload ? { cli: workload } : {}) });
   registerLabCommands(program, { io, format, quiet: () => globals().quiet === true, withApp, ...(lab ? { cli: lab } : {}) });
 
   program
@@ -366,9 +368,9 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 });
 
 /** Runs the CLI and returns the exit code; never throws. */
-export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps): Promise<number> {
+export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps, workload?: WorkloadDeps): Promise<number> {
   const state = { exitCode: EXIT.ok as number, dataDir: "" };
-  const program = buildProgram(io, state, chat, handsFree, syncDeps, lab, keyboards);
+  const program = buildProgram(io, state, chat, handsFree, syncDeps, lab, keyboards, workload);
   let commandError: unknown;
   let hasCommandError = false;
   let commandResult: number = EXIT.ok;

@@ -512,6 +512,20 @@ Only BK can do these:
 
 **Left out:** the MacBook (S52); key-frequency statistics outside a session.
 
+## Rung 22a: Test an existing config against the same workloads
+
+**Status:** Built in source (D-469); [release history](https://github.com/planetaryescape/keyloom/releases) records published availability. Local checks, passing real-core QMK/ZMK tests and the compiled synthetic CLI journey are recorded in [workload-evaluator.md](../research/workload-evaluator.md). These pre-release checks alone do not establish installed-release or hardware acceptance.
+
+**Previously:** the typing lab needed a recording, and board-review suggestions had no common workload comparison. **Now:** the first workload slice evaluates a named task against a config and compares an explicit patch without applying it (D-469).
+
+**Promise:** "I can see the physical actions my config needs for a prose or programming task, then test whether a small change helps without breaking the same suite."
+
+**Demo:** import a synthetic config into a scratch data directory, run `keyloom workload list`, evaluate a workload, compare supplied ops, and confirm the stored head did not move. A layered-letter fixture should show the shared layer entry once for a run of repeated letters; a brace fixture should include required Shift and layer controls.
+
+**Done when:** an installed release runs the supported QMK and ZMK journeys with real-core output verification, reproduces the evidence on repeat, rejects wrong-output candidates, and leaves configs and hardware unchanged. Local synthetic/injected-output tests alone do not satisfy this gate.
+
+**Left out:** automatic search, automatic board-review integration, UI, Kanata production replay, other host layouts, editor assistance and predictions of human speed or comfort. These need separate increments rather than hidden assumptions in the score.
+
 ## Rung 23: Car: several configs per board, and versions I can go back to
 
 **Status:** Built in v0.27.0 (engine) and v0.31.0 (screens), with polish in v0.31.1 and v0.32.0. Done when: partly observed. "Editing a non-active config never syncs" is a test. Versions after real syncs on BK's Moonlander are not recorded.

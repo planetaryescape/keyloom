@@ -1,6 +1,6 @@
 # 24: Typing lab: keyloom watches you type and tunes the board to your hands
 
-Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens and `/api/lab` routes built on a scripted fake keyboard (D-314), 2026-10-16. QMK and ZMK capture own bounded write/close waits (D-446). ZMK capture now persists serial interruption warnings and refuses analysis on the legacy stty/polling transport (24d TS half). The native Rust serial backend and physical S59 serial evidence remain pending; S50/S51 remain unrun hardware runbooks.
+Status: capture and analysis built (rung 22 part 1, D-284 to D-289), 2026-10-16; the lab screens and `/api/lab` routes built on a scripted fake keyboard (D-314), 2026-10-16. Deterministic workload CLI evaluation/comparison is built separately (D-469, rung 22a), without automatic board-review integration. QMK and ZMK capture own bounded write/close waits (D-446). ZMK capture now persists serial interruption warnings and refuses analysis on the legacy stty/polling transport (24d TS half). The native Rust serial backend and physical S59 serial evidence remain pending; S50/S51 remain unrun hardware runbooks.
 
 BK: "timings are quite tricky for home row mods and stuff. I'd love a feature where I can set up a key config, then tell the software to listen/watch me type for a bit (you can make a quick typing test or something) and then notice things that go wrong like rolls, typos and timings and stuff and then use that knowledge to make suggestions about what to improve … Maybe we could even create a test that checks how fast each of my fingers is so instead of saying this is your typing speed it can say your typing slows down on keys that you need to press with your index finger or something or most typos come from your pinky."
 
@@ -74,6 +74,18 @@ A failed start reports its original error first and appends cleanup uncertainty 
 ## Privacy
 
 Sessions start only by BK's action, show a recording indicator, stay in keyloom's local database, and can be deleted. The raw trace never goes to a model provider; the agent sees aggregated findings and short anonymised examples (key names, not text). Passwords never get typed into the lab: the lab tells the person not to, and it stops recording if the focus leaves its own text box.
+
+## Workload tests do not record the user
+
+[D-469](14-decision-log.md#deterministic-workload-evaluation-2026-11-01) adds a different question beside the recorded typing lab: how much physical work does the existing config require to perform a named task? See the [workload CLI reference](10-cli.md#test-a-config-against-a-workload) for the entry point and supported subset.
+
+A task is board-independent text or an exact key/modifier sequence under a declared US host mapping. The planner chooses physical positions on each board separately; the existing firmware emulator checks what that route sends. A route that cannot be established is not proof that the character is missing from the firmware. Unknown and failed tasks stay visible in coverage.
+
+Costs belong to the whole route, not isolated characters. Holding a layer once to type `eee` takes four physical keydowns, while releasing and reopening it for every `e` takes six. A layer-plus-Shift route to braces includes both held controls. These are counts of a witnessed synthetic method, not predictions of speed or comfort. There is no single ergonomic score or cross-board ranking.
+
+Supplied change ops can be compared with the original config in memory. Validation still applies, and a lower action count cannot excuse wrong output or an unassessed task. Comparison does not save a proposal, move the head, start auto-sync or touch a keyboard. Workload text and traces are not sent to a model. The new evaluator is separate from the automatic board-review/AI flow; it does not yet change how connection-triggered suggestions are made.
+
+Implementation and runtime evidence are recorded in [workload-evaluator.md](../research/workload-evaluator.md). Other host layouts, editor completion and auto-pairing, learned human routes, automatic layout search and Kanata production emulation remain outside this first slice.
 
 ## Decisions and spikes
 
