@@ -261,6 +261,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `vendor` | all | The maker as people know them, such as `foostan` or `Bastard Keyboards`. |
 | `firmware` | all | `qmk` or `zmk`. It decides the importer, the generator and the validator rules. |
 | `keyCount` | all | The number of keys. It must equal the number of keys in `geometry.json`. |
+| `sensorPositions` | optional | Encoder press positions in firmware sensor order. Alternative encoder footprints may share one press position; keyloom edits those turn bindings together. Requires ZMK `build.sensorBindings` defaults. |
 | `revisions` | all | A list of hardware revisions. One entry when there is only one. |
 | `revisions[].id` | all | A short name, such as `default` or `rev1`. Unique in the board. |
 | `revisions[].source` | all | The pinned firmware tree. |

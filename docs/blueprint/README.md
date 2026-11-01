@@ -6,6 +6,8 @@ keyloom is built; the [latest release](https://github.com/planetaryescape/keyloo
 
 ## Reading order
 
+To try per-layer ZMK encoder editing, follow [mouse turns on Base, media on Numbers](../encoder-layers.md). This is a working-tree feature, not yet released; the recipe uses synthetic data and stops before flashing.
+
 | # | Document | What it covers |
 |---|---|---|
 | 00 | [Overview](00-overview.md) | What keyloom is, the loop, principles, scope, non-goals, glossary |

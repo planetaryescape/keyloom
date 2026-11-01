@@ -1,5 +1,7 @@
 # 03: Agent
 
+Working-tree update, 2026-11-01 (not yet released): encoder edits use the same checked proposals as key edits (D-469). `get_layout` includes effective per-layer sensor bindings and their press positions; `find_function` includes understood encoder turns and accepts firmware aliases and media labels. Invalid calls carry public failure codes, not proof of a keyboard limitation (D-470).
+
 Revision, 2026-10-29: D-452 replaced D-020's alternatives. `propose_changes` takes one proposal and `supersedes`, and `ask_user` takes considerations and a step; the tool table and the loop below say how. D-458 lets a question be answered after the layout head moves, behind a note to the model. D-460 implements whole-config adaptation in a target-owned conversation, keeping ordinary writes scoped to one layout.
 
 Extension, 2026-10-18: [28](28-agent-experience.md), [29](29-agent-app-control.md) and [30](30-agent-keyboard-context.md) broaden the agent into an app-wide keyboard specialist and specify its presentation/runtime. Rung 26a implements observed work, public-message grouping and bounded saved presentation; [compiled acceptance](../screenshots/agent-experience/integrated/README.md) records what was checked. Durable execution and broader app/collection control remain proposals. D-401 proposes replacing the one-conversation-layout write limit; D-403 preserves validated proposals and user approval. The historical provider and post-Apply wording below must not override the current provider chapter or actual auto-sync state.
@@ -35,7 +37,7 @@ Each tool is a `betaZodTool` in `src/agent/tools/`, one file per tool.
 |---|---|---|---|
 | `list_layouts` | `{}` | Every layout: id, name, board, firmware, layers, and what its board can and cannot do ([20](20-cross-board.md)) | So the agent looks at BK's other keyboards before asking him for them (D-220) |
 | `get_layout` | `{ layout?: string, layers?: string[] }` | The head revision as one text grid per layer (labels placed by the board's physical rows, with a legend), plus the IR JSON for the requested layers | The grid is how the model reasons about position. The JSON is what it edits against |
-| `find_function` | `{ function: string }` | Every position and layer producing that function, and how each layer is reached | Answers "where is Option now?" deterministically, not by reading grids |
+| `find_function` | `{ function: string }` (canonical ID, firmware alias or recognised key label) | Matching key positions and modelled encoder turns; access paths for matching key layers | Answers "where is Option now?" deterministically, not by reading grids. Inspect opaque sensor calls with `get_layout` |
 | `analyse_change` | `{ ops: ChangeOp[] }` | The validator's result for those ops against head ([07](07-change-validation.md)), without saving anything | Lets the agent check an idea before proposing it |
 | `propose_changes` | `{ title, ops, explanation, tradeoffs, decisionDraft, supersedes?: id \| null }`: one proposal (a one-element `{ alternatives }` from before D-452 is still read) | Its change set ID and validation result, and which proposal it superseded | The only way a proposal reaches BK. An invalid one comes back with errors so the agent can fix it, and the proposal it was revising stays current. `supersedes` is required while another proposal of the agent's is open in the conversation: an id replaces it, `null` stands beside it (D-452) |
 | `mirror_keys` | `{ positions: number[], layer: string }` | For each position, the key at its mirror position, the binding this position should hold to match it (its own letter, the right hand's modifiers, a mirrored ZMK profile where the original lists the other hand's keys), and ops covering exactly the keys that change, validated | "The same as the other hand, mirrored" without the model counting positions or guessing hands (D-060) |
@@ -61,6 +63,7 @@ type Slot = { layerId: string; position: number };
 
 type ChangeOp =
   | { op: "setBinding"; at: Slot; binding: Binding }
+  | { op: "setSensorBindings"; layerId: string; sensorBindings: SensorBinding[] | null } // replace all turns on one layer; null restores board defaults
   | { op: "moveBinding"; from: Slot; to: Slot }        // what was at `to` is displaced
   | { op: "swapBindings"; a: Slot; b: Slot }
   | { op: "addLayer"; layer: { id: string; name: string }; afterLayerId: string } // filled with transparent
@@ -79,6 +82,8 @@ type ChangeOp =
 ```
 
 Ops apply in order to a copy of the head document. `src/layout/apply-ops.ts` is a pure function, `(Layout, ChangeOp[]) => Layout | OpError`, shared by the editor, the agent, the CLI and the validator.
+
+For encoder edits, read the sensor count and order first. On the Keebart Corne, four sensor slots represent two physical knobs; the key card changes alternate footprints together, but a CLI or agent proposal must provide all four entries. Presses use ordinary `setBinding` ops. [The encoder recipe](../encoder-layers.md) checks and applies a complete example without flashing.
 
 ### "Do that here too" is expanded into plain ops
 

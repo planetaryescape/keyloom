@@ -1,5 +1,7 @@
 # 28: The agent works beside the keyboard
 
+Status update, 2026-11-01 (D-470, working tree, not yet released): completed replies put the answer and proposals before working details, superseding D-412's ordering. Successful working folds even when another step failed; failed lookups have a separate, explicit failure-count disclosure with safe reasons and recovery guidance. Unknown outcomes remain visible. Live work still leads while streaming. The editing context appears once, and an entirely unreported cost/usage footer is omitted rather than repeating missing-data boilerplate.
+
 Status: partly implemented, 2026-10-20. Rung 26a shipped in v0.42.0. Rung 27 interactive question kinds (single/multiple choice, short text, layer, key, keyboard_or_config), explicit recommendation, reopened selection actions, typed artifacts, and confirmation/outcome cards are built on feat/rung27-interactive-questions. Agent-made configs open themselves and the reply carries a config card (D-450, 2026-10-22). Proposal, config, question and footer cards were made calmer (D-456, D-457, 2026-10-28). The agent proposes one best proposal first and refines it with questions, each answer superseding the proposal before (D-452, built on feat/refine-loop). Cross-keyboard target plans below remain proposals. Original source baseline: `71934e13f8c0c8b702b6dc1beb57ca25993f7cf3`.
 
 Reconciled with origin/main at `72370d0494497ae4bdd6036106fcec9d3f6c1aab`: inherit the no-accent-stripe/no-sparkle rule in [18](18-visual-design.md#patterns-keyloom-doesnt-use) and separate case/keycap controls (D-319).
@@ -60,14 +62,14 @@ After the proposal is ready:
 ┌──────────────────────────────────┐
 │ Moonlander / Daily -> Glove80     │
 │ keyloom                          │
-│ > Read 2 configs; checked mapping│  collapsed in place, before the answer
-│                                  │
 │ Navigation is ready to preview.  │
 │ Your current config is unchanged.│
 │                                  │
 │ [Navigation preview on the board]│
 │ 12 mapped · 1 needs a place       │  illustrative counts, not real data
 │ [Choose key]  [Review changes]    │
+│                                  │
+│ > Read 2 configs; checked mapping│  completed work, after the result
 └──────────────────────────────────┘
 ```
 
@@ -108,9 +110,9 @@ While running, show the current activity plus a few recent completed rows. Older
 
 Use keyboard-specific labels: "Reading your Moonlander's navigation layer", "Checking that Symbols is still reachable", "Matching the thumb keys", "Preparing the MacBook preview". Unknown tools get an honest generic label and remain inspectable. Never manufacture a sequence of tasks to make an idle timer look productive.
 
-On successful task completion, fold ordinary activity into a one-line disclosure, such as "Read 2 configs · checked 12 mappings · 8 s". Derive it from events. Do not collapse an unanswered question, pending Apply, unsent device change or error. If the person expanded the section themselves or has focus inside it, leave it open. Preserve scroll position when folding (D-397, D-405).
+When the reply completes, fold ordinary successful activity into a disclosure derived from events. A failed step must not force successful rows and working notes open. If every attention row is a failure, show a separate "N steps failed" disclosure with safe reasons and a next action. Unknown, declined, partial and cancelled outcomes remain visible outside routine success; incomplete-history warnings also remain visible. Do not collapse an unanswered question, pending Apply or unsent device change. If the person expanded routine work themselves or has focus inside it, leave it open (D-397, D-405, D-470).
 
-Keep that section before the final answer while running, folded and reopened. Finishing a reply must not move its working notes underneath the answer. BK corrected this ordering after seeing it in the live app (D-412); the follow-up implementation is not part of v0.43.0's proof.
+While streaming, working details precede the answer. Once streaming stops, the answer and proposals precede working details, including reopened history (`Turns.tsx`). D-470 supersedes D-412's earlier before-answer rule; the older release screenshots are evidence of that earlier UI, not the current ordering. [Encoder/chat captures](../screenshots/encoder-layers/README.md) show the working-tree result in both themes and viewport sizes.
 
 A model reply can finish while a hardware job continues. In that case the answer is readable, but "Sending to your Glove80" remains live until the sync engine verifies it or reports another state.
 
@@ -170,7 +172,7 @@ BK called the cards wordy (2026-10-28); the shapes below are built (D-456, D-457
 - **Proposal.** Title, the explanation's first sentence, "N keys change" with the cost (cut at two lines), a line for each function the proposal drops with its reason ("Drops F16 · you said you barely use it"), one validator line when there is a finding (the full text a tap away), Details (the keys, the rest of the reasoning, gains, costs, what keyloom will remember), then Not this and Apply. There is one proposal, and a revision replaces it: the old card folds to one line, "Superseded by the revised proposal", with Details and no Apply. Tabs appear only for a group of alternatives stored before D-452. The panel for a copy's waiting proposals uses the same card, with tabs for its two ways of putting a config on.
 - **Config.** Name, board and source, and "Review N proposals" as the one primary button; "Back to X" is a text link. The count is not repeated as a fact.
 - **Question.** A neutral surface (D-457) with "Question n of m" (only when m is 2 or more), the question, one to three considerations, and numbered options of at least 44px with the recommended one first and marked (D-452). It sits under the proposal it refines. Answered, it is a quiet line without the count; when BK applies the proposal it refines instead, it reads "Skipped, you applied the proposal", and when he applies any other proposal of the conversation, "Closed, you applied another proposal" (the layout has moved on, so the question can no longer be answered). Neither leaves the reply saying "Needs your answer".
-- **Activity and footer.** Remembered chips with an icon and no label, working notes folded into one line when the run is clean, and one USD figure under the reply (D-456).
+- **Activity and footer.** Remembered chips with an icon and no label; routine work folds independently of failed steps. Show a reported or estimated USD figure when known, Usage for token-only accounting, and no footer when neither was reported (D-456, D-470). Missing accounting never means free usage. Expand the footer for its basis and tokens.
 
 No question, proposal, result or confirmation gets a colored stripe on its edge, a substitute glow or a sparkle/wand icon for AI. Reuse the existing title glyphs, plain labels and marks on the keyboard. A color picker can address the case or keycaps separately; neither setting is firmware lighting.
 

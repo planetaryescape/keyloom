@@ -8,6 +8,7 @@ keyloom is a local-first configurator for QMK and ZMK keyboards, and for the Mac
 
 - Configure any QMK or ZMK keyboard, and the MacBook keyboard, from one app.
 - Click a key and change it. Tap, hold, double-tap and tap-then-hold are slots on the key, and macros and combos are made on the board.
+- Edit supported ZMK encoder turns per layer and keep their presses as ordinary keys. [Try mouse turns on Base with media on Numbers](docs/encoder-layers.md).
 - Have changes reach the keyboard without touching it, where the board supports that.
 - Tell the AI what's in your way. It proposes changes, and you preview them on the keys before accepting.
 - Copy a setup from one of your boards to another, even when the keys differ.
