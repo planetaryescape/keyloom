@@ -53,7 +53,7 @@ export function reviewRequest(layoutName: string, revisionId: string, checks: re
   return `Review the layout "${layoutName}" at revision ${revisionId}.\n\n${found}`;
 }
 
-export async function runReviewAgent(input: { model: AgentModel; ports: AgentPorts; checks: readonly ReviewItem[]; signal?: AbortSignal }): Promise<ReviewAgentOutcome> {
+export async function runReviewAgent(input: { model: AgentModel; ports: AgentPorts; checks: readonly ReviewItem[]; workload?: string; signal?: AbortSignal }): Promise<ReviewAgentOutcome> {
   const { model, ports, checks } = input;
   const snapshot = ports.snapshot();
   const recorder = new TurnRecorder();
@@ -91,7 +91,7 @@ export async function runReviewAgent(input: { model: AgentModel; ports: AgentPor
 
   const result = await model.run({
     system: `${assembleSystemPrompt(snapshot.board, snapshot.document, ports.priorities(), ports.choices())}\n\n${review.trim()}`,
-    messages: [{ role: "user", content: [{ type: "text", text: reviewRequest(snapshot.layoutName, snapshot.revisionId, checks) }] }],
+    messages: [{ role: "user", content: [{ type: "text", text: `${reviewRequest(snapshot.layoutName, snapshot.revisionId, checks)}${input.workload ? `\n\nIndependent workload measurements:\n${input.workload}` : ""}` }] }],
     tools,
     maxIterations: REVIEW_MAX_ITERATIONS,
     ...(input.signal ? { signal: input.signal } : {}),

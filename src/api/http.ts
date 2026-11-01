@@ -125,7 +125,7 @@ export type UndoResponse = z.infer<typeof UndoResponseSchema>;
 // History is the layout's revisions, newest first (18#words, D-102).
 //   GET  /api/layouts/:ref/revisions                 -> RevisionListResponse
 //   GET  /api/boards                                 -> BoardListResponse     (what the import screen offers)
-//   POST /api/import?board=&filename=&name=  <file bytes as application/octet-stream> -> ImportResponse
+//   POST /api/import?board=&filename=&name=&activities=prose,shortcuts  <file bytes as application/octet-stream> -> ImportResponse
 export const RevisionEntrySchema = RevisionInfoSchema.omit({ undoable: true }).extend({ isHead: z.boolean() });
 export type RevisionEntry = z.infer<typeof RevisionEntrySchema>;
 export const RevisionListResponseSchema = z.object({ revisions: z.array(RevisionEntrySchema) });

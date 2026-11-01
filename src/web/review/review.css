@@ -109,6 +109,19 @@
   padding: var(--space-1) var(--space-5) var(--space-4);
 }
 
+.br-workloads { margin-top: var(--space-3); }
+.br-workloads p, .br-test-results { color: var(--ink-2); font-size: var(--text-xs); line-height: 1.55; }
+.br-activities { min-width: 0; margin: 0; padding: 0; border: 0; }
+.br-activities legend { margin-bottom: var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.br-activities > div { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.br-activities label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 32px; color: var(--ink); font-size: var(--text-xs); cursor: pointer; }
+.br-activities input { accent-color: var(--ink); }
+.br-test-results { margin-top: var(--space-2); overflow-wrap: anywhere; }
+.br-test-results summary { cursor: pointer; }
+.br-test-results summary:focus-visible, .br-activities input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.br-test-results ul { padding-left: var(--space-4); }
+.br-test-results li { margin-top: var(--space-1); font-variant-numeric: tabular-nums; }
+
 .br-group {
   margin-top: var(--space-4);
 }

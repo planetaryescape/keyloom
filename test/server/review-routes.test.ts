@@ -9,6 +9,8 @@ import { handleReviewRoute } from "../../src/server/review-routes.ts";
 import { handleSyncRoute } from "../../src/server/sync-routes.ts";
 import { type SyncWorld, gate, syncWorld, waitFor } from "../helpers/fake-sync.ts";
 import { finished, scriptedModel, submit } from "../helpers/review-world.ts";
+import type { WorkloadDeps } from "../../src/app/workload.ts";
+import { replayResult } from "../helpers/workload.ts";
 
 setDefaultTimeout(20_000);
 
@@ -23,7 +25,7 @@ afterEach(async () => {
   worlds = [];
 });
 
-async function serve(opts: { held?: boolean } = {}) {
+async function serve(opts: { held?: boolean; workload?: WorkloadDeps } = {}) {
   const w = await syncWorld();
   worlds.push(w);
   w.flashed();
@@ -34,7 +36,7 @@ async function serve(opts: { held?: boolean } = {}) {
     finished,
   ]);
   const held = gate();
-  const engine = new ReviewEngine(w.app, { model: async () => { if (opts.held) await held.promise; return model.model; } }, { quietMs: 10_000, tickMs: 10_000 });
+  const engine = new ReviewEngine(w.app, { model: async () => { if (opts.held) await held.promise; return model.model; }, ...(opts.workload ? { workload: opts.workload } : {}) }, { quietMs: 10_000, tickMs: 10_000 });
   engines.push(engine);
   const review = appReviewBackend(engine);
   const sync2 = appSyncBackend(sync, engine);
@@ -64,6 +66,9 @@ describe("the guard", () => {
     expect((await call(`${base}/run`, { method: "POST", body: "{" })).status).toBe(400);
     expect((await post(`${base}/run`, { force: "yes" })).status).toBe(400);
     expect((await post(`${base}/run`, { surprise: true })).status).toBe(400);
+    expect((await post(`${base}/run`, { activities: null })).status).toBe(400);
+    expect((await post(`${base}/run`, { activities: ["gaming"] })).status).toBe(400);
+    expect((await post(`${base}/run`, { activities: ["prose", "prose"] })).status).toBe(400);
     expect((await call(base, { method: "POST", body: "{}" })).status).toBe(405);
     expect((await call(`${base}/run`)).status).toBe(405);
     expect((await call(`${base}/elsewhere`)).status).toBe(404);
@@ -71,6 +76,15 @@ describe("the guard", () => {
 });
 
 describe("the review", () => {
+  test("selected activities reach the engine and the response retains unverified task evidence", async () => {
+    const { base, post, read, w } = await serve({ workload: { replay: async () => replayResult([]) } });
+    const response = await post(`${base}/run`, { activities: ["prose"] });
+    expect(response.status).toBe(202);
+    expect(ReviewResponseSchema.parse(await response.json()).workloadActivities).toEqual(["prose"]);
+    await waitFor(() => (w.app.db.query("SELECT ai_status FROM board_reviews").get() as { ai_status: string }).ai_status === "done", "workload-backed review");
+    const done = await read(base);
+    expect(done.review?.workload).toMatchObject({ activities: ["prose"], status: "done", baseline: [{ id: "prose-prose", physicalKeydowns: null }] });
+  });
   test("before any run there is none, and the head is named so the page can tell", async () => {
     const { w, read, base } = await serve();
     expect(await read(base)).toEqual({ layoutId: w.layoutId, headRevisionId: w.head(), review: null });

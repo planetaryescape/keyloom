@@ -1,6 +1,7 @@
 // The rung 2 write routes (src/api/http.ts lists them). The caller has already passed the Host and
 // token checks, so this module only decides method, body and the backend call.
 import { z } from "zod";
+import { ReviewActivitiesSchema } from "../api/review.ts";
 import {
   ApplyRequestSchema,
   ApplyResponseSchema,
@@ -204,9 +205,12 @@ async function importUpload(backend: EditorBackend, request: Request): Promise<R
   const filename = query.get("filename");
   const name = query.get("name")?.trim();
   if (!board || !filename) return fail(400, "schema", "Name the board and the file: ?board=...&filename=...");
+  const selection = query.get("activities");
+  const activities = selection === null ? undefined : ReviewActivitiesSchema.safeParse(selection.split(","));
+  if (activities && !activities.success) return fail(400, "schema", "Choose activities from prose, typescript, python, json, shell or shortcuts, without duplicates.");
   const bytes = new Uint8Array(await request.arrayBuffer());
   if (bytes.length > MAX_IMPORT_BYTES) return fail(413, "too_large", "That file is too large to be a layout export.");
-  return Response.json(ImportResponseSchema.parse(await backend.importUpload({ board, filename, bytes, ...(name ? { name } : {}) })), { status: 201 });
+  return Response.json(ImportResponseSchema.parse(await backend.importUpload({ board, filename, bytes, ...(name ? { name } : {}), ...(activities?.data === undefined ? {} : { reviewActivities: activities.data }) })), { status: 201 });
 }
 
 async function startBuild(backend: EditorBackend, ref: string, request: Request): Promise<Response> {

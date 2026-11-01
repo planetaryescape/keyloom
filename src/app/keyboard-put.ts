@@ -14,6 +14,8 @@ import { type TransferReport, transferReport } from "./copy-report.ts";
 import { evaluate } from "../validation/validate.ts";
 import type { ChangeOp } from "../layout/change.ts";
 import type { Layout } from "../layout/schema.ts";
+import { ReviewActivitiesSchema, type ReviewActivity } from "../layout/review-workload.ts";
+import { setReviewActivities } from "../persistence/review-workloads.ts";
 import type { Board } from "../boards/load.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
@@ -34,6 +36,8 @@ export type PutInput = {
   layers?: string[];
   /** Who is asking: the editor and the CLI, or the agent (D-372). The proposals are the same either way. */
   source?: ChangeSetSource;
+  /** Explicit activities to test after the copied mapping is applied; never inferred from the source board. */
+  reviewActivities?: ReviewActivity[];
 };
 
 /** What a put would make, without making it (D-336): the plan, the layout the placed proposal would give the board, and anything the validator refuses, so the page can say it before a config is made. */
@@ -133,6 +137,7 @@ export function planPut(app: App, input: PutInput) {
 }
 
 export function putConfig(app: App, input: PutInput): PutOutcome {
+  if (input.reviewActivities !== undefined && !ReviewActivitiesSchema.safeParse(input.reviewActivities).success) throw new UsageError("invalid review activities");
   // One write transaction: when the validator refuses the mapping, the config it was going on is not left behind half made (D-336).
   return transact(app.db, () => putConfigNow(app, input));
 }
@@ -142,6 +147,7 @@ function putConfigNow(app: App, input: PutInput): PutOutcome {
 
   const name = input.name ?? `${view.layout.name} on ${target.definition.name}`;
   const config = newConfig(app, { name, from: "blank", board: target.definition.id });
+  if (input.reviewActivities !== undefined) setReviewActivities(app.db, config.id, [...input.reviewActivities].sort());
   const group = newId("pg");
   const summary = summaryOf(view.layout.name, plan);
   const explanation = [

@@ -14,6 +14,7 @@ import m0011 from "./migrations/0011_board_reviews.sql" with { type: "text" };
 import m0012 from "./migrations/0012_chat_presentations.sql" with { type: "text" };
 import m0013 from "./migrations/0013_agent_runs.sql" with { type: "text" };
 import m0014 from "./migrations/0014_agent_request_cancellations.sql" with { type: "text" };
+import m0015 from "./migrations/0015_review_workloads.sql" with { type: "text" };
 
 export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: string }> = [
   { version: 1, name: "0001_layouts_and_revisions", sql: m0001 },
@@ -30,4 +31,5 @@ export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: str
   { version: 12, name: "0012_chat_presentations", sql: m0012 },
   { version: 13, name: "0013_agent_runs", sql: m0013 },
   { version: 14, name: "0014_agent_request_cancellations", sql: m0014 },
+  { version: 15, name: "0015_review_workloads", sql: m0015 },
 ];

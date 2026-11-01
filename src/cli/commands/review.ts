@@ -9,6 +9,10 @@ import { REVIEW_FIX_REQUEST } from "../../api/review.ts";
 import { followAgentRun, parseProvider, type ChatDeps } from "./chat.ts";
 import { type Format, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
+import { ReviewActivitiesSchema, workloadVerdictWords } from "../../api/review.ts";
+import type { WorkloadDeps } from "../../app/workload.ts";
+import { EmulateFailedError } from "../../app/firmware-errors.ts";
+import { untilInterrupted } from "./firmware.ts";
 
 const itemJson = (i: ReviewItem) => ({
   id: i.id, source: i.source, kind: i.kind, severity: i.severity, code: i.code, title: i.title, body: i.body,
@@ -18,10 +22,11 @@ const itemJson = (i: ReviewItem) => ({
 const reviewJson = (r: BoardReview) => ({
   id: r.id, layout_id: r.layoutId, revision_id: r.revisionId, trigger: r.trigger, checked_at: r.checkedAt,
   checks: { status: r.checks.status, summary: r.checks.summary }, ai: r.ai,
+  ...(r.workload ? { workload: r.workload } : {}),
   items: r.items.map(itemJson), fixed: r.fixed.map((f) => ({ ...itemJson(f), fixed_since: f.fixedSince })),
 });
 
-export const viewJson = (v: ReviewView) => ({ layout_id: v.layoutId, head_revision_id: v.headRevisionId, stale: v.review !== null && v.review.revisionId !== v.headRevisionId, review: v.review && reviewJson(v.review) });
+export const viewJson = (v: ReviewView) => ({ layout_id: v.layoutId, head_revision_id: v.headRevisionId, stale: v.review !== null && v.review.revisionId !== v.headRevisionId, review: v.review && reviewJson(v.review), ...(v.workloadActivities ? { workload_activities: v.workloadActivities } : {}) });
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -56,6 +61,12 @@ export function reviewText(app: Parameters<typeof reviewWords>[0], v: ReviewView
     `${name}: ${shown.length === 0 ? "nothing to note" : tally.join(", ")}`,
     ...(v.headRevisionId !== r.revisionId ? ["This is the review of an earlier version of the config; run it again for the latest."] : []),
     ...section("Problems", "problem"), ...section("Suggestions", "suggestion"), ...section("Hints", "hint"),
+    ...(r.workload ? ["", `Workload tests: ${r.workload.activities.join(", ")} · ${r.workload.status}`,
+      ...r.workload.baseline.map((t) => `  ${t.id}: ${t.status}; ${t.physicalKeydowns ?? "?"} keydowns, peak ${t.maxSimultaneousKeys ?? "?"}`),
+      ...r.workload.comparisons.flatMap((c) => [`  ${c.proposalId}: ${workloadVerdictWords[c.verdict]}${c.reason ? `; ${c.reason}` : ""}`,
+        ...c.deltas.map((d) => `    ${d.id}: keydowns ${d.physicalKeydowns ?? "unknown"}, peak ${d.maxSimultaneousKeys ?? "unknown"} (candidate minus baseline)`)]),
+      ...(r.workload.reason ? [r.workload.reason] : []),
+      "Selected US-ANSI tasks only; not speed or comfort. Nothing applied."] : []),
     ...(r.fixed.length === 0 ? [] : ["", "Fixed since the last look", ...r.fixed.map((f) => `  ${words(f.title)}`)]),
     "",
     `${checked}. ${AI_WORDS[r.ai.status]}${r.ai.reason ? `: ${r.ai.reason}` : ""}.${hidden > 0 ? ` ${count(hidden, "hidden item")}.` : ""}`,
@@ -69,7 +80,7 @@ function resolveLayoutArg(app: Parameters<typeof listLayouts>[0], ref?: string):
   return (layouts[0] as { id: string }).id;
 }
 
-export function registerReviewCommand(program: Command, ctx: CliContext, deps: ChatDeps = {}): void {
+export function registerReviewCommand(program: Command, ctx: CliContext, deps: ChatDeps = {}, workload?: WorkloadDeps): void {
   const review = program
     .command("review")
     .description("what keyloom found in a config: problems, suggestions and hints. --run looks again now, with the agent");
@@ -80,16 +91,28 @@ export function registerReviewCommand(program: Command, ctx: CliContext, deps: C
     .argument("[layout]", "config ID or name (optional when there is only one)")
     .option("--run", "make the review of the head now and wait for the agent's part")
     .option("--force", "with --run, run the agent again even when it already looked at this version")
+    .option("--activities <ids>", "with --run, remember comma-separated workloads: prose,typescript,python,json,shell,shortcuts; none disables tests (needs Docker)")
     .option("--json", "print JSON, whatever the output format")
     .option("--provider <provider>", `model provider for the agent's look: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
-    .action(async (layoutArg: string | undefined, opts: { run?: boolean; force?: boolean; json?: boolean; provider?: string }) => {
+    .action(async (layoutArg: string | undefined, opts: { run?: boolean; force?: boolean; activities?: string; json?: boolean; provider?: string }) => {
       if (opts.force && !opts.run) throw new UsageError("--force goes with --run");
+      if (opts.activities !== undefined && !opts.run) throw new UsageError("--activities goes with --run");
+      const parsed = opts.activities === undefined ? undefined : ReviewActivitiesSchema.safeParse(opts.activities === "none" ? [] : opts.activities.split(",").map((s) => s.trim()));
+      if (parsed && !parsed.success) throw new UsageError(`invalid review activities: ${parsed.error.issues[0]?.message}`);
+      const activities = parsed?.data;
       const provider: ProviderId | undefined = opts.provider === undefined ? undefined : parseProvider(opts.provider);
       const format: Format = opts.json ? "json" : ctx.format();
       await ctx.withApp(async (app) => {
         const ref = resolveLayoutArg(app, layoutArg);
-        const engine = new ReviewEngine(app, { model: async () => deps.model ?? defaultAgentModel(app.dataDir, provider ? { provider } : {}) });
-        if (opts.run) await engine.review(ref, "manual", { force: opts.force === true }).done;
+        const engine = new ReviewEngine(app, { model: async () => deps.model ?? defaultAgentModel(app.dataDir, provider ? { provider } : {}), ...(workload ? { workload } : {}) });
+        if (opts.run) {
+          try {
+            await untilInterrupted(async (signal) => {
+              await engine.review(ref, "manual", { force: opts.force === true, ...(activities === undefined ? {} : { activities }), signal }).done;
+              if (signal.aborted) throw new EmulateFailedError("The board review was cancelled.");
+            });
+          } finally { await engine.stop(); }
+        }
         const view = engine.show(ref);
         const name = listLayouts(app).find((l) => l.id === view.layoutId)?.name ?? ref;
         print(ctx.io, format, { json: viewJson(view), table: reviewText(app, view, name), ids: view.review?.items.map((i) => i.id) ?? [] });

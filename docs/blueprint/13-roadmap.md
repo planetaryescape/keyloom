@@ -526,7 +526,9 @@ Only BK can do these:
 
 **Done when:** an installed release runs the supported QMK and ZMK journeys with real-core output verification, reproduces the evidence on repeat, rejects wrong-output candidates, and leaves configs and hardware unchanged. Local synthetic/injected-output tests alone do not satisfy this gate.
 
-**Left out:** automatic search, automatic board-review integration, UI, Kanata production replay, other host layouts, editor assistance and predictions of human speed or comfort. These need separate increments rather than hidden assumptions in the score.
+**Follow-up built in source (D-473):** choose activities during import/new-board copying or in the review panel. Automatic review measures a baseline, gives the model aggregate costs, and independently compares up to two saved suggestions, preserving pins and exposing gaps/tradeoffs. [Board review](27-board-review.md#test-suggestions-against-your-activities) documents the UI, API and CLI contract. No activity selection means no workload builds.
+
+**Left out:** automatic search, Kanata production replay, other host layouts, editor assistance and predictions of human speed or comfort. These need separate increments rather than hidden assumptions in the score.
 
 ## Rung 23: Car: several configs per board, and versions I can go back to
 

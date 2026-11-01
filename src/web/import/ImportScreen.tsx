@@ -5,6 +5,9 @@ import { boardTitle } from "../shell/Header.tsx";
 import { fetchBoards, uploadLayout } from "./api-import.ts";
 import { acceptsFile, guideFor, importCommand } from "./export-steps.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
+import { ActivityChoices } from "../review/WorkloadTests.tsx";
+import type { ReviewActivity } from "../../api/review.ts";
+import "../review/review.css";
 import "./import.css";
 
 type Boards = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; boards: BoardChoice[] };
@@ -22,6 +25,7 @@ interface Props {
 export function ImportScreen({ token, onImported, onBack }: Props) {
   const [boards, setBoards] = useState<Boards>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [activities, setActivities] = useState<ReviewActivity[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -47,6 +51,10 @@ export function ImportScreen({ token, onImported, onBack }: Props) {
         <h2 id="import-title">{onBack === undefined ? "Bring in your first layout" : "Import a layout"}</h2>
         <p>Export your layout from your keyboard's own editor and drop the file on its card. Every layer shows up here, and nothing reaches the keyboard until you apply a change.</p>
       </header>
+      <div className="br-workloads">
+        <ActivityChoices value={activities} onChange={setActivities} />
+        <p className="muted">Optional: test short US-ANSI samples after import and independently check suggestions. Needs Docker, may download firmware, and can take several minutes. Tests never flash your keyboard.</p>
+      </div>
       {boards.status === "loading" ? (
         <p className="loading" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading the boards…</p>
       ) : boards.status === "error" ? (
@@ -59,7 +67,7 @@ export function ImportScreen({ token, onImported, onBack }: Props) {
         <ul className="board-cards" aria-label="Supported keyboards">
           {inOrder(boards.boards).map((board) => (
             <li key={board.id}>
-              <BoardCard board={board} token={token} onImported={onImported} />
+              <BoardCard board={board} token={token} onImported={onImported} activities={activities} />
             </li>
           ))}
         </ul>
@@ -75,7 +83,7 @@ function inOrder(boards: readonly BoardChoice[]): BoardChoice[] {
   return [...boards].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
-function BoardCard({ board, token, onImported }: { board: BoardChoice; token: string; onImported: (result: ImportResponse) => void }) {
+function BoardCard({ board, token, onImported, activities }: { board: BoardChoice; token: string; onImported: (result: ImportResponse) => void; activities: ReviewActivity[] }) {
   const guide = guideFor(board);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -95,7 +103,7 @@ function BoardCard({ board, token, onImported }: { board: BoardChoice; token: st
     setBusy(true);
     setProblem(null);
     try {
-      onImported(await uploadLayout(token, board.id, file));
+      onImported(await uploadLayout(token, board.id, file, activities));
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "The import didn't go through.");
     } finally {

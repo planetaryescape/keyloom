@@ -14,6 +14,7 @@ import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import { FixIssuesButton } from "./FixIssues.tsx";
 import type { Review } from "./useReview.ts";
+import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
 
 type Rows = Readonly<Record<string, readonly number[]>>;
@@ -73,6 +74,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
   const review = r.review;
   const now = Date.now();
   const card = (item: ReviewItem) => (item.proposalId === null ? undefined : proposals?.find((p) => p.changeSetId === item.proposalId && p.status === "proposed"));
+  const workloadTests = <WorkloadTests key={JSON.stringify(r.activities)} activities={r.activities} evidence={review?.workload} busy={r.busy || review?.ai.status === "running"} onRun={(activities) => void r.run(true, activities)} />;
 
   const head = (
     <header className="br-head">
@@ -94,6 +96,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
       <section className="br-panel" aria-label="Board review">
         {head}
         <div className="br-body">
+          {workloadTests}
           <p className="br-quiet">keyloom looks a config over when its keyboard connects and after each change. This one hasn't had a look yet.</p>
           <div className="br-actions br-actions-start"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run()}>{r.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}Look it over now</button></div>
         </div>
@@ -113,6 +116,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
         <p><ReviewText text={bodyOf(item, rows)} layout={layout} rows={rows} /></p>
+        <SuggestionTestResults baseline={review.workload?.baseline ?? []} result={review.workload?.comparisons.find((c) => c.proposalId === item.proposalId)} />
         <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>checked against your layout</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
@@ -123,7 +127,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
             <button
               type="button"
               className="bar-apply"
-              disabled={applying !== null || !c.validation.ok || r.stale}
+              disabled={applying !== null || !c.validation.ok || r.stale || review.ai.status === "running"}
               onClick={() => {
                 setApplying(item.id);
                 void onApply(c).finally(() => setApplying(null));
@@ -182,6 +186,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
     <section className="br-panel" aria-label="Board review">
       {head}
       <div className="br-body">
+        {workloadTests}
         {nothing && fixedNow.length === 0 ? (
           <p className="br-quiet br-nothing">
             <Check size={14} aria-hidden="true" /> Nothing to note. keyloom checked {review.checks.summary.layers} layers, {review.checks.summary.keys} keys and {review.checks.summary.combos} combos: every layer can be reached, nothing is lost, and the timings agree.

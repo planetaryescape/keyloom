@@ -110,6 +110,7 @@ export function App({ token }: { token: string }) {
     setLayouts(null);
     setView(null);
     setSelectedId(result.layoutId);
+    setCarry({ id: result.layoutId, layerName: null, chatOpen: false, thread: null, review: true });
     setImporting(false);
     setAttempt((count) => count + 1);
   };

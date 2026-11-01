@@ -5,8 +5,12 @@
 //   - apply / import: a head made since the engine started, once the quiet time has passed with no further change.
 // A config that was not touched and whose keyboard is away is left alone; `POST /review/run` and `keyloom review --run` cover it.
 import { findRevision, listLayoutRows } from "../persistence/layouts.ts";
+import { listChangeSets } from "../persistence/change-sets.ts";
+import { reviewActivities } from "../persistence/review-workloads.ts";
 import { failOrphanedRuns, findReviewOfRevision } from "../persistence/reviews.ts";
 import type { App } from "./context.ts";
+import type { ReviewActivity } from "../layout/review-workload.ts";
+import { saveReviewActivities } from "./review-workloads.ts";
 import {
   type BoardReview, type ReviewAiDeps, type ReviewEvent, type ReviewTrigger, type ReviewView, createReview, dismissReviewItem, restoreReviewItem, runReviewAi, showReview,
 } from "./review.ts";
@@ -117,7 +121,12 @@ export class ReviewEngine {
     if (this.now() - layout.updatedAt < this.quietMs) return undefined;
     // A head made since the server started was caused by the change, even when the keyboard is connected; "connect" is for a head that
     // was already there when the keyboard appeared.
-    const head = findRevision(this.app.db, layout.id, layout.headRevisionId)?.revision;
+    const saved = findRevision(this.app.db, layout.id, layout.headRevisionId);
+    const head = saved?.revision;
+    // A put starts on an empty config with a mapping waiting for Apply. Test the copied keys, not that temporary blank.
+    if (head?.origin === "import" && saved?.layout.layers.every((layer) => layer.bindings.every((binding) => binding.kind === "none" || binding.kind === "transparent"))
+      && reviewActivities(this.app.db, layout.id).length > 0
+      && listChangeSets(this.app.db, layout.id, { status: "proposed" }).some((change) => change.baseRevisionId === head.id && change.proposalGroup !== null && change.conversationId === null)) return undefined;
     if (head !== undefined && head.createdAt >= this.startedAt) return head.origin === "import" ? "import" : "apply";
     return this.connected.has(layout.id) ? "connect" : undefined;
   }
@@ -132,11 +141,14 @@ export class ReviewEngine {
    * The checks for the head now, returned as soon as they are stored; `done` settles when the agent's part has too. A revision
    * that has a review keeps it: only an agent part that was missing or failed runs again, or any with `force`.
    */
-  review(ref: string, trigger: ReviewTrigger, opts: { force?: boolean } = {}): { review: BoardReview; done: Promise<BoardReview> } {
+  review(ref: string, trigger: ReviewTrigger, opts: { force?: boolean; activities?: ReviewActivity[]; signal?: AbortSignal } = {}): { review: BoardReview; done: Promise<BoardReview> } {
+    if (opts.activities !== undefined) saveReviewActivities(this.app, ref, opts.activities);
+    const force = opts.force === true || opts.activities !== undefined;
     const hooks = { emit: this.emit, now: this.now };
     const { review } = createReview(this.app, ref, trigger, hooks);
-    if (review.ai.status === "done" && !opts.force) return { review, done: Promise.resolve(review) };
-    const done = runReviewAi(this.app, review.id, this.deps, { ...hooks, ...(opts.force ? { force: true } : {}), signal: this.abort.signal });
+    if (review.ai.status === "done" && !force) return { review, done: Promise.resolve(review) };
+    const signal = opts.signal ? AbortSignal.any([this.abort.signal, opts.signal]) : this.abort.signal;
+    const done = runReviewAi(this.app, review.id, this.deps, { ...hooks, ...(force ? { force: true } : {}), signal });
     this.running.add(done);
     void done.finally(() => this.running.delete(done)).catch(() => undefined);
     return { review, done };

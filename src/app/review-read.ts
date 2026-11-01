@@ -3,8 +3,10 @@
 import type { ReviewFinding, ReviewFindings } from "../agent/ports.ts";
 import { keyName } from "../boards/key-names.ts";
 import { layerDisplayName } from "../layout/cap-words.ts";
+import type { ReviewActivity, ReviewWorkload } from "../layout/review-workload.ts";
 import { type ChangeSetRow, findChangeSet } from "../persistence/change-sets.ts";
 import { findLayoutRow } from "../persistence/layouts.ts";
+import { reviewActivities, reviewWorkload } from "../persistence/review-workloads.ts";
 import {
   type AiStatus, type BoardReviewRow, type ReviewItemRow, type ReviewTrigger, dismissals, latestReview, listReviewItems,
 } from "../persistence/reviews.ts";
@@ -21,6 +23,7 @@ export type BoardReview = {
   checkedAt: number;
   checks: { status: "done"; summary: { layers: number; keys: number; combos: number } };
   ai: { status: AiStatus; reason: string | null; model: string | null };
+  workload?: ReviewWorkload;
   /** Hidden items are in the list with `dismissedAt` set, so the screen can count them and offer them back. */
   items: ReviewItem[];
   /** What the previous review had that this revision no longer produces, each saying which review it was fixed since. */
@@ -33,16 +36,19 @@ export type ReviewView = {
   headRevisionId: string;
   /** The newest review of the config, or null when none has run. */
   review: BoardReview | null;
+  workloadActivities?: ReviewActivity[];
 };
 
 export const itemOf = (row: ReviewItemRow, hidden: ReadonlyMap<string, number>): ReviewItem => ({ ...row, dismissedAt: hidden.get(row.id) ?? null });
 
 export function toReview(app: App, row: BoardReviewRow): BoardReview {
   const hidden = dismissals(app.db, row.layoutId);
+  const workload = reviewWorkload(app.db, row.id);
   return {
     id: row.id, layoutId: row.layoutId, revisionId: row.revisionId, trigger: row.trigger, checkedAt: row.checkedAt,
     checks: { status: "done", summary: row.summary },
     ai: { status: row.ai.status, reason: row.ai.reason, model: row.ai.model },
+    ...(workload ? { workload } : {}),
     items: listReviewItems(app.db, row.id).map((r) => itemOf(r, hidden)),
     fixed: row.fixed.flatMap((f) => (row.previousReviewId === null ? [] : [{ ...itemOf(f, hidden), fixedSince: row.previousReviewId }])),
   };
@@ -52,7 +58,8 @@ export function showReview(app: App, ref: string): ReviewView {
   const layout = findLayoutRow(app.db, ref);
   if (!layout) throw new NotFoundError(`no layout "${ref}"`);
   const row = latestReview(app.db, layout.id);
-  return { layoutId: layout.id, headRevisionId: layout.headRevisionId, review: row ? toReview(app, row) : null };
+  const activities = reviewActivities(app.db, layout.id);
+  return { layoutId: layout.id, headRevisionId: layout.headRevisionId, review: row ? toReview(app, row) : null, ...(activities.length ? { workloadActivities: activities } : {}) };
 }
 
 /**

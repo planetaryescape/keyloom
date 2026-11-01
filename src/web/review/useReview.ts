@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReviewEvent, ReviewResponse } from "../../api/review.ts";
+import type { ReviewActivity, ReviewEvent, ReviewResponse } from "../../api/review.ts";
 import type { FixedItem } from "../../validation/review-item.ts";
 import { ApiError } from "../api.ts";
 import * as api from "./api-review.ts";
@@ -60,6 +60,7 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
   const review = response?.review ?? null;
   return {
     review,
+    activities: response?.workloadActivities ?? [],
     /** The review is of an older revision: the head's is being made. */
     stale: review !== null && response !== null && review.revisionId !== response.headRevisionId,
     loaded: response !== null,
@@ -67,7 +68,7 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     busy,
     justFixed: justFixed !== null && review !== null && justFixed.reviewId === review.id ? justFixed.items : [],
     clearJustFixed: () => setJustFixed(null),
-    run: (force = false) => act(() => api.runReview(token, layoutId, force)),
+    run: (force = false, activities?: ReviewActivity[]) => act(() => api.runReview(token, layoutId, force, activities)),
     dismiss: (id: string) => act(() => api.dismissItem(token, layoutId, id)),
     restore: (id: string) => act(() => api.restoreItem(token, layoutId, id)),
     reload: () => void load(),

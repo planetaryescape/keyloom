@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compareStoredWorkload, evaluateStoredWorkload, readWorkloadSuite, resolveWorkloadSuite, workloadHash, type WorkloadDeps } from "../../src/app/workload.ts";
+import { compareStoredWorkload, compareWorkloadToBaseline, evaluateStoredWorkload, readWorkloadSuite, resolveWorkloadSuite, workloadHash, type WorkloadDeps } from "../../src/app/workload.ts";
 import { EmulateFailedError } from "../../src/app/firmware-errors.ts";
 import { getLayout } from "../../src/app/layouts.ts";
 import { recordPriority } from "../../src/app/decisions.ts";
@@ -9,6 +9,26 @@ import { tempDir } from "../helpers/tmp.ts";
 
 const directPatch: ChangeOp[] = [{ op: "setBinding", at: { layerId: "base", position: 3 }, binding: { kind: "key", code: "E" } }, { op: "dropFunction", function: "key:V", reason: "synthetic test" }];
 const reports = [...stroke(0, "S"), ...stroke(30, "E"), ...stroke(50, "E")];
+
+test("comparison still refuses an empty patch before looking up a snapshot", async () => {
+  const { app } = workloadApp();
+  try { await expect(compareStoredWorkload(app, "missing", [])).rejects.toThrow("1 to 256 change ops"); }
+  finally { app.db.close(); }
+});
+
+test("review baseline reuse refuses changed suites, evaluator identities or snapshot hashes before replay", async () => {
+  const { app, layoutId } = workloadApp();
+  try {
+    const measured = await evaluateStoredWorkload(app, layoutId, { suite: suiteText("see") }, { replay: async () => replayResult(reports) });
+    let calls = 0;
+    const deps: WorkloadDeps = { replay: async () => { calls++; return replayResult(reports); } };
+    await expect(compareWorkloadToBaseline(app, layoutId, directPatch, measured, { suite: suiteText("e") }, deps)).rejects.toThrow("baseline no longer matches");
+    for (const identity of [{ ...measured.identity, evaluator: "old" }, { ...measured.identity, layoutHash: "changed" }, { ...measured.identity, boardHash: "changed" }]) {
+      await expect(compareWorkloadToBaseline(app, layoutId, directPatch, { ...measured, identity }, { suite: measured.suite }, deps)).rejects.toThrow("baseline no longer matches");
+    }
+    expect(calls).toBe(0);
+  } finally { app.db.close(); }
+});
 
 test("stored evaluation is deterministic, includes hashes and never changes storage; replay cache is off", async () => {
   const { app, layoutId } = workloadApp();

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiCandidate, DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { PreviewResponse, PutPreviewResponse, PutResponse } from "../../api/keyboards.ts";
+import type { ReviewActivity } from "../../api/review.ts";
 import { ApiError } from "../api.ts";
 import { createConfig } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
@@ -39,6 +40,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [found, setFound] = useState<ApiCandidate[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [activities, setActivities] = useState<ReviewActivity[]>([]);
   const waiting = keyboards.filter((k) => k.status !== "known");
   const offered = waiting.filter((k) => !dismissed.has(keyboardKey(k)));
   const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
@@ -123,7 +125,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const candidateOf = (k: DetectedKeyboard, id: string): ApiCandidate | undefined => k.candidates.find((c) => c.id === id) ?? found.find((c) => c.id === id);
 
   return {
-    step, preview, putPreview, busy, problem, waiting, setupWaiting, searchText, found,
+    step, preview, putPreview, busy, problem, waiting, setupWaiting, searchText, found, activities, setActivities,
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
       setDismissed((d) => new Set([...d].filter((x) => x !== keyboardKey(k))));
@@ -137,6 +139,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setStep({ kind: "setup", keyboard: k, boardId: board.id, boardName: board.name });
     },
     notNow: () => {
+      setActivities([]);
       if (step.kind === "card" || step.kind === "confirm" || step.kind === "review") setDismissed((d) => new Set([...d, keyboardKey(step.keyboard)]));
       if (step.kind === "setup") setDismissed((d) => new Set([...d, step.boardId]));
       setStep({ kind: "idle" });
@@ -213,10 +216,11 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setBusy(true);
       setProblem(null);
       try {
-        const out = await api.putConfig(token, { from: step.source, board: step.boardId, placements: step.choices });
+        const out = await api.putConfig(token, { from: step.source, board: step.boardId, placements: step.choices, ...(activities.length ? { reviewActivities: activities } : {}) });
         setStep({ kind: "idle" });
         setPutPreview(null);
         setPreview(null);
+        setActivities([]);
         return out;
       } catch (e) {
         setProblem(message(e));
@@ -226,6 +230,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       }
     },
     close: () => {
+      setActivities([]);
       setStep({ kind: "idle" });
       setPreview(null);
       setPutPreview(null);

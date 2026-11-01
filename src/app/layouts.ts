@@ -12,6 +12,9 @@ import {
 } from "../layout/export-document.ts";
 import type { ImportReport, NativeItem } from "../layout/import-report.ts";
 import type { Binding, Layout } from "../layout/schema.ts";
+import { ReviewActivitiesSchema, type ReviewActivity } from "../layout/review-workload.ts";
+import { setReviewActivities } from "../persistence/review-workloads.ts";
+import { transact } from "../persistence/transaction.ts";
 import {
   NameTakenError, type LayoutRow, type RevisionRow, createLayout, findLayoutRow, findRevision, listLayoutRows,
 } from "../persistence/layouts.ts";
@@ -31,6 +34,7 @@ export type ImportInput = {
   source: string;
   /** Layout name; derived from the source when omitted. */
   name?: string;
+  reviewActivities?: ReviewActivity[];
 };
 
 export type ImportOutcome = { layoutId: string; revisionId: string; name: string; report: ImportReport };
@@ -95,7 +99,7 @@ function reportOfLayout(layout: Layout): ImportReport {
 }
 
 /** Stores an imported document as a new layout. A derived name is made unique by suffix; an explicit clash is refused. */
-function storeImported(app: App, imported: Imported, explicit: string | undefined): ImportOutcome {
+function storeImported(app: App, imported: Imported, explicit: string | undefined, activities?: ReviewActivity[]): ImportOutcome {
   const { layout, report, suggestedName } = imported;
   const summary = `Imported ${report.layers} layers of ${report.keysPerLayer} keys from ${suggestedName}`;
   // The unique index decides, so two imports racing for the same name can't both win.
@@ -103,7 +107,11 @@ function storeImported(app: App, imported: Imported, explicit: string | undefine
   for (let attempt = 1; ; attempt++) {
     const name = attempt === 1 ? base : `${base}-${attempt}`;
     try {
-      const created = createLayout(app.db, { name, layout, summary, origin: "import" });
+      const created = transact(app.db, () => {
+        const made = createLayout(app.db, { name, layout, summary, origin: "import" });
+        if (activities !== undefined) setReviewActivities(app.db, made.layout.id, [...activities].sort());
+        return made;
+      });
       return { layoutId: created.layout.id, revisionId: created.revision.id, name, report };
     } catch (err) {
       if (!(err instanceof NameTakenError)) throw err;
@@ -122,10 +130,11 @@ function importExportedLayout(app: App, input: ImportInput, board: Board, explic
   if (document.layout.boardId !== wanted) {
     throw new UsageError(`${input.source} is a layout for ${document.layout.boardId}, not ${wanted}; pass --board ${document.layout.boardId}`);
   }
-  return storeImported(app, { layout: document.layout, report: reportOfLayout(document.layout), suggestedName: document.layout_name ?? `${board.definition.name} layout` }, explicit);
+  return storeImported(app, { layout: document.layout, report: reportOfLayout(document.layout), suggestedName: document.layout_name ?? `${board.definition.name} layout` }, explicit, input.reviewActivities);
 }
 
 export async function importLayout(app: App, input: ImportInput): Promise<ImportOutcome> {
+  if (input.reviewActivities !== undefined && !ReviewActivitiesSchema.safeParse(input.reviewActivities).success) throw new UsageError("invalid review activities");
   const board = showBoard(input.board);
 
   const explicit = input.name?.trim();
@@ -146,7 +155,7 @@ export async function importLayout(app: App, input: ImportInput): Promise<Import
     if (err instanceof ImportError || err instanceof ZmkImportError || err instanceof KarabinerImportError) throw new UsageError(err.message);
     throw err;
   }
-  return storeImported(app, result, explicit);
+  return storeImported(app, result, explicit, input.reviewActivities);
 }
 
 export function listLayouts(app: App): LayoutRow[] {

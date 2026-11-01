@@ -73,7 +73,7 @@ export async function handleReviewRoute(request: Request, pathname: string, back
     if (action === "run") {
       const body = await readBody(request, RunReviewRequestSchema);
       if (body instanceof Response) return body;
-      return Response.json(ReviewResponseSchema.parse(await backend.run(ref, { force: body.force === true })), { status: 202 });
+      return Response.json(ReviewResponseSchema.parse(await backend.run(ref, { force: body.force === true, ...(body.activities === undefined ? {} : { activities: body.activities }) })), { status: 202 });
     }
     // dismiss and restore take no body; reading `{}` keeps the content-type rule the same on every POST.
     const empty = await readBody(request, EmptyBody);
