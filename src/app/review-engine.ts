@@ -3,10 +3,10 @@
 //   - connect: the config on a board's keyboard when it connects, reconnects, or its observed firmware identity changes;
 //   - apply / import: a head made since the engine started, once the quiet time has passed with no further change.
 // A config that was not touched and whose keyboard is away is left alone; `POST /review/run` and `keyloom review --run` cover it.
-import { findRevision, listLayoutRows } from "../persistence/layouts.ts";
+import { findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import { listChangeSets } from "../persistence/change-sets.ts";
 import { reviewActivities } from "../persistence/review-workloads.ts";
-import { failOrphanedRuns, findReviewOfRevision, invalidateReview, latestReview, REVIEW_CONTRACT_VERSION } from "../persistence/reviews.ts";
+import { failOrphanedRuns, findReviewOfRevision, invalidateReview, latestReview, reviewDevice, saveReviewDevice, REVIEW_CONTRACT_VERSION } from "../persistence/reviews.ts";
 import { transact } from "../persistence/transaction.ts";
 import { reviewFreshness } from "./review-freshness.ts";
 import type { App } from "./context.ts";
@@ -38,8 +38,6 @@ export class ReviewEngine {
   /** Config IDs whose board has its keyboard connected, from the sync engine's last view. */
   private connected = new Set<string>();
   private readonly freshConnections = new Set<string>();
-  private deviceKeys = new Map<string, string | undefined>();
-  private readonly observed = new Set<string>();
   private readonly controllers = new Map<string, AbortController>();
   private readonly active = new Map<string, { reviewId: string; done: Promise<BoardReview> }>();
   private unwatch: (() => void) | undefined;
@@ -69,21 +67,23 @@ export class ReviewEngine {
       const next = new Set(boards.filter((b) => b.state.kind !== "not_connected").map((b) => b.layoutId));
       for (const board of boards) {
         const id = board.layoutId;
-        const changed = this.observed.has(id) && next.has(id) && (!this.connected.has(id) || this.deviceKeys.get(id) !== board.reviewDeviceKey);
-        this.observed.add(id);
-        const disconnected = this.connected.has(id) && !next.has(id);
+        const stored = reviewDevice(this.app.db, id);
+        const changed = stored !== undefined && next.has(id) && (!stored.connected || (stored.identity ?? undefined) !== board.reviewDeviceKey);
+        const disconnected = stored?.connected === true && !next.has(id);
         if (changed || disconnected) {
           if (changed) this.freshConnections.add(id);
           else this.freshConnections.delete(id);
           this.invalidate(id, disconnected ? "The keyboard disconnected. Recommendations will be reanalyzed when it reconnects."
             : "The keyboard connected or its observed firmware changed. A fresh analysis is required.");
         }
+        saveReviewDevice(this.app.db, id, board.reviewDeviceKey, next.has(id));
       }
       for (const id of this.connected) if (!boards.some((board) => board.layoutId === id)) {
         this.freshConnections.delete(id);
         this.invalidate(id, "The keyboard or its active config changed. Run a fresh review.");
+        // A removed/deleted config may no longer have a parent row to reference.
+        if (findLayoutRow(this.app.db, id)) saveReviewDevice(this.app.db, id, reviewDevice(this.app.db, id)?.identity ?? undefined, false);
       }
-      this.deviceKeys = new Map(boards.map((b) => [b.layoutId, b.reviewDeviceKey]));
       this.connected = next;
       void this.tick();
     });

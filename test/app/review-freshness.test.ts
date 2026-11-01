@@ -8,7 +8,7 @@ import { applyChange, listChanges, showChange } from "../../src/app/changes.ts";
 import type { AgentModel } from "../../src/agent/model.ts";
 import { deleteConfig } from "../../src/app/configs.ts";
 import { getLayout } from "../../src/app/layouts.ts";
-import { claimAi, findReview, invalidateReview } from "../../src/persistence/reviews.ts";
+import { claimAi, findReview, invalidateReview, saveReviewDevice } from "../../src/persistence/reviews.ts";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 
@@ -44,6 +44,7 @@ test("a config with linked automatic proposals can still be deleted", async () =
       title: "Retarget", ops: retargetMode(), explanation: "Retarget", tradeoffs: { gains: [], costs: [] }, decisionDraft: draft(),
     } }] }, submit([]), finished]).deps);
     expect(listChanges(w.app, w.layoutId)).toHaveLength(1);
+    saveReviewDevice(w.app.db, w.layoutId, "synthetic-marker", true);
     w.app.db.query("DELETE FROM board_config WHERE layout_id = ?").run(w.layoutId);
     expect(deleteConfig(w.app, w.layoutId, "workload-test").id).toBe(w.layoutId);
     expect(() => getLayout(w.app, w.layoutId)).toThrow("no layout");

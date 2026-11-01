@@ -59,6 +59,34 @@ function reviewer(w: SyncWorld, model = emptyReviews()) {
 const reviews = (w: SyncWorld) => (w.app.db.query("SELECT trigger, revision_id, ai_status FROM board_reviews ORDER BY checked_at").all() as Array<{ trigger: string; revision_id: string; ai_status: string }>);
 
 describe("connect", () => {
+  test("a firmware change made while keyloom was closed is not hidden by the startup baseline", async () => {
+    const w = await world();
+    w.flashed();
+    const sync = w.engine({ tickMs: 600_000, pollMs: 0 });
+    const first = reviewer(w);
+    await first.start(sync);
+    await sync.start();
+    first.clock.advance(QUIET);
+    await first.engine.tick();
+    expect(first.model.requests).toHaveLength(2);
+    await first.engine.stop();
+    w.world.reading = { state: "keyloom", keys: ["bbbbbbbbbbbb"], boardRevision: "mk1" };
+    const restarted = reviewer(w);
+    await restarted.start(sync);
+    restarted.clock.advance(QUIET);
+    await sync.tick();
+    await restarted.engine.tick();
+    expect(restarted.model.requests).toHaveLength(2);
+    expect(restarted.engine.show(w.layoutId).review?.freshness.current).toBe(true);
+    await restarted.engine.stop();
+    const unchanged = reviewer(w);
+    await unchanged.start(sync);
+    unchanged.clock.advance(QUIET);
+    await sync.tick();
+    await unchanged.engine.tick();
+    expect(unchanged.model.requests).toHaveLength(0);
+  });
+
   test("duplicate review calls retain the original controller and share its cancellation", async () => {
     const w = await world();
     const reached = Promise.withResolvers<void>();

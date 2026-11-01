@@ -10,6 +10,17 @@ export type AiStatus = "pending" | "running" | "done" | "unavailable" | "failed"
 export const REVIEW_AI_STALE_MS = 10 * 60_000;
 export const REVIEW_CONTRACT_VERSION = 1;
 
+export function reviewDevice(db: Database, layoutId: string): { identity: string | null; connected: boolean } | undefined {
+  const row = db.query("SELECT identity, connected FROM review_devices WHERE layout_id = ?").get(layoutId) as { identity: string | null; connected: number } | null;
+  return row ? { identity: row.identity, connected: row.connected === 1 } : undefined;
+}
+
+export function saveReviewDevice(db: Database, layoutId: string, identity: string | undefined, connected: boolean): void {
+  db.query(`INSERT INTO review_devices (layout_id, identity, connected) VALUES (?, ?, ?)
+    ON CONFLICT(layout_id) DO UPDATE SET identity = excluded.identity, connected = excluded.connected
+    WHERE identity IS NOT excluded.identity OR connected != excluded.connected`).run(layoutId, identity ?? null, Number(connected));
+}
+
 export type ReviewItemRow = {
   id: string;
   source: "check" | "agent";

@@ -9,6 +9,13 @@ CREATE TABLE review_proposals (
   run_id TEXT NOT NULL,
   behavior_evidence TEXT
 );
+-- First observation after upgrade is a baseline. Subsequent restarts can compare
+-- device markers without paying for a review of an unchanged connected keyboard.
+CREATE TABLE review_devices (
+  layout_id TEXT PRIMARY KEY REFERENCES layouts(id) ON DELETE CASCADE,
+  identity TEXT,
+  connected INTEGER NOT NULL CHECK (connected IN (0, 1))
+);
 
 -- Old model claims were not grounded by the current contract. Retain deterministic checks,
 -- but withdraw the old recommendations without making a model call on upgrade.
