@@ -16,15 +16,20 @@ import { ApiError } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 import { createObservedSseParser, createSseParser, SseError } from "./sse.ts";
 import { AgentRunSnapshotSchema, AgentRequestCancellationSchema, type AgentRequestCancellation, type AgentRunSnapshot } from "../../api/agent-runs.ts";
+import { ViewResultSchema, type ViewAck } from "../../api/open-view.ts";
 
-export async function startSavedChat(token: string, ref: string, requestId: string, input: ChatRequest, signal: AbortSignal): Promise<AgentRunSnapshot | null> {
+export async function startSavedChat(token: string, ref: string, requestId: string, input: ChatRequest, signal: AbortSignal, viewClient?: { version: 1; owner: string }): Promise<AgentRunSnapshot | null> {
   try {
-    return await request("POST", "/api/agent/v1/runs", token, AgentRunSnapshotSchema, signal, { version: 1, requestId, layoutRef: ref, input });
+    return await request("POST", "/api/agent/v1/runs", token, AgentRunSnapshotSchema, signal, { version: 1, requestId, layoutRef: ref, input, ...(viewClient === undefined ? {} : { viewClient }) });
   } catch (error) {
     // Only a definite unsupported route permits the old mutating transport. Never retry a timeout.
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;
   }
+}
+
+export function acknowledgeView(token: string, id: string, ack: ViewAck, signal: AbortSignal) {
+  return request("POST", `/api/agent/v1/runs/${encodeURIComponent(id)}/view-ack`, token, ViewResultSchema, signal, ack);
 }
 
 export function fetchSavedRun(token: string, id: string, signal: AbortSignal): Promise<AgentRunSnapshot> {

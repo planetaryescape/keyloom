@@ -377,6 +377,7 @@ export type ChatEvent = z.infer<typeof ChatEventSchema>;
 export const CopyHandoffSchema = z.object({ layoutId: z.string(), conversationId: z.string(), runId: z.string(), requestId: z.string() });
 
 export const ChatPresentationSchema = z.object({
+  viewIntents: z.array(ViewIntentSchema).max(8).optional(),
   handoff: CopyHandoffSchema.optional(),
   version: z.literal(1), userMessageId: z.string().min(1),
   // Absent on older recordings and when execution did not return usage.
@@ -627,3 +628,4 @@ export const LayoutUpdatedEventSchema = z.object({
   revisionId: z.string().min(1).optional(),
 });
 export type LayoutUpdatedEvent = z.infer<typeof LayoutUpdatedEventSchema>;
+import { ViewIntentSchema } from "./open-view.ts";

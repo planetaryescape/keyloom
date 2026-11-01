@@ -1,6 +1,6 @@
 import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessageSquare, MessagesSquare, Plus, ScrollText, SquarePen } from "lucide-react";
 import { Menu } from "../shell/Menu.tsx";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatPresentation, ChatSelection, ProposalCard } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -24,7 +24,8 @@ import { AssistantMessage, UserMessage } from "./Turns.tsx";
 import { madeConfigs } from "../configs/agent-made-configs.ts";
 import { useConfigCards } from "../configs/useConfigCards.ts";
 import type { ConfigCards } from "./ConfigCards.tsx";
-import { useChat, type ChatDrafts } from "./useChat.ts";
+import { useChat, type ChatDrafts, type OpenRequestedView } from "./useChat.ts";
+import type { ViewResult } from "../../api/open-view.ts";
 import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
 import { referableProposals, referenceView, type ReferenceContext } from "./reference-view.ts";
 import type { Reference } from "../../layout/references.ts";
@@ -37,6 +38,7 @@ import "./chat.css";
 import "./command-bar.css";
 
 interface Props {
+  beginViewRequest?: () => OpenRequestedView;
   /** "bar" is the command bar at the stage's foot (P3); "panel" the bottom sheet on a narrow screen. */
   variant?: "bar" | "panel";
   /** Closes the bar (Esc does too). */
@@ -111,8 +113,9 @@ const NO_NAMES: ReadonlyMap<string, string> = new Map();
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, fixRequest, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
-  const chat = useChat(token, layoutRef, onContinueCopy, initialConversation);
+export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, fixRequest, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
+  const beginView = useRef<() => OpenRequestedView>(() => async () => ({ version: 1, status: "unavailable", reason: "unsupported" }));
+  const chat = useChat(token, layoutRef, onContinueCopy, initialConversation, beginViewRequest === undefined ? undefined : () => beginView.current());
   const arrived = useRef(false);
   useEffect(() => {
     if (initialConversation === undefined || arrived.current) return;
@@ -201,6 +204,43 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
     return true;
   };
   const [view, setView] = useState<"chat" | "history" | "decisions">("chat");
+  const [decisionRequest, setDecisionRequest] = useState<{ signal: AbortSignal; resolve: (result: ViewResult) => void; already: boolean } | null>(null);
+  const viewNow = useRef(view);
+  const viewEpoch = useRef(0);
+  const draftNow = useRef(draft);
+  useLayoutEffect(() => {
+    if (viewNow.current !== view) viewEpoch.current++;
+    viewNow.current = view;
+    draftNow.current = draft;
+  }, [view, draft]);
+  const composerEpoch = useRef(0);
+  useLayoutEffect(() => { beginView.current = () => {
+    const shell = beginViewRequest?.();
+    let expected = viewEpoch.current;
+    const composerAtSend = composerEpoch.current;
+    return async (destination, signal) => {
+      if (signal.aborted) return { version: 1, status: "unavailable", reason: "cancelled" };
+      if (draftNow.current.trim() !== "" || drafts.length > 0 || composerEpoch.current !== composerAtSend) return { version: 1, status: "unavailable", reason: "draft" };
+      if (viewEpoch.current !== expected) return { version: 1, status: "unavailable", reason: "moved" };
+      const opened = await shell?.(destination, signal) ?? { version: 1, status: "unavailable", reason: "unsupported" };
+      if (opened.status === "unavailable" || destination !== "decisions") return opened;
+      if (signal.aborted) return { version: 1, status: "unavailable", reason: "cancelled" };
+      const result = await new Promise<ViewResult>((resolve) => {
+        const abort = () => resolve({ version: 1, status: "unavailable", reason: "cancelled" });
+        signal.addEventListener("abort", abort, { once: true });
+        setDecisionRequest({ signal, already: opened.status === "already-open" && viewNow.current === "decisions", resolve: (value) => { signal.removeEventListener("abort", abort); resolve(value); } });
+        setView("decisions");
+      });
+      expected = viewEpoch.current;
+      return result;
+    };
+  }; });
+  useLayoutEffect(() => {
+    if (!decisionRequest) return;
+    decisionRequest.resolve(decisionRequest.signal.aborted ? { version: 1, status: "unavailable", reason: "cancelled" } : view === "decisions" ? { version: 1, status: decisionRequest.already ? "already-open" : "opened" } : { version: 1, status: "unavailable", reason: "moved" });
+    setDecisionRequest(null);
+  }, [decisionRequest, view]);
+  useEffect(() => () => decisionRequest?.resolve({ version: 1, status: "unavailable", reason: "cancelled" }), [decisionRequest]);
   const [modelOpen, setModelOpen] = useState(false);
   // Bumped when the chat moves between the bar and the panel: the log has a new height, so where it rests is worked out again.
   const [placed, setPlaced] = useState(0);
@@ -632,7 +672,7 @@ export function ChatPanel({ variant = "panel", onClose, collapsed = false, onPre
           <Composer
             onCommandKey={onCommandKey}
             value={draft}
-            onChange={setDraft}
+            onChange={(text) => { composerEpoch.current++; setDraft(text); }}
             onSend={() => send(draft)}
             onStop={chat.stop}
             streaming={streaming}

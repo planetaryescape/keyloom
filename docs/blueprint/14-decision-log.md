@@ -13,7 +13,9 @@ Numbers are not contiguous. Ranges were set aside for parallel workers and some 
 
 ## 2026-11-01 follow-up
 
-### D-469: Encoder turns belong to each layer, with ordinary editable presses. Replaces D-462's fixed-turn limit and the relevant part of D-105. (BK: fix the encoder request and investigate changing the build)
+These entries were numbered D-469/D-470 on the unmerged encoder branch. They are D-471/D-472 here to preserve the already-merged D-469 view-opening decision.
+
+### D-471: Encoder turns belong to each layer, with ordinary editable presses. Replaces D-462's fixed-turn limit and the relevant part of D-105. (BK: fix the encoder request and investigate changing the build)
 
 ZMK already dispatches `sensor-bindings` per active layer; repeating defaults was keyloom's generator policy, not a keyboard restriction. Optional `Layer.sensorBindings` and `setSensorBindings` now carry rotation pairs or whole imported calls. Null resets to board defaults; old documents retain their defaults. The Corne's four sensor slots map to press positions `[6, 6, 7, 7]`, so editing one knob changes its alternative footprints together. Presses still use `setBinding`.
 
@@ -21,7 +23,7 @@ The validator checks count, keycodes, understood native mouse actions, function 
 
 Mouse turns need dedicated timing: the pinned ZMK's 5 ms sensor tap ends before its 16 ms mouse tick. Generated constant-speed input devices use 5 ms ticks and 20 ms taps, leaving ordinary mouse keys unchanged; scroll uses a whole-unit-per-tick speed. Headers, listeners and pointing Kconfig are generated, with no hardware-module fork. Generation/import, adversarial validation, scripted-agent apply and a compiled scratch-CLI proposal/apply/generate journey passed. The first firmware build stopped because Docker was not running. On BK's retry, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` compiled both Keebart halves and produced verified single-image UF2s (family `0xada52840`); the final devicetree keeps different sensor tables on Base and Numbers, and pointing/input-two-axis/sensor-rotate support is enabled. Physical pointer movement and a hardware flash are not claimed.
 
-### D-470: A completed reply leads with the result; lookup failures stay explicit without expanding successful working. Supersedes D-412's ordering; refines D-398, D-409 and D-456. (BK: fix the screenshot's failures, hierarchy and dead end)
+### D-472: A completed reply leads with the result; lookup failures stay explicit without expanding successful working. Supersedes D-412's ordering; refines D-398, D-409 and D-456. (BK: fix the screenshot's failures, hierarchy and dead end)
 
 While streaming, observed work leads. At rest the answer and saved proposals lead, then working details. A separate failure-count disclosure keeps failed steps explicit, with allowlisted error codes translated into a reason and next action. Raw exception messages and tool inputs never enter presentation. Unknown, declined and partial outcomes remain outside routine success. A failed step no longer forces successful steps and working notes open; incomplete-history warnings remain visible.
 
@@ -2214,3 +2216,13 @@ The reply that made a config told BK where to find it, and a later reply that na
 - **The prompt teaches four forms, briefly.** Config and layer ids from `list_layouts`/`get_layout`, positions from `get_layout`/`find_function`, a proposal's id from the `propose_changes` result or the conversation; write the marker where the name belongs and keep the noun; a marker naming nothing reads as words; never a URL, a link or HTML.
 - **Screens stay out.** History, the typing lab and Decisions have no marker, no client-intent protocol and no acknowledgement: rung 28's typed client intents (29) are a later stage, and this decision adds no wire field, no migration and no server behaviour.
 - **Built in** `src/layout/references.ts`, `src/app/references.ts`, `src/cli/reference-stream.ts`, `src/cli/commands/chat.ts`, `src/web/chat/markdown.ts`, `src/web/chat/Markdown.tsx`, `src/web/chat/reference-view.ts`, `src/web/chat/ChatPanel.tsx`, `src/web/chat/Turns.tsx`, `src/web/chat/CarriedThread.tsx`, `src/web/chat/chat.css`, `src/web/Viewer.tsx` and `src/agent/prompts/system.md`; tests in `test/layout/references.test.ts`, `test/web/chat-markdown.test.ts`, `test/web/chat-references.test.ts`, `test/cli/reply-references.test.ts` and `test/agent/reply-references.test.ts`. Captures and the keyboard check are in [the stage C evidence](../research/ui-audit/c-reply-references/README.md).
+
+### D-469: Open one of four existing views through the initiating send's browser, and report success only after its React render acknowledgement. Extends D-403 and D-468. (2026-10-31, stage D)
+
+`open_view` accepts only `history|lab|decisions|settings` on the current config. History is layout version history. There is no screen marker, generic navigation registry, URL, selector, setting change, recording or hardware action. The model receives `opened`, `already-open` or a bounded `unavailable` result before answering; it must not turn navigation into a claim that data loaded or anything was saved.
+
+A browser opts in on each new durable request with a fresh owner UUID. Accepted snapshots echo protocol 1, but never the owner. Only that send's live observer may consume its run/request/config-bound intent. Reload, history and foreign tabs are read-only observers. CLI, legacy streams, automatic reviews and copied configs' autonomous child runs return unavailable immediately.
+
+Use one process-local waiter per capable run and the existing bounded presentation row, with at most eight intent receipts, one pending action and a five-second deadline. React acknowledges the actual committed destination. Editor/composer drafts, recording, navigation away, foreground loss, Stop, New and unmount prevent further actions. Exact duplicate acknowledgements return the saved result; wrong ownership, contradictory duplicates and late replies cannot upgrade timeout/cancellation. Restart makes saved pending intents inert, never executable. The wider chapter 29 capability proposal is not implemented by this decision.
+
+Release approval, 2026-11-01: BK explicitly waived the unfinished independent review and Computer Use/visual checks after local tests and CI passed. Those checks remain unverified, not passed. [Stage D evidence](../research/ui-audit/d-open-view/README.md) records the limits.

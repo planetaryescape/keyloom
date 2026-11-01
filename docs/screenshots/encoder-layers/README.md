@@ -44,7 +44,7 @@ Generation uses ZMK's existing per-layer dispatch. Its ordinary 5 ms sensor tap
 ends before the default 16 ms mouse tick; dedicated constant-speed encoder input
 devices use a 5 ms tick and 20 ms tap without retuning ordinary mouse keys. This
 has now compiled for both halves, but that is not a replacement for a hardware
-test. Pins and the decision are in D-469.
+test. Pins and the decision are in D-471.
 
 ## Firmware build receipt
 

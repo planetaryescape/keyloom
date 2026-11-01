@@ -1,6 +1,6 @@
 # 02: Layout model
 
-Status update, 2026-11-01: per-layer ZMK encoder turns are implemented (D-469). `Layer.sensorBindings` optionally stores firmware-ordered rotation pairs (clockwise/counterclockwise key, none or native actions), or whole imported sensor calls. Absence retains board defaults; `setSensorBindings` with null restores them. Presses remain ordinary key bindings. Validation includes reachable encoder functions, and duplicate, stale-check, export, undo and history paths retain the turns.
+Status update, 2026-11-01: per-layer ZMK encoder turns are implemented (D-471). `Layer.sensorBindings` optionally stores firmware-ordered rotation pairs (clockwise/counterclockwise key, none or native actions), or whole imported sensor calls. Absence retains board defaults; `setSensorBindings` with null restores them. Presses remain ordinary key bindings. Validation includes reachable encoder functions, and duplicate, stale-check, export, undo and history paths retain the turns.
 
 keyloom's own firmware-neutral layout document is the thing everything edits (D-033). Chat and the editor change it through change sets (D-013, D-014). Importers produce it from QMK or ZMK source. Generators turn it back into firmware source ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)). The local SQLite database stores revisions of it, plus the conversations and decisions around it (D-032).
 
@@ -38,7 +38,7 @@ type Layer = {
   id: string;                      // stable slug, e.g. "base", "num"
   name: string;                    // "Numbers"
   bindings: Binding[];             // length === board.keys.length
-  sensorBindings?: SensorBinding[]; // firmware sensor order; absent means board defaults (D-469)
+  sensorBindings?: SensorBinding[]; // firmware sensor order; absent means board defaults (D-471)
   shortLabel?: string;             // up to 4 characters, printed on layer keys; default: first letters of the name (D-180)
   color?: 1 | 2 | 3 | 4 | 5 | 6;   // display only; default: the layer's place in the list (D-180)
 };

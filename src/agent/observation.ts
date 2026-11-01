@@ -30,6 +30,12 @@ export function toolObserver(ports: AgentPorts, emit: (event: AgentObservation) 
   const reference = (kind: OperationReference["kind"], id: string) => context.getStore()?.references.push({ kind, id });
   const observed: AgentPorts = {
     ...ports,
+    openView: async (view) => {
+      const result = await ports.openView?.(view) ?? { version: 1 as const, status: "unavailable" as const, reason: "unsupported" as const };
+      const current = context.getStore();
+      if (current) { if (result.status === "unavailable") current.declined++; else current.accepted++; }
+      return result;
+    },
     check: (ops) => { const result = ports.check(ops); validation(result); return result; },
     propose: (alternatives, options) => {
       const results = ports.propose(alternatives, options);

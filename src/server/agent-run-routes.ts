@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentRunRequestSchema, AgentRunSnapshotSchema, AgentRequestCancellationSchema } from "../api/agent-runs.ts";
 import { type ChatBackend, ChatError } from "./chat-backend.ts";
+import { ViewAckSchema, ViewResultSchema } from "../api/open-view.ts";
 
 const answerSchema = z.object({ version: z.literal(1), requestId: z.string().min(1).max(128), answer: z.object({ toolUseId: z.string().min(1).max(128), text: z.string().trim().min(1).max(500) }) });
 
@@ -26,6 +27,11 @@ export async function agentRunRoute(request: Request, pathname: string, backend:
     return Response.json(AgentRunSnapshotSchema.parse(await runs.start(input)), { status: 202 });
   }
   if (!id) return new Response("not found", { status: 404 });
+  if (verb === "view-ack" && request.method === "POST") {
+    if (!runs.acknowledgeView) throw new ChatError(404, "unsupported", "View acknowledgements are unavailable on this server.");
+    const ack = ViewAckSchema.parse(await json(request));
+    return Response.json(ViewResultSchema.parse(await runs.acknowledgeView(id, ack)));
+  }
   if (verb === undefined && request.method === "GET") return Response.json(AgentRunSnapshotSchema.parse(await runs.get(id)));
   if (verb === "answer" && request.method === "POST") {
     const input = answerSchema.parse(await json(request));

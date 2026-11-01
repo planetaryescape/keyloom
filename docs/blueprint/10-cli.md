@@ -256,6 +256,10 @@ One server serves a data directory (D-323). `serve --reuse` attaches to a live o
 
 The repo ships `skills/keyloom/SKILL.md`, so coding agents and BK's own agents can drive keyloom through the CLI. It covers the loop, which is to `import`, `layout show`, `change check`, `change propose` and `change apply`. It also covers the `--data-dir` rule for tests, and the rule that `flash` is never run without BK asking, because it rewrites the keyboard he types on. There's no MCP server, which follows BK's standing preference for a CLI plus a skill.
 
+## View requests from the terminal (D-469)
+
+`keyloom chat <config> --message 'Open History'` and `keyloom agent start <config> 'Open settings'` do not control an unrelated browser. If the model calls `open_view`, it immediately receives `{"version":1,"status":"unavailable","reason":"unsupported"}` before answering. No pending intent or acknowledgement wait is created. The ordinary saved presentation records the operation as declined; inspect it with `conversations show <conversation>` or `agent show <run>`. CLI commands never advertise browser ownership. Other tools in that turn retain their existing behavior.
+
 ## Continue a copied setup on its target
 
 ```sh

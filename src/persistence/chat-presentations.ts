@@ -14,7 +14,20 @@ export type Accounting = z.infer<typeof AccountingSchema>;
 
 export const CopyHandoffSchema = z.object({ layoutId: z.string(), conversationId: z.string(), runId: z.string(), requestId: z.string() });
 
+// Structural counterpart of api/open-view; contract tests hold the module boundary together.
+const ViewResultSchema = z.union([
+  z.object({ version: z.literal(1), status: z.enum(["opened", "already-open"]) }).strict(),
+  z.object({ version: z.literal(1), status: z.literal("unavailable"), reason: z.enum(["unsupported", "busy", "timeout", "cancelled", "background", "draft", "recording", "moved", "disconnected", "limit"]) }).strict(),
+]);
+const viewScope = { version: z.literal(1), id: z.string().min(1).max(80), runId: z.string().min(1).max(80), requestId: z.string().min(1).max(128), configId: z.string().min(1).max(80), expiresAt: z.number().int().positive(), view: z.enum(["history", "lab", "decisions", "settings"]) };
+export const ViewIntentSchema = z.discriminatedUnion("status", [
+  z.object({ ...viewScope, status: z.literal("pending") }),
+  z.object({ ...viewScope, status: z.literal("resolved"), result: ViewResultSchema }),
+]);
+export type ViewIntent = z.infer<typeof ViewIntentSchema>;
+
 export const PresentationSchema = z.object({
+  viewIntents: z.array(ViewIntentSchema).max(8).optional(),
   handoff: CopyHandoffSchema.optional(),
   version: z.literal(1),
   userMessageId: z.string().min(1),
