@@ -19,6 +19,7 @@ type BoardReview = {
   checkedAt;
   checks: { status: "done"; summary: { layers; keys; combos } };
   ai: { status: "pending" | "running" | "done" | "unavailable" | "failed"; reason: string | null; model: string | null };
+  workload?: ReviewWorkload;
   items: ReviewItem[];   // hidden ones included, with dismissedAt
   fixed: FixedItem[];    // the previous review's items this revision no longer produces
 };
@@ -68,7 +69,7 @@ keyloom review my-layout --json
 keyloom review my-layout --run --activities none
 ```
 
-Choose activities before dropping a layout on the import screen, while copying a config to a new board, or under **Activity tests** in its review. The CLI also accepts `import --activities prose,shortcuts` and `keyboard put … --activities prose,shortcuts`. Supported IDs are `prose`, `typescript`, `python`, `json`, `shell` and `shortcuts`; selection is explicit and starts empty. Choosing activities permits the selected tests to run on later automatic reviews of this config. Disable them with **Turn off tests** or `--activities none`. You cannot change the profile in the middle of an active review.
+Choose activities before dropping a layout on the import screen, while copying a config to a new board, or under **Activity tests** in its review. The CLI also accepts `import --activities prose,shortcuts` and `keyboard put … --activities prose,shortcuts`; omitting the flag or passing `none` starts the new config without tests. Supported IDs are `prose`, `typescript`, `python`, `json`, `shell` and `shortcuts`; selection is explicit and starts empty. Choosing activities permits the selected tests to run on later automatic reviews of this config. Disable them with **Turn off tests** or `review my-layout --run --activities none`. You cannot change the profile in the middle of an active review.
 
 Tests need Docker and can download pinned firmware sources and images. They run before the model, so baseline results still arrive when no provider is configured. Suggestions still need a provider. Neither path applies a change or accesses the keyboard. Windows and Kanata retain the review's ordinary checks while workload replay reports unavailable.
 
@@ -106,7 +107,7 @@ These short US-ANSI transcription and HID samples do not measure editor behavior
 - `POST /api/layouts/:ref/review/run` (202) stores the head's checks and answers with them; measurement and the agent's part continue. Body `{ force?: boolean, activities?: ("prose"|"typescript"|"python"|"json"|"shell"|"shortcuts")[] }`. Supplying activities remembers the profile and reruns the same revision; `[]` disables tests. Unknown/duplicate IDs fail schema validation before writes. The response's optional `workloadActivities` names the current profile, while `review.workload.activities` names the profile that produced that evidence.
 - `POST /api/layouts/:ref/review/items/:id/dismiss` and `…/restore` (`:id` URL-encoded). 404 for an id the latest review doesn't have.
 - `GET /api/events` carries `event: review` frames (`{ type: "review", layoutId, revisionId, reviewId, aiStatus }`) when a review is made and each time its agent part moves. The frame holds no review; the page reads it again.
-- `keyloom review [layout] [--run] [--force] [--json]` prints the review in plain words, or the JSON with `schema_version`. `--run` makes the head's review now and waits for the agent.
+- `keyloom review [layout] [--run] [--force] [--activities <ids|none>] [--json]` prints the review in plain words, or the JSON with `schema_version`. `--run` makes the head's review now and waits for the agent; `--activities` requires `--run`.
 
 ## The screens
 

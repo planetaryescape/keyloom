@@ -18,6 +18,7 @@ The copy screen's phone body scrolls independently of its fixed Make/Later foote
 - Opened a known, unconfigured synthetic Glove80, chose a Moonlander config, selected Writing and pressed Make. The returned config retained `workloadActivities: ["prose"]`; its mapping remained a proposal, not applied.
 - Chose Writing on the import screen, uploaded the existing public Oryx fixture as a zip, and landed in the new config's review with Writing selected. The harness deliberately did not start automatic review; its pending first review was not reported as a missing activity choice.
 - Read baseline coverage, opened current-to-suggested results, switched themes and resized. The verified writing result showed 22 → 21 presses and peak 2 → 1 keys.
+- After PR review fixes, Make on a known-board copy opened that config's review. Switching away and selecting it again kept the review closed. Selecting Writing on import also added `--activities prose` to every card's terminal command.
 
 ## Design review
 

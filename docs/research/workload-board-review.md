@@ -51,7 +51,7 @@ A run-owned scratch harness exercised `createReview` → baseline → scripted p
 | Persistence | The stored layout document and head stayed identical in both runs; the candidate remained proposed |
 | Provider | Three scripted SDK requests per run; no paid model calls |
 
-Both commands ran through `agent-work run --`. Receipts are retained under the run-owned `.orchestrate/keyloom-workload-review/` directory (`qmk-final/real-core-review.json`, `zmk-final/real-core-review.json` and their logs). These are firmware-core simulations, not physical keyboard, scan/debounce, USB or human-performance observations.
+Both commands ran through `agent-work run --`. Receipts are retained under the run-owned `.orchestrate/keyloom-workload-review/` directory (`qmk-final/real-core-review.json`, `zmk-final/real-core-review.json` and their logs). Those local receipts and the content manifest below are not committed, so their historical results cannot be independently inspected from this repository; the committed gated tests above reproduce the real-core assertions. These are firmware-core simulations, not physical keyboard, scan/debounce, USB or human-performance observations.
 
 ## Compiled CLI check
 
@@ -73,8 +73,8 @@ The [UI evidence](ui-audit/workload-review/README.md) covers import, new-board c
 
 | Check | Result |
 |---|---|
-| `bun test` on the frozen production candidate | 3,573 passed, 233 skipped, zero failures; 3,806 tests across 386 files, 250.68 seconds |
-| Added gated review regressions | QMK and ZMK passed separately as recorded above; these two gated cases were added after the full suite enumerated its files |
+| `bun test` after PR review fixes | 3,577 passed, 235 skipped, zero failures; 3,812 tests across 387 files, 250.12 seconds |
+| Gated review regressions | QMK and ZMK passed separately as recorded above; their two real-core cases are skipped in the ordinary full suite |
 | `bun run typecheck` | Passed, including the gated regression file |
 | `bun run depcruise` | Passed; the repository's existing TypeScript-7 parser warning remains |
 | Compiled scratch CLI | Passed; profile retained at import, real baseline without a provider, byte-identical saved reads, disable and unchanged head |
@@ -83,7 +83,9 @@ The [UI evidence](ui-audit/workload-review/README.md) covers import, new-board c
 | React Doctor | No UI findings after simplifying the result component; one deliberately sequential candidate-replay loop warning remains |
 | `git diff --check` and staged equivalent | Passed |
 
-The changed source/test content manifest is retained as `source-manifest.json` in the run-owned directory, SHA-256 `1da0b0abbffc0f74ef3db908c2f499c70a6247668389bd7c92250ce6403f7331`. It names the checked base and hashes each changed file, including the two gated cases. It is not a release checksum.
+The pre-review source/test content manifest for commit `e5fae14459219a4e9212c121f16fd82094494a04` is retained as `source-manifest.json` in the run-owned directory, SHA-256 `1da0b0abbffc0f74ef3db908c2f499c70a6247668389bd7c92250ce6403f7331`. It names the checked base and hashes each changed file, including the two gated cases. It is not a release checksum or a manifest of the later review fixes.
+
+PR review added regressions for deadline expiry during candidate replay, inactive/orphaned progress, invalid task statuses, activity-preserving terminal commands and explicit `none` profiles at import/copy. The deadline and orphaned-progress regressions failed before their fixes. Browser closeout also verified that a known-board copy opens its review, returning to that config does not reopen it, and the import cards' terminal commands retain selected activities.
 
 Running Docker candidates in parallel would defeat the review's resource bound, so the remaining React Doctor warning is not a requested change. The mechanical anti-slop scan also flags existing repository conventions: conditional omission for exact optional types, SQLite row assertions, closed enum dictionaries, an immediately parsed `unknown` boundary and Zod's `.shape` property. No compiler or lint configuration was relaxed to hide these.
 

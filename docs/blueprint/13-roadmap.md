@@ -516,7 +516,7 @@ Only BK can do these:
 
 ## Rung 22a: Test an existing config against the same workloads
 
-**Status:** Built in source (D-470); [release history](https://github.com/planetaryescape/keyloom/releases) records published availability. Local checks, passing real-core QMK/ZMK tests and the compiled synthetic CLI journey are recorded in [workload-evaluator.md](../research/workload-evaluator.md). These pre-release checks alone do not establish installed-release or hardware acceptance.
+**Status:** Built in source (D-470, with D-473's opt-in board-review integration); [release history](https://github.com/planetaryescape/keyloom/releases) records published availability. Local checks, passing real-core QMK/ZMK tests and compiled CLI journeys are recorded in [workload-evaluator.md](../research/workload-evaluator.md) and [workload-board-review.md](../research/workload-board-review.md). These pre-release checks alone do not establish installed-release or hardware acceptance.
 
 **Previously:** the typing lab needed a recording, and board-review suggestions had no common workload comparison. **Now:** the first workload slice evaluates a named task against a config and compares an explicit patch without applying it (D-470).
 
