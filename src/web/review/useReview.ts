@@ -6,20 +6,28 @@ import { ApiError } from "../api.ts";
 import * as api from "./api-review.ts";
 
 // The board review of the config on screen (D-340): read when the page opens, again whenever the head moves, and again on each `review`
-// frame for this config, so the checks show at once and the agent's part fills in when it arrives. Nothing here runs a review by
-// itself except "Look now" on a config that has none; the engine reviews on connect, apply and import.
+// frame for this config. Results stay non-interactive until the current run finishes. Only explicit UI actions request runs here;
+// the engine handles automatic refresh on connect, apply, import and changed inputs on connected configs.
 export function useReview(token: string, layoutId: string, headRevisionId: string, lastEvent: ReviewEvent | null) {
-  const [response, setResponse] = useState<ReviewResponse | null>(null);
+  const [saved, setSaved] = useState<{ token: string; layoutId: string; response: ReviewResponse } | null>(null);
+  const response = saved?.token === token && saved.layoutId === layoutId ? saved.response : null;
   const [problem, setProblem] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [action, setAction] = useState<{ token: string; layoutId: string; serial: number } | null>(null);
+  const busy = action?.token === token && action.layoutId === layoutId;
   // The fixed items of a review that arrived while the page was open, for the tick and the toast; once per review.
   const [justFixed, setJustFixed] = useState<{ reviewId: string; items: FixedItem[] } | null>(null);
   const seen = useRef<string | null>(null);
+  const request = useRef(0);
+  const event = lastEvent?.layoutId === layoutId ? lastEvent : null;
+  const [settledEvent, setSettledEvent] = useState<ReviewEvent | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
+    const serial = ++request.current;
     try {
       const r = await api.fetchReview(token, layoutId, signal);
-      setResponse(r);
+      if (signal?.aborted || serial !== request.current) return;
+      setSaved({ token, layoutId, response: r });
+      setSettledEvent(event);
       setProblem(null);
       const review = r.review;
       if (review !== null && review.revisionId === r.headRevisionId) {
@@ -28,10 +36,10 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
         seen.current = review.id;
       } else if (review !== null && seen.current === null) seen.current = review.id;
     } catch (error) {
-      if (signal?.aborted) return;
+      if (signal?.aborted || serial !== request.current) return;
       setProblem(error instanceof ApiError || error instanceof Error ? error.message : "Couldn't read the review.");
     }
-  }, [token, layoutId]);
+  }, [token, layoutId, event]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -39,22 +47,20 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     return () => controller.abort();
   }, [load, headRevisionId]);
 
-  // A frame for this config: a review was made or its agent part moved.
-  const event = lastEvent?.layoutId === layoutId ? lastEvent : null;
-  useEffect(() => {
-    if (event === null) return;
-    void load();
-  }, [event, load]);
-
   const act = async (run: () => Promise<ReviewResponse>) => {
-    setBusy(true);
+    const serial = ++request.current;
+    setAction({ token, layoutId, serial });
     try {
-      setResponse(await run());
+      const next = await run();
+      if (serial !== request.current) return;
+      setSaved({ token, layoutId, response: next });
+      setSettledEvent(event);
       setProblem(null);
     } catch (error) {
+      if (serial !== request.current) return;
       setProblem(error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
     } finally {
-      setBusy(false);
+      setAction((pending) => pending?.serial === serial ? null : pending);
     }
   };
 
@@ -63,10 +69,11 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     review,
     activities: response?.workloadActivities ?? [],
     /** The revision or other inputs changed; old recommendations are withheld. */
-    stale: review !== null && response !== null && !isReviewCurrent(review, response.headRevisionId),
+    stale: review !== null && !isReviewCurrent(review, headRevisionId),
     loaded: response !== null,
     problem,
-    busy,
+    // A review event disables the old results before the GET can replace them, even when it reuses the same review row.
+    busy: busy || event !== settledEvent,
     justFixed: justFixed !== null && review !== null && justFixed.reviewId === review.id ? justFixed.items : [],
     clearJustFixed: () => setJustFixed(null),
     run: (force = false, activities?: ReviewActivity[]) => act(() => api.runReview(token, layoutId, force, activities)),

@@ -2246,6 +2246,8 @@ Release approval, 2026-11-01: BK explicitly waived the unfinished independent re
 
 ### D-473: Let people choose activity tests during setup, and independently measure automatic review suggestions. Extends D-340 and D-470; replaces D-470's board-review integration deferral. (2026-11-01, BK: "do it")
 
+**The panel's immediate-check display is replaced by D-475; API/CLI checks remain available immediately.**
+
 - **Choose, do not infer.** Import and new-board copying offer writing, TypeScript, Python, JSON, terminal and shortcut samples. No choice means no workload builds. The choice belongs to a config, persists across its revisions, and does not silently follow a copy to another board. The review panel and `review --run --activities` can change or disable it.
 - **Measure before suggesting.** The existing automatic connect/import/apply review measures the selected suite before calling the model. No provider is needed for those measurements. The model receives task IDs, verified counts, layer/modifier entry counts and the six most-used physical positions by count, not sample text, event order or HID reports. These are short US-ANSI samples, not activity frequencies, human performance or a universal layout.
 - **Test the actual proposals.** Up to two visible suggestions are compared independently against the same process-local baseline, after ordinary proposal validation. Pins are hard constraints, including when replay is unavailable. Surplus or pin-breaking proposals are withdrawn. Every selected task remains protected: partial evidence cannot produce `verified-improvement`. Equivalent, regression, tradeoff, inconclusive and not-tested results stay explicit. The app writes the suggestion's measurement claim, not the model.
@@ -2255,6 +2257,8 @@ Release approval, 2026-11-01: BK explicitly waived the unfinished independent re
 Automatic optimization, representative corpora, editor/application outcomes, non-US locales and real human performance remain outside this integration. The validator and explicit Apply remain unchanged (D-014).
 
 ### D-474: Ground automatic recommendations in source facts, preserve existing behavior, and invalidate them at reconnects and input changes. Replaces D-340's once-per-revision reuse, D-343's cached-run/reconnect rules and D-344's one cached run per revision; extends D-473. (2026-11-01, BK: "fix all this. fully to completion" and "Let's not cache recommendations if the keyboard has changed")
+
+**The connected-upgrade rerun condition is clarified by D-475.**
 
 The failure was not just poor wording. The reviewer lacked the custom tap's definition, ordinary validation accepted a model-authored permission to drop it, and an old review stayed current because its revision still matched. A prompt warning alone would leave those paths open.
 
@@ -2266,3 +2270,11 @@ The failure was not just poor wording. The reviewer lacked the custom tap's defi
 - Migration 0016 retires old recommendations without a provider call or config edit. A deliberate rerun or genuine connection can request current suggestions. One row per revision remains a storage detail, not a recommendation cache guarantee.
 
 The tests and explicit limits are in [grounded board review](../research/grounded-board-review.md). No permission to sync or flash hardware follows from this decision.
+
+### D-475: Refresh outdated connected reviews automatically and withhold unfinished result controls. Extends D-474; replaces D-340/D-473's immediate interactive panel checks. (2026-11-01, BK: "i don't want to have to click a button. this should just happen automatically if the conditions are met" and "it's loading a fresh review but I can still interact with the previous one")
+
+- An active connected config with outdated review inputs, including a legacy contract, refreshes after the quiet time without a button press. The first device observation still establishes a baseline; it does not block this eligible refresh. An absent keyboard waits for a connection or explicit request. Stable polling and unchanged restarts reuse a current review, including its unavailable-provider result.
+- The panel and marker show a dedicated loading state during initial reads, refresh requests and pending/running reviews. Results, counts and their controls stay out of that view; Close remains available. Stale findings are read-only and stale/unfinished board marks are withheld. Source checks remain available immediately through CLI/API.
+- A review event locks the previous results before the replacement GET returns. Request ordering and config identity prevent delayed GET/POST responses from restoring an old snapshot. A failed read keeps the old results locked and offers a read-only retry.
+
+This changes review scheduling and presentation only. Provider terms still apply; no Apply, sync or flash is authorized. The follow-up is built and locally checked, not yet released; its [evidence](../research/grounded-board-review.md#automatic-refresh-and-loading-follow-up) is separate from the v0.68.1 receipt.

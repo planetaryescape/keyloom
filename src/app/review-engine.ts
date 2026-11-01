@@ -1,4 +1,4 @@
-// The board review's triggers (D-340, D-474). Every tick checks saved input freshness; device observations also invalidate immediately.
+// The board review's triggers (D-340, D-474, D-475). Every tick checks saved input freshness; device observations also invalidate immediately.
 // A revision can be analyzed again after a genuine reconnect or changed inputs. Stable polling reuses only the current snapshot.
 //   - connect: the config on a board's keyboard when it connects, reconnects, or its observed firmware identity changes;
 //   - apply / import: a head made since the engine started, once the quiet time has passed with no further change.
@@ -6,7 +6,7 @@
 import { findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import { listChangeSets } from "../persistence/change-sets.ts";
 import { reviewActivities } from "../persistence/review-workloads.ts";
-import { failOrphanedRuns, findReviewOfRevision, invalidateReview, latestReview, reviewDevice, saveReviewDevice, REVIEW_CONTRACT_VERSION } from "../persistence/reviews.ts";
+import { failOrphanedRuns, findReviewOfRevision, invalidateReview, latestReview, reviewDevice, saveReviewDevice } from "../persistence/reviews.ts";
 import { transact } from "../persistence/transaction.ts";
 import { reviewFreshness } from "./review-freshness.ts";
 import type { App } from "./context.ts";
@@ -161,8 +161,8 @@ export class ReviewEngine {
     const existing = findReviewOfRevision(this.app.db, layout.id, layout.headRevisionId);
     if (existing && !this.freshConnections.has(layout.id)) {
       if (reviewFreshness(this.app, existing).current) return undefined;
-      // An upgrade alone does not authorize a provider call. Connect or an explicit rerun does.
-      if (existing.contractVersion !== REVIEW_CONTRACT_VERSION || (!this.connected.has(layout.id) && existing.invalidatedReason !== null)) return undefined;
+      // A connected active config refreshes outdated checks, including after an upgrade. An absent board waits for a trigger.
+      if (!this.connected.has(layout.id) && existing.invalidatedReason !== null) return undefined;
     }
     // Wait for the change to settle: a run of Applies is one review, of the last of them.
     if (this.now() - layout.updatedAt < this.quietMs) return undefined;
