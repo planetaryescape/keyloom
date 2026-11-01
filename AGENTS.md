@@ -79,6 +79,7 @@ release-please owns versions, tags and `CHANGELOG.md`. Never push a tag by hand.
    If release-please creates the release but its job then fails, the builds are skipped and the release has no assets. Build it with `gh workflow run release.yml --ref main -f tag=vX.Y.Z`; a release that already has assets is refused.
    Only BK can write to the repo, so the publishing jobs have no approval gate. A branch can carry an edited copy of `release.yml` that drops the main-only check, and any `environment:` key along with it. Before anyone else gets write access, move the signing secrets from repository secrets into a `release` environment whose deployment branches are limited to main, so a branch copy runs without them. Also require approval on that environment.
 4. `install.sh` installs the latest release, or `--version vX.Y.Z`, and checks the checksum. Verify a release by installing it and running `keyloom --version`.
+5. **On BK's machine, shipping includes updating both installed copies:** `/Applications/keyloom.app` and the CLI on PATH. Use checksum-verified release assets; confirm both installed versions and macOS trust. A scratch install alone does not finish shipping. If the desktop is running, quit normally and reopen it when safe, then verify the running server's version separately; leave an app that was closed closed. Wait for any keyboard write to finish before restarting.
 
 ## Issues
 
