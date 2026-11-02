@@ -16,6 +16,7 @@
 
 /* The Pegboard panel: tonal textured surface matching room colors, with SKÅDIS slot grid */
 .pegboard {
+  view-transition-name: pegboard-wall;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -204,53 +205,75 @@
   background-color: var(--bad);
 }
 
-/* Flight animations between Pegboard and Desk/Configurator */
-@keyframes fly-to-desk {
-  0% {
-    transform: perspective(900px) rotateX(12deg) scale(0.48) translateY(-60px);
-    opacity: 0.85;
-  }
-  40% {
-    transform: perspective(900px) rotateX(6deg) scale(0.75) translateY(-20px);
-    opacity: 1;
-  }
-  100% {
-    transform: perspective(900px) rotateX(0deg) scale(1) translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes fly-to-wall {
-  0% {
-    transform: perspective(900px) rotateX(0deg) scale(1) translateY(0);
-    opacity: 1;
-  }
-  60% {
-    transform: perspective(900px) rotateX(8deg) scale(0.65) translateY(-30px);
-    opacity: 0.95;
-  }
-  100% {
-    transform: perspective(900px) rotateX(12deg) scale(0.48) translateY(-60px);
-    opacity: 0.85;
-  }
-}
-
-.flying-active-board {
+.peg-flying-cradle {
   view-transition-name: flying-board;
 }
 
-::view-transition-old(flying-board) {
-  animation: fly-to-wall 520ms var(--ease-out) both;
+/* 3D Flight View Transitions between Pegboard and Desk/Configurator */
+::view-transition-group(flying-board) {
+  animation-duration: 540ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+  filter: drop-shadow(0 32px 50px rgba(0, 0, 0, 0.45));
 }
 
+::view-transition-image-pair(flying-board) {
+  isolation: isolate;
+}
+
+::view-transition-old(flying-board),
 ::view-transition-new(flying-board) {
-  animation: fly-to-desk 520ms var(--ease-out) both;
+  animation-duration: 540ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  mix-blend-mode: normal;
+  height: 100%;
+  width: 100%;
+}
+
+::view-transition-group(pegboard-wall) {
+  animation-duration: 480ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-old(pegboard-wall) {
+  animation: wall-recede 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-new(pegboard-wall) {
+  animation: wall-advance 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes wall-recede {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.93) translateY(-14px);
+    opacity: 0;
+  }
+}
+
+@keyframes wall-advance {
+  0% {
+    transform: scale(0.93) translateY(-14px);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(flying-board),
   ::view-transition-old(flying-board),
-  ::view-transition-new(flying-board) {
+  ::view-transition-new(flying-board),
+  ::view-transition-group(pegboard-wall),
+  ::view-transition-old(pegboard-wall),
+  ::view-transition-new(pegboard-wall) {
     animation: none;
+    filter: none;
   }
   .peg-board {
     transition: none;

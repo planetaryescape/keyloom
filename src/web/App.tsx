@@ -25,13 +25,20 @@ type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure 
 
 // Runs a state change that replaces the page as a crossfade where the browser has view transitions; elsewhere, and with reduced
 // motion, it happens at once. flushSync makes React commit inside the transition's callback, so the new page is what it captures.
-function crossfade(update: () => void) {
+function crossfade(update: () => void, onComplete?: () => void) {
+  const doc = document as Document & {
+    startViewTransition?: (callback: () => void) => { finished: Promise<void> };
+  };
   // A collection change can switch the underlying layout. Do not cover an open dialog with the page's transition snapshot.
-  if (document.startViewTransition === undefined || document.querySelector("dialog[open]") !== null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (doc.startViewTransition === undefined || document.querySelector("dialog[open]") !== null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     update();
+    onComplete?.();
     return;
   }
-  document.startViewTransition(() => flushSync(update));
+  const transition = doc.startViewTransition(() => flushSync(update));
+  if (onComplete && transition && typeof transition.finished?.then === "function") {
+    transition.finished.finally(onComplete);
+  }
 }
 
 export function App({ token }: { token: string }) {
@@ -180,22 +187,41 @@ export function App({ token }: { token: string }) {
     boardChoices,
   };
 
-  const openBoardFromWall = (target: LayoutSummary, detail: LayoutDetail) => {
+  const openBoardFromWall = (target: LayoutSummary, detail: LayoutDetail, triggerElement?: HTMLElement | null) => {
+    if (triggerElement) {
+      triggerElement.style.viewTransitionName = "flying-board";
+    }
     setFlyingId(target.id);
     setSelectedId(target.id);
     setView({ id: target.id, detail });
     void markOpened(token, target.id);
-    crossfade(() => {
-      setOnWall(false);
-    });
+    crossfade(
+      () => {
+        setOnWall(false);
+      },
+      () => {
+        setFlyingId(null);
+        if (triggerElement) triggerElement.style.viewTransitionName = "";
+      },
+    );
   };
 
   const returnToWall = () => {
+    const deskBoard = document.querySelector<HTMLElement>(".stage > .keyboard-well");
+    if (deskBoard) {
+      deskBoard.style.viewTransitionName = "flying-board";
+    }
     setFlyingId(selectedId);
-    crossfade(() => {
-      setOnWall(true);
-      setAttempt((n) => n + 1);
-    });
+    crossfade(
+      () => {
+        setOnWall(true);
+        setAttempt((n) => n + 1);
+      },
+      () => {
+        setFlyingId(null);
+        if (deskBoard) deskBoard.style.viewTransitionName = "";
+      },
+    );
   };
 
   if (onWall) {
