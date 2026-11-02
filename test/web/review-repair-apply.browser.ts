@@ -55,7 +55,7 @@ try {
   const stillListed = (result.review?.items ?? []).some((item: { id: string }) => item.id === "check:keys_do_nothing::layer-0/33");
   if (result.review?.freshness?.current !== true || !fixedSelected || stillListed) throw new Error(`selected source finding was not resolved in the current review: ${fresh}`);
   await Bun.write(`${evidence}/selected-finding-resolution.json`, JSON.stringify({ result: "PASS", headRevisionId: result.headRevisionId, sourceFindingId: "check:keys_do_nothing::layer-0/33", fixed: result.review.fixed, remainingItemIds: result.review.items.map((item: { id: string }) => item.id) }, null, 2));
-  console.log(JSON.stringify({ result: "PASS", before, preview, applied, freshReview: "one remaining unused key; selected finding resolved" }));
+  console.log(JSON.stringify({ result: "PASS", before, preview, applied, freshReview: "selected finding resolved; no remaining source findings" }));
 } catch (error) {
   console.error(String(error));
   console.error(browser("snapshot", "-i"));

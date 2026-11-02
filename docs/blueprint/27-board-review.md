@@ -1,6 +1,6 @@
 # 27: Board review
 
-Status: engine and screens built (D-340), with scoped repair requests implemented in rung 2a (D-479; awaiting coordinator review and release), and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation shipped in v0.68.1 (D-474), 2026-11-01. Published CLI and installed desktop-sidecar verification passed on synthetic scratch data; [grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. No real config was applied or keyboard flashed; hardware acceptance is separate.
+Status: engine and screens built (D-340), with scoped repair requests (D-479) and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation shipped in v0.68.1 (D-474), 2026-11-01. Published CLI and installed desktop-sidecar verification passed on synthetic scratch data; [grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. No real config was applied or keyboard flashed; hardware acceptance is separate.
 
 Follow-up shipped in v0.68.2, 2026-11-02: outdated connected reviews refresh without a button, and unfinished reviews withhold result controls (D-475). The desktop and CLI on PATH were updated and verified; [the receipt](../research/automatic-review-release-v0.68.2.json) records the signed-sidecar CLI source and standalone-asset signature limitation. The app was closed and remained closed.
 
