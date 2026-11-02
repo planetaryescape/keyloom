@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.3](https://github.com/planetaryescape/keyloom/compare/v0.68.2...v0.68.3) (2026-11-02)
+
+
+### Bug Fixes
+
+* keep long review text inside the sidebar ([6023bbd](https://github.com/planetaryescape/keyloom/commit/6023bbdee61d7a3d7eeeb699b89e9c521a54eade))
+
 ## [0.68.2](https://github.com/planetaryescape/keyloom/compare/v0.68.1...v0.68.2) (2026-11-02)
 
 
