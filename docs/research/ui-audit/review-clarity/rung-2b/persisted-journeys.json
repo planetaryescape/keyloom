@@ -1,0 +1,40 @@
+{
+  "result": "PASS",
+  "session": "keyloom-rung2b-proof-32171",
+  "staleBefore": {
+    "id": "rev_01M6F162MB0ERP2Y7V799JC6W7",
+    "parentId": "rev_01M6F162J1X94ZQ7K4VRYBW99R",
+    "origin": "editor",
+    "summary": "Synthetic conflicting edit",
+    "createdAt": 1793653410443,
+    "undoable": true
+  },
+  "staleAfter": {
+    "id": "rev_01M6F17502QGGEVHXWDYPYSJE8",
+    "parentId": "rev_01M6F162MB0ERP2Y7V799JC6W7",
+    "origin": "agent",
+    "summary": "Give the selected key F17; replace the synthetic conflicting F19 if present and keep its neighbor.",
+    "createdAt": 1793653445634,
+    "undoable": true
+  },
+  "refusedBefore": {
+    "id": "rev_01M6F162HFNGYT033VW5F43BWG",
+    "parentId": null,
+    "origin": "import",
+    "summary": "Imported 6 layers of 72 keys from synchronized",
+    "createdAt": 1793653410351,
+    "undoable": false
+  },
+  "refusedAfter": {
+    "id": "rev_01M6F17WAA9Y5WXADZQY47KYQX",
+    "parentId": "rev_01M6F162HFNGYT033VW5F43BWG",
+    "origin": "agent",
+    "summary": "Give the selected key F17; replace the synthetic conflicting F19 if present and keep its neighbor.",
+    "createdAt": 1793653469514,
+    "undoable": true
+  },
+  "target": 33,
+  "neighbor": 36,
+  "neighborUnchanged": true,
+  "previewReadOnly": true
+}

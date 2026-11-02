@@ -1,0 +1,20 @@
+{
+  "implementationCommit": "3469a79c4d982c1fb1435b21bf0c3661d5c8144d",
+  "implementationTree": "4ebcd82bf9c9c1a5bfcba94c845c9a0f4a43d6c6",
+  "base": "14312ecda7d960546474514121336a716e80e67d",
+  "focused": { "passed": 6, "failed": 0, "assertions": 36 },
+  "defaultSuite": { "passed": 3681, "skipped": 243, "failed": 1, "assertions": 150615, "files": 404, "seconds": 311.56, "queueTask": 698, "failure": "test/firmware/zmk/flash.test.ts:100 synthetic byte-for-byte UF2 copy observer saw an empty array" },
+  "isolatedFailureRerun": { "passed": 24, "failed": 0, "assertions": 75, "seconds": 4.15 },
+  "firstDefaultAttempt": { "queueTask": 696, "result": "killed by 180-second harness timeout; no summary" },
+  "typecheck": "passed",
+  "dependencyCruiser": "passed; existing TypeScript 7 compatibility warning",
+  "reactDoctor": { "score": 66, "warnings": 1, "finding": "existing empty default drafts prop at touched ChatPanel signature" },
+  "antiSlop": { "changedLineWarnings": 3, "finding": "optional-property spreads follow adjacent existing repository convention; no suppression" },
+  "diffWhitespace": "passed",
+  "persistedBrowserJourneys": "passed",
+  "mountedLifecycle": "passed for assertions recorded in journey-receipt.json",
+  "scrollReachability": "passed in both sizes/themes",
+  "sourceCliDraftHumanAndJson": "passed, read-only",
+  "nativeHardwareInstalledRelease": "not run",
+  "shipping": "pending coordinator review, full-suite disposition and release gates"
+}
