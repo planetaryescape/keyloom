@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.71.0](https://github.com/planetaryescape/keyloom/compare/v0.70.2...v0.71.0) (2026-11-02)
+
+
+### Features
+
+* plan contextual recovery for refused proposals ([fb25e1f](https://github.com/planetaryescape/keyloom/commit/fb25e1fd3388ec9a9cc8b40615a8c21e0694bf7a))
+
 ## [0.70.2](https://github.com/planetaryescape/keyloom/compare/v0.70.1...v0.70.2) (2026-11-02)
 
 
