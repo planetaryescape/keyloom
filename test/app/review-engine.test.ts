@@ -1,4 +1,4 @@
-// When the board review runs (D-340): on connect, on a new head once it has settled, on an import, and never twice for a revision.
+// When the board review runs (D-340, D-474, D-475): connect, changed settled inputs or import; stable polling reuses a current snapshot.
 // The engine runs on a clock these tests move and looks only when they call `tick()`, so no test depends on how long a runner takes.
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { applyOps, getLayout, importLayout, openProposalsOutsideChat } from "../../src/app/index.ts";
@@ -137,7 +137,7 @@ describe("connect", () => {
     await Promise.all([first.done, second.done]);
   });
 
-  for (const legacy of [false, true]) test(`startup does not re-review an already reviewed connected board (legacy=${legacy})`, async () => {
+  for (const legacy of [false, true]) test(`startup refreshes an outdated connected review automatically, but reuses a current one (legacy=${legacy})`, async () => {
     const w = await world();
     const r = reviewer(w);
     await r.engine.review(w.layoutId, "manual").done;
@@ -148,7 +148,30 @@ describe("connect", () => {
     await sync.start();
     r.clock.advance(QUIET);
     await r.engine.tick();
+    expect(r.model.requests).toHaveLength(legacy ? 4 : 2);
+    expect(r.engine.show(w.layoutId).review?.freshness.current).toBe(true);
+    await sync.tick();
+    await r.engine.tick();
+    expect(r.model.requests).toHaveLength(legacy ? 4 : 2);
+  });
+
+  test("an outdated review while its keyboard is absent waits for connection without a model call", async () => {
+    const w = await world();
+    const r = reviewer(w);
+    await r.engine.review(w.layoutId, "manual").done;
+    w.app.db.query("UPDATE board_reviews SET contract_version = 0").run();
+    const sync = w.engine({ tickMs: 600_000, pollMs: 0 });
+    await r.start(sync);
+    await sync.start();
+    r.clock.advance(QUIET);
+    await r.engine.tick();
     expect(r.model.requests).toHaveLength(2);
+    expect(r.engine.show(w.layoutId).review?.freshness.current).toBe(false);
+    w.flashed();
+    await sync.tick();
+    await r.engine.tick();
+    expect(r.model.requests).toHaveLength(4);
+    expect(r.engine.show(w.layoutId).review?.freshness.current).toBe(true);
   });
 
   test("a constraint change withdraws recommendations while the keyboard is away, without starting a model", async () => {
@@ -254,17 +277,26 @@ describe("connect", () => {
     expect(disconnected.items.filter((i) => i.source === "agent")).toEqual([]);
   });
 
-  test("with no model the review is still made, and says why the agent's part is missing", async () => {
+  for (const legacy of [false, true]) test(`without a model, connected checks refresh once and explain missing suggestions (legacy=${legacy})`, async () => {
     const w = await world();
     w.flashed();
     const sync = w.engine({ tickMs: 600_000, pollMs: 0 });
     const r = reviewer(w, { ...emptyReviews(), deps: noModel });
+    if (legacy) {
+      await r.engine.review(w.layoutId, "manual").done;
+      w.app.db.query("UPDATE board_reviews SET contract_version = 0").run();
+    }
     await r.start(sync);
     await sync.start();
     r.clock.advance(QUIET);
     await r.engine.tick();
     expect(reviews(w).map((x) => x.ai_status)).toEqual(["unavailable"]);
     expect(latestReview(w.app.db, w.layoutId)?.ai.reason).toContain("No model provider is set up");
+    expect(r.engine.show(w.layoutId).review?.freshness.current).toBe(true);
+    const completed = latestReview(w.app.db, w.layoutId);
+    await sync.tick();
+    await r.engine.tick();
+    expect(latestReview(w.app.db, w.layoutId)?.runId).toBe(completed?.runId);
   });
 });
 

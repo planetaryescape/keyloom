@@ -348,10 +348,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const waitingCount = waiting?.filter((p) => p.status === "proposed" && !reviewSuggestionIds.has(p.changeSetId)).length ?? 0;
   const proposalsShown = proposalsOpen && !newBoardPanel && !labPanelShown && !reviewShown;
   const reviewMarks = useMemo(() => {
-    const items = (boardReview.review?.items ?? []).filter((i) => i.dismissedAt === null);
+    const unavailable = boardReview.refreshing || boardReview.stale || boardReview.review?.ai.status === "pending" || boardReview.review?.ai.status === "running";
+    const items = (unavailable ? [] : boardReview.review?.items ?? []).filter((i) => i.dismissedAt === null);
     const on = (kind: "problem" | "hint") => new Set(items.filter((i) => i.kind === kind).flatMap((i) => i.keys.filter((k) => k.layerId === layer?.id).map((k) => k.position)));
     return { problems: on("problem"), hints: on("hint"), layers: new Set(items.filter((i) => i.kind === "problem").flatMap((i) => i.layers)) };
-  }, [boardReview.review, layer?.id]);
+  }, [boardReview.review, boardReview.refreshing, boardReview.stale, layer?.id]);
   // The satisfaction beat (D-340): a review made after a change that cleared findings says so, once.
   const fixedToastFor = useRef<string | null>(null);
   useEffect(() => {

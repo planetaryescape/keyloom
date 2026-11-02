@@ -79,3 +79,26 @@ KEYLOOM_INSTALL_DIR="$scratch/bin" sh install.sh --version v0.68.1
 After the user quit normally, the installed desktop bundle was replaced with the verified v0.68.1 bundle. The previous v0.68.0 bundle was preserved as a backup, the installed file manifest matched the downloaded source, and signature/notarization/version checks passed again. The GUI was left closed: no real-data server, automatic sync, provider call or keyboard interaction was started for installation. The normal standalone CLI and real configs were not changed.
 
 Remaining limits are deliberate: observed device markers are not a full firmware readback, finite core checks are not all possible timing sequences, and no result measures human typing speed or comfort. No real config was applied and no keyboard was flashed.
+
+## Automatic refresh and loading follow-up
+
+Built in the working tree after the v0.68.1 receipt above; not yet released or installed. D-475 removes the legacy-contract guard that made an already-connected keyboard wait for a button press. The panel also stops presenting partial or old results as a completed review while a replacement is loading.
+
+Run the focused regressions:
+
+```sh
+bun test test/app/review-engine.test.ts test/web/review-freshness.test.tsx test/web/review-fix.test.tsx test/web/contrast.test.ts test/web/led-contrast.test.ts
+bunx tsc --noEmit
+bun run depcruise
+bun --port 4493 test/web/review-loading.fixture.html
+```
+
+Open `http://localhost:4493`, then choose **Run regression checks**. The fixture uses the real React hook and panel with synthetic HTTP responses, no provider or device. It checks initial read failure/retry, activity-draft retention during dismissal, manual refresh, event-before-GET and running-state lockout, late POST/GET rejection, foreign-event isolation, config switching and head-change read recovery. A late response deliberately ignores transport cancellation so publication ordering is tested separately.
+
+The additional contributor tools used for the changed-line checks were `anti-slop-check` and `npx -y react-doctor@latest . --verbose --scope changed`; neither is a project dependency or part of `bun test`.
+
+Observed: the focused tests passed, and the browser fixture reported PASS. Loading-state screenshots were read at 1440×900 ([light](../screenshots/review-loading/light-desktop.png), [dark](../screenshots/review-loading/dark-desktop.png)) and 390×844 ([light](../screenshots/review-loading/light-phone.png), [dark](../screenshots/review-loading/dark-phone.png)); the panel retains Close and withholds old result controls. These are component-fixture checks, not installed-app or hardware acceptance. The original stale-state screenshot and v0.68.1 receipt remain historical evidence of that release's manual refresh behavior.
+
+A newly compiled scratch CLI imported a synthetic 72-key config, then ran `review --run --json` with an explicitly selected credential-free Anthropic provider and no activities. It returned current source checks and `ai.status: unavailable`; the head revision stayed unchanged. This checks the built CLI path, not automatic physical-device detection.
+
+The first working diff passed 3,636 tests, with 243 skipped and zero failures. Review then added regressions for foreign events, read failures and dismissal draft retention: 66 focused review/contrast tests and the expanded browser fixture passed, as did type checking and changed-line anti-slop checks. Dependency rules passed with the existing TypeScript 7 support warning. React Doctor reported one non-blocking control-flow-complexity warning in `useReview`; no functional errors were reported. An initial full-suite attempt timed out at 120 seconds and reported an unrelated `running-server` process-liveness failure; that file passed in isolation, and both longer full-suite reruns passed. No new live-model or firmware replay was needed for this scheduling/presentation change.

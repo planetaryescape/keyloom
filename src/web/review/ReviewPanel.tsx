@@ -72,6 +72,8 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
   const provider = useProviderStatus(token);
   const [applying, setApplying] = useState<string | null>(null);
   const review = r.review;
+  const loading = !r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running";
+  const readFailed = loading && r.problem !== null;
   const now = Date.now();
   const card = (item: ReviewItem) => (item.proposalId === null ? undefined : proposals?.find((p) => p.changeSetId === item.proposalId && p.status === "proposed"));
   const workloadTests = <WorkloadTests key={JSON.stringify(r.activities)} activities={r.activities} evidence={review?.workload} busy={r.busy || review?.ai.status === "running"} onRun={(activities) => void r.run(true, activities)} />;
@@ -80,15 +82,26 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
     <header className="br-head">
       <div>
         <p className="br-eyebrow"><FileText size={13} aria-hidden="true" />
-          {review === null ? "Not looked over yet" : r.stale ? "Review out of date" : `keyloom looked it over · ${TRIGGER[review.trigger]}, ${formatWhen(review.checkedAt, now).replace(/^(Today|Yesterday|Just now)/, (w) => w.toLowerCase())}`}
+          {readFailed ? "Review unavailable" : loading ? "Looking over this config" : review === null ? "Not looked over yet" : r.stale ? "Review out of date" : `keyloom looked it over · ${TRIGGER[review.trigger]}, ${formatWhen(review.checkedAt, now).replace(/^(Today|Yesterday|Just now)/, (w) => w.toLowerCase())}`}
         </p>
-        <h2>Your {boardName}, looked over</h2>
+        <h2>{readFailed ? `Your ${boardName}, review unavailable` : loading ? `Looking over your ${boardName}` : `Your ${boardName}, looked over`}</h2>
         <p className="br-lead">
-          {r.stale ? review?.freshness?.reason ?? "These checks cover an earlier version. Run a fresh review before using suggestions." : `Source checks for ${configName}. It looks again after changes and reconnects; this is not a readback of the keyboard's full firmware.`}
+          {readFailed ? "The last results are withheld until this config's review can be read." : loading ? `Checking ${configName}. Findings and suggestions will appear when this review finishes.` : r.stale ? review?.freshness?.reason ?? "These checks cover an earlier version. Run a fresh review before using suggestions." : `Source checks for ${configName}. It looks again after changes and reconnects; this is not a readback of the keyboard's full firmware.`}
         </p>
       </div>
       <button type="button" className="sheet-close" aria-label="Close the review" onClick={onClose}><X size={16} aria-hidden="true" /></button>
     </header>
+  );
+
+  if (loading) return (
+    <section className="br-panel" aria-label="Board review" aria-busy={!readFailed}>
+      {head}
+      <div className="br-body">
+        {readFailed ? null : <p className="br-quiet br-ai-coming" role="status"><LoaderCircle size={13} className="spin" aria-hidden="true" />Looking over this config…</p>}
+        <p className="br-quiet">Nothing is applied to your layout or sent to the keyboard.</p>
+        {r.problem === null ? null : <><p className="br-problem" role="alert">{r.problem}</p><button type="button" className="sheet-action" onClick={r.reload}>Try loading again</button></>}
+      </div>
+    </section>
   );
 
   if (review === null) {
@@ -125,14 +138,14 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
         <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>source checked</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
-            <button type="button" className="sheet-action" aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
+            <button type="button" className="sheet-action" disabled={r.stale} aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
           )}
-          <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.dismiss(item.id)}>Not this</button>
+          <button type="button" className="sheet-action" disabled={r.busy || r.stale} onClick={() => void r.dismiss(item.id)}>Not this</button>
           {c === undefined ? null : (
             <button
               type="button"
               className="bar-apply"
-              disabled={applying !== null || !c.validation.ok || r.stale || review.ai.status === "running"}
+              disabled={applying !== null || r.busy || !c.validation.ok || r.stale || review.ai.status === "running"}
               onClick={() => {
                 setApplying(item.id);
                 void onApply(c).finally(() => setApplying(null));
@@ -157,11 +170,14 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
         </div>
         <div className="br-actions">
           {item.layers[0] === undefined && item.keys[0] === undefined ? null : (
-            <button type="button" className="sheet-action" onClick={() => onShowLayer(item.layers[0] ?? (item.keys[0] as { layerId: string }).layerId)}>
+            <button type="button" className="sheet-action" disabled={r.stale} onClick={() => {
+              const layerId = item.layers[0] ?? item.keys[0]?.layerId;
+              if (layerId !== undefined) onShowLayer(layerId);
+            }}>
               {item.layers[0] !== undefined ? "Show the layer" : "Show the keys"}
             </button>
           )}
-          <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.dismiss(item.id)}>{item.kind === "problem" ? "It's on purpose · hide" : "Hide"}</button>
+          <button type="button" className="sheet-action" disabled={r.busy || r.stale} onClick={() => void r.dismiss(item.id)}>{item.kind === "problem" ? "It's on purpose · hide" : "Hide"}</button>
         </div>
       </article>
       {fixesFor(review, item.id).map(suggestion)}
@@ -202,9 +218,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
         {g.hints.length === 0 ? null : group("Hints", g.hints.length, <>{fixedNow.filter((f) => f.kind === "hint").map(fixed)}{g.hints.map(finding)}</>)}
         {workloadTests}
 
-        {r.stale ? null : review.ai.status === "pending" || review.ai.status === "running" ? (
-          <p className="br-quiet br-ai-coming"><LoaderCircle size={13} className="spin" aria-hidden="true" /> keyloom's own look is on its way; the checks above are already in.</p>
-        ) : review.ai.status === "done" && review.ai.reason !== null ? (
+        {r.stale ? null : review.ai.status === "done" && review.ai.reason !== null ? (
           // A look that stopped early still shows what it found; say so, quietly, so a short list isn't read as all there is.
           <p className="br-quiet">{review.ai.reason}</p>
         ) : review.ai.status === "unavailable" || review.ai.status === "failed" ? (
@@ -246,7 +260,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
             {hidden.map((item) => (
               <article key={item.id} className="br-item" data-kind="hidden">
                 <h4><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
-                <div className="br-actions"><button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.restore(item.id)}>Show it again</button></div>
+                <div className="br-actions"><button type="button" className="sheet-action" disabled={r.busy || r.stale} onClick={() => void r.restore(item.id)}>Show it again</button></div>
               </article>
             ))}
           </div>
@@ -268,7 +282,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
           ready={activeProviderReady(provider.status)}
           onFix={onFixIssues}
         />
-        {hidden.length === 0 ? null : <button type="button" className="sheet-action" onClick={() => setShowHidden((v) => !v)}>{showHidden ? "Hide hidden" : "Show hidden"}</button>}
+        {hidden.length === 0 ? null : <button type="button" className="sheet-action" disabled={r.stale} onClick={() => setShowHidden((v) => !v)}>{showHidden ? "Hide hidden" : "Show hidden"}</button>}
       </footer>
     </section>
   );
@@ -277,7 +291,7 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
 /** The marker by the config name (D-340): what the review found, calm; one click opens it. */
 export function ReviewMarker({ review: r, open, onToggle }: { review: Review; open: boolean; onToggle: () => void }) {
   const review = r.review;
-  if (!r.loaded) return null;
+  if (!r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running") return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}>{r.problem === null ? <><LoaderCircle size={13} className="spin" aria-hidden="true" />Looking over…</> : <><FileText size={13} aria-hidden="true" />Review unavailable</>}</button>;
   if (review === null) {
     return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}><i data-tone="hint" aria-hidden="true" />Not looked over yet</button>;
   }

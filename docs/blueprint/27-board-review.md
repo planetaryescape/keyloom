@@ -2,13 +2,15 @@
 
 Status: engine and screens built (D-340), with the fix run (D-461) and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation shipped in v0.68.1 (D-474), 2026-11-01. Published CLI and installed desktop-sidecar verification passed on synthetic scratch data; [grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. No real config was applied or keyboard flashed; hardware acceptance is separate.
 
+Follow-up built in the working tree, not yet released: outdated connected reviews refresh without a button, and unfinished reviews withhold result controls (D-475).
+
 BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … and I can just see them somewhere without me needing to ask for them or dig into some menus … it would be nice if it's proactive."
 
 ## What it is
 
 A board review is what keyloom found in a saved config under a particular set of constraints and board inputs. Read it from `GET /api/layouts/:ref/review`. Storage retains one row per config/revision, but a fresh analysis replaces its contents when inputs change or the keyboard reconnects. An unchanged revision alone does not make recommendations current.
 
-The checks fill in at once and need nothing. The agent's part arrives after, on whichever model provider is set up, and the page hears about it on the events stream. If there is no provider, or the run fails, the review says so in words and the checks still show.
+The checks are stored at once and need no provider. The agent's part arrives after, on whichever model provider is set up, and the page hears about it on the events stream. The panel shows a loading state until the run finishes, then reveals its results. If there is no provider, or the run fails, the review says so in words and shows the source checks.
 
 ## The review and its items
 
@@ -68,16 +70,16 @@ The app generates the saved proposal's effects and tradeoffs from the actual ops
 
 The review engine (`src/app/review-engine.ts`) is level-triggered, like the sync engine. Every second it checks for missing or outdated reviews and eligible triggers:
 
-- **connect/reconnect:** every genuine connection, even at the same config head, and changes to observed firmware identity or attached halves. Stable polling does not rerun a review;
+- **connect/reconnect:** every genuine connection, even at the same config head, and changes to observed firmware identity or attached halves. An active connected config with an outdated review also refreshes automatically, including after a review-contract upgrade. Stable polling reuses a current review;
 - **apply** and **import:** a head made since the server started, once the quiet time (3 s, as the sync engine's) has passed with no further change, so a burst of Applies is one review of the last of them.
 
 A config whose keyboard stays away is not automatically reanalyzed just because its saved constraints changed. Its old recommendations are withdrawn; use `POST …/review/run`, `keyloom review --run`, or reconnect the keyboard. Each genuine reconnect can call the chosen model provider under its normal billing or subscription terms.
 
 Disconnect or observed device change immediately withdraws the old recommendations and revokes the active writer's lease. A superseded run cannot save or publish proposals over its replacement. Saved config, board, constraints and activity-profile changes also invalidate freshness. Apply independently checks the automatic proposal's snapshot and completed run; an old proposal ID cannot bypass the panel's disabled button.
 
-A genuine reconnect requests a new model review even when the saved config is identical. The first observation after upgrade establishes a persisted device baseline without authorizing a model call for an outdated legacy contract. Later restarts compare that identity: unchanged devices reuse fresh reviews, while changed firmware markers or halves request reanalysis even when the change happened while keyloom was closed. Stable polling makes no new request. A changed kanata loaded-revision marker also requests a fresh review, including after keyloom's own reload. If the Apply review started before that reload, it is revoked and replaced; this can make a second provider request. This deliberately favors reanalysis of observed device changes over reusing the saved-head review.
+A genuine reconnect requests a new model review even when the saved config is identical. The first observation after upgrade establishes a persisted device baseline; an outdated review refreshes if its keyboard is connected, without requiring a disconnect or button press. Later restarts compare that identity: unchanged devices reuse fresh reviews, while changed firmware markers or halves request reanalysis even when the change happened while keyloom was closed. Stable polling makes no new request. A changed kanata loaded-revision marker also requests a fresh review, including after keyloom's own reload. If the Apply review started before that reload, it is revoked and replaced; this can make a second provider request. This deliberately favors reanalysis of observed device changes over reusing the saved-head review.
 
-Migration 0016 withdraws legacy model recommendations, including unpublished standalone agent proposals, and marks their review contract outdated without calling a provider or changing configs. Legacy attribution cannot distinguish other standalone agent proposals, so those are conservatively withdrawn too; chat and editor proposals remain. Choose **Run a fresh review**, use `keyloom review my-layout --run`, or reconnect the keyboard. The sync identity is not a full firmware/keymap readback: changes the device does not expose cannot be verified by this review.
+Migration 0016 withdraws legacy model recommendations, including unpublished standalone agent proposals, and marks their review contract outdated without calling a provider or changing configs. Legacy attribution cannot distinguish other standalone agent proposals, so those are conservatively withdrawn too; chat and editor proposals remain. The running review engine refreshes the active config automatically when its keyboard is connected and the quiet time has passed. For an absent keyboard, you can still choose **Run a fresh review** or use `keyloom review my-layout --run`. The sync identity is not a full firmware/keymap readback: changes the device does not expose cannot be verified by this review.
 
 ## Test suggestions against your activities
 
@@ -138,6 +140,8 @@ Passing these cases does not establish all timing interactions, lighting effects
 ## The screens
 
 Built in `src/web/review/`: `useReview` reads `GET …/review` on open, on every new head and on each `event: review` frame for the config; `ReviewMarker` sits in the caption; `ReviewPanel` is the side column (a sheet on a phone). The caps and the strip are marked from `keys` and `layers` of the items that show. D-340 has the states.
+
+While loading or rerunning, the panel and marker say **Looking over…**. Previous findings, suggestions, counts and Show/Hide/Fix/Apply controls are withheld until the current run finishes; Close remains available. Stale findings outside a run are read-only. Board marks are withheld for stale or unfinished reviews too. A review event locks the old results before its GET returns, and older responses cannot overwrite a newer snapshot or another config. Other configs' events cannot unlock a failed refresh. If loading fails, the panel and openable marker say **Review unavailable** without a running spinner; **Try loading again** repeats only the read, not the model call. Hiding or restoring a finding keeps the results and unsaved activity choices mounted while the request completes.
 
 ## What the screens need
 
