@@ -278,6 +278,14 @@
   line-height: 1.5;
 }
 
+.nb-step > .field-group {
+  margin-top: var(--space-2);
+}
+
+.nb-step .choice {
+  font-size: var(--text-xs);
+}
+
 .nb-seg {
   display: flex;
   flex-wrap: wrap;

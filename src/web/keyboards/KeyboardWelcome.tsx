@@ -40,10 +40,10 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
   const phone = useMediaQuery(PHONE);
   const search = flow.search;
   useEffect(() => {
-    if (!firmwareSearch) return;
+    if (!firmwareSearch || collection === null) return;
     const timer = window.setTimeout(() => void search(query), 200);
     return () => window.clearTimeout(timer);
-  }, [query, firmwareSearch, search]);
+  }, [query, firmwareSearch, search, collection]);
   if (importing) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onBack={() => setImporting(false)} />;
   const targetId = flow.step.kind === "put" ? flow.step.boardId : null;
   const known = choices.find((board) => board.id === targetId);
@@ -75,8 +75,8 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
             })}
             {collection !== null && rows.length === 0 ? <p>No supported board matches. Search the firmware catalogue below, or use the contribution guide.</p> : null}
           </div>
-          <button type="button" className="sheet-action" onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Not listed? Search QMK and ZMK</button>
-          {firmwareSearch ? <div className="nb-list">{query.trim().length < 2 ? <p>Type at least two letters in the search above.</p> : flow.found.map((candidate) => <button key={candidate.id} type="button" onClick={() => flow.chooseCandidate(candidate)}>{candidate.displayName}<small>{candidate.detail}</small></button>)}</div> : null}
+          <button type="button" className="sheet-action" disabled={collection === null} onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Not listed? Search QMK and ZMK</button>
+          {firmwareSearch && collection !== null ? <div className="nb-list">{query.trim().length < 2 ? <p>Type at least two letters in the search above.</p> : flow.found.map((candidate) => <button key={candidate.id} type="button" onClick={() => flow.chooseCandidate(candidate)}>{candidate.displayName}<small>{candidate.detail}</small></button>)}</div> : null}
           {flow.problem ? <p role="alert" className="nb-problem">{flow.problem}</p> : null}
           <p className="nb-note">Already have a keymap? <button type="button" className="sheet-action" onClick={() => setImporting(true)}>Import a layout</button></p>
         </div> : null}

@@ -32,7 +32,9 @@ try {
     browser("network", "route", "**/api/keyboards/collection", "--abort");
     click("menuitem", "Add a keyboard…");
     browser("wait", "--text", "Couldn't check your keyboard collection.");
-    check("![...document.querySelectorAll('.onboarding-catalogue button')].some(b=>b.textContent.includes('Corne'))", "Catalogue offered setup without checking removed membership");
+    check("document.querySelectorAll('.onboarding-catalogue > button').length===0", "Catalogue offered setup without checking removed membership");
+    check("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Not listed? Search QMK and ZMK'))?.disabled", "Firmware search stayed enabled without checked membership");
+    check("document.querySelectorAll('.onboarding-choices > .nb-list button').length===0", "Firmware search advertised unchecked candidates");
     browser("network", "unroute", "**/api/keyboards/collection"); click("button", "Try again");
     browser("wait", "--load", "networkidle");
     browser("fill", "input[aria-label='Find a keyboard to add']", "corne");
@@ -48,6 +50,7 @@ try {
     click("button", "Open");
     browser("wait", "button[aria-label='Choose a config']");
     check("document.querySelector('[aria-label=\"Choose a board\"]')?.textContent.includes('Corne')", "Restore did not open the retained config");
+    check("document.querySelector('[aria-label=\"Choose a config\"]')?.textContent.includes('Archived synthetic Corne')", "Restore did not retain and open the archived config");
     console.log("PASS removed catalogue choice opens Restore; restore keeps the old config and opens it");
   } else if (mode === "first") {
     browser("wait", ".keyboard-welcome");
@@ -69,6 +72,7 @@ try {
     click("radio", "Top row"); browser("press", "ArrowRight");
     check("document.activeElement?.closest('label')?.textContent.includes('Middle row')&&document.activeElement.matches(':checked')", "Home-row radios do not support arrow navigation");
     browser("wait", "--load", "networkidle"); shot("keyboard-confirmation");
+    check("[...document.querySelectorAll('.nb-step > fieldset')].every(group=>parseFloat(getComputedStyle(group).marginTop)>0)&&[...document.querySelectorAll('.nb-step .choice')].every(choice=>parseFloat(getComputedStyle(choice).fontSize)===12)", "Onboarding choices lost compact spacing or type sizing");
     browser("set", "viewport", "390", "844");
     for (const theme of ["light", "dark"]) {
       browser("eval", `document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
