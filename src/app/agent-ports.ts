@@ -134,7 +134,8 @@ export function createAgentPorts(app: App, layoutId: string, conversationId: str
         if (!validation.ok) return { title: alt.title, changeSetId: null, validation };
         try {
           const from = lineage(replaced, sourceMessageIds, app);
-          const description = conversationId === null ? automaticProposalDescription(getLayout(app, layoutId).document, alt.ops) : alt;
+          const proposalLayout = conversationId === null ? getLayout(app, layoutId) : null;
+          const description = proposalLayout === null ? alt : automaticProposalDescription(proposalLayout.document, alt.ops, proposalLayout.board.definition);
           const cs = proposeChange(app, layoutId, {
             ops: alt.ops, explanation: description.explanation, source: "agent", title: description.title, tradeoffs: description.tradeoffs, ...(conversationId === null ? {} : { conversationId }), proposalGroup, ...scope,
             ...(typeof supersedes === "string" ? { supersedes } : {}),

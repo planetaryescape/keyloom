@@ -1,6 +1,6 @@
 # Rung 1 review clarity evidence
 
-These screenshots use the synthetic full-App fixture on port 4531. They show the keyboard alongside the review panel, including the explicit unavailable-proposal state. The fixture has no linked proposal, so this evidence verifies that an old stored body is withheld when its proposal cannot be resolved; it does **not** verify a live proposal's changed-field rows, key scope, preview, or Apply journey.
+These screenshots use the synthetic full-App/Viewer fixture on port 4531. A validated Glove80/ZMK proposal is returned by the config proposals API and changes a tap/hold term, a 23-to-40-position trigger set, and swaps two base-layer keys. Screenshots show the keyboard alongside Current/Proposed rows and changed-key details. The browser runner inspects all 40 proposed positions, pins the proposal, confirms the source revision does not change during preview, then activates Apply with Enter and verifies the persisted profile and both bindings match the exact proposal ops.
 
 | Viewport | Light | Dark |
 |---|---|---|
@@ -8,6 +8,8 @@ These screenshots use the synthetic full-App fixture on port 4531. They show the
 | 1100×577 | [screenshot](1100-577-light.png) | [screenshot](1100-577-dark.png) |
 | 390×844 | [screenshot](390-844-light.png) | [screenshot](390-844-dark.png) |
 
-The browser run checked panel/text/control bounds, page and panel horizontal overflow, vertical scrolling without moving the keyboard, at 1440×900, 1100×577 and 390×844 in light and dark themes. It passed. Screenshots were inspected at desktop and phone sizes. The footer remains visible; the phone panel scrolls internally while the keyboard stays behind it.
+[Pinned keyboard preview before Apply](preview-before-apply.png)
 
-No released binary, installed app/CLI, native helper, firmware runtime, physical keyboard or typing outcome was tested. The remaining linked-proposal acceptance requires a fixture with a real validated proposal and persisted synthetic apply, plus keyboard-only preview and Apply.
+The browser run checked panel bounds and overflow at 1440×900, 1100×577 and 390×844 in light and dark themes. Screenshots were inspected at desktop, short/narrow and phone sizes. The phone review panel scrolls internally while the keyboard stays behind it. Unit coverage separately checks invalid linked proposals: their stored body is withheld, “source checked” is absent, and preview/Apply are unavailable.
+
+No released binary, installed app/CLI, native helper, firmware runtime, physical keyboard or typing outcome was tested. The fixture uses an in-memory FakeEditor; no model, firmware build, device or real config was involved.

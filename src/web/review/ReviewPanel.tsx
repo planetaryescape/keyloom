@@ -3,9 +3,11 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { Layout } from "../../layout/schema.ts";
+import type { BoardDefinition } from "../../boards/schema.ts";
 import { applyOps } from "../../layout/apply-ops.ts";
-import { deepEqual } from "../../layout/equal.ts";
-import { automaticProposalDescription } from "../../validation/review-policy.ts";
+import { validate } from "../../validation/validate.ts";
+import { proposalChanges } from "../../validation/proposal-changes.ts";
+import type { ProposalChanges } from "../../validation/proposal-changes.ts";
 import { fixableFindings, type FixedItem, type ReviewItem } from "../../validation/review-item.ts";
 import { describeKey } from "../../layout/describe.ts";
 import { layerName } from "../chat/proposal-facts.ts";
@@ -40,6 +42,86 @@ export function ReviewText({ text, layout, rows }: { text: string; layout: Pick<
   );
 }
 
+function ProposalChangeDetails({ changes, before, board, ops }: { changes: ProposalChanges; before: Layout; board: BoardDefinition; ops: ProposalCard["ops"] }) {
+  const applied = applyOps(before, ops);
+  const after = applied.ok ? applied.layout : before;
+  const profileRows = changes.profiles.flatMap((profile) => profile.fields.map((field) => ({ profile, field })));
+  const displayed = profileRows.slice(0, 6);
+  const extra = profileRows.slice(6);
+  const keyName = (layerId: string, position: number) => {
+    if (position >= board.keyCount) return `Unknown position ${position + 1}`;
+    const physicalKey = board.physicalKeys?.[position];
+    if (physicalKey !== undefined) return physicalKey;
+    const index = before.layers.findIndex((layer) => layer.id === layerId);
+    return index < 0 ? `Key ${position + 1}` : describeKey(before, index, position)?.legend.tap || `Key ${position + 1}`;
+  };
+  const keyGroups = (slots: readonly { layerId: string; position: number }[]) => {
+    const groups = new Map<string, number[]>();
+    for (const slot of slots) groups.set(slot.layerId, [...(groups.get(slot.layerId) ?? []), slot.position]);
+    return [...groups].map(([layerId, positions]) => ({ layerId, name: layerName(before, layerId), positions: [...new Set(positions)].sort((a, b) => a - b) }));
+  };
+  const bindingLegends = (layerId: string, position: number) => {
+    const oldIndex = before.layers.findIndex((layer) => layer.id === layerId);
+    const nextIndex = after.layers.findIndex((layer) => layer.id === layerId);
+    return {
+      current: oldIndex < 0 ? "Absent" : describeKey(before, oldIndex, position)?.legend.tap || keyName(layerId, position),
+      proposed: nextIndex < 0 ? "Absent" : describeKey(after, nextIndex, position)?.legend.tap || keyName(layerId, position),
+    };
+  };
+  const callerGroups = changes.callers;
+  const currentCallerCount = callerGroups.filter((group) => group.phase === "current").reduce((total, group) => total + group.slots.length, 0);
+  const proposedCallerCount = callerGroups.filter((group) => group.phase === "proposed").reduce((total, group) => total + group.slots.length, 0);
+  const triggers = changes.triggers;
+  return (
+    <section className="br-proposal-changes" aria-label="Current and proposed changes">
+      {profileRows.length === 0 ? null : <>
+        <h5>Tap/hold settings</h5>
+        <table className="br-change-table">
+          <thead><tr><th scope="col">Setting</th><th scope="col">Current</th><th scope="col">Proposed</th></tr></thead>
+          <tbody>{displayed.map(({ profile, field }) => <Fragment key={`${profile.id}:${field.key}`}>
+            <tr><th scope="row">{profile.name} · {field.label}{field.recognized ? null : <small>Unknown option</small>}</th>
+              <td>{field.currentValues ? (field.key === "hold-trigger-key-positions" ? `${field.currentValues.length} positions` : `${field.currentValues.length} numeric values`) : field.current}</td>
+              <td>{field.proposedValues ? (field.key === "hold-trigger-key-positions" ? `${field.proposedValues.length} positions` : `${field.proposedValues.length} numeric values`) : field.proposed}</td></tr>
+            {field.currentValues || field.proposedValues ? <tr><td colSpan={3}><details className="br-value-details"><summary>All values</summary><p>Current values: {field.currentValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p><p>Proposed values: {field.proposedValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p></details></td></tr> : null}
+          </Fragment>)}</tbody>
+        </table>
+        {extra.length === 0 ? null : <details><summary>More changed settings ({extra.length})</summary><table className="br-change-table"><tbody>
+          {extra.map(({ profile, field }) => <Fragment key={`${profile.id}:${field.key}`}><tr><th scope="row">{profile.name} · {field.label}{field.recognized ? null : <small>Unknown option</small>}</th>
+            <td>{field.currentValues ? (field.key === "hold-trigger-key-positions" ? `${field.currentValues.length} positions` : `${field.currentValues.length} numeric values`) : field.current}</td>
+            <td>{field.proposedValues ? (field.key === "hold-trigger-key-positions" ? `${field.proposedValues.length} positions` : `${field.proposedValues.length} numeric values`) : field.proposed}</td></tr>
+            {field.currentValues || field.proposedValues ? <tr><td colSpan={3}><details className="br-value-details"><summary>All values</summary><p>Current values: {field.currentValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p><p>Proposed values: {field.proposedValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p></details></td></tr> : null}
+          </Fragment>)}
+        </tbody></table></details>}
+      </>}
+      {callerGroups.length === 0 ? null : <details className="br-scope-details"><summary>Profile caller keys ({currentCallerCount} current · {proposedCallerCount} proposed)</summary>
+        {callerGroups.map((group) => <div className="br-scope-group" key={`${group.profileName}:${group.phase}:${group.layerId}`}><span className="br-layer">{group.profileName} · {group.layerName} · {group.phase}</span>
+          {group.slots.slice(0, 6).map((slot) => <MiniCap key={slot.position}>{keyName(group.layerId, slot.position)}</MiniCap>)}
+          {group.slots.length > 6 ? <details><summary>More keys ({group.slots.length - 6})</summary>{group.slots.slice(6).map((slot) => <MiniCap key={slot.position}>{keyName(group.layerId, slot.position)}</MiniCap>)}</details> : null}
+        </div>)}
+      </details>}
+      {changes.changedSlots.length === 0 ? null : <details className="br-scope-details"><summary>Keys whose bindings change ({changes.changedSlots.length})</summary>
+        {keyGroups(changes.changedSlots).map((group) => <div className="br-scope-group" key={group.layerId}><span className="br-layer">{group.name}</span>{group.positions.slice(0, 6).map((position) => {
+          const binding = bindingLegends(group.layerId, position);
+          return <span className="br-binding-change" key={position}><MiniCap>{binding.current}</MiniCap><span aria-hidden="true">→</span><MiniCap>{binding.proposed}</MiniCap></span>;
+        })}
+          {group.positions.length > 6 ? <details><summary>More changed keys ({group.positions.length - 6})</summary>{group.positions.slice(6).map((position) => {
+            const binding = bindingLegends(group.layerId, position);
+            return <span className="br-binding-change" key={position}><span>{keyName(group.layerId, position)}</span><MiniCap>{binding.current}</MiniCap><span aria-hidden="true">→</span><MiniCap>{binding.proposed}</MiniCap></span>;
+          })}</details> : null}
+        </div>)}
+      </details>}
+      {triggers.length === 0 ? null : <details className="br-scope-details"><summary>Hold-trigger positions changed</summary>
+        {triggers.map((set) => <div key={set.profileName}><strong>{set.profileName}</strong>
+          <p>Added positions: {set.added.length ? set.added.map((position) => `${position + 1} (${keyName(before.layers[0]?.id ?? "", position)})`).join(", ") : "none"}</p>
+          <p>Removed positions: {set.removed.length ? set.removed.map((position) => `${position + 1} (${keyName(before.layers[0]?.id ?? "", position)})`).join(", ") : "none"}</p>
+          {set.added.length + set.removed.length > 12 ? <p>Positions are one-based. Keyboard labels are from the current base layer; positions identify physical slots.</p> : null}
+        </div>)}
+      </details>}
+      {changes.otherChanges.length === 0 ? null : <p>{changes.otherChanges.map((change) => / (?:added|removed)$/.test(change) ? change : `${change} changed`).join(", ")}.</p>}
+    </section>
+  );
+}
+
 // The check's own sentence names its empty keys one by one, which as caps would all read "empty"; where they are says more.
 function bodyOf(item: ReviewItem, rows: Rows): string {
   if (item.source !== "check" || item.code !== "keys_do_nothing" || item.keys.length === 0) return item.body;
@@ -51,10 +133,11 @@ const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it conn
 
 // The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
 // a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
-export function ReviewPanel({ token, review: r, layout, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onFixIssues, onClose }: {
+export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onFixIssues, onClose }: {
   token: string;
   review: Review;
   layout: Layout;
+  board: BoardDefinition;
   /** The board's rows, to say where a key with no legend is. */
   rows: Rows;
   boardName: string;
@@ -128,55 +211,34 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
 
   const suggestion = (item: ReviewItem) => {
     const c = card(item);
-    const proposed = c === undefined || !c.validation.ok ? undefined : (() => {
-      try { return automaticProposalDescription(layout, c.ops); } catch { return undefined; }
+    const changes = c === undefined ? undefined : (() => {
+      try {
+        return validate(board, layout, c.ops).ok ? proposalChanges(layout, c.ops, board) : undefined;
+      } catch { return undefined; }
     })();
-    const after = c === undefined ? undefined : applyOps(layout, c.ops);
-    const changedKeys = after?.ok ? [...new Set([...layout.layers, ...after.layout.layers].map((layer) => layer.id))].flatMap((layerId) => {
-      const oldLayer = layout.layers.find((layer) => layer.id === layerId);
-      const nextLayer = after.layout.layers.find((layer) => layer.id === layerId);
-      return Array.from({ length: Math.max(oldLayer?.bindings.length ?? 0, nextLayer?.bindings.length ?? 0) }, (_, position) =>
-        deepEqual(oldLayer?.bindings[position], nextLayer?.bindings[position]) ? undefined : { layerId, position }).filter((key) => key !== undefined);
-    }) : [];
-    if (after?.ok) {
-      const layerId = layout.layers[0]?.id;
-      if (layerId !== undefined) for (const profile of after.layout.holdTapProfiles) {
-        const old = layout.holdTapProfiles.find((candidate) => candidate.id === profile.id)?.options["hold-trigger-key-positions"];
-        const next = profile.options["hold-trigger-key-positions"];
-        if (!Array.isArray(next) || deepEqual(old, next)) continue;
-        for (const position of new Set([...(Array.isArray(old) ? old : []), ...next])) {
-          if (!changedKeys.some((key) => key.layerId === layerId && key.position === position)) changedKeys.push({ layerId, position });
-        }
-      }
-    }
+    const sourceChecked = changes !== undefined;
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
-        <p>{proposed ? <ReviewText text={proposed.explanation} layout={layout} rows={rows} /> : "The proposal is unavailable or no longer valid for this config, so its changes cannot be verified."}</p>
-        {changedKeys.length > 0 ? <div className="br-change-scope" aria-label="Keys changed by this proposal">
-          {changedKeys.map(({ layerId, position }) => {
-            const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
-            const legend = layerIndex < 0 ? "" : describeKey(layout, layerIndex, position)?.legend.tap ?? "";
-            return <span className="br-change-key" key={`${layerId}:${position}`}><ReviewText text={`{layer:${layerId}}`} layout={layout} rows={rows} /> <MiniCap>{legend || placeOf(position, rows)}</MiniCap></span>;
-          })}
-        </div> : null}
+        {sourceChecked ? <p>These source changes can be previewed on the board. Source values do not establish runtime behavior or typing outcomes.</p> : <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>}
+        {changes && c ? <ProposalChangeDetails changes={changes} before={layout} board={board} ops={c.ops} /> : null}
         <SuggestionTestResults baseline={review.workload?.baseline ?? []} result={review.workload?.comparisons.find((c) => c.proposalId === item.proposalId)} />
         {review.behavior?.filter((b) => b.proposalId === item.proposalId).map((b) => <details key={b.proposalId}>
           <summary>Affected behavior · {b.status === "not-tested" ? "not tested" : b.status}</summary>
           {b.checks.map((check) => <p key={check.name}><ReviewText text={check.name} layout={layout} rows={rows} />: {check.status}{check.reason ? ` — ${check.reason}` : ""}</p>)}
           {b.limitations.map((limit) => <p key={limit}>{limit}</p>)}
         </details>)}
-        <div className="br-meta"><span className="br-src">keyloom</span>{c === undefined ? <span>no longer applies to this version</span> : <span>source checked</span>}</div>
+        <div className="br-meta"><span className="br-src">keyloom</span>{sourceChecked ? <span>source checked</span> : <span>change unavailable or invalid for this version</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
-            <button type="button" className="sheet-action" disabled={r.stale} aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
+            <button type="button" className="sheet-action" disabled={r.stale || !sourceChecked} aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
           )}
           <button type="button" className="sheet-action" disabled={r.busy || r.stale} onClick={() => void r.dismiss(item.id)}>Not this</button>
           {c === undefined ? null : (
             <button
               type="button"
               className="bar-apply"
-              disabled={applying !== null || r.busy || !c.validation.ok || r.stale || review.ai.status === "running"}
+              disabled={applying !== null || r.busy || !sourceChecked || r.stale || review.ai.status === "running"}
               onClick={() => {
                 setApplying(item.id);
                 void onApply(c).finally(() => setApplying(null));
