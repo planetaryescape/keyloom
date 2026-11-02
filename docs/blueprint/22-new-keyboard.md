@@ -4,7 +4,7 @@ Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on or
 
 BK: "If I get a new keyboard I just connect it and say put my config on this. Doesn't matter what keyboard it is as long as it uses ZMK or QMK."
 
-Collection follow-up (D-476), 2026-11-02, unreleased: bounded searchable switching, reversible collection removal/restore, first-run/manual setup and board-only contribution handoff are built. Browser verification uses synthetic collections and fake USB, not additional physical-board evidence.
+Collection follow-up (D-476), shipped in v0.69.0, 2026-11-02: bounded searchable switching, reversible collection removal/restore, first-run/manual setup and board-only contribution handoff are built. Browser verification uses synthetic collections and fake USB, not additional physical-board evidence. The [shipping receipt](../research/keyboard-collection.md#release-and-installed-verification) records the release and installed checks.
 
 ## Manage a collection
 

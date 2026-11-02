@@ -36,3 +36,13 @@ A compiled CLI was driven against scratch data through migration, list, remove, 
 The PR review prompted additional checks: legacy archived-only boards also require restore before config creation; removal reaps a dead sync owner without touching live operations; config creation checks membership in its write transaction; JSONL lists emit one keyboard per line; failed exports clean up only their own new directory.
 
 Browser verification confirmed that restore keeps the paused-sync notice visible until the person chooses Open. With collection refresh requests deliberately aborted, a successful remove/restore still updates local membership, refreshes the parent and distinguishes the refresh failure from the completed action. Manual catalogue mapping renders the known board, and the searchable popup's search field sits outside its nested menus. The scoped picker audit found no violations; off-screen contrast checks remained incomplete.
+
+## Release and installed verification
+
+Shipped in [v0.69.0](https://github.com/planetaryescape/keyloom/releases/tag/v0.69.0), through implementation PR [#235](https://github.com/planetaryescape/keyloom/pull/235) and release-please PR [#238](https://github.com/planetaryescape/keyloom/pull/238). The implementation's final checks passed; the release PR merged only after its dispatched CI succeeded on its exact head. The release workflow published the signed, notarized desktop app and platform CLI assets.
+
+Installation waited for a separate synthetic desktop test rather than interrupting it. By then v0.70.0 had been installed, so the v0.69.0 installer refused to downgrade. Git ancestry confirms v0.70.0 includes the collection merge. The installed app's version, running server record and read-only collection endpoint were checked at v0.70.0; the endpoint returned a valid collection response.
+
+The v0.70.0 desktop ZIP checksum was verified, and both installed executables and its Info.plist matched that release bundle. The app passed strict codesign and Gatekeeper's Notarized Developer ID assessment. The PATH CLI had an invalid signature; replacing only that file with the bundle's signed sidecar restored signature validity and made the two CLI copies byte-identical, without restarting the running app.
+
+The installed signed v0.70.0 CLI passed a scratch-data journey: import the synthetic Glove80 fixture, list the collection, remove the keyboard, restore with sync paused, and export a contribution under a new upstream ID. No sync, build, flash or real-data mutation was performed in this verification.
