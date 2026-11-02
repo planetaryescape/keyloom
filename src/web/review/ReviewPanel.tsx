@@ -3,6 +3,9 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { Layout } from "../../layout/schema.ts";
+import { applyOps } from "../../layout/apply-ops.ts";
+import { deepEqual } from "../../layout/equal.ts";
+import { automaticProposalDescription } from "../../validation/review-policy.ts";
 import { fixableFindings, type FixedItem, type ReviewItem } from "../../validation/review-item.ts";
 import { describeKey } from "../../layout/describe.ts";
 import { layerName } from "../chat/proposal-facts.ts";
@@ -125,10 +128,38 @@ export function ReviewPanel({ token, review: r, layout, rows, boardName, configN
 
   const suggestion = (item: ReviewItem) => {
     const c = card(item);
+    const proposed = c === undefined || !c.validation.ok ? undefined : (() => {
+      try { return automaticProposalDescription(layout, c.ops); } catch { return undefined; }
+    })();
+    const after = c === undefined ? undefined : applyOps(layout, c.ops);
+    const changedKeys = after?.ok ? [...new Set([...layout.layers, ...after.layout.layers].map((layer) => layer.id))].flatMap((layerId) => {
+      const oldLayer = layout.layers.find((layer) => layer.id === layerId);
+      const nextLayer = after.layout.layers.find((layer) => layer.id === layerId);
+      return Array.from({ length: Math.max(oldLayer?.bindings.length ?? 0, nextLayer?.bindings.length ?? 0) }, (_, position) =>
+        deepEqual(oldLayer?.bindings[position], nextLayer?.bindings[position]) ? undefined : { layerId, position }).filter((key) => key !== undefined);
+    }) : [];
+    if (after?.ok) {
+      const layerId = layout.layers[0]?.id;
+      if (layerId !== undefined) for (const profile of after.layout.holdTapProfiles) {
+        const old = layout.holdTapProfiles.find((candidate) => candidate.id === profile.id)?.options["hold-trigger-key-positions"];
+        const next = profile.options["hold-trigger-key-positions"];
+        if (!Array.isArray(next) || deepEqual(old, next)) continue;
+        for (const position of new Set([...(Array.isArray(old) ? old : []), ...next])) {
+          if (!changedKeys.some((key) => key.layerId === layerId && key.position === position)) changedKeys.push({ layerId, position });
+        }
+      }
+    }
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
-        <p><ReviewText text={bodyOf(item, rows)} layout={layout} rows={rows} /></p>
+        <p>{proposed ? <ReviewText text={proposed.explanation} layout={layout} rows={rows} /> : "The proposal is unavailable or no longer valid for this config, so its changes cannot be verified."}</p>
+        {changedKeys.length > 0 ? <div className="br-change-scope" aria-label="Keys changed by this proposal">
+          {changedKeys.map(({ layerId, position }) => {
+            const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
+            const legend = layerIndex < 0 ? "" : describeKey(layout, layerIndex, position)?.legend.tap ?? "";
+            return <span className="br-change-key" key={`${layerId}:${position}`}><ReviewText text={`{layer:${layerId}}`} layout={layout} rows={rows} /> <MiniCap>{legend || placeOf(position, rows)}</MiniCap></span>;
+          })}
+        </div> : null}
         <SuggestionTestResults baseline={review.workload?.baseline ?? []} result={review.workload?.comparisons.find((c) => c.proposalId === item.proposalId)} />
         {review.behavior?.filter((b) => b.proposalId === item.proposalId).map((b) => <details key={b.proposalId}>
           <summary>Affected behavior · {b.status === "not-tested" ? "not tested" : b.status}</summary>

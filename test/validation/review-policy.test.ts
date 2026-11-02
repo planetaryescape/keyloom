@@ -39,3 +39,31 @@ test("effects describe added and removed layers and combo outputs rather than in
   const combo = automaticProposalDescription(before, [{ op: "upsertCombo", combo: { id: "c", name: "Chord", positions: [1, 2], layerIds: "all", output: { kind: "key", code: "B" } } }]);
   expect(combo.explanation).toContain("Combo Chord (1+2): key B");
 });
+
+test("profile source summary names changed timing and summarizes long position sets without serializing them", () => {
+  const before = groundedLayout();
+  before.holdTapProfiles = [{ id: "hold", name: "Home row", firmware: "zmk", options: { flavor: "balanced", "tapping-term-ms": 200, "hold-trigger-key-positions": [0, 1, 2] } }];
+  const result = automaticProposalDescription(before, [{ op: "upsertHoldTapProfile", profile: { ...before.holdTapProfiles[0]!, options: { flavor: "tap-preferred", "tapping-term-ms": 240, "hold-trigger-key-positions": Array.from({ length: 40 }, (_, i) => i) } } }]);
+  expect(result.explanation).toContain("Tapping term 200 ms → Tapping term 240 ms");
+  expect(result.explanation).toContain("Flavor balanced → Flavor tap-preferred");
+  expect(result.explanation).toContain("positions 1–40");
+  expect(result.explanation).not.toContain("[0,1,2");
+  expect(result.explanation).not.toContain("{\"flavor\"");
+});
+
+test("same legends do not hide settings-only changes, and unchanged profile options are omitted", () => {
+  const before = groundedLayout();
+  before.holdTapProfiles = [{ id: "hold", name: "Home row", firmware: "zmk", options: { flavor: "balanced", "tapping-term-ms": 200 } }];
+  const changed = automaticProposalDescription(before, [{ op: "upsertHoldTapProfile", profile: { ...before.holdTapProfiles[0]!, options: { flavor: "balanced", "tapping-term-ms": 200, "quick-tap-ms": 150 } } }]);
+  expect(changed.explanation).toContain("Quick tap: not set → Quick tap 150 ms");
+  expect(changed.explanation).not.toContain("Tapping term 200 ms");
+});
+
+test("unknown structured options are labeled without dumping values; invalid operations remain rejected", () => {
+  const before = groundedLayout();
+  before.holdTapProfiles = [{ id: "hold", name: "Home row", firmware: "zmk", options: { "vendor-special": [1, 2, 3] } }];
+  const result = automaticProposalDescription(before, [{ op: "upsertHoldTapProfile", profile: { ...before.holdTapProfiles[0]!, options: { "vendor-special": [1, 2, 3, 4] } } }]);
+  expect(result.explanation).toContain("Unrecognized option “vendor-special”");
+  expect(result.explanation).not.toContain("1,2,3");
+  expect(() => automaticProposalDescription(before, [{ op: "removeLayer", layerId: "missing" }])).toThrow("invalid automatic proposal");
+});

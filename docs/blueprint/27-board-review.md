@@ -60,6 +60,8 @@ For an understood native hold-layer key, `retarget_layer_hold` prepares a narrow
 
 The app generates the saved proposal's effects and tradeoffs from the actual ops. Automatic proposals carry no decision draft: applying one must not replace the user's saved reasons with a generic model hypothesis. It also regenerates the displayed suggestion and recomputes which source checks it fixes. Unsupported standalone model diagnoses are not published. With no supported improvement, an empty review is valid.
 
+The suggestion panel derives its change description from the linked proposal ops and current layout, not the saved review body's prose. Legacy reviews therefore use the current source-derived description too; if the proposal is no longer available, the panel says it cannot verify the change. Timing/profile deltas use named options and units, and affected binding positions are shown as keycaps. Runtime and typing outcomes remain separate evidence.
+
 - A suggestion is a real change set saved by `propose_changes` outside any conversation, validated against the head (D-014). It shows in the config's open proposals (D-336). A suggestion whose `proposalId` the run didn't save is dropped. Nothing is ever applied.
 - The budget is 10 requests and 14 tool calls. A model past its tool calls is told to submit. The run takes the review first (`claimAi`), so the server and `keyloom review --run` never both pay for one.
 - A run that stops at its limit after saving a fix is `done`, with that fix attached and a reason saying so; with nothing usable saved it is `failed`.

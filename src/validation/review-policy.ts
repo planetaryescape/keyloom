@@ -3,9 +3,12 @@ import { applyOps } from "../layout/apply-ops.ts";
 import { behaviorDescription, preservesCompoundBehavior, preservesNativeBehavior } from "../layout/behavior-facts.ts";
 import { deepEqual } from "../layout/equal.ts";
 import type { ChangeOp } from "../layout/change.ts";
-import type { Layout } from "../layout/schema.ts";
+import type { HoldTapProfile, Layout } from "../layout/schema.ts";
 import type { Issue } from "./result.ts";
 import { functionHomes, lostFunctions } from "./reachability.ts";
+import { optionLabel, optionWords } from "../layout/option-words.ts";
+
+const PROFILE_OPTIONS = new Set(["tapping-term-ms", "quick-tap-ms", "require-prior-idle-ms", "hold-trigger-key-positions", "flavor", "hold-trigger-on-release", "retro-tap", "TAPPING_TERM", "QUICK_TAP_TERM", "PERMISSIVE_HOLD", "HOLD_ON_OTHER_KEY_PRESS", "CHORDAL_HOLD"]);
 
 export function automaticReviewErrors(before: Layout, ops: readonly ChangeOp[]): Issue[] {
   const applied = applyOps(before, ops);
@@ -79,19 +82,50 @@ export function automaticProposalDescription(before: Layout, ops: readonly Chang
     lines.push(`Combo ${combo.name} (${combo.positions.join("+")}): ${behaviorDescription(after, combo.output)}; layers ${combo.layerIds === "all" ? "all" : combo.layerIds.join(", ")}.`);
   }
   for (const collection of ["macros", "tapDances", "conditionalLayers", "settings", "passthrough"] as const) {
-    if (!deepEqual(before[collection], after[collection])) lines.push(`${collection}: ${JSON.stringify(before[collection])} → ${JSON.stringify(after[collection])}.`);
+    if (!deepEqual(before[collection], after[collection])) {
+      const label = collection === "tapDances" ? "Tap dances" : collection === "conditionalLayers" ? "Conditional layers" : collection === "passthrough" ? "Firmware source" : collection === "settings" ? "Firmware settings" : "Macros";
+      lines.push(`${label} changed. Inspect the affected configuration before applying.`);
+    }
   }
   for (const profile of after.holdTapProfiles) {
     const previous = before.holdTapProfiles.find((p) => p.id === profile.id);
     if (!deepEqual(previous, profile)) {
       if (!lines.length) title = `Review ${profile.name} tap/hold settings`;
-      lines.push(`Tap/hold profile ${profile.id}: ${JSON.stringify(previous?.options ?? {})} → ${JSON.stringify(profile.options)}. These are source settings, not proof of better rolls or chords.`);
+      const keys = [...new Set([...Object.keys(previous?.options ?? {}), ...Object.keys(profile.options)])].sort();
+      for (const key of keys) {
+        const oldValue = previous?.options[key];
+        const nextValue = profile.options[key];
+        if (deepEqual(oldValue, nextValue)) continue;
+        const describe = (value: HoldTapProfile["options"][string] | undefined) => {
+          if (value === undefined) return "not set";
+          return optionWords(key, value);
+        };
+        const label = PROFILE_OPTIONS.has(key) ? optionLabel(key) : `Unrecognized option “${key}”`;
+        const positions = key === "hold-trigger-key-positions" && Array.isArray(nextValue) ? ` (positions ${positionRanges(nextValue)}; key numbers start at 1)` : "";
+        lines.push(`${profile.name} · ${label}: ${describe(oldValue)} → ${describe(nextValue)}${positions}.`);
+      }
+      lines.push("These are source settings, not proof of better rolls or chords.");
     }
   }
-  const explanation = `${lines.join(" ") || `Declared operations: ${JSON.stringify(ops)}.`} Source-derived change only; consult the separate runtime-test coverage.`;
+  for (const profile of before.holdTapProfiles) {
+    if (!after.holdTapProfiles.some((next) => next.id === profile.id)) lines.push(`Remove tap/hold profile ${profile.name}.`);
+  }
+  const explanation = `${lines.join(" ") || "No visible source differences were found."} Source-derived change only; consult the separate runtime-test coverage.`;
   return {
     title: title.slice(0, 100),
     explanation,
     tradeoffs: { gains: ["The declared changes are shown from the source, not inferred from a legend."], costs: ["Runtime behavior, typing speed and comfort are not established by this source check."] },
   };
+}
+
+function positionRanges(values: number[]): string {
+  const positions = [...new Set(values.filter(Number.isSafeInteger))].sort((a, b) => a - b).map((position) => position + 1);
+  const ranges: string[] = [];
+  for (let start = 0; start < positions.length;) {
+    let end = start;
+    while (positions[end + 1] === positions[end]! + 1) end++;
+    ranges.push(end - start >= 2 ? `${positions[start]}–${positions[end]}` : positions.slice(start, end + 1).join(", "));
+    start = end + 1;
+  }
+  return ranges.length === 0 ? "none" : ranges.join(", ");
 }
