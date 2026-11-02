@@ -3,26 +3,25 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { Layout } from "../../layout/schema.ts";
-import type { BoardDefinition } from "../../boards/schema.ts";
+import type { BoardDefinition, Geometry } from "../../boards/schema.ts";
+import { keyName } from "../../boards/key-names.ts";
 import { applyOps } from "../../layout/apply-ops.ts";
 import { validate } from "../../validation/validate.ts";
 import { proposalChanges } from "../../validation/proposal-changes.ts";
 import type { ProposalChanges } from "../../validation/proposal-changes.ts";
-import { fixableFindings, type FixedItem, type ReviewItem } from "../../validation/review-item.ts";
+import type { FixedItem, ReviewItem } from "../../validation/review-item.ts";
 import { describeKey } from "../../layout/describe.ts";
 import { layerName } from "../chat/proposal-facts.ts";
 import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
-import { activeProviderReady } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
-import { FixIssuesButton } from "./FixIssues.tsx";
 import type { Review } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
 
-type Rows = Readonly<Record<string, readonly number[]>>;
+export type Rows = Readonly<Record<string, readonly number[]>>;
 
 /**
  * A title or body with its keys drawn as caps and its layers as chips (D-340). A key with no legend would be a cap that says nothing,
@@ -40,6 +39,14 @@ export function ReviewText({ text, layout, rows }: { text: string; layout: Pick<
       })}
     </>
   );
+}
+
+export function reviewTextWords(text: string, layout: Layout, board: BoardDefinition, geometry: Geometry): string {
+  return segments(text).map((part) => {
+    if (part.kind === "text") return part.text;
+    if (part.kind === "layer") return layerName(layout, part.layerId);
+    return keyName(board, layout, { layerId: part.layerId, position: part.position }, { geometry, withLayer: true });
+  }).join("");
 }
 
 function ProposalChangeDetails({ changes, before, board, ops }: { changes: ProposalChanges; before: Layout; board: BoardDefinition; ops: ProposalCard["ops"] }) {
@@ -139,7 +146,7 @@ const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it conn
 
 // The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
 // a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
-export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onFixIssues, onClose }: {
+export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onPlanRepair, onClose }: {
   token: string;
   review: Review;
   layout: Layout;
@@ -154,8 +161,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   onPin: (card: ProposalCard) => void;
   onApply: (card: ProposalCard) => Promise<void>;
   onShowLayer: (layerId: string) => void;
-  /** Opens the chat on this config with one request that fixes what the review found (D-461). */
-  onFixIssues: () => void;
+  onPlanRepair: (item: ReviewItem) => void;
   onClose: () => void;
 }) {
   const [showHidden, setShowHidden] = useState(false);
@@ -279,6 +285,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             </button>
           )}
           <button type="button" className="sheet-action" disabled={r.busy || r.stale} onClick={() => void r.dismiss(item.id)}>{item.kind === "problem" ? "It's on purpose · hide" : "Hide"}</button>
+          <button type="button" className="sheet-action" disabled={r.busy || r.stale || loading} onClick={() => onPlanRepair(item)}>Plan a repair</button>
         </div>
       </article>
       {fixesFor(review, item.id).map(suggestion)}
@@ -375,14 +382,6 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
           {g.suggestions.length ? ` · ${g.suggestions.length} ${g.suggestions.length === 1 ? "suggestion" : "suggestions"}` : ""}
           {hidden.length === 0 ? "" : ` · ${hidden.length} hidden`}
         </span>
-        <FixIssuesButton
-          findings={fixableFindings(review.items).length}
-          stale={r.stale}
-          busy={r.busy}
-          reviewing={review.ai.status === "pending" || review.ai.status === "running"}
-          ready={activeProviderReady(provider.status)}
-          onFix={onFixIssues}
-        />
         {hidden.length === 0 ? null : <button type="button" className="sheet-action" disabled={r.stale} onClick={() => setShowHidden((v) => !v)}>{showHidden ? "Hide hidden" : "Show hidden"}</button>}
       </footer>
     </section>

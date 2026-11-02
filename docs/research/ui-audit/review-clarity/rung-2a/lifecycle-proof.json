@@ -1,0 +1,14 @@
+{
+  "result": "PASS",
+  "checks": [
+    "Plan makes no agent POST",
+    "composer occupancy disables scoped Send",
+    "short and long request scrolls reach Send at 390x844",
+    "edited request survives Home and same-config return",
+    "explicit refusal restores an editable unsent request",
+    "same-turn double activation yields one POST",
+    "ambiguous accepted POST is never replayed after Home",
+    "sent-request dismissal does not cancel the run",
+    "pending and completed finding dismissal keep Send disabled"
+  ]
+}

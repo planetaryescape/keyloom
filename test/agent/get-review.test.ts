@@ -143,7 +143,8 @@ describe("the system prompt", () => {
     const w = await reviewed();
     const prompt = assembleSystemPrompt(getLayout(w.app, w.layoutId).board, getLayout(w.app, w.layoutId).document);
     expect(prompt).toContain("Call `get_review` before you say anything about the findings");
-    expect(prompt).toContain("Make one change, not one per finding");
+    expect(prompt).toContain("For a broad review-fix request, make one change, not one per finding");
+    expect(prompt).toContain("This does not widen a request explicitly scoped to one finding.");
     expect(prompt).toContain("A review of an earlier version is a pointer, not a refusal");
     expect(prompt).toContain("- `get_review`: what the newest board review of this config found");
   });

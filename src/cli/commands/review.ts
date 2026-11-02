@@ -5,7 +5,7 @@ import {
   type BoardReview, EmulateFailedError, PROVIDERS, type ProviderId, type ReviewItem, type ReviewView, type WorkloadDeps, ReviewEngine, UsageError, defaultAgentModel, dismissReviewItem, fixableFindings, listLayouts, restoreReviewItem, reviewWords, showReview,
 } from "../../app/index.ts";
 import { startAgentRun } from "../../app/agent-runs.ts";
-import { REVIEW_FIX_REQUEST, REVIEW_ACTIVITIES, ReviewActivitiesSchema, workloadVerdictWords, isReviewCurrent } from "../../api/review.ts";
+import { formatFindingRepairRequest, REVIEW_FIX_REQUEST, REVIEW_ACTIVITIES, ReviewActivitiesSchema, workloadVerdictWords, isReviewCurrent, selectableFinding } from "../../api/review.ts";
 import { followAgentRun, parseProvider, type ChatDeps } from "./chat.ts";
 import { type Format, print } from "../output.ts";
 import type { CliContext } from "./context.ts";
@@ -121,11 +121,14 @@ export function registerReviewCommand(program: Command, ctx: CliContext, deps: C
 
   review
     .command("fix")
-    .description("start one agent run that fixes what the review found, then follow it")
+    .description("ask for a repair to a review finding, or fix all visible findings")
     .argument("[layout]", "config ID or name (optional when there is only one)")
     .option("--json", "print JSON, whatever the output format")
     .option("--provider <provider>", `model provider for the run: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
-    .action(async (layoutArg: string | undefined, opts: { json?: boolean; provider?: string }) => {
+    .option("--finding <id>", "request a repair for this visible problem or hint")
+    .option("--draft", "print the scoped request without starting an agent run (requires --finding)")
+    .action(async (layoutArg: string | undefined, opts: { json?: boolean; provider?: string; finding?: string; draft?: boolean }) => {
+      if (opts.draft && opts.finding === undefined) throw new UsageError("--draft requires --finding");
       const provider: ProviderId | undefined = opts.provider === undefined ? undefined : parseProvider(opts.provider);
       const format: Format = opts.json ? "json" : ctx.format();
       await ctx.withApp(async (app) => {
@@ -133,6 +136,26 @@ export function registerReviewCommand(program: Command, ctx: CliContext, deps: C
         const view = showReview(app, ref);
         const name = listLayouts(app).find((l) => l.id === view.layoutId)?.name ?? ref;
         if (view.review === null) throw new UsageError(`no review of ${name} yet; make one with: keyloom review ${name} --run`);
+        if (opts.finding !== undefined) {
+          if (view.headRevisionId !== view.review.revisionId || !isReviewCurrent(view.review, view.headRevisionId)) throw new UsageError(`the review of ${name} is out of date; make a fresh review before choosing a finding`);
+          const item = selectableFinding(view.review.items, opts.finding);
+          if (item === undefined) throw new UsageError(`finding ${opts.finding} is missing, hidden, or is not a fixable problem or hint on ${name}`);
+          const words = (text: string) => reviewWords(app, view.review!, text);
+          const request = formatFindingRepairRequest({
+            title: words(item.title), body: words(item.body),
+            scope: [...item.layers.map((id) => words(`{layer:${id}}`)), ...item.keys.map((key) => words(`{key:${key.layerId}:${key.position}}`))],
+          });
+          if (opts.draft) {
+            print(ctx.io, format, { json: { layout_id: view.layoutId, head_revision_id: view.headRevisionId, finding_id: item.id, request }, table: request, ids: [item.id] });
+            return;
+          }
+          const runOptions: Parameters<typeof startAgentRun>[2] = {};
+          if (deps.model !== undefined) runOptions.model = deps.model;
+          if (provider !== undefined) runOptions.provider = provider;
+          const run = await startAgentRun(app, { version: 1, requestId: crypto.randomUUID(), layoutRef: view.layoutId, input: { message: request } }, runOptions);
+          await followAgentRun(ctx, app, run, format);
+          return;
+        }
         if (fixableFindings(view.review.items).length === 0) throw new UsageError(`${name} has nothing to fix: no problems or hints that you have not hidden`);
         // The same run and the same fixed request the review panel's Fix issues sends (D-461); the findings are read by the get_review tool.
         const run = await startAgentRun(app, { version: 1, requestId: crypto.randomUUID(), layoutRef: view.layoutId, input: { message: REVIEW_FIX_REQUEST } }, { ...(deps.model ? { model: deps.model } : {}), ...(provider ? { provider } : {}) });
