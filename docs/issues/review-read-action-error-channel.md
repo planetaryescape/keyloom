@@ -4,7 +4,7 @@ Status: open, P3 presentation follow-up. Identified during [PR 230 review](https
 
 `useReview` stores GET failures and POST action failures in the same `problem` field. `ReviewPanel` uses that field to choose the generic **Review unavailable** state while a replacement is still locked. An action failure overlapping a new event/read could therefore briefly use the read-failure presentation even though it was the POST that failed.
 
-The generation guard rejects a superseded POST result once the replacement GET has started. The original error text remains visible. **Try loading again** performs only GET: this presentation ambiguity does not unlock stale findings, approve Apply or start another provider call.
+An action error can appear before the replacement GET starts. Starting that GET clears `problem`, and the generation guard ignores a POST rejection that has become superseded; the original action error is not retained through the replacement read. **Try loading again** performs only GET: this presentation ambiguity does not unlock stale findings, approve Apply or start another provider call.
 
 ## Next check
 

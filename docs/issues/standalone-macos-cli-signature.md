@@ -5,10 +5,15 @@ Status: open. Observed on the published arm64 CLI for v0.68.2 and the preserved 
 ## Reproduce without changing a normal installation
 
 ```sh
-scratch="$(mktemp -d)"
-KEYLOOM_INSTALL_DIR="$scratch/bin" sh install.sh --version v0.68.2
-"$scratch/bin/keyloom" --version
-codesign --verify --strict --verbose=2 "$scratch/bin/keyloom"
+case "$(uname -s):$(uname -m)" in
+  Darwin:arm64)
+    scratch="$(mktemp -d)"
+    KEYLOOM_INSTALL_DIR="$scratch/bin" sh install.sh --version v0.68.2
+    "$scratch/bin/keyloom" --version
+    codesign --verify --strict --verbose=2 "$scratch/bin/keyloom"
+    ;;
+  *) printf '%s\n' 'This reproduction requires Apple Silicon macOS.' >&2 ;;
+esac
 ```
 
 Observed: the installer checksum passes and the CLI reports `0.68.2`, but `codesign` exits 1 with `invalid signature (code or signature have been modified)`. The published arm64 SHA-256 is `a464352d013434de5c815d5fd5d6aa111b94685f0398949e523719b59e2cb1dd`. The preserved v0.68.1 CLI also fails strict verification, so this was not introduced by the review UI repair.
