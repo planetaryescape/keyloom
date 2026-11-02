@@ -141,6 +141,8 @@ Passing these cases does not establish all timing interactions, lighting effects
 
 Built in `src/web/review/`: `useReview` reads `GET …/review` on open, on every new head and on each `event: review` frame for the config; `ReviewMarker` sits in the caption; `ReviewPanel` is the side column (a sheet on a phone). The caps and the strip are marked from `keys` and `layers` of the items that show. D-340 has the states.
 
+Long source-derived settings wrap inside the panel instead of increasing its minimum width beyond the sidebar. The full-App browser regression checks text/control bounds and internal scrolling at desktop, short-window and phone sizes; [overflow evidence](../research/ui-audit/review-overflow/README.md) records the source repair and its verification boundary.
+
 While loading or rerunning, the panel and marker say **Looking over…**. Previous findings, suggestions, counts and Show/Hide/Fix/Apply controls are withheld until the current run finishes; Close remains available. Stale findings outside a run are read-only. Board marks are withheld for stale or unfinished reviews too. A review event locks the old results before its GET returns, and older responses cannot overwrite a newer snapshot or another config. Other configs' events cannot unlock a failed refresh. If loading fails, the panel and openable marker say **Review unavailable** without a running spinner; **Try loading again** repeats only the read, not the model call. Hiding or restoring a finding keeps the results and unsaved activity choices mounted while the request completes.
 
 ## What the screens need

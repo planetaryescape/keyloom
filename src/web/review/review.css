@@ -60,6 +60,7 @@
 
 .br-panel {
   display: flex;
+  min-width: 0;
   min-height: 0;
   flex: 1;
   flex-direction: column;
@@ -67,6 +68,8 @@
   background: var(--surface);
   box-shadow: var(--card-shadow);
   color: var(--ink);
+  /* Source-derived settings can contain long, unspaced arrays. Wrap them instead of widening the flex item beyond its column. */
+  overflow-wrap: anywhere;
   animation: pane-in 0.3s var(--ease-out);
 }
 
