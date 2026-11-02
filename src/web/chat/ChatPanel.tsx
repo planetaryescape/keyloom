@@ -30,8 +30,7 @@ import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
 import { referableProposals, referenceView, type ReferenceContext } from "./reference-view.ts";
 import type { Reference } from "../../layout/references.ts";
 import { openProposalsOnBoard, questionOpen, withoutRepeats, type Turn } from "./transcript.ts";
-import { createOneShot, sendOnce, type OneShot } from "./one-shot.ts";
-import { REVIEW_FIX_REQUEST } from "../../api/review.ts";
+import type { FindingRepairDraft } from "../../api/review.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
 import { activeProviderReady } from "./provider-ready.ts";
 import "./chat.css";
@@ -81,8 +80,11 @@ interface Props {
   /** The thread on screen before a board or config switch (D-317), shown read-only above this layout's own. */
   initialConversation?: string | undefined;
   continueCopy?: boolean | undefined;
-  /** A fresh id when the shell asks the chat to start one run that fixes what the board review found (D-461). */
-  fixRequest?: string | undefined;
+  repairDraft?: FindingRepairDraft | null;
+  repairCurrent?: boolean;
+  onRepairDraftChange?: (id: string, request: string) => void;
+  onRepairSentStateChange?: (id: string, sent: boolean) => void;
+  onRepairSent?: (id: string) => void;
   onContinueCopy?: (handoff: NonNullable<ChatPresentation["handoff"]>) => void;
   carried?: CarriedThread | null;
   /** Explicit New discards the read-only thread carried from another board, not its saved history. */
@@ -113,7 +115,7 @@ const NO_NAMES: ReadonlyMap<string, string> = new Map();
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, fixRequest, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
+export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, repairDraft = null, repairCurrent = false, onRepairDraftChange, onRepairSentStateChange, onRepairSent, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
   const beginView = useRef<() => OpenRequestedView>(() => async () => ({ version: 1, status: "unavailable", reason: "unsupported" }));
   const chat = useChat(token, layoutRef, onContinueCopy, initialConversation, beginViewRequest === undefined ? undefined : () => beginView.current());
   const arrived = useRef(false);
@@ -124,17 +126,10 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
       if (error === null && continueCopy) void chat.send("Continue adapting the copied setup.", null);
     });
   }, [initialConversation, continueCopy, chat.open, chat.send]);
-  // Fix issues (D-461): one new conversation on this config with the fixed request, once per id. A question open in the old conversation
-  // is left alone on the server; nothing here answers it or closes it.
-  const fixGuard = useRef<OneShot | null>(null);
-  fixGuard.current ??= createOneShot();
-  const fixOnce = fixGuard.current;
-  useEffect(() => {
-    sendOnce(fixOnce, fixRequest, () => {
-      chat.newConversation();
-      void chat.send(REVIEW_FIX_REQUEST, null);
-    });
-  }, [fixRequest, fixOnce, chat.newConversation, chat.send]);
+  const repairSending = useRef(false);
+  const repairSent = repairDraft?.sent === true;
+  const repairRunId = useRef<string | null>(null);
+  const repairSubmitLock = useRef<string | null>(null);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.
@@ -389,10 +384,31 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   // After the render that holds the finished reply, so what the parent carries along is the whole reply, not the one before its last words.
   const liveCompleted = chat.liveCompleted;
   useEffect(() => {
-    if (liveCompleted !== null) onReplyCompleted?.(liveCompleted.presentation, transcript.turns);
+    if (liveCompleted !== null) {
+      onReplyCompleted?.(liveCompleted.presentation, transcript.turns);
+      if (repairSent && repairDraft && repairRunId.current === repairDraft.id) {
+        repairRunId.current = null;
+        repairSubmitLock.current = null;
+        onRepairSent?.(repairDraft.id);
+      }
+    }
     // Once per finished reply; the callback and the turns are read as they are at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveCompleted]);
+
+  function sendRepair() {
+    if (repairDraft === null || !repairCurrent || streaming || repairSent || repairSubmitLock.current === repairDraft.id || draft.trim() !== "" || drafts.length > 0 || repairDraft.request.trim() === "") return;
+    repairSubmitLock.current = repairDraft.id;
+    repairRunId.current = repairDraft.id;
+    onRepairSentStateChange?.(repairDraft.id, true);
+    chat.newConversation();
+    void chat.send(repairDraft.request, null, () => {
+      if (repairRunId.current !== repairDraft.id) return;
+      repairRunId.current = null;
+      repairSubmitLock.current = null;
+      onRepairSentStateChange?.(repairDraft.id, false);
+    });
+  }
   useEffect(() => {
     onTurns?.(transcript.turns);
     // The callback is the parent's setter through a ref; only the turns matter.
@@ -687,6 +703,16 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         </>
       )}
       {view === "chat" || !streaming ? null : <div className="chat-stop-footer"><span>Working on {board.name}</span><ChatStopButton onStop={chat.stop} /></div>}
+      {repairDraft === null ? null : <section className="repair-request" aria-label="Repair request">
+        <p className="repair-request-title">Request for one review finding</p>
+        <p className="repair-request-scope">{repairSent ? "Already sent. If the reply was interrupted, check chat history before taking another action; keyloom will not resend it." : repairCurrent ? "Check the request before sending. It asks for a proposal; nothing is applied." : "This finding is no longer current. Your request is kept, but cannot be sent from this review."}</p>
+        <label htmlFor="repair-request-text">Request</label>
+        <textarea id="repair-request-text" value={repairDraft.request} onChange={(event) => onRepairDraftChange?.(repairDraft.id, event.currentTarget.value)} disabled={repairSent} rows={5} />
+        <div className="repair-request-actions">
+          <button type="button" className="bar-apply" disabled={!repairCurrent || streaming || draft.trim() !== "" || drafts.length > 0 || repairSent || repairDraft.request.trim() === ""} onClick={sendRepair}>Send request</button>
+          <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>Cancel</button>
+        </div>
+      </section>}
     </section>
   );
 }

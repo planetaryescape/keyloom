@@ -28,11 +28,12 @@ import { NewBoardPanel, type PutSource } from "./keyboards/NewBoardPanel.tsx";
 import { NewBoardKeyboard } from "./keyboards/NewBoardKeyboard.tsx";
 import { OpenProposals } from "./keyboards/OpenProposals.tsx";
 import { useReview } from "./review/useReview.ts";
-import { ReviewMarker, ReviewPanel } from "./review/ReviewPanel.tsx";
+import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import { withoutRepeats } from "./chat/transcript.ts";
 import type { Turn } from "./chat/transcript.ts";
+import { formatFindingRepairRequest, type FindingRepairDraft } from "../api/review.ts";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
 import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
@@ -109,6 +110,8 @@ interface ViewerProps {
   onChanged: () => Promise<void>;
   /** Opens the Build and flash dialog, which the chat points at after an apply. With a revision, it builds that one instead of the head (History's "Flash this"). */
   onOpenRelease: (revision?: { id: string; summary: string }) => void;
+  repairDraft: FindingRepairDraft | null;
+  onRepairDraft: (id: string, draft: FindingRepairDraft | null, replace?: boolean) => void;
   /** The keyboard's sync state, for the sync line and the toasts that say a change reached it or didn't. */
   sync: SyncApi;
   /** What the top bar needs from the page around the layout: the layouts and boards to switch between, and Build and flash. */
@@ -162,7 +165,7 @@ const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
-export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, sync, chrome }: ViewerProps) {
+export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, repairDraft, onRepairDraft, sync, chrome }: ViewerProps) {
   const { document: layout, board, revision } = detail;
   // Arriving from another board or config lands on the layer of the same name, if this layout has one (D-317).
   const [layerId, setLayerId] = useState<string | null>(() => {
@@ -204,8 +207,6 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const turnsNow = useRef<readonly Turn[]>([]);
   // Where the open conversation reads (D-310): the bar at the stage's foot, or the panel beside the board.
   const [chatPresentation, setChatPresentation] = useState<"bar" | "panel">("bar");
-  // A fresh id each time Fix issues is pressed, so the chat starts exactly one new run for what the review found (D-461).
-  const [fixRequest, setFixRequest] = useState<string | null>(null);
   // The keys in the chips, on one layer, and the proposal being previewed (hovered or pinned).
   const [chatSelection, setChatSelection] = useState<ChatSelection | null>(null);
   const [hoveredProposal, setHoveredProposal] = useState<ProposalCard | null>(null);
@@ -1593,7 +1594,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 drafts={chatDrafts}
                 initialConversation={chrome.arrival?.conversationId}
                 continueCopy={chrome.arrival?.continueCopy}
-                fixRequest={fixRequest ?? undefined}
+                repairDraft={repairDraft}
+                repairCurrent={repairDraft !== null && revision.id === repairDraft.headRevisionId && boardReview.review?.id === repairDraft.reviewId && boardReview.review.revisionId === repairDraft.headRevisionId && !boardReview.stale && !boardReview.refreshing && boardReview.review.items.some((item) => item.id === repairDraft.findingId && item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"))}
+                onRepairDraftChange={(id, request) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, request })}
+                onRepairSentStateChange={(id, sent) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, sent })}
+                onRepairSent={(id) => repairDraft?.id === id && onRepairDraft(id, null)}
                 onContinueCopy={(handoff) => {
                   chrome.onCarry?.(handoff.layoutId, { layerName: null, chatOpen: true, thread: threadToCarry(), conversationId: handoff.conversationId, continueCopy: true });
                   chrome.onReload?.(handoff.layoutId);
@@ -2151,10 +2156,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
               }}
               onShowLayer={(id) => setLayerId(id)}
-              onFixIssues={() => {
+                onPlanRepair={(item) => {
+                const words = (text: string) => reviewTextWords(text, layout, board.rows);
+                const id = crypto.randomUUID();
+                onRepairDraft(id, {
+                  id,
+                  reviewId: boardReview.review?.id ?? "",
+                  headRevisionId: boardReview.review?.revisionId ?? "",
+                  findingId: item.id,
+                  request: formatFindingRepairRequest({ title: words(item.title), body: words(item.body), scope: [...item.layers.map((layerId) => layerName(layout, layerId)), ...item.keys.map((key) => words(`{key:${key.layerId}:${key.position}}`))] }),
+                  sent: false,
+                }, true);
                 setReviewOpen(false);
                 setChatOpen(true);
-                setFixRequest(crypto.randomUUID());
               }}
               onClose={() => setReviewOpen(false)}
             />

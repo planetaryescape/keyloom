@@ -12,7 +12,7 @@ import { fakeAnthropic } from "../helpers/fake-anthropic.ts";
 import { withoutCredentials } from "../helpers/no-credentials.ts";
 import { draft } from "../helpers/ops.ts";
 import { optionOptionApp } from "../helpers/option-option.ts";
-import { savedId } from "../helpers/review-world.ts";
+import { savedId, touch } from "../helpers/review-world.ts";
 
 async function cli(args: string[], deps: Parameters<typeof runCli>[2] = {}) {
   let out = "";
@@ -44,6 +44,66 @@ async function reviewed() {
 const runIdOf = (text: string) => /^(run_\w+): (?:waiting_user|completed)/m.exec(text)?.[1] ?? "";
 
 describe("keyloom review fix", () => {
+  test("--finding --draft prints a named scoped request without starting a run or writing history", async () => {
+    const w = await reviewed();
+    const before = w.app.db.query("SELECT head_revision_id FROM layouts WHERE id = ?").get(w.layoutId);
+    // SAFETY: SQLite's COUNT(*) projection is numeric for this fixed query.
+    const history = w.app.db.query("SELECT count(*) AS count FROM agent_runs").get() as { count: number };
+    const jsonReview = JSON.parse((await cli(["review", "bk", "--json", "--data-dir", w.dir])).out);
+    const finding = jsonReview.review.items.find((item: { kind: string; dismissed_at: number | null }) => item.kind === "hint" && item.dismissed_at === null);
+    const fake = fakeAnthropic([]);
+    const result = await cli(["review", "fix", "bk", "--finding", finding.id, "--draft", "--format", "json", "--data-dir", w.dir], { model: anthropicModel(fake.client) });
+    expect(result.code).toBe(0);
+    const output = JSON.parse(result.out);
+    expect(output).toMatchObject({ schema_version: 1, finding_id: finding.id });
+    expect(output.request).toContain("Please investigate this board-review finding and propose a repair for it only");
+    expect(output.request).toContain("blank (left index, home row");
+    expect(output.request).toContain("Layer 0");
+    expect(output.request).toContain("Marked scope:");
+    expect(output.request).not.toContain("{key:");
+    expect(fake.requests).toHaveLength(0);
+    expect(w.app.db.query("SELECT count(*) AS count FROM agent_runs").get()).toEqual(history);
+    expect(w.app.db.query("SELECT head_revision_id FROM layouts WHERE id = ?").get(w.layoutId)).toEqual(before);
+  });
+
+  test("--finding sends the same scoped request shown by --draft", async () => {
+    const w = await reviewed();
+    const jsonReview = JSON.parse((await cli(["review", "bk", "--json", "--data-dir", w.dir])).out);
+    const finding = jsonReview.review.items.find((item: { kind: string; dismissed_at: number | null }) => item.kind === "hint" && item.dismissed_at === null);
+    const draftRun = await cli(["review", "fix", "bk", "--finding", finding.id, "--draft", "--json", "--data-dir", w.dir]);
+    const expected = JSON.parse(draftRun.out).request;
+    const fake = fakeAnthropic([{ blocks: [{ text: "I inspected the selected finding. I could not validate a repair." }] }]);
+    const sent = await cli(["review", "fix", "bk", "--finding", finding.id, "--format", "table", "--data-dir", w.dir], { model: anthropicModel(fake.client) });
+    expect(sent.code).toBe(0);
+    expect(fake.requests.length).toBeGreaterThan(0);
+    // SAFETY: a successful CLI run above inserted one row, so the latest-row projection is present.
+    const row = w.app.db.query("SELECT request_json FROM agent_runs ORDER BY created_at DESC LIMIT 1").get() as { request_json: string };
+    expect(JSON.parse(row.request_json).input.message).toBe(expected);
+  });
+
+  test("--finding rejects unknown, hidden and stale items without starting a run", async () => {
+    const w = await reviewed();
+    const before = w.app.db.query("SELECT count(*) AS count FROM agent_runs").get();
+    const fake = fakeAnthropic([]);
+    const missing = await cli(["review", "fix", "bk", "--finding", "no-such-finding", "--draft", "--data-dir", w.dir], { model: anthropicModel(fake.client) });
+    expect(missing.code).toBe(2);
+    expect(missing.err).toContain("missing, hidden, or is not a fixable problem or hint");
+    const currentReview = JSON.parse((await cli(["review", "bk", "--json", "--data-dir", w.dir])).out);
+    const staleCandidate = currentReview.review.items.find((item: { kind: string }) => item.kind === "hint");
+    touch(w.app, w.layoutId);
+    const stale = await cli(["review", "fix", "bk", "--finding", staleCandidate.id, "--draft", "--data-dir", w.dir], { model: anthropicModel(fake.client) });
+    expect(stale.code).toBe(2);
+    expect(stale.err).toContain("review of bk is out of date");
+    await withoutCredentials(() => cli(["review", "bk", "--run", "--format", "table", "--data-dir", w.dir]));
+    const jsonReview = JSON.parse((await cli(["review", "bk", "--json", "--data-dir", w.dir])).out);
+    const hint = jsonReview.review.items.find((item: { kind: string }) => item.kind === "hint");
+    await cli(["review", "dismiss", hint.id, "--layout", "bk", "--format", "table", "--data-dir", w.dir]);
+    const hidden = await cli(["review", "fix", "bk", "--finding", hint.id, "--draft", "--data-dir", w.dir], { model: anthropicModel(fake.client) });
+    expect(hidden.code).toBe(2);
+    expect(fake.requests).toHaveLength(0);
+    expect(w.app.db.query("SELECT count(*) AS count FROM agent_runs").get()).toEqual(before);
+  });
+
   test("asks the same fixed request, reads the review by tool, then follows the question to the answer line", async () => {
     const w = await reviewed();
     let supersede = "";

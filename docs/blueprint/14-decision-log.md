@@ -2145,7 +2145,7 @@ The copy-specific restriction ends for fresh requests once a proposal carrying t
 
 No database migration is needed: copy context is in the accepted target request JSON; the source effect receipt and presentation carry the handoff references. Older readers ignore these added JSON fields and can still read the ordinary target proposals and questions. They do not implement handoff continuation. Direct `keyboard put` keeps its deterministic proposal workflow. Tests and limitations are recorded in [the A3 evidence](../research/copy-adaptation/README.md).
 
-### D-461: "Fix issues" starts a new conversation with one fixed request; the agent reads the review with a tool and answers it with one change. Extends D-340 and D-452. (2026-10-30, BK's A4 request)
+### D-461: "Fix issues" starts a new conversation with one fixed request; the agent reads the review with a tool and answers it with one change. Extends D-340 and D-452. (2026-10-30, BK's A4 request; GUI action superseded by D-479)
 
 The review panel's findings could only be applied one suggestion at a time, and each apply moved the head under the next suggestion's base; the only other route was retyping the findings into chat. The panel now has **Fix issues**, and `keyloom review fix` does the same from the terminal (D-030). The proposal, the questions and Apply are the chat's ordinary ones (D-452), beside the board; the panel is not where the proposal lives, and it closes when the chat opens.
 
@@ -2303,3 +2303,8 @@ The review panel derives a linked suggestion's presentation from its validated p
 - **Flight navigation:** Selecting a board lifts it from the pegboard cradle and flies it into the flat desk editor using View Transitions and 3D transforms (`rotateX`, `translate3d`, scale). Navigating "Home" via the top bar triggers the reverse flight back to its pegboard slot. Reduced motion preferences disable the 3D movement and use an instant crossfade.
 - **Data storage:** Added `opened_at` to `layouts` table via migration 0018, updated whenever a layout is opened in the configurator, and surfaced via `keyloom layout recent`.
 
+### D-479: Plan a repair for one review finding, then send and apply deliberately. Supersedes the blanket GUI action in D-461; preserves its global CLI command. (2026-11-02, rung 2a)
+
+The review offers a per-finding repair action for a current visible problem or hint. It opens an editable request that names the finding and its keys/layers; opening it does not start an agent run or alter the layout. Explicit Send starts a separate conversation only when the current run is idle. The agent is asked to work on that finding, but the request is not a hard tool-scope boundary. The person reviews the ordinary proposal and explicitly applies it. The pending request and edits are kept in App-owned state for that config across Home navigation, not persisted or shared across configs. Existing hidden findings and suggestions retain their meanings.
+
+`keyloom review fix [layout] --finding <id>` explicitly requests a proposal for one current visible problem or hint using the same formatter. `--draft` prints the request without a model call or writes. The no-flag command remains the legacy broad request for compatibility. No request schema or persistence protocol changes.

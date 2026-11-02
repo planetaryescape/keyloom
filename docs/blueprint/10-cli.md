@@ -48,7 +48,8 @@ keyloom
   provider use <provider> [--model M]       save the default for new conversations in config.json
   review [layout] [--run] [--force] [--provider P] [--activities prose,shortcuts|none]
                                              show saved review; selected tests need Docker; --run can call a model
-  review fix [layout] [--provider P]        one agent run that fixes what the review found
+  review fix [layout] [--provider P]         one agent run for all visible problems and hints (legacy)
+  review fix [layout] --finding <id> [--draft] [--provider P]   request or print a repair for one current visible finding
   review dismiss|restore <item> [--layout L]   hide or restore a finding
 
   decisions list <layout> [--status S] [--kind choice|priority]
@@ -97,6 +98,15 @@ keyloom
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
 
 `layout history` and `layout delete` were planned names, not implemented aliases. Use `version list <config>` for history and `config delete <config> <name>` for guarded deletion. `boards check --offline` checks local files without fetching the pinned geometry.
+
+### Request a repair for one review finding
+
+```sh
+keyloom --data-dir <scratch> review fix <layout> --finding <finding-id> --draft
+keyloom --data-dir <scratch> review fix <layout> --finding <finding-id>
+```
+
+`--draft` prints the shared human-readable request without starting a model run or writing a proposal, conversation or layout revision. Without `--draft`, the command explicitly starts a proposal run for that visible, current problem or hint. Hidden, missing, stale and non-fixable findings are rejected. Use `--format json` (or `--json`) to receive `schema_version`, `layout_id`, `head_revision_id`, `finding_id` and `request`. Omitting `--finding` preserves the legacy broad `review fix` behavior.
 
 ## Read a layout's firmware settings
 
@@ -247,7 +257,7 @@ The key script (`src/firmware/emulate/script.ts`) numbers keys as the editor doe
 
 CLI JSON adds optional `workload_activities` at the root and `workload` in the review. The latter contains `activities`, `status`, `reason`, `identity`, `baseline` and `comparisons`; task fields use camelCase to match the standalone workload report. Tables show baseline counts, per-proposal verdicts and candidate-minus-baseline deltas. Unknown costs stay null in JSON. See [the activity-test contract](27-board-review.md#test-suggestions-against-your-activities). Both `import --activities …` and `keyboard put … --activities …` remember the choice before automatic review without running tests inside those creation commands. No test applies or flashes anything.
 
-`review fix [layout]` starts one agent run on the config with the same request the review panel's **Fix issues** button sends, and follows it like `agent start`: a run that stops on a question prints the question and the `keyloom agent answer …` line. The findings are not pasted into the request; the agent reads them with its `get_review` tool, so they cannot be out of date with the stored review, and it answers with one validated change that reuses any suggestion still on the board. It refuses before calling a model when the config has no review or nothing is left to fix (hidden findings do not count). `--json` prints the run snapshot; `--provider` picks the model as for `chat`.
+`review fix [layout]` without `--finding` retains the legacy broad request and follows it like `agent start`: a run that stops on a question prints the question and the `keyloom agent answer …` line. The GUI no longer offers a blanket Fix issues action; use **Plan a repair** on one current finding instead. `--finding <id>` requests a proposal for that current visible problem or hint, while `--draft` prints the shared request without a model call or writes. Both run forms read the review through the agent's `get_review` tool; neither applies a proposal. `--json` prints the run snapshot (or the draft object); `--provider` picks the model as for `chat`.
 
 `review dismiss <item> --layout <config>` hides a finding; `review restore` shows it again. Neither runs a model. `--layout` may be omitted only when there is one saved config. `review show` is the explicit form of the default read, and `--json` forces JSON output.
 
