@@ -2290,3 +2290,7 @@ The tests and explicit limits are in [grounded board review](../research/grounde
 - A review event locks the previous results before the replacement GET returns. Request ordering and config identity prevent delayed GET/POST responses from restoring an old snapshot. Events for other configs neither reload settled results nor release an unresolved read lock. A failed read, including a head-change read, keeps the old results locked and offers a read-only retry without a running spinner. The marker remains openable after an initial read failure. Dismiss/restore requests disable actions without replacing the results subtree or discarding an activity draft.
 
 This changes review scheduling and presentation only. Provider terms still apply; no Apply, sync or flash is authorized. Shipped and locally installed in v0.68.2, 2026-11-02; its [evidence](../research/grounded-board-review.md#automatic-refresh-and-loading-follow-up) is separate from the v0.68.1 receipt.
+
+### D-477: Review suggestions show source-derived changes, not stored model prose. (2026-11-02, rung 1)
+
+The review panel derives a linked suggestion's presentation from its validated proposal ops and current layout, including for reviews stored by older releases. Missing proposal data is shown as unverifiable; stored body text is not a fallback. Changed profile options use named values and units, and affected key positions are shown as keycaps. Source preservation, runtime evidence and typing outcomes remain distinct. CLI JSON remains the machine-readable representation.

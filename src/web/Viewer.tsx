@@ -2136,6 +2136,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               token={token}
               review={boardReview}
               layout={layout}
+              board={board}
               rows={board.rows}
               boardName={boardDisplayName(board.name)}
               configName={summary.name}

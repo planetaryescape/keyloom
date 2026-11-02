@@ -4,6 +4,8 @@ Status: engine and screens built (D-340), with the fix run (D-461) and activity 
 
 Follow-up shipped in v0.68.2, 2026-11-02: outdated connected reviews refresh without a button, and unfinished reviews withhold result controls (D-475). The desktop and CLI on PATH were updated and verified; [the receipt](../research/automatic-review-release-v0.68.2.json) records the signed-sidecar CLI source and standalone-asset signature limitation. The app was closed and remained closed.
 
+Current-worktree follow-up (not released): linked proposals show concrete Current/Proposed source values, including semantic binding effects. Incomplete comparisons disable preview and Apply. The six viewport/theme states and read-only preview/keyboard-Apply journey passed on the synthetic fixture; no physical keyboard was used.
+
 BK: "when I connect a keyboard, the ai immediately analyses that board and stores a state of the board with all the warnings and hints and suggestions … and I can just see them somewhere without me needing to ask for them or dig into some menus … it would be nice if it's proactive."
 
 ## What it is
@@ -59,6 +61,8 @@ Timing changes to modeled hold-tap profiles and tap dances are allowed; preserva
 For an understood native hold-layer key, `retarget_layer_hold` prepares a narrowly checked layer-argument edit while retaining its tap, source definition and other arguments. It saves nothing; the complete proposal must still preserve access to the old target's functions.
 
 The app generates the saved proposal's effects and tradeoffs from the actual ops. Automatic proposals carry no decision draft: applying one must not replace the user's saved reasons with a generic model hypothesis. It also regenerates the displayed suggestion and recomputes which source checks it fixes. Unsupported standalone model diagnoses are not published. With no supported improvement, an empty review is valid.
+
+The suggestion panel derives its comparison from the linked proposal ops and current layout, not the saved review body's prose. It shows Current/Proposed values for changed profile settings, layers, combos, macros, tap dances, conditional layers and firmware settings. Changed bindings show both the key legend and its effect; a recognized native hold-layer binding includes its tap action and named hold target. Unknown native source stays verbatim and unverified. If a changed effect cannot be compared completely, the panel says so and disables preview and Apply; missing or invalid proposals also withhold their stored body and source-check claim. Runtime and typing outcomes remain separate evidence. [Review-clarity evidence](../research/ui-audit/review-clarity/rung-1/README.md) records the browser states and its limits.
 
 - A suggestion is a real change set saved by `propose_changes` outside any conversation, validated against the head (D-014). It shows in the config's open proposals (D-336). A suggestion whose `proposalId` the run didn't save is dropped. Nothing is ever applied.
 - The budget is 10 requests and 14 tool calls. A model past its tool calls is told to submit. The run takes the review first (`claimAi`), so the server and `keyloom review --run` never both pay for one.

@@ -55,8 +55,8 @@ describe("get_review", () => {
     // Markers the screen draws are words here, so the model never parses them.
     expect(text).not.toContain("{key:");
     expect(text).not.toContain("{layer:");
-    expect(text).toContain("Set F17 on Layer 0");
-    expect(text).toContain("blank (left index, home row, middle, Layer 0): empty → key F17.");
+    expect(text).toContain("Change a key on Layer 0");
+    expect(text).toContain("Key 34 on Layer 0: Does nothing → Sends F17.");
     expect(text).toContain("Positions: layer-0/33");
     expect(text).toContain(`Already a checked proposal: ${w.suggestion?.proposalId}`);
     const cs = findChangeSet(w.app.db, w.suggestion?.proposalId ?? "");

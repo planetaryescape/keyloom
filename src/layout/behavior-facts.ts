@@ -4,6 +4,7 @@ import { readNative } from "./native-read.ts";
 import type { Binding, Layout } from "./schema.ts";
 import { deepEqual } from "./equal.ts";
 import type { ChangeOp, Slot } from "./change.ts";
+import { bindingEffectDescription } from "./describe.ts";
 
 export function nativeBehaviorFacts(layout: Layout, binding: Extract<Binding, { kind: "native" }>) {
   const kept = keptDefinitions(layout.passthrough);
@@ -50,23 +51,7 @@ export function preservesNativeBehavior(before: Layout, old: Extract<Binding, { 
 
 /** Literal effects only. No claimed diagnosis, comfort, frequency or runtime result comes from a model. */
 export function behaviorDescription(layout: Layout, binding: Binding | undefined): string {
-  if (!binding) return "absent";
-  switch (binding.kind) {
-    case "none": return "empty";
-    case "transparent": return "fall through to a lower layer";
-    case "key": return `key ${binding.code}${binding.mods?.length ? ` + ${binding.mods.join("+")}` : ""}`;
-    case "modifier": return `hold ${binding.mods.join("+")}`;
-    case "layer": return `${binding.action} {layer:${binding.layerId}}`;
-    case "macro": return `run macro ${binding.macroId}`;
-    case "tapDance": return `tap dance ${binding.tapDanceId}`;
-    case "holdTap": return `tap ${binding.tap.macroId ? `macro ${binding.tap.macroId}` : binding.tap.code}; hold ${"layerId" in binding.hold ? `{layer:${binding.hold.layerId}}` : binding.hold.mods.join("+")}`;
-    case "native": {
-      const reading = readNative(binding, keptDefinitions(layout.passthrough));
-      if (reading.kind === "holdLayer") return `tap calls ${reading.tap}; hold {layer:${reading.layerId}}`;
-      if (reading.kind === "steps") return `source effects ${JSON.stringify(reading.steps)}`;
-      return `custom source ${binding.source} (effects unknown)`;
-    }
-  }
+  return binding === undefined ? "No binding" : bindingEffectDescription(binding, layout).text;
 }
 
 /** Existing tap/hold and macro actions stay attached to their key, even when the same output also exists elsewhere. */

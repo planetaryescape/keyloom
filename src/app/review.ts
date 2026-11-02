@@ -278,7 +278,7 @@ function groundedItems(app: App, row: BoardReviewRow, items: ReviewItem[], now: 
     if (!proposal || proposal.status !== "proposed" || proposal.baseRevisionId !== row.revisionId) return [];
     const errors = automaticReviewErrors(view.document, proposal.ops);
     if (errors.length) { markRejected(app.db, proposal.id, now()); return []; }
-    const description = automaticProposalDescription(view.document, proposal.ops);
+    const description = automaticProposalDescription(view.document, proposal.ops, view.board.definition);
     const diff = ValidationResultSchema.parse(proposal.validation).diff;
     const slots = [...new Map([...diff.changed, ...diff.retuned].map((at) => [`${at.layerId}:${at.position}`, at])).values()];
     const applied = applyOps(view.document, proposal.ops);
