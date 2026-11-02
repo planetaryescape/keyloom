@@ -82,7 +82,7 @@ Remaining limits are deliberate: observed device markers are not a full firmware
 
 ## Automatic refresh and loading follow-up
 
-Built in the working tree after the v0.68.1 receipt above; not yet released or installed. D-475 removes the legacy-contract guard that made an already-connected keyboard wait for a button press. The panel also stops presenting partial or old results as a completed review while a replacement is loading.
+Shipped and locally installed in v0.68.2 on 2026-11-02, after the v0.68.1 receipt above. D-475 removes the legacy-contract guard that made an already-connected keyboard wait for a button press. The panel also stops presenting partial or old results as a completed review while a replacement is loading.
 
 Run the focused regressions:
 
@@ -102,3 +102,17 @@ Observed: the focused tests passed, and the browser fixture reported PASS. Loadi
 A newly compiled scratch CLI imported a synthetic 72-key config, then ran `review --run --json` with an explicitly selected credential-free Anthropic provider and no activities. It returned current source checks and `ai.status: unavailable`; the head revision stayed unchanged. This checks the built CLI path, not automatic physical-device detection.
 
 The first working diff passed 3,636 tests, with 243 skipped and zero failures. Review then added regressions for foreign events, read failures and dismissal draft retention: 66 focused review/contrast tests and the expanded browser fixture passed, as did type checking and changed-line anti-slop checks. Dependency rules passed with the existing TypeScript 7 support warning. React Doctor reported one non-blocking control-flow-complexity warning in `useReview`; no functional errors were reported. An initial full-suite attempt timed out at 120 seconds and reported an unrelated `running-server` process-liveness failure; that file passed in isolation, and both longer full-suite reruns passed. No new live-model or firmware replay was needed for this scheduling/presentation change.
+
+### Release and local installation
+
+Final implementation `a0b77f1d` passed 3,638 tests, 243 skipped, zero failures. [PR 230](https://github.com/planetaryescape/keyloom/pull/230) merged as `cdf19441` after push and PR CI passed. [Release PR 231](https://github.com/planetaryescape/keyloom/pull/231) passed [dispatched CI](https://github.com/planetaryescape/keyloom/actions/runs/41366234160) on exact head `0669d895`; release-please tagged `v0.68.2` at `80efa768`. [Publishing run 41367013355](https://github.com/planetaryescape/keyloom/actions/runs/41367013355) built all four CLI/helper targets and the signed desktop successfully.
+
+All four `SHA256SUMS` entries match GitHub's asset digests. The downloaded arm64 CLI, desktop ZIP/checksum and updater version/signature reference also matched. The downloaded and installed desktop passed strict deep signature verification and Gatekeeper's Notarized Developer ID assessment. Bundle ID, version/build and signing team matched the expected release.
+
+The official installer first updated the normal CLI. Its bytes matched the published checksum, but `codesign --verify --strict` failed on that standalone asset; the preserved v0.68.1 CLI fails the same check. The final CLI on PATH was therefore replaced with the unchanged Developer-ID-signed sidecar from the checksum-verified desktop archive. Its signature passes and its bytes match the installed desktop sidecar. No binary was locally re-signed and no OS protection was changed. [The standalone signature issue](../issues/standalone-macos-cli-signature.md) retains the evidence and next gate; checksum identity and signature validity are different claims.
+
+The published CLI, downloaded sidecar, final installed CLI and installed sidecar each passed an isolated synthetic import → source checks → legacy-contract staleness → explicit refresh journey, with an explicitly unavailable provider and no activities. Config heads/documents stayed unchanged. Each extracted helper reported version 0.68.2, protocol 1 and the expected seven native capabilities; its strict signature and Developer ID team passed. The helper-only doctor performs no device discovery.
+
+`/Applications/keyloom.app`, the CLI on PATH and the bundled sidecar all report 0.68.2. Previous 0.68.1 copies are preserved. The desktop was closed before replacement and stayed closed, so no running-server or new GUI acceptance claim is made. No real config was applied, no keyboard was accessed and no live model call was used. The [portable release/install receipt](automatic-review-release-v0.68.2.json) records exact hashes and gates.
+
+One non-blocking presentation follow-up remains: [read and action errors share a channel](../issues/review-read-action-error-channel.md). Its narrow overlapping-error case was review-identified, not independently reproduced; retries remain read-only and previous results stay locked.
