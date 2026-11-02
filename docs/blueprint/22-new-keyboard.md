@@ -21,7 +21,7 @@ The authenticated HTTP routes use the normal `x-keyloom-token` header:
 | `POST /api/keyboards/restore` | Same | `CollectionKeyboard` |
 | `POST /api/keyboards/contribute` | Same | ZIP download |
 
-The collection row has `boardId`, `name`, nullable `removedAt` and `layoutId`, `configCount`, `paused` and `modelled`. POST bodies require JSON and reject extra fields. Invalid input or a busy operation returns 400, an unknown collection board returns 404, and a missing or wrong token returns 401. Export can also package a known catalogue board without configs. Neither removal, restore nor export writes to a keyboard.
+The collection row has `boardId`, `name`, nullable `removedAt` and `layoutId`, `configCount`, `paused` and `modelled`. POST bodies require JSON and reject extra fields. Malformed JSON, schema failures and busy operations return 400; wrong content types return 415 and oversized bodies return 413. An unknown collection board returns 404, and a missing or wrong token returns 401. Export can also package a known catalogue board without configs. Neither removal, restore nor export writes to a keyboard.
 
 Today a board reaches keyloom as a contributed definition ([04](04-boards-and-contributions.md), rung 8). This chapter makes keyloom build that definition itself, from a keyboard it sees on USB. BK then confirms only what it can't work out, and says "put my config on this" (D-236). The research, with pinned sources and counts across QMK's and ZMK's trees, is [../research/new-keyboard.md](../research/new-keyboard.md).
 

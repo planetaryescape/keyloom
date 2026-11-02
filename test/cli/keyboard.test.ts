@@ -50,6 +50,9 @@ describe("keyloom keyboard detect", () => {
     const listed = await cli("keyboard", "list");
     expect(listed.code).toBe(0);
     expect(json(listed).keyboards[0]).toMatchObject({ boardId: "foostan/corne", removedAt: null, layoutId: config.id });
+    const lines = await cli("keyboard", "list", "--format", "jsonl");
+    expect(JSON.parse(lines.out.trim())).toMatchObject({ schema_version: 1, boardId: "foostan/corne" });
+    expect((await cli("keyboard", "restore", "foostan/corne", "--format", "table")).out).toContain("sync settings unchanged");
     expect(json(await cli("keyboard", "remove", "foostan/corne")).keyboard.removedAt).not.toBeNull();
     expect(json(await cli("keyboard", "restore", "foostan/corne")).keyboard).toMatchObject({ removedAt: null, paused: true });
     const out = join(tempDir(), "contribution");

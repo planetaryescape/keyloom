@@ -191,7 +191,7 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
             </button>
           ))}
         </div>
-        {sources.length === 0 ? <div className="nb-blank"><p>This is your first keyboard. Start a config, then edit its keys.</p><button type="button" className="bar-apply" disabled={flow.busy} onClick={() => void start()}>Start a config</button><p className="nb-note">Nothing is applied or flashed. Use Import instead if you already have a keymap.</p></div> : shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
+        {sources.length === 0 ? <div className="nb-blank"><p>Start a config for this keyboard, then edit its keys.</p><button type="button" className="bar-apply" disabled={flow.busy} onClick={() => void start()}>Start a config</button><p className="nb-note">Nothing is applied or flashed. Use Import instead if you already have a keymap.</p></div> : shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
         {step.source === null ? sources.length === 0 ? null : <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : preview === null ? (
           <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Mapping it…</p>
         ) : (

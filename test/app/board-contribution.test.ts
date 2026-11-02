@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { exportBoardContribution, prepareBoardContribution } from "../../src/app/index.ts";
 import { parseBoard } from "../../src/boards/load.ts";
@@ -19,9 +19,18 @@ describe("a private-data-free contribution handoff", () => {
     const root = tempDir();
     expect(() => prepareBoardContribution("foostan/corne", "../../outside")).toThrow();
     expect(() => exportBoardContribution("foostan/corne", root)).toThrow(/already exists/);
-    expect(existsSync(join(root, "CONTRIBUTION.md"))).toBe(false);
+    expect(readdirSync(root)).toEqual([]);
     const dir = join(root, "new");
     expect(exportBoardContribution("foostan/corne", dir).files).toHaveLength(3);
     expect(existsSync(join(dir, "boards/foostan/corne/geometry.json"))).toBe(true);
+  });
+  test("a filesystem failure removes only this export's partial output so it can be retried", () => {
+    const root = tempDir();
+    const out = join(root, "retry");
+    const longId = `example/${"x".repeat(300)}`;
+    expect(prepareBoardContribution("foostan/corne", longId).boardId).toBe(longId);
+    expect(() => exportBoardContribution("foostan/corne", out, longId)).toThrow();
+    expect(existsSync(out)).toBe(false);
+    expect(exportBoardContribution("foostan/corne", out).files).toHaveLength(3);
   });
 });

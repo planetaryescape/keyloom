@@ -83,7 +83,7 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
   keyboard.command("list").description("your keyboard collection, including removed keyboards that can be restored")
     .action(async () => {
       const keyboards = await withApp(listKeyboardCollection);
-      print(io, format(), { json: { keyboards }, ids: keyboards.map((k) => k.boardId),
+      print(io, format(), { json: { keyboards }, rows: keyboards.map((k) => ({ schema_version: SCHEMA_VERSION, ...k })), ids: keyboards.map((k) => k.boardId),
         table: columns([["BOARD", "NAME", "STATUS", "CONFIGS"], ...keyboards.map((k) => [k.boardId, k.name, k.removedAt === null ? "in setup" : "removed", String(k.configCount)])]) });
     });
   for (const action of ["remove", "restore"] as const) {
@@ -91,7 +91,7 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
       .description(action === "remove" ? "stop managing a keyboard; keep every config and history; never flash" : "bring back a removed keyboard, with sync paused")
       .action(async (board: string) => {
         const result = await withApp((app) => action === "remove" ? removeKeyboard(app, board) : restoreKeyboard(app, board));
-        print(io, format(), { json: { keyboard: result }, ids: [result.boardId], table: `${result.name}: ${action === "remove" ? "removed from setup; configs and history kept" : "restored; syncing stays paused"}. Nothing was written to the keyboard.` });
+        print(io, format(), { json: { keyboard: result }, ids: [result.boardId], table: `${result.name}: ${action === "remove" ? "removed from setup; configs and history kept" : result.paused ? "in setup; syncing is paused" : "already in setup; sync settings unchanged"}. Nothing was written to the keyboard.` });
       });
   }
   keyboard.command("contribute").argument("<board>", "the board ID to package")

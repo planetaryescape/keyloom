@@ -12,7 +12,7 @@ The folder is `boards/<vendor>/<board>/`. The board ID is the folder path, such 
 
 Already added the keyboard locally? Open **Manage keyboards → Prepare contribution** in the app, or run `keyloom keyboard contribute <board> --as maker/my-keyboard --out ./my-keyboard-contribution`, using the ID from `keyloom keyboard list`.
 
-The new directory contains `boards/maker/my-keyboard/` and `CONTRIBUTION.md`; no layouts, conversations, credentials or typing recordings are exported, and nothing is published. Existing output directories are refused. Copy only the board folder into your clone, then continue at step 4 below. If the app export retains a `local/` ID, rename its folder and update `board.json`'s `id` to the maker's name first.
+The CLI creates a new directory containing `boards/maker/my-keyboard/` and `CONTRIBUTION.md`, refusing an existing output directory. The app downloads a ZIP that retains the board ID; for a `local/` board, rename its folder and update `board.json`'s `id` to the maker's name first. Both paths exclude layouts, conversations, credentials and typing recordings, and publish nothing. Copy only the board folder into your clone, then continue at step 4 below.
 
 Photos let you refine the case, but are not required for local use or a draft PR. Without them, retain the generated 3D-style caps and approximate raised body. With photos, `/add-keyboard` explains how to trace the real enclosure with display-only data. Keep `geometry.json` generated from firmware in either case.
 

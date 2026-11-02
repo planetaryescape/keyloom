@@ -17,7 +17,7 @@ export type NewBoardStep =
   | { kind: "idle" }
   /** The stage card: what USB said, the candidates, and a search. */
   | { kind: "card"; keyboard: DetectedKeyboard; choice: string | null }
-  /** A board keyloom knows, on USB, with no config yet: put one on, import one, or start blank. */
+  /** A known board chosen from USB or the catalogue: put a config on it, import one, or start blank. */
   | { kind: "setup"; keyboard: DetectedKeyboard | null; boardId: string; boardName: string }
   /** The home row and the controller, with the board drawn. */
   | { kind: "confirm"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number | null; controller: string | null }

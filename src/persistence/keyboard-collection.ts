@@ -6,7 +6,10 @@ export function removedKeyboards(db: Database): Map<string, number> {
 }
 
 export function keyboardRemoved(db: Database, boardId: string): boolean {
-  return db.query("SELECT 1 FROM keyboard_collection WHERE board_id = ? AND removed_at IS NOT NULL").get(boardId) !== null;
+  return db.query(`SELECT 1 WHERE
+    EXISTS (SELECT 1 FROM keyboard_collection WHERE board_id = ? AND removed_at IS NOT NULL)
+    OR (EXISTS (SELECT 1 FROM layouts WHERE board_id = ?)
+      AND NOT EXISTS (SELECT 1 FROM layouts WHERE board_id = ? AND archived_at IS NULL))`).get(boardId, boardId, boardId) !== null;
 }
 
 export function setKeyboardRemoved(db: Database, boardId: string, at: number | null): void {

@@ -267,7 +267,7 @@
   transition: opacity 0.3s ease;
 }
 
-:root[data-lab="listening"] .topbar :is(.topbar-middle, .board-switch, .topbar-end) {
+:root[data-lab="listening"] .topbar :is(.topbar-middle, .board-switch, .board-menu-trigger, .topbar-end) {
   opacity: 0.25;
   transition: opacity 0.3s ease;
 }

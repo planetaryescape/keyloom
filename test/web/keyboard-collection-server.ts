@@ -18,6 +18,8 @@ import { CORNE_LAYOUT_FIXTURE } from "../helpers/derive-sources.ts";
 const app = openApp({ dataDir: mkdtempSync(join(tmpdir(), "keyloom-collection-browser-")) });
 const sample = await devSample();
 const count = Number(process.argv[3] ?? 40);
+if (!Number.isInteger(count) || count < 0 || count > 1000) throw new Error("count must be an integer from 0 to 1000");
+if (process.argv[4] !== undefined && !["usb", "manual"].includes(process.argv[4])) throw new Error("mode must be usb or manual");
 const boards = Array.from({ length: count }, (_, i) => ({ ...sample.board, id: `local/synthetic-${String(i + 1).padStart(2, "0")}`, name: `Keyboard ${String(i + 1).padStart(2, "0")}` }));
 setUserBoards(boards.map((definition) => ({ definition, geometry: sample.geometry })));
 for (const board of boards) newConfig(app, { name: `${board.name} daily`, from: "blank", board: board.id, start: { layout: { ...sample.document, boardId: board.id }, summary: "Synthetic collection fixture" } });
@@ -38,7 +40,7 @@ const engine = new SyncEngine(app, {
 });
 await engine.snapshot();
 const fake = new FakeEditor(sample);
-fake.boards = async () => listBoards().map(({ definition: d, geometry }) => ({ id: d.id, name: d.name, vendor: d.vendor, firmware: d.firmware, keyCount: d.keyCount, importers: d.importers, keys: geometry.keys, display: d.display }));
+fake.boards = async () => listBoards().map(({ definition: d, geometry }) => ({ id: d.id, name: d.name, vendor: d.vendor, firmware: d.firmware, keyCount: d.keyCount, importers: d.importers, keys: geometry.keys, display: d.display, hands: d.hands, fingers: d.fingers, rows: d.rows }));
 const server = startServer({ port: Number(process.argv[2] ?? 0), token: "collection-browser-token", source: appLayoutSource(app), editor: fake,
   configs: appConfigsBackend(app, engine, firmware), keyboards: appKeyboardsBackend(app, engine, firmware), sync: appSyncBackend(engine) });
 console.log(server.url);

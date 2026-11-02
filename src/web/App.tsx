@@ -108,7 +108,7 @@ export function App({ token }: { token: string }) {
   };
   const controls = {
     onManageKeyboards: () => setManaging(true),
-    onAddKeyboard: () => { setManaging(false); setAdding(true); },
+    onAddKeyboard: () => { setManaging(false); setImporting(false); setAdding(true); },
   };
   const wrap = (page: ReactNode) => <>{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
     active={layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null} onChanged={reload}
@@ -143,9 +143,9 @@ export function App({ token }: { token: string }) {
   if (layouts.length === 0 || adding) {
     return wrap(
       <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: () => setImporting(true) }}>
-        <KeyboardWelcome token={token} choices={boardChoices} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name,
+        <KeyboardWelcome token={token} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
-          onMade={(id, proposals = false) => { setAdding(false); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
+          onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
           onManage={controls.onManageKeyboards} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />
       </Shell>
     );

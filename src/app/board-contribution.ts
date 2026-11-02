@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { BoardDefinitionSchema } from "../boards/schema.ts";
 import { serializeGeometry } from "../boards/geometry.ts";
@@ -29,10 +29,16 @@ export function exportBoardContribution(boardId: string, out: string, as = board
   mkdirSync(dirname(directory), { recursive: true });
   // Claim the output directory exclusively too: an existing empty directory is not ours to use.
   mkdirSync(directory);
-  for (const [path, text] of Object.entries(prepared.files)) {
-    const target = join(directory, path);
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, text, { flag: "wx" });
+  try {
+    for (const [path, text] of Object.entries(prepared.files)) {
+      const target = join(directory, path);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, text, { flag: "wx" });
+    }
+  } catch (error) {
+    // Only this call's exclusively created directory is removed, never a pre-existing output.
+    rmSync(directory, { recursive: true, force: true });
+    throw error;
   }
   return { boardId: prepared.boardId, directory, files: Object.keys(prepared.files) };
 }

@@ -213,6 +213,7 @@ function BoardMenu({ entries, active, onSelect, onManage, onAdd }: NonNullable<T
   return (
     <Menu
       label="Choose a board"
+      popupRole="dialog"
       triggerClassName="board-switch-item board-menu-trigger"
       trigger={
         <>
@@ -224,7 +225,7 @@ function BoardMenu({ entries, active, onSelect, onManage, onAdd }: NonNullable<T
     >
       {(close) => <div className="keyboard-picker">
         <label className="keyboard-picker-search"><Search size={14} aria-hidden="true" /><input data-menu-focus type="search" aria-label="Search keyboards" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Find a keyboard (${entries.length})`} /></label>
-        <div className="keyboard-picker-results">
+        <div className="keyboard-picker-results" role={matches.length > 0 ? "menu" : undefined} aria-label="Keyboards">
         {matches.map((entry) => (
           <button key={entry.id} type="button" role="menuitemradio" aria-checked={entry.id === active} className="menu-item" onClick={() => { close(); onSelect(entry.id); }}>
             <BoardMark entry={entry} />
@@ -234,8 +235,10 @@ function BoardMenu({ entries, active, onSelect, onManage, onAdd }: NonNullable<T
         ))}
         {matches.length === 0 ? <p className="keyboard-picker-empty">No keyboards match “{query}”.</p> : null}
         </div>
-        {onAdd === undefined ? null : <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setQuery(""); onAdd(); }}>Add a keyboard…</button>}
-        {onManage === undefined ? null : <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setQuery(""); onManage(); }}>Manage keyboards…</button>}
+        {onAdd === undefined && onManage === undefined ? null : <div role="menu" aria-label="Keyboard actions">
+          {onAdd === undefined ? null : <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setQuery(""); onAdd(); }}>Add a keyboard…</button>}
+          {onManage === undefined ? null : <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setQuery(""); onManage(); }}>Manage keyboards…</button>}
+        </div>}
       </div>}
     </Menu>
   );

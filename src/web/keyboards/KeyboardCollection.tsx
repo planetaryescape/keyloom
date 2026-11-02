@@ -1,5 +1,5 @@
 import { Download, Keyboard as KeyboardIcon, LoaderCircle, Plus, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CollectionResponseSchema, CollectionKeyboardSchema, type CollectionKeyboard } from "../../api/keyboards.ts";
 import type { BoardChoice } from "../../api/http.ts";
 import { request, failure } from "../api-write.ts";
@@ -19,22 +19,27 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const load = async (signal?: AbortSignal) => setItems((await request("GET", "/api/keyboards/collection", token, CollectionResponseSchema, signal)).keyboards);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    const result = await request("GET", "/api/keyboards/collection", token, CollectionResponseSchema, signal);
+    if (!signal?.aborted) setItems(result.keyboards);
+  }, [token]);
   useEffect(() => {
     dialog.current?.showModal();
     const abort = new AbortController();
     void load(abort.signal).catch((error) => { if (!abort.signal.aborted) setProblem(error instanceof Error ? error.message : "Couldn't load keyboards."); });
     return () => abort.abort();
-  }, [token]);
+  }, [load]);
   const change = async (keyboard: CollectionKeyboard, action: "remove" | "restore") => {
     setBusy(keyboard.boardId); setProblem(null); setNote(null);
     try {
       const result = await request("POST", `/api/keyboards/${action}`, token, CollectionKeyboardSchema, undefined, { board: keyboard.boardId });
-      await load();
+      setItems((current) => current?.map((item) => item.boardId === result.boardId ? result : item) ?? [result]);
       setConfirm(null);
+      if (action === "restore") setRemoved(false);
       setNote(action === "remove" ? `${keyboard.name} removed. Configs and history are kept under Removed.` : `${keyboard.name} restored. Syncing stays paused until you resume it.`);
-      if (action === "restore" && result.layoutId) { onChanged(result.layoutId); onClose(); }
-      else onChanged();
+      onChanged();
+      try { await load(); }
+      catch { setProblem("The keyboard was updated, but the collection couldn't refresh. Try again to reload the list."); }
     } catch (error) { setProblem(error instanceof Error ? error.message : "That didn't work."); }
     finally { setBusy(null); }
   };

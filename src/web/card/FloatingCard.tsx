@@ -99,7 +99,7 @@ export function FloatingCard({ stage, position, placeKey, layout, onLayout, chil
         caseUnit: svg === null || svg === undefined || svg.viewBox.baseVal.width === 0 ? 1 : svg.getBoundingClientRect().width / scaleNow / svg.viewBox.baseVal.width,
       };
       const boardBox = { x: motion.cx - motion.tx - br.width / scaleNow / 2 - origin.left, y: motion.cy - br.height / scaleNow / 2 - origin.top, w: br.width / scaleNow, h: br.height / scaleNow };
-      const parts = [...board.querySelectorAll("[data-hand]"), ...board.querySelectorAll(".keyboard-case path:not([data-hand]), button.cap:not([data-hand])")];
+      const parts = [...board.querySelectorAll("[data-hand]"), ...board.querySelectorAll(".keyboard-case path:not([data-hand]):not([data-hand] path), button.cap:not([data-hand])")];
       const left: Box[] = [];
       const right: Box[] = [];
       for (const part of parts) (part.getAttribute("data-hand") === "right" ? right : left).push(unmoved(part, origin, motion));

@@ -1,5 +1,5 @@
 import { ArrowLeft, Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BoardChoice } from "../../api/http.ts";
 import type { SyncApi } from "../sync/useSync.ts";
 import { ImportScreen } from "../import/ImportScreen.tsx";
@@ -11,6 +11,7 @@ import { NewBoardKeyboard } from "./NewBoardKeyboard.tsx";
 import { Silhouette } from "../shell/TopBar.tsx";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { isOnePiece } from "../../boards/one-piece.ts";
+import { applyDisplayRotation } from "../keyboard/geometry.ts";
 import "./collection.css";
 
 export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManage, onBack }: {
@@ -23,19 +24,36 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
   const [half, setHalf] = useState<"left" | "right">("left");
   const [firmwareSearch, setFirmwareSearch] = useState(false);
   const phone = useMediaQuery(PHONE);
+  const search = flow.search;
+  useEffect(() => {
+    if (!firmwareSearch) return;
+    const timer = window.setTimeout(() => void search(query), 200);
+    return () => window.clearTimeout(timer);
+  }, [query, firmwareSearch, search]);
   if (importing) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onBack={() => setImporting(false)} />;
-  const drawn = flow.preview?.board ?? null;
+  const targetId = flow.step.kind === "put" ? flow.step.boardId : null;
+  const known = choices.find((board) => board.id === targetId);
+  const drawn = flow.preview?.board ?? (known?.keys && known.hands && known.fingers && known.rows ? {
+    keys: applyDisplayRotation(known.keys, known.display), hands: known.hands, fingers: known.fingers,
+    rows: Object.entries(known.rows).map(([name, positions]) => ({ name, positions })),
+  } : null);
+  const display = flow.preview?.board ? undefined : known?.display;
+  const split = drawn !== null && !isOnePiece({ hands: drawn.hands, display }, drawn.keys);
+  const placed = new Set(flow.putPreview?.placements.flatMap((placement) => {
+    if (flow.step.kind !== "put" || placement.blocked !== undefined || !placement.candidates[0]) return [];
+    return [flow.step.choices[String(placement.source)] ?? placement.candidates[0].target];
+  }) ?? []);
   const panel = flow.step.kind === "confirm" || flow.step.kind === "review" || flow.step.kind === "put";
   const rows = choices.filter((board) => `${board.name} ${board.vendor} ${board.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <div className="keyboard-welcome">
     <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>Connect a keyboard or choose it below. Setup never flashes it.</p></div><button type="button" className="sheet-action" onClick={onManage}>Manage keyboards</button></header>
     <div className="onboarding-workbench" data-panel={panel || undefined}>
       <section className="onboarding-stage" aria-label="Keyboard setup">
-        {drawn && panel ? <><NewBoardKeyboard board={drawn} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={new Set()} onPickRow={flow.setHomeRow} half={phone && !isOnePiece({ hands: drawn.hands }, drawn.keys) ? half : null} />{!isOnePiece({ hands: drawn.hands }, drawn.keys) ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
+        {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={phone && split ? half : null} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
         <NewKeyboardCard flow={flow} />
         <SetupCard flow={flow} onImport={() => setImporting(true)} onMade={onMade} />
         {flow.step.kind === "idle" ? <div className="onboarding-choices">
-          <label className="keyboard-picker-search"><Search size={16} /><input type="search" aria-label="Find a keyboard to add" placeholder="Keyboard or maker" value={query} onChange={(event) => { setQuery(event.target.value); if (firmwareSearch) void flow.search(event.target.value); }} /></label>
+          <label className="keyboard-picker-search"><Search size={16} /><input type="search" aria-label="Find a keyboard to add" placeholder="Keyboard or maker" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
           <div className="onboarding-catalogue">
             {rows.map((board) => <button key={board.id} type="button" onClick={() => flow.chooseKnown(board)}>{board.keys ? <Silhouette keys={board.keys} display={board.display} width={48} height={24} /> : null}<span>{board.name}<small>{board.vendor}</small></span></button>)}
             {rows.length === 0 ? <p>No supported board matches. Search the firmware catalogue below, or use the contribution guide.</p> : null}

@@ -69,7 +69,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     exportLayout: (ref, revisionId) => translate(() => layoutExportDocument(app, ref, revisionId)),
     boards: async () => listBoardDefinitions().map((b) => ({
       id: b.definition.id, name: b.definition.name, vendor: b.definition.vendor, firmware: b.definition.firmware, keyCount: b.definition.keyCount, importers: b.definition.importers,
-      keys: b.geometry.keys, display: b.definition.display,
+      keys: b.geometry.keys, display: b.definition.display, hands: b.definition.hands, fingers: b.definition.fingers, rows: b.definition.rows,
     })),
     importUpload: (request) =>
       translate(async () => {

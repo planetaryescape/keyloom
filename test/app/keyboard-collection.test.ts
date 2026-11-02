@@ -6,6 +6,7 @@ import { BOARD, syncWorld, gate, waitFor } from "../helpers/fake-sync.ts";
 import { tempDir } from "../helpers/tmp.ts";
 import { createBuild, createFlash, finishBuild, finishFlash, newBuildId, newFlashId } from "../../src/persistence/builds.ts";
 import { STYLE_FIXTURE } from "../helpers/zmk.ts";
+import { claimSync, findSync, newSyncId } from "../../src/persistence/syncs.ts";
 
 describe("a recoverable keyboard collection", () => {
   test("removal and restore are idempotent, unknown keyboards do not change the collection", () => {
@@ -53,6 +54,7 @@ describe("a recoverable keyboard collection", () => {
       const second = newConfig(app, { name: "Archived second", from: "blank", board: "foostan/corne", selectFirst: false });
       archiveConfig(app, first.id); archiveConfig(app, second.id);
       expect(listKeyboardCollection(app).find((k) => k.boardId === "foostan/corne")?.removedAt).not.toBeNull();
+      expect(() => newConfig(app, { name: "Hidden legacy", from: "blank", board: "foostan/corne" })).toThrow(/restore/);
       const restored = restoreKeyboard(app, "foostan/corne");
       expect(restored).toMatchObject({ removedAt: null, paused: true, configCount: 2 });
       expect(showConfig(app, restored.layoutId!).onKeyboard).toBe(true);
@@ -106,6 +108,18 @@ describe("a recoverable keyboard collection", () => {
       expect(w.calls.builds).toEqual([]);
       expect(w.calls.flashes).toEqual([]);
     } finally { await engine.stop(); w.app.db.close(); }
+  });
+
+  test("a dead sync owner does not prevent removal and its interrupted run remains in history", async () => {
+    const w = await syncWorld();
+    try {
+      const id = newSyncId();
+      claimSync(w.app.db, { id, boardId: BOARD, layoutId: w.layoutId, revisionId: getLayout(w.app, w.layoutId).revision.id,
+        boardRevision: "reva", trigger: "manual", logPath: "logs/interrupted.log", appliedAt: Date.now(), owner: "gone", pid: 2147483647 }, () => false);
+      expect(removeKeyboard(w.app, BOARD).removedAt).not.toBeNull();
+      expect(findSync(w.app.db, id)).toMatchObject({ status: "failed", failure: "interrupted" });
+      expect(w.calls.flashes).toEqual([]);
+    } finally { w.app.db.close(); }
   });
 
   test("a manual flash must finish before a keyboard is removed", () => {

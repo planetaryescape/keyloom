@@ -2,7 +2,8 @@ import { listBoards } from "../boards/registry.ts";
 import { getBoardConfig, setArchivedAt, setBoardConfig } from "../persistence/configs.ts";
 import { listLayoutRows } from "../persistence/layouts.ts";
 import { removedKeyboards, setKeyboardRemoved } from "../persistence/keyboard-collection.ts";
-import { activeSyncs, getBoardSync, setPaused } from "../persistence/syncs.ts";
+import { activeSyncs, finishSync, getBoardSync, setPaused } from "../persistence/syncs.ts";
+import { processAlive } from "../firmware/toolchain/lock.ts";
 import { transact } from "../persistence/transaction.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
@@ -42,7 +43,11 @@ function requireKeyboard(app: App, boardId: string): CollectionKeyboard {
 export function removeKeyboard(app: App, boardId: string, now = Date.now()): CollectionKeyboard {
   return transact(app.db, () => {
     const keyboard = requireKeyboard(app, boardId);
-    if (activeSyncs(app.db).some((s) => s.boardId === boardId) || firmwareBusy(app)) throw new UsageError("a build or keyboard write is running; wait for it to finish before removing a keyboard");
+    for (const row of activeSyncs(app.db).filter((sync) => sync.boardId === boardId)) {
+      if (processAlive(row.pid)) throw new UsageError("a build or keyboard write is running; wait for it to finish before removing a keyboard");
+      finishSync(app.db, row.id, { status: "failed", failure: "interrupted", error: "keyloom stopped before this sync finished." }, now);
+    }
+    if (firmwareBusy(app)) throw new UsageError("a build or keyboard write is running; wait for it to finish before removing a keyboard");
     setPaused(app.db, boardId, true);
     setKeyboardRemoved(app.db, boardId, keyboard.removedAt ?? now);
     return requireKeyboard(app, boardId);

@@ -30,3 +30,9 @@ The scoped collection accessibility audit found no violations; its contrast chec
 App tests cover preserved history, restart persistence, paused restore, legacy archived-only recovery, idempotence, unknown IDs, sync/resume refusal, removal during a preflight read, active sync refusal and an in-progress manual flash. CLI/API tests cover authentication, malformed requests, output collisions and board-only contribution data. Renderer tests cover empty-case fallback and one-piece detection.
 
 A compiled CLI was driven against scratch data through migration, list, remove, restore and contribution export. No real user data, keyboard firmware, installed app or installed CLI was changed. Collections still group by board model; independent targeting of multiple physical copies is outside this change.
+
+## Pre-release review follow-up
+
+The PR review prompted additional checks: legacy archived-only boards also require restore before config creation; removal reaps a dead sync owner without touching live operations; config creation checks membership in its write transaction; JSONL lists emit one keyboard per line; failed exports clean up only their own new directory.
+
+Browser verification confirmed that restore keeps the paused-sync notice visible until the person chooses Open. With collection refresh requests deliberately aborted, a successful remove/restore still updates local membership, refreshes the parent and distinguishes the refresh failure from the completed action. Manual catalogue mapping renders the known board, and the searchable popup's search field sits outside its nested menus. The scoped picker audit found no violations; off-screen contrast checks remained incomplete.
