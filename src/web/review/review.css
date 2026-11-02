@@ -272,6 +272,27 @@
   min-width: 0;
 }
 
+.br-comparison-section {
+  margin-top: var(--space-3);
+}
+
+.br-unverified {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+}
+
+.br-unverified strong {
+  color: var(--ink);
+}
+
+.br-unverified ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
 .br-proposal-changes details {
   margin-top: var(--space-2);
 }
@@ -290,8 +311,24 @@
 
 .br-binding-change {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.br-binding-side {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.br-binding-side > span:last-child {
+  max-width: 24rem;
+  line-height: 1.45;
 }
 
 .br-src {

@@ -105,7 +105,7 @@ describe("the review", () => {
     await waitFor(() => (w.app.db.query("SELECT ai_status FROM board_reviews").get() as { ai_status: string }).ai_status === "done", "the agent's part");
     const done = await read(base);
     expect(done.review?.ai.status).toBe("done");
-    expect(done.review?.items.at(-1)).toMatchObject({ source: "agent", kind: "suggestion", title: "Set F17 on Layer 0" });
+    expect(done.review?.items.at(-1)).toMatchObject({ source: "agent", kind: "suggestion", title: "Change a key on Layer 0" });
   });
 
   test("it is found by name as well as by ID", async () => {

@@ -36,19 +36,21 @@ test("a missing dance definition is not preserved, while tuning its term is allo
 test("effects describe added and removed layers and combo outputs rather than inventing a diagnosis", () => {
   const before = groundedLayout();
   const removal = automaticProposalDescription(before, [{ op: "removeLayer", layerId: "factory" }], board);
-  expect(removal.explanation).toContain("layer Factory removed");
+  expect(removal.explanation).toContain("Layer Factory · Name: Factory → Not present");
   const added = automaticProposalDescription(before, [{ op: "addLayer", layer: { id: "new", name: "New" }, afterLayerId: "factory" }, { op: "setBinding", at: { layerId: "new", position: 0 }, binding: { kind: "key", code: "D" } }], board);
-  expect(added.explanation).toContain("layer New added");
+  expect(added.explanation).toContain("Layer New · Name: Not present → New");
   const combo = automaticProposalDescription(before, [{ op: "upsertCombo", combo: { id: "c", name: "Chord", positions: [1, 2], layerIds: "all", output: { kind: "key", code: "B" } } }], board);
-  expect(combo.explanation).toContain("combos changed");
+  expect(combo.explanation).toContain("Combo · Chord · Keys:");
+  expect(combo.explanation).toContain("Active on: Not present → All layers");
+  expect(combo.explanation).toContain("Output: Not present → Sends B");
 });
 
 test("profile source summary names changed timing and summarizes long position sets without serializing them", () => {
   const before = groundedLayout();
   before.holdTapProfiles = [{ id: "hold", name: "Home row", firmware: "zmk", options: { flavor: "balanced", "tapping-term-ms": 200, "hold-trigger-key-positions": [0, 1, 2] } }];
   const result = automaticProposalDescription(before, [{ op: "upsertHoldTapProfile", profile: { ...before.holdTapProfiles[0]!, options: { flavor: "tap-preferred", "tapping-term-ms": 240, "hold-trigger-key-positions": Array.from({ length: 40 }, (_, i) => i) } } }], board);
-  expect(result.explanation).toContain("Tapping term, 200 ms to 240 ms");
-  expect(result.explanation).toContain("Flavor, Balanced to Tap preferred");
+  expect(result.explanation).toContain("Home row · Tapping term: 200 ms → 240 ms");
+  expect(result.explanation).toContain("Home row · Flavor: Balanced → Tap preferred");
   expect(result.explanation).toContain("hold-trigger positions added 4, 5, 6");
   expect(result.explanation).not.toContain("[0,1,2");
   expect(result.explanation).not.toContain("{\"flavor\"");
@@ -58,7 +60,7 @@ test("same legends do not hide settings-only changes, and unchanged profile opti
   const before = groundedLayout();
   before.holdTapProfiles = [{ id: "hold", name: "Home row", firmware: "zmk", options: { flavor: "balanced", "tapping-term-ms": 200 } }];
   const changed = automaticProposalDescription(before, [{ op: "upsertHoldTapProfile", profile: { ...before.holdTapProfiles[0]!, options: { flavor: "balanced", "tapping-term-ms": 200, "quick-tap-ms": 150 } } }], board);
-  expect(changed.explanation).toContain("Quick tap, Not set to 150 ms");
+  expect(changed.explanation).toContain("Home row · Quick tap: Not set → 150 ms");
   expect(changed.explanation).not.toContain("Tapping term");
 });
 
@@ -67,7 +69,7 @@ test("unknown structured options are labeled without dumping values; invalid ope
   before.holdTapProfiles = [{ id: "hold", name: "Home row", firmware: "zmk", options: { "vendor-special": [1, 2, 3] } }];
   const result = automaticProposalDescription(before, [{ op: "upsertHoldTapProfile", profile: { ...before.holdTapProfiles[0]!, options: { "vendor-special": [1, 2, 3, 4] } } }], board);
   expect(result.explanation).toContain("Unrecognized option “vendor-special”");
-  expect(result.explanation).toContain("Numbers: 1, 2, 3 to Numbers: 1, 2, 3, 4");
+  expect(result.explanation).toContain("Numbers: 1, 2, 3 → Numbers: 1, 2, 3, 4");
   const facts = proposalChanges(before, [{ op: "upsertHoldTapProfile", profile: { ...before.holdTapProfiles[0]!, options: { "vendor-special": [6, 7, 8] } } }], board);
   expect(facts.profiles[0]?.fields[0]?.currentValues).toEqual([1, 2, 3]);
   expect(facts.profiles[0]?.fields[0]?.proposedValues).toEqual([6, 7, 8]);

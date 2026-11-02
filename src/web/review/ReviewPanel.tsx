@@ -45,7 +45,7 @@ export function ReviewText({ text, layout, rows }: { text: string; layout: Pick<
 function ProposalChangeDetails({ changes, before, board, ops }: { changes: ProposalChanges; before: Layout; board: BoardDefinition; ops: ProposalCard["ops"] }) {
   const applied = applyOps(before, ops);
   const after = applied.ok ? applied.layout : before;
-  const profileRows = changes.profiles.flatMap((profile) => profile.fields.map((field) => ({ profile, field })));
+  const profileRows = changes.profiles.flatMap((profile) => profile.fields.map((field) => ({ name: profile.name, label: field.label, field })));
   const displayed = profileRows.slice(0, 6);
   const extra = profileRows.slice(6);
   const keyName = (layerId: string, position: number) => {
@@ -68,31 +68,33 @@ function ProposalChangeDetails({ changes, before, board, ops }: { changes: Propo
       proposed: nextIndex < 0 ? "Absent" : describeKey(after, nextIndex, position)?.legend.tap || keyName(layerId, position),
     };
   };
+  const bindingBySlot = new Map(changes.bindings.map((binding) => [`${binding.slot.layerId}:${binding.slot.position}`, binding]));
   const callerGroups = changes.callers;
   const currentCallerCount = callerGroups.filter((group) => group.phase === "current").reduce((total, group) => total + group.slots.length, 0);
   const proposedCallerCount = callerGroups.filter((group) => group.phase === "proposed").reduce((total, group) => total + group.slots.length, 0);
-  const triggers = changes.triggers;
+  const comparisonRows = (entries: readonly { name: string; label: string; field: ProposalChanges["profiles"][number]["fields"][number] }[]) => entries.map(({ name, label, field }) => <Fragment key={`${name}:${field.key}`}>
+    <tr><th scope="row">{name}{label ? ` · ${label}` : ""}{field.recognized ? null : <small>Unknown option</small>}{field.verified === false ? <small>Effect not established</small> : null}</th>
+      <td>{field.currentValues ? `${field.currentValues.length} ${field.key === "hold-trigger-key-positions" ? "positions" : "numeric values"}` : field.current}</td>
+      <td>{field.proposedValues ? `${field.proposedValues.length} ${field.key === "hold-trigger-key-positions" ? "positions" : "numeric values"}` : field.proposed}</td></tr>
+    {field.currentValues || field.proposedValues ? <tr key={`${name}:${field.key}:values`}><td colSpan={3}><details className="br-value-details"><summary>All values</summary>
+      <p>Current values: {field.currentValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p>
+      <p>Proposed values: {field.proposedValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p>
+    </details></td></tr> : null}
+  </Fragment>);
   return (
     <section className="br-proposal-changes" aria-label="Current and proposed changes">
+      {changes.incomplete.length === 0 ? null : <div className="br-unverified" role="note"><strong>Comparison incomplete. Preview and Apply are unavailable.</strong><ul>{changes.incomplete.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
       {profileRows.length === 0 ? null : <>
         <h5>Tap/hold settings</h5>
-        <table className="br-change-table">
-          <thead><tr><th scope="col">Setting</th><th scope="col">Current</th><th scope="col">Proposed</th></tr></thead>
-          <tbody>{displayed.map(({ profile, field }) => <Fragment key={`${profile.id}:${field.key}`}>
-            <tr><th scope="row">{profile.name} · {field.label}{field.recognized ? null : <small>Unknown option</small>}</th>
-              <td>{field.currentValues ? (field.key === "hold-trigger-key-positions" ? `${field.currentValues.length} positions` : `${field.currentValues.length} numeric values`) : field.current}</td>
-              <td>{field.proposedValues ? (field.key === "hold-trigger-key-positions" ? `${field.proposedValues.length} positions` : `${field.proposedValues.length} numeric values`) : field.proposed}</td></tr>
-            {field.currentValues || field.proposedValues ? <tr><td colSpan={3}><details className="br-value-details"><summary>All values</summary><p>Current values: {field.currentValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p><p>Proposed values: {field.proposedValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p></details></td></tr> : null}
-          </Fragment>)}</tbody>
-        </table>
-        {extra.length === 0 ? null : <details><summary>More changed settings ({extra.length})</summary><table className="br-change-table"><tbody>
-          {extra.map(({ profile, field }) => <Fragment key={`${profile.id}:${field.key}`}><tr><th scope="row">{profile.name} · {field.label}{field.recognized ? null : <small>Unknown option</small>}</th>
-            <td>{field.currentValues ? (field.key === "hold-trigger-key-positions" ? `${field.currentValues.length} positions` : `${field.currentValues.length} numeric values`) : field.current}</td>
-            <td>{field.proposedValues ? (field.key === "hold-trigger-key-positions" ? `${field.proposedValues.length} positions` : `${field.proposedValues.length} numeric values`) : field.proposed}</td></tr>
-            {field.currentValues || field.proposedValues ? <tr><td colSpan={3}><details className="br-value-details"><summary>All values</summary><p>Current values: {field.currentValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p><p>Proposed values: {field.proposedValues?.map((value) => field.key === "hold-trigger-key-positions" ? value + 1 : value).join(", ") ?? "none"}</p></details></td></tr> : null}
-          </Fragment>)}
-        </tbody></table></details>}
+        <table className="br-change-table"><thead><tr><th scope="col">Setting</th><th scope="col">Current</th><th scope="col">Proposed</th></tr></thead><tbody>{comparisonRows(displayed)}</tbody></table>
+        {extra.length === 0 ? null : <details><summary>More changed settings ({extra.length})</summary><table className="br-change-table"><tbody>{comparisonRows(extra)}</tbody></table></details>}
       </>}
+      {changes.sections.map((section) => <section className="br-comparison-section" key={section.title}>
+        <h5>{section.title}</h5>
+        <table className="br-change-table"><thead><tr><th scope="col">Change</th><th scope="col">Current</th><th scope="col">Proposed</th></tr></thead>
+          <tbody>{comparisonRows(section.items.flatMap((item) => item.fields.map((field) => ({ name: item.name, label: field.label, field }))))}</tbody>
+        </table>
+      </section>)}
       {callerGroups.length === 0 ? null : <details className="br-scope-details"><summary>Profile caller keys ({currentCallerCount} current · {proposedCallerCount} proposed)</summary>
         {callerGroups.map((group) => <div className="br-scope-group" key={`${group.profileName}:${group.phase}:${group.layerId}`}><span className="br-layer">{group.profileName} · {group.layerName} · {group.phase}</span>
           {group.slots.slice(0, 6).map((slot) => <MiniCap key={slot.position}>{keyName(group.layerId, slot.position)}</MiniCap>)}
@@ -102,22 +104,23 @@ function ProposalChangeDetails({ changes, before, board, ops }: { changes: Propo
       {changes.changedSlots.length === 0 ? null : <details className="br-scope-details"><summary>Keys whose bindings change ({changes.changedSlots.length})</summary>
         {keyGroups(changes.changedSlots).map((group) => <div className="br-scope-group" key={group.layerId}><span className="br-layer">{group.name}</span>{group.positions.slice(0, 6).map((position) => {
           const binding = bindingLegends(group.layerId, position);
-          return <span className="br-binding-change" key={position}><MiniCap>{binding.current}</MiniCap><span aria-hidden="true">→</span><MiniCap>{binding.proposed}</MiniCap></span>;
+          const effect = bindingBySlot.get(`${group.layerId}:${position}`);
+          return <span className="br-binding-change" key={position}><span className="br-binding-side"><MiniCap>{binding.current}</MiniCap><span>{effect?.current ?? "Effect unavailable"}</span></span><span aria-hidden="true">→</span><span className="br-binding-side"><MiniCap>{binding.proposed}</MiniCap><span>{effect?.proposed ?? "Effect unavailable"}</span></span></span>;
         })}
           {group.positions.length > 6 ? <details><summary>More changed keys ({group.positions.length - 6})</summary>{group.positions.slice(6).map((position) => {
             const binding = bindingLegends(group.layerId, position);
-            return <span className="br-binding-change" key={position}><span>{keyName(group.layerId, position)}</span><MiniCap>{binding.current}</MiniCap><span aria-hidden="true">→</span><MiniCap>{binding.proposed}</MiniCap></span>;
+            const effect = bindingBySlot.get(`${group.layerId}:${position}`);
+            return <span className="br-binding-change" key={position}><span>{keyName(group.layerId, position)}</span><span className="br-binding-side"><MiniCap>{binding.current}</MiniCap><span>{effect?.current ?? "Effect unavailable"}</span></span><span aria-hidden="true">→</span><span className="br-binding-side"><MiniCap>{binding.proposed}</MiniCap><span>{effect?.proposed ?? "Effect unavailable"}</span></span></span>;
           })}</details> : null}
         </div>)}
       </details>}
-      {triggers.length === 0 ? null : <details className="br-scope-details"><summary>Hold-trigger positions changed</summary>
-        {triggers.map((set) => <div key={set.profileName}><strong>{set.profileName}</strong>
+      {changes.triggers.length === 0 ? null : <details className="br-scope-details"><summary>Hold-trigger positions changed</summary>
+        {changes.triggers.map((set) => <div key={set.profileName}><strong>{set.profileName}</strong>
           <p>Added positions: {set.added.length ? set.added.map((position) => `${position + 1} (${keyName(before.layers[0]?.id ?? "", position)})`).join(", ") : "none"}</p>
           <p>Removed positions: {set.removed.length ? set.removed.map((position) => `${position + 1} (${keyName(before.layers[0]?.id ?? "", position)})`).join(", ") : "none"}</p>
           {set.added.length + set.removed.length > 12 ? <p>Positions are one-based. Keyboard labels are from the current base layer; positions identify physical slots.</p> : null}
         </div>)}
       </details>}
-      {changes.otherChanges.length === 0 ? null : <p>{changes.otherChanges.map((change) => / (?:added|removed)$/.test(change) ? change : `${change} changed`).join(", ")}.</p>}
     </section>
   );
 }
@@ -216,11 +219,13 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
         return validate(board, layout, c.ops).ok ? proposalChanges(layout, c.ops, board) : undefined;
       } catch { return undefined; }
     })();
-    const sourceChecked = changes !== undefined;
+    const sourceChecked = changes !== undefined && changes.incomplete.length === 0;
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
-        {sourceChecked ? <p>These source changes can be previewed on the board. Source values do not establish runtime behavior or typing outcomes.</p> : <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>}
+        {changes === undefined ? <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>
+          : sourceChecked ? <p>These source changes can be previewed on the board. Source values do not establish runtime behavior or typing outcomes.</p>
+            : <p>The proposal is valid, but some changed values cannot be fully compared. The unverified details are marked below; preview and Apply are unavailable.</p>}
         {changes && c ? <ProposalChangeDetails changes={changes} before={layout} board={board} ops={c.ops} /> : null}
         <SuggestionTestResults baseline={review.workload?.baseline ?? []} result={review.workload?.comparisons.find((c) => c.proposalId === item.proposalId)} />
         {review.behavior?.filter((b) => b.proposalId === item.proposalId).map((b) => <details key={b.proposalId}>
@@ -228,7 +233,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
           {b.checks.map((check) => <p key={check.name}><ReviewText text={check.name} layout={layout} rows={rows} />: {check.status}{check.reason ? ` — ${check.reason}` : ""}</p>)}
           {b.limitations.map((limit) => <p key={limit}>{limit}</p>)}
         </details>)}
-        <div className="br-meta"><span className="br-src">keyloom</span>{sourceChecked ? <span>source checked</span> : <span>change unavailable or invalid for this version</span>}</div>
+        <div className="br-meta"><span className="br-src">keyloom</span>{sourceChecked ? <span>source checked</span> : changes === undefined ? <span>change unavailable or invalid for this version</span> : <span>comparison incomplete</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
             <button type="button" className="sheet-action" disabled={r.stale || !sourceChecked} aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>

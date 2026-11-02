@@ -314,7 +314,7 @@ describe("every proposal a run saves is shown or withdrawn", () => {
     const done = await runReviewAi(w.app, review.id, m.deps);
     const suggestion = done.items.find((i) => i.kind === "suggestion");
     expect(suggestion).toMatchObject({
-      source: "agent", code: "proposed-change", title: "Set F17 on Layer 0", body: expect.stringContaining("empty → key F17"), fixes: [], keys: [{ layerId: "layer-0", position: 33 }],
+      source: "agent", code: "proposed-change", title: "Change a key on Layer 0", body: expect.stringContaining("Does nothing → Sends F17"), fixes: [], keys: [{ layerId: "layer-0", position: 33 }],
     });
     expect(openIds(w)).toEqual([suggestion?.proposalId as string]);
   });
@@ -336,7 +336,7 @@ describe("every proposal a run saves is shown or withdrawn", () => {
     const done = await runReviewAi(w.app, review.id, m.deps);
     const suggestions = done.items.filter((i) => i.kind === "suggestion");
     expect(suggestions).toHaveLength(1);
-    expect(suggestions[0]?.body).toContain("empty → key F17");
+    expect(suggestions[0]?.body).toContain("Does nothing → Sends F17");
     expect(openIds(w)).toEqual([suggestions[0]!.proposalId!]);
   });
 });
@@ -467,7 +467,7 @@ describe("a run that stops at its limit", () => {
     expect(m.requests).toHaveLength(10);
     expect(done.ai).toMatchObject({ status: "done", reason: "Stopped at its step limit; showing what it found." });
     const suggestion = done.items.find((i) => i.kind === "suggestion");
-    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Set F17 on Layer 0", fixes: [] });
+    expect(suggestion).toMatchObject({ code: "proposed-change", title: "Change a key on Layer 0", fixes: [] });
     expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.changeSetId)).toEqual([suggestion?.proposalId as string]);
   });
 
@@ -490,7 +490,7 @@ describe("a run that stops at its limit", () => {
     const both = { blocks: [{ tool: "propose_changes", input: alt("Big fix", [33, 36]) }, { tool: "propose_changes", input: alt("Small fix", [33]) }] };
     const done = await runReviewAi(w.app, review.id, scriptedModel([both, ...Array.from({ length: 12 }, () => getLayoutStep)]).deps);
     expect(done.ai.status).toBe("done");
-    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.title)).toEqual(["Set F17 on Layer 0"]);
+    expect(done.items.filter((i) => i.kind === "suggestion").map((i) => i.title)).toEqual(["Change a key on Layer 0"]);
     expect(openProposalsOutsideChat(w.app, w.layoutId).map((p) => p.ops.length)).toEqual([1]);
   });
 });
