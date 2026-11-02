@@ -7,6 +7,8 @@ import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
 import "./keyboards.css";
 import { isOnePiece } from "../../boards/one-piece.ts";
+import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
+import "../editor/editor.css";
 
 export type PutSource = { id: string; name: string; boardName: string; note: string | null };
 
@@ -80,25 +82,16 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
             <div className="nb-step">
               <h3><span>1</span>Where do your fingers rest?</h3>
               <p>Click any key in that row on the board, or pick it here. keyloom's guess is marked.</p>
-              <div className="nb-seg" role="radiogroup" aria-label="Home row">
-                {preview.rows.map((r) => (
-                  <button key={r.row} type="button" role="radio" aria-checked={homeRow === r.row} onClick={() => flow.setHomeRow(r.row)}>
-                    {rowWord(r.row, rows)}{r.row === preview.guessedHomeRow ? <small> · guess</small> : null}
-                  </button>
-                ))}
-              </div>
+              <ChoiceGroup legend="Home row" legendHidden variant="pills" value={homeRow === null ? null : String(homeRow)}
+                choices={preview.rows.map((r) => ({ value: String(r.row), label: `${rowWord(r.row, rows)}${r.row === preview.guessedHomeRow ? " · guess" : ""}` }))}
+                onChange={(row) => flow.setHomeRow(Number(row))} />
             </div>
             {needsController ? (
               <div className="nb-step">
                 <h3><span>2</span>Which controller is in it?</h3>
                 <p>The {step.candidate.name} is a shield: a separate board runs it. Its name is printed on the chip under each half.</p>
-                <div className="nb-list" role="radiogroup" aria-label="Controller">
-                  {preview.controllers.map((c) => (
-                    <button key={c.id} type="button" role="radio" aria-checked={step.controller === c.id} onClick={() => flow.setController(c.id)}>
-                      <i aria-hidden="true" />{c.name}
-                    </button>
-                  ))}
-                </div>
+                <ChoiceGroup legend="Controller" legendHidden variant="list" value={step.controller}
+                  choices={preview.controllers.map((c) => ({ value: c.id, label: c.name }))} onChange={flow.setController} />
               </div>
             ) : null}
             {preview.boardProblem === null ? null : <p className="nb-problem" role="alert">{preview.boardProblem}</p>}

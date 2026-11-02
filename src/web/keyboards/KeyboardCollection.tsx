@@ -8,13 +8,14 @@ import "./collection.css";
 
 const GUIDE = "https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md";
 
-export function KeyboardCollection({ token, choices, active, onChanged, onClose, onAdd }: {
+export function KeyboardCollection({ token, choices, active, onChanged, onClose, onAdd, initiallyRemoved = false }: {
   token: string; choices: readonly BoardChoice[]; active: string | null; onChanged: (layoutId?: string) => void; onClose: () => void; onAdd: () => void;
+  initiallyRemoved?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [items, setItems] = useState<CollectionKeyboard[] | null>(null);
   const [query, setQuery] = useState("");
-  const [removed, setRemoved] = useState(false);
+  const [removed, setRemoved] = useState(initiallyRemoved);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
