@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.2](https://github.com/planetaryescape/keyloom/compare/v0.68.1...v0.68.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* refresh outdated connected reviews and lock unfinished results ([cdf1944](https://github.com/planetaryescape/keyloom/commit/cdf1944124ff276d47691dc54b18297ac3bbc291))
+
 ## [0.68.1](https://github.com/planetaryescape/keyloom/compare/v0.68.0...v0.68.1) (2026-11-01)
 
 
