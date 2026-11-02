@@ -6,7 +6,7 @@ BK: "If I get a new keyboard I just connect it and say put my config on this. Do
 
 Collection follow-up (D-476), shipped in v0.69.0, 2026-11-02: bounded searchable switching, reversible collection removal/restore, first-run/manual setup and board-only contribution handoff are built. Browser verification uses synthetic collections and fake USB, not additional physical-board evidence. The [shipping receipt](../research/keyboard-collection.md#release-and-installed-verification) records the release and installed checks.
 
-QA follow-up: the manual catalogue checks collection membership before offering setup. Removed boards open the Removed collection for an explicit restore, rather than offering a blank config that the safety guard must reject. Home-row/controller choices use native radio inputs for arrow navigation and one tab stop per group. Creating or importing a config opens its editor directly; opening a restored config also leaves setup. Browser regressions and limits are recorded in the [collection verification](../research/keyboard-collection.md#onboarding-qa-follow-up).
+QA follow-up, shipped in v0.71.0: the manual catalogue checks collection membership before offering setup. Removed boards open the Removed collection for an explicit restore, rather than offering a blank config that the safety guard must reject. Home-row/controller choices use native radio inputs for arrow navigation and one tab stop per group. Creating or importing a config opens its editor directly; opening a restored config also leaves setup. Browser regressions and limits are recorded in the [collection verification](../research/keyboard-collection.md#onboarding-qa-follow-up).
 
 ## Manage a collection
 
