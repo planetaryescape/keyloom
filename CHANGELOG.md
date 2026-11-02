@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.70.2](https://github.com/planetaryescape/keyloom/compare/v0.70.1...v0.70.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* make review repair requests clear and reachable ([b60669a](https://github.com/planetaryescape/keyloom/commit/b60669affb887fde30e65d373f7c7b7edd5329f6))
+* plan repairs for individual review findings ([cc5f023](https://github.com/planetaryescape/keyloom/commit/cc5f0236d9ac6bc9deb74f12415e9404327d66af))
+* scope board review repair requests ([c1ab5fc](https://github.com/planetaryescape/keyloom/commit/c1ab5fcab4f1c7e637f4e355900d961bb1615828))
+
 ## [0.70.1](https://github.com/planetaryescape/keyloom/compare/v0.70.0...v0.70.1) (2026-11-02)
 
 
