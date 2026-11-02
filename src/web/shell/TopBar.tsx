@@ -1,4 +1,4 @@
-import { Activity, Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Keyboard as KeyboardIcon, Library, ListTree, LoaderCircle, Monitor, Moon, MousePointer2, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
+import { Activity, Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Home as HomeIcon, Keyboard as KeyboardIcon, Library, ListTree, LoaderCircle, Monitor, Moon, MousePointer2, Plus, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { PHONE, useMediaQuery } from "./useMediaQuery.ts";
 import type { BoardChoice } from "../../api/http.ts";
@@ -51,6 +51,7 @@ export interface UndoState {
 }
 
 interface TopBarProps {
+  onHome?: (() => void) | undefined;
   onManageKeyboards?: (() => void) | undefined;
   onAddKeyboard?: (() => void) | undefined;
   boards?: { entries: readonly BoardEntry[]; active: string | null; onSelect: (boardId: string) => void };
@@ -93,7 +94,7 @@ const THEMES: readonly { value: ThemeChoice; label: string; icon: typeof Sun }[]
 ];
 
 // The top bar (23#chrome-recedes): which board, one line of state, and the few things used often. Everything else is in the menu.
-export function TopBar({ boards, boardsAfter, sync, ask, undo, menu, onManageKeyboards, onAddKeyboard }: TopBarProps) {
+export function TopBar({ onHome, boards, boardsAfter, sync, ask, undo, menu, onManageKeyboards, onAddKeyboard }: TopBarProps) {
   const [theme, setTheme] = useTheme();
   // A phone keeps the board menu, the sync light, Ask and the menu; undo, redo and the theme move into the menu (P1 review).
   const phone = useMediaQuery(PHONE);
@@ -101,7 +102,14 @@ export function TopBar({ boards, boardsAfter, sync, ask, undo, menu, onManageKey
   return (
     <header className="topbar">
       <div className="topbar-start">
-        <span className="topbar-word">keyloom</span>
+        {onHome ? (
+          <button type="button" className="topbar-word topbar-home-btn" onClick={onHome} title="Go to pegboard wall" aria-label="Pegboard Home">
+            <HomeIcon size={16} aria-hidden="true" />
+            <span>keyloom</span>
+          </button>
+        ) : (
+          <span className="topbar-word">keyloom</span>
+        )}
         {boards === undefined || boards.entries.length === 0
           ? onManageKeyboards === undefined ? null : <button className="board-switch-item board-menu-trigger" type="button" onClick={onManageKeyboards}><KeyboardIcon size={16} />Keyboards</button>
           : <BoardMenu {...boards} onManage={onManageKeyboards} onAdd={onAddKeyboard} />}

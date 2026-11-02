@@ -17,7 +17,7 @@ import { setReviewActivities } from "../persistence/review-workloads.ts";
 import { transact } from "../persistence/transaction.ts";
 import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
 import {
-  NameTakenError, type LayoutRow, type RevisionRow, createLayout, findLayoutRow, findRevision, listLayoutRows,
+  NameTakenError, type LayoutRow, type RevisionRow, createLayout, findLayoutRow, findRevision, listLayoutRows, markLayoutOpened,
 } from "../persistence/layouts.ts";
 import type { App } from "./context.ts";
 import { showBoard } from "./boards.ts";
@@ -162,6 +162,13 @@ export async function importLayout(app: App, input: ImportInput): Promise<Import
 
 export function listLayouts(app: App): LayoutRow[] {
   return listLayoutRows(app.db);
+}
+
+/** Records that the editor opened a config, for the home wall's order (D-476). `ref` is a layout ID or a unique name. */
+export function markOpened(app: App, ref: string, now = Date.now()): void {
+  const layout = findLayoutRow(app.db, ref);
+  if (!layout) throw new NotFoundError(`no layout "${ref}"`);
+  markLayoutOpened(app.db, layout.id, now);
 }
 
 export type LayoutView = {

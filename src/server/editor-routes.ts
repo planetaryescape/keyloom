@@ -46,6 +46,7 @@ const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["change-sets/:/apply", { method: "POST", run: (b, id, r) => applyChangeSet(b, id, r) }],
   ["layouts/:/undo", { method: "POST", run: (b, ref, r) => undo(b, ref, r) }],
   ["layouts/:/upgrade", { method: "POST", run: (b, ref, r) => upgrade(b, ref, r) }],
+  ["layouts/:/opened", { method: "POST", run: async (b, ref) => { await b.markOpened(ref); return Response.json({}); } }],
   ["layouts/:/revisions", { method: "GET", run: async (b, ref) => Response.json(RevisionListResponseSchema.parse({ revisions: await b.revisions(ref) })) }],
   ["layouts/:/export", { method: "GET", run: async (b, ref, r) => Response.json(LayoutExportDocumentSchema.parse(await b.exportLayout(ref, revisionQuery(r)))) }],
   ["boards", { method: "GET", run: async (b) => Response.json(BoardListResponseSchema.parse({ boards: await b.boards() })) }],

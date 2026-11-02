@@ -118,6 +118,7 @@ interface ViewerProps {
     layouts: readonly Summary[];
     selectedId: string;
     onSelect: (id: string) => void;
+    onHome?: (() => void) | undefined;
     onImport: () => void;
     /** What a switch carries to the next layout (D-317): the layer by name, and the chat if it was open. */
     arrival?: Arrival | null;
@@ -1710,6 +1711,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   return (
     <div className="workspace">
       <TopBar
+        onHome={chrome.onHome}
         onManageKeyboards={chrome.onManageKeyboards}
         onAddKeyboard={chrome.onAddKeyboard}
         boards={{

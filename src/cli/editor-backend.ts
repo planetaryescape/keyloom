@@ -3,6 +3,7 @@
 import {
   type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
   ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
+  markOpened,
 } from "../app/index.ts";
 import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
 
@@ -57,6 +58,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     apply: (ref, request) => translate(() => applied(applyOps(app, ref, request))),
     applyChangeSet: (changeSetId) => translate(() => applied(applyChange(app, changeSetId))),
     undo: (ref, request) => translate(() => applied({ revisionId: undo(app, ref, { revisionId: request.revisionId, ...(request.to === undefined ? {} : { to: request.to }) }).revision.id })),
+    markOpened: (ref) => translate(() => markOpened(app, ref)),
     upgrade: (ref) => translate(() => {
       const out = upgradeLayout(app, ref);
       if (out.changed) applied(undefined);

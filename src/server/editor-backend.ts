@@ -20,6 +20,8 @@ export interface EditorBackend {
   revisions(ref: string): Promise<RevisionEntry[]>;
   /** The layout as the portable document `keyloom layout export` writes; the head unless a revision is named. */
   exportLayout(ref: string, revisionId?: string): Promise<LayoutExportDocument>;
+  /** Records that the editor opened the layout, for the home wall's order (D-476). */
+  markOpened(ref: string): Promise<void>;
   /** The boards keyloom can import a layout for. */
   boards(): Promise<BoardChoice[]>;
   /** Imports an uploaded export (a .zip or a .keymap); the same use case as `keyloom import`. */

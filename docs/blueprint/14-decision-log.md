@@ -2294,3 +2294,12 @@ This changes review scheduling and presentation only. Provider terms still apply
 ### D-477: Review suggestions show source-derived changes, not stored model prose. (2026-11-02, rung 1)
 
 The review panel derives a linked suggestion's presentation from its validated proposal ops and current layout, including for reviews stored by older releases. Missing proposal data is shown as unverifiable; stored body text is not a fallback. Changed profile options use named values and units, and affected key positions are shown as keycaps. Source preservation, runtime evidence and typing outcomes remain distinct. CLI JSON remains the machine-readable representation.
+
+### D-478: Display top recently opened keyboards on a SKÅDIS pegboard home page with a 3D flight transition to the desk configurator. (2026-11-02, BK: "design a home landing page that shows a pegboard with my top four keyboards on display on it... when you click one there's an animation to transition into the configurator page and when you click home there's an animation to transition back to the pegboard")
+
+- **Landing surface:** A dedicated home view styled as a SKÅDIS pegboard panel matching the room's palette. Slots use the standard 5×15 mm rounded slot pattern with a 40 mm pitch and 20 mm offset.
+- **Selection rule:** Displays up to four unique keyboards corresponding to the user's most recently opened configurations (falling back to `updatedAt` for existing layouts). Archived layouts are omitted.
+- **Physical representation:** Each board is rendered in accurate geometry and keycap colourways, resting on contoured ledge mounts fitted to the board or split halves, tilted back 12° in 3D perspective.
+- **Flight navigation:** Selecting a board lifts it from the pegboard cradle and flies it into the flat desk editor using View Transitions and 3D transforms (`rotateX`, `translate3d`, scale). Navigating "Home" via the top bar triggers the reverse flight back to its pegboard slot. Reduced motion preferences disable the 3D movement and use an instant crossfade.
+- **Data storage:** Added `opened_at` to `layouts` table via migration 0018, updated whenever a layout is opened in the configurator, and surfaced via `keyloom layout recent`.
+
