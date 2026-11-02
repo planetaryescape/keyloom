@@ -11,9 +11,9 @@ const SPLIT_GAP = 0.5;
  * key boxes does, measured square to the page so a tilted thumb cluster can't close it. The editor passes the keys as drawn and
  * boards check the firmware's, which can't see display.shift; every shipped board gets the same answer from both (test/web/stage-fit).
  */
-export function isOnePiece(def: Pick<BoardDefinition, "hands" | "display">, keys: readonly GeometryKey[]): boolean {
+export function isOnePiece(def: Pick<BoardDefinition, "display"> & { hands: { left: readonly number[]; right: readonly number[] } }, keys: readonly GeometryKey[]): boolean {
   const drawn = def.display?.case;
-  if (drawn !== undefined) return drawn.some((part) => part.hand === null && (part.kind === "body" || part.kind === "deck"));
+  if (drawn?.length) return drawn.some((part) => part.hand === null && (part.kind === "body" || part.kind === "deck"));
   const at = (positions: readonly number[]) => positions.flatMap((p) => keys[p] ?? []);
   const left = at(def.hands.left);
   const right = at(def.hands.right);

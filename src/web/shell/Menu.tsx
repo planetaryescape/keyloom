@@ -8,12 +8,13 @@ interface MenuProps {
   children: (close: () => void) => ReactNode;
   align?: "start" | "end";
   triggerClassName?: string;
+  popupRole?: "menu" | "dialog";
 }
 
 // A button that opens a list of items (the ARIA menu button pattern): arrow keys move between
 // items, Escape and an outside click close it, and focus goes back to the button. A native
 // <select> can't group, style or hold a status line, which the layout and Build menus need.
-export function Menu({ trigger, label, children, align = "start", triggerClassName = "button" }: MenuProps) {
+export function Menu({ trigger, label, children, align = "start", triggerClassName = "button", popupRole = "menu" }: MenuProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -32,7 +33,7 @@ export function Menu({ trigger, label, children, align = "start", triggerClassNa
     document.addEventListener("pointerdown", onPointer);
     // Opening puts focus on the chosen item, or the first.
     const items = root.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]');
-    (root.current?.querySelector<HTMLElement>('[role^="menuitem"][aria-checked="true"]') ?? items?.[0])?.focus();
+    (root.current?.querySelector<HTMLElement>("[data-menu-focus]") ?? root.current?.querySelector<HTMLElement>('[role^="menuitem"][aria-checked="true"]') ?? items?.[0])?.focus();
     return () => document.removeEventListener("pointerdown", onPointer);
   }, [open]);
 
@@ -42,11 +43,12 @@ export function Menu({ trigger, label, children, align = "start", triggerClassNa
       close(true);
       return;
     }
+    if (event.target instanceof HTMLInputElement && (event.key === "Home" || event.key === "End")) return;
     const items = [...(root.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLElement);
+    const at = items.findIndex((item) => item === document.activeElement);
     const target =
       event.key === "ArrowDown" ? items[(at + 1) % items.length]
-      : event.key === "ArrowUp" ? items[(at - 1 + items.length) % items.length]
+      : event.key === "ArrowUp" ? items[at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length]
       : event.key === "Home" ? items[0]
       : event.key === "End" ? items.at(-1)
       : undefined;
@@ -61,7 +63,7 @@ export function Menu({ trigger, label, children, align = "start", triggerClassNa
         ref={button}
         type="button"
         className={triggerClassName}
-        aria-haspopup="menu"
+        aria-haspopup={popupRole}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         aria-label={label}
@@ -70,7 +72,7 @@ export function Menu({ trigger, label, children, align = "start", triggerClassNa
         {trigger}
       </button>
       {open ? (
-        <div id={id} className="menu-list" role="menu" aria-label={label} data-align={align}>
+        <div id={id} className="menu-list" role={popupRole} aria-label={label} data-align={align}>
           {children(() => close(true))}
         </div>
       ) : null}

@@ -140,7 +140,7 @@ export const BoardChoiceSchema = z.object({
   // The board's keys and display hints, so the top bar can draw each board's silhouette before its layout is open (D-269).
   keys: GeometrySchema.shape.keys.optional(),
   display: BoardDefinitionSchema.shape.display,
-});
+}).and(BoardDefinitionSchema.pick({ hands: true, fingers: true, rows: true }).partial());
 export type BoardChoice = z.infer<typeof BoardChoiceSchema>;
 export const BoardListResponseSchema = z.object({ boards: z.array(BoardChoiceSchema) });
 

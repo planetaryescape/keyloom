@@ -113,6 +113,8 @@ interface ViewerProps {
   sync: SyncApi;
   /** What the top bar needs from the page around the layout: the layouts and boards to switch between, and Build and flash. */
   chrome: {
+    onManageKeyboards?: (() => void) | undefined;
+    onAddKeyboard?: (() => void) | undefined;
     layouts: readonly Summary[];
     selectedId: string;
     onSelect: (id: string) => void;
@@ -1708,6 +1710,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   return (
     <div className="workspace">
       <TopBar
+        onManageKeyboards={chrome.onManageKeyboards}
+        onAddKeyboard={chrome.onAddKeyboard}
         boards={{
           entries: boardEntries(chrome.layouts, chrome.boardChoices).map((entry) => ({ ...entry, tone: boardLight(sync.boards.find((candidate) => candidate.boardId === entry.id)) })),
           active: summary.boardId,

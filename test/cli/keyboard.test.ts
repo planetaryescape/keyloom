@@ -10,6 +10,7 @@ import type { UsbDevice } from "../../src/firmware/toolchain/usb.ts";
 import { CORNE_LAYOUT_FIXTURE } from "../helpers/derive-sources.ts";
 import { STYLE_FIXTURE } from "../helpers/zmk.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { join } from "node:path";
 
 afterAll(() => setUserBoards([]));
 
@@ -41,6 +42,26 @@ function harness(devices: UsbDevice[], hideCorne = true) {
 }
 
 describe("keyloom keyboard detect", () => {
+  test("collection list/remove/restore and contribution export work through the CLI without USB or firmware writes", async () => {
+    const { cli, dataDir } = harness([], false);
+    const app = openApp({ dataDir });
+    const config = newConfig(app, { name: "Synthetic collection", from: "blank", board: "foostan/corne" });
+    app.db.close();
+    const listed = await cli("keyboard", "list");
+    expect(listed.code).toBe(0);
+    expect(json(listed).keyboards[0]).toMatchObject({ boardId: "foostan/corne", removedAt: null, layoutId: config.id });
+    const lines = await cli("keyboard", "list", "--format", "jsonl");
+    expect(JSON.parse(lines.out.trim())).toMatchObject({ schema_version: 1, boardId: "foostan/corne" });
+    expect((await cli("keyboard", "restore", "foostan/corne", "--format", "table")).out).toContain("sync settings unchanged");
+    expect(json(await cli("keyboard", "remove", "foostan/corne")).keyboard.removedAt).not.toBeNull();
+    expect(json(await cli("keyboard", "restore", "foostan/corne")).keyboard).toMatchObject({ removedAt: null, paused: true });
+    const out = join(tempDir(), "contribution");
+    const exported = await cli("keyboard", "contribute", "foostan/corne", "--as", "example/test", "--out", out);
+    expect(exported.code).toBe(0);
+    expect(json(exported).files).toContain("boards/example/test/geometry.json");
+    expect(JSON.parse(await Bun.file(join(out, "boards/example/test/board.json")).text()).id).toBe("example/test");
+    expect((await cli("keyboard", "contribute", "foostan/corne", "--out", out)).code).toBe(2);
+  });
   test("lists the keyboards on USB with their candidates, in JSON with schema_version, and leaves a mouse out", async () => {
     const { cli } = harness([mouse, corne]);
     const r = await cli("keyboard", "detect", "--format", "json");
@@ -121,6 +142,11 @@ describe("keyloom keyboard add and put", () => {
     const shown = await cli("boards", "show", "local/corne", "--format", "json");
     expect(json(shown).board).toMatchObject({ id: "local/corne", keyCount: 42 });
     expect(json(await cli("boards", "list", "--format", "json")).boards.map((b: { id: string }) => b.id)).toContain("local/corne");
+
+    const contribution = join(tempDir(), "local-board");
+    const exported = await cli("keyboard", "contribute", "local/corne", "--as", "example/corne", "--out", contribution);
+    expect(exported.code).toBe(0);
+    expect(JSON.parse(await Bun.file(join(contribution, "boards/example/corne/board.json")).text()).id).toBe("example/corne");
 
     const app = openApp({ dataDir });
     const glove80 = await importLayout(app, { board: "moergo/glove80", source: STYLE_FIXTURE, name: "my-glove80" });

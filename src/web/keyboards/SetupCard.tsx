@@ -22,7 +22,7 @@ export function SetupCard({ flow, onImport, onMade }: {
     <section className="nb-card" aria-label={`${step.boardName} has no config yet`}>
       <header className="nb-card-head">
         <div>
-          <p className="nb-eyebrow"><Usb size={13} aria-hidden="true" />Just plugged in</p>
+          <p className="nb-eyebrow"><Usb size={13} aria-hidden="true" />{step.keyboard === null ? "Set up a keyboard" : "Just plugged in"}</p>
           <h2>Your {step.boardName} has no config yet</h2>
         </div>
         <button type="button" className="sheet-close" aria-label="Not now" onClick={flow.notNow}><X size={16} aria-hidden="true" /></button>

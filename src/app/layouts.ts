@@ -15,6 +15,7 @@ import type { Binding, Layout } from "../layout/schema.ts";
 import { ReviewActivitiesSchema, type ReviewActivity } from "../layout/review-workload.ts";
 import { setReviewActivities } from "../persistence/review-workloads.ts";
 import { transact } from "../persistence/transaction.ts";
+import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
 import {
   NameTakenError, type LayoutRow, type RevisionRow, createLayout, findLayoutRow, findRevision, listLayoutRows,
 } from "../persistence/layouts.ts";
@@ -108,6 +109,7 @@ function storeImported(app: App, imported: Imported, explicit: string | undefine
     const name = attempt === 1 ? base : `${base}-${attempt}`;
     try {
       const created = transact(app.db, () => {
+        if (keyboardRemoved(app.db, layout.boardId)) throw new UsageError("restore this keyboard in Manage keyboards or with `keyloom keyboard restore <board>` before importing another config");
         const made = createLayout(app.db, { name, layout, summary, origin: "import" });
         if (activities !== undefined) setReviewActivities(app.db, made.layout.id, [...activities].sort());
         return made;

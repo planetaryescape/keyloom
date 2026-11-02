@@ -60,10 +60,15 @@
   stroke-width: 0.018;
 }
 
-/* A fill gradient can't take a CSS variable in every browser, so the lit top is a second, faded layer drawn by the case's own shine. */
+/* Crafted paths keep their material mix; generated bodies override the fill with their shaded top. */
 .keyboard-case .case-body {
   fill: color-mix(in oklab, var(--case-hi) 55%, var(--case-lo));
 }
+
+/* An approximate enclosure keeps the app's physical depth without inventing firmware geometry. */
+.case-edge { fill: var(--case-lo); stroke: var(--case-seam); stroke-width: 0.025; stroke-linejoin: round; }
+.case-top-hi { stop-color: var(--case-hi); }
+.case-top-lo { stop-color: color-mix(in oklab, var(--case-hi) 35%, var(--case-lo)); }
 
 /* The case's status LEDs (display.statusLeds): dark until a layer with a light is on, then that light. */
 .case-led {

@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import { z } from "zod";
 import {
   type AddDeps, type App, type CandidateView, type DetectedKeyboard, type HandsFreeOverrides, UsageError, addKeyboard, detectKeyboards, previewKeyboard, putConfig, searchKeyboards,
+  listKeyboardCollection, removeKeyboard, restoreKeyboard, exportBoardContribution,
 } from "../../app/index.ts";
 import { type Format, type Io, SCHEMA_VERSION, columns, print } from "../output.ts";
 import { transferReportText } from "../transfer-text.ts";
@@ -78,6 +79,29 @@ function detectedText(k: DetectedKeyboard): string {
 export function registerKeyboardCommands(program: Command, deps: KeyboardCommandDeps): void {
   const { io, format, quiet, withApp } = deps;
   const keyboard = program.command("keyboard").description("keyboards on USB: detect one, build a board for one keyloom has not seen, put a config on it");
+
+  keyboard.command("list").description("your keyboard collection, including removed keyboards that can be restored")
+    .action(async () => {
+      const keyboards = await withApp(listKeyboardCollection);
+      print(io, format(), { json: { keyboards }, rows: keyboards.map((k) => ({ schema_version: SCHEMA_VERSION, ...k })), ids: keyboards.map((k) => k.boardId),
+        table: columns([["BOARD", "NAME", "STATUS", "CONFIGS"], ...keyboards.map((k) => [k.boardId, k.name, k.removedAt === null ? "in setup" : "removed", String(k.configCount)])]) });
+    });
+  for (const action of ["remove", "restore"] as const) {
+    keyboard.command(action).argument("<board>", "board ID from keyboard list")
+      .description(action === "remove" ? "stop managing a keyboard; keep every config and history; never flash" : "bring back a removed keyboard, with sync paused")
+      .action(async (board: string) => {
+        const result = await withApp((app) => action === "remove" ? removeKeyboard(app, board) : restoreKeyboard(app, board));
+        print(io, format(), { json: { keyboard: result }, ids: [result.boardId], table: `${result.name}: ${action === "remove" ? "removed from setup; configs and history kept" : result.paused ? "in setup; syncing is paused" : "already in setup; sync settings unchanged"}. Nothing was written to the keyboard.` });
+      });
+  }
+  keyboard.command("contribute").argument("<board>", "the board ID to package")
+    .requiredOption("--out <directory>", "a new output directory; existing directories are never overwritten")
+    .option("--as <maker/keyboard>", "the upstream board ID, instead of its local ID")
+    .description("prepare a board-only contribution folder and modelling instructions; publishes nothing")
+    .action((board: string, opts: { out: string; as?: string }) => {
+      const result = exportBoardContribution(board, opts.out, opts.as);
+      print(io, format(), { json: { ...result }, ids: result.files, table: `${result.directory}\nRead CONTRIBUTION.md, then run /add-keyboard in the clone. Nothing was published.` });
+    });
 
   keyboard
     .command("detect")

@@ -8,6 +8,8 @@ export function boardTitle(boardId: string): string {
 }
 
 export interface HeaderProps {
+  onManageKeyboards?: (() => void) | undefined;
+  onAddKeyboard?: (() => void) | undefined;
   layouts?: readonly LayoutSummary[];
   selectedId?: string;
   onSelect?: (id: string) => void;
@@ -18,11 +20,13 @@ export interface HeaderProps {
 
 // The top bar for pages that aren't a layout (loading, import, an error, board dev): the name, the boards the person has, and the theme.
 // A layout page draws its own, with the sync line, undo and the menu (Viewer.tsx).
-export function Header({ layouts, selectedId, onSelect, boardChoices = [] }: HeaderProps) {
+export function Header({ layouts, selectedId, onSelect, boardChoices = [], onManageKeyboards, onAddKeyboard }: HeaderProps) {
   const boards = boardEntries(layouts ?? [], boardChoices);
   const active = layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null;
   return (
     <TopBar
+      onManageKeyboards={onManageKeyboards}
+      onAddKeyboard={onAddKeyboard}
       {...(boards.length === 0 || onSelect === undefined
         ? {}
         : { boards: { entries: boards, active, onSelect: (boardId: string) => { const first = layouts?.find((layout) => layout.boardId === boardId); if (first !== undefined) onSelect(first.id); } } })}
@@ -37,6 +41,7 @@ export const boardDisplayName = (name: string): string => name.replace(/ keyboar
 export function boardEntries(layouts: readonly LayoutSummary[], choices: readonly BoardChoice[] = []): BoardEntry[] {
   const seen = new Map<string, BoardEntry>();
   for (const layout of layouts) {
+    if (layout.archivedAt != null) continue;
     if (seen.has(layout.boardId)) continue;
     const board = choices.find((choice) => choice.id === layout.boardId);
     seen.set(layout.boardId, { id: layout.boardId, name: board === undefined ? boardTitle(layout.boardId) : boardDisplayName(board.name), ...(board === undefined ? {} : { board }) });

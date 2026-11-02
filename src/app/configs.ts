@@ -11,6 +11,7 @@ import {
 } from "../persistence/layouts.ts";
 import { activeSyncs } from "../persistence/syncs.ts";
 import { transact } from "../persistence/transaction.ts";
+import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { readDefaultKeymap } from "./default-keymap.ts";
@@ -122,7 +123,13 @@ export function newConfig(app: App, input: NewConfigInput): ConfigView {
     summary = `Copied from ${source.name}: ${plainSummary(found.revision.summary)}`;
   }
   try {
-    const created = createLayout(app.db, { name, layout, summary, origin: "import", ...(input.selectFirst === undefined ? {} : { selectFirst: input.selectFirst }), ...(copiedFrom ? { copiedFrom } : {}) });
+    const created = transact(app.db, () => {
+      if (keyboardRemoved(app.db, layout.boardId)) throw new UsageError("restore this keyboard in Manage keyboards or with `keyloom keyboard restore <board>` before creating another config");
+      const creation: Parameters<typeof createLayout>[1] = { name, layout, summary, origin: "import" };
+      if (input.selectFirst !== undefined) creation.selectFirst = input.selectFirst;
+      if (copiedFrom !== undefined) creation.copiedFrom = copiedFrom;
+      return createLayout(app.db, creation);
+    });
     return viewOf(app, created.layout, getBoardConfig(app.db, created.layout.boardId));
   } catch (err) {
     if (err instanceof NameTakenError) throw new UsageError(`a config named "${name}" already exists; pick another name`);

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { PreviewBoard, PutPreviewResponse } from "../../api/keyboards.ts";
+import type { BoardChoice } from "../../api/http.ts";
 import { describeKey } from "../../layout/describe.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { Layout } from "../../layout/schema.ts";
@@ -15,8 +16,9 @@ const fingerWord = (finger: string | undefined): string => (finger === undefined
 // The new keyboard on the stage (n2 to n4, D-336), drawn by the board renderer every board uses, so it looks like itself and not a diagram.
 // Confirming, its caps are blank and the home row is lit; reviewing, each cap's front says the finger keyloom expects; putting, the caps
 // carry the mapped config. Clicking a key while confirming picks its row as the home row.
-export function NewBoardKeyboard({ board, mode, homeRow, mapped, placed, onPickRow, half = null }: {
-  board: PreviewBoard;
+export function NewBoardKeyboard({ board, display, mode, homeRow, mapped, placed, onPickRow, half = null }: {
+  board: Pick<PreviewBoard, "keys" | "hands" | "fingers" | "rows">;
+  display?: BoardChoice["display"];
   mode: "confirm" | "review" | "put";
   /** The row to light, 1-based from the top: the one given, or keyloom's guess. */
   homeRow: number | null;
@@ -55,6 +57,7 @@ export function NewBoardKeyboard({ board, mode, homeRow, mapped, placed, onPickR
     <Keyboard
       keys={board.keys}
       hands={board.hands}
+      display={display}
       descriptions={descriptions}
       fingers={board.fingers}
       layerName={mode === "put" ? niceLayerName(mapped?.after.layers[0]?.name ?? "Base") : "Base"}

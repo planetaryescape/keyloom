@@ -4,11 +4,17 @@ Using Claude Code? Run `/add-keyboard` in a clone of this repo. It walks you thr
 
 A board is a folder in this repo. You add one with a pull request that holds only that folder. You don't write code.
 
-You need the keyboard on your desk. keyloom's maintainer can't test hardware he doesn't own, so your PR must say you built the firmware and flashed it to your own board.
+An owner must eventually verify the keyboard. You can prepare a draft contribution without owning or flashing it, but state exactly what you tested; it waits for an owner to build, flash with permission and confirm the keys. The maintainer cannot verify hardware he does not own.
 
 The folder is `boards/<vendor>/<board>/`. The board ID is the folder path, such as `foostan/corne`. Use lowercase letters, digits and dashes. The vendor is the maker as people know them, not the folder their firmware happens to live in: the Unix60 is by mkdl, so it is `mkdl/unix60`, though QMK keeps it under `keyboards/fr4/`.
 
 ## Before you start
+
+Already added the keyboard locally? Open **Manage keyboards → Prepare contribution** in the app, or run `keyloom keyboard contribute <board> --as maker/my-keyboard --out ./my-keyboard-contribution`, using the ID from `keyloom keyboard list`.
+
+The CLI creates a new directory containing `boards/maker/my-keyboard/` and `CONTRIBUTION.md`, refusing an existing output directory. The app downloads a ZIP that retains the board ID; for a `local/` board, rename its folder and update `board.json`'s `id` to the maker's name first. Both paths exclude layouts, conversations, credentials and typing recordings, and publish nothing. Copy only the board folder into your clone, then continue at step 4 below.
+
+Photos let you refine the case, but are not required for local use or a draft PR. Without them, retain the generated 3D-style caps and approximate raised body. With photos, `/add-keyboard` explains how to trace the real enclosure with display-only data. Keep `geometry.json` generated from firmware in either case.
 
 You need these installed:
 

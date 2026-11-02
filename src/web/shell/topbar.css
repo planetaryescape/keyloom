@@ -326,10 +326,48 @@
 .board-menu-trigger {
   background: var(--line);
   color: var(--ink);
+  max-width: min(28vw, 280px);
 }
 
 .board-menu-trigger .board-switch-name {
   display: inline;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.keyboard-picker {
+  width: min(320px, calc(100vw - 40px));
+}
+
+.keyboard-picker-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.keyboard-picker-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.keyboard-picker-results {
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+}
+
+.keyboard-picker-empty {
+  margin: var(--space-2);
+  color: var(--ink-2);
+}
+
+@media (max-width: 600px) {
+  .board-menu-trigger { max-width: 48vw; }
 }
 
 .board-menu-trigger .silhouette {

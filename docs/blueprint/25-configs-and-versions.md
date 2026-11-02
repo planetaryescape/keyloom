@@ -1,6 +1,6 @@
 # 25: Configs and versions
 
-Status: model, sync, CLI, API and agent built (rung 23 part 1); screens built on fake keyboards (D-315); a blank config starts from the firmware's default keymap where there is one and a config can be made from a file (D-370, D-371), 2026-10-17. Source baseline: origin/main after v0.25.0.
+Status: model, sync, CLI, API and agent built (rung 23 part 1); screens built on fake keyboards (D-315); a blank config starts from the firmware's default keymap where there is one and a config can be made from a file (D-370, D-371), 2026-10-17. Reversible keyboard collection removal and restore built and checked with fake devices (D-476), 2026-11-02; unreleased. Source baseline: origin/main after v0.25.0.
 
 BK: "I would like this app to keep multiple versions of my layout and version history just like oryx does so if i change something an use it for a week and don't like it I can go bto a past version or maybe I want a steno config and a qwerty config and a colemac config and I don't want to use layers for that, then I can keep layout configs that are different".
 
@@ -14,6 +14,7 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 
 - **A config is a layout** (no new entity). The UI and CLI call it a config, because that's BK's word.
 - **Each board has exactly one config on the keyboard** (D-300). Only that config auto-syncs. Editing any other config never touches the keyboard.
+- **Collection membership is separate** (D-476). Remove a keyboard through Manage keyboards or `keyboard remove <board>` without deleting its configs or bypassing the current-config archive guard. Restore preserves history and leaves syncing paused; neither action rewrites firmware.
 - **"Put this config on my Moonlander"** makes a config the one on the keyboard. It's an explicit action: one sync, with the usual flash confirmation the first time.
 - **New config:**
   - from the current config, as a copy of its head revision, with the history starting there and a "copied from" link;
