@@ -32,7 +32,7 @@ export function Menu({ trigger, label, children, align = "start", triggerClassNa
     document.addEventListener("pointerdown", onPointer);
     // Opening puts focus on the chosen item, or the first.
     const items = root.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]');
-    (root.current?.querySelector<HTMLElement>('[role^="menuitem"][aria-checked="true"]') ?? items?.[0])?.focus();
+    (root.current?.querySelector<HTMLElement>("[data-menu-focus]") ?? root.current?.querySelector<HTMLElement>('[role^="menuitem"][aria-checked="true"]') ?? items?.[0])?.focus();
     return () => document.removeEventListener("pointerdown", onPointer);
   }, [open]);
 
@@ -42,11 +42,12 @@ export function Menu({ trigger, label, children, align = "start", triggerClassNa
       close(true);
       return;
     }
+    if (event.target instanceof HTMLInputElement && (event.key === "Home" || event.key === "End")) return;
     const items = [...(root.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLElement);
+    const at = items.findIndex((item) => item === document.activeElement);
     const target =
       event.key === "ArrowDown" ? items[(at + 1) % items.length]
-      : event.key === "ArrowUp" ? items[(at - 1 + items.length) % items.length]
+      : event.key === "ArrowUp" ? items[at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length]
       : event.key === "Home" ? items[0]
       : event.key === "End" ? items.at(-1)
       : undefined;

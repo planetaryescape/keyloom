@@ -220,6 +220,7 @@ export function Keyboard({
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const shapes = display?.keyShapes;
   const caseId = useId().replace(/:/g, "");
+  const generatedBody = (display?.case?.length ?? 0) === 0 && parts.some((part) => part.kind === "body");
   const { delays, outgoing, origin: rippleOrigin } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
   // Only a board whose case is in two pieces can part; a laptop's keys belong to hands but sit on one deck.
   const parts2 = parts.some((part) => part.hand !== null);
@@ -301,6 +302,7 @@ export function Keyboard({
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
+          {generatedBody ? <defs><linearGradient id={`${caseId}-body`} x1="0" y1="0" x2="0.2" y2="1"><stop offset="0" className="case-top-hi" /><stop offset="1" className="case-top-lo" /></linearGradient></defs> : null}
           {parts.some((part) => part.kind === "grille" || part.kind === "ball") ? (
             <defs>
               {/* A speaker grille's holes, as a pattern in key units: drawn one by one they would be a thousand paths. */}
@@ -315,7 +317,12 @@ export function Keyboard({
             </defs>
           ) : null}
           {parts.map((part, i) =>
-            part.kind === "ball" ? (
+            generatedBody && part.kind === "body" ? (
+              <g key={i} data-hand={part.hand ?? undefined}>
+                <path className="case-edge" d={part.d} transform="translate(0 0.12)" />
+                <path className="case-body" d={part.d} style={{ fill: `url(#${caseId}-body)` }} />
+              </g>
+            ) : part.kind === "ball" ? (
               <g key={i} data-hand={part.hand ?? undefined}>
                 <path className="case-ball-socket" d={part.d} />
                 <path className="case-ball" d={part.d} style={{ fill: `url(#${caseId}-ball)` }} />

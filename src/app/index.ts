@@ -1,5 +1,7 @@
 // The only module src/cli (and src/server) may import (01#modules).
 export { type App, closeApp, openApp } from "./context.ts";
+export { type CollectionKeyboard, listKeyboardCollection, listSetupLayouts, removeKeyboard, restoreKeyboard } from "./keyboard-collection.ts";
+export { prepareBoardContribution, exportBoardContribution } from "./board-contribution.ts";
 export { drainDeviceConsumers, shutdownDeviceConnections } from "./device-connections.ts";
 export { BusyError, IncompatibleError, LabCaptureError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {

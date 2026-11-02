@@ -5,6 +5,9 @@
 //   POST /api/keyboards/add        AddRequest -> AddResponse (201; 400 usage when the home row or controller is missing or wrong)
 //   POST /api/keyboards/put/preview PutRequest -> PutPreviewResponse (what a put would make, and the layout it gives the board; nothing stored)
 //   POST /api/keyboards/put        PutRequest -> PutResponse (201: a new config on the board, with the mapping as proposals, none applied)
+//   GET  /api/keyboards/collection -> CollectionResponse (including removed keyboards)
+//   POST /api/keyboards/remove|restore CollectionAction -> CollectionKeyboard (configs kept; restore leaves sync paused)
+//   POST /api/keyboards/contribute CollectionAction -> ZIP (board-only definition, geometry and CONTRIBUTION.md)
 import { z } from "zod";
 import { GeometryKeySchema } from "../boards/schema.ts";
 import { LayoutSchema } from "../layout/schema.ts";
@@ -16,6 +19,14 @@ export { CandidateSchema, DetectedKeyboardSchema, type ApiCandidate, type Detect
 
 export const DetectResponseSchema = z.object({ keyboards: z.array(DetectedKeyboardSchema), candidates: z.array(CandidateSchema) });
 export type DetectResponse = z.infer<typeof DetectResponseSchema>;
+
+export const CollectionKeyboardSchema = z.object({
+  boardId: z.string(), name: z.string(), removedAt: z.number().nullable(), layoutId: z.string().nullable(),
+  configCount: z.number().int().nonnegative(), paused: z.boolean(), modelled: z.boolean(),
+});
+export type CollectionKeyboard = z.infer<typeof CollectionKeyboardSchema>;
+export const CollectionResponseSchema = z.object({ keyboards: z.array(CollectionKeyboardSchema) });
+export const CollectionActionSchema = z.strictObject({ board: z.string().min(1) });
 
 export const PreviewRequestSchema = z.object({
   candidate: z.string().min(1),

@@ -13,6 +13,16 @@ Numbers are not contiguous. Ranges were set aside for parallel workers and some 
 
 ## 2026-11-01 follow-up
 
+### D-476: Manage a keyboard collection separately from config archives, with a bounded picker and a contribution handoff. (2026-11-02, BK: "fix all this please")
+
+Extends D-266, D-277, D-300, D-315 and D-336. The top bar uses one bounded, searchable keyboard picker at every width; a collection of 40 boards does not expand the header. Manage keyboards offers reversible removal, restore and board-only contribution export. Archived-only boards are recoverable under Removed and excluded from normal switching. Collection entries still identify board models; this does not claim physical-device-instance targeting from chapter 30.
+
+Migration 0017 records removed board IDs without deleting or archiving their configs. Removal refuses an active sync or firmware operation, pauses sync, and excludes the keyboard from sync decisions and setup offers. Sync launch checks membership in the same transaction as claiming a run. Restore retains paused sync and restores one config for an old archived-only board; no firmware or remapper write is implied. The current-config archive guard remains intact because collection removal is a different action.
+
+First-run setup exposes the existing detected-keyboard questions without requiring another layout. People can also choose a supported board or search QMK/ZMK without USB. A new board with no source configs can start a config or import its keymap. An unmodelled board keeps the firmware's key geometry and shared sculpted caps, with a generated shaded, raised enclosure; crafted display data wins when available.
+
+`keyboard list|remove|restore` and authenticated collection routes back the UI. `keyboard contribute` exports board data plus a handoff, with an optional upstream ID and a new output directory; the app downloads the same data. Exports exclude personal configs and recordings and publish nothing. `/add-keyboard` owns photo-based refinement and the checked board-folder PR. A draft can be prepared without photos or hardware, but an owner must supply honest build/flash verification before hardware support is accepted.
+
 These entries were numbered D-469/D-470 on the unmerged encoder branch. They are D-471/D-472 here to preserve the already-merged D-469 view-opening decision.
 
 ### D-471: Encoder turns belong to each layer, with ordinary editable presses. Replaces D-462's fixed-turn limit and the relevant part of D-105. (BK: fix the encoder request and investigate changing the build)

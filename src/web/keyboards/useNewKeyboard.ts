@@ -18,11 +18,11 @@ export type NewBoardStep =
   /** The stage card: what USB said, the candidates, and a search. */
   | { kind: "card"; keyboard: DetectedKeyboard; choice: string | null }
   /** A board keyloom knows, on USB, with no config yet: put one on, import one, or start blank. */
-  | { kind: "setup"; keyboard: DetectedKeyboard; boardId: string; boardName: string }
+  | { kind: "setup"; keyboard: DetectedKeyboard | null; boardId: string; boardName: string }
   /** The home row and the controller, with the board drawn. */
-  | { kind: "confirm"; keyboard: DetectedKeyboard; candidate: ApiCandidate; homeRow: number | null; controller: string | null }
+  | { kind: "confirm"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number | null; controller: string | null }
   /** The board as keyloom would add it: hands, fingers, the flash. */
-  | { kind: "review"; keyboard: DetectedKeyboard; candidate: ApiCandidate; homeRow: number; controller: string | null }
+  | { kind: "review"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number; controller: string | null }
   /** Added, or already known: pick a config to put on it, see it mapped, choose where the keys with no place go. */
   | { kind: "put"; boardId: string; boardName: string; source: string | null; choices: Record<string, number>; origin: "new" | "known" };
 
@@ -41,6 +41,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
+  const searchSequence = useRef(0);
   const waiting = keyboards.filter((k) => k.status !== "known");
   const offered = waiting.filter((k) => !dismissed.has(keyboardKey(k)));
   const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
@@ -70,7 +71,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
 
   // A bare board that was set up elsewhere, or unplugged, closes its card.
   useEffect(() => {
-    if (step.kind !== "setup") return;
+    if (step.kind !== "setup" || step.keyboard === null) return;
     const boardId = step.boardId;
     if (!knownWithNoConfig.some((k) => k.knownBoard?.id === boardId)) setStep({ kind: "idle" });
   }, [knownWithNoConfig, step]);
@@ -85,7 +86,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       candidate: step.candidate.id,
       ...(step.homeRow === null ? {} : { homeRow: step.homeRow }),
       ...(step.controller === null ? {} : { controller: step.controller }),
-    }, controller.signal).then((p) => setPreview(p), (e: unknown) => {
+    }, controller.signal).then((p) => { if (!controller.signal.aborted) setPreview(p); }, (e) => {
       if (!controller.signal.aborted) setProblem(message(e));
     });
     return () => controller.abort();
@@ -110,21 +111,32 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   }, [token, putKey]);
 
   const search = useCallback(async (text: string) => {
+    const sequence = ++searchSequence.current;
+    setProblem(null);
     setSearchText(text);
     if (text.trim().length < 2) {
       setFound([]);
       return;
     }
     try {
-      setFound((await api.searchKeyboards(token, text.trim())).candidates);
+      const result = await api.searchKeyboards(token, text.trim());
+      if (searchSequence.current === sequence) setFound(result.candidates);
     } catch (e) {
-      setProblem(message(e));
+      if (searchSequence.current === sequence) setProblem(message(e));
     }
   }, [token]);
 
   const candidateOf = (k: DetectedKeyboard, id: string): ApiCandidate | undefined => k.candidates.find((c) => c.id === id) ?? found.find((c) => c.id === id);
 
   return {
+    chooseKnown: (board: { id: string; name: string }) => {
+      setProblem(null);
+      setStep({ kind: "setup", keyboard: null, boardId: board.id, boardName: board.name });
+    },
+    chooseCandidate: (candidate: ApiCandidate) => {
+      setProblem(null); setPreview(null);
+      setStep({ kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null });
+    },
     step, preview, putPreview, busy, problem, waiting, setupWaiting, searchText, found, activities, setActivities,
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
@@ -140,7 +152,10 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     notNow: () => {
       setActivities([]);
-      if (step.kind === "card" || step.kind === "confirm" || step.kind === "review") setDismissed((d) => new Set([...d, keyboardKey(step.keyboard)]));
+      if ((step.kind === "card" || step.kind === "confirm" || step.kind === "review") && step.keyboard !== null) {
+        const keyboard = step.keyboard;
+        setDismissed((d) => new Set([...d, keyboardKey(keyboard)]));
+      }
       if (step.kind === "setup") setDismissed((d) => new Set([...d, step.boardId]));
       setStep({ kind: "idle" });
       setPreview(null);
@@ -158,6 +173,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     backToCard: () => {
       if (step.kind !== "confirm") return;
+      if (step.keyboard === null) { setStep({ kind: "idle" }); return; }
       setStep({ kind: "card", keyboard: step.keyboard, choice: step.candidate.id });
     },
     setHomeRow: (row: number) => setStep((s) => (s.kind === "confirm" || s.kind === "review" ? { ...s, homeRow: row } : s)),
@@ -195,7 +211,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     /** "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. */
     startBlank: async (name: string): Promise<string | null> => {
-      if (step.kind !== "setup") return null;
+      if (step.kind !== "setup" && step.kind !== "put") return null;
       setBusy(true);
       setProblem(null);
       try {

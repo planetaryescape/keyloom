@@ -1,13 +1,15 @@
 ---
 name: add-keyboard
-description: Add a new QMK or ZMK keyboard to keyloom as a board folder, from a plugged-in keyboard or its firmware tree, drawn faithfully from photos of the real board, and checked end to end. Use when a contributor wants keyloom to support their keyboard.
+description: Add, model or contribute a QMK or ZMK keyboard to keyloom, from a local board export, USB identification or a firmware tree. Keep a polished generated case until photos permit a faithful model, and prepare a checked board-folder PR.
 ---
 
 # Add a keyboard to keyloom
 
 The result is one folder, `boards/<vendor>/<board>/`, in a pull request that touches nothing else. `CONTRIBUTING.md` is the reference for every field and recipe; this skill is the order to do it in and the checks that prove it. Read `CONTRIBUTING.md` once before starting, and follow it where the two differ.
 
-Run `bun install` once in the clone. Run keyloom from the clone, because a new board only exists for a keyloom started from a checkout that has its folder: wherever this says `keyloom`, run `bun src/cli/main.ts`. Pass a scratch data directory to every command (`--data-dir /tmp/keyloom-<board>`, before the command name), so the contributor's real layouts are never touched.
+Run `bun install` once in the clone. For repo changes, wherever this says `keyloom`, run `bun src/cli/main.ts`. The installed app also loads locally derived boards from its data directory; a new repo folder is only visible to a checkout that contains it. Pass a scratch `--data-dir` before the command name so contributor testing stays separate from real layouts.
+
+If the person already added the board in the app, use **Manage keyboards → Prepare contribution** or `keyloom keyboard contribute <board> --as <maker>/<keyboard> --out <new-directory>`. Read the exported `CONTRIBUTION.md`, copy only its `boards/<maker>/<keyboard>/` folder into the clone, and continue at step 2. The export publishes nothing and excludes personal configs and recordings; keep the handoff file outside the PR.
 
 ## 0. Ask what you need, once
 
@@ -16,7 +18,7 @@ Ask the contributor for:
 - the keyboard's name and maker, and whether it runs QMK or ZMK. The vendor folder is the maker as people know them (`mkdl/unix60`), not the folder the firmware sits in (`keyboards/fr4/unix60`);
 - whether they own it and can flash it. If not, the board can still be added: build it if Docker is available, and say in the PR that it wasn't flashed (`CONTRIBUTING.md` step 7). It then waits for an owner to confirm;
 - whether it is plugged in now;
-- two or three photos of the real board from above (their own, or the maker's product shots). The drawing is made from these; without them, say the case will be drawn from the keys and offer to redo it when photos arrive.
+- two or three photos of the real board from above (their own, or the maker's product shots), if available. Without them, retain the shared sculpted caps and generated shaded, raised enclosure. Describe the case as approximate and offer to refine it when photos arrive; lack of photos does not block local use or a draft contribution.
 
 Never flash their keyboard without their go-ahead in this session. Building is fine.
 
@@ -36,7 +38,7 @@ keyloom --data-dir /tmp/keyloom-<board> keyboard add --candidate <id> --home-row
 
 Without `--home-row` it prints the rows it found and writes nothing; ask the contributor which row their fingers rest on. The derived board lands in `/tmp/keyloom-<board>/boards/local/<keyboard>/`: its `board.json` and `geometry.json` are the starting point for the repo folder. Copy them to `boards/<vendor>/<board>/`, set the board ID to that folder path, and continue at step 2.
 
-If it isn't plugged in, or detection can't name it, follow `CONTRIBUTING.md` steps 1 to 3 by hand: pin the firmware tree (mainline QMK or ZMK, or the maker's fork when only that has the controller) and the Docker image, copy `boards/_template/qmk` or `boards/_template/zmk`, and generate the geometry with `keyloom boards geometry boards/<vendor>/<board>`. Delete the QMK template's `layoutFile` when the layouts are in `keyboards/<qmkTarget>/keyboard.json`. Never write `geometry.json` by hand; it comes from the pinned firmware.
+If it isn't plugged in, search by name with `keyloom keyboard detect --search <name>`; the same `keyboard add` command works without USB. If the index cannot supply the board, follow `CONTRIBUTING.md` steps 1 to 3 by hand: pin the firmware tree (mainline QMK or ZMK, or the maker's fork when only that has the controller) and the Docker image, copy `boards/_template/qmk` or `boards/_template/zmk`, and generate the geometry with `keyloom boards geometry boards/<vendor>/<board>`. Delete the QMK template's `layoutFile` when the layouts are in `keyboards/<qmkTarget>/keyboard.json`. Never write `geometry.json` by hand; it comes from the pinned firmware.
 
 ## 2. Hands, fingers, rows and mirror
 
@@ -54,7 +56,7 @@ A one-piece board still has two hands. Split it at the touch-typing line: 6, Y, 
 
 ## 3. Draw it like the real object
 
-A board drawn as rectangles in a generic tray is wrong. Make it look like the keyboard on their desk. Everything here lives under `display` in `board.json` and changes only how the board is drawn, never what positions mean. The field reference is the `display` rows in `CONTRIBUTING.md`.
+A board with no custom model still uses the app's physical renderer: sculpted caps, a generated raised body, shadows and the room's materials. This is a valid approximate starting point. If there are no photos, keep that fallback instead of inventing case details and continue to step 4. With photos, make it look like the keyboard on their desk. Everything here lives under `display` in `board.json` and changes only how the board is drawn, never what positions mean. The field reference is the `display` rows in `CONTRIBUTING.md`.
 
 Work from the photos:
 
@@ -96,6 +98,6 @@ Then the end to end test in `CONTRIBUTING.md` ("Test the board end to end"): bui
 
 ## 6. The pull request
 
-Only `boards/<vendor>/<board>/` changes, plus a note in `docs/issues/` when one is needed (below). Use `CONTRIBUTING.md` step 7 for what the description must contain (keyloom version, firmware pin, what was flashed and how it behaved), and attach the photo-versus-render screenshots.
+Only `boards/<vendor>/<board>/` changes, plus a note in `docs/issues/` when one is needed (below). Use `CONTRIBUTING.md` step 7 for what the description must contain (keyloom version, firmware pin, what was flashed and how it behaved). Attach render screenshots, with photo comparisons when available. Label an approximate case and any missing hardware verification; an unflashed draft waits for an owner to verify it.
 
 When the board needs something keyloom can't do (a new flasher, a part the drawing can't express), don't work around it in `board.json`: draw what the schema can, and say in the PR what differs and why. If it needs a code change, describe it in the PR, or add a short note to `docs/issues/` in the same PR; this project tracks issues there, not on GitHub.

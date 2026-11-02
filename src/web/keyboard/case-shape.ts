@@ -1,7 +1,8 @@
 // The board's case, drawn under its keys so each keyboard looks like itself instead of keys on a tray (D-266). Everything comes from
 // the board's geometry and display hints; a contributed board gets a case with no code of its own.
 import type { BoardDefinition, GeometryKey } from "../../boards/schema.ts";
-import { boardBounds, MAX_SPLIT_OVERLAP, rotatedCorners, type Point } from "./geometry.ts";
+import { boardBounds, rotatedCorners, type Point } from "./geometry.ts";
+import { isOnePiece } from "../../boards/one-piece.ts";
 
 /** Which hand a part belongs to, so a split board's halves can part (P2); null for one-piece boards. */
 type Hand = "left" | "right" | null;
@@ -99,7 +100,7 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
   // cut down to one hand, so a phone showing one hand of it draws the computed case around that hand's keys instead.
   const oneHandOfOnePiece = only !== null && display?.case?.some((part) => part.hand === null) === true;
   // A drawn case keeps its column wells (the Glove80's, D-341): they come from the keys, and are drawn over the body they sink into.
-  if (display?.case !== undefined && !oneHandOfOnePiece) {
+  if (display?.case?.length && !oneHandOfOnePiece) {
     return [...display.case.filter((part) => only === null || part.hand === only).map((part) => ({ ...part })), ...wells(keys, hands, display, visible)];
   }
 
@@ -134,14 +135,11 @@ export function caseParts(keys: readonly GeometryKey[], hands: Hands, display: D
   const body = (positions: readonly number[]) => at(positions.filter((p) => visible(p) && !inModule.has(p)));
   const left = body(hands.left);
   const right = body(hands.right);
-  const interleaved =
-    left.length > 0 && right.length > 0 && (() => {
-      const l = boardBounds(left);
-      return l.minX + l.width - boardBounds(right).minX > MAX_SPLIT_OVERLAP;
-    })();
-  const bodies: { keys: GeometryKey[]; hand: Hand }[] = interleaved
+  // A hand assignment is not a seam in the enclosure. Keep the case and the phone's half switcher in agreement.
+  const onePiece = isOnePiece({ hands, display }, keys);
+  const bodies: { keys: GeometryKey[]; hand: Hand }[] = (onePiece
     ? [{ keys: [...left, ...right], hand: null }]
-    : [{ keys: left, hand: "left" as const }, { keys: right, hand: "right" as const }].filter((group) => group.keys.length > 0);
+    : [{ keys: left, hand: "left" as const }, { keys: right, hand: "right" as const }]).filter((group) => group.keys.length > 0);
   // Bodies go first so the modules, drawn after, sit on top of them where they meet.
   const drawn: CasePart[] = bodies.map(({ keys: group, hand }) => ({ kind: "body", d: outline(group, group.every((k) => k.r === 0) ? BODY_PAD : HULL_PAD, 0.36), hand }));
   if (display?.surface === "wells") {

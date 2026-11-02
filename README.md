@@ -103,6 +103,14 @@ If a board in the table is connected and keyloom knows it but has no config yet,
 
 The typing lab has been exercised on fake keyboards. The new-keyboard flow and the Keebart Corne have been used on physical boards.
 
+### Manage your keyboards
+
+The keyboard name in the top bar opens a searchable picker, even for a large collection. Choose **Manage keyboards…** there (or **… → Keyboards…**) to remove one from your setup, restore it, or prepare a board-only contribution.
+
+Removal keeps every config and its history and stops automatic syncing; it does not change firmware or disable running software remapping. Restore brings it back with syncing paused. Archived-only boards are available under **Removed**, not in the picker. First-run setup works without an existing layout: connect a keyboard, choose a supported one, or search QMK/ZMK by name.
+
+The CLI equivalents are `keyloom keyboard list`, `remove <board>`, `restore <board>` and `contribute <board> --out <new-directory>`. Contribution export includes a handoff to `/add-keyboard` and [CONTRIBUTING.md](CONTRIBUTING.md), and never publishes anything. Collection entries currently represent board models, not independently targeted physical copies of the same model.
+
 ## AI providers
 
 The agent runs on one of three providers.

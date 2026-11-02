@@ -2,6 +2,7 @@
 // and the engine share one look at USB; previews and adds read the pinned firmware trees as `keyloom keyboard add` does.
 import {
   NotFoundError, StaleBaseError, UsageError, ValidationFailedError, addKeyboard, previewKeyboard, previewPut, putConfig, searchKeyboards, type AddDeps, type App,
+  listKeyboardCollection, removeKeyboard, restoreKeyboard, prepareBoardContribution,
 } from "../app/index.ts";
 import type { SyncEngine } from "../app/sync-engine.ts";
 import { KeyboardsError, type KeyboardsBackend } from "../server/keyboards-backend.ts";
@@ -25,6 +26,10 @@ const defined = <T extends Record<string, unknown>>(o: T): { [K in keyof T]: Exc
 
 export function appKeyboardsBackend(app: App, engine: SyncEngine, deps: AddDeps = {}): KeyboardsBackend {
   return {
+    collection: () => translate(() => listKeyboardCollection(app)),
+    remove: (board) => translate(() => { const result = removeKeyboard(app, board); engine.notifyApplied(); return result; }),
+    restore: (board) => translate(() => { const result = restoreKeyboard(app, board); engine.notifyApplied(); return result; }),
+    contribution: (board) => translate(() => prepareBoardContribution(board).files),
     detect: (search) => translate(() => ({ keyboards: engine.newKeyboards(), candidates: search === null ? [] : searchKeyboards(search) })),
     preview: (request) => translate(() => previewKeyboard(defined(request), deps)),
     add: (request) =>

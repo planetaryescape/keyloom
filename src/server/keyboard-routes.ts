@@ -4,7 +4,9 @@ import type { z } from "zod";
 import type { ApiErrorBody } from "../api/http.ts";
 import {
   AddRequestSchema, AddResponseSchema, DetectResponseSchema, PreviewRequestSchema, PreviewResponseSchema, PutPreviewResponseSchema, PutRequestSchema, PutResponseSchema,
+  CollectionResponseSchema, CollectionActionSchema, CollectionKeyboardSchema,
 } from "../api/keyboards.ts";
+import { zipSync, strToU8 } from "fflate";
 import { checkToken } from "./guard.ts";
 import { KeyboardsError, type KeyboardsBackend } from "./keyboards-backend.ts";
 
@@ -12,14 +14,19 @@ const MAX_BODY_BYTES = 10_000;
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "detect" | "preview" | "add" | "putPreview" | "put";
-const ROUTES: Record<string, { method: "GET" | "POST"; action: Action }> = {
+type Action = "detect" | "preview" | "add" | "putPreview" | "put" | "collection" | "remove" | "restore" | "contribute";
+type Route = { method: "GET" | "POST"; action: Action };
+const ROUTES = new Map<string, Route>(Object.entries({
+  "/api/keyboards/collection": { method: "GET", action: "collection" },
+  "/api/keyboards/remove": { method: "POST", action: "remove" },
+  "/api/keyboards/restore": { method: "POST", action: "restore" },
+  "/api/keyboards/contribute": { method: "POST", action: "contribute" },
   "/api/keyboards/detect": { method: "GET", action: "detect" },
   "/api/keyboards/preview": { method: "POST", action: "preview" },
   "/api/keyboards/add": { method: "POST", action: "add" },
   "/api/keyboards/put/preview": { method: "POST", action: "putPreview" },
   "/api/keyboards/put": { method: "POST", action: "put" },
-};
+} satisfies Record<string, Route>));
 
 async function readBody<T>(request: Request, schema: z.ZodType<T>): Promise<T | Response> {
   const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
@@ -43,12 +50,29 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>): Promise<T | 
 /** Null when the request is not a keyboards route, so startServer carries on with its own. */
 export async function handleKeyboardRoute(request: Request, pathname: string, backend: KeyboardsBackend, token: string): Promise<Response | null> {
   if (!pathname.startsWith("/api/keyboards")) return null;
-  const route = ROUTES[pathname];
+  const route = ROUTES.get(pathname);
   if (route === undefined) return null;
   const denied = checkToken(request, token);
   if (denied) return denied;
   if (request.method !== route.method) return new Response("method not allowed", { status: 405 });
   try {
+    if (route.action === "collection") {
+      if (!backend.collection) return errorResponse(404, "not_found", "Keyboard collection management is unavailable in this server.");
+      return Response.json(CollectionResponseSchema.parse({ keyboards: await backend.collection() }));
+    }
+    if (route.action === "remove" || route.action === "restore" || route.action === "contribute") {
+      const body = await readBody(request, CollectionActionSchema);
+      if (body instanceof Response) return body;
+      if (route.action === "contribute") {
+        if (!backend.contribution) return errorResponse(404, "not_found", "Contribution export is unavailable.");
+        const files = await backend.contribution(body.board);
+        const bytes = zipSync(Object.fromEntries(Object.entries(files).map(([path, text]) => [path, strToU8(text)])));
+        return new Response(bytes, { headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="keyloom-board-contribution.zip"' } });
+      }
+      const action = route.action === "remove" ? backend.remove : backend.restore;
+      if (!action) return errorResponse(404, "not_found", "Keyboard collection management is unavailable.");
+      return Response.json(CollectionKeyboardSchema.parse(await action(body.board)));
+    }
     if (route.action === "detect") {
       const search = new URL(request.url).searchParams.get("search");
       return Response.json(DetectResponseSchema.parse(await backend.detect(search === null || search.trim() === "" ? null : search.trim())));

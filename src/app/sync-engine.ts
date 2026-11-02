@@ -14,6 +14,8 @@ import { sameBuild } from "../layout/conditional-backfill.ts";
 import { withoutLayerNumbers } from "../layout/layer-refs.ts";
 import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash, lastSuccessfulFlashAt } from "../persistence/builds.ts";
 import { boardConfigs, getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
+import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
+import { transact } from "../persistence/transaction.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
   type BoardSyncRow, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
@@ -204,7 +206,7 @@ export class SyncEngine {
    */
   setupBoards(): DetectedKeyboard[] {
     const configured = new Set(boardConfigs(this.app.db).keys());
-    return this.detected.filter((k) => k.status === "known" && k.knownBoard !== null && !configured.has(k.knownBoard.id));
+    return this.detected.filter((k) => k.status === "known" && k.knownBoard !== null && !configured.has(k.knownBoard.id) && !keyboardRemoved(this.app.db, k.knownBoard.id));
   }
 
   subscribe(listener: (boards: BoardSyncView[], newKeyboards: DetectedKeyboard[], setupBoards: DetectedKeyboard[]) => void): () => void {
@@ -304,6 +306,7 @@ export class SyncEngine {
   }
 
   private factsFor(boardId: string, boardName: string, layouts: LayoutRow[], over?: LayoutRow): BoardFacts | null {
+    if (keyboardRemoved(this.app.db, boardId)) return null;
     if (!layouts.some((layout) => layout.archivedAt === null)) return null;
     const reading = this.readingOf(boardId);
     const db = this.app.db;
@@ -494,12 +497,12 @@ export class SyncEngine {
   private launch(b: BoardFacts, trigger: "auto" | "manual"): Running | null {
     if (b.reading.state !== "keyloom" && !(trigger === "manual" && (b.reading.state === "bootloader" || b.reading.state === "remapping_off"))) return null;
     const id = newSyncId();
-    const claim = claimSync(this.app.db, {
+    const claim = transact(this.app.db, () => keyboardRemoved(this.app.db, b.boardId) ? null : claimSync(this.app.db, {
       id, boardId: b.boardId, layoutId: b.layout.id, revisionId: b.layout.headRevisionId,
       boardRevision: b.reading.state === "keyloom" ? b.reading.boardRevision : this.boardRevisionOf(b.boardId), trigger, logPath: `logs/sync-${id}.log`,
       appliedAt: b.layout.updatedAt, owner: this.id, now: this.now(),
-    }, this.alive);
-    if ("busy" in claim) return null;
+    }, this.alive));
+    if (claim === null || "busy" in claim) return null;
     const run: Running = { row: claim.claimed, abort: new AbortController(), flashAbort: new AbortController(), reason: undefined, done: undefined as never };
     run.done = this.execute(run).catch((err: unknown) => {
       // The row stays as it was; the next engine's recovery finishes it.
@@ -652,6 +655,7 @@ export class SyncEngine {
   private async syncLocked(layoutRef: string, put: boolean): Promise<SyncNowResult> {
     const layout = findLayoutRow(this.app.db, layoutRef);
     if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
+    if (keyboardRemoved(this.app.db, layout.boardId)) throw new UsageError("this keyboard was removed from your setup; restore it before syncing");
     if (layout.archivedAt !== null) throw new UsageError(`${layout.name} is archived; restore it first with \`keyloom config restore ${layout.name}\``);
     const onKeyboard = getBoardConfig(this.app.db, layout.boardId);
     if (!put && onKeyboard !== layout.id) {
@@ -664,6 +668,7 @@ export class SyncEngine {
       throw new UsageError(`keyloom can't tell what a ${name} is running or restart it by itself, so it can't sync it. Use \`keyloom build\` and \`keyloom flash\`.`);
     }
     await this.refresh(true);
+    if (keyboardRemoved(this.app.db, layout.boardId)) throw new UsageError("this keyboard was removed from your setup; restore it before syncing");
     const reading = this.readingOf(board.definition.id);
     if (reading.state === "absent") {
       throw new UsageError(board.definition.firmware === "kanata"
@@ -736,6 +741,7 @@ export class SyncEngine {
 
   /** Turns auto-sync on or off. It can turn on only after a flash on this board that keyloom did by itself and verified (D-160). */
   setAutoSync(boardId: string, on: boolean): BoardSyncRow {
+    if (on && keyboardRemoved(this.app.db, boardId)) throw new UsageError("restore this keyboard before enabling automatic sync");
     this.requireSyncable(boardId);
     const bs = getBoardSync(this.app.db, boardId);
     if (on && bs.provenAt === null && isRemapper(boardId)) {
@@ -753,6 +759,7 @@ export class SyncEngine {
 
   /** Pause stops auto-sync starting anything, and stops a build of its own that has not reached the keyboard. */
   setPaused(boardId: string, paused: boolean): BoardSyncRow {
+    if (!paused && keyboardRemoved(this.app.db, boardId)) throw new UsageError("restore this keyboard before resuming sync");
     this.requireSyncable(boardId);
     storePaused(this.app.db, boardId, paused);
     const run = this.running;

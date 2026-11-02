@@ -4,6 +4,25 @@ Status: engine and CLI built (rung 21 part 1, D-330 to D-335), 2026-10-16, on or
 
 BK: "If I get a new keyboard I just connect it and say put my config on this. Doesn't matter what keyboard it is as long as it uses ZMK or QMK."
 
+Collection follow-up (D-476), 2026-11-02, unreleased: bounded searchable switching, reversible collection removal/restore, first-run/manual setup and board-only contribution handoff are built. Browser verification uses synthetic collections and fake USB, not additional physical-board evidence.
+
+## Manage a collection
+
+Open the keyboard picker and choose **Manage keyboards…**. Removal keeps configs and history, pauses syncing and refuses to run during an active sync or firmware write. Restore leaves syncing paused. An archived-only keyboard appears under Removed; restoring it unarchives one config. Removal does not rewrite firmware or turn off a running software remapper. Entries identify board models, not separate physical copies.
+
+The CLI exposes the same operations as `keyboard list`, `keyboard remove <board>` and `keyboard restore <board>`. All support the global `--data-dir` and output format options. `keyboard contribute <board> --out <new-directory> [--as maker/keyboard]` exports only the definition, generated geometry and handoff instructions; it refuses an existing output directory.
+
+The authenticated HTTP routes use the normal `x-keyloom-token` header:
+
+| Route | Request | Success |
+|---|---|---|
+| `GET /api/keyboards/collection` | None | `{ keyboards: CollectionKeyboard[] }` |
+| `POST /api/keyboards/remove` | `{ board: "vendor/keyboard" }` | `CollectionKeyboard` |
+| `POST /api/keyboards/restore` | Same | `CollectionKeyboard` |
+| `POST /api/keyboards/contribute` | Same | ZIP download |
+
+The collection row has `boardId`, `name`, nullable `removedAt` and `layoutId`, `configCount`, `paused` and `modelled`. POST bodies require JSON and reject extra fields. Invalid input or a busy operation returns 400, an unknown collection board returns 404, and a missing or wrong token returns 401. Export can also package a known catalogue board without configs. Neither removal, restore nor export writes to a keyboard.
+
 Today a board reaches keyloom as a contributed definition ([04](04-boards-and-contributions.md), rung 8). This chapter makes keyloom build that definition itself, from a keyboard it sees on USB. BK then confirms only what it can't work out, and says "put my config on this" (D-236). The research, with pinned sources and counts across QMK's and ZMK's trees, is [../research/new-keyboard.md](../research/new-keyboard.md).
 
 ## Recognising the keyboard
@@ -31,7 +50,7 @@ The physical layout comes from the firmware tree: QMK's `keyboard.json` `LAYOUT`
 | Home row | BK points at it once | Can't be derived |
 | Flash recipe | From the bootloader type | 9% of QMK boards used recipes keyloom had. atmel-dfu, caterina and stm32-dfu cover 76% of the boards with USB IDs and are the new `dfu-tool` recipes (D-365) |
 
-The derived definition goes through the same `keyloom boards check` as a contributed one. BK can contribute it upstream with one command, which closes the loop with rung 8.
+The derived definition goes through the same `keyloom boards check` as a contributed one. `keyloom keyboard contribute <board> --as <maker>/<keyboard> --out <new-directory>` prepares the board folder and a modelling/PR handoff (D-476); the app's Manage keyboards panel downloads the same board-only data as a ZIP. Neither path opens a PR or publishes automatically. Photos are optional for the generated 3D-style case and needed to verify a faithful custom outline.
 
 ## Putting BK's config on it
 

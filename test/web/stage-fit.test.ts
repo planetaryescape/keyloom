@@ -19,6 +19,12 @@ const STAGES = [
   { window: "390x844", width: 366, height: 592, min: MIN_UNIT.mouse, phone: true },
 ] as const;
 
+test("an empty case hint falls back to geometry for one-piece detection", () => {
+  const keys = [0, 1].map((x) => ({ x, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }));
+  expect(isOnePiece({ hands: { left: [0], right: [1] }, display: { case: [] } }, keys)).toBe(true);
+  expect(isOnePiece({ hands: { left: [0], right: [1] }, display: { case: [] } }, [keys[0]!, { ...keys[1]!, x: 4 }])).toBe(false);
+});
+
 describe("every shipped board fits the editor's stage", () => {
   for (const { definition: d, geometry } of listBoards()) {
     const keys = applyDisplayRotation(geometry.keys, d.display);

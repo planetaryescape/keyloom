@@ -6,6 +6,7 @@ import type { PreviewResponse, PutPreviewResponse } from "../../api/keyboards.ts
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
 import "./keyboards.css";
+import { isOnePiece } from "../../boards/one-piece.ts";
 
 export type PutSource = { id: string; name: string; boardName: string; note: string | null };
 
@@ -133,7 +134,7 @@ function Review({ flow, preview }: { flow: NewKeyboard; preview: PreviewResponse
           <>
             <dl className="nb-facts">
               <dt>Keys</dt><dd>{board.keys.length}{board.thumbs.length > 0 ? `, ${plural(board.thumbs.length, "thumb key")}` : ""}</dd>
-              <dt>Halves</dt><dd>Split at the widest gap: {board.hands.left.length} and {board.hands.right.length}</dd>
+              <dt>Body</dt><dd>{isOnePiece({ hands: board.hands }, board.keys) ? "One piece" : `Split: ${board.hands.left.length} and ${board.hands.right.length} keys`}</dd>
               <dt>Home row</dt><dd>{rowWord(board.homeRow, preview?.rows.length ?? 0)} (you said)</dd>
               {controller === null ? null : (<><dt>Controller</dt><dd>{controller}</dd></>)}
               <dt>Firmware</dt><dd>{step.candidate.firmware === "zmk" ? "ZMK" : "QMK"}, from its own tree</dd>
@@ -165,6 +166,10 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
   const chosenFor = (source: number, first: number) => step.choices[String(source)] ?? first;
   const needle = filter.trim().toLowerCase();
   const shown = needle === "" ? sources : sources.filter((s) => `${s.name} ${s.boardName}`.toLowerCase().includes(needle));
+  const start = async () => {
+    const id = await flow.startBlank(`${step.boardName} daily`);
+    if (id !== null) onMade(id);
+  };
   return (
     <section className="nb-panel" aria-label={`Put a config on the ${step.boardName}`}>
       <header className="nb-panel-head">
@@ -186,8 +191,8 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
             </button>
           ))}
         </div>
-        {shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
-        {step.source === null ? <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : preview === null ? (
+        {sources.length === 0 ? <div className="nb-blank"><p>This is your first keyboard. Start a config, then edit its keys.</p><button type="button" className="bar-apply" disabled={flow.busy} onClick={() => void start()}>Start a config</button><p className="nb-note">Nothing is applied or flashed. Use Import instead if you already have a keymap.</p></div> : shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
+        {step.source === null ? sources.length === 0 ? null : <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : preview === null ? (
           <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Mapping it…</p>
         ) : (
           <>

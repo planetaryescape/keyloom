@@ -69,6 +69,21 @@ describe("a board's case (D-266)", () => {
     expect(caseParts(keys, board.hands, undefined).map((part) => part.kind)).toEqual(["body", "body"]);
   });
 
+  test("an empty custom case still generates an enclosure, including on a phone", async () => {
+    const { board, keys } = await load("foostan/corne");
+    expect(caseParts(keys, board.hands, { case: [] })).toEqual(caseParts(keys, board.hands, undefined));
+    expect(caseParts(keys, board.hands, { case: [] }, "right").map((part) => part.hand)).toEqual(["right"]);
+  });
+
+  test("adjacent hands share one generated enclosure, rather than inventing a physical split", () => {
+    const keys = [0, 1, 2, 3].map((x) => ({ x, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }));
+    const parts = caseParts(keys, { left: [0, 1], right: [2, 3] }, undefined);
+    expect(parts.map((part) => ({ kind: part.kind, hand: part.hand }))).toEqual([{ kind: "body", hand: null }]);
+    const bounds = caseBounds(parts)!;
+    expect(bounds.minX).toBeLessThan(0);
+    expect(bounds.maxX).toBeGreaterThan(4);
+  });
+
   test("one hand on a phone draws only that hand's case", async () => {
     const { board, keys } = await load("zsa/moonlander");
     const parts = caseParts(keys, board.hands, board.display, "left");

@@ -4,7 +4,8 @@
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { ProposalsResponseSchema } from "../../src/api/configs.ts";
 import { AddResponseSchema, DetectResponseSchema, PreviewResponseSchema, PutPreviewResponseSchema, PutResponseSchema } from "../../src/api/keyboards.ts";
-import { detectKeyboards, importLayout, openApp } from "../../src/app/index.ts";
+import { detectKeyboards, importLayout, openApp, newConfig } from "../../src/app/index.ts";
+import { unzipSync, strFromU8 } from "fflate";
 import type { SyncEngine } from "../../src/app/sync-engine.ts";
 import { listBoards, setUserBoards } from "../../src/boards/registry.ts";
 import { appConfigsBackend } from "../../src/cli/configs-backend.ts";
@@ -51,6 +52,25 @@ async function serve(opts: { hideCommittedCorne?: boolean } = {}) {
 }
 
 describe("the guard", () => {
+  test("collection writes are authenticated and schema-checked; a contribution contains only board files", async () => {
+    const { app, call, post } = await serve();
+    const config = newConfig(app, { name: "Collection synthetic", from: "blank", board: "foostan/corne" });
+    expect((await call("/api/keyboards/collection", {}, null)).status).toBe(401);
+    expect((await call("/api/keyboards/remove", { method: "POST", body: JSON.stringify({ board: "foostan/corne" }) }, null)).status).toBe(401);
+    expect((await post("/api/keyboards/remove", { board: "foostan/corne", force: true })).status).toBe(400);
+    expect((await post("/api/keyboards/remove", { board: "missing" })).status).toBe(404);
+    const removed = await post("/api/keyboards/remove", { board: "foostan/corne" });
+    expect(removed.status).toBe(200);
+    expect((await removed.json()).removedAt).not.toBeNull();
+    expect((await (await call("/api/keyboards/collection")).json()).keyboards[0]).toMatchObject({ boardId: "foostan/corne", layoutId: config.id });
+    expect((await (await post("/api/keyboards/restore", { board: "foostan/corne" })).json())).toMatchObject({ removedAt: null, paused: true });
+    const bundle = await post("/api/keyboards/contribute", { board: "foostan/corne" });
+    expect(bundle.headers.get("content-type")).toBe("application/zip");
+    const files = unzipSync(new Uint8Array(await bundle.arrayBuffer()));
+    expect(Object.keys(files).sort()).toEqual(["CONTRIBUTION.md", "boards/foostan/corne/board.json", "boards/foostan/corne/geometry.json"]);
+    expect(strFromU8(files["CONTRIBUTION.md"]!)).toContain("/add-keyboard");
+    app.db.close();
+  });
   test("every route needs the token, a write needs JSON, and the wrong method is refused", async () => {
     const { call } = await serve();
     expect((await call("/api/keyboards/detect", {}, null)).status).toBe(401);

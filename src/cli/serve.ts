@@ -17,6 +17,7 @@ import { appReviewBackend } from "./review-backend.ts";
 import { appSyncBackend } from "./sync-backend.ts";
 import { createDataVersionWatcher } from "./data-version-watcher.ts";
 import { drainAgentRuns, reconcileAgentRuns } from "../app/agent-runs.ts";
+import { listSetupLayouts } from "../app/index.ts";
 
 export const DEFAULT_PORT = 4477;
 
@@ -24,7 +25,7 @@ export const DEFAULT_PORT = 4477;
 export function appLayoutSource(app: App): LayoutSource {
   return {
     async list() {
-      return listLayouts(app).map((r) => ({
+      return listSetupLayouts(app).map((r) => ({
         id: r.id,
         name: r.name,
         boardId: r.boardId,

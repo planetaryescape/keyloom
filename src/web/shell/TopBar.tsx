@@ -1,5 +1,5 @@
 import { Activity, Check, ChevronDown, CircleHelp, Code, Ellipsis, Eye, Hammer, History, Keyboard as KeyboardIcon, Library, ListTree, LoaderCircle, Monitor, Moon, MousePointer2, Redo2, Search, SlidersHorizontal, Spline, Sun, SunMoon, Undo2 } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { PHONE, useMediaQuery } from "./useMediaQuery.ts";
 import type { BoardChoice } from "../../api/http.ts";
 import type { GeometryKey } from "../../boards/schema.ts";
@@ -51,6 +51,8 @@ export interface UndoState {
 }
 
 interface TopBarProps {
+  onManageKeyboards?: (() => void) | undefined;
+  onAddKeyboard?: (() => void) | undefined;
   boards?: { entries: readonly BoardEntry[]; active: string | null; onSelect: (boardId: string) => void };
   /** Beside the boards: the chip for a keyboard keyloom hasn't met (D-336). */
   boardsAfter?: ReactNode;
@@ -91,7 +93,7 @@ const THEMES: readonly { value: ThemeChoice; label: string; icon: typeof Sun }[]
 ];
 
 // The top bar (23#chrome-recedes): which board, one line of state, and the few things used often. Everything else is in the menu.
-export function TopBar({ boards, boardsAfter, sync, ask, undo, menu }: TopBarProps) {
+export function TopBar({ boards, boardsAfter, sync, ask, undo, menu, onManageKeyboards, onAddKeyboard }: TopBarProps) {
   const [theme, setTheme] = useTheme();
   // A phone keeps the board menu, the sync light, Ask and the menu; undo, redo and the theme move into the menu (P1 review).
   const phone = useMediaQuery(PHONE);
@@ -100,28 +102,9 @@ export function TopBar({ boards, boardsAfter, sync, ask, undo, menu }: TopBarPro
     <header className="topbar">
       <div className="topbar-start">
         <span className="topbar-word">keyloom</span>
-        {boards === undefined || boards.entries.length === 0 ? null : phone ? <BoardMenu {...boards} /> : (
-          <nav className="board-switch" aria-label="Boards">
-            {boards.entries.map((entry) => {
-              const on = entry.id === boards.active;
-              return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  className="board-switch-item"
-                  aria-current={on ? "page" : undefined}
-                  title={entry.name}
-                  aria-label={entry.name}
-                  onClick={() => boards.onSelect(entry.id)}
-                >
-                  <BoardMark entry={entry} />
-                  {on ? <span className="board-switch-name">{entry.name}</span> : null}
-                  {entry.tone === null || entry.tone === undefined || on ? null : <i className="board-switch-light" data-tone={entry.tone} aria-hidden="true" />}
-                </button>
-              );
-            })}
-          </nav>
-        )}
+        {boards === undefined || boards.entries.length === 0
+          ? onManageKeyboards === undefined ? null : <button className="board-switch-item board-menu-trigger" type="button" onClick={onManageKeyboards}><KeyboardIcon size={16} />Keyboards</button>
+          : <BoardMenu {...boards} onManage={onManageKeyboards} onAdd={onAddKeyboard} />}
         {boardsAfter}
       </div>
       <div className="topbar-middle">{sync}</div>
@@ -147,6 +130,7 @@ export function TopBar({ boards, boardsAfter, sync, ask, undo, menu }: TopBarPro
         <Menu label="More" align="end" triggerClassName="topbar-icon" trigger={<Ellipsis size={18} aria-hidden="true" />}>
           {(close) => (
             <>
+              {onManageKeyboards === undefined ? null : <Item icon={KeyboardIcon} label="Keyboards…" onSelect={() => { close(); onManageKeyboards(); }} />}
               {undo === undefined ? null : (
                 <>
                   {phone ? <Item icon={Undo2} label="Undo" hint="⌘Z" disabled={!undo.canUndo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} /> : null}
@@ -220,8 +204,10 @@ function BoardMark({ entry }: { entry: BoardEntry }) {
   return entry.board?.keys === undefined ? <KeyboardIcon size={16} aria-hidden="true" /> : <Silhouette keys={entry.board.keys} display={entry.board.display} />;
 }
 
-// On a phone the switcher is one button, the board on screen, that opens the list of boards.
-function BoardMenu({ entries, active, onSelect }: NonNullable<TopBarProps["boards"]>) {
+// A bounded, searchable picker at every width keeps a large collection out of the header.
+function BoardMenu({ entries, active, onSelect, onManage, onAdd }: NonNullable<TopBarProps["boards"]> & { onManage?: (() => void) | undefined; onAdd?: (() => void) | undefined }) {
+  const [query, setQuery] = useState("");
+  const matches = entries.filter((entry) => `${entry.name} ${entry.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const current = entries.find((entry) => entry.id === active) ?? entries[0];
   if (current === undefined) return null;
   return (
@@ -236,15 +222,21 @@ function BoardMenu({ entries, active, onSelect }: NonNullable<TopBarProps["board
         </>
       }
     >
-      {(close) =>
-        entries.map((entry) => (
+      {(close) => <div className="keyboard-picker">
+        <label className="keyboard-picker-search"><Search size={14} aria-hidden="true" /><input data-menu-focus type="search" aria-label="Search keyboards" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Find a keyboard (${entries.length})`} /></label>
+        <div className="keyboard-picker-results">
+        {matches.map((entry) => (
           <button key={entry.id} type="button" role="menuitemradio" aria-checked={entry.id === active} className="menu-item" onClick={() => { close(); onSelect(entry.id); }}>
             <BoardMark entry={entry} />
             <span className="menu-item-label">{entry.name}</span>
             {entry.id === active ? <Check size={14} aria-hidden="true" /> : null}
           </button>
-        ))
-      }
+        ))}
+        {matches.length === 0 ? <p className="keyboard-picker-empty">No keyboards match “{query}”.</p> : null}
+        </div>
+        {onAdd === undefined ? null : <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setQuery(""); onAdd(); }}>Add a keyboard…</button>}
+        {onManage === undefined ? null : <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); setQuery(""); onManage(); }}>Manage keyboards…</button>}
+      </div>}
     </Menu>
   );
 }

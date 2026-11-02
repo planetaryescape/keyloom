@@ -1,0 +1,85 @@
+import { Download, Keyboard as KeyboardIcon, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CollectionResponseSchema, CollectionKeyboardSchema, type CollectionKeyboard } from "../../api/keyboards.ts";
+import type { BoardChoice } from "../../api/http.ts";
+import { request, failure } from "../api-write.ts";
+import { Silhouette } from "../shell/TopBar.tsx";
+import "./collection.css";
+
+const GUIDE = "https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md";
+
+export function KeyboardCollection({ token, choices, active, onChanged, onClose, onAdd }: {
+  token: string; choices: readonly BoardChoice[]; active: string | null; onChanged: (layoutId?: string) => void; onClose: () => void; onAdd: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [items, setItems] = useState<CollectionKeyboard[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [removed, setRemoved] = useState(false);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const load = async (signal?: AbortSignal) => setItems((await request("GET", "/api/keyboards/collection", token, CollectionResponseSchema, signal)).keyboards);
+  useEffect(() => {
+    dialog.current?.showModal();
+    const abort = new AbortController();
+    void load(abort.signal).catch((error) => { if (!abort.signal.aborted) setProblem(error instanceof Error ? error.message : "Couldn't load keyboards."); });
+    return () => abort.abort();
+  }, [token]);
+  const change = async (keyboard: CollectionKeyboard, action: "remove" | "restore") => {
+    setBusy(keyboard.boardId); setProblem(null); setNote(null);
+    try {
+      const result = await request("POST", `/api/keyboards/${action}`, token, CollectionKeyboardSchema, undefined, { board: keyboard.boardId });
+      await load();
+      setConfirm(null);
+      setNote(action === "remove" ? `${keyboard.name} removed. Configs and history are kept under Removed.` : `${keyboard.name} restored. Syncing stays paused until you resume it.`);
+      if (action === "restore" && result.layoutId) { onChanged(result.layoutId); onClose(); }
+      else onChanged();
+    } catch (error) { setProblem(error instanceof Error ? error.message : "That didn't work."); }
+    finally { setBusy(null); }
+  };
+  const download = async (keyboard: CollectionKeyboard) => {
+    setBusy(keyboard.boardId); setProblem(null); setNote(null);
+    try {
+      const response = await fetch("/api/keyboards/contribute", { method: "POST", headers: { "x-keyloom-token": token, "content-type": "application/json" }, body: JSON.stringify({ board: keyboard.boardId }) });
+      if (!response.ok) throw await failure(response);
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a"); link.href = url; link.download = "keyloom-board-contribution.zip"; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setNote("Downloaded board data and CONTRIBUTION.md. No personal layouts are included. Nothing was published.");
+    } catch (error) { setProblem(error instanceof Error ? error.message : "Couldn't prepare the contribution."); }
+    finally { setBusy(null); }
+  };
+  const matches = (items ?? []).filter((k) => (k.removedAt !== null) === removed && `${k.name} ${k.boardId}`.toLowerCase().includes(query.trim().toLowerCase()));
+  return <dialog ref={dialog} className="keyboard-collection" aria-labelledby="keyboard-collection-title" onClose={onClose} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <header className="collection-head"><div><h2 id="keyboard-collection-title">Your keyboards</h2><p>Switch, restore or stop managing a keyboard.</p></div><button className="sheet-close" type="button" aria-label="Close keyboards" onClick={onClose}><X size={16} /></button></header>
+    <div className="collection-tools">
+      <label className="keyboard-picker-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="Find in your keyboards" placeholder="Name or maker" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <div className="collection-tabs" role="group" aria-label="Keyboard collection">
+        <button type="button" aria-pressed={!removed} onClick={() => { setRemoved(false); setConfirm(null); }}>In setup ({items?.filter((k) => k.removedAt === null).length ?? 0})</button>
+        <button type="button" aria-pressed={removed} onClick={() => { setRemoved(true); setConfirm(null); }}>Removed ({items?.filter((k) => k.removedAt !== null).length ?? 0})</button>
+      </div>
+    </div>
+    {problem ? <p role="alert" className="collection-message">{problem}<button type="button" className="sheet-action" onClick={() => { setProblem(null); void load().catch((error) => setProblem(error instanceof Error ? error.message : "Couldn't load keyboards.")); }}>Try again</button></p> : null}
+    {note ? <p role="status" className="collection-message">{note}</p> : null}
+    <div className="collection-list">
+      {items === null && !problem ? <p><LoaderCircle size={16} className="spin" /> Loading your keyboards…</p> : null}
+      {items !== null && matches.length === 0 ? <p className="collection-empty">{query ? "No keyboards match your search." : removed ? "No removed keyboards. Removed keyboards stay here with their configs and history." : "No keyboards in your setup yet. Add one below, or restore one from Removed."}</p> : null}
+      {matches.map((keyboard) => {
+        const choice = choices.find((c) => c.id === keyboard.boardId);
+        return <section className="collection-keyboard" key={keyboard.boardId} aria-label={keyboard.name}>
+          <div className="collection-identity">{choice?.keys ? <Silhouette keys={choice.keys} display={choice.display} width={42} height={24} /> : <KeyboardIcon size={24} aria-hidden="true" />}<div><h3>{keyboard.name}</h3><p>{keyboard.configCount} config{keyboard.configCount === 1 ? "" : "s"} · {keyboard.modelled ? "Crafted case" : "Approximate case"}{keyboard.boardId === active ? " · Viewing" : ""}</p><small>{keyboard.boardId}</small></div></div>
+          <div className="collection-actions">
+            {removed ? <button type="button" className="sheet-action" disabled={busy !== null} onClick={() => void change(keyboard, "restore")}>Restore {keyboard.name}</button> : <>
+              {keyboard.layoutId ? <button type="button" className="sheet-action" onClick={() => { onChanged(keyboard.layoutId ?? undefined); onClose(); }}>Open</button> : null}
+              <button type="button" className="sheet-action" disabled={busy !== null} onClick={() => setConfirm(keyboard.boardId)}>Remove from setup…</button>
+            </>}
+            <button type="button" className="sheet-action" disabled={busy !== null} onClick={() => void download(keyboard)}><Download size={13} aria-hidden="true" />Prepare contribution</button>
+          </div>
+          {confirm === keyboard.boardId ? <div className="collection-confirm"><p>Remove {keyboard.name} from your setup? Automatic syncing stops. Every config and its history stays recoverable under Removed. This does not change the keyboard's firmware or disable running software remapping.</p><div><button type="button" className="sheet-action" disabled={busy !== null} onClick={() => setConfirm(null)}>Cancel</button><button type="button" className="bar-apply" disabled={busy !== null} onClick={() => void change(keyboard, "remove")}>Remove keyboard</button></div></div> : null}
+        </section>;
+      })}
+    </div>
+    <footer className="collection-foot"><div><a href={GUIDE} target="_blank" rel="noopener">Model and contribute a keyboard</a><p>Use <code>/add-keyboard</code> in a clone. Photos refine the case; firmware defines the keys.</p></div><button className="bar-apply" type="button" onClick={onAdd}><Plus size={14} aria-hidden="true" />Add keyboard</button></footer>
+  </dialog>;
+}

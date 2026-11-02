@@ -15,6 +15,8 @@ import { useNow } from "./release/useNow.ts";
 import { useRelease } from "./release/useRelease.ts";
 import { useSync, type SyncApi } from "./sync/useSync.ts";
 import { Viewer, type Arrival } from "./Viewer.tsx";
+import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
+import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
 
 type Failure = { message: string; retryable: boolean };
 type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
@@ -22,12 +24,12 @@ type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure 
 // Runs a state change that replaces the page as a crossfade where the browser has view transitions; elsewhere, and with reduced
 // motion, it happens at once. flushSync makes React commit inside the transition's callback, so the new page is what it captures.
 function crossfade(update: () => void) {
-  const doc = document as Document & { startViewTransition?: (callback: () => void) => unknown };
-  if (doc.startViewTransition === undefined || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  // A collection change can switch the underlying layout. Do not cover an open dialog with the page's transition snapshot.
+  if (document.startViewTransition === undefined || document.querySelector("dialog[open]") !== null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     update();
     return;
   }
-  doc.startViewTransition(() => flushSync(update));
+  document.startViewTransition(() => flushSync(update));
 }
 
 export function App({ token }: { token: string }) {
@@ -40,6 +42,8 @@ export function App({ token }: { token: string }) {
   const requestSequence = useRef(0);
   // The import screen from the layout menu; with no layouts it is the page itself.
   const [importing, setImporting] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [adding, setAdding] = useState(false);
   // Bumping this refetches the list; it backs the "Check again" and "Try again" buttons.
   const [attempt, setAttempt] = useState(0);
   // Where each keyboard stands against its layout's head; the server's engine does the work and this follows it (17).
@@ -58,16 +62,18 @@ export function App({ token }: { token: string }) {
     setListError(null);
     fetchLayouts(token, controller.signal)
       .then((list) => {
-        setLayouts(list);
+        if (controller.signal.aborted) return;
+        const live = list.filter((layout) => layout.archivedAt == null);
+        setLayouts(live);
         setSelectedId((previous) =>
-          list.some((layout) => layout.id === previous) ? previous : (list[0]?.id ?? null),
+          live.some((layout) => layout.id === previous) ? previous : (live[0]?.id ?? null),
         );
       })
-      .catch((error: unknown) => {
+      .catch((error) => {
         if (!controller.signal.aborted) setListError(describe(error));
       });
     return () => controller.abort();
-  }, [token, attempt]);
+  }, [token, attempt, sync.lastLayoutUpdated]);
 
   useEffect(() => {
     if (selectedId === null) return;
@@ -96,8 +102,20 @@ export function App({ token }: { token: string }) {
     setAttempt((count) => count + 1);
   };
 
+  const reload = (selectId?: string) => {
+    if (selectId !== undefined) setSelectedId(selectId);
+    setAttempt((count) => count + 1);
+  };
+  const controls = {
+    onManageKeyboards: () => setManaging(true),
+    onAddKeyboard: () => { setManaging(false); setAdding(true); },
+  };
+  const wrap = (page: ReactNode) => <>{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
+    active={layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null} onChanged={reload}
+    onClose={() => setManaging(false)} onAdd={controls.onAddKeyboard} /> : null}</>;
+
   if (listError !== null) {
-    return (
+    return wrap(
       <Shell>
         <ErrorState title="Can't load your layouts" {...(listError.retryable ? { onRetry: retry } : {})}>
           {listError.message}
@@ -112,6 +130,7 @@ export function App({ token }: { token: string }) {
     setSelectedId(result.layoutId);
     setCarry({ id: result.layoutId, layerName: null, chatOpen: false, thread: null, review: true });
     setImporting(false);
+    setAdding(false);
     setAttempt((count) => count + 1);
   };
   if (layouts === null) {
@@ -121,10 +140,13 @@ export function App({ token }: { token: string }) {
       </Shell>
     );
   }
-  if (layouts.length === 0) {
-    return (
-      <Shell>
-        <ImportScreen token={token} onImported={imported} />
+  if (layouts.length === 0 || adding) {
+    return wrap(
+      <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: () => setImporting(true) }}>
+        <KeyboardWelcome token={token} choices={boardChoices} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name,
+          boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
+          onMade={(id, proposals = false) => { setAdding(false); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
+          onManage={controls.onManageKeyboards} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />
       </Shell>
     );
   }
@@ -132,13 +154,9 @@ export function App({ token }: { token: string }) {
   const summary = layouts.find((layout) => layout.id === selectedId) ?? layouts[0];
   if (summary === undefined) return null;
   // A new, renamed or restored config changes the list; the switcher asks for it again, and a new config opens (D-315).
-  const reload = (selectId?: string) => {
-    if (selectId !== undefined) setSelectedId(selectId);
-    setAttempt((count) => count + 1);
-  };
-  const menu = { layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setCarry(null); setSelectedId(id); }, onImport: () => setImporting(true), onReload: reload, boardChoices };
+  const menu = { ...controls, layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setCarry(null); setSelectedId(id); }, onImport: () => setImporting(true), onReload: reload, boardChoices };
   if (importing) {
-    return (
+    return wrap(
       <Shell menu={menu}>
         <ImportScreen token={token} onImported={imported} onBack={() => setImporting(false)} />
       </Shell>
@@ -151,14 +169,14 @@ export function App({ token }: { token: string }) {
   const current = view !== null && view.id === summary.id ? view : previous !== undefined ? view : null;
   const shown = current !== null && current.id !== summary.id && previous !== undefined ? previous : summary;
   if (current === null) {
-    return (
+    return wrap(
       <Shell menu={menu} fill>
         <BoardSkeleton boardId={summary.boardId} label="Loading layout" />
       </Shell>
     );
   }
   if ("error" in current) {
-    return (
+    return wrap(
       <Shell menu={menu}>
         <ErrorState title="Can't show this layout" {...(current.error.retryable ? { onRetry: retry } : {})}>
           {current.error.message}
@@ -167,7 +185,7 @@ export function App({ token }: { token: string }) {
     );
   }
 
-  return (
+  return wrap(
     <LayoutPage
       key={shown.id}
       token={token}
@@ -282,7 +300,7 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
   return null;
 }
 
-export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void; onReload?: (selectId?: string) => void; boardChoices?: readonly BoardChoice[] };
+export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void; onReload?: (selectId?: string) => void; boardChoices?: readonly BoardChoice[]; onManageKeyboards?: () => void; onAddKeyboard?: () => void };
 
 // `fill` is the layout page, which is exactly the window tall so the board and its panel never scroll the page. A `bare` page draws its
 // own top bar (the layout page's has the sync line, undo and the menu).

@@ -11,6 +11,7 @@ import {
 } from "../persistence/layouts.ts";
 import { activeSyncs } from "../persistence/syncs.ts";
 import { transact } from "../persistence/transaction.ts";
+import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { readDefaultKeymap } from "./default-keymap.ts";
@@ -122,6 +123,7 @@ export function newConfig(app: App, input: NewConfigInput): ConfigView {
     summary = `Copied from ${source.name}: ${plainSummary(found.revision.summary)}`;
   }
   try {
+    if (keyboardRemoved(app.db, layout.boardId)) throw new UsageError("restore this keyboard in Manage keyboards or with `keyloom keyboard restore <board>` before creating another config");
     const created = createLayout(app.db, { name, layout, summary, origin: "import", ...(input.selectFirst === undefined ? {} : { selectFirst: input.selectFirst }), ...(copiedFrom ? { copiedFrom } : {}) });
     return viewOf(app, created.layout, getBoardConfig(app.db, created.layout.boardId));
   } catch (err) {
