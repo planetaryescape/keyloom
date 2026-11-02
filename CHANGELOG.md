@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.70.0](https://github.com/planetaryescape/keyloom/compare/v0.69.0...v0.70.0) (2026-11-02)
+
+
+### Features
+
+* pegboard home page with flight transition to configurator ([36fbb86](https://github.com/planetaryescape/keyloom/commit/36fbb86b8af1099e672517127f7876d058762225))
+* pegboard home page with flight transition to configurator ([993d14f](https://github.com/planetaryescape/keyloom/commit/993d14ff7391111de973069314d581bec31d47bb))
+
+
+### Bug Fixes
+
+* add pegboard wall navigation item to mobile menu ([a1dace5](https://github.com/planetaryescape/keyloom/commit/a1dace55419795ede2c7463c3878841a7c804f6e))
+
 ## [0.69.0](https://github.com/planetaryescape/keyloom/compare/v0.68.4...v0.69.0) (2026-11-02)
 
 
