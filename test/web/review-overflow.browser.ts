@@ -25,7 +25,7 @@ try {
       const close=panel.querySelector('.sheet-close'),board=document.querySelector('.keyboard');
       const rect=panel.getBoundingClientRect(),control=close.getBoundingClientRect();
       const overflow={viewport:innerWidth,panel:rect.toJSON(),close:control.toJSON(),bodyClient:body.clientWidth,bodyScroll:body.scrollWidth,pageClient:page.clientWidth,pageScroll:page.scrollWidth};
-      if(!body.textContent.includes('hold-trigger-key-positions') || body.querySelectorAll('.br-item').length!==8) throw Error('long review fixture missing');
+      if(!body.textContent.includes('positions 1 through 80 currently included') || !body.textContent.includes('last words') || body.textContent.includes('hold-trigger-key-positions') || body.textContent.includes('{"') || body.querySelectorAll('.br-item').length!==8) throw Error('long human-readable review stress content is missing or raw JSON leaked');
       if(rect.right>innerWidth+1 || rect.left<0 || control.right>innerWidth || control.left<rect.left || body.scrollWidth>body.clientWidth+1 || page.scrollWidth>page.clientWidth+1) throw Error('Review text or controls extend past sidebar: '+JSON.stringify(overflow));
       const walker=document.createTreeWalker(panel,NodeFilter.SHOW_TEXT);
       while(walker.nextNode()) {

@@ -8,18 +8,17 @@ import { FakeChat } from "../helpers/fake-chat-backend.ts";
 
 const sample = await devSample();
 const editor = new FakeEditor(sample);
-const options = { bindings: "&kp &kp", "tapping-term-ms": 200, flavor: "tap-preferred", "hold-trigger-on-release": true, "hold-trigger-key-positions": Array.from({ length: 80 }, (_, i) => i) };
-const body = `Tap/hold profile synthetic_hold: ${JSON.stringify(options)} → ${JSON.stringify({ ...options, "quick-tap-ms": 300 })}. These are source settings, not proof of better rolls or chords. Source-derived change only; consult the separate runtime-test coverage.`;
+const body = `The synthetic profile has an 80-position hold-trigger set, with positions 1 through 80 currently included. The proposed setting also changes the quick-tap term to 300 ms. This intentionally long, human-readable finding checks wrapping and sidebar scrolling without exposing serialized config or suggesting a typing outcome.`;
 const show = async (ref: string): Promise<ReviewResponse> => ({
   layoutId: ref, headRevisionId: sample.revision.id, workloadActivities: [], review: {
     id: "synthetic-long-review", layoutId: ref, revisionId: sample.revision.id, trigger: "connect", checkedAt: 0,
     checks: { status: "done", summary: { layers: sample.document.layers.length, keys: 72, combos: 0 } },
     ai: { status: "done", reason: null, model: "synthetic" }, freshness: { current: true, reason: null }, fixed: [],
     items: Array.from({ length: 8 }, (_, index) => ({
-      id: `synthetic-${index}`, source: index === 0 ? "agent" : "check", kind: index === 0 ? "suggestion" : "hint", severity: "info",
-      code: "synthetic-long-review", title: index === 0 ? "Review synthetic tap/hold settings" : `Synthetic finding ${index}`,
+      id: `synthetic-${index}`, source: "check", kind: "hint", severity: "info",
+      code: "synthetic-long-review", title: index === 0 ? "Synthetic long-content overflow finding" : `Synthetic finding ${index}`,
       body: index === 0 ? body : "This synthetic source finding is long enough to wrap onto another line in the review sidebar without losing its last words.",
-      keys: [], layers: [sample.document.layers[0]!.id], proposalId: index === 0 ? "synthetic-proposal" : null, fixes: [], dismissedAt: null,
+      keys: [], layers: [sample.document.layers[0]!.id], proposalId: null, fixes: [], dismissedAt: null,
     })),
   },
 });

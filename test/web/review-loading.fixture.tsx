@@ -3,6 +3,7 @@ import { useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { ReviewEvent, ReviewResponse } from "../../src/api/review.ts";
 import type { Layout } from "../../src/layout/schema.ts";
+import { showBoard } from "../../src/app/boards.ts";
 import { ReviewPanel, ReviewMarker } from "../../src/web/review/ReviewPanel.tsx";
 import { useReview, type Review } from "../../src/web/review/useReview.ts";
 import "../../src/web/tokens.css";
@@ -10,6 +11,7 @@ import "../../src/web/app.css";
 import "../../src/web/shell/shell.css";
 
 const layout: Layout = { schemaVersion: 1, boardId: "zsa/moonlander", firmware: "qmk", layers: [{ id: "base", name: "Base", bindings: [{ kind: "key", code: "A" }] }], macros: [], combos: [], tapDances: [], conditionalLayers: [], holdTapProfiles: [], settings: [], passthrough: [] };
+const board = showBoard("zsa/moonlander").definition;
 const response = (status: "done" | "running" = "done", layoutId = "lay"): ReviewResponse => ({
   layoutId, headRevisionId: "rev", review: {
     id: `review-${layoutId}`, layoutId, revisionId: "rev", trigger: "connect", checkedAt: Date.now(),
@@ -106,7 +108,7 @@ function Harness() {
   useLayoutEffect(() => { current = review; sendEvent = setEvent; chooseLayout = setId; chooseHead = setHead; });
   return <main style={{ padding: 16, maxWidth: 520, margin: "auto", height: "100dvh", display: "flex", flexDirection: "column", gap: 12 }}>
     <header><button onClick={() => void runChecks()}>Run regression checks</button><ReviewMarker review={review} open onToggle={() => {}} /></header>
-    <ReviewPanel token="synthetic" review={review} layout={layout} rows={{}} boardName="Moonlander" configName="Daily" proposals={[]} pinnedId={null} onPin={() => {}} onApply={async () => {}} onShowLayer={() => {}} onFixIssues={() => {}} onClose={() => {}} />
+    <ReviewPanel token="synthetic" review={review} layout={layout} board={board} rows={{}} boardName="Moonlander" configName="Daily" proposals={[]} pinnedId={null} onPin={() => {}} onApply={async () => {}} onShowLayer={() => {}} onFixIssues={() => {}} onClose={() => {}} />
     <output>Ready · synthetic data only</output>
   </main>;
 }

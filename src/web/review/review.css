@@ -220,6 +220,117 @@
   font-size: var(--text-xs);
 }
 
+.br-proposal-changes {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+}
+
+.br-proposal-changes h5 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--text-xs);
+}
+
+.br-change-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 1px;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-sm);
+  background: var(--line);
+}
+
+.br-change-table th,
+.br-change-table td {
+  width: 33.333%;
+  padding: var(--space-2);
+  text-align: left;
+  vertical-align: top;
+  background: var(--surface-2);
+}
+
+.br-change-table th {
+  color: var(--ink);
+  font-weight: var(--weight-medium);
+}
+
+.br-change-table thead th {
+  color: var(--ink-3);
+  font-weight: var(--weight-semibold);
+}
+
+.br-change-table small {
+  display: block;
+  color: var(--ink-3);
+}
+
+.br-value-details {
+  min-width: 0;
+}
+
+.br-comparison-section {
+  margin-top: var(--space-3);
+}
+
+.br-unverified {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+}
+
+.br-unverified strong {
+  color: var(--ink);
+}
+
+.br-unverified ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
+.br-proposal-changes details {
+  margin-top: var(--space-2);
+}
+
+.br-scope-details {
+  padding-top: var(--space-2);
+}
+
+.br-scope-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.br-binding-change {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.br-binding-side {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.br-binding-side > span:last-child {
+  max-width: 24rem;
+  line-height: 1.45;
+}
+
 .br-src {
   display: inline-flex;
   align-items: center;

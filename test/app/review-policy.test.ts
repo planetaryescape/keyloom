@@ -147,7 +147,7 @@ test("a source-preserving retarget is allowed but the app, not the model, descri
     expect(result.changeSetId).not.toBeNull();
     const saved = showChange(w.app, result.changeSetId!);
     expect(saved.explanation).toContain("indicator");
-    expect(saved.explanation).toContain("tools");
+    expect(saved.explanation).toContain("hold to use Tools");
     expect(saved.explanation).not.toContain("Sticky");
     expect(saved.explanation).not.toContain("faster");
     expect(saved.tradeoffs.costs.join(" ")).not.toContain("Sticky");

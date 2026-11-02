@@ -13,7 +13,7 @@ test("an invalidated review offers one fresh-review action rather than pretendin
         checks: { status: "done", summary: { layers: 1, keys: 4, combos: 0 } }, ai: { status: "failed", reason: "The keyboard reconnected.", model: null },
         freshness: { current: false, reason: "The keyboard reconnected. A fresh analysis is required." }, items: [], fixed: [] },
       stale: true, loaded: true, busy: false, refreshing: false, problem: null, activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
-    }, layout: tinyLayout(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: [], pinnedId: null,
+     }, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: [], pinnedId: null,
     onPin() {}, onApply: async () => {}, onShowLayer() {}, onFixIssues() {}, onClose() {},
   }));
   expect(html).toContain("Review out of date");
@@ -37,14 +37,24 @@ function populatedReview(): Review {
   };
 }
 
-function panel(review: Review) {
+function panel(review: Review, ops: import("../../src/layout/change.ts").ChangeOp[] = []) {
   return renderToStaticMarkup(createElement(ReviewPanel, {
-    token: "synthetic", review, layout: tinyLayout(), rows: {}, boardName: "Synthetic", configName: "Synthetic config",
-    proposals: [{ changeSetId: "proposal", proposalGroup: null, title: "Synthetic proposal", explanation: "Synthetic", status: "proposed", ops: [],
-      validation: evaluate(tinyBoard(), tinyLayout(), []).result, tradeoffs: { gains: [], costs: [] }, decisionDraft: null }],
+    token: "synthetic", review, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config",
+    proposals: [{ changeSetId: "proposal", proposalGroup: null, title: "Synthetic proposal", explanation: "Legacy stored body must not be rendered", status: "proposed", ops,
+      validation: evaluate(tinyBoard(), tinyLayout(), ops).result, tradeoffs: { gains: [], costs: [] }, decisionDraft: null }],
     pinnedId: null, onPin() {}, onApply: async () => {}, onShowLayer() {}, onFixIssues() {}, onClose() {},
   }));
 }
+
+test("invalid linked proposal withholds both the body and source-checked evidence claim", () => {
+  const html = panel(populatedReview(), [{ op: "removeLayer", layerId: "missing" }]);
+  expect(html).toContain("change unavailable or invalid for this version");
+  expect(html).toContain("cannot be verified");
+  expect(html).not.toContain("source checked");
+  expect(html).not.toContain("Legacy stored body must not be rendered");
+  expect(html).toMatch(/disabled=""[^>]*>Show it on the board/);
+  expect(html).toMatch(/class="bar-apply" disabled=""[^>]*>Apply/);
+});
 
 for (const phase of ["pending", "running", "request", "initial"] as const) test(`${phase} review hides previous results and all result actions`, () => {
   const r = populatedReview();
