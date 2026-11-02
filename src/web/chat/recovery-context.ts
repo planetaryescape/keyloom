@@ -4,13 +4,17 @@ import type { AssistantTurn, Turn } from "./transcript.ts";
 
 /** Never borrow the newest unrelated turn. Only the selected reply's owner or immediate optimistic request. */
 export function owningRequest(turns: readonly Turn[], owner: AssistantTurn): string | undefined {
-  const id = owner.userMessageId ?? owner.presentation?.userMessageId;
-  const canonical = turns.find((turn) => turn.kind === "user" && turn.id === id);
-  if (canonical?.kind === "user") return canonical.text;
   const at = turns.indexOf(owner);
+  if (at < 0) return undefined;
+  const id = owner.userMessageId ?? owner.presentation?.userMessageId;
+  const canonical = turns.slice(0, at).find((turn) => turn.kind === "user" && turn.id === id);
+  if (canonical?.kind === "user") return canonical.text;
   const preceding = turns[at - 1];
   if (preceding?.kind === "user" && preceding.id.startsWith("you-") && preceding.id !== id) return preceding.text;
-  if (preceding?.kind === "assistant" && preceding.question?.answer) return `Answer to “${preceding.question.question}”: ${preceding.question.answer}`;
+  if (preceding?.kind === "assistant" && preceding.question?.answer) {
+    const original = owningRequest(turns, preceding);
+    return [original, `Answer to “${preceding.question.question}”: ${preceding.question.answer}`].filter(Boolean).join("\n\n");
+  }
   return undefined;
 }
 

@@ -14,15 +14,29 @@ export type ReplanSelector = { proposal?: string; conversation?: string; turn?: 
 
 function originalRequests(app: App, conversationId: string, ids: ReadonlySet<string>): string[] {
   const detail = showConversation(app, conversationId);
-  return listMessages(app.db, conversationId).filter((message) => ids.has(message.id) && message.role === "user").flatMap((message) => {
-    const text = detail.messages.find((shown) => shown.id === message.id)?.text;
-    if (text) return [text];
+  const stored = listMessages(app.db, conversationId);
+  const shown = new Map(detail.messages.map((message) => [message.id, message]));
+  const questions = new Map(detail.messages.flatMap((message) => message.question ? [[message.question.toolUseId, message] as const] : []));
+  const questionOwners = new Map(detail.presentations.flatMap((presentation) => presentation.questionToolUseId ? [[presentation.questionToolUseId, presentation.userMessageId] as const] : []));
+  const resolve = (id: string, before = stored.length): { id: string; text: string }[] => {
+    const index = stored.findIndex((message) => message.id === id);
+    const message = stored[index];
+    if (!message || message.role !== "user" || index >= before) return [];
+    const text = shown.get(id)?.text;
+    if (text) return [{ id, text }];
     return message.content.map(neutralBlock).flatMap((block) => {
       if (block.type !== "tool_result") return [];
-      const question = detail.messages.find((shown) => shown.question?.toolUseId === block.tool_use_id)?.question;
-      return question?.answer ? [`Answer to “${question.question}”: ${question.answer}`] : [];
+      const asked = questions.get(block.tool_use_id);
+      if (!asked?.question?.answer) return [];
+      // Older recordings may lack presentation ownership, but the actual question still anchors its preceding request.
+      const askedIndex = stored.findIndex((candidate) => candidate.id === asked.id);
+      if (askedIndex < 0 || askedIndex >= index) return [];
+      const parent = questionOwners.get(block.tool_use_id) ?? stored.slice(0, askedIndex).findLast((candidate) => candidate.role === "user" && (shown.get(candidate.id)?.text || candidate.content.map(neutralBlock).some((part) => part.type === "tool_result" && questions.has(part.tool_use_id))))?.id;
+      return [...(parent ? resolve(parent, askedIndex) : []), { id, text: `Answer to “${asked.question.question}”: ${asked.question.answer}` }];
     });
-  });
+  };
+  const lineage = stored.filter((message) => ids.has(message.id)).flatMap((message) => resolve(message.id));
+  return [...new Map(lineage.map((part) => [part.id, part.text])).values()];
 }
 
 /** Read-only source resolution. All identity and recoverability checks precede starting agent work. */

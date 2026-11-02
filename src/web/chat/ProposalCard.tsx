@@ -46,8 +46,12 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
   const [failure, setFailure] = useState<{ message: string; stale: boolean; reasons: string[] } | null>(null);
-  const currentValidation = useMemo(() => evaluate(board, layout, proposal.ops).result, [board, layout, proposal.ops]);
-  const recoveryReasons = failure?.reasons.length ? failure.reasons : validationReasons((currentValidation.ok ? proposal.validation : currentValidation).errors, layout);
+  const open = proposal.status === "proposed";
+  // History describes the saved operation, not an attempt to replay non-idempotent ops on today's head.
+  const currentValidation = useMemo(() => open ? evaluate(board, layout, proposal.ops).result : proposal.validation, [open, board, layout, proposal.ops, proposal.validation]);
+  const effectiveValidation = currentValidation.ok ? proposal.validation : currentValidation;
+  const canApply = open && !applying && proposal.validation.ok && currentValidation.ok && failure?.stale !== true;
+  const recoveryReasons = failure?.reasons.length ? failure.reasons : validationReasons(effectiveValidation.errors, layout);
   const recoverable = proposal.status === "proposed" && (failure?.stale === true || recoveryReasons.length > 0);
   const recovery = recoverable ? <button type="button" className="bar-link" onClick={() => onAskAgain(proposal, recoveryReasons.length ? recoveryReasons : [failure?.message ?? "The proposal no longer applies cleanly.", `Proposal targets: ${proposal.validation.diff.changed.map((slot) => keyIn(layout, slot)).join("; ") || "no key target recorded"}.`])}>Plan a revised proposal</button> : null;
   const [justApplied, setJustApplied] = useState(false);
@@ -72,7 +76,6 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   const { gains, costs } = proposal.tradeoffs;
   // The validator's count, not the rows': a key whose binding changes while its printed label stays the same still changes.
   const changedKeys = proposal.validation.diff.changed.length;
-  const open = proposal.status === "proposed";
   // A function the proposal gives up on purpose is said where Apply is, with its reason: the keys on the board show what moves, not what is lost.
   const { dropped } = proposal.validation.diff;
 
@@ -82,6 +85,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   }, [justApplied]);
 
   async function apply() {
+    if (!canApply) return;
     setApplying(true);
     setFailure(null);
     try {
@@ -103,12 +107,18 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     }
   }
 
+  function requestApply() {
+    if (!canApply) return;
+    if (natives.length > 0 && !confirming) setConfirming(true);
+    else void apply();
+  }
+
   // The validator's warnings and errors, only when there are any: a clean proposal says nothing about checking.
   const problems = proposal.validation.errors.length + proposal.validation.warnings.length;
   const { lead, rest } = leadSentence(proposal.explanation);
   // The details show the moves as chips, so "function lost" would only say them again (the same filter as the full form's hideLost).
   const issues = [
-    ...validationReasons((currentValidation.ok ? proposal.validation : currentValidation).errors, layout).map((text) => ({ tone: "error" as const, text })),
+    ...validationReasons(effectiveValidation.errors, layout).map((text) => ({ tone: "error" as const, text })),
     ...proposal.validation.warnings.filter((issue) => issue.code !== "function_lost").map((issue) => ({ tone: "warning" as const, text: issue.plain ?? issue.message })),
   ];
 
@@ -131,8 +141,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
               <button
                 type="button"
                 className="bar-apply"
-                disabled={applying || !proposal.validation.ok || failure?.stale === true}
-                onClick={() => (natives.length > 0 && !confirming ? setConfirming(true) : void apply())}
+                disabled={!canApply}
+                onClick={requestApply}
               >
                 {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
                 {confirming ? "Replace and apply" : "Apply"}
@@ -206,7 +216,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <TriangleAlert size={16} aria-hidden="true" />
             <div>
               <p>{failure.message}</p>
-               {recovery}
+              {recovery}
             </div>
           </div>
         )}
@@ -285,7 +295,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         </div>
       )}
 
-      <Validation layout={layout} idleNote="" state={{ status: "done", result: currentValidation.ok ? proposal.validation : currentValidation }} onRecheck={() => {}} showMoves={false} />
+      <Validation layout={layout} idleNote="" state={{ status: "done", result: effectiveValidation }} onRecheck={() => {}} showMoves={false} />
 
       {open ? (
         confirming ? (
@@ -298,7 +308,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
               </span>
             </p>
             <div className="proposal-actions">
-              <button type="button" className="button button-primary" disabled={applying} onClick={() => void apply()} autoFocus>
+              <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()} autoFocus>
                 {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
                 Replace and apply
               </button>
@@ -314,8 +324,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <button
               type="button"
               className="button button-primary"
-              disabled={applying || !proposal.validation.ok || failure?.stale === true}
-              onClick={() => (natives.length > 0 ? setConfirming(true) : void apply())}
+              disabled={!canApply}
+              onClick={requestApply}
             >
               {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
               Apply

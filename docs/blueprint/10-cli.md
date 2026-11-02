@@ -401,4 +401,6 @@ keyloom --data-dir <scratch> agent replan <config> --conversation <conversation-
 
 Choose either a currently invalid/conflicting proposed change or a recorded unsaved validator-refused turn. Mixed selectors, missing sources, foreign configs and still-valid proposals are rejected before model work. `--draft` writes no revisions, proposals, conversations or runs. JSON includes `version: 1`, `layoutId`, `headRevisionId`, labelled `context` and `request`, beside the normal `schema_version` envelope.
 
+When the source turn answers a question, the draft includes its original request and the source-relevant refining questions and answers, labelled as answers rather than standalone typed requests. Saved revised proposals retain that same lineage; a later unrelated message is not used as the original goal.
+
 Omit `--draft` to explicitly request a new proposal run; `--provider` selects its provider. This never applies a change. If wrapping the original request exceeds 8000 characters, print the draft, edit it shorter and use `agent start <config> <edited-request> --request-id <unique-id>`. The original source is never truncated or changed.
