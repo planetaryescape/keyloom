@@ -1,6 +1,6 @@
 // The browser side of the rung 2 routes (src/api/http.ts). Every call sends the session token
 // and a JSON body, and turns an ApiErrorBody into an ApiError the UI can read.
-import type { z } from "zod";
+import { z } from "zod";
 import {
   ApiErrorBodySchema,
   ApplyResponseSchema,
@@ -99,6 +99,13 @@ export function applyChangeSet(token: string, changeSetId: string): Promise<Appl
 
 export function undoChange(token: string, ref: string, body: UndoRequest): Promise<UndoResponse> {
   return request("POST", layoutPath(ref, "undo"), token, UndoResponseSchema, undefined, body);
+}
+
+const Opened = z.object({});
+
+/** Tells keyloom the editor opened this layout, so the home wall hangs its board first next time (D-476). */
+export async function markOpened(token: string, ref: string): Promise<void> {
+  await request("POST", layoutPath(ref, "opened"), token, Opened, undefined, {});
 }
 
 export function upgradeStoredLayout(token: string, ref: string): Promise<UpgradeResponse> {

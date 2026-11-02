@@ -17,6 +17,8 @@ export const LayoutSummarySchema = z.object({
   revisionId: z.string().min(1),
   // When it was archived, or null. Optional so older senders still parse; a board's own configs are never archived.
   archivedAt: z.number().finite().nullable().optional(),
+  // When the editor last opened it, or null; the home wall hangs the most recently opened boards (D-476). Optional for older senders.
+  openedAt: z.number().finite().nullable().optional(),
 });
 export type LayoutSummary = z.infer<typeof LayoutSummarySchema>;
 

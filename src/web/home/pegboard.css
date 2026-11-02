@@ -1,0 +1,275 @@
+/* Pegboard Home (D-476): A SKÅDIS-inspired pegboard displaying up to four recently opened keyboards. */
+
+.pegboard-room {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  padding: var(--space-6) var(--space-4);
+  box-sizing: border-box;
+  perspective: 1200px;
+}
+
+/* The Pegboard panel: tonal textured surface matching room colors, with SKÅDIS slot grid */
+.pegboard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 1280px;
+  min-height: 720px;
+  padding: var(--space-6) var(--space-5);
+  border-radius: var(--radius-lg);
+  background-color: var(--room-spot);
+  box-shadow:
+    0 30px 80px var(--cap-drop),
+    0 4px 16px var(--well),
+    inset 0 1px 0 var(--top-rim);
+  /* The SKÅDIS slot pattern: 5x15mm rounded slots, 40mm pitch with 20mm offset grid */
+  background-image:
+    radial-gradient(ellipse 2.5px 7.5px at 20px 20px, var(--room-floor) 85%, transparent 95%),
+    radial-gradient(ellipse 2.5px 7.5px at 40px 40px, var(--room-floor) 85%, transparent 95%);
+  background-size: 40px 40px;
+  background-position: 0 0, 0 0;
+  box-sizing: border-box;
+}
+
+.peg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-6);
+  width: 100%;
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+/* 1 board: center single column. 2 boards: side-by-side or stacked. 3-4 boards: 2x2 */
+.pegboard[data-count="1"] .peg-grid {
+  grid-template-columns: minmax(0, 700px);
+  justify-content: center;
+}
+
+.pegboard[data-count="2"] .peg-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.peg-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  position: relative;
+}
+
+/* The interactive board frame hanging on the wall */
+.peg-board {
+  position: relative;
+  width: 100%;
+  height: 270px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  transition: transform 0.28s var(--ease-out);
+}
+
+.peg-board:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 4px;
+  border-radius: var(--radius-md);
+}
+
+.peg-board:hover {
+  transform: translateY(-4px);
+}
+
+.peg-board-empty {
+  cursor: default;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.peg-missing {
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+/* The tilted cradle effect: upright on pegboard tilted slightly back (12deg) */
+.peg-tilt {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: perspective(900px) rotateX(12deg);
+  transform-origin: 50% 80%;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.peg-stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 25px var(--case-shadow));
+}
+
+/* The physical ledge / cradle bracket holding the board against the pegboard */
+.peg-ledge {
+  position: absolute;
+  height: 6px;
+  background: var(--leg);
+  border-radius: 3px 3px 2px 2px;
+  box-shadow:
+    0 3px 6px var(--case-shadow),
+    inset 0 1px 0 var(--top-rim);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Label below the board */
+.peg-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-ui);
+  line-height: 1.2;
+}
+
+.peg-name {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+.peg-config {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+}
+
+.peg-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  margin-left: var(--space-1);
+}
+
+.peg-state i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+}
+
+.peg-state[data-tone="ok"] {
+  color: var(--ok-ink);
+}
+
+.peg-state[data-tone="ok"] i {
+  background-color: var(--ok);
+}
+
+.peg-state[data-tone="pending"] {
+  color: var(--pending-ink);
+}
+
+.peg-state[data-tone="pending"] i {
+  background-color: var(--pending);
+}
+
+.peg-state[data-tone="bad"] {
+  color: var(--bad-ink);
+}
+
+.peg-state[data-tone="bad"] i {
+  background-color: var(--bad);
+}
+
+/* Flight animations between Pegboard and Desk/Configurator */
+@keyframes fly-to-desk {
+  0% {
+    transform: perspective(900px) rotateX(12deg) scale(0.48) translateY(-60px);
+    opacity: 0.85;
+  }
+  40% {
+    transform: perspective(900px) rotateX(6deg) scale(0.75) translateY(-20px);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(900px) rotateX(0deg) scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fly-to-wall {
+  0% {
+    transform: perspective(900px) rotateX(0deg) scale(1) translateY(0);
+    opacity: 1;
+  }
+  60% {
+    transform: perspective(900px) rotateX(8deg) scale(0.65) translateY(-30px);
+    opacity: 0.95;
+  }
+  100% {
+    transform: perspective(900px) rotateX(12deg) scale(0.48) translateY(-60px);
+    opacity: 0.85;
+  }
+}
+
+.flying-active-board {
+  view-transition-name: flying-board;
+}
+
+::view-transition-old(flying-board) {
+  animation: fly-to-wall 520ms var(--ease-out) both;
+}
+
+::view-transition-new(flying-board) {
+  animation: fly-to-desk 520ms var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(flying-board),
+  ::view-transition-new(flying-board) {
+    animation: none;
+  }
+  .peg-board {
+    transition: none;
+  }
+  .peg-tilt {
+    transform: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .peg-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+  .pegboard {
+    min-height: auto;
+    padding: var(--space-4) var(--space-3);
+  }
+  .peg-board {
+    height: 200px;
+  }
+}

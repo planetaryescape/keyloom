@@ -28,6 +28,7 @@ import { FORMATS, type Format, type Io, SCHEMA_VERSION, columns, defaultFormat, 
 import { importTable, settingsTable } from "./report.ts";
 import pkg from "../../package.json" with { type: "json" };
 import { REVIEW_ACTIVITIES, ReviewActivitiesSchema } from "../api/review.ts";
+import { recentBoards } from "../api/recent-boards.ts";
 
 const stdIo = (): Io => ({
   out: (t) => void process.stdout.write(t),
@@ -107,6 +108,22 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
           rows.length === 0
             ? "no layouts yet; import one with: keyloom import --board <board> <file>"
             : columns([["ID", "NAME", "BOARD", "UPDATED"], ...rows.map((r) => [r.id, r.name, r.boardId, new Date(r.updatedAt).toISOString()])]),
+      });
+    });
+
+  layout
+    .command("recent")
+    .description("the boards on the home wall: the most recently opened, newest first, with the config each opens (at most four)")
+    .action(async () => {
+      const rows = recentBoards(await withApp((app) => listLayouts(app)));
+      print(io, format(), {
+        json: { layouts: rows.map(layoutJson) },
+        rows: rows.map((r) => ({ schema_version: SCHEMA_VERSION, ...layoutJson(r) })),
+        ids: rows.map((r) => r.id),
+        table:
+          rows.length === 0
+            ? "no layouts yet; import one with: keyloom import --board <board> <file>"
+            : columns([["BOARD", "ID", "NAME", "OPENED"], ...rows.map((r) => [r.boardId, r.id, r.name, r.openedAt === null ? "never" : new Date(r.openedAt).toISOString()])]),
       });
     });
 
@@ -365,8 +382,9 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
   return program;
 }
 
-const layoutJson = (r: { id: string; name: string; boardId: string; headRevisionId: string; createdAt: number; updatedAt: number }) => ({
+const layoutJson = (r: { id: string; name: string; boardId: string; headRevisionId: string; createdAt: number; updatedAt: number; openedAt?: number | null }) => ({
   id: r.id, name: r.name, board_id: r.boardId, head_revision_id: r.headRevisionId, created_at: r.createdAt, updated_at: r.updatedAt,
+  ...(r.openedAt === undefined ? {} : { opened_at: r.openedAt }),
 });
 
 /** Runs the CLI and returns the exit code; never throws. */

@@ -17,6 +17,8 @@ import { useSync, type SyncApi } from "./sync/useSync.ts";
 import { Viewer, type Arrival } from "./Viewer.tsx";
 import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
 import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
+import { Pegboard } from "./home/Pegboard.tsx";
+import { markOpened } from "./api-write.ts";
 
 type Failure = { message: string; retryable: boolean };
 type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
@@ -36,6 +38,9 @@ export function App({ token }: { token: string }) {
   const [layouts, setLayouts] = useState<LayoutSummary[] | null>(null);
   const [listError, setListError] = useState<Failure | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Whether the pegboard wall is shown.
+  const [onWall, setOnWall] = useState(true);
+  const [flyingId, setFlyingId] = useState<string | null>(null);
   // What a board or config switch carries to the layout it opens (D-317), kept with that layout's ID so nothing else picks it up.
   const [carry, setCarry] = useState<(Arrival & { id: string }) | null>(null);
   const [view, setView] = useState<View | null>(null);
@@ -154,7 +159,52 @@ export function App({ token }: { token: string }) {
   const summary = layouts.find((layout) => layout.id === selectedId) ?? layouts[0];
   if (summary === undefined) return null;
   // A new, renamed or restored config changes the list; the switcher asks for it again, and a new config opens (D-315).
-  const menu = { ...controls, layouts, selectedId: summary.id, onSelect: (id: string) => { setImporting(false); setCarry(null); setSelectedId(id); }, onImport: () => setImporting(true), onReload: reload, boardChoices };
+  const menu = {
+    ...controls,
+    layouts,
+    selectedId: summary.id,
+    onSelect: (id: string) => {
+      setImporting(false);
+      setCarry(null);
+      setSelectedId(id);
+      setOnWall(false);
+    },
+    onImport: () => setImporting(true),
+    onReload: (selectId?: string) => {
+      if (selectId !== undefined) {
+        setSelectedId(selectId);
+        setOnWall(false);
+      }
+      reload(selectId);
+    },
+    boardChoices,
+  };
+
+  const openBoardFromWall = (target: LayoutSummary, detail: LayoutDetail) => {
+    setFlyingId(target.id);
+    setSelectedId(target.id);
+    setView({ id: target.id, detail });
+    void markOpened(token, target.id);
+    crossfade(() => {
+      setOnWall(false);
+    });
+  };
+
+  const returnToWall = () => {
+    setFlyingId(selectedId);
+    crossfade(() => {
+      setOnWall(true);
+      setAttempt((n) => n + 1);
+    });
+  };
+
+  if (onWall) {
+    return wrap(
+      <Shell fill>
+        <Pegboard token={token} layouts={layouts} sync={sync} flying={flyingId} onOpen={openBoardFromWall} />
+      </Shell>
+    );
+  }
   if (importing) {
     return wrap(
       <Shell menu={menu}>
@@ -194,12 +244,14 @@ export function App({ token }: { token: string }) {
       menu={menu}
       boardChoices={boardChoices}
       sync={sync}
+      onHome={returnToWall}
       onChanged={refresh}
       arrival={carry !== null && carry.id === shown.id ? carry : null}
       onCarry={(id, next) => {
         setCarry({ id, ...next });
         setImporting(false);
         setSelectedId(id);
+        setOnWall(false);
       }}
     />
   );
@@ -212,6 +264,7 @@ function LayoutPage({
   menu,
   boardChoices,
   sync,
+  onHome,
   onChanged,
   arrival,
   onCarry,
@@ -222,6 +275,7 @@ function LayoutPage({
   menu: HeaderMenu;
   boardChoices: readonly BoardChoice[];
   sync: SyncApi;
+  onHome?: () => void;
   onChanged: () => Promise<void>;
   arrival: Arrival | null;
   onCarry: (id: string, carry: Arrival) => void;
@@ -269,7 +323,7 @@ function LayoutPage({
           sync={sync}
           onChanged={onChanged}
           onOpenRelease={openRelease}
-          chrome={{ ...menu, boardChoices, release: { status, onOpen: () => openRelease() }, arrival, onCarry }}
+          chrome={{ ...menu, onHome, boardChoices, release: { status, onOpen: () => openRelease() }, arrival, onCarry }}
         />
       )}
       <ReleaseDialog

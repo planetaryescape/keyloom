@@ -9,7 +9,7 @@ export {
 } from "./changes.ts";
 export { type ParsedBinding, parseBindingExpression } from "./binding-expression.ts";
 export {
-  type ExportOutcome, type ImportInput, type ImportOutcome, type LayoutView, exportLayout, getLayout, importLayout, layoutExportDocument, listLayouts,
+  type ExportOutcome, type ImportInput, type ImportOutcome, type LayoutView, exportLayout, getLayout, importLayout, layoutExportDocument, listLayouts, markOpened,
 } from "./layouts.ts";
 export {
   type LayoutExportDocument, type LayoutExportProbe, LAYOUT_EXPORT_KIND, LAYOUT_EXPORT_SCHEMA_VERSION, LayoutExportDocumentSchema, buildLayoutExportDocument, probeLayoutExport,

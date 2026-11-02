@@ -15,6 +15,8 @@ export type LayoutRow = {
   updatedAt: number;
   /** When the config was archived (hidden, restorable), or null. */
   archivedAt: number | null;
+  /** When the config was last opened in the editor, or null if it never was (D-476). */
+  openedAt: number | null;
   /** The config and revision this one started as a copy of; the source may have been deleted since. */
   copiedFrom: { layoutId: string; revisionId: string } | null;
 };
@@ -34,7 +36,7 @@ export class NameTakenError extends Error {
 
 type LayoutDb = {
   id: string; board_id: string; name: string; head_revision_id: string; created_at: number; updated_at: number;
-  archived_at: number | null; copied_from_layout_id: string | null; copied_from_revision_id: string | null;
+  archived_at: number | null; opened_at: number | null; copied_from_layout_id: string | null; copied_from_revision_id: string | null;
 };
 type RevisionDb = {
   id: string; layout_id: string; parent_id: string | null; origin: Origin; summary: string; created_at: number; document?: string;
@@ -42,7 +44,7 @@ type RevisionDb = {
 
 const toLayout = (r: LayoutDb): LayoutRow => ({
   id: r.id, boardId: r.board_id, name: r.name, headRevisionId: r.head_revision_id, createdAt: r.created_at, updatedAt: r.updated_at,
-  archivedAt: r.archived_at,
+  archivedAt: r.archived_at, openedAt: r.opened_at,
   copiedFrom: r.copied_from_layout_id !== null && r.copied_from_revision_id !== null ? { layoutId: r.copied_from_layout_id, revisionId: r.copied_from_revision_id } : null,
 });
 const toRevision = (r: RevisionDb): RevisionRow => ({
@@ -78,10 +80,15 @@ export function createLayout(
   }
   return {
     layout: {
-      id: layoutId, boardId: input.layout.boardId, name: input.name, headRevisionId: revisionId, createdAt: now, updatedAt: now, archivedAt: null, copiedFrom: input.copiedFrom ?? null,
+      id: layoutId, boardId: input.layout.boardId, name: input.name, headRevisionId: revisionId, createdAt: now, updatedAt: now, archivedAt: null, openedAt: null, copiedFrom: input.copiedFrom ?? null,
     },
     revision: { id: revisionId, layoutId, parentId: null, origin: input.origin, summary: input.summary, createdAt: now },
   };
+}
+
+/** Records that the editor opened the config; false when there is no such layout. */
+export function markLayoutOpened(db: Database, layoutId: string, now = Date.now()): boolean {
+  return db.query("UPDATE layouts SET opened_at = ? WHERE id = ?").run(now, layoutId).changes > 0;
 }
 
 /** Oldest first; the explicit tiebreak keeps the order stable when two layouts share a millisecond. */

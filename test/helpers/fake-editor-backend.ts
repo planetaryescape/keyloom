@@ -163,6 +163,11 @@ export class FakeEditor implements EditorBackend {
     return buildLayoutExportDocument({ name: "Daily driver", revisionId: revision.id, layout: structuredClone(revision.document) });
   }
 
+  readonly opened: string[] = [];
+  async markOpened(ref: string): Promise<void> {
+    this.opened.push(ref);
+  }
+
   async boards(): Promise<BoardChoice[]> {
     return [
       { id: "zsa/moonlander", name: "Moonlander", vendor: "ZSA", firmware: "qmk", keyCount: 72, importers: ["oryx-source"] },
