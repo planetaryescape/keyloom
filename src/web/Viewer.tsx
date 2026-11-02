@@ -166,7 +166,7 @@ const typing = (target: EventTarget | null) =>
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
 export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, repairDraft, onRepairDraft, sync, chrome }: ViewerProps) {
-  const { document: layout, board, revision } = detail;
+  const { document: layout, board, geometry, revision } = detail;
   // Arriving from another board or config lands on the layer of the same name, if this layout has one (D-317).
   const [layerId, setLayerId] = useState<string | null>(() => {
     const name = chrome.arrival?.layerName?.trim().toLowerCase();
@@ -1595,7 +1595,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 initialConversation={chrome.arrival?.conversationId}
                 continueCopy={chrome.arrival?.continueCopy}
                 repairDraft={repairDraft}
-                repairCurrent={repairDraft !== null && revision.id === repairDraft.headRevisionId && boardReview.review?.id === repairDraft.reviewId && boardReview.review.revisionId === repairDraft.headRevisionId && !boardReview.stale && !boardReview.refreshing && boardReview.review.items.some((item) => item.id === repairDraft.findingId && item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"))}
+                repairCurrent={repairDraft !== null && revision.id === repairDraft.headRevisionId && boardReview.review?.id === repairDraft.reviewId && boardReview.review.revisionId === repairDraft.headRevisionId && !boardReview.stale && !boardReview.busy && !boardReview.refreshing && boardReview.review.items.some((item) => item.id === repairDraft.findingId && item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"))}
                 onRepairDraftChange={(id, request) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, request })}
                 onRepairSentStateChange={(id, sent) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, sent })}
                 onRepairSent={(id) => repairDraft?.id === id && onRepairDraft(id, null)}
@@ -2157,7 +2157,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               }}
               onShowLayer={(id) => setLayerId(id)}
                 onPlanRepair={(item) => {
-                const words = (text: string) => reviewTextWords(text, layout, board.rows);
+                const words = (text: string) => reviewTextWords(text, layout, board, geometry);
                 const id = crypto.randomUUID();
                 onRepairDraft(id, {
                   id,

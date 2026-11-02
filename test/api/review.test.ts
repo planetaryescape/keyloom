@@ -24,7 +24,7 @@ test("a scoped repair request names only the chosen finding and scope, without o
     scope: ["Home row", "A on Home row", "Home row"],
   });
   expect(request).toContain("A does nothing");
-  expect(request).toContain("Marked scope: Home row; A on Home row.");
+  expect(request).toContain("Marked scope: Home row; A on Home row; Home row.");
   expect(request).toContain("Read the current review and layout first");
   expect(request).toContain("Do not apply it");
   expect(request).not.toContain("fix every");

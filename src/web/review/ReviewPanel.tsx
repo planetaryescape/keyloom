@@ -3,7 +3,8 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { Layout } from "../../layout/schema.ts";
-import type { BoardDefinition } from "../../boards/schema.ts";
+import type { BoardDefinition, Geometry } from "../../boards/schema.ts";
+import { keyName } from "../../boards/key-names.ts";
 import { applyOps } from "../../layout/apply-ops.ts";
 import { validate } from "../../validation/validate.ts";
 import { proposalChanges } from "../../validation/proposal-changes.ts";
@@ -40,13 +41,11 @@ export function ReviewText({ text, layout, rows }: { text: string; layout: Pick<
   );
 }
 
-export function reviewTextWords(text: string, layout: Layout, rows: Rows): string {
+export function reviewTextWords(text: string, layout: Layout, board: BoardDefinition, geometry: Geometry): string {
   return segments(text).map((part) => {
     if (part.kind === "text") return part.text;
     if (part.kind === "layer") return layerName(layout, part.layerId);
-    const layerIndex = layout.layers.findIndex((layer) => layer.id === part.layerId);
-    const legend = layerIndex < 0 ? "" : describeKey(layout, layerIndex, part.position)?.legend.tap ?? "";
-    return legend === "" ? `an empty key ${placeOf(part.position, rows)}` : `${legend} on ${layerName(layout, part.layerId)}`;
+    return keyName(board, layout, { layerId: part.layerId, position: part.position }, { geometry, withLayer: true });
   }).join("");
 }
 

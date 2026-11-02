@@ -703,14 +703,14 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         </>
       )}
       {view === "chat" || !streaming ? null : <div className="chat-stop-footer"><span>Working on {board.name}</span><ChatStopButton onStop={chat.stop} /></div>}
-      {repairDraft === null ? null : <section className="repair-request" aria-label="Repair request">
+      {repairDraft === null ? null : <section className="repair-request" aria-label="Repair request" tabIndex={0}>
         <p className="repair-request-title">Request for one review finding</p>
         <p className="repair-request-scope">{repairSent ? "Already sent. If the reply was interrupted, check chat history before taking another action; keyloom will not resend it." : repairCurrent ? "Check the request before sending. It asks for a proposal; nothing is applied." : "This finding is no longer current. Your request is kept, but cannot be sent from this review."}</p>
         <label htmlFor="repair-request-text">Request</label>
         <textarea id="repair-request-text" value={repairDraft.request} onChange={(event) => onRepairDraftChange?.(repairDraft.id, event.currentTarget.value)} disabled={repairSent} rows={5} />
         <div className="repair-request-actions">
           <button type="button" className="bar-apply" disabled={!repairCurrent || streaming || draft.trim() !== "" || drafts.length > 0 || repairSent || repairDraft.request.trim() === ""} onClick={sendRepair}>Send request</button>
-          <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>Cancel</button>
+          <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>{repairSent ? "Dismiss request" : "Cancel"}</button>
         </div>
       </section>}
     </section>

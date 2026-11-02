@@ -67,7 +67,7 @@ export type ReviewEvent = z.infer<typeof ReviewEventSchema>;
 export const REVIEW_FIX_REQUEST = "Fix what the board review found in this config.";
 
 export function formatFindingRepairRequest(finding: { title: string; body: string; scope: readonly string[] }): string {
-  const scope = [...new Set(finding.scope.map((part) => part.trim()).filter(Boolean))];
+  const scope = finding.scope.map((part) => part.trim()).filter(Boolean);
   return [
     `Please investigate this board-review finding and propose a repair for it only: ${finding.title.trim()}`,
     finding.body.trim(),
