@@ -1,6 +1,6 @@
 # 09: Web editor
 
-Status update, 2026-11-02: contextual proposal recovery is implemented in source (D-480); release verification is pending.
+Status update, 2026-11-02: contextual proposal recovery is built (D-480).
 
 Recovery keeps the source request and its refining question/answer chain, including after reload; it does not substitute a later unrelated message. Proposed cards use current validation to gate every Apply and native-replacement confirmation. Applied and superseded cards show their saved validation rather than replaying non-idempotent operations against today's head.
 
