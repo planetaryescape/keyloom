@@ -14,7 +14,7 @@ test("an invalidated review offers one fresh-review action rather than pretendin
         freshness: { current: false, reason: "The keyboard reconnected. A fresh analysis is required." }, items: [], fixed: [] },
       stale: true, loaded: true, busy: false, refreshing: false, problem: null, activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
      }, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: [], pinnedId: null,
-    onPin() {}, onApply: async () => {}, onShowLayer() {}, onFixIssues() {}, onClose() {},
+    onPin() {}, onApply: async () => {}, onShowLayer() {}, onPlanRepair() {}, onClose() {},
   }));
   expect(html).toContain("Review out of date");
   expect(html).toContain("The keyboard reconnected. A fresh analysis is required.");
@@ -42,7 +42,7 @@ function panel(review: Review, ops: import("../../src/layout/change.ts").ChangeO
     token: "synthetic", review, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config",
     proposals: [{ changeSetId: "proposal", proposalGroup: null, title: "Synthetic proposal", explanation: "Legacy stored body must not be rendered", status: "proposed", ops,
       validation: evaluate(tinyBoard(), tinyLayout(), ops).result, tradeoffs: { gains: [], costs: [] }, decisionDraft: null }],
-    pinnedId: null, onPin() {}, onApply: async () => {}, onShowLayer() {}, onFixIssues() {}, onClose() {},
+    pinnedId: null, onPin() {}, onApply: async () => {}, onShowLayer() {}, onPlanRepair() {}, onClose() {},
   }));
 }
 
