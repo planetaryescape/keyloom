@@ -28,6 +28,8 @@ Both the agent (`analyse_change`, `propose_changes`) and the editor call it. The
 
 ## Errors
 
+A recorded unsaved `propose_changes` refusal and an invalid or conflicting saved proposal can open an editable recovery request (D-480). Detailed issues name the known affected keys or layers. Historical observations retain only code categories, so their recovery explicitly says the exact target was not recorded. Generic failures and partial acceptance are not evidence that nothing was saved. Recovery never bypasses validation or Apply.
+
 Errors make the change set invalid. The codes are stable strings that the agent sees, so it can fix the proposal.
 
 An identical document-rule problem already present before the change is reported as a warning, so an imported layout stays editable. A newly added unreachable layer also warns while it is being filled in (D-181); making an existing reachable layer unreachable is an error. `stale_base` is checked by the app against revision history, not by the pure `validate` call alone.

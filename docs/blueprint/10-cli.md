@@ -41,6 +41,8 @@ keyloom
   conversations show <conversation>         stored public messages and working details
   agent show <run-or-request>               inspect saved work without executing it
   agent start <layout> <message> --request-id <id> [--conversation C] [--provider P]
+  agent replan <layout> --proposal <id> [--draft] [--provider P] [--json]
+  agent replan <layout> --conversation <id> --turn <user-message-id> [--draft] [--provider P] [--json]
   agent answer <run> <question-tool-id> <text> --request-id <id>
   agent cancel <run-or-request>             request Stop; committed preparation remains
   agent cancel <request-id> --request       save Stop even before the request is accepted
@@ -388,3 +390,17 @@ to review it: keyloom change show cs_01M65JJX62REZ96VCR35FPNRD2
 ```
 
 `--format json` is unchanged: `text` is the reply the model wrote, markers included, because a machine reader can resolve them itself and the stored message is the same text. The web draws a link on each marker that names something live ([28](28-agent-experience.md#results-use-app-owned-views-instead-of-prose-imitations)).
+## Recover a refused proposal
+
+Print and inspect a recovery request before starting new work:
+
+```sh
+keyloom --data-dir <scratch> agent replan <config> --proposal <proposal-id> --draft --format table
+keyloom --data-dir <scratch> agent replan <config> --conversation <conversation-id> --turn <user-message-id> --draft --json
+```
+
+Choose either a currently invalid/conflicting proposed change or a recorded unsaved validator-refused turn. Mixed selectors, missing sources, foreign configs and still-valid proposals are rejected before model work. `--draft` writes no revisions, proposals, conversations or runs. JSON includes `version: 1`, `layoutId`, `headRevisionId`, labelled `context` and `request`, beside the normal `schema_version` envelope.
+
+When the source turn answers a question, the draft includes its original request and the source-relevant refining questions and answers, labelled as answers rather than standalone typed requests. Saved revised proposals retain that same lineage; a later unrelated message is not used as the original goal.
+
+Omit `--draft` to explicitly request a new proposal run; `--provider` selects its provider. This never applies a change. If wrapping the original request exceeds 8000 characters, print the draft, edit it shorter and use `agent start <config> <edited-request> --request-id <unique-id>`. The original source is never truncated or changed.

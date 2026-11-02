@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "session": "keyloom-rung2b-correction-cards-13173",
+  "checks": [
+    "actual applied addLayer has no replay errors compact/full",
+    "actual removed target layer disables Apply compact/full",
+    "valid native confirmation remains available",
+    "actual head change disables already-open confirmation compact/full",
+    "disabled confirmation never calls Apply handler"
+  ]
+}

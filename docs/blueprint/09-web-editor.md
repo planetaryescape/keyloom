@@ -1,5 +1,11 @@
 # 09: Web editor
 
+Status update, 2026-11-02: contextual proposal recovery is built (D-480).
+
+Recovery keeps the source request and its refining question/answer chain, including after reload; it does not substitute a later unrelated message. Proposed cards use current validation to gate every Apply and native-replacement confirmation. Applied and superseded cards show their saved validation rather than replaying non-idempotent operations against today's head.
+
+Proposal recovery (D-480): **Plan a revised proposal** opens a config-owned editable request, using the selected proposal's original request or a labelled saved-intent fallback. A recorded unsaved validation refusal offers the same action without inventing a proposal card. Explicit Send uses ordinary saved chat; preview and Apply remain separate. The existing finding-repair draft owns this request too: another pending request is kept rather than replaced. Home retains unsent edits for the same config; reload retains only the persisted source action. Changed head/source, occupied composer/key drafts and active work block Send. More than 8000 characters requires editing, never silent truncation.
+
 Status update, 2026-10-15: the key panel in [16](16-key-editor.md) replaces the binding editor and the layer and selection interactions below, and [18](18-visual-design.md) replaces the screen layout. The rest of this chapter still holds.
 
 The browser side of `keyloom serve` (D-028). It puts the keyboard picture and the chat side by side, both editing one layout (D-003, D-013). The aim is that BK sees a proposed change on the keyboard before he flashes anything, because the picture is the fastest way to catch a misunderstanding (D-015).

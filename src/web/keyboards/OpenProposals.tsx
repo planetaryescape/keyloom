@@ -9,7 +9,7 @@ import "./keyboards.css";
 
 // A config's open proposals that no conversation shows (n5, D-336): the ones "Put my config on it" made, and any other made outside the
 // chat. The same card as the chat's, so pinning previews it on the board and Apply is the ordinary apply; applying one retires its sibling.
-export function OpenProposals({ proposals, layout, board, configName, firstFlash, pinnedId, onPin, onPreview, onApply, onClose, onOpenRelease }: {
+export function OpenProposals({ proposals, layout, board, configName, firstFlash, pinnedId, onPin, onPreview, onApply, onClose, onOpenRelease, onPlanRecovery }: {
   proposals: readonly Proposal[] | null;
   layout: Layout;
   board: BoardDefinition;
@@ -22,6 +22,7 @@ export function OpenProposals({ proposals, layout, board, configName, firstFlash
   onApply: (proposal: Proposal) => Promise<void>;
   onClose: () => void;
   onOpenRelease: () => void;
+  onPlanRecovery: (proposal: Proposal, reasons: string[]) => void;
 }) {
   const open = proposals?.filter((p) => p.status === "proposed") ?? [];
   // One card at a time, the pinned option or the first, and the board shows it: a lone proposal needs no tabs and no "show it" button.
@@ -57,7 +58,7 @@ export function OpenProposals({ proposals, layout, board, configName, firstFlash
               onPreview={onPreview}
               onPin={onPin}
               onApply={onApply}
-              onAskAgain={onClose}
+              onAskAgain={onPlanRecovery}
               onOpenRelease={onOpenRelease}
               compact
             />

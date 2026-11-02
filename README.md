@@ -6,6 +6,10 @@ keyloom is a local-first configurator for QMK and ZMK keyboards, and for the Mac
 
 ## What you can do
 
+If validation refuses a proposal, choose **Plan a revised proposal** to open an editable request retaining its original goal. Opening sends nothing: choose **Send request**, preview the validated replacement, then **Apply** separately. Historical refusals may record only validation categories; keyloom says when the exact target is unknown. Unsent request edits survive Home navigation for that config, not a browser reload.
+
+The CLI equivalent is `keyloom agent replan <config> --proposal <id> --draft --format table`, or `--conversation <id> --turn <user-message-id> --draft`. Draft mode is read-only; omit `--draft` only to start a new proposal run. See [CLI recovery](docs/blueprint/10-cli.md#recover-a-refused-proposal).
+
 - Configure any QMK or ZMK keyboard, and the MacBook keyboard, from one app.
 - Click a key and change it. Tap, hold, double-tap and tap-then-hold are slots on the key, and macros and combos are made on the board.
 - Edit supported ZMK encoder turns per layer and keep their presses as ordinary keys. [Try mouse turns on Base with media on Numbers](docs/encoder-layers.md).

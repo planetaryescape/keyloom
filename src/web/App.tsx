@@ -278,6 +278,7 @@ export function App({ token }: { token: string }) {
       arrival={carry !== null && carry.id === shown.id ? carry : null}
       repairDraft={repairDrafts[shown.id] ?? null}
       onRepairDraft={(id, draft, replace = false) => setRepairDrafts((current) => {
+        if (replace && current[shown.id] !== undefined) return current;
         if (!replace && current[shown.id]?.id !== id) return current;
         if (draft === null) {
           if (current[shown.id] === undefined) return current;

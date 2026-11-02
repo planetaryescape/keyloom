@@ -1,0 +1,47 @@
+{
+  "results": [
+    {
+      "format": "table",
+      "exit": 0
+    },
+    {
+      "format": "json",
+      "exit": 0
+    }
+  ],
+  "before": {
+    "layouts": {
+      "n": 2
+    },
+    "revisions": {
+      "n": 6
+    },
+    "change_sets": {
+      "n": 7
+    },
+    "conversations": {
+      "n": 5
+    },
+    "agent_runs": {
+      "n": 4
+    }
+  },
+  "after": {
+    "layouts": {
+      "n": 2
+    },
+    "revisions": {
+      "n": 6
+    },
+    "change_sets": {
+      "n": 7
+    },
+    "conversations": {
+      "n": 5
+    },
+    "agent_runs": {
+      "n": 4
+    }
+  },
+  "unchanged": true
+}
