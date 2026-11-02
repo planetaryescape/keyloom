@@ -20,6 +20,7 @@ const check = (expression: string, message: string) => browser("eval", `if(!(${e
 const shot = (name: string) => { if (evidence) browser("screenshot", `${evidence}/${mode}-${name}.png`); };
 try {
   browser("set", "viewport", "1440", "900");
+  browser("set", "media", "light", "reduced-motion");
   browser("open", `http://127.0.0.1:${port}/?t=collection-browser-token`);
   browser("wait", "--load", "networkidle");
   if (mode === "manual") {
