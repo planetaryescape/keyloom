@@ -61,7 +61,7 @@ export function automaticProposalDescription(before: Layout, ops: readonly Chang
   const firstBinding = changes.bindings[0];
   const layer = firstBinding && before.layers.find((candidate) => candidate.id === firstBinding.slot.layerId);
   const bindingTitle = firstBinding && layer
-    ? firstBinding.proposed.startsWith("key ") ? `Set ${firstBinding.proposed.slice(4)} on ${layer.name}` : `Change a key on ${layer.name}`
+    ? `Change a key on ${layer.name}`
     : undefined;
   const onlyProfile = changes.profiles.length === 1 ? changes.profiles[0] : undefined;
   const title = onlyProfile && changes.changedSlots.length === 0

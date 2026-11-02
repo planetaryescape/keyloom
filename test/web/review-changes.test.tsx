@@ -55,6 +55,16 @@ test("tap-dance timing is a named Current/Proposed delta rather than a category-
   expect(html).not.toContain("Tap dances changed");
 });
 
+test("changed keys on a newly added layer use its human-readable name", () => {
+  const layout = tinyLayout([{ kind: "key", code: "A" }, { kind: "key", code: "B" }, { kind: "none" }, { kind: "key", code: "D" }]);
+  const { html } = panel(layout, tinyBoard(), [
+    { op: "addLayer", layer: { id: "function-layer", name: "Function" }, afterLayerId: "base" },
+    { op: "setBinding", at: { layerId: "function-layer", position: 0 }, binding: { kind: "key", code: "F17" } },
+  ]);
+  expect(html).toContain("Function");
+  expect(html).not.toContain("function-layer");
+});
+
 test("native hold retarget shows distinct named effects beside unchanged legends and no serialized facts", () => {
   const layout = structuredClone(fullLayout);
   layout.layers[1]!.name = "Navigation";

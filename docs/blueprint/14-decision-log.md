@@ -2279,6 +2279,6 @@ The tests and explicit limits are in [grounded board review](../research/grounde
 
 This changes review scheduling and presentation only. Provider terms still apply; no Apply, sync or flash is authorized. Shipped and locally installed in v0.68.2, 2026-11-02; its [evidence](../research/grounded-board-review.md#automatic-refresh-and-loading-follow-up) is separate from the v0.68.1 receipt.
 
-### D-476: Review suggestions show source-derived changes, not stored model prose. (2026-11-02, rung 1)
+### D-477: Review suggestions show source-derived changes, not stored model prose. (2026-11-02, rung 1)
 
 The review panel derives a linked suggestion's presentation from its validated proposal ops and current layout, including for reviews stored by older releases. Missing proposal data is shown as unverifiable; stored body text is not a fallback. Changed profile options use named values and units, and affected key positions are shown as keycaps. Source preservation, runtime evidence and typing outcomes remain distinct. CLI JSON remains the machine-readable representation.

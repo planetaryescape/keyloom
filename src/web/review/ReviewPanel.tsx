@@ -58,7 +58,10 @@ function ProposalChangeDetails({ changes, before, board, ops }: { changes: Propo
   const keyGroups = (slots: readonly { layerId: string; position: number }[]) => {
     const groups = new Map<string, number[]>();
     for (const slot of slots) groups.set(slot.layerId, [...(groups.get(slot.layerId) ?? []), slot.position]);
-    return [...groups].map(([layerId, positions]) => ({ layerId, name: layerName(before, layerId), positions: [...new Set(positions)].sort((a, b) => a - b) }));
+    return [...groups].map(([layerId, positions]) => {
+      const source = before.layers.some((layer) => layer.id === layerId) ? before : after;
+      return { layerId, name: layerName(source, layerId), positions: [...new Set(positions)].sort((a, b) => a - b) };
+    });
   };
   const bindingLegends = (layerId: string, position: number) => {
     const oldIndex = before.layers.findIndex((layer) => layer.id === layerId);
