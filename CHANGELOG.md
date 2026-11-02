@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.70.1](https://github.com/planetaryescape/keyloom/compare/v0.70.0...v0.70.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* pegboard 3D flight view transition pairing and mechanics ([48932ee](https://github.com/planetaryescape/keyloom/commit/48932ee479a82a1a9a9080d8eb49d4d53817dc7f))
+* pegboard 3D flight view transition pairing and mechanics ([01c50d1](https://github.com/planetaryescape/keyloom/commit/01c50d1c763bdc79310e99699a64f580f9f4bd75))
+
 ## [0.70.0](https://github.com/planetaryescape/keyloom/compare/v0.69.0...v0.70.0) (2026-11-02)
 
 
