@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.69.0](https://github.com/planetaryescape/keyloom/compare/v0.68.4...v0.69.0) (2026-11-02)
+
+
+### Features
+
+* manage keyboard collections and contribution handoffs ([c1c1fce](https://github.com/planetaryescape/keyloom/commit/c1c1fce3cc167e4230f29c716be55f78ef20e60a))
+
 ## [0.68.4](https://github.com/planetaryescape/keyloom/compare/v0.68.3...v0.68.4) (2026-11-02)
 
 
