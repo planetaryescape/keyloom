@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.4](https://github.com/planetaryescape/keyloom/compare/v0.68.3...v0.68.4) (2026-11-02)
+
+
+### Bug Fixes
+
+* make review proposal changes readable ([2cc4606](https://github.com/planetaryescape/keyloom/commit/2cc46066992586ba1ea1a404b0dc3d7d4ccecc8e))
+
 ## [0.68.3](https://github.com/planetaryescape/keyloom/compare/v0.68.2...v0.68.3) (2026-11-02)
 
 
