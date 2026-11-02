@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "feature": {
+    "decision": "D-477",
+    "implementationPr": 236,
+    "implementationMergeCommit": "2cc46066992586ba1ea1a404b0dc3d7d4ccecc8e",
+    "reviewedTree": "adc63b50724dea50d0de51ba19ea7b30c64598b3"
+  },
+  "release": {
+    "version": "0.68.4",
+    "pr": 237,
+    "mergeCommit": "445e53d1ecf1b4d36a0fc57f37b2c141a0795fda",
+    "buildRun": 41443733554,
+    "buildSucceeded": true,
+    "historicalInstallReceipt": {
+      "desktopVersion": "0.68.4",
+      "cliVersion": "0.68.4",
+      "cliSource": "unchanged signed desktop sidecar",
+      "desktopArchiveSha256": "5924573caf98536779c5f0b316013ecef8ae8998acb16f6c140e04f29c92134e",
+      "installedCliAndSidecarSha256": "6422384a52129707c8c4dcf260923a600f142c164083c91d1cc4ada97f8db406",
+      "desktopSignatureAndGatekeeperPassed": true,
+      "standaloneArm64CliStrictSignaturePassed": false
+    },
+    "ciJobsGreen": 8,
+    "fullSuite": { "passed": 3654, "skipped": 243, "failed": 0 }
+  },
+  "releasedFrontendBrowser": {
+    "version": "0.68.4",
+    "backend": "synthetic FakeEditor proxy",
+    "viewportThemeStatesPassed": 6,
+    "comboComparison": true,
+    "sameLegendNativeRetargetEffects": true,
+    "readOnlyPreview": true,
+    "enterToApply": true,
+    "appliedOpsMatchedProposal": true,
+    "physicalKeyboardUsed": false
+  },
+  "nativeApp": {
+    "version": "0.68.4",
+    "comparisonVisible": true,
+    "image": "native-app-comparison-v0.68.4.jpg",
+    "realDataAccessDenied": true,
+    "deviceHelperAccessDenied": true,
+    "scratchDatabaseCreated": false,
+    "accessibilityDriver": "timed out",
+    "automatedNativeApplyClaimed": false
+  },
+  "currentInstalledVerification": {
+    "verifiedOn": "2026-11-02",
+    "desktopBundleVersion": "0.70.0",
+    "cliVersion": "0.70.0",
+    "sidecarVersion": "0.70.0",
+    "cliAndSidecarByteIdentical": true,
+    "cliAndSidecarSha256": "3172ae37270fdd25db4421bdf5a1e8bc869d0a5868cdc4b6561a0fa7096e9738",
+    "cliCodeSignatureValid": true,
+    "sidecarCodeSignatureValid": true
+  },
+  "currentInstalledCliSmoke": {
+    "consumerVersion": "0.70.0",
+    "sourceSetup": "current 0.70.0 app/persistence code with existing deterministic scripted fake-provider helpers",
+    "liveProviderCalls": 0,
+    "fakeProviderRequests": 3,
+    "scenario": "synthetic ZMK Home row tapping-term proposal, 200 ms to 240 ms",
+    "reviewShow": {
+      "humanShowsDeltaAndLinkedProposal": true,
+      "jsonSchemaVersion": 1,
+      "stale": false,
+      "proposalLinked": true
+    },
+    "changeShow": {
+      "humanShowsDeltaAndUnits": true,
+      "jsonSchemaVersion": 1,
+      "status": "proposed",
+      "validationPassed": true
+    },
+    "headAndLayoutUnchangedAfterShow": true,
+    "humanOutput": "Home row · Tapping term: 200 ms → 240 ms",
+    "applied": false
+  },
+  "limits": [
+    "The six screenshots in README.md are from the original source-run fixture; released-frontend browser evidence is recorded separately above.",
+    "The v0.70.0 installed-CLI smoke is not a v0.68.4 CLI rendering smoke.",
+    "Native evidence is visual only because accessibility automation timed out; the released-frontend browser replay is the full Apply journey.",
+    "No firmware runtime, physical keyboard behavior, typing speed, or comfort outcome was tested."
+  ]
+}
