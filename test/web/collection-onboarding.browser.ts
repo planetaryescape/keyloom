@@ -15,7 +15,10 @@ function browser(...args: string[]): string {
   if (result.exitCode !== 0) throw new Error(`${args.join(" ")} failed: ${result.stdout}${result.stderr}`);
   return result.stdout.toString();
 }
-const click = (role: string, name: string) => browser("find", "role", role, "click", "--name", name, "--exact");
+const click = (role: string, name: string) => {
+  browser("wait", "--fn", "document.getAnimations().every(a=>a.playState!=='running')");
+  return browser("find", "role", role, "click", "--name", name, "--exact");
+};
 const check = (expression: string, message: string) => browser("eval", `if(!(${expression}))throw Error(${JSON.stringify(message)})`);
 const shot = (name: string) => { if (evidence) browser("screenshot", `${evidence}/${mode}-${name}.png`); };
 try {
