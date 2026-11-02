@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "layoutId": "lay_01M6F346QBAC9DTFGGTX10J7YM",
+  "headRevisionId": "rev_01M6F34YXB0EBM07F83V14WVPN",
+  "context": {
+    "title": "Refused proposal",
+    "goal": "Distinctive original F17 goal: put F17 on my index finger\n\nAnswer to “Which hand do you prefer?”: Left",
+    "goalBasis": "request",
+    "reasons": [
+      "The change refers to something missing from the layout.",
+      "Only validation categories were recorded; the exact affected target was not recorded."
+    ]
+  },
+  "request": "Please plan a revised proposal for: Refused proposal\n\nOriginal request:\nDistinctive original F17 goal: put F17 on my index finger\n\nAnswer to “Which hand do you prefer?”: Left\n\nRecorded reason:\nThe change refers to something missing from the layout.\nOnly validation categories were recorded; the exact affected target was not recorded.\n\nRead the current layout first. Retain the original goal, preserve unrelated behavior, and explain any uncertainty. Propose a validated replacement for preview. Do not apply it."
+}

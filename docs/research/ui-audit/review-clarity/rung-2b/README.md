@@ -1,5 +1,7 @@
 # Contextual proposal recovery: source proof
 
+The b82 review found three in-scope defects in question-answer lineage and card validation. [Correction round 1](correction-round-1/README.md) records their fixes at `d0269994e2f812d9481282ed00b803ccff90432b`, red/green regressions, actual question-answer reload/recovery, and mounted card checks. The evidence below remains the initial implementation record; its failed local full suite is preserved, not waived or rewritten.
+
 Source implementation: `3469a79c4d982c1fb1435b21bf0c3661d5c8144d`, tree `4ebcd82bf9c9c1a5bfcba94c845c9a0f4a43d6c6`, on base `14312ecda7d960546474514121336a716e80e67d`. The following evidence-only commit adds this receipt and captures; it changes no implementation. This is a source candidate, not a shipped release.
 
 ## Reproduce
@@ -33,7 +35,7 @@ Focused tests: 6 passed, 36 assertions. Typecheck and dependency-cruiser passed.
 
 The first full default suite was killed by the 180-second harness timeout (queue task 696), without a summary. The unchanged rerun (task 698) completed in 311.56 seconds: **3681 passed, 243 skipped, 1 failed**, 150615 assertions across 404 files. The failure was `test/firmware/zmk/flash.test.ts:100`: the synthetic drive observer read an empty byte array instead of its fixture artifact. Its narrow rerun passed all 24 tests / 75 assertions in 4.15 seconds. That test and the flashing implementation are unchanged by this candidate. The full suite is **not green**; the isolated pass does not erase the failure. No further full-suite retry or flashing-code edit was made. See [check summary](checks.json).
 
-Remaining proof limits: no native interaction, installed-consumer run, physical typing outcome, independent model review or release gate was performed by this worker. Those belong to the coordinator. Question-answer lineage is labelled as an answer to its recorded question rather than presented as a standalone typed request; a dedicated mounted question-answer recovery journey, a full keyboard-only journey and an in-flight proposal-source deletion were not run.
+Remaining proof limits: no native interaction, installed-consumer run, physical typing outcome, independent model review or release gate was performed by this worker. Those belong to the coordinator. The initial candidate lacked a dedicated mounted question-answer recovery journey; correction round 1 now supplies it and retains the original request plus labelled answers. A full keyboard-only journey and an in-flight proposal-source deletion remain unverified.
 
 ## Review notes
 

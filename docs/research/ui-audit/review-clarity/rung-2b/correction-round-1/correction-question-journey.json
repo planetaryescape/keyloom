@@ -1,0 +1,27 @@
+{
+  "result": "PASS",
+  "session": "keyloom-rung2b-correction-app-38010",
+  "goal": "Distinctive original F17 goal: put F17 on my index finger",
+  "question": "Which hand do you prefer?",
+  "answer": "Left",
+  "refusalOwner": "msg_01M6F34PDREV1JP94HWF3PRJYN",
+  "originalOwner": "msg_01M6F346QFVECH0ZFVC5BEQAKD",
+  "request": "Please plan a revised proposal for: Refused proposal\n\nOriginal request:\nDistinctive original F17 goal: put F17 on my index finger\n\nAnswer to “Which hand do you prefer?”: Left\n\nRecorded reason:\nThe change refers to something missing from the layout.\nOnly validation categories were recorded; the exact affected target was not recorded.\n\nRead the current layout first. Retain the original goal, preserve unrelated behavior, and explain any uncertainty. Propose a validated replacement for preview. Do not apply it.",
+  "revisionBefore": "rev_01M6F346QBAC9DTFGGTX10J7YN",
+  "revisionPreview": "rev_01M6F346QBAC9DTFGGTX10J7YN",
+  "revisionAfter": "rev_01M6F34YXB0EBM07F83V14WVPN",
+  "neighborUnchanged": true,
+  "planPosts": 0,
+  "explicitSendPosts": 1,
+  "sourceConversationId": "conv_01M6F346QE2FN92BHNE1JW47GD",
+  "checks": [
+    "actual keyboard-activated question answer",
+    "actual unsaved validator refusal",
+    "later unrelated request excluded",
+    "reload reconstructs source",
+    "keyboard Plan sends nothing",
+    "keyboard Send exactly once",
+    "preview read-only",
+    "explicit Apply F17 only"
+  ]
+}
