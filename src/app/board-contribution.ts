@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, openSync, closeSync, unlinkSync, rmdirSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { BoardDefinitionSchema } from "../boards/schema.ts";
 import { serializeGeometry } from "../boards/geometry.ts";
@@ -29,15 +29,29 @@ export function exportBoardContribution(boardId: string, out: string, as = board
   mkdirSync(dirname(directory), { recursive: true });
   // Claim the output directory exclusively too: an existing empty directory is not ours to use.
   mkdirSync(directory);
+  const createdFiles: string[] = [];
+  const createdDirectories = new Set([directory]);
   try {
     for (const [path, text] of Object.entries(prepared.files)) {
       const target = join(directory, path);
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, text, { flag: "wx" });
+      let parent = directory;
+      for (const segment of path.split("/").slice(0, -1)) {
+        parent = join(parent, segment);
+        if (!existsSync(parent)) { mkdirSync(parent); createdDirectories.add(parent); }
+      }
+      const file = openSync(target, "wx");
+      createdFiles.push(target);
+      try { writeFileSync(file, text); }
+      finally { closeSync(file); }
     }
   } catch (error) {
-    // Only this call's exclusively created directory is removed, never a pre-existing output.
-    rmSync(directory, { recursive: true, force: true });
+    // Remove only files we created. Non-recursive directory cleanup preserves anything another writer added.
+    for (const file of createdFiles) {
+      try { unlinkSync(file); } catch { /* Preserve the original export error if cleanup cannot finish. */ }
+    }
+    for (const parent of [...createdDirectories].sort((a, b) => b.length - a.length)) {
+      try { rmdirSync(parent); } catch { /* A nonempty directory belongs to another writer too; leave it intact. */ }
+    }
     throw error;
   }
   return { boardId: prepared.boardId, directory, files: Object.keys(prepared.files) };
