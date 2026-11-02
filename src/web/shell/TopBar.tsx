@@ -138,6 +138,12 @@ export function TopBar({ onHome, boards, boardsAfter, sync, ask, undo, menu, onM
         <Menu label="More" align="end" triggerClassName="topbar-icon" trigger={<Ellipsis size={18} aria-hidden="true" />}>
           {(close) => (
             <>
+              {phone && onHome !== undefined ? (
+                <>
+                  <Item icon={HomeIcon} label="Pegboard wall" onSelect={() => { close(); onHome(); }} />
+                  <div className="menu-separator" role="separator" />
+                </>
+              ) : null}
               {onManageKeyboards === undefined ? null : <Item icon={KeyboardIcon} label="Keyboards…" onSelect={() => { close(); onManageKeyboards(); }} />}
               {undo === undefined ? null : (
                 <>
