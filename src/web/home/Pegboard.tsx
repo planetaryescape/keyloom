@@ -34,7 +34,7 @@ export function Pegboard({ token, layouts, sync, flying, onOpen }: {
   sync: SyncApi;
   /** The layout whose board is in flight to or from the desk; its board carries the transition's name. */
   flying: string | null;
-  onOpen: (summary: LayoutSummary, detail: LayoutDetail) => void;
+  onOpen: (summary: LayoutSummary, detail: LayoutDetail, triggerElement?: HTMLElement | null) => void;
 }) {
   const hung = useMemo(() => recentBoards(layouts), [layouts]);
   const [loaded, setLoaded] = useState(0);
@@ -73,7 +73,7 @@ export function Pegboard({ token, layouts, sync, flying, onOpen }: {
                   <WallBoard
                     detail={detail}
                     flying={flying === layout.id}
-                    onOpen={() => onOpen(layout, detail)}
+                    onOpen={(element) => onOpen(layout, detail, element)}
                   />
                 )}
                 <p className="peg-label">
@@ -95,7 +95,7 @@ export function Pegboard({ token, layouts, sync, flying, onOpen }: {
   );
 }
 
-function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: boolean; onOpen: () => void }) {
+function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: boolean; onOpen: (element: HTMLElement | null) => void }) {
   const { document: layout, board, geometry } = detail;
   const keys = useMemo<readonly GeometryKey[] | null>(() => {
     try {
@@ -107,8 +107,16 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
   const [colourway] = useColourway(board.id, board.display?.colourways);
   const descriptions = useMemo(() => (keys ?? []).map((_, index) => describeKey(layout, 0, index)), [keys, layout]);
   const frame = useRef<HTMLButtonElement>(null);
+  const tiltRef = useRef<HTMLSpanElement>(null);
   const [scale, setScale] = useState(0);
   const [ledges, setLedges] = useState<readonly { left: number; width: number; top: number }[]>([]);
+
+  const handleClick = () => {
+    if (tiltRef.current) {
+      tiltRef.current.style.viewTransitionName = "flying-board";
+    }
+    onOpen(tiltRef.current);
+  };
 
   useLayoutEffect(() => {
     const element = frame.current;
@@ -139,8 +147,8 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
 
   if (keys === null) return <div className="peg-board peg-board-empty"><span className="peg-missing">Can't draw this board</span></div>;
   return (
-    <button ref={frame} type="button" className={`peg-board${flying ? " flying-active-board" : ""}`} onClick={onOpen} aria-label={`Open ${boardDisplayName(board.name)}`}>
-      <span className="peg-tilt">
+    <button ref={frame} type="button" className="peg-board" onClick={handleClick} aria-label={`Open ${boardDisplayName(board.name)}`}>
+      <span ref={tiltRef} className={`peg-tilt${flying ? " peg-flying-cradle" : ""}`}>
         <span className="peg-stage" style={{ width: STAGE_W, height: STAGE_H, transform: `translate(-50%, -50%) scale(${scale})` }} inert>
           <Keyboard
             keys={keys}
