@@ -2303,3 +2303,11 @@ The review panel derives a linked suggestion's presentation from its validated p
 - **Flight navigation:** Selecting a board lifts it from the pegboard cradle and flies it into the flat desk editor using View Transitions and 3D transforms (`rotateX`, `translate3d`, scale). Navigating "Home" via the top bar triggers the reverse flight back to its pegboard slot. Reduced motion preferences disable the 3D movement and use an instant crossfade.
 - **Data storage:** Added `opened_at` to `layouts` table via migration 0018, updated whenever a layout is opened in the configurator, and surfaced via `keyloom layout recent`.
 
+### D-479: Synchronous DOM capture and destination pairing for View Transition flight animations. Extends D-478. (2026-11-02, BK: "the animation is not really working, the page just changes, i don't knowif we need to use view transitions or something I don't know")
+
+- **Synchronous capture before unmount:** `document.startViewTransition` captures Snapshot 1 synchronously when called. In declarative React components, setting state right before the transition call batches the update; Snapshot 1 captures the DOM before `view-transition-name` is applied. The gesture handler must set `triggerElement.style.viewTransitionName = "flying-board"` directly on the live DOM node before starting the transition, then clean up inline styles on `transition.finished`.
+- **Destination pairing contract:** The browser's `::view-transition-group` requires an element with that exact name to exist in both Snapshot 1 and Snapshot 2. Without a matching counterpart on the destination stage (`.stage > .keyboard-well`), the browser aborts the element transition and defaults to a root opacity crossfade.
+- **Payload vs cradle isolation:** The spatial transition name belongs strictly to `<span className="peg-tilt">` (the keyboard itself). The mounting hardware (`.peg-ledge`) stays anchored to the wall panel, while the pegboard panel recedes via a subtle parallax transform (`scale(0.96)`).
+- **Matrix interpolation over rigid keyframes:** The browser automatically computes 3D transform matrices between bounding boxes. Rigid spatial keyframes (`translateY`) on `::view-transition-group` break this calculation and must be omitted; the group styles configure only duration, easing curve and elevation drop shadows.
+
+
