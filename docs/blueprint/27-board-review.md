@@ -141,7 +141,7 @@ Passing these cases does not establish all timing interactions, lighting effects
 
 Built in `src/web/review/`: `useReview` reads `GET …/review` on open, on every new head and on each `event: review` frame for the config; `ReviewMarker` sits in the caption; `ReviewPanel` is the side column (a sheet on a phone). The caps and the strip are marked from `keys` and `layers` of the items that show. D-340 has the states.
 
-While loading or rerunning, the panel and marker say **Looking over…**. Previous findings, suggestions, counts and Show/Hide/Fix/Apply controls are withheld until the current run finishes; Close remains available. Stale findings outside a run are read-only. Board marks are withheld for stale or unfinished reviews too. A review event locks the old results before its GET returns, and older responses cannot overwrite a newer snapshot or another config. If loading fails, **Try loading again** repeats only the read, not the model call.
+While loading or rerunning, the panel and marker say **Looking over…**. Previous findings, suggestions, counts and Show/Hide/Fix/Apply controls are withheld until the current run finishes; Close remains available. Stale findings outside a run are read-only. Board marks are withheld for stale or unfinished reviews too. A review event locks the old results before its GET returns, and older responses cannot overwrite a newer snapshot or another config. Other configs' events cannot unlock a failed refresh. If loading fails, the panel and openable marker say **Review unavailable** without a running spinner; **Try loading again** repeats only the read, not the model call. Hiding or restoring a finding keeps the results and unsaved activity choices mounted while the request completes.
 
 ## What the screens need
 

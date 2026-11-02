@@ -16,7 +16,7 @@ keyloom is a local-first configurator for QMK and ZMK keyboards, and for the Mac
 - Use the typing lab. It records you typing, measures each finger, and tests home-row-mod timings on the recording.
 - Plug in a new keyboard and put your config on it.
 - Choose activity tests during import or new-board copying, then see measured before/after costs on review suggestions. Tests need Docker on macOS or Linux and a QMK or ZMK config; Windows and the MacBook's Kanata config are not supported yet. Tests never flash a keyboard.
-- Reviews preserve existing custom actions and distinguish source checks from firmware-test coverage. Reconnecting a keyboard starts a fresh analysis on your chosen provider, even at the same config revision; normal provider charges apply. Outdated reviews refresh automatically while the active keyboard is connected, and unfinished reviews withhold result controls. [Review freshness and limits](docs/blueprint/27-board-review.md).
+- Reviews preserve existing custom actions and distinguish source checks from firmware-test coverage. Reconnecting a keyboard, even at the same config revision, or automatically refreshing an outdated review while the active keyboard is connected starts a fresh analysis on your chosen provider; normal provider charges apply to both. Unfinished reviews withhold result controls. [Review freshness and limits](docs/blueprint/27-board-review.md).
 
 ## The main screens
 

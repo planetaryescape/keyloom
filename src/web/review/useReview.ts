@@ -9,24 +9,30 @@ import * as api from "./api-review.ts";
 // frame for this config. Results stay non-interactive until the current run finishes. Only explicit UI actions request runs here;
 // the engine handles automatic refresh on connect, apply, import and changed inputs on connected configs.
 export function useReview(token: string, layoutId: string, headRevisionId: string, lastEvent: ReviewEvent | null) {
-  const [saved, setSaved] = useState<{ token: string; layoutId: string; response: ReviewResponse } | null>(null);
+  const [saved, setSaved] = useState<{ token: string; layoutId: string; headRevisionId: string; response: ReviewResponse } | null>(null);
   const response = saved?.token === token && saved.layoutId === layoutId ? saved.response : null;
   const [problem, setProblem] = useState<string | null>(null);
-  const [action, setAction] = useState<{ token: string; layoutId: string; serial: number } | null>(null);
+  const [action, setAction] = useState<{ token: string; layoutId: string; serial: number; kind: "refresh" | "dismissal" } | null>(null);
   const busy = action?.token === token && action.layoutId === layoutId;
   // The fixed items of a review that arrived while the page was open, for the tick and the toast; once per review.
   const [justFixed, setJustFixed] = useState<{ reviewId: string; items: FixedItem[] } | null>(null);
   const seen = useRef<string | null>(null);
   const request = useRef(0);
-  const event = lastEvent?.layoutId === layoutId ? lastEvent : null;
+  const matchingEvent = lastEvent?.layoutId === layoutId ? lastEvent : null;
+  // Retain this config's last event when another board emits; foreign traffic cannot settle or release its read lock.
+  const [observed, setObserved] = useState({ token, layoutId, event: matchingEvent });
+  const sameScope = observed.token === token && observed.layoutId === layoutId;
+  const event = matchingEvent ?? (sameScope ? observed.event : null);
+  if (!sameScope || event !== observed.event) setObserved({ token, layoutId, event });
   const [settledEvent, setSettledEvent] = useState<ReviewEvent | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     const serial = ++request.current;
+    setProblem(null);
     try {
       const r = await api.fetchReview(token, layoutId, signal);
       if (signal?.aborted || serial !== request.current) return;
-      setSaved({ token, layoutId, response: r });
+      setSaved({ token, layoutId, headRevisionId, response: r });
       setSettledEvent(event);
       setProblem(null);
       const review = r.review;
@@ -39,21 +45,21 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
       if (signal?.aborted || serial !== request.current) return;
       setProblem(error instanceof ApiError || error instanceof Error ? error.message : "Couldn't read the review.");
     }
-  }, [token, layoutId, event]);
+  }, [token, layoutId, headRevisionId, event]);
 
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [load, headRevisionId]);
+  }, [load]);
 
-  const act = async (run: () => Promise<ReviewResponse>) => {
+  const act = async (kind: "refresh" | "dismissal", run: () => Promise<ReviewResponse>) => {
     const serial = ++request.current;
-    setAction({ token, layoutId, serial });
+    setAction({ token, layoutId, serial, kind });
     try {
       const next = await run();
       if (serial !== request.current) return;
-      setSaved({ token, layoutId, response: next });
+      setSaved({ token, layoutId, headRevisionId, response: next });
       setSettledEvent(event);
       setProblem(null);
     } catch (error) {
@@ -65,6 +71,7 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
   };
 
   const review = response?.review ?? null;
+  const refreshing = response === null || saved?.headRevisionId !== headRevisionId || event !== settledEvent || (busy && action?.kind === "refresh");
   return {
     review,
     activities: response?.workloadActivities ?? [],
@@ -73,12 +80,13 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     loaded: response !== null,
     problem,
     // A review event disables the old results before the GET can replace them, even when it reuses the same review row.
-    busy: busy || event !== settledEvent,
+    busy: busy || refreshing,
+    refreshing,
     justFixed: justFixed !== null && review !== null && justFixed.reviewId === review.id ? justFixed.items : [],
     clearJustFixed: () => setJustFixed(null),
-    run: (force = false, activities?: ReviewActivity[]) => act(() => api.runReview(token, layoutId, force, activities)),
-    dismiss: (id: string) => act(() => api.dismissItem(token, layoutId, id)),
-    restore: (id: string) => act(() => api.restoreItem(token, layoutId, id)),
+    run: (force = false, activities?: ReviewActivity[]) => act("refresh", () => api.runReview(token, layoutId, force, activities)),
+    dismiss: (id: string) => act("dismissal", () => api.dismissItem(token, layoutId, id)),
+    restore: (id: string) => act("dismissal", () => api.restoreItem(token, layoutId, id)),
     reload: () => void load(),
   };
 }
