@@ -12,6 +12,7 @@ import { ReplyStream } from "../reference-stream.ts";
 import { replyReferenceReader, replyReferenceRoutes } from "../../app/index.ts";
 import { type AgentArtifact, TransferArtifactSchema } from "../../api/artifacts.ts";
 import { answerAgentRun, cancelAgentRequest, cancelAgentRun, inspectAgentRun, startAgentRun, waitForAgentRun, savedRunOutcome, type AgentRunSnapshot } from "../../app/agent-runs.ts";
+import { proposalRecovery } from "../../app/proposal-recovery.ts";
 
 type TransferReport = Extract<AgentArtifact, { kind: "transfer" }>;
 
@@ -126,6 +127,17 @@ export async function followAgentRun(ctx: CliContext, app: App, run: AgentRunSna
 
 export function registerChatCommands(program: Command, ctx: CliContext, deps: ChatDeps = {}): void {
   const agent = program.command("agent").description("saved agent work; inspection never replays it");
+  agent.command("replan").argument("<layout>").option("--proposal <id>").option("--conversation <id>").option("--turn <id>").option("--draft", "print an editable request without starting work").option("--provider <provider>").option("--json", "print versioned JSON")
+    .action(async (ref: string, opts: { proposal?: string; conversation?: string; turn?: string; draft?: boolean; provider?: string; json?: boolean }) => {
+      await ctx.withApp(async (app) => {
+        const recovery = proposalRecovery(app, ref, opts);
+        const format = opts.json ? "json" : ctx.format();
+        if (opts.draft) { print(ctx.io, format, { json: recovery, table: recovery.request }); return; }
+        if (recovery.request.length > 8000) throw new UsageError("The recovery request exceeds 8000 characters. Use --draft, edit it shorter, then send it through agent start.");
+        const run = await startAgentRun(app, { version: 1, requestId: crypto.randomUUID(), layoutRef: ref, input: { message: recovery.request } }, { ...(deps.model ? { model: deps.model } : {}), ...(opts.provider ? { provider: parseProvider(opts.provider) } : {}) });
+        await followAgentRun(ctx, app, run, format);
+      });
+    });
   agent.command("show").argument("<id>", "run or request identity").action(async (id: string) => showRun(ctx, await ctx.withApp((app) => inspectAgentRun(app, id))));
   agent.command("cancel").argument("<id>").option("--request", "persist Stop for this request identity even before acceptance").action(async (id: string, opts: { request?: boolean }) => {
     const result = await ctx.withApp((app) => opts.request ? cancelAgentRequest(app, id) : cancelAgentRun(app, id));

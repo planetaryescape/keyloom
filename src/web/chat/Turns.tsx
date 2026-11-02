@@ -261,7 +261,8 @@ interface Props {
   onPin: (proposal: Proposal) => void;
   onApply: (proposal: Proposal) => Promise<void>;
   onRemovePriority: (id: string) => Promise<void>;
-  onAskAgain: () => void;
+  onAskAgain: (proposal: Proposal, reasons: string[]) => void;
+  refusalRecovery?: { reasons: string[]; onPlan: () => void };
   onOpenRelease: () => void;
   onRetry: () => void;
   /** The person's answer to the question this reply asked. */
@@ -285,7 +286,7 @@ interface Props {
   reference?: DrawReference;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards, revised, reference }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards, revised, reference }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -316,6 +317,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
         return null;
       })}
       <ConfigCardList presentation={turn.presentation} cards={configCards} />
+      {refusalRecovery === undefined ? null : <div className="proposal-problem"><div><p>The proposed change was refused by validation. No replacement proposal was recorded for this reply.</p>{refusalRecovery.reasons.map((reason) => <p key={reason}>{reason}</p>)}<button type="button" className="bar-link" onClick={refusalRecovery.onPlan}>Plan a revised proposal</button></div></div>}
       {turn.phase === "stopped" ? <p className="msg-note">Stopped. Configs or proposals prepared before Stop may remain.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}
       {compact

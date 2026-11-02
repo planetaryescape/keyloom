@@ -76,7 +76,7 @@ export function formatFindingRepairRequest(finding: { title: string; body: strin
   ].filter(Boolean).join("\n\n");
 }
 
-export type FindingRepairDraft = { id: string; reviewId: string; headRevisionId: string; findingId: string; request: string; sent: boolean };
+export type FindingRepairDraft = { id: string; reviewId: string; headRevisionId: string; findingId: string; request: string; sent: boolean } | import("../validation/proposal-recovery.ts").ProposalRecoveryDraft;
 
 export function selectableFinding(items: readonly import("../validation/review-item.ts").ReviewItem[], id: string) {
   return fixableFindings(items).find((item) => item.id === id);

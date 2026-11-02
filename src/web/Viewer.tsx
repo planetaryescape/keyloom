@@ -34,6 +34,8 @@ import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import { withoutRepeats } from "./chat/transcript.ts";
 import type { Turn } from "./chat/transcript.ts";
 import { formatFindingRepairRequest, type FindingRepairDraft } from "../api/review.ts";
+import { formatProposalRecoveryRequest, type RecoveryContext, type RecoverySource } from "../validation/proposal-recovery.ts";
+import { proposalContext } from "./chat/recovery-context.ts";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
 import { layerName } from "./chat/proposal-facts.ts";
 import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
@@ -166,6 +168,14 @@ const typing = (target: EventTarget | null) =>
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
 export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, repairDraft, onRepairDraft, sync, chrome }: ViewerProps) {
+  const [repairNotice, setRepairNotice] = useState<string | null>(null);
+  const planRecovery = (source: RecoverySource, context: RecoveryContext) => {
+    if (repairDraft) { setRepairNotice("Finish or dismiss the existing repair request first. It has been kept."); return; }
+    const id = crypto.randomUUID();
+    onRepairDraft(id, { id, source, context, headRevisionId: detail.revision.id, request: formatProposalRecoveryRequest(context), sent: false }, true);
+    setProposalsOpen(false);
+    setChatOpen(true);
+  };
   const { document: layout, board, geometry, revision } = detail;
   // Arriving from another board or config lands on the layer of the same name, if this layout has one (D-317).
   const [layerId, setLayerId] = useState<string | null>(() => {
@@ -1550,6 +1560,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   useEffect(() => () => viewRequest?.resolve({ version: 1, status: "unavailable", reason: "cancelled" }), [viewRequest]);
 
   if (layer === undefined) return null;
+  function currentRepair(): boolean {
+    if (repairDraft === null || revision.id !== repairDraft.headRevisionId) return false;
+    if ("source" in repairDraft) {
+      const source = repairDraft.source;
+      return source.conversationId !== undefined || (source.kind === "proposal" && waiting?.some((proposal) => proposal.changeSetId === source.proposalId && proposal.status === "proposed") === true);
+    }
+    const review = boardReview.review;
+    return review?.id === repairDraft.reviewId && review.revisionId === repairDraft.headRevisionId && !boardReview.stale && !boardReview.busy && !boardReview.refreshing && review.items.some((item) => item.id === repairDraft.findingId && item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"));
+  }
   const chatContent = (
             <>
               {reminders.length === 0 ? null : (
@@ -1595,7 +1614,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 initialConversation={chrome.arrival?.conversationId}
                 continueCopy={chrome.arrival?.continueCopy}
                 repairDraft={repairDraft}
-                repairCurrent={repairDraft !== null && revision.id === repairDraft.headRevisionId && boardReview.review?.id === repairDraft.reviewId && boardReview.review.revisionId === repairDraft.headRevisionId && !boardReview.stale && !boardReview.busy && !boardReview.refreshing && boardReview.review.items.some((item) => item.id === repairDraft.findingId && item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"))}
+                repairCurrent={currentRepair()}
+                onPlanRecovery={planRecovery}
                 onRepairDraftChange={(id, request) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, request })}
                 onRepairSentStateChange={(id, sent) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, sent })}
                 onRepairSent={(id) => repairDraft?.id === id && onRepairDraft(id, null)}
@@ -2156,7 +2176,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
               }}
               onShowLayer={(id) => setLayerId(id)}
-                onPlanRepair={(item) => {
+                 onPlanRepair={(item) => {
+                 if (repairDraft) { setRepairNotice("Finish or dismiss the existing repair request first. It has been kept."); return; }
                 const words = (text: string) => reviewTextWords(text, layout, board, geometry);
                 const id = crypto.randomUUID();
                 onRepairDraft(id, {
@@ -2191,6 +2212,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
               }}
               onClose={() => setProposalsOpen(false)}
+              onPlanRecovery={(proposal, reasons) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId }, proposalContext(proposal, reasons, []))}
               onOpenRelease={() => onOpenRelease()}
             />
           </div>
@@ -2212,6 +2234,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           </div>
         )}
       </div>
+      {repairNotice === null ? null : <p role="status">{repairNotice}</p>}
       <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       {chatActivity === null || (chatOpen && !keyOverChat) ? null : (
         <div className="chat-background-work" aria-label="Active agent request">
