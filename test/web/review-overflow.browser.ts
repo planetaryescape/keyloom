@@ -18,7 +18,7 @@ try {
     browser("open", url);
     browser("wait", ".br-marker");
     browser("eval", `document.documentElement.dataset.theme=${JSON.stringify(theme)};document.querySelector('.br-marker').click()`);
-    browser("wait", ".br-panel");
+    browser("wait", "--fn", "document.querySelectorAll('.br-panel .br-item').length === 8");
     browser("eval", `(async()=>{
       await document.fonts.ready;await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
       const page=document.scrollingElement,panel=document.querySelector('.br-panel'),body=panel.querySelector('.br-body');

@@ -1,6 +1,6 @@
 # Verify long review text stays inside the sidebar
 
-Status: source repair verified on 2026-11-02. This page records source-served acceptance, not installed-release verification; [the changelog](../../../../CHANGELOG.md) identifies the release containing the repair. The fixture uses the real App/Viewer sidebar with synthetic review data and the published Moonlander sample. It has no database, credentials, model calls, firmware work or physical keyboard access.
+Status: source repair verified on 2026-11-02. This page records source-served acceptance, not installed-release verification. The fixture uses the real App/Viewer sidebar with synthetic review data and the published Moonlander sample. It has no database, credentials, model calls, firmware work or physical keyboard access.
 
 Start the synthetic server:
 
