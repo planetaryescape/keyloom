@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.71.1](https://github.com/planetaryescape/keyloom/compare/v0.71.0...v0.71.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* retry ZMK flash after USB connects ([63f715a](https://github.com/planetaryescape/keyloom/commit/63f715a65fc083047559b02d5ba8dc378f765b45))
+
 ## [0.71.0](https://github.com/planetaryescape/keyloom/compare/v0.70.2...v0.71.0) (2026-11-02)
 
 
