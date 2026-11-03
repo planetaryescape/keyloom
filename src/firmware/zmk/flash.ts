@@ -227,14 +227,22 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
         break;
       }
       if (retryRestart && input.hooks?.enterBootloader) {
+        if (signal?.aborted) {
+          return failed(i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
+        }
         const entered = await input.hooks.enterBootloader(step, i, (text) => {
           instruction = text;
-          input.onState("waiting_for_bootloader", text);
+          input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined);
         });
         if (entered.ok) {
           restarted = true;
           byKeyloom = entered.alreadyThere !== true;
           retryRestart = false;
+          mount = await input.findVolume(step.volume);
+          if (mount) {
+            identity = statSync(mount);
+            break;
+          }
         } else if (!entered.retry) {
           retryRestart = false;
           restartReason = entered.reason;
@@ -249,11 +257,15 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       await sleep(poll, signal);
     }
+    if (!mount) {
+      mount = await input.findVolume(step.volume);
+      if (mount) identity = statSync(mount);
+    }
     if (!mount || !identity) {
       // The Mac can lock after the last poll; probe once more so the timeout names the real reason.
       if (lockWasReported || await screenLocked()) return failed(`${SCREEN_LOCK_MESSAGE} ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`}`);
       return failed(
-        `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? missingSharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
+        `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? missingSharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)} ${retryRestart ? instruction : ""}`,
       );
     }
     allRestarted &&= byKeyloom;

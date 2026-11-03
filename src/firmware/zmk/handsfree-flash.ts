@@ -176,7 +176,7 @@ export async function restartHalf(opts: {
     if (opts.waitForVolume !== false && peers.length > 0) {
       const presence = await Promise.all(peers.map((other) => peerPresence(deps, other, ports)));
       if (presence.includes("unattributable")) {
-        return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware` };
+        return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware`, retry: true };
       }
       if (presence.includes("absent")) log(`keyloom: the other half isn't on USB, so ${t.step.volume} can only be the ${label}'s boot drive`);
     }
@@ -333,7 +333,9 @@ export function zmkHandsFreeHooks(input: {
     enterBootloader: async (step, _index, announce) => {
       const target = forStep(step);
       if (target) {
-        try { before.set(target, await readHalf(input.deps, target)); } catch { /* Recovery treats an unreadable half as unknown. */ }
+        if (!before.has(target)) {
+          try { before.set(target, await readHalf(input.deps, target)); } catch { /* Recovery treats an unreadable half as unknown. */ }
+        }
       }
       return target ? restartHalf({ deps: input.deps, targets, target, findVolume: input.findVolume, log: input.log, announce, screenLocked: input.screenLocked }) : { ok: false, reason: "keyloom has no hands-free recipe for this step" };
     },

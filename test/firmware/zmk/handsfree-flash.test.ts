@@ -174,13 +174,22 @@ describe("a Glove80 whose halves run keyloom's firmware", () => {
       if (right.serial === undefined) throw new Error("Glove80 right half has no firmware marker");
       const serial = right.serial;
       delete right.serial;
-      setTimeout(() => { right.serial = serial; }, 80);
-      const left = w.halves.find((half) => half.letter === "L");
-      if (!left) throw new Error("Glove80 left half missing");
-      if (left.serial === undefined) throw new Error("Glove80 left half has no firmware marker");
-      const leftSerial = left.serial;
-      delete left.serial;
-      setTimeout(() => { left.serial = leftSerial; }, 300);
+      const transport = w.deps.serial;
+      let listings = 0;
+      w.deps.serial = async () => {
+        const serialTransport = await transport();
+        return {
+          ...serialTransport,
+          list: async () => {
+            if (listings < 2) {
+              if (listings === 1) right.serial = serial;
+              listings++;
+              return [];
+            }
+            return serialTransport.list();
+          },
+        };
+      };
       return w;
     });
     expect(r.result).toMatchObject({ state: "succeeded", error: null });
