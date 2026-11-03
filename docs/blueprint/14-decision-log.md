@@ -23,6 +23,12 @@ First-run setup exposes the existing detected-keyboard questions without requiri
 
 `keyboard list|remove|restore` and authenticated collection routes back the UI. `keyboard contribute` exports board data plus a handoff, with an optional upstream ID and a new output directory; the app downloads the same data. Exports exclude personal configs and recordings and publish nothing. `/add-keyboard` owns photo-based refinement and the checked board-folder PR. A draft can be prepared without photos or hardware, but an owner must supply honest build/flash verification before hardware support is accepted.
 
+## 2026-11-03 follow-up
+
+### D-481: Desktop updates are installed only after the user chooses to install and restart. (BK: “offer the user a prompt to restart and install”)
+
+The updater still checks at launch and every six hours, but finding an update no longer downloads or installs it. keyloom posts a notification and enables a menu-bar action naming the version. Choosing it downloads and installs the signed update, then requests restart through the normal app exit path so the shell can stop its owned server. A failed install leaves the action available to retry. The updater remains compiled only when its signing keys are configured (D-328).
+
 ## 2026-11-01 follow-up
 
 These entries were numbered D-469/D-470 on the unmerged encoder branch. They are D-471/D-472 here to preserve the already-merged D-469 view-opening decision.

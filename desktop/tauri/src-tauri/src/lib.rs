@@ -29,6 +29,8 @@ pub struct AppState {
     pub sync_layout: Mutex<Option<String>>,
     /// Signalled when the person picks the menu item that replaces an incompatible server (offered only when the CLI offers it).
     pub replace: tokio::sync::Notify,
+    #[cfg(feature = "updater")]
+    pub install_update: tokio::sync::Notify,
 }
 
 fn show_window(app: &AppHandle) {
@@ -73,9 +75,32 @@ pub fn run() {
             let summary = MenuItem::with_id(&handle, "summary", "Starting", false, None::<&str>)?;
             let sync_now = MenuItem::with_id(&handle, "sync_now", "Sync now", false, None::<&str>)?;
             let open = MenuItem::with_id(&handle, "open", "Open keyloom", true, None::<&str>)?;
+            #[cfg(feature = "updater")]
+            let update = MenuItem::with_id(
+                &handle,
+                "install_update",
+                "Checking for updates…",
+                false,
+                None::<&str>,
+            )?;
             // Off until BK turns it on: nothing registers a login item by itself.
             let login = CheckMenuItem::with_id(&handle, "login", "Launch at login", true, handle.autolaunch().is_enabled().unwrap_or(false), None::<&str>)?;
             let quit = MenuItem::with_id(&handle, "quit", "Quit keyloom", true, Some("CmdOrCtrl+Q"))?;
+            #[cfg(feature = "updater")]
+            let menu = Menu::with_items(
+                &handle,
+                &[
+                    &summary,
+                    &menu_bar::separator(&handle)?,
+                    &sync_now,
+                    &open,
+                    &update,
+                    &login,
+                    &menu_bar::separator(&handle)?,
+                    &quit,
+                ],
+            )?;
+            #[cfg(not(feature = "updater"))]
             let menu = Menu::with_items(
                 &handle,
                 &[&summary, &menu_bar::separator(&handle)?, &sync_now, &open, &login, &menu_bar::separator(&handle)?, &quit],
@@ -92,6 +117,10 @@ pub fn run() {
                         "open" => show_window(app),
                         "sync_now" => menu_bar::sync_now(app),
                         "replace" => app.state::<AppState>().replace.notify_one(),
+                        #[cfg(feature = "updater")]
+                        "install_update" => {
+                            app.state::<AppState>().install_update.notify_one()
+                        }
                         "login" => {
                             let manager = app.autolaunch();
                             let result = if manager.is_enabled().unwrap_or(false) { manager.disable() } else { manager.enable() };
@@ -116,7 +145,7 @@ pub fn run() {
             });
 
             #[cfg(feature = "updater")]
-            tauri::async_runtime::spawn(updates::watch(handle.clone()));
+            tauri::async_runtime::spawn(updates::watch(handle.clone(), update.clone()));
 
             // Everything that waits on the server runs off the setup thread so the menu-bar extra shows at once.
             let handle2 = handle.clone();
