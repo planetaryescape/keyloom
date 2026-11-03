@@ -29,7 +29,7 @@ export const WRITING_INSTRUCTION = "Don't unplug or switch off the half. Writing
 export type { FlashStep } from "../../boards/recipes.ts";
 
 /** `alreadyThere`: the half was in its bootloader before keyloom tried, so keyloom proved nothing about reaching it. */
-export type EnterResult = { ok: true; alreadyThere?: true } | { ok: false; reason: string };
+export type EnterResult = { ok: true; alreadyThere?: true } | { ok: false; reason: string; retry?: boolean };
 export type VerifyResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** What hands-free flashing adds to each step (src/firmware/zmk/handsfree-flash.ts); without it the person puts every half in its bootloader. */
@@ -175,6 +175,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let instruction = recovery?.instruction ?? instructionFor(step, i, input.steps.length, waitMs);
     let restarted = false;
     let byKeyloom = false;
+    let retryRestart = false;
     let restartReason: string | undefined;
     // A mounted drive can be written while the Mac is locked. Otherwise refuse before any hands-free
     // trigger, which would strand the half in its bootloader without a mountable drive.
@@ -192,8 +193,11 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined));
       if (!entered.ok) {
         restartReason = entered.reason;
+        retryRestart = entered.retry === true;
         say(`keyloom: couldn't restart the ${step.label} by itself: ${entered.reason}`);
-        instruction = `keyloom couldn't restart the ${step.label} by itself: ${entered.reason}. ${instruction}`;
+        instruction = retryRestart
+          ? `keyloom couldn't restart the ${step.label} by itself: ${entered.reason}. ${instruction} If you connect it by USB while keyloom waits, keyloom will retry; otherwise press its bootloader key.`
+          : `keyloom couldn't restart the ${step.label} by itself: ${entered.reason}. ${instruction}`;
       }
       restarted = entered.ok;
       byKeyloom = entered.ok && entered.alreadyThere !== true;
@@ -211,8 +215,6 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     say(`keyloom: waiting for ${step.volume} (${step.label}, step ${i + 1} of ${input.steps.length})`);
     // A half keyloom restarted needs nothing from the person; its drive is already there.
     if (!restarted) input.onState("waiting_for_bootloader", instruction, { needsHand: true });
-    allRestarted &&= byKeyloom;
-
     let identity: { dev: number; ino: number } | undefined;
     let lockWasReported = false;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
@@ -223,6 +225,22 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       if (mount) {
         identity = statSync(mount);
         break;
+      }
+      if (retryRestart && input.hooks?.enterBootloader) {
+        const entered = await input.hooks.enterBootloader(step, i, (text) => {
+          instruction = text;
+          input.onState("waiting_for_bootloader", text);
+        });
+        if (entered.ok) {
+          restarted = true;
+          byKeyloom = entered.alreadyThere !== true;
+          retryRestart = false;
+        } else if (!entered.retry) {
+          retryRestart = false;
+          restartReason = entered.reason;
+          instruction = `keyloom couldn't restart the ${step.label} by itself: ${entered.reason}. ${instruction}`;
+          input.onState("waiting_for_bootloader", instruction, { needsHand: true });
+        }
       }
       const locked = await screenLocked();
       if (locked !== lockWasReported) {
@@ -238,6 +256,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
         `${step.volume} didn't appear within ${Math.round(waitMs / 1000)} s. ${i === 0 ? "Nothing was flashed." : `The ${input.steps[0]?.label} was flashed and the ${step.label} was not.`} ${shared ? missingSharedDriveRemedy(step, input.steps) : retryRemedy(input.steps)}`,
       );
     }
+    allRestarted &&= byKeyloom;
 
     const selectedMount = mount;
     const selectedIdentity = identity;

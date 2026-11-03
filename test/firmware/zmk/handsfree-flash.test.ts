@@ -166,6 +166,29 @@ describe("which port is which half", () => {
 });
 
 describe("a Glove80 whose halves run keyloom's firmware", () => {
+  test("a half connected after flashing starts is restarted when its USB serial port appears", async () => {
+    const r = await run(GLOVE80, glove80Image(KEY), (root) => {
+      const w = fakeWorld({ root, halves: [running("L"), running("R")] });
+      const right = w.halves.find((half) => half.letter === "R");
+      if (!right) throw new Error("Glove80 right half missing");
+      if (right.serial === undefined) throw new Error("Glove80 right half has no firmware marker");
+      const serial = right.serial;
+      delete right.serial;
+      setTimeout(() => { right.serial = serial; }, 80);
+      const left = w.halves.find((half) => half.letter === "L");
+      if (!left) throw new Error("Glove80 left half missing");
+      if (left.serial === undefined) throw new Error("Glove80 left half has no firmware marker");
+      const leftSerial = left.serial;
+      delete left.serial;
+      setTimeout(() => { left.serial = leftSerial; }, 300);
+      return w;
+    });
+    expect(r.result).toMatchObject({ state: "succeeded", error: null });
+    expect(r.w.touches[0]).toEqual({ path: "/dev/fake-ttyACM-R", baud: 1200 });
+    expect(r.w.flashed[0]).toEqual({ letter: "R", key: KEY });
+    expect(r.states.some(([, instruction]) => instruction?.includes("keyloom will retry") && instruction.includes("otherwise press its bootloader key"))).toBe(true);
+  });
+
   test("flashes the right half and then the left with no keypress, and verifies both", async () => {
     const r = await run(GLOVE80, glove80Image(KEY), (root) => fakeWorld({ root, halves: [running("L"), running("R")] }));
     expect(r.result).toMatchObject({ state: "succeeded", error: null });
@@ -251,7 +274,7 @@ describe("the first keyloom flash and failures to restart", () => {
       { wait: 3000 },
     );
     expect(r.w.touches).toEqual([]);
-    expect(r.states.some(([, i]) => i?.includes("no keyloom serial port was found for it, so it needs its bootloader key this once"))).toBe(true);
+    expect(r.states.some(([, i]) => i?.includes("keyloom will retry") && i.includes("otherwise press its bootloader key"))).toBe(true);
     expect(r.result.state).toBe("succeeded");
     expect(r.lines.at(-1)).toContain("Verified");
   });
