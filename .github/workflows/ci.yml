@@ -261,6 +261,8 @@ jobs:
   desktop:
     # Same runner choice as device-helper's Apple Silicon entry (D-483).
     runs-on: ${{ (github.actor == 'bhekanik' || github.actor == 'github-actions[bot]') && (github.triggering_actor == 'bhekanik' || github.triggering_actor == 'github-actions[bot]') && fromJSON('["self-hosted","macOS","ARM64","keyloom-builder"]') || 'macos-15' }}
+    # A hung step would hold the one runner on BK's Mac for the 6-hour default.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: desktop/tauri/src-tauri
