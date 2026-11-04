@@ -187,6 +187,7 @@ export const FlashSchema = z.object({
   instruction: z.string().nullable(),
   // What keyloom confirmed after a successful flash, such as "Verified: the keyboard is running build bld_...".
   note: z.string().nullable(),
+  verified: z.boolean(),
   logTail: z.array(z.string()),
 });
 export type Flash = z.infer<typeof FlashSchema>;

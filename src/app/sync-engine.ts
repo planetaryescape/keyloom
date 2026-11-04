@@ -16,6 +16,7 @@ import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, fin
 import { boardConfigs, getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
 import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
 import { transact } from "../persistence/transaction.ts";
+import { latestVerifiedVersionOnBoard } from "../persistence/versions.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
   type BoardSyncRow, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
@@ -352,11 +353,11 @@ export class SyncEngine {
       }
     }
 
-    // Unplugged, the keyboard can't be read, so what it last ran is the last build keyloom put on it (null count when that revision is
-    // off the head's line).
+    // Unplugged, the keyboard can't be read, so use the last verified revision keyloom put on it by Sync or a standalone flash
+    // (null count when that revision is off the head's line).
     let lastKnown: SyncFacts["lastKnown"];
     if (reading.state === "absent") {
-      const last = lastSucceededSync(db, boardId);
+      const last = latestVerifiedVersionOnBoard(db, boardId);
       if (last !== undefined && last.layoutId === layout.id) {
         const head = layout.headRevisionId;
         const at = revisionLine(db, layout.id, head).indexOf(last.revisionId);

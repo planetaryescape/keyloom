@@ -108,7 +108,7 @@ function Harness() {
   useLayoutEffect(() => { current = review; sendEvent = setEvent; chooseLayout = setId; chooseHead = setHead; });
   return <main style={{ padding: 16, maxWidth: 520, margin: "auto", height: "100dvh", display: "flex", flexDirection: "column", gap: 12 }}>
     <header><button onClick={() => void runChecks()}>Run regression checks</button><ReviewMarker review={review} open onToggle={() => {}} /></header>
-    <ReviewPanel token="synthetic" review={review} layout={layout} board={board} rows={{}} boardName="Moonlander" configName="Daily" proposals={[]} pinnedId={null} onPin={() => {}} onApply={async () => {}} onShowLayer={() => {}} onFixIssues={() => {}} onClose={() => {}} />
+    <ReviewPanel token="synthetic" review={review} layout={layout} board={board} rows={{}} boardName="Moonlander" configName="Daily" proposals={[]} pinnedId={null} onPin={() => {}} onApply={async () => {}} onShowLayer={() => {}} onPlanRepair={() => {}} onClose={() => {}} />
     <output>Ready · synthetic data only</output>
   </main>;
 }

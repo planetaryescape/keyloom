@@ -11,7 +11,48 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-04 follow-up
+
+### D-482: A verified standalone flash updates the keyboard's recorded version; an unverified write is never reported as fully complete. (BK: “verification should be part of flashing”; “fix the app so that it reports the correct state”)
+
+The flasher's completion includes its build-marker readback when the board supports it. A verified standalone flash records that exact revision in version history, just as a verified Sync does; offline status uses the newest verified revision from either path. A write that finishes without confirming the marker is shown as “Flashed, not verified,” does not become a version, and its log remains available. This replaces D-301/D-307's sync-only recording rule. Verification is of the running build marker, not a full key-by-key readback.
+
+### D-483: Apple Silicon CI and release jobs run on BK's Mac, not hosted macOS runners. Replaces the `macos-15` runner in D-329. (2026-11-04, BK: "see how i configured things to use this mac as a runner for macos stuff and then please copy that so that on this app we do something similar instead of relying on github runners")
+
+On 2026-11-04 PR #258's `desktop` and Apple Silicon `device-helper` jobs were cancelled twice after 20 to 25 minutes without starting a step: "The job was not acquired by Runner of type hosted even after multiple attempts", under GitHub's notice that macOS arm64 capacity is constrained. Releases need the same runners, so a release could publish without its Apple Silicon CLI or desktop app.
+
+The jobs now run on a repository runner on BK's M3 Max, labelled `keyloom-builder` and set up the way mxr's `mxr-builder` is (one runner per repository under `~/.actions-runner/<repo>`, a launchd service running as BK). It takes release.yml's Apple Silicon `build-native` and `build-desktop`, the signing preflight's Apple Silicon entry, and ci.yml's Apple Silicon `device-helper` and `desktop`. Intel and Linux stay on hosted runners, as does Windows: the Mac can't run them natively, and their runners were not short.
+
+Because the runner is BK's workstation:
+- `.github/actions/self-hosted-rust-home` (adapted from mxr) gives jobs a rustup and Cargo home of their own in the runner's tool cache, ahead of BK's `~/.dotfiles/bin` cargo wrapper, and caps Cargo at five jobs. On mxr's runner, a job left on BK's `~/.cargo` and `~/.rustup` rewrote his toolchain.
+- `build-desktop` adds its temporary signing keychain to BK's keychain search list and restores the list in an `always()` step. The hosted-runner version replaced the list with `login.keychain-db` alone. `scripts/sign-device-helper.sh` already restored it.
+- No job reaches his keyboards. The Rust integration tests compile only with the synthetic features, the unit tests use synthetic records and PTYs, and the installed-CLI smokes run with a scratch `HOME` and no device discovery.
+- Only BK's own work runs there (BK: "only run on this mac for work done by me, i dont want this to be a malicious way to run things on my mac"). The repository is public, and a pull request runs its own copy of the workflow files, so a fork can ask for any runner by label. ci.yml therefore runs on `push` and `workflow_dispatch`, no longer on `pull_request`; only people with write access, BK alone, can push or dispatch. Its Apple Silicon jobs ask for the Mac only when BK, or release.yml's dispatch on the release PR, started the run. The guarantee itself is the runner's job-started hook (`infra/keyloom-builder/job-started.sh`, installed outside the repository): it fails any job that is not a push or dispatch by BK, or a dispatch by `github-actions[bot]`, before any step runs. A fork's token can't dispatch workflows.
+
+A fork's pull request now gets no CI run; its commits get one once BK pushes them. If the Mac is off or asleep, these jobs wait for it.
+
+### D-484: The desktop release signs through Tauri's own keychain, kept out of BK's home. Replaces D-483's `build-desktop` keychain handling. (2026-11-04)
+
+v0.72.2's `build-desktop`, the first on `keyloom-builder`, shipped no app. It imported the Developer ID certificate into a keychain of its own and added that to BK's search list. His login keychain holds the same identity, so Tauri's `codesign`, which names no keychain, found it twice and refused: `ambiguous (matches … in …/build.keychain-db and … in …/login.keychain-db)`. Hosted runners have an empty login keychain, so this never showed there. The release has its CLI assets, and the release workflow refuses to rebuild a release that already has assets, so the app ships in the next release.
+
+`build-desktop` now passes the certificate to Tauri as `APPLE_CERTIFICATE`/`APPLE_CERTIFICATE_PASSWORD`. Tauri imports it into a keychain of its own, adds it to the existing search list, signs with `codesign --keychain` and deletes the keychain on exit (`tauri-macos-sign` `keychain.rs` @ `tauri-cli-v2.12.1`). `scripts/sign-device-helper.sh` already signs with `--keychain`, and signed the helper with the same identity on the same Mac in that run. Tauri puts that keychain in `$HOME/Library/Keychains` and the decoded `.p12` in `TMPDIR`, so the build step points both at scratch folders in `RUNNER_TEMP`. An `always()` step then deletes any keychain or certificate left there and restores BK's search list, in case Tauri dies before its own cleanup.
+
+- **Options rejected:** a search list holding only the job's keychain during the build, which takes BK's login keychain off his own list for ten minutes; signing with the identity in his login keychain, which a launchd session may not be able to unlock without a prompt.
+
+## 2026-11-03 follow-up
+
+### D-481: Desktop updates are installed only after the user chooses to install and restart. (BK: “offer the user a prompt to restart and install”)
+
+The updater still checks at launch and every six hours, but finding an update no longer downloads or installs it. keyloom posts a notification and enables a menu-bar action naming the version. Choosing it downloads and installs the signed update, then requests restart through the normal app exit path so the shell can stop its owned server. A failed install leaves the action available to retry. The updater remains compiled only when its signing keys are configured (D-328).
+
 ## 2026-11-02 follow-up
+
+### D-485: The pegboard flight names the moving board on the live element before the transition starts, and on both ends. Extends D-478. (2026-11-02, BK: "the animation is not really working, the page just changes, i don't knowif we need to use view transitions or something I don't know"; numbered when recorded on 2026-11-04, after D-479 had gone to another decision)
+
+- **Name it before the first snapshot:** `document.startViewTransition` takes its first snapshot synchronously. A `view-transition-name` set through React state is not in the DOM yet at that point, so the browser saw nothing to fly and crossfaded the page. The click handler sets `style.viewTransitionName = "flying-board"` on the live `.peg-tilt` element, and the name is cleared when the transition finishes (`src/web/home/Pegboard.tsx`, `src/web/App.tsx`, 01c50d1c).
+- **Both ends carry the name:** a named group flies only when an element has that name in both snapshots. The desk's `.stage > .keyboard-well` always carries it (`src/web/shell/shell.css`), so opening pairs it with `.peg-tilt`; going home pairs it with the slot the board came from (`.peg-flying-cradle`).
+- **The board flies, the ledge stays:** the name sits on `.peg-tilt` (the keyboard), not on `.peg-ledge`, so the bracket stays on the wall. The wall itself recedes (scale 0.93, up 14 px, fading out) under its own `pegboard-wall` name.
+- **The browser computes the path:** the `flying-board` group sets only duration, easing, z-index and shadow. Keyframed transforms on the group would replace the movement the browser interpolates between the two boxes.
 
 ### D-476: Manage a keyboard collection separately from config archives, with a bounded picker and a contribution handoff. (2026-11-02, BK: "fix all this please")
 
@@ -2145,7 +2186,7 @@ The copy-specific restriction ends for fresh requests once a proposal carrying t
 
 No database migration is needed: copy context is in the accepted target request JSON; the source effect receipt and presentation carry the handoff references. Older readers ignore these added JSON fields and can still read the ordinary target proposals and questions. They do not implement handoff continuation. Direct `keyboard put` keeps its deterministic proposal workflow. Tests and limitations are recorded in [the A3 evidence](../research/copy-adaptation/README.md).
 
-### D-461: "Fix issues" starts a new conversation with one fixed request; the agent reads the review with a tool and answers it with one change. Extends D-340 and D-452. (2026-10-30, BK's A4 request)
+### D-461: "Fix issues" starts a new conversation with one fixed request; the agent reads the review with a tool and answers it with one change. Extends D-340 and D-452. (2026-10-30, BK's A4 request; GUI action superseded by D-479)
 
 The review panel's findings could only be applied one suggestion at a time, and each apply moved the head under the next suggestion's base; the only other route was retyping the findings into chat. The panel now has **Fix issues**, and `keyloom review fix` does the same from the terminal (D-030). The proposal, the questions and Apply are the chat's ordinary ones (D-452), beside the board; the panel is not where the proposal lives, and it closes when the chat opens.
 
@@ -2303,11 +2344,15 @@ The review panel derives a linked suggestion's presentation from its validated p
 - **Flight navigation:** Selecting a board lifts it from the pegboard cradle and flies it into the flat desk editor using View Transitions and 3D transforms (`rotateX`, `translate3d`, scale). Navigating "Home" via the top bar triggers the reverse flight back to its pegboard slot. Reduced motion preferences disable the 3D movement and use an instant crossfade.
 - **Data storage:** Added `opened_at` to `layouts` table via migration 0018, updated whenever a layout is opened in the configurator, and surfaced via `keyloom layout recent`.
 
-### D-479: Synchronous DOM capture and destination pairing for View Transition flight animations. Extends D-478. (2026-11-02, BK: "the animation is not really working, the page just changes, i don't knowif we need to use view transitions or something I don't know")
+### D-479: Plan a repair for one review finding, then send and apply deliberately. Supersedes the blanket GUI action in D-461; preserves its global CLI command. (2026-11-02, rung 2a)
 
-- **Synchronous capture before unmount:** `document.startViewTransition` captures Snapshot 1 synchronously when called. In declarative React components, setting state right before the transition call batches the update; Snapshot 1 captures the DOM before `view-transition-name` is applied. The gesture handler must set `triggerElement.style.viewTransitionName = "flying-board"` directly on the live DOM node before starting the transition, then clean up inline styles on `transition.finished`.
-- **Destination pairing contract:** The browser's `::view-transition-group` requires an element with that exact name to exist in both Snapshot 1 and Snapshot 2. Without a matching counterpart on the destination stage (`.stage > .keyboard-well`), the browser aborts the element transition and defaults to a root opacity crossfade.
-- **Payload vs cradle isolation:** The spatial transition name belongs strictly to `<span className="peg-tilt">` (the keyboard itself). The mounting hardware (`.peg-ledge`) stays anchored to the wall panel, while the pegboard panel recedes via a subtle parallax transform (`scale(0.96)`).
-- **Matrix interpolation over rigid keyframes:** The browser automatically computes 3D transform matrices between bounding boxes. Rigid spatial keyframes (`translateY`) on `::view-transition-group` break this calculation and must be omitted; the group styles configure only duration, easing curve and elevation drop shadows.
+The review offers a per-finding repair action for a current visible problem or hint. It opens an editable request that names the finding and its keys/layers; opening it does not start an agent run or alter the layout. Explicit Send starts a separate conversation only when the current run is idle. The agent is asked to work on that finding, but the request is not a hard tool-scope boundary. The person reviews the ordinary proposal and explicitly applies it. The pending request and edits are kept in App-owned state for that config across Home navigation, not persisted or shared across configs. Existing hidden findings and suggestions retain their meanings.
 
+`keyloom review fix [layout] --finding <id>` explicitly requests a proposal for one current visible problem or hint using the same formatter. `--draft` prints the request without a model call or writes. The no-flag command remains the legacy broad request for compatibility. No request schema or persistence protocol changes.
+### D-480: Recover a refused proposal through an editable original-goal request. Extends D-479; replaces generic automatic Ask Again. (2026-11-02, rung 2b)
 
+The selected saved proposal or recorded unsaved `propose_changes` validation refusal supplies the source. Use its original request when known; label a model-authored saved goal or explanation as a fallback. Code-only historical observations explain the validation category and admit that the exact affected target was not recorded. Generic failures, truncated observations and partial acceptance do not prove an unsaved refusal.
+
+Reuse the App-owned config-keyed repair request. Opening sends nothing, overwrites no pending request and cancels no work. Explicit Send starts a separate ordinary chat request after source/head and composer checks. A definite refusal keeps edits; uncertain acceptance remains observation-only. The validator and explicit Apply still decide. No wire/storage expansion or raw tool results are needed.
+
+`agent replan <config> --proposal <id>` or `--conversation <id> --turn <user-message-id>` resolves the source read-only before starting work. `--draft` prints the shared request without writes. A different base alone is not a refusal: disjoint proposals may still validate. Long requests retain the full goal and require shortening rather than truncation.

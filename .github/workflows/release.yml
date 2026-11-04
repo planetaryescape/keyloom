@@ -76,7 +76,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-15, rust: aarch64-apple-darwin, bun: bun-darwin-arm64, asset: keyloom-darwin-arm64 }
+          # Apple Silicon builds on BK's Mac (D-483); hosted macOS arm64 runners went unacquired for 20+ minutes.
+          - { os: [self-hosted, macOS, ARM64, keyloom-builder], rust: aarch64-apple-darwin, bun: bun-darwin-arm64, asset: keyloom-darwin-arm64 }
           - { os: macos-15-intel, rust: x86_64-apple-darwin, bun: bun-darwin-x64, asset: keyloom-darwin-x64 }
           - { os: ubuntu-22.04, rust: x86_64-unknown-linux-musl, bun: bun-linux-x64, asset: keyloom-linux-x64 }
           - { os: windows-2022, rust: x86_64-pc-windows-msvc, bun: bun-windows-x64, asset: keyloom-windows-x64.exe }
@@ -85,6 +86,9 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "12.0"
     steps:
+      # The action comes from this workflow's commit: a rebuild of a tag cut before it existed has no copy of it.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: ./.github/actions/self-hosted-rust-home
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
@@ -179,7 +183,9 @@ jobs:
   build-desktop:
     needs: [release-please, build-binaries]
     if: needs.release-please.outputs.release_created == 'true'
-    runs-on: macos-15
+    runs-on: [self-hosted, macOS, ARM64, keyloom-builder]
+    # A hung step would hold the one runner on BK's Mac for the 6-hour default.
+    timeout-minutes: 60
     permissions:
       contents: write
     env:
@@ -203,6 +209,9 @@ jobs:
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
     steps:
+      # The action comes from this workflow's commit: a rebuild of a tag cut before it existed has no copy of it.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: ./.github/actions/self-hosted-rust-home
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
@@ -215,19 +224,12 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern keyloom-darwin-arm64 --dir "$RUNNER_TEMP/sidecar"
           sh scripts/fetch-sidecar.sh "$RUNNER_TEMP/sidecar/keyloom-darwin-arm64"
           bun install --frozen-lockfile
-      - name: Import the signing certificate
-        if: env.APPLE_CERT_P12_BASE64 != ''
-        run: |
-          keychain="$RUNNER_TEMP/build.keychain-db"
-          password="$(uuidgen)"
-          security create-keychain -p "$password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          printf '%s' "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
-          security list-keychains -d user -s "$keychain" login.keychain-db
-          rm "$RUNNER_TEMP/cert.p12"
+      # Tauri imports the certificate itself (APPLE_CERTIFICATE below) into a keychain of its own and signs with
+      # `codesign --keychain`. A keychain made here leaves the identity ambiguous on BK's Mac, whose login keychain
+      # holds the same certificate (v0.72.2's build-desktop, D-484). His search list is saved in case Tauri dies
+      # before removing its keychain, and restored at the end.
+      - name: Save the keychain search list
+        run: security list-keychains -d user > "$RUNNER_TEMP/original-keychains.txt"
       - name: Build, sign and notarise when the credentials exist
         working-directory: desktop/tauri
         run: |
@@ -235,6 +237,14 @@ jobs:
           args=""
           if [ -n "$APPLE_CERT_P12_BASE64" ]; then
             export APPLE_SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY_NAME"
+            export APPLE_CERTIFICATE="$APPLE_CERT_P12_BASE64" APPLE_CERTIFICATE_PASSWORD="$APPLE_CERT_PASSWORD"
+            # Tauri creates its keychain in $HOME/Library/Keychains. A scratch HOME keeps the private key out of BK's
+            # own, so an interrupted build can't leave it there. Cargo and rustup have homes of their own (rust-home).
+            export HOME="$RUNNER_TEMP/signing-home"
+            mkdir -p "$HOME/Library/Keychains"
+            # Tauri decodes the certificate's .p12 into a temporary directory first.
+            export TMPDIR="$RUNNER_TEMP/signing-tmp"
+            mkdir -p "$TMPDIR"
           else
             echo "::warning::No APPLE_CERT_P12_BASE64 secret: the app is built unsigned."
           fi
@@ -278,3 +288,20 @@ jobs:
             printf '%s\n\n> The macOS app in this release is not notarised yet, so macOS will refuse to open a downloaded copy until the notarisation credentials are added (see desktop/tauri/README.md).\n' "$body" > "$RUNNER_TEMP/notes.md"
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
           fi
+      # Runs after a failed or cancelled build too, so no keychain from this job stays on BK's Mac or his search list.
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          for chain in "$RUNNER_TEMP"/signing-home/Library/Keychains/*.keychain-db; do
+            if [ -f "$chain" ]; then security delete-keychain "$chain" || rm -f "$chain"; fi
+          done
+          rm -rf "$RUNNER_TEMP/signing-tmp"
+          if [ -f "$RUNNER_TEMP/original-keychains.txt" ]; then
+            original=()
+            while IFS= read -r line; do
+              line="${line#*\"}"
+              if [ -n "$line" ]; then original+=("${line%\"}"); fi
+            done < "$RUNNER_TEMP/original-keychains.txt"
+            security list-keychains -d user -s "${original[@]}"
+          fi
+          rm -f "$RUNNER_TEMP/AuthKey.p8"

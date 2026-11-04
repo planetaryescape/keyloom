@@ -171,14 +171,15 @@ export async function restartHalf(opts: {
     const transport = await deps.serial();
     const ports = await transport.list();
     const peers = opts.targets.filter((other) => other !== t && other.step.volume === t.step.volume);
+    const own = portsOfHalf(ports, t);
+    const central = opts.targets.find((x) => x.half.role === "central");
     if (opts.waitForVolume !== false && peers.length > 0) {
       const presence = await Promise.all(peers.map((other) => peerPresence(deps, other, ports)));
       if (presence.includes("unattributable")) {
-        return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware` };
+        return { ok: false, reason: `${t.step.volume} could belong to either half; keyloom cannot confirm the other half is running firmware`, retry: true };
       }
       if (presence.includes("absent")) log(`keyloom: the other half isn't on USB, so ${t.step.volume} can only be the ${label}'s boot drive`);
     }
-    const own = portsOfHalf(ports, t);
     const keys = new Set(own.keyloom.map((k) => k.key));
     if (own.keyloom.length > 1 && (keys.size > 1 || new Set(own.keyloom.map((k) => k.port.path)).size > 1)) {
       return { ok: false, reason: `more than one ${t.boardName} ${label} is attached (${own.keyloom.map((k) => k.port.path).join(", ")}); unplug the others` };
@@ -189,11 +190,10 @@ export async function restartHalf(opts: {
       log(`keyloom: the ${label} runs keyloom build ${mine.key}; closing ${mine.port.path} at ${LOCAL_BAUD} baud restarts it into its bootloader`);
       touched = { path: mine.port.path, baud: LOCAL_BAUD };
     } else {
-      const central = opts.targets.find((x) => x.half.role === "central");
       const via = t.half.relay && central ? portsOfHalf(ports, central).keyloom : [];
       if (via.length === 0 || !central) {
         const seen = own.other.length > 0 ? `it is running firmware keyloom didn't build (USB serial ${own.other[0]?.serial ?? "unavailable"})` : `no keyloom serial port was found for it`;
-        return { ok: false, reason: `${seen}, so it needs its bootloader key this once` };
+        return { ok: false, reason: `${seen}, so it needs its bootloader key this once`, ...(own.other.length === 0 ? { retry: true } : {}) };
       }
       if (via.length > 1) return { ok: false, reason: `more than one ${t.boardName} ${central.step.label} is attached (${via.map((k) => k.port.path).join(", ")}); unplug the others` };
       const relay = via[0] as { port: SerialPort; key: string };
@@ -240,8 +240,10 @@ export async function restartHalf(opts: {
     }
     if (lockWasReported) return { ok: false, reason: SCREEN_LOCK_MESSAGE };
     // A relayed peripheral with no cable of its own goes back to its app after 3 s, which looks the same from here.
-    const cable = touched.baud === RELAY_BAUD ? ` Is the ${label}'s own USB cable plugged in? A half on battery returns to typing after 3 seconds.` : "";
-    return { ok: false, reason: `${t.step.volume} didn't appear within ${Math.round(waitMs / 1000)} seconds of restarting the ${label}.${cable}` };
+    // The reason is shown in a prompt the person can't reply to, so it states the likely cause rather than asking.
+    // The caller appends ". " and the instruction, so the reason ends without a full stop.
+    const cable = touched.baud === RELAY_BAUD ? `; a half with no USB cable of its own returns to typing after 3 seconds` : "";
+    return { ok: false, reason: `${t.step.volume} didn't appear within ${Math.round(waitMs / 1000)} seconds of restarting the ${label}${cable}` };
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
@@ -333,7 +335,9 @@ export function zmkHandsFreeHooks(input: {
     enterBootloader: async (step, _index, announce) => {
       const target = forStep(step);
       if (target) {
-        try { before.set(target, await readHalf(input.deps, target)); } catch { /* Recovery treats an unreadable half as unknown. */ }
+        if (!before.has(target)) {
+          try { before.set(target, await readHalf(input.deps, target)); } catch { /* Recovery treats an unreadable half as unknown. */ }
+        }
       }
       return target ? restartHalf({ deps: input.deps, targets, target, findVolume: input.findVolume, log: input.log, announce, screenLocked: input.screenLocked }) : { ok: false, reason: "keyloom has no hands-free recipe for this step" };
     },

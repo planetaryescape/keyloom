@@ -6,6 +6,8 @@ import type { Slot } from "../../layout/change.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { applyChangeSet } from "../api-write.ts";
+import { fetchLayout } from "../api.ts";
+import { fetchOpenProposals } from "../keyboards/api-keyboards.ts";
 import { DecisionsView } from "../decisions/DecisionsView.tsx";
 import { OutcomeQuestions } from "../decisions/OutcomeQuestions.tsx";
 import { useDecisions, useOutcomeQuestions } from "../decisions/useDecisions.ts";
@@ -15,7 +17,7 @@ import { AgentMotionToggle } from "./AgentWorking.tsx";
 import { ConversationList } from "./ConversationList.tsx";
 import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
 import { ProviderPicker } from "./ProviderPicker.tsx";
-import { chooseProvider } from "./api-chat.ts";
+import { chooseProvider, fetchConversation } from "./api-chat.ts";
 
 const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" } as const;
 import { keyLabel, layerName } from "./proposal-facts.ts";
@@ -30,8 +32,9 @@ import { CarriedThreadView, type CarriedThread } from "./CarriedThread.tsx";
 import { referableProposals, referenceView, type ReferenceContext } from "./reference-view.ts";
 import type { Reference } from "../../layout/references.ts";
 import { openProposalsOnBoard, questionOpen, withoutRepeats, type Turn } from "./transcript.ts";
-import { createOneShot, sendOnce, type OneShot } from "./one-shot.ts";
-import { REVIEW_FIX_REQUEST } from "../../api/review.ts";
+import type { FindingRepairDraft } from "../../api/review.ts";
+import { declinedProposalCodes, refusalReasons, type RecoveryContext, type RecoverySource } from "../../validation/proposal-recovery.ts";
+import { owningRequest, proposalContext } from "./recovery-context.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
 import { activeProviderReady } from "./provider-ready.ts";
 import "./chat.css";
@@ -81,8 +84,12 @@ interface Props {
   /** The thread on screen before a board or config switch (D-317), shown read-only above this layout's own. */
   initialConversation?: string | undefined;
   continueCopy?: boolean | undefined;
-  /** A fresh id when the shell asks the chat to start one run that fixes what the board review found (D-461). */
-  fixRequest?: string | undefined;
+  repairDraft?: FindingRepairDraft | null;
+  repairCurrent?: boolean;
+  onRepairDraftChange?: (id: string, request: string) => void;
+  onRepairSentStateChange?: (id: string, sent: boolean) => void;
+  onRepairSent?: (id: string) => void;
+  onPlanRecovery?: (source: RecoverySource, context: RecoveryContext) => void;
   onContinueCopy?: (handoff: NonNullable<ChatPresentation["handoff"]>) => void;
   carried?: CarriedThread | null;
   /** Explicit New discards the read-only thread carried from another board, not its saved history. */
@@ -107,13 +114,12 @@ interface Props {
   commands?: { find: (text: string) => Command[]; run: (command: Command) => void };
 }
 
-const ASK_AGAIN = "The layout changed after you proposed that, so it no longer applies. Please propose it again against the current layout.";
 // A page that hands in no config names still reads a marker as words: the id it carries.
 const NO_NAMES: ReadonlyMap<string, string> = new Map();
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, fixRequest, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
+export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, repairDraft = null, repairCurrent = false, onRepairDraftChange, onRepairSentStateChange, onRepairSent, onPlanRecovery, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
   const beginView = useRef<() => OpenRequestedView>(() => async () => ({ version: 1, status: "unavailable", reason: "unsupported" }));
   const chat = useChat(token, layoutRef, onContinueCopy, initialConversation, beginViewRequest === undefined ? undefined : () => beginView.current());
   const arrived = useRef(false);
@@ -124,17 +130,10 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
       if (error === null && continueCopy) void chat.send("Continue adapting the copied setup.", null);
     });
   }, [initialConversation, continueCopy, chat.open, chat.send]);
-  // Fix issues (D-461): one new conversation on this config with the fixed request, once per id. A question open in the old conversation
-  // is left alone on the server; nothing here answers it or closes it.
-  const fixGuard = useRef<OneShot | null>(null);
-  fixGuard.current ??= createOneShot();
-  const fixOnce = fixGuard.current;
-  useEffect(() => {
-    sendOnce(fixOnce, fixRequest, () => {
-      chat.newConversation();
-      void chat.send(REVIEW_FIX_REQUEST, null);
-    });
-  }, [fixRequest, fixOnce, chat.newConversation, chat.send]);
+  const repairSending = useRef(false);
+  const repairSent = repairDraft?.sent === true;
+  const repairRunId = useRef<string | null>(null);
+  const repairSubmitLock = useRef<string | null>(null);
   const provider = useProviderStatus(token);
   const { transcript, streaming } = chat;
   // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.
@@ -180,6 +179,19 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     [referenceContext, carriedForeign],
   );
   const [draft, setDraft] = useState("");
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
+  const [invalidRecovery, setInvalidRecovery] = useState<string | null>(null);
+  const repairGate = useRef<(id: string, request: string) => boolean>(() => false);
+  useLayoutEffect(() => {
+    repairGate.current = (id, request) => repairDraft?.id === id && repairDraft.request === request && repairDraft.request.length <= 8000 && repairCurrent && !streaming && !repairDraft.sent && !draft.trim() && drafts.length === 0;
+    return () => { repairGate.current = () => false; };
+  }, [repairDraft, repairCurrent, streaming, draft, drafts]);
+  function planRecovery(source: RecoverySource, context: RecoveryContext) {
+    if (repairDraft || draft.trim() || drafts.length) { setRecoveryNotice("Finish or dismiss the existing request and composer/key drafts first. They have been kept."); return; }
+    setRecoveryNotice(null);
+    onPlanRecovery?.(source, context);
+  }
+  const planProposal = (proposal: ProposalCard, reasons: string[]) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId, ...(transcript.conversationId ? { conversationId: transcript.conversationId } : {}) }, proposalContext(proposal, reasons, transcript.turns));
   const [motionPaused, setMotionPaused] = useState(false);
   // The command rows for what's typed. Enter runs the highlighted one; a short text highlights the first command, a longer one (a
   // question that happens to say "test") highlights "Ask keyloom", so a real question is never swallowed by a command.
@@ -389,10 +401,48 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   // After the render that holds the finished reply, so what the parent carries along is the whole reply, not the one before its last words.
   const liveCompleted = chat.liveCompleted;
   useEffect(() => {
-    if (liveCompleted !== null) onReplyCompleted?.(liveCompleted.presentation, transcript.turns);
+    if (liveCompleted !== null) {
+      onReplyCompleted?.(liveCompleted.presentation, transcript.turns);
+      if (repairSent && repairDraft && repairRunId.current === repairDraft.id) {
+        repairRunId.current = null;
+        repairSubmitLock.current = null;
+        onRepairSent?.(repairDraft.id);
+      }
+    }
     // Once per finished reply; the callback and the turns are read as they are at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveCompleted]);
+
+  async function sendRepair() {
+    if (repairDraft === null || !repairCurrent || invalidRecovery === repairDraft.id || streaming || repairSent || repairSubmitLock.current === repairDraft.id || draft.trim() !== "" || drafts.length > 0 || repairDraft.request.trim() === "" || repairDraft.request.length > 8000) return;
+    repairSubmitLock.current = repairDraft.id;
+    const unlock = () => { if (repairSubmitLock.current === repairDraft.id) repairSubmitLock.current = null; };
+    if ("source" in repairDraft && repairDraft.source.conversationId) {
+      try {
+        const source = repairDraft.source;
+        const detail = await fetchConversation(token, source.conversationId!, new AbortController().signal);
+        const head = await fetchLayout(token, layoutRef, new AbortController().signal);
+        const current = detail.conversation.layoutId === layoutRef && head.revision.id === repairDraft.headRevisionId && (source.kind === "proposal" ? detail.proposals.some((p) => p.changeSetId === source.proposalId && p.status === "proposed") : declinedProposalCodes(detail.presentations?.find((p) => p.userMessageId === source.userMessageId)).length > 0);
+        if (!current) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or source changed. Your request is kept; select its recovery action again."); unlock(); return; }
+      } catch { setRecoveryNotice("Could not recheck the recovery source. Nothing was sent; your request is kept."); unlock(); return; }
+    } else if ("source" in repairDraft && repairDraft.source.kind === "proposal") {
+      try {
+        const source = repairDraft.source;
+        const [head, proposals] = await Promise.all([fetchLayout(token, layoutRef, new AbortController().signal), fetchOpenProposals(token, layoutRef)]);
+        if (head.revision.id !== repairDraft.headRevisionId || !proposals.some((p) => p.changeSetId === source.proposalId && p.status === "proposed")) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or source changed. Your request is kept; select its recovery action again."); unlock(); return; }
+      } catch { setRecoveryNotice("Could not recheck the recovery source. Nothing was sent; your request is kept."); unlock(); return; }
+    }
+    if (!repairGate.current(repairDraft.id, repairDraft.request)) { unlock(); return; }
+    repairRunId.current = repairDraft.id;
+    onRepairSentStateChange?.(repairDraft.id, true);
+    chat.newConversation();
+    void chat.send(repairDraft.request, null, () => {
+      if (repairRunId.current !== repairDraft.id) return;
+      repairRunId.current = null;
+      repairSubmitLock.current = null;
+      onRepairSentStateChange?.(repairDraft.id, false);
+    });
+  }
   useEffect(() => {
     onTurns?.(transcript.turns);
     // The callback is the parent's setter through a ref; only the turns matter.
@@ -540,7 +590,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
             onPreview={onPreview}
             onPin={onPin}
             onApply={apply}
-            onAskAgain={() => send(ASK_AGAIN)}
+            onAskAgain={planProposal}
             onOpenRelease={onOpenRelease}
             compact
             line
@@ -621,7 +671,15 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                     onPin={onPin}
                     onApply={apply}
                     onRemovePriority={chat.removePriority}
-                    onAskAgain={() => send(ASK_AGAIN)}
+                    onAskAgain={planProposal}
+                    {...(() => {
+                      const codes = turn.proposals.length ? [] : declinedProposalCodes(turn.presentation);
+                      const goal = owningRequest(transcript.turns, turn);
+                      const owner = turn.userMessageId ?? turn.presentation?.userMessageId;
+                      if (!codes.length || !goal || !owner || !transcript.conversationId || turn.phase === "streaming") return {};
+                      const reasons = refusalReasons(codes);
+                      return { refusalRecovery: { reasons, onPlan: () => planRecovery({ kind: "refusal", conversationId: transcript.conversationId!, userMessageId: owner }, { title: "Refused proposal", goal, goalBasis: "request", reasons }) } };
+                    })()}
                     onOpenRelease={onOpenRelease}
                     onRetry={() => void chat.retry()}
                     onAnswer={(toolUseId, text) => void chat.answer(toolUseId, text)}
@@ -687,6 +745,20 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         </>
       )}
       {view === "chat" || !streaming ? null : <div className="chat-stop-footer"><span>Working on {board.name}</span><ChatStopButton onStop={chat.stop} /></div>}
+      {recoveryNotice === null ? null : <p role="status">{recoveryNotice}</p>}
+      {repairDraft === null ? null : <section className="repair-request" aria-label="Repair request" tabIndex={0}>
+        <p className="repair-request-title">{"source" in repairDraft ? "Request for a revised proposal" : "Request for one review finding"}</p>
+        {"source" in repairDraft ? <details><summary>{repairDraft.context.goalBasis === "request" ? "Original request" : "Saved intent (not a verbatim request)"}</summary><p>{repairDraft.context.goal}</p></details> : null}
+        <p className="repair-request-scope">{repairSent ? "Already sent. If the reply was interrupted, check chat history before taking another action; keyloom will not resend it." : repairCurrent ? "Check the request before sending. It asks for a proposal; nothing is applied." : "source" in repairDraft ? "The layout or source changed. Your original goal and edits are kept. Dismiss this request and select its recovery action again before sending." : "This finding is no longer current. Your request is kept, but cannot be sent from this review."}</p>
+        {repairDraft.request.length > 8000 ? <p role="status">This request exceeds 8000 characters. Edit it shorter before sending; the original source has not changed.</p> : null}
+        {draft.trim() || drafts.length ? <p>Finish or clear your composer and key drafts before sending this request. They have been kept.</p> : null}
+        <label htmlFor="repair-request-text">Request</label>
+        <textarea id="repair-request-text" value={repairDraft.request} onChange={(event) => onRepairDraftChange?.(repairDraft.id, event.currentTarget.value)} disabled={repairSent} rows={5} />
+        <div className="repair-request-actions">
+          <button type="button" className="bar-apply" disabled={!repairCurrent || invalidRecovery === repairDraft.id || streaming || draft.trim() !== "" || drafts.length > 0 || repairSent || repairDraft.request.trim() === "" || repairDraft.request.length > 8000} onClick={sendRepair}>Send request</button>
+          <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>{repairSent ? "Dismiss request" : "Cancel"}</button>
+        </div>
+      </section>}
     </section>
   );
 }

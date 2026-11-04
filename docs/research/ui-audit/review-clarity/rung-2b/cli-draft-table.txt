@@ -1,0 +1,10 @@
+Please plan a revised proposal for: Refused proposal
+
+Original request:
+Distinctive original refusal goal: F17 for my left index
+
+Recorded reason:
+The change refers to something missing from the layout.
+Only validation categories were recorded; the exact affected target was not recorded.
+
+Read the current layout first. Retain the original goal, preserve unrelated behavior, and explain any uncertainty. Propose a validated replacement for preview. Do not apply it.

@@ -1,0 +1,49 @@
+{
+  "result": "PASS",
+  "session": "keyloom-rung2b-proof-24263",
+  "staleBefore": {
+    "id": "rev_01M6F2YQDPN1FSRVXVJR2MSNE1",
+    "parentId": "rev_01M6F2YQ98JYPT5AV3QPQ8DKNB",
+    "origin": "editor",
+    "summary": "Synthetic conflicting edit",
+    "createdAt": 1793655266742,
+    "undoable": true
+  },
+  "staleAfter": {
+    "id": "rev_01M6F2ZVCSWTF40HENQTK1HAG2",
+    "parentId": "rev_01M6F2YQDPN1FSRVXVJR2MSNE1",
+    "origin": "agent",
+    "summary": "Give the selected key F17; replace the synthetic conflicting F19 if present and keep its neighbor.",
+    "createdAt": 1793655303577,
+    "undoable": true
+  },
+  "refusedBefore": {
+    "id": "rev_01M6F2YQ8PJ4EY9THD07QD6MM0",
+    "parentId": null,
+    "origin": "import",
+    "summary": "Imported 6 layers of 72 keys from synchronized",
+    "createdAt": 1793655266582,
+    "undoable": false
+  },
+  "refusedAfter": {
+    "id": "rev_01M6F30JWKH0083TE5DC3ES2H2",
+    "parentId": "rev_01M6F2YQ8PJ4EY9THD07QD6MM0",
+    "origin": "agent",
+    "summary": "Give the selected key F17; replace the synthetic conflicting F19 if present and keep its neighbor.",
+    "createdAt": 1793655327635,
+    "undoable": true
+  },
+  "checks": [
+    "genuine persisted validator refusal without proposal card",
+    "actual stale Apply refusal",
+    "source-specific original goals",
+    "Plan no POST",
+    "Home retains edited request",
+    "occupied composer and long request blocked",
+    "occupied pending request preserved",
+    "explicit send refusal preserves edits",
+    "double activation one POST",
+    "both previews read-only",
+    "both explicit Applies change F17 only; neighbor unchanged"
+  ]
+}

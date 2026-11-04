@@ -22,7 +22,7 @@ export function releaseStatus(build: Build | null, flash: Flash | null, headRevi
     switch (flash.status) {
       case "waiting_for_bootloader": return { label: "Press reset", tone: "attention" };
       case "writing": return { label: "Flashing", tone: "busy" };
-      case "succeeded": return { label: "Flashed", tone: "success" };
+      case "succeeded": return flash.verified ? { label: "Flashed and verified", tone: "success" } : { label: "Flashed, not verified", tone: "attention" };
       case "failed": return { label: "Flash failed", tone: "error" };
     }
   }

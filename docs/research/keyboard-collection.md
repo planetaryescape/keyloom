@@ -39,6 +39,8 @@ Browser verification confirmed that restore keeps the paused-sync notice visible
 
 ## Release and installed verification
 
+The onboarding QA follow-up below is a later fix, not part of the original v0.69.0 verification.
+
 Shipped in [v0.69.0](https://github.com/planetaryescape/keyloom/releases/tag/v0.69.0), through implementation PR [#235](https://github.com/planetaryescape/keyloom/pull/235) and release-please PR [#238](https://github.com/planetaryescape/keyloom/pull/238). The implementation's final checks passed; the release PR merged only after its dispatched CI succeeded on its exact head. The release workflow published the signed, notarized desktop app and platform CLI assets.
 
 Installation waited for a separate synthetic desktop test rather than interrupting it. By then v0.70.0 had been installed, so the v0.69.0 installer refused to downgrade. Git ancestry confirms v0.70.0 includes the collection merge. The installed app's version, running server record and read-only collection endpoint were checked at v0.70.0; the endpoint returned a valid collection response.
@@ -46,3 +48,37 @@ Installation waited for a separate synthetic desktop test rather than interrupti
 The v0.70.0 desktop ZIP checksum was verified, and both installed executables and its Info.plist matched that release bundle. The app passed strict codesign and Gatekeeper's Notarized Developer ID assessment. The PATH CLI had an invalid signature; replacing only that file with the bundle's signed sidecar restored signature validity and made the two CLI copies byte-identical, without restarting the running app.
 
 The installed signed v0.70.0 CLI passed a scratch-data journey: import the synthetic Glove80 fixture, list the collection, remove the keyboard, restore with sync paused, and export a contribution under a new upstream ID. No sync, build, flash or real-data mutation was performed in this verification.
+
+## Onboarding QA follow-up
+
+QA against v0.70.1 reproduced two defects and one friction point: choosing an archived-only Corne in Add offered Start blank and then rejected it, controller radios ignored arrow keys, and starting the first config returned to Home rather than its editor. The catalogue had no collection-membership read; the custom radio buttons had no arrow handling; config creation selected an ID but left Home active. Opening a restored config from Add also needed to leave the setup page.
+
+The catalogue now checks membership before presenting its choices and offers removed boards as Restore entries that open the Removed collection. A failed membership read offers Try again, disables firmware search, and withholds unchecked catalogue and firmware candidates. Existing server-side membership guards remain authoritative. Controller and home-row choices reuse the editor's native-radio ChoiceGroup, preserving the renderer and home-row preview, with panel-scoped spacing and compact type. Selecting a new or restored config opens the editor and exits Home/setup/import pages. Nothing in these changes starts a build, sync or flash.
+
+`test/web/collection-onboarding.browser.ts` drives the real app with isolated SQLite and fake USB, and asserts the user-visible outcomes. Each original check failed against the unfixed build. Repeat with three independent fixtures:
+
+```sh
+bun test/web/keyboard-collection-server.ts 59820 40 manual
+bun test/web/keyboard-collection-server.ts 59821 0 manual
+bun test/web/keyboard-collection-server.ts 59822 0 usb
+```
+
+In another terminal, run each browser mode once against the corresponding fresh fixture:
+
+```sh
+bun test/web/collection-onboarding.browser.ts manual 59820
+bun test/web/collection-onboarding.browser.ts first 59821
+bun test/web/collection-onboarding.browser.ts controller 59822
+```
+
+All three modes passed after the fix: failed collection read/retry with catalogue and firmware search blocked, archived-only restore reopening the named archived config, direct first MacBook config, controller ArrowDown/ArrowUp and Tab leaving the group, home-row ArrowRight, and direct first fake-USB Corne config. The browser pass checks page bounds and takes optional screenshots at 1440×900 and 390×844 in both themes. Regression runs now use reduced-motion emulation so onboarding assertions do not race page transitions. Browser regressions are explicit commands, not automatically included in `bun test`. No paid models, real-data edits or hardware writes were used. Native WKWebView and physical controller behavior are not established by this Chromium fixture pass.
+
+### Published follow-up: v0.71.0
+
+The fixes merged through [PR #245](https://github.com/planetaryescape/keyloom/pull/245) at `9bbe8dfdf00403f7eb5aa7bdb60024fc192a1701`. [CI run 41534765925](https://github.com/planetaryescape/keyloom/actions/runs/41534765925) passed on the final candidate `7c01fdfe267f2cab17395592805d23272a8c2ae8`, including the native macOS jobs. The full local suite passed 3,676 tests with 243 skipped. The computed merge tree passed typechecking and 661 focused integration/docs tests, and matched the integrated tree exactly. Earlier delays were runner-allocation failures and a Rust download DNS failure, not application-test failures.
+
+[v0.71.0](https://github.com/planetaryescape/keyloom/releases/tag/v0.71.0) includes that merge. Its source differs from the checked merge tree only in release-please's version, manifest and changelog files. The concurrently merged release PR [#249](https://github.com/planetaryescape/keyloom/pull/249) had a successful dispatched CI run on its exact head; [release run 41536188867](https://github.com/planetaryescape/keyloom/actions/runs/41536188867) published the CLI and signed desktop assets.
+
+The checksum-verified published arm64 CLI served the actual compiled web app against scratch data under a sandbox denying personal app data, credentials, device-helper execution, HID/USB opens and serial-device access. The browser created a first MacBook config directly in the editor, removed the last keyboard, selected its catalogue Restore entry, restored with sync paused, downloaded a board-only ZIP, and reopened the original config. [Release screenshots and limits](ui-audit/keyboard-collection/v0.71.0/README.md) preserve that proof.
+
+Both installed copies were independently checked at v0.71.0 after another session updated them. The installed app's executable, sidecar and Info.plist matched the checksum-verified desktop bundle. The PATH CLI was byte-identical to its signed sidecar. Strict codesign, Gatekeeper's Notarized Developer ID assessment and stapled notarization validation passed. The installed CLI passed scratch-data import, collection removal, paused restore retaining one config, contribution export and discovery-free helper doctor with all seven expected capabilities. No keyboard flash or personal layout edit was part of this verification.

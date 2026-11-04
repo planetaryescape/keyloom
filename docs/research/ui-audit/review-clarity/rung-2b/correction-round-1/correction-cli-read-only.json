@@ -1,0 +1,18 @@
+{
+  "result": "PASS",
+  "results": [
+    {
+      "format": "table",
+      "exit": 0
+    },
+    {
+      "format": "json",
+      "exit": 0
+    }
+  ],
+  "beforeHash": "5c4e7c7e267b0ad4bc53e56a0f532ff69a39f9507a6fefd030c83397485aa4f2",
+  "afterHash": "5c4e7c7e267b0ad4bc53e56a0f532ff69a39f9507a6fefd030c83397485aa4f2",
+  "unchanged": true,
+  "sourceConversationId": "conv_01M6F346QE2FN92BHNE1JW47GD",
+  "sourceOwner": "msg_01M6F34PDREV1JP94HWF3PRJYN"
+}

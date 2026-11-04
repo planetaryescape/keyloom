@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.72.3](https://github.com/planetaryescape/keyloom/compare/v0.72.2...v0.72.3) (2026-11-04)
+
+
+### Bug Fixes
+
+* sign the desktop app with its own keychain on BK's Mac ([#261](https://github.com/planetaryescape/keyloom/issues/261)) ([9f156ab](https://github.com/planetaryescape/keyloom/commit/9f156abfd6179c90486101fd7e882f06af716125))
+
+## [0.72.2](https://github.com/planetaryescape/keyloom/compare/v0.72.1...v0.72.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* state the cable cause instead of asking when a half won't restart ([#258](https://github.com/planetaryescape/keyloom/issues/258)) ([0ff2b3e](https://github.com/planetaryescape/keyloom/commit/0ff2b3ecdb6a4d0a419b17d05a4a89e45713320e))
+
+## [0.72.1](https://github.com/planetaryescape/keyloom/compare/v0.72.0...v0.72.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* give build and flash dialog more room ([#255](https://github.com/planetaryescape/keyloom/issues/255)) ([ee78e4c](https://github.com/planetaryescape/keyloom/commit/ee78e4c5c882f15ce4eccdecd853e01f5fe1a3e2))
+
+## [0.72.0](https://github.com/planetaryescape/keyloom/compare/v0.71.1...v0.72.0) (2026-11-04)
+
+
+### Features
+
+* prompt before installing desktop updates ([#252](https://github.com/planetaryescape/keyloom/issues/252)) ([1e71c30](https://github.com/planetaryescape/keyloom/commit/1e71c30ec8b2b6252c57993506dff08255d0019c))
+
+
+### Bug Fixes
+
+* record only verified standalone flashes ([#253](https://github.com/planetaryescape/keyloom/issues/253)) ([4d60d0e](https://github.com/planetaryescape/keyloom/commit/4d60d0ed964bdeb6dcbb4e07a8b2cdbabd0291a9))
+
+## [0.71.1](https://github.com/planetaryescape/keyloom/compare/v0.71.0...v0.71.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* retry ZMK flash after USB connects ([63f715a](https://github.com/planetaryescape/keyloom/commit/63f715a65fc083047559b02d5ba8dc378f765b45))
+
+## [0.71.0](https://github.com/planetaryescape/keyloom/compare/v0.70.2...v0.71.0) (2026-11-02)
+
+
+### Features
+
+* plan contextual recovery for refused proposals ([fb25e1f](https://github.com/planetaryescape/keyloom/commit/fb25e1fd3388ec9a9cc8b40615a8c21e0694bf7a))
+
+## [0.70.2](https://github.com/planetaryescape/keyloom/compare/v0.70.1...v0.70.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* make review repair requests clear and reachable ([b60669a](https://github.com/planetaryescape/keyloom/commit/b60669affb887fde30e65d373f7c7b7edd5329f6))
+* plan repairs for individual review findings ([cc5f023](https://github.com/planetaryescape/keyloom/commit/cc5f0236d9ac6bc9deb74f12415e9404327d66af))
+* scope board review repair requests ([c1ab5fc](https://github.com/planetaryescape/keyloom/commit/c1ab5fcab4f1c7e637f4e355900d961bb1615828))
+
 ## [0.70.1](https://github.com/planetaryescape/keyloom/compare/v0.70.0...v0.70.1) (2026-11-02)
 
 

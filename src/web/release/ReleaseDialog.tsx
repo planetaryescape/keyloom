@@ -23,13 +23,13 @@ interface Props {
   now: number;
 }
 
-type StepState = "todo" | "active" | "done" | "failed" | "locked";
+type StepState = "todo" | "active" | "done" | "failed" | "warning" | "locked";
 
 function Step({ number, title, state, aside, children }: { number: number; title: string; state: StepState; aside?: string; children: ReactNode }) {
   return (
     <li className="step" data-state={state}>
       <span className="step-mark" aria-hidden="true">
-        {state === "done" ? <CircleCheck size={20} /> : state === "failed" ? <CircleAlert size={20} /> : number}
+        {state === "done" ? <CircleCheck size={20} /> : state === "failed" ? <CircleAlert size={20} /> : state === "warning" ? <TriangleAlert size={20} /> : number}
       </span>
       <div className="step-body">
         <div className="step-head">
@@ -70,7 +70,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const canFlash = build?.status === "succeeded" && !flashing;
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
-  const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? "done" : flash.status === "failed" ? "failed" : "active";
+  const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? flash.verified ? "done" : "warning" : flash.status === "failed" ? "failed" : "active";
 
   const confirmBlock = (
     <div className="confirm">
@@ -241,10 +241,13 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               </>
             ) : flash.status === "succeeded" ? (
               <>
-                <div className="callout callout-success" role="status">
-                  <CircleCheck size={18} aria-hidden="true" />
+                <div className={`callout ${flash.verified ? "callout-success" : "callout-warning"}`} role="status">
+                  {flash.verified ? <CircleCheck size={18} aria-hidden="true" /> : <TriangleAlert size={18} aria-hidden="true" />}
                   <p>
-                    <strong>Flashed.</strong> Your {boardName} restarts with {earlierRevision ? "this earlier revision" : "the latest layout"}: {withFullStop(headline(head.summary))}
+                    <strong>{flash.verified ? "Flashed and verified." : "Flashed, not verified."}</strong>{" "}
+                    {flash.verified
+                      ? <>Your {boardName} is running {earlierRevision ? "this earlier revision" : "the latest layout"}: {withFullStop(headline(head.summary))}</>
+                      : <>keyloom wrote the firmware but could not confirm which build your {boardName} is running. Check its connection and the flash log before treating this as complete.</>}
                     {flash.note === null ? null : <> {flash.note}</>}
                   </p>
                 </div>

@@ -25,7 +25,7 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 
 ## Versions
 
-- **A version is a revision that went onto the keyboard,** recorded automatically when a sync verifies (D-301). It carries:
+- **A version is a revision that went onto the keyboard,** recorded automatically when a flash verifies the exact build marker (D-482). Sync and standalone Build & Flash both record it. A successful write without readback is explicitly unverified and does not become a version. It carries:
   - when it went on;
   - how long it stayed on (until the next version replaced it);
   - an optional name BK gives it ("before the HRM tweak").
@@ -41,7 +41,7 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 - **Nouns.** Board → config → layer → key. A change and a version are moments in a config's history.
 - **Map.** The top bar shows the board; the caption under it shows the config ("Config QWERTY ▾", D-315), and its menu lists that board's configs, the one on the keyboard first and marked green, with New, Rename and Archive. History is one click away (C/H/L controls).
 - **Journeys.**
-  - Try a change for a week: edit, apply (a version is recorded on sync), and later History → that version → Go back.
+  - Try a change for a week: edit, apply (a version is recorded when the running build is verified), and later History → that version → Go back.
   - Switch to Colemak for the day: config menu → Colemak → "Put on my Moonlander".
   - Start a steno config: New config → from blank, or import.
 - **Across surfaces.**
@@ -62,7 +62,7 @@ BK: "I would like this app to keep multiple versions of my layout and version hi
 
 - **Model.** `board_config` names the config on each keyboard; `versions` holds the revisions that went on a keyboard or were named; `layouts` gains `archived_at` and `copied_from_*` (D-302 for the migration).
 - **Sync.** The engine tracks the stored config only. A manual `sync` of another config is refused, `config use` stores the choice after the usual checks and syncs once, and a switch in the middle of a sync stops a build and checks again right before the flash (D-303, D-304). A keyboard running another config of the board reads "behind: other_config" and auto-sync leaves it.
-- **Versions.** Written in the transaction that finishes a verified sync (D-307). History is `versions` with the revisions between two folded under the later one, plus the revisions newer than the newest version as `pending`. Restore is the go-back path; compare is a key-by-key diff (D-309).
+- **Versions.** Written in the transaction that finishes a verified sync or standalone flash (D-307, D-482). History is `versions` with the revisions between two folded under the later one, plus the revisions newer than the newest version as `pending`. Offline sync state uses the latest verified version, not only the latest Sync run. Restore is the go-back path; compare is a key-by-key diff (D-309).
 - **Surfaces.** CLI in [10](10-cli.md#config-and-version-keep-several-layouts-per-board-and-go-back-to-old-ones); routes in [01](01-architecture.md) and `src/api/configs.ts`; the agent's `list_layouts` marks the config on each keyboard and its prompt says a "Colemak config" is a new config, which it tells BK how to make.
 
 ## Blank and from a file

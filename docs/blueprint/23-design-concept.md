@@ -89,7 +89,7 @@ Always visible without asking: which board and layout, which layer and how to re
 
 | Moment | What the person should feel | What makes it land |
 |---|---|---|
-| Pegboard landing | "My workshop wall" | The top four recently opened keyboards rest on physical ledges tilted back 12°; picking one lifts it into flight toward the desk |
+| Pegboard landing | "My workshop wall" | Up to four recently opened keyboards rest on ledges, tilted back 12°; picking one lifts it off the wall and flies it onto the desk |
 | First open | "That's my keyboard" | The board as itself, lit, centred; one hint line |
 | Switching layer | "I'm on a different layer now" | The underglow changes first, then legends and LEDs change in a ripple from the thumb that holds the layer |
 | Finding a key | "There it is" | Press it on the real keyboard and it lights on screen |
@@ -134,7 +134,7 @@ Always visible without asking: which board and layout, which layer and how to re
 
 ## Screens
 
-The comps are the screens: `a-moonlander-idle` (rest), `b-edit-key` and `b2-key-card-states` (P2), `c-layer-light` (a lit layer), `d-command-bar` (P3), `e-glove80-idle`, `f-phone-edit-key`, `h-how-it-fits-together` (the storyboard), `j-macbook-sketch`, `k-new-board`, `l-pegboard-home` (P6). At rest the eye lands on the board, then the layer's name; nothing else competes.
+The comps are the screens: `a-moonlander-idle` (rest), `b-edit-key` and `b2-key-card-states` (P2), `c-layer-light` (a lit layer), `d-command-bar` (P3), `e-glove80-idle`, `f-phone-edit-key`, `h-how-it-fits-together` (the storyboard), `j-macbook-sketch`, `k-new-board`. At rest the eye lands on the board, then the layer's name; nothing else competes.
 
 ## The design gate
 
@@ -156,4 +156,4 @@ A phase is done when:
 | P3 | ⌘K as the command bar, proposals on the caps | Built (D-278, D-279, D-310, D-311) |
 | P4 | History, Library, Settings, Combos, import and new board, sync detail, MacBook states | Built (D-312), except the new-board stage card, which is rung 21's ([22](22-new-keyboard.md)) |
 | P5 | Phones for all of it, and a full light and dark pass | Built (D-313); the typing lab, configs and journeys after it kept the same gate (D-314 to D-317) |
-| P6 | The pegboard home wall: the top four recently opened keyboards displayed in 3D perspective resting on acrylic ledges, with synchronous View Transition flight to and from the desk | Built (v0.70.0, v0.70.1, D-478, D-479) |
+| P6 | The pegboard home wall: up to four recently opened keyboards in 3D perspective on ledges, with a View Transition flight to and from the desk | Built in v0.70.0, flight fixed in v0.70.1 (D-478, D-485); no comp was drawn for it |

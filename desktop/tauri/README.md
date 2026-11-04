@@ -1,6 +1,6 @@
 # keyloom desktop shell
 
-A Tauri v2 shell around the unchanged `keyloom serve` ([chapter 26](../../docs/blueprint/26-desktop-app.md)). It runs the release `keyloom` binary as a sidecar, shows its page in a window, and mirrors `/api/events` into a menu-bar extra and native notifications. The server words every string the shell shows; the Rust has no product logic.
+A Tauri v2 shell around the unchanged `keyloom serve` ([chapter 26](../../docs/blueprint/26-desktop-app.md)). It runs the release `keyloom` binary as a sidecar, shows its page in a window, and mirrors `/api/events` into a menu-bar extra and native notifications. The server words sync and keyboard status; the shell owns desktop concerns such as updates and launch-at-login.
 
 ## Build
 
@@ -50,4 +50,4 @@ The updater is compiled in only with the `updater` Cargo feature, so a build wit
 1. `bunx tauri signer generate -w ~/.tauri/keyloom.key` (keep the private key; losing it strands installed apps).
 2. Add the private key as `TAURI_SIGNING_PRIVATE_KEY` (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) and the public key as `TAURI_UPDATER_PUBKEY` in the repo's Actions secrets.
 
-With all of those present the release job builds with `--features updater`, merges `tauri.updater.example.json` with the public key, and uploads `keyloom.app.tar.gz`, its `.sig` and `latest.json`. The app checks at launch and every six hours, installs what it finds and notifies; the new version runs from the next launch.
+With all of those present the release job builds with `--features updater`, merges `tauri.updater.example.json` with the public key, and uploads `keyloom.app.tar.gz`, its `.sig` and `latest.json`. The app checks at launch and every six hours. When an update is available, it notifies the user and enables an **Install VERSION and restart keyloom** menu-bar action. The update bundle is not downloaded or installed until the user chooses that action; after installation, keyloom restarts through its normal exit path so its owned server is stopped first. If installation fails, the action stays available to retry.

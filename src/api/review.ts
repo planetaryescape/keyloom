@@ -7,7 +7,7 @@
 //   GET  /api/events: besides `event: sync` frames, an `event: review` frame (ReviewEvent) whenever a review is made or its agent part changes
 // A review is stale when revisions differ or `review.freshness.current` is false. `:id` is a stable item id, URL-encoded.
 import { z } from "zod";
-import { FixedItemSchema, ReviewItemSchema } from "../validation/review-item.ts";
+import { FixedItemSchema, ReviewItemSchema, fixableFindings } from "../validation/review-item.ts";
 import { ReviewActivitiesSchema, ReviewWorkloadSchema } from "../layout/review-workload.ts";
 import { BehaviorEvidenceSchema } from "../layout/review-evidence.ts";
 export { isReviewCurrent } from "../layout/review-evidence.ts";
@@ -65,3 +65,19 @@ export type ReviewEvent = z.infer<typeof ReviewEventSchema>;
  * and the findings themselves are read at run time, so they cannot drift from the stored review and the visible request stays short.
  */
 export const REVIEW_FIX_REQUEST = "Fix what the board review found in this config.";
+
+export function formatFindingRepairRequest(finding: { title: string; body: string; scope: readonly string[] }): string {
+  const scope = finding.scope.map((part) => part.trim()).filter(Boolean);
+  return [
+    `Please investigate this board-review finding and propose a repair for it only: ${finding.title.trim()}`,
+    finding.body.trim(),
+    scope.length === 0 ? "No specific key or layer was marked; inspect the finding and current layout." : `Marked scope: ${scope.join("; ")}.`,
+    "Read the current review and layout first. Preserve existing behavior, explain any uncertainty, and propose a validated change for preview. Do not apply it.",
+  ].filter(Boolean).join("\n\n");
+}
+
+export type FindingRepairDraft = { id: string; reviewId: string; headRevisionId: string; findingId: string; request: string; sent: boolean } | import("../validation/proposal-recovery.ts").ProposalRecoveryDraft;
+
+export function selectableFinding(items: readonly import("../validation/review-item.ts").ReviewItem[], id: string) {
+  return fixableFindings(items).find((item) => item.id === id);
+}

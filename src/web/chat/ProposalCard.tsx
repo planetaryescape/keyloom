@@ -4,6 +4,9 @@ import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
+import { evaluate } from "../../validation/validate.ts";
+import { validationReasons } from "../../validation/proposal-recovery.ts";
+import { keyIn } from "../../validation/words.ts";
 import { functionName } from "../editor/function-label.ts";
 import { Validation } from "../editor/Validation.tsx";
 import { previewProposal } from "./preview.ts";
@@ -24,7 +27,7 @@ interface Props {
   onPin: (proposal: Proposal) => void;
   /** Applies it; rejects with the server's ApiError. */
   onApply: (proposal: Proposal) => Promise<void>;
-  onAskAgain: () => void;
+  onAskAgain: (proposal: Proposal, reasons: string[]) => void;
   onOpenRelease: () => void;
   /** The command bar's card: the explanation, the changes as chips, one trade-off line, the options as tabs, Apply (comp d). */
   compact?: boolean;
@@ -42,7 +45,15 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [failure, setFailure] = useState<{ message: string; stale: boolean } | null>(null);
+  const [failure, setFailure] = useState<{ message: string; stale: boolean; reasons: string[] } | null>(null);
+  const open = proposal.status === "proposed";
+  // History describes the saved operation, not an attempt to replay non-idempotent ops on today's head.
+  const currentValidation = useMemo(() => open ? evaluate(board, layout, proposal.ops).result : proposal.validation, [open, board, layout, proposal.ops, proposal.validation]);
+  const effectiveValidation = currentValidation.ok ? proposal.validation : currentValidation;
+  const canApply = open && !applying && proposal.validation.ok && currentValidation.ok && failure?.stale !== true;
+  const recoveryReasons = failure?.reasons.length ? failure.reasons : validationReasons(effectiveValidation.errors, layout);
+  const recoverable = proposal.status === "proposed" && (failure?.stale === true || recoveryReasons.length > 0);
+  const recovery = recoverable ? <button type="button" className="bar-link" onClick={() => onAskAgain(proposal, recoveryReasons.length ? recoveryReasons : [failure?.message ?? "The proposal no longer applies cleanly.", `Proposal targets: ${proposal.validation.diff.changed.map((slot) => keyIn(layout, slot)).join("; ") || "no key target recorded"}.`])}>Plan a revised proposal</button> : null;
   const [justApplied, setJustApplied] = useState(false);
   const outcome = useRef<HTMLDivElement>(null);
   const natives = useMemo(() => replacedNatives(layout, proposal), [layout, proposal]);
@@ -65,7 +76,6 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   const { gains, costs } = proposal.tradeoffs;
   // The validator's count, not the rows': a key whose binding changes while its printed label stays the same still changes.
   const changedKeys = proposal.validation.diff.changed.length;
-  const open = proposal.status === "proposed";
   // A function the proposal gives up on purpose is said where Apply is, with its reason: the keys on the board show what moves, not what is lost.
   const { dropped } = proposal.validation.diff;
 
@@ -75,6 +85,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   }, [justApplied]);
 
   async function apply() {
+    if (!canApply) return;
     setApplying(true);
     setFailure(null);
     try {
@@ -89,10 +100,17 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             ? "The layout changed after this was proposed, so it no longer applies cleanly."
             : error instanceof Error ? error.message : "Couldn't apply this.",
         stale: error instanceof ApiError && error.code === "stale_base",
+        reasons: error instanceof ApiError && error.validation ? validationReasons(error.validation.errors, layout) : [],
       });
     } finally {
       setApplying(false);
     }
+  }
+
+  function requestApply() {
+    if (!canApply) return;
+    if (natives.length > 0 && !confirming) setConfirming(true);
+    else void apply();
   }
 
   // The validator's warnings and errors, only when there are any: a clean proposal says nothing about checking.
@@ -100,7 +118,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   const { lead, rest } = leadSentence(proposal.explanation);
   // The details show the moves as chips, so "function lost" would only say them again (the same filter as the full form's hideLost).
   const issues = [
-    ...proposal.validation.errors.map((issue) => ({ tone: "error" as const, text: issue.plain ?? issue.message })),
+    ...validationReasons(effectiveValidation.errors, layout).map((text) => ({ tone: "error" as const, text })),
     ...proposal.validation.warnings.filter((issue) => issue.code !== "function_lost").map((issue) => ({ tone: "warning" as const, text: issue.plain ?? issue.message })),
   ];
 
@@ -123,8 +141,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
               <button
                 type="button"
                 className="bar-apply"
-                disabled={applying || !proposal.validation.ok || failure?.stale === true}
-                onClick={() => (natives.length > 0 && !confirming ? setConfirming(true) : void apply())}
+                disabled={!canApply}
+                onClick={requestApply}
               >
                 {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
                 {confirming ? "Replace and apply" : "Apply"}
@@ -141,6 +159,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         <strong className="proposal-line-title" title={proposal.title}>{shortTitle(proposal.title, 44)}</strong>
         {dropped.length === 0 ? null : <span className="proposal-line-drop">Drops {dropped.map((d) => functionName(d.function, layout)).join(", ")}</span>}
         {failure === null ? null : <span className="proposal-line-problem" role="alert">{failure.message}</span>}
+        {recovery}
         {confirming ? <span className="proposal-line-problem" role="alert">Replaces {natives.length === 1 ? "a custom key" : `${natives.length} custom keys`} keyloom can&apos;t write back; Undo restores it.</span> : null}
         <span className="proposal-bar-gap" />
         {actions}
@@ -197,11 +216,12 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <TriangleAlert size={16} aria-hidden="true" />
             <div>
               <p>{failure.message}</p>
-              {failure.stale ? <button type="button" className="bar-link" onClick={onAskAgain}>Ask for a fresh proposal</button> : null}
+              {recovery}
             </div>
           </div>
         )}
         <ProposalDetails chips={chips} rest={rest} gains={gains} costs={costs} remembers={proposal.decisionDraft === null || !open ? null : proposal.decisionDraft.reason} />
+        {failure === null ? recovery : null}
         <div className="proposal-bar-foot">
           <span className="proposal-bar-gap" />
           {actions}
@@ -275,7 +295,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         </div>
       )}
 
-      <Validation layout={layout} idleNote="" state={{ status: "done", result: proposal.validation }} onRecheck={() => {}} showMoves={false} />
+      <Validation layout={layout} idleNote="" state={{ status: "done", result: effectiveValidation }} onRecheck={() => {}} showMoves={false} />
 
       {open ? (
         confirming ? (
@@ -288,7 +308,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
               </span>
             </p>
             <div className="proposal-actions">
-              <button type="button" className="button button-primary" disabled={applying} onClick={() => void apply()} autoFocus>
+              <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()} autoFocus>
                 {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
                 Replace and apply
               </button>
@@ -304,8 +324,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <button
               type="button"
               className="button button-primary"
-              disabled={applying || !proposal.validation.ok || failure?.stale === true}
-              onClick={() => (natives.length > 0 ? setConfirming(true) : void apply())}
+              disabled={!canApply}
+              onClick={requestApply}
             >
               {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
               Apply
@@ -319,12 +339,12 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
           <TriangleAlert size={16} aria-hidden="true" />
           <div>
             <p>{failure.message}</p>
-            {failure.stale ? (
-              <button type="button" className="button" onClick={onAskAgain}>Ask for a fresh proposal</button>
-            ) : null}
+            {recovery}
           </div>
         </div>
       )}
+
+      {failure === null ? recovery : null}
 
       {justApplied && proposal.status === "applied" ? (
         <div className="proposal-next" ref={outcome} tabIndex={-1}>

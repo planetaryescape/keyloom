@@ -93,3 +93,4 @@ export { PlatformUnavailableError, requireCommandSupport, windowsUnavailable } f
 export { SchemaTooNewError, assertDataDirOpenable } from "../persistence/schema-guard.ts";
 
 export { sendMessage } from "./send-message.ts";
+export { proposalRecovery } from "./proposal-recovery.ts";

@@ -19,6 +19,7 @@ import {
 import { recordHandsFreeProof } from "../persistence/syncs.ts";
 import { appendLog } from "../persistence/log.ts";
 import { findLayoutRow, listLayoutRows } from "../persistence/layouts.ts";
+import { recordVersion } from "../persistence/versions.ts";
 import { cacheDir } from "../persistence/paths.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
@@ -57,6 +58,8 @@ export type FlashView = {
   instruction: string | null;
   /** What keyloom confirmed after the flash (read from its log, so it survives a restart), or null. */
   note: string | null;
+  /** True only when the flasher read back this exact build marker from the keyboard. */
+  verified: boolean;
   logTail: string[];
   logPath: string;
 };
@@ -293,10 +296,10 @@ async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
   // Read before the first await: the instruction a state change carries must be the one in force when it was announced.
   const instruction = instructionFor(row, boardOfFlash(app, row));
   const logTail = await tailOf(logPath);
+  const note = row.status === "succeeded" ? (logTail.map((l) => VERIFIED.exec(l)?.[1]).findLast((n) => n !== undefined) ?? null) : null;
   return {
     id: row.id, buildId: row.buildId, status: row.status, error: row.error, startedAt: row.startedAt, finishedAt: row.finishedAt,
-    instruction,
-    note: row.status === "succeeded" ? (logTail.map((l) => VERIFIED.exec(l)?.[1]).findLast((n) => n !== undefined) ?? null) : null,
+    instruction, note, verified: note !== null && note.includes(`build ${row.buildId}`),
     logTail, logPath,
   };
 }
@@ -424,7 +427,20 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
         }
       },
     });
-    finishFlash(app.db, row.id, result.state === "succeeded" ? null : { error: result.error ?? "the flash failed" });
+    const verified = result.state === "succeeded" && result.output.some((line) => line.startsWith("keyloom: Verified:") && line.includes(`build ${row.buildId}`));
+    app.db.transaction(() => {
+      finishFlash(app.db, row.id, result.state === "succeeded" ? null : { error: result.error ?? "the flash failed" });
+      if (verified) {
+        const build = findBuild(app.db, row.buildId);
+        if (build) {
+          const flash = findFlash(app.db, row.id);
+          recordVersion(app.db, {
+            layoutId: build.layoutId, revisionId: build.revisionId, boardId: board.definition.id, syncId: null,
+            at: flash?.finishedAt ?? Date.now(),
+          });
+        }
+      }
+    })();
     appendLog(app.dataDir, {
       event: "flash",
       flashId: row.id,
@@ -474,4 +490,3 @@ export async function flashAndWait(app: App, opts: FlashOptions): Promise<FlashV
   if (done.status !== "succeeded") throw new FlashFailedError(`flash ${done.id} failed: ${done.error ?? "unknown error"} (log: ${done.logPath})`, done.id, done.logPath);
   return done;
 }
-

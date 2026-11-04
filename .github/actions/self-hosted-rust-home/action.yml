@@ -1,0 +1,31 @@
+# Adapted from planetaryescape/mxr .github/actions/self-hosted-rust-home/action.yml @ 707a7143f
+name: Use the runner's own Rust home
+description: >-
+  The keyloom-builder runner runs as the developer on their Mac. On mxr's runner, a job
+  left on the developer's ~/.cargo and ~/.rustup rewrote their toolchain and deleted
+  unpacked crates mid-build. This gives the job a Rust home of its own, kept between runs,
+  and does nothing on GitHub-hosted runners. Run it after checkout and before any cargo
+  or rustup step.
+runs:
+  using: composite
+  steps:
+    - if: runner.environment == 'self-hosted'
+      shell: bash
+      run: |
+        set -eu
+        home="${RUNNER_TOOL_CACHE}/keyloom-rust"
+        export CARGO_HOME="$home/cargo" RUSTUP_HOME="$home/rustup"
+        if [ ! -x "$CARGO_HOME/bin/rustup" ]; then
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://sh.rustup.rs \
+            | sh -s -- -y --no-modify-path --profile minimal --default-toolchain stable -c clippy -c rustfmt
+        fi
+        # Hosted images move to each new stable; native/device-helper pins its own toolchain in rust-toolchain.toml.
+        "$CARGO_HOME/bin/rustup" update stable --no-self-update
+        {
+          echo "CARGO_HOME=$CARGO_HOME"
+          echo "RUSTUP_HOME=$RUSTUP_HOME"
+          # The Mac is also the developer's workstation; a job's own setting wins.
+          echo "CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-5}"
+        } >> "$GITHUB_ENV"
+        # Ahead of anything else on the runner PATH, such as the developer's own ~/.cargo/bin.
+        echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"

@@ -19,6 +19,7 @@ import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
 import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
 import { Pegboard } from "./home/Pegboard.tsx";
 import { markOpened } from "./api-write.ts";
+import type { FindingRepairDraft } from "../api/review.ts";
 
 type Failure = { message: string; retryable: boolean };
 type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
@@ -51,10 +52,13 @@ export function App({ token }: { token: string }) {
   // What a board or config switch carries to the layout it opens (D-317), kept with that layout's ID so nothing else picks it up.
   const [carry, setCarry] = useState<(Arrival & { id: string }) | null>(null);
   const [view, setView] = useState<View | null>(null);
+  // Only this new request is carried across the pegboard's Viewer unmount, scoped by config.
+  const [repairDrafts, setRepairDrafts] = useState<Record<string, FindingRepairDraft>>({});
   const requestSequence = useRef(0);
   // The import screen from the layout menu; with no layouts it is the page itself.
   const [importing, setImporting] = useState(false);
   const [managing, setManaging] = useState(false);
+  const [manageRemoved, setManageRemoved] = useState(false);
   const [adding, setAdding] = useState(false);
   // Bumping this refetches the list; it backs the "Check again" and "Try again" buttons.
   const [attempt, setAttempt] = useState(0);
@@ -115,15 +119,15 @@ export function App({ token }: { token: string }) {
   };
 
   const reload = (selectId?: string) => {
-    if (selectId !== undefined) setSelectedId(selectId);
+    if (selectId !== undefined) { setSelectedId(selectId); setOnWall(false); setAdding(false); setImporting(false); }
     setAttempt((count) => count + 1);
   };
   const controls = {
-    onManageKeyboards: () => setManaging(true),
+    onManageKeyboards: () => { setManageRemoved(false); setManaging(true); },
     onAddKeyboard: () => { setManaging(false); setImporting(false); setAdding(true); },
   };
   const wrap = (page: ReactNode) => <>{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
-    active={layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null} onChanged={reload}
+    active={layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null} onChanged={reload} initiallyRemoved={manageRemoved}
     onClose={() => setManaging(false)} onAdd={controls.onAddKeyboard} /> : null}</>;
 
   if (listError !== null) {
@@ -143,6 +147,7 @@ export function App({ token }: { token: string }) {
     setCarry({ id: result.layoutId, layerName: null, chatOpen: false, thread: null, review: true });
     setImporting(false);
     setAdding(false);
+    setOnWall(false);
     setAttempt((count) => count + 1);
   };
   if (layouts === null) {
@@ -155,10 +160,10 @@ export function App({ token }: { token: string }) {
   if (layouts.length === 0 || adding) {
     return wrap(
       <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: () => setImporting(true) }}>
-        <KeyboardWelcome token={token} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name,
+        <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
           onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
-          onManage={controls.onManageKeyboards} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />
+          onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />
       </Shell>
     );
   }
@@ -273,6 +278,18 @@ export function App({ token }: { token: string }) {
       onHome={returnToWall}
       onChanged={refresh}
       arrival={carry !== null && carry.id === shown.id ? carry : null}
+      repairDraft={repairDrafts[shown.id] ?? null}
+      onRepairDraft={(id, draft, replace = false) => setRepairDrafts((current) => {
+        if (replace && current[shown.id] !== undefined) return current;
+        if (!replace && current[shown.id]?.id !== id) return current;
+        if (draft === null) {
+          if (current[shown.id] === undefined) return current;
+          const next = { ...current };
+          delete next[shown.id];
+          return next;
+        }
+        return { ...current, [shown.id]: draft };
+      })}
       onCarry={(id, next) => {
         setCarry({ id, ...next });
         setImporting(false);
@@ -293,6 +310,8 @@ function LayoutPage({
   onHome,
   onChanged,
   arrival,
+  repairDraft,
+  onRepairDraft,
   onCarry,
 }: {
   token: string;
@@ -304,6 +323,8 @@ function LayoutPage({
   onHome?: () => void;
   onChanged: () => Promise<void>;
   arrival: Arrival | null;
+  repairDraft: FindingRepairDraft | null;
+  onRepairDraft: (id: string, draft: FindingRepairDraft | null, replace?: boolean) => void;
   onCarry: (id: string, carry: Arrival) => void;
 }) {
   const { document: layout, board, geometry } = detail;
@@ -349,6 +370,8 @@ function LayoutPage({
           sync={sync}
           onChanged={onChanged}
           onOpenRelease={openRelease}
+          repairDraft={repairDraft}
+          onRepairDraft={onRepairDraft}
           chrome={{ ...menu, onHome, boardChoices, release: { status, onOpen: () => openRelease() }, arrival, onCarry }}
         />
       )}

@@ -53,7 +53,7 @@ const buildJson = (b: BuildView) => ({
 });
 
 const flashJson = (f: FlashView) => ({
-  flash_id: f.id, build_id: f.buildId, status: f.status, error: f.error, note: f.note, log_path: f.logPath, started_at: f.startedAt, finished_at: f.finishedAt,
+  flash_id: f.id, build_id: f.buildId, status: f.status, verified: f.verified, error: f.error, note: f.note, log_path: f.logPath, started_at: f.startedAt, finished_at: f.finishedAt,
 });
 
 export function registerFirmwareCommands(program: Command, deps: FirmwareCommandDeps): void {
@@ -153,7 +153,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
       );
       print(io, format(), {
         json: flashJson(f),
-        table: quiet() ? f.id : columns([["flash", f.id], ["build", f.buildId], ["status", f.status], ...(f.note ? [["result", f.note] as [string, string]] : []), ["log", f.logPath]]),
+        table: quiet() ? f.id : columns([["flash", f.id], ["build", f.buildId], ["status", f.status === "succeeded" && !f.verified ? "succeeded (not verified)" : f.status], ...(f.note ? [["result", f.note] as [string, string]] : []), ["log", f.logPath]]),
         ids: [f.id],
       });
     });

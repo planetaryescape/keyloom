@@ -166,6 +166,38 @@ describe("which port is which half", () => {
 });
 
 describe("a Glove80 whose halves run keyloom's firmware", () => {
+  test("a half connected after flashing starts is restarted when its USB serial port appears", async () => {
+    const r = await run(GLOVE80, glove80Image(KEY), (root) => {
+      const w = fakeWorld({ root, halves: [running("L"), running("R")] });
+      const right = w.halves.find((half) => half.letter === "R");
+      if (!right) throw new Error("Glove80 right half missing");
+      if (right.serial === undefined) throw new Error("Glove80 right half has no firmware marker");
+      const serial = right.serial;
+      delete right.serial;
+      const transport = w.deps.serial;
+      let listings = 0;
+      w.deps.serial = async () => {
+        const serialTransport = await transport();
+        return {
+          ...serialTransport,
+          list: async () => {
+            if (listings < 2) {
+              if (listings === 1) right.serial = serial;
+              listings++;
+              return [];
+            }
+            return serialTransport.list();
+          },
+        };
+      };
+      return w;
+    });
+    expect(r.result).toMatchObject({ state: "succeeded", error: null });
+    expect(r.w.touches[0]).toEqual({ path: "/dev/fake-ttyACM-R", baud: 1200 });
+    expect(r.w.flashed[0]).toEqual({ letter: "R", key: KEY });
+    expect(r.states.some(([, instruction]) => instruction?.includes("keyloom will retry") && instruction.includes("otherwise press its bootloader key"))).toBe(true);
+  });
+
   test("flashes the right half and then the left with no keypress, and verifies both", async () => {
     const r = await run(GLOVE80, glove80Image(KEY), (root) => fakeWorld({ root, halves: [running("L"), running("R")] }));
     expect(r.result).toMatchObject({ state: "succeeded", error: null });
@@ -207,7 +239,10 @@ describe("a Glove80 whose halves run keyloom's firmware", () => {
     );
     expect(r.result.state).toBe("succeeded");
     const fallback = r.states.find(([, i]) => i?.includes("couldn't restart the right half by itself"));
-    expect(fallback?.[1]).toContain("Is the right half's own USB cable plugged in?");
+    // The prompt has no way to answer, so it states the cause instead of asking about the cable.
+    expect(fallback?.[1]).toContain("a half with no USB cable of its own returns to typing after 3 seconds. Flash the right half");
+    expect(fallback?.[1]).not.toContain("?");
+    expect(fallback?.[1]).not.toContain("..");
     expect(fallback?.[1]).toContain("Flash the right half (1 of 2)");
   });
 
@@ -251,7 +286,7 @@ describe("the first keyloom flash and failures to restart", () => {
       { wait: 3000 },
     );
     expect(r.w.touches).toEqual([]);
-    expect(r.states.some(([, i]) => i?.includes("no keyloom serial port was found for it, so it needs its bootloader key this once"))).toBe(true);
+    expect(r.states.some(([, i]) => i?.includes("keyloom will retry") && i.includes("otherwise press its bootloader key"))).toBe(true);
     expect(r.result.state).toBe("succeeded");
     expect(r.lines.at(-1)).toContain("Verified");
   });

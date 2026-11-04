@@ -19,7 +19,7 @@ export type SeenRequest = {
   toolResults: string[];
 };
 
-export type ScriptStep = ScriptedReply | ((seen: SeenRequest) => ScriptedReply);
+export type ScriptStep = ScriptedReply | ((seen: SeenRequest) => ScriptedReply | Promise<ScriptedReply>);
 
 const sse = (events: Array<[string, unknown]>): string => events.map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join("");
 
@@ -63,7 +63,7 @@ export function fakeAnthropic(script: ScriptStep[], clientOptions: ConstructorPa
     requests.push(seen);
     const step = script[requests.length - 1];
     if (!step) throw new Error(`the scripted model was called ${requests.length} times, but the script has ${script.length} steps`);
-    const reply = typeof step === "function" ? step(seen) : step;
+    const reply = await ("blocks" in step ? step : step(seen));
     if (reply.error) {
       return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: reply.error.message } }), {
         status: reply.error.status, headers: { "content-type": "application/json" },

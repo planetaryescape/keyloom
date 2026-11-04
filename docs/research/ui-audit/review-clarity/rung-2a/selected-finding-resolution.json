@@ -1,0 +1,28 @@
+{
+  "result": "PASS",
+  "headRevisionId": "rev_01M6EP0EMV9JRHCZ32G9XZN37V",
+  "sourceFindingId": "check:keys_do_nothing::layer-0/33",
+  "fixed": [
+    {
+      "id": "check:keys_do_nothing::layer-0/33",
+      "source": "check",
+      "kind": "hint",
+      "severity": "info",
+      "code": "keys_do_nothing",
+      "title": "1 key does nothing on {layer:layer-0}",
+      "body": "{key:layer-0:33} is empty on {layer:layer-0}. Pressing it types nothing.",
+      "keys": [
+        {
+          "layerId": "layer-0",
+          "position": 33
+        }
+      ],
+      "layers": [],
+      "proposalId": null,
+      "fixes": [],
+      "dismissedAt": null,
+      "fixedSince": "rvw_01M6ENZXZQ0BEXW0B693JX5EE6"
+    }
+  ],
+  "remainingItemIds": []
+}
