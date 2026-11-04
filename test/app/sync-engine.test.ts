@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, setDefaultTimeout } from "bun:test";
 import { UsageError } from "../../src/app/index.ts";
 import { SyncEngine } from "../../src/app/sync-engine.ts";
 import { activeSyncs, claimSync, finishSync, getBoardSync, lastSyncOfBoard, newSyncId, progressSync, recentSyncs, recordHandsFreeProof } from "../../src/persistence/syncs.ts";
+import { recordVersion } from "../../src/persistence/versions.ts";
 import { proposeChange } from "../../src/app/index.ts";
 import { BOARD, type SyncWorld, gate, skewedClock, syncWorld, waitFor } from "../helpers/fake-sync.ts";
 import { setKey } from "../helpers/ops.ts";
@@ -48,6 +49,19 @@ describe("a keyboard that runs the head", () => {
     undo(w.app, w.layoutId);
     // The head is a new revision (undo appends), but its document is the one the keyboard runs.
     expect(w.stateOf(e)?.kind).toBe("in_sync");
+  });
+});
+
+describe("last known firmware after a verified standalone flash", () => {
+  test("does not report later edits as pending when the keyboard is unplugged", async () => {
+    const w = await world();
+    const head = w.app.db.query("SELECT head_revision_id FROM layouts WHERE id = ?").get(w.layoutId) as { head_revision_id: string };
+    recordVersion(w.app.db, { layoutId: w.layoutId, revisionId: head.head_revision_id, boardId: BOARD, syncId: null, at: Date.now() });
+    w.apply();
+    w.world.reading = { state: "absent" };
+    const e = w.engine();
+    await e.start();
+    expect(w.stateOf(e)).toEqual({ kind: "not_connected", changes: 1 });
   });
 });
 

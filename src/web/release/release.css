@@ -102,6 +102,10 @@
   border: 0;
   color: var(--color-error);
 }
+.step[data-state="warning"] .step-mark {
+  border: 0;
+  color: var(--color-warning);
+}
 .step[data-state="locked"] h3 {
   color: var(--color-text-muted);
 }

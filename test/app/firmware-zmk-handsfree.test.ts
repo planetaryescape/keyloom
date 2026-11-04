@@ -3,7 +3,7 @@
 // and the boot drives are fakes; nothing here touches a keyboard.
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { buildAndWait, flashAndWait, getFlash, startFlash } from "../../src/app/index.ts";
+import { buildAndWait, flashAndWait, getFlash, openApp, startFlash, versionHistory } from "../../src/app/index.ts";
 import { waitForFlash } from "../../src/app/firmware.ts";
 import { buildKey } from "../../src/firmware/zmk/handsfree.ts";
 import { MODULE_FILES } from "../../src/firmware/zmk/module.ts";
@@ -53,13 +53,37 @@ describe("a Glove80 flash", () => {
     const f = await flashAndWait(e.app, { buildId: b.id, volumesRoot: e.volumes, handsFree: { zmk: world.deps }, onState: (v) => seen.push(v.instruction) });
     world.stop();
     expect(f.status).toBe("succeeded");
+    expect(f.verified).toBe(true);
     expect(f.note).toBe(`Verified: the right half is running build ${b.id}, and the left half is running build ${b.id}.`);
+    const history = versionHistory(e.app, "glove80");
+    expect(history.pending).toEqual([]);
+    expect(history.versions[0]?.version).toMatchObject({ revisionId: b.revisionId, putOnAt: expect.any(Number), current: true });
     expect(world.touches.map((t) => t.baud)).toEqual([1200, 1200]);
     expect(seen.some((i) => i?.includes("restarting the right half"))).toBe(true);
     expect(seen.some((i) => i?.includes("Magic"))).toBe(false); // the manual instruction names the Magic key
     for (const letter of ["L", "R"]) expect(Bun.file(join(e.dataDir, "firmware", "last-good", "moergo-glove80", `${letter}.uf2`)).size).toBeGreaterThan(0);
     // It reads back from the log, so a reload of the web app shows the same.
     expect((await getFlash(e.app, f.id)).note).toBe(f.note);
+  });
+
+  test("repairs version history for a verified flash made before the app recorded flash versions", async () => {
+    const e = await zmkEnv();
+    const b = await built(e);
+    const world = fakeWorld({ root: e.volumes, halves: [half("L"), half("R")] });
+    const f = await flashAndWait(e.app, { buildId: b.id, volumesRoot: e.volumes, handsFree: { zmk: world.deps } });
+    world.stop();
+    expect(f.verified).toBe(true);
+    e.app.db.query("DELETE FROM versions WHERE layout_id = ? AND revision_id = ?").run(b.layoutId, b.revisionId);
+    e.closeApp();
+
+    const reopened = openApp({ dataDir: e.dataDir });
+    try {
+      const history = versionHistory(reopened, b.layoutId);
+      expect(history.pending).toEqual([]);
+      expect(history.versions[0]?.version).toMatchObject({ revisionId: b.revisionId, current: true });
+    } finally {
+      reopened.db.close();
+    }
   });
 
   test("halves that don't run keyloom's firmware yet get the key combo, with the reason, and the first flash is still verified", async () => {
@@ -87,6 +111,7 @@ describe("a Glove80 flash", () => {
     try {
       const failed = await waitForFlash(e.app, (await startFlash(e.app, opts)).id);
       expect(failed.status).toBe("failed");
+      expect(failed.verified).toBe(false);
       expect(failed.note).toBeNull();
       expect(failed.error).toContain("no verified last-good image for the right half");
       expect(failed.error).toContain("Retry starts with the right half");
@@ -112,6 +137,8 @@ describe("a Glove80 flash", () => {
     world.stop();
     expect(f.status).toBe("succeeded");
     expect(f.note).toBeNull();
+    expect(f.verified).toBe(false);
     expect(boot.written).toEqual(["GLV80RHBOOT", "GLV80LHBOOT"]);
+    expect(versionHistory(e.app, "glove80").versions).toEqual([]);
   });
 });

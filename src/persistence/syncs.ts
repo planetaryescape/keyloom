@@ -130,8 +130,8 @@ export type SyncFinish =
 
 /**
  * Finishes a sync that is still running. Only the first finish counts; returns whether this one did. A sync that succeeded was
- * verified (the engine only finishes one that way), so it is also where its revision becomes a version (D-301): in the same write,
- * so a verified sync without a version, or a version without a verified sync, cannot exist.
+ * verified (the engine only finishes one that way), so it is also where its revision becomes a version (D-301): in the same write.
+ * Standalone verified flashes record their versions in the firmware use case.
  */
 export function finishSync(db: Database, id: string, result: SyncFinish, now = Date.now()): boolean {
   return db.transaction(() => {
