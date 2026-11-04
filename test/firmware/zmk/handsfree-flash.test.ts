@@ -239,7 +239,10 @@ describe("a Glove80 whose halves run keyloom's firmware", () => {
     );
     expect(r.result.state).toBe("succeeded");
     const fallback = r.states.find(([, i]) => i?.includes("couldn't restart the right half by itself"));
-    expect(fallback?.[1]).toContain("Is the right half's own USB cable plugged in?");
+    // The prompt has no way to answer, so it states the cause instead of asking about the cable.
+    expect(fallback?.[1]).toContain("a half with no USB cable of its own returns to typing after 3 seconds. Flash the right half");
+    expect(fallback?.[1]).not.toContain("?");
+    expect(fallback?.[1]).not.toContain("..");
     expect(fallback?.[1]).toContain("Flash the right half (1 of 2)");
   });
 

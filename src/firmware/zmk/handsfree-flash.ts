@@ -240,8 +240,10 @@ export async function restartHalf(opts: {
     }
     if (lockWasReported) return { ok: false, reason: SCREEN_LOCK_MESSAGE };
     // A relayed peripheral with no cable of its own goes back to its app after 3 s, which looks the same from here.
-    const cable = touched.baud === RELAY_BAUD ? ` Is the ${label}'s own USB cable plugged in? A half on battery returns to typing after 3 seconds.` : "";
-    return { ok: false, reason: `${t.step.volume} didn't appear within ${Math.round(waitMs / 1000)} seconds of restarting the ${label}.${cable}` };
+    // The reason is shown in a prompt the person can't reply to, so it states the likely cause rather than asking.
+    // The caller appends ". " and the instruction, so the reason ends without a full stop.
+    const cable = touched.baud === RELAY_BAUD ? `; a half with no USB cable of its own returns to typing after 3 seconds` : "";
+    return { ok: false, reason: `${t.step.volume} didn't appear within ${Math.round(waitMs / 1000)} seconds of restarting the ${label}${cable}` };
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
