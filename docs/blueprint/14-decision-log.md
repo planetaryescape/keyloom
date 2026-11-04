@@ -11,6 +11,12 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-04 follow-up
+
+### D-482: A verified standalone flash updates the keyboard's recorded version; an unverified write is never reported as fully complete. (BK: “verification should be part of flashing”; “fix the app so that it reports the correct state”)
+
+The flasher's completion includes its build-marker readback when the board supports it. A verified standalone flash records that exact revision in version history, just as a verified Sync does; offline status uses the newest verified revision from either path. A write that finishes without confirming the marker is shown as “Flashed, not verified,” does not become a version, and its log remains available. This replaces D-301/D-307's sync-only recording rule. Verification is of the running build marker, not a full key-by-key readback.
+
 ## 2026-11-03 follow-up
 
 ### D-481: Desktop updates are installed only after the user chooses to install and restart. (BK: “offer the user a prompt to restart and install”)
