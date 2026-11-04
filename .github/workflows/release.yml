@@ -224,26 +224,12 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern keyloom-darwin-arm64 --dir "$RUNNER_TEMP/sidecar"
           sh scripts/fetch-sidecar.sh "$RUNNER_TEMP/sidecar/keyloom-darwin-arm64"
           bun install --frozen-lockfile
-      - name: Import the signing certificate
-        if: env.APPLE_CERT_P12_BASE64 != ''
-        run: |
-          keychain="$RUNNER_TEMP/build.keychain-db"
-          password="$(uuidgen)"
-          security create-keychain -p "$password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          printf '%s' "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
-          # This runs on BK's Mac, so his search list is extended for the build and restored afterwards, never replaced.
-          security list-keychains -d user > "$RUNNER_TEMP/original-keychains.txt"
-          original=()
-          while IFS= read -r line; do
-            line="${line#*\"}"
-            if [ -n "$line" ]; then original+=("${line%\"}"); fi
-          done < "$RUNNER_TEMP/original-keychains.txt"
-          security list-keychains -d user -s "$keychain" "${original[@]}"
-          rm "$RUNNER_TEMP/cert.p12"
+      # Tauri imports the certificate itself (APPLE_CERTIFICATE below) into a keychain of its own and signs with
+      # `codesign --keychain`. A keychain made here leaves the identity ambiguous on BK's Mac, whose login keychain
+      # holds the same certificate (v0.72.2's build-desktop). His search list is saved in case Tauri dies before
+      # removing its keychain, and restored at the end.
+      - name: Save the keychain search list
+        run: security list-keychains -d user > "$RUNNER_TEMP/original-keychains.txt"
       - name: Build, sign and notarise when the credentials exist
         working-directory: desktop/tauri
         run: |
@@ -251,6 +237,9 @@ jobs:
           args=""
           if [ -n "$APPLE_CERT_P12_BASE64" ]; then
             export APPLE_SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY_NAME"
+            export APPLE_CERTIFICATE="$APPLE_CERT_P12_BASE64" APPLE_CERTIFICATE_PASSWORD="$APPLE_CERT_PASSWORD"
+            # Tauri's keychain goes in a temporary directory; the runner empties RUNNER_TEMP before every job.
+            export TMPDIR="$RUNNER_TEMP"
           else
             echo "::warning::No APPLE_CERT_P12_BASE64 secret: the app is built unsigned."
           fi
@@ -294,8 +283,8 @@ jobs:
             printf '%s\n\n> The macOS app in this release is not notarised yet, so macOS will refuse to open a downloaded copy until the notarisation credentials are added (see desktop/tauri/README.md).\n' "$body" > "$RUNNER_TEMP/notes.md"
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
           fi
-      # Runs after a failed or cancelled build too: the temporary keychain must not outlive the job on BK's Mac.
-      - name: Remove the signing keychain
+      # Runs after a failed or cancelled build too, so BK's search list never keeps a keychain from this job.
+      - name: Restore the keychain search list
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/original-keychains.txt" ]; then
@@ -306,5 +295,4 @@ jobs:
             done < "$RUNNER_TEMP/original-keychains.txt"
             security list-keychains -d user -s "${original[@]}"
           fi
-          if [ -f "$RUNNER_TEMP/build.keychain-db" ]; then security delete-keychain "$RUNNER_TEMP/build.keychain-db"; fi
-          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/cert.p12"
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
