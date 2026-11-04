@@ -2327,3 +2327,16 @@ The selected saved proposal or recorded unsaved `propose_changes` validation ref
 Reuse the App-owned config-keyed repair request. Opening sends nothing, overwrites no pending request and cancels no work. Explicit Send starts a separate ordinary chat request after source/head and composer checks. A definite refusal keeps edits; uncertain acceptance remains observation-only. The validator and explicit Apply still decide. No wire/storage expansion or raw tool results are needed.
 
 `agent replan <config> --proposal <id>` or `--conversation <id> --turn <user-message-id>` resolves the source read-only before starting work. `--draft` prints the shared request without writes. A different base alone is not a refusal: disjoint proposals may still validate. Long requests retain the full goal and require shortening rather than truncation.
+### D-483: Apple Silicon CI and release jobs run on BK's Mac, not hosted macOS runners. Replaces the `macos-15` runner in D-329. (2026-11-04, BK: "see how i configured things to use this mac as a runner for macos stuff and then please copy that so that on this app we do something similar instead of relying on github runners")
+
+On 2026-11-04 PR #258's `desktop` and Apple Silicon `device-helper` jobs were cancelled twice after 20 to 25 minutes without starting a step: "The job was not acquired by Runner of type hosted even after multiple attempts", under GitHub's notice that macOS arm64 capacity is constrained. Releases need the same runners, so a release could publish without its Apple Silicon CLI or desktop app.
+
+The jobs now run on a repository runner on BK's M3 Max, labelled `keyloom-builder` and set up the way mxr's `mxr-builder` is (one runner per repository under `~/.actions-runner/<repo>`, a launchd service running as BK). It takes release.yml's Apple Silicon `build-native` and `build-desktop`, the signing preflight's Apple Silicon entry, and ci.yml's Apple Silicon `device-helper` and `desktop`. Intel and Linux stay on hosted runners, as does Windows: the Mac can't run them natively, and their runners were not short.
+
+Because the runner is BK's workstation:
+- `.github/actions/self-hosted-rust-home` (adapted from mxr) gives jobs a rustup and Cargo home of their own in the runner's tool cache, ahead of BK's `~/.dotfiles/bin` cargo wrapper, and caps Cargo at five jobs. On mxr's runner, a job left on BK's `~/.cargo` and `~/.rustup` rewrote his toolchain.
+- `build-desktop` adds its temporary signing keychain to BK's keychain search list and restores the list in an `always()` step. The hosted-runner version replaced the list with `login.keychain-db` alone. `scripts/sign-device-helper.sh` already restored it.
+- No job reaches his keyboards. The Rust integration tests compile only with the synthetic features, the unit tests use synthetic records and PTYs, and the installed-CLI smokes run with a scratch `HOME` and no device discovery.
+- The repository is public. In ci.yml a pull request from a fork keeps the hosted runner. A fork can still edit the workflow to request the label, so whether its run starts depends on the repository's fork-PR approval policy.
+
+If the Mac is off or asleep, these jobs wait for it. Each push to a branch with an open PR runs ci.yml twice (`push` and `pull_request`), and the one runner takes those jobs in turn.
