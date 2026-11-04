@@ -47,6 +47,13 @@ The updater still checks at launch and every six hours, but finding an update no
 
 ## 2026-11-02 follow-up
 
+### D-485: The pegboard flight names the moving board on the live element before the transition starts, and on both ends. Extends D-478. (2026-11-02, BK: "the animation is not really working, the page just changes, i don't knowif we need to use view transitions or something I don't know"; numbered when recorded on 2026-11-04, after D-479 had gone to another decision)
+
+- **Name it before the first snapshot:** `document.startViewTransition` takes its first snapshot synchronously. A `view-transition-name` set through React state is not in the DOM yet at that point, so the browser saw nothing to fly and crossfaded the page. The click handler sets `style.viewTransitionName = "flying-board"` on the live `.peg-tilt` element, and the name is cleared when the transition finishes (`src/web/home/Pegboard.tsx`, `src/web/App.tsx`, 01c50d1c).
+- **Both ends carry the name:** a named group flies only when an element has that name in both snapshots. The desk's `.stage > .keyboard-well` always carries it (`src/web/shell/shell.css`), so opening pairs it with `.peg-tilt`; going home pairs it with the slot the board came from (`.peg-flying-cradle`).
+- **The board flies, the ledge stays:** the name sits on `.peg-tilt` (the keyboard), not on `.peg-ledge`, so the bracket stays on the wall. The wall itself recedes (scale 0.93, up 14 px, fading out) under its own `pegboard-wall` name.
+- **The browser computes the path:** the `flying-board` group sets only duration, easing, z-index and shadow. Keyframed transforms on the group would replace the movement the browser interpolates between the two boxes.
+
 ### D-476: Manage a keyboard collection separately from config archives, with a bounded picker and a contribution handoff. (2026-11-02, BK: "fix all this please")
 
 Extends D-266, D-277, D-300, D-315 and D-336. The top bar uses one bounded, searchable keyboard picker at every width; a collection of 40 boards does not expand the header. Manage keyboards offers reversible removal, restore and board-only contribution export. Archived-only boards are recoverable under Removed and excluded from normal switching. Collection entries still identify board models; this does not claim physical-device-instance targeting from chapter 30.

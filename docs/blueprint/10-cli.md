@@ -22,6 +22,7 @@ keyloom
 
   import --board <board> <file> [--name N] import an existing layout; prints the new layout ID and an import report
   layout list
+  layout recent                            the boards on the home wall: up to four, most recently opened (or edited) first
   layout show <layout> [--layer L] [--rev R]   grid per layer, or the IR with --format json
   layout settings <layout> [--rev R]       the firmware settings the Settings page offers: value in force, default, stored or not, why forced (read only, D-459)
   layout export <layout> [--rev R] --out <file.json>
@@ -333,6 +334,14 @@ One server serves a data directory (D-323). `serve --reuse` attaches to a live o
 ## Agent skill
 
 The repo ships `skills/keyloom/SKILL.md`, so coding agents and BK's own agents can drive keyloom through the CLI. It covers the loop, which is to `import`, `layout show`, `change check`, `change propose` and `change apply`. It also covers the `--data-dir` rule for tests, and the rule that `flash` is never run without BK asking, because it rewrites the keyboard he types on. There's no MCP server, which follows BK's standing preference for a CLI plus a skill.
+
+## Recently opened keyboards (`layout recent`)
+
+```sh
+keyloom --data-dir <scratch> layout recent
+```
+
+Prints the keyboards on the pegboard home wall (D-478): one config per board, at most four, most recently opened first, with the time each was last opened. A config that has never been opened in the editor counts from its last edit, so a data directory from before the wall still fills it. Archived configs are left out.
 
 ## View requests from the terminal (D-469)
 

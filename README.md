@@ -70,7 +70,7 @@ On macOS or Linux, start the app:
 keyloom web
 ```
 
-This opens the web app at `http://127.0.0.1:4477`. `keyloom serve` is the same command. Use `--port` to change the port and `--no-open` to skip opening the browser.
+This opens the web app at `http://127.0.0.1:4477`. `keyloom serve` is the same command. Use `--port` to change the port and `--no-open` to skip opening the browser. Once you have a config, the app opens on a pegboard wall that holds up to four of your most recently used keyboards. Pick one to open it in the editor; the home button in the top bar takes you back to the wall.
 
 Building firmware needs Docker. Flashing a Moonlander needs [Zapp](https://github.com/zsa/zapp). `keyloom doctor` checks both, along with the bundled device helper.
 

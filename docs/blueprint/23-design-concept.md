@@ -89,6 +89,7 @@ Always visible without asking: which board and layout, which layer and how to re
 
 | Moment | What the person should feel | What makes it land |
 |---|---|---|
+| Pegboard landing | "My workshop wall" | Up to four recently used keyboards rest on ledges, tilted back 12°; picking one lifts it off the wall and flies it onto the desk |
 | First open | "That's my keyboard" | The board as itself, lit, centred; one hint line |
 | Switching layer | "I'm on a different layer now" | The underglow changes first, then legends and LEDs change in a ripple from the thumb that holds the layer |
 | Finding a key | "There it is" | Press it on the real keyboard and it lights on screen |
@@ -155,3 +156,4 @@ A phase is done when:
 | P3 | ⌘K as the command bar, proposals on the caps | Built (D-278, D-279, D-310, D-311) |
 | P4 | History, Library, Settings, Combos, import and new board, sync detail, MacBook states | Built (D-312), except the new-board stage card, which is rung 21's ([22](22-new-keyboard.md)) |
 | P5 | Phones for all of it, and a full light and dark pass | Built (D-313); the typing lab, configs and journeys after it kept the same gate (D-314 to D-317) |
+| P6 | The pegboard home wall: up to four recently used keyboards in 3D perspective on ledges, with a View Transition flight to and from the desk | Built in v0.70.0, flight fixed in v0.70.1 (D-478, D-485); no comp was drawn for it |
