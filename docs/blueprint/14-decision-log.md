@@ -11,6 +11,12 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-03 follow-up
+
+### D-481: Desktop updates are installed only after the user chooses to install and restart. (BK: “offer the user a prompt to restart and install”)
+
+The updater still checks at launch and every six hours, but finding an update no longer downloads or installs it. keyloom posts a notification and enables a menu-bar action naming the version. Choosing it downloads and installs the signed update, then requests restart through the normal app exit path so the shell can stop its owned server. A failed install leaves the action available to retry. The updater remains compiled only when its signing keys are configured (D-328).
+
 ## 2026-11-02 follow-up
 
 ### D-476: Manage a keyboard collection separately from config archives, with a bounded picker and a contribution handoff. (2026-11-02, BK: "fix all this please")
@@ -22,12 +28,6 @@ Migration 0017 records removed board IDs without deleting or archiving their con
 First-run setup exposes the existing detected-keyboard questions without requiring another layout. People can also choose a supported board or search QMK/ZMK without USB. A new board with no source configs can start a config or import its keymap. An unmodelled board keeps the firmware's key geometry and shared sculpted caps, with a generated shaded, raised enclosure; crafted display data wins when available.
 
 `keyboard list|remove|restore` and authenticated collection routes back the UI. `keyboard contribute` exports board data plus a handoff, with an optional upstream ID and a new output directory; the app downloads the same data. Exports exclude personal configs and recordings and publish nothing. `/add-keyboard` owns photo-based refinement and the checked board-folder PR. A draft can be prepared without photos or hardware, but an owner must supply honest build/flash verification before hardware support is accepted.
-
-## 2026-11-03 follow-up
-
-### D-481: Desktop updates are installed only after the user chooses to install and restart. (BK: “offer the user a prompt to restart and install”)
-
-The updater still checks at launch and every six hours, but finding an update no longer downloads or installs it. keyloom posts a notification and enables a menu-bar action naming the version. Choosing it downloads and installs the signed update, then requests restart through the normal app exit path so the shell can stop its owned server. A failed install leaves the action available to retry. The updater remains compiled only when its signing keys are configured (D-328).
 
 ## 2026-11-01 follow-up
 

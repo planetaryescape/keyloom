@@ -6,6 +6,8 @@ mod sidecar;
 #[cfg(feature = "updater")]
 mod updates;
 
+#[cfg(feature = "updater")]
+use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem},
@@ -31,6 +33,8 @@ pub struct AppState {
     pub replace: tokio::sync::Notify,
     #[cfg(feature = "updater")]
     pub install_update: tokio::sync::Notify,
+    #[cfg(feature = "updater")]
+    pub update_offered: AtomicBool,
 }
 
 fn show_window(app: &AppHandle) {
@@ -119,7 +123,10 @@ pub fn run() {
                         "replace" => app.state::<AppState>().replace.notify_one(),
                         #[cfg(feature = "updater")]
                         "install_update" => {
-                            app.state::<AppState>().install_update.notify_one()
+                            let state = app.state::<AppState>();
+                            if state.update_offered.swap(false, std::sync::atomic::Ordering::AcqRel) {
+                                state.install_update.notify_waiters();
+                            }
                         }
                         "login" => {
                             let manager = app.autolaunch();

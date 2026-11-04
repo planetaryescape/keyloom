@@ -9,6 +9,8 @@ use tauri_plugin_updater::UpdaterExt;
 const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 pub async fn watch(app: AppHandle, item: MenuItem<Wry>) {
+    let mut checks =
+        tokio::time::interval_at(tokio::time::Instant::now() + CHECK_INTERVAL, CHECK_INTERVAL);
     loop {
         let check = async { app.updater()?.check().await }.await;
         match check {
@@ -27,11 +29,24 @@ pub async fn watch(app: AppHandle, item: MenuItem<Wry>) {
                     eprintln!("keyloom-desktop: update notification failed: {err}");
                 }
 
-                app.state::<crate::AppState>()
-                    .install_update
-                    .notified()
-                    .await;
+                let state = app.state::<crate::AppState>();
+                let selected = state.install_update.notified();
+                tokio::pin!(selected);
+                selected.as_mut().enable();
+                state
+                    .update_offered
+                    .store(true, std::sync::atomic::Ordering::Release);
+                let should_install = tokio::select! {
+                    _ = &mut selected => true,
+                    _ = checks.tick() => false,
+                };
                 let _ = item.set_enabled(false);
+                state
+                    .update_offered
+                    .store(false, std::sync::atomic::Ordering::Release);
+                if !should_install {
+                    continue;
+                }
                 let _ = item.set_text(format!("Installing version {version}…"));
                 match update.download_and_install(|_, _| {}, || {}).await {
                     Ok(()) => app.request_restart(),
@@ -48,19 +63,26 @@ pub async fn watch(app: AppHandle, item: MenuItem<Wry>) {
                         {
                             eprintln!("keyloom-desktop: update failure notification failed: {notification_err}");
                         }
-                        tokio::time::sleep(CHECK_INTERVAL).await;
                     }
                 }
             }
             Ok(None) => {
+                app.state::<crate::AppState>()
+                    .update_offered
+                    .store(false, std::sync::atomic::Ordering::Release);
+                let _ = item.set_enabled(false);
                 let _ = item.set_text("No updates available");
             }
             Err(err) => {
+                app.state::<crate::AppState>()
+                    .update_offered
+                    .store(false, std::sync::atomic::Ordering::Release);
+                let _ = item.set_enabled(false);
                 eprintln!("keyloom-desktop: update check failed: {err}");
                 let _ = item.set_text("Update check failed");
             }
         }
-        tokio::time::sleep(CHECK_INTERVAL).await;
+        checks.tick().await;
     }
 }
 

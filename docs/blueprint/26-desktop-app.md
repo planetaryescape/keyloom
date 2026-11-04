@@ -1,6 +1,6 @@
 # 26: keyloom as a desktop app
 
-Status: built, 2026-10-17 (rung 24, PR from `rung24/desktop-app`); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
+Status: built through 2026-11-03 (rung 24 plus D-481); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 
@@ -42,7 +42,7 @@ The release matrix signs the visible Rust executable before embedding, without B
 
 ## Decisions
 
-D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), and D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them.
+D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them.
 
 ## As built
 
