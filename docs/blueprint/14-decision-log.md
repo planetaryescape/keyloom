@@ -11,6 +11,12 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-03 follow-up
+
+### D-481: Desktop updates are installed only after the user chooses to install and restart. (BK: “offer the user a prompt to restart and install”)
+
+The updater still checks at launch and every six hours, but finding an update no longer downloads or installs it. keyloom posts a notification and enables a menu-bar action naming the version. Choosing it downloads and installs the signed update, then requests restart through the normal app exit path so the shell can stop its owned server. A failed install leaves the action available to retry. The updater remains compiled only when its signing keys are configured (D-328).
+
 ## 2026-11-02 follow-up
 
 ### D-476: Manage a keyboard collection separately from config archives, with a bounded picker and a contribution handoff. (2026-11-02, BK: "fix all this please")

@@ -1,6 +1,6 @@
 # 26: keyloom as a desktop app
 
-Status: built, 2026-10-17 (rung 24, PR from `rung24/desktop-app`); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
+Status: built through 2026-11-03 (rung 24 plus D-481); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 
@@ -29,7 +29,7 @@ keyloom becomes an app in the Dock, with its own window and keyboard, and a quie
 
 - A `macos-15` release job builds, signs and notarises the `.app`. The bun sidecar needs the `allow-jit`, `allow-unsigned-executable-memory` and `disable-library-validation` entitlements, or it crashes under hardened runtime.
 - One Homebrew cask in `planetaryescape/homebrew-tap` installs the app and links the bundled binary as the CLI, so there's one install and one version. `install.sh` keeps working for the CLI alone.
-- **Auto-update** through Tauri's updater, with its own signing key.
+- **Auto-update** through Tauri's updater, with its own signing key. Detection is automatic; installation and restart are user-initiated (D-481).
 - **Needs from BK:** notarisation credentials (an app-specific password or an App Store Connect API key). His Developer ID certificate is already in his keychain.
 
 ## Device-helper diagnostics packaging
@@ -42,7 +42,7 @@ The release matrix signs the visible Rust executable before embedding, without B
 
 ## Decisions
 
-D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), and D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them.
+D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them.
 
 ## As built
 
@@ -52,4 +52,5 @@ D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), and D-454 (th
 - **Fonts are bundled (D-326)** into the web bundle, for the app and for a browser tab alike.
 - **Signing.** Tauri signs the shell and the sidecar with hardened runtime and `Entitlements.plist` (the three bun entitlements, applied to both binaries). The CI job is in `release.yml`, steps and secrets in `desktop/tauri/README.md`.
 - **Install.** A Homebrew cask is prepared at `packaging/homebrew/keyloom.rb` for `planetaryescape/homebrew-tap`. The updater is compiled in only with a key (D-328).
+- **Updates (D-481).** When a signed update is available, the app notifies the user and offers a version-specific install-and-restart action in the menu bar. It downloads only after the user chooses; a successful install requests restart through the normal exit path, and a failed install leaves the action available to retry.
 - **Measured on BK's Mac (Apple Silicon):** 70 MB `.app` (72,088 KB on disk), server listening 0.6 s after launch.
