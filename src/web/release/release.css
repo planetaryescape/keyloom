@@ -260,7 +260,7 @@
   color: var(--color-success);
 }
 
-/* The one thing the person must do now, so it is the largest text in the dialog. */
+/* The one thing the person must do now, emphasized within its warning panel. */
 .instruction {
   display: flex;
   width: 100%;
