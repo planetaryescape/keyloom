@@ -22,7 +22,7 @@ keyloom
 
   import --board <board> <file> [--name N] import an existing layout; prints the new layout ID and an import report
   layout list
-  layout recent                            the boards on the home wall: up to four, most recently opened first
+  layout recent                            the boards on the home wall: up to four, most recently opened (or edited) first
   layout show <layout> [--layer L] [--rev R]   grid per layer, or the IR with --format json
   layout settings <layout> [--rev R]       the firmware settings the Settings page offers: value in force, default, stored or not, why forced (read only, D-459)
   layout export <layout> [--rev R] --out <file.json>
