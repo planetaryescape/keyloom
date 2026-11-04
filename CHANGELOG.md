@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.72.1](https://github.com/planetaryescape/keyloom/compare/v0.72.0...v0.72.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* give build and flash dialog more room ([#255](https://github.com/planetaryescape/keyloom/issues/255)) ([ee78e4c](https://github.com/planetaryescape/keyloom/commit/ee78e4c5c882f15ce4eccdecd853e01f5fe1a3e2))
+
 ## [0.72.0](https://github.com/planetaryescape/keyloom/compare/v0.71.1...v0.72.0) (2026-11-04)
 
 
