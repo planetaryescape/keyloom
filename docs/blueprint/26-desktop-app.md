@@ -27,7 +27,7 @@ keyloom becomes an app in the Dock, with its own window and keyboard, and a quie
 
 ## Shipping
 
-- A `macos-15` release job builds, signs and notarises the `.app`. The bun sidecar needs the `allow-jit`, `allow-unsigned-executable-memory` and `disable-library-validation` entitlements, or it crashes under hardened runtime.
+- A release job on BK's Mac (the `keyloom-builder` runner, D-483) builds the `.app`, and signs and notarises it when those credentials exist (D-329). The bun sidecar needs the `allow-jit`, `allow-unsigned-executable-memory` and `disable-library-validation` entitlements, or it crashes under hardened runtime.
 - One Homebrew cask in `planetaryescape/homebrew-tap` installs the app and links the bundled binary as the CLI, so there's one install and one version. `install.sh` keeps working for the CLI alone.
 - **Auto-update** through Tauri's updater, with its own signing key. Detection is automatic; installation and restart are user-initiated (D-481).
 - **Needs from BK:** notarisation credentials (an app-specific password or an App Store Connect API key). His Developer ID certificate is already in his keychain.
