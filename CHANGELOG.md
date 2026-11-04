@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.72.3](https://github.com/planetaryescape/keyloom/compare/v0.72.2...v0.72.3) (2026-11-04)
+
+
+### Bug Fixes
+
+* sign the desktop app with its own keychain on BK's Mac ([#261](https://github.com/planetaryescape/keyloom/issues/261)) ([9f156ab](https://github.com/planetaryescape/keyloom/commit/9f156abfd6179c90486101fd7e882f06af716125))
+
 ## [0.72.2](https://github.com/planetaryescape/keyloom/compare/v0.72.1...v0.72.2) (2026-11-04)
 
 
