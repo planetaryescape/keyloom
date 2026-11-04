@@ -242,6 +242,9 @@ jobs:
             # own, so an interrupted build can't leave it there. Cargo and rustup have homes of their own (rust-home).
             export HOME="$RUNNER_TEMP/signing-home"
             mkdir -p "$HOME/Library/Keychains"
+            # Tauri decodes the certificate's .p12 into a temporary directory first.
+            export TMPDIR="$RUNNER_TEMP/signing-tmp"
+            mkdir -p "$TMPDIR"
           else
             echo "::warning::No APPLE_CERT_P12_BASE64 secret: the app is built unsigned."
           fi
@@ -292,6 +295,7 @@ jobs:
           for chain in "$RUNNER_TEMP"/signing-home/Library/Keychains/*.keychain-db; do
             if [ -f "$chain" ]; then security delete-keychain "$chain" || rm -f "$chain"; fi
           done
+          rm -rf "$RUNNER_TEMP/signing-tmp"
           if [ -f "$RUNNER_TEMP/original-keychains.txt" ]; then
             original=()
             while IFS= read -r line; do
