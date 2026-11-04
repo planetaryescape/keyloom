@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.72.0](https://github.com/planetaryescape/keyloom/compare/v0.71.1...v0.72.0) (2026-11-04)
+
+
+### Features
+
+* prompt before installing desktop updates ([#252](https://github.com/planetaryescape/keyloom/issues/252)) ([1e71c30](https://github.com/planetaryescape/keyloom/commit/1e71c30ec8b2b6252c57993506dff08255d0019c))
+
+
+### Bug Fixes
+
+* record only verified standalone flashes ([#253](https://github.com/planetaryescape/keyloom/issues/253)) ([4d60d0e](https://github.com/planetaryescape/keyloom/commit/4d60d0ed964bdeb6dcbb4e07a8b2cdbabd0291a9))
+
 ## [0.71.1](https://github.com/planetaryescape/keyloom/compare/v0.71.0...v0.71.1) (2026-11-03)
 
 
