@@ -6,7 +6,11 @@ keyloom is built; the [latest release](https://github.com/planetaryescape/keyloo
 
 ## Reading order
 
+To distinguish a published CLI from an installed or running desktop app, use [Verify the desktop installation](../verify-desktop-install.md). The checks do not launch the app, apply a config or access a keyboard.
+
 To try per-layer ZMK encoder editing, follow [mouse turns on Base, media on Numbers](../encoder-layers.md). The recipe states availability, uses synthetic data and stops before flashing.
+
+To navigate from a conversation, follow [ask the agent to open a view](../agent-views.md). It covers the four released destinations and what an acknowledgement does and does not prove.
 
 | # | Document | What it covers |
 |---|---|---|
@@ -39,10 +43,10 @@ To try per-layer ZMK encoder editing, follow [mouse turns on Base, media on Numb
 | 26 | [Desktop app](26-desktop-app.md) | Tauri shell around the server, menu-bar sync status, shipping and signing |
 | 27 | [Board review](27-board-review.md) | What keyloom finds in a revision without being asked: checks at once, the agent after, triggers, hiding and the fixed tick |
 | 28 | [The agent works beside the keyboard](28-agent-experience.md) | Implemented 26a message/activity/folding experience; proposed domain questions, rich artifacts and later interaction gates |
-| 29 | [The agent operates the app](29-agent-app-control.md) | Released observation and durable-run contracts; proposed app-wide capabilities, confirmation and coverage gates |
+| 29 | [The agent operates the app](29-agent-app-control.md) | Released observation, durable runs and finite view opens; proposed broader capabilities, confirmation and coverage gates |
 | 30 | [Talk to any keyboard](30-agent-keyboard-context.md) | Proposed collection awareness, request focus, cross-keyboard writes, transfers, batch outcomes and physical-device identity limits |
-| 31 | [Rust device helper](31-device-helper.md) | Built diagnostics subset; proposed native ownership, unchanged TypeScript policy and backend adoption gate |
-| 32 | [Device-helper protocol](32-device-helper-protocol.md) | Built diagnostics stdio subset; proposed device/session identity, bounded I/O, loss and no-replay semantics |
+| 31 | [Rust device helper](31-device-helper.md) | Apple Silicon native HID/serial default, diagnostics-only Intel/Linux releases, TypeScript policy and backend adoption gates |
+| 32 | [Device-helper protocol](32-device-helper-protocol.md) | Diagnostics and native transport contracts, device/session identity, bounded I/O, loss and no-replay semantics |
 | 33 | [Device-helper platforms](33-device-helper-platforms.md) | Native macOS/Linux/Windows plan, matched binary packaging and installed/hardware proof |
 | — | [Kickoff](KICKOFF.md) | Historical first build and follow-on implementation prompts |
 
@@ -88,9 +92,9 @@ Research behind these decisions:
 - **The UI:** the board is the page, one click does one job, kind is shown by shape, plain words first, and every visual rung passes a screenshot gate (D-098 to D-102, [18](18-visual-design.md)).
 - **Providers:** the agent runs on an Anthropic key, an OpenRouter key or BK's Codex subscription. A Claude subscription isn't allowed for third-party apps (D-106 to D-111, [19](19-model-providers.md)).
 
-## Rust device-helper proposal (2026-10-20)
+## Rust device-helper track (proposed 2026-10-20; arm64 default shipped)
 
-BK asked for a focused Rust device helper, including Linux and Windows, after reconsidering the TypeScript choice with implementation hindsight. The application remains TypeScript (D-418); each transport replacement must earn adoption through reliability and packaging evidence (D-419). Rung 24b shipped installed diagnostics only in v0.46.1: hello/ping/shutdown with empty capabilities (D-426). Chapters 31–33 retain the **unbuilt native transport** design. [S58/S62 evidence](../research/spikes/device-helper-24b.md) records the merged slice's passing native CI/full suites, the explicitly waived signing-patch review, and verified published CLI/desktop-sidecar receipts. Device backends remain unproven. The broader choices remain D-420 to D-425 and Q37–Q42.
+BK asked for a focused Rust device helper, including Linux and Windows, after reconsidering the TypeScript choice with implementation hindsight. The application remains TypeScript (D-418); each transport replacement must earn adoption through reliability and packaging evidence (D-419). Rung 24b shipped installed diagnostics only in v0.46.1 (D-426). D-433 subsequently selected combined native HID/serial for Apple Silicon releases; ordinary Intel, Linux and Windows releases retain diagnostics-only helpers. [Stage 5 evidence](../research/spikes/device-helper-native-default.md) records capture, native reset/touch observations and the remaining installed-desktop/relay acceptance limits. Explicit Linux/Windows candidates are not release-default or full-app support. Read chapters 31–33 for those platform gates, rather than treating all native transports as unbuilt.
 
 Read these chapters together and follow rungs 24b–24f in [13](13-roadmap.md). This track is independent of unfinished agent rungs. Windows means native helper support plus an installed CLI device journey under the Q38 assumption, not an already-supported full Windows app. No real capture, reset or flash is authorized by the planning request. Use the device-helper prompt in [KICKOFF](KICKOFF.md).
 

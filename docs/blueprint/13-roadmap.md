@@ -805,9 +805,9 @@ Previously, questions have a few buttons and free text. Now a key/layer/config/k
 
 ## Rung 28: I manage configs, versions and settings through the agent
 
-Status: not built; depends on rung 27 and Q32's confirmation policy.
+Status: partly shipped. D-469 released finite `open_view` requests for History, the typing lab, Decisions and settings in v0.66.0. These are read-only navigation, not version/config/settings mutation. App/CLI tests and CI passed; independent review and Computer Use/visual journeys were explicitly waived, not passed ([evidence](../research/ui-audit/d-open-view/README.md)). The broader inventory and confirmation work below remains unbuilt and depends on rung 27 and Q32.
 
-Previously, many tasks require another app surface. Now the agent can navigate, create/rename/archive configs, compare/restore versions and manage the existing editable app settings with the same results and safeguards as direct manipulation.
+Beyond the shipped navigation slice, the planned work lets the agent create/rename/archive configs, compare/restore versions and manage the existing editable app settings with the same results and safeguards as direct manipulation. These broader workflows are not established by `open_view`.
 
 **Promise:** "I can ask it to make a config, compare last week's version, or change a setting without hunting through menus."
 

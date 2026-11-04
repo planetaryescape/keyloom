@@ -4,6 +4,17 @@ Implementation source `ac3b3f9ffbf7bda85fdaaa8dc3f53935fa4527d3`, based on `a39b
 
 Release approval, 2026-11-01: BK explicitly chose to waive unfinished independent review and Computer Use/visual checks and ship with passing local tests and CI. Computer Use could import its runtime but refused Safari access. Independent review did not produce an accepted complete verdict: unsupported source claims were rejected, and the replacement review was interrupted and then quota-blocked. Neither gate is represented as passed. The remaining browser checks below are unverified and waived for this release, not evidence of observed behavior.
 
+## Published release and installation
+
+Stage D shipped in [v0.66.0](https://github.com/planetaryescape/keyloom/releases/tag/v0.66.0), not only as the earlier candidate above:
+
+- Final feature head `6fb7112b84add3d9f6526c4b47a59e888b14906f` passed both [PR CI](https://github.com/planetaryescape/keyloom/actions/runs/41263749005) and [push CI](https://github.com/planetaryescape/keyloom/actions/runs/41263744354). PR 220 squash-merged as `f0aed75df6797e4e748e820fe70381c67dd530ab`; its tree matched the checked head.
+- Release PR 218 merged as `5a643923717036be957b4525529d54a22ac85936`, the v0.66.0 tag target, after dispatched CI passed. [Publishing workflow 41265225938](https://github.com/planetaryescape/keyloom/actions/runs/41265225938) succeeded and published ten assets.
+- Downloaded Apple Silicon CLI and app ZIP matched published checksums. Strict app signing, Gatekeeper and stapled-notarisation checks passed; app and bundled sidecar reported 0.66.0. Native-helper pairing/integrity and isolated installed-CLI journeys passed without device discovery or hardware operations.
+- The CLI, desktop app and sidecar were installed at 0.66.0 and the app was relaunched. Process liveness was confirmed; it is not GUI acceptance. v0.65.0 CLI/app rollback copies were retained. Later releases or auto-updates do not change what this dated receipt establishes.
+
+Local durable receipts: `agent-opens-config/D-open-view/release/v0.66.0/{checksums.json,artifact-verification.json,installation.json}` under the run's `.orchestrate/` directory. These machine-local files are not public fixtures. The user guide is [ask the agent to open a view](../../../agent-views.md).
+
 ## Run the synthetic app for Computer Use
 
 ```sh
@@ -25,6 +36,8 @@ Unverified browser checks: all four destinations and render-before-ack ordering;
 `test/cli/open-view.test.ts` drives both command families through the real SDK tool loop. The scripted provider asserts that `unavailable/unsupported` reaches its next request before answering; ordinary inspection retains a declined operation and no pending intent.
 
 `test/web/open-view-ack.test.ts` checks that a stalled acknowledgement fetch is aborted with its initiating intent. The same deadline/cancellation signal bounds both rendering and the acknowledgement transport; a lost acknowledgement is never retried as a new action.
+
+Documentation recheck, 2026-11-01, at source `a8b9fe99`: the three focused files above passed 21 tests with zero failures. `open-view-installed.ts` also passed against the installed v0.66.0 CLI in a new scratch data directory, using its loopback scripted provider. This rechecked both terminal command families and saved inspection without paid model calls or hardware. It did not exercise a browser or convert either waived check into acceptance.
 
 For a task-local installed production candidate:
 
@@ -56,6 +69,8 @@ An exact duplicate receipt remains readable after termination. A wrong owner or 
 New client/new server negotiate per send. Old client/new server returns unavailable immediately. New client/old server receives no `viewProtocol` echo and cannot execute an intent. Legacy fallback has no view negotiation. Older presentation parsers strip the additive fields and preserve normal chat. Copies' autonomous child runs and automatic reviews have no injected view port.
 
 No new database table, status, protocol major, marker kind, generic router or capability registry. No URL/selector/HTML/JS comes from the model. Navigation reports rendering only, not loaded data, recording, Apply, settings saved or a hardware change.
+
+A lost acknowledgement is ambiguous: the client may have rendered before its fetch failed or expired. `unavailable` establishes no confirmed open, not that no screen ever appeared. The tool description still overstates this as "it did not open"; [the documentation-only follow-up](../../../issues/open-view-unavailable-is-not-proof-of-no-render.md) records the source wording left unchanged.
 
 ## Inline review
 
