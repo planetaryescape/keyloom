@@ -34,6 +34,8 @@ The same board in the light theme.
 
 Press ⌘K to open the conversation column. Describe what's wrong, or pick a suggestion.
 
+You can also ask it to open History, the typing lab, Decisions or settings. These requests only open the existing view; they do not record, change settings or apply anything. See [ask the agent to open a view](docs/agent-views.md).
+
 ![The conversation column with suggested starting points](docs/screenshots/ask-keyloom.png)
 
 History shows what was on the keyboard and when. You can name a version, compare it with now, or go back to it.
@@ -60,7 +62,9 @@ The screenshots use keyloom's test fixtures and fake keyboards; nothing in them 
 curl -fsSL https://raw.githubusercontent.com/planetaryescape/keyloom/main/install.sh | sh
 ```
 
-The script downloads the binary for your machine from the latest GitHub release, checks it against `SHA256SUMS`, and puts it in `~/.local/bin`. Releases exist for macOS (Apple silicon and Intel) and Linux (x64). Add `--version vX.Y.Z` to pin a release.
+The script downloads the standalone CLI for your machine from the latest GitHub release, checks it against `SHA256SUMS`, and puts it in `~/.local/bin`. It does not install the desktop app. Releases exist for macOS (Apple silicon and Intel) and Linux (x64). Add `--version vX.Y.Z` to pin a release.
+
+For the Apple Silicon desktop app, download the versioned `.app.zip` and its `.sha256` from the [release page](https://github.com/planetaryescape/keyloom/releases). Verify the archive before extracting it; quit any existing app normally before moving `keyloom.app` into Applications. [Verify the desktop installation](docs/verify-desktop-install.md) covers checksum, signature and running-version checks. Desktop updates and the CLI on PATH are separate. When keyloom offers an update, choosing to install it restarts the app (D-481); an app replaced on disk by hand needs Quit and reopen.
 
 Windows x64 (PowerShell): `irm https://raw.githubusercontent.com/planetaryescape/keyloom/main/install.ps1 -OutFile install.ps1; .\install.ps1 -AddToPath` installs a checksum-verified unsigned executable under `%LOCALAPPDATA%\Programs\keyloom`; omit `-AddToPath` to leave PATH unchanged, use `-Version vX.Y.Z` to pin a release, or set `KEYLOOM_INSTALL_DIR` / `KEYLOOM_DOWNLOAD_BASE` for another directory / mirror. Windows currently supports diagnostics, import, layout, boards and change; build, flash, sync, lab, kanata and serve are [not available yet](docs/blueprint/13-roadmap.md#rung-24f-i-can-use-the-device-helper-on-native-windows). The installed journey is checked on a native Windows runner in CI; the executable is unsigned, so keep SmartScreen and antivirus enabled.
 

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { applyDisplayRotation } from "../../src/web/keyboard/geometry.ts";
+import { applyDisplayRotation, rotatedCorners } from "../../src/web/keyboard/geometry.ts";
 import { caseBounds, caseParts, convexHull, roundedPath } from "../../src/web/keyboard/case-shape.ts";
+import { isOnePiece } from "../../src/boards/one-piece.ts";
+import type { GeometryKey } from "../../src/boards/schema.ts";
 
 const load = async (dir: string) => {
   const board = await Bun.file(new URL(`../../boards/${dir}/board.json`, import.meta.url)).json();
@@ -82,6 +84,59 @@ describe("a board's case (D-266)", () => {
     const bounds = caseBounds(parts)!;
     expect(bounds.minX).toBeLessThan(0);
     expect(bounds.maxX).toBeGreaterThan(4);
+  });
+
+  test("an unmodelled ortholinear board is one enclosure, not a body for each hand", () => {
+    const keys: GeometryKey[] = Array.from({ length: 12 }, (_, i) => ({ x: i % 4, y: Math.floor(i / 4), w: 1, h: 1, r: 0, rx: 0, ry: 0 }));
+    const hands = { left: [0, 1, 4, 5, 8, 9], right: [2, 3, 6, 7, 10, 11] };
+    const before = structuredClone(keys);
+    for (const display of [undefined, { case: [] }]) {
+      expect(isOnePiece({ hands, display }, keys)).toBe(true);
+      const parts = caseParts(keys, hands, display);
+      expect(parts).toHaveLength(1);
+      expect(parts[0]).toMatchObject({ kind: "body", hand: null });
+      const bounds = caseBounds(parts);
+      expect(bounds?.minX).toBeLessThan(0);
+      expect(bounds?.maxX).toBeGreaterThan(4);
+      expect(bounds?.minY).toBeLessThan(0);
+      expect(bounds?.maxY).toBeGreaterThan(3);
+    }
+    expect(keys).toEqual(before);
+  });
+
+  test("an unmodelled split keeps its rotated thumbs inside separate cases and respects the phone's half", async () => {
+    const { board, keys } = await load("foostan/corne");
+    const before = structuredClone(keys);
+    const parts = caseParts(keys, board.hands, undefined);
+    expect(parts.map((part) => part.hand)).toEqual(["left", "right"]);
+    for (const hand of ["left", "right"] as const) {
+      const half = caseParts(keys, board.hands, undefined, hand);
+      expect(half).toEqual(parts.filter((part) => part.hand === hand));
+      const bounds = caseBounds(half)!;
+      for (const p of board.hands[hand]) {
+        for (const corner of rotatedCorners(keys[p]!)) {
+          expect(corner.x).toBeGreaterThan(bounds.minX);
+          expect(corner.x).toBeLessThan(bounds.maxX);
+          expect(corner.y).toBeGreaterThan(bounds.minY);
+          expect(corner.y).toBeLessThan(bounds.maxY);
+        }
+      }
+    }
+    expect(keys).toEqual(before);
+  });
+
+  test("the inferred case and phone agree at the half-unit split boundary", () => {
+    const hands = { left: [0], right: [1] };
+    for (const [gap, pieces] of [[0.49, 1], [0.5, 2], [1, 2]] as const) {
+      const keys = [{ x: 0, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }, { x: 1 + gap, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }];
+      expect(caseParts(keys, hands, undefined)).toHaveLength(pieces);
+      expect(isOnePiece({ hands }, keys)).toBe(pieces === 1);
+    }
+  });
+
+  test("missing geometry does not fabricate an empty enclosure", () => {
+    expect(caseParts([], { left: [], right: [] }, undefined)).toEqual([]);
+    expect(caseParts([], { left: [], right: [] }, { case: [] })).toEqual([]);
   });
 
   test("one hand on a phone draws only that hand's case", async () => {

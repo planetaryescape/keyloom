@@ -54,6 +54,8 @@ The physical layout comes from the firmware tree: QMK's `keyboard.json` `LAYOUT`
 
 The derived definition goes through the same `keyloom boards check` as a contributed one. `keyloom keyboard contribute <board> --as <maker>/<keyboard> --out <new-directory>` prepares the board folder and a modelling/PR handoff (D-476); the app's Manage keyboards panel downloads the same board-only data as a ZIP. Neither path opens a PR or publishes automatically. Photos are optional for the generated 3D-style case and needed to verify a faithful custom outline.
 
+An unmodelled board uses those key positions in the normal physical renderer during setup and in the editor (D-476). Its caps stay sculpted and its generated enclosure has a shaded top, front-wall depth and contact shadow in either theme. The enclosure is approximate, not a claim about the real case. A later crafted `display.case` replaces it without changing the keymap. [Checks and screenshots](../research/ui-audit/unmodelled-board/README.md).
+
 ## Putting BK's config on it
 
 - **Start from BK's config, not the board's current keymap.** Only Vial, VIA and Studio-enabled ZMK boards can be read at all. The board's default keymap is built once as a smoke test.

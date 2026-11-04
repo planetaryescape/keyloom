@@ -70,3 +70,40 @@ test. Pins and the decision are in D-471.
   duplicate SoC unit addresses, the board's underglow brightness setting while
   RGB matrix disables underglow, and USB being disabled on the split peripheral.
   These were not treated as evidence of a pointer failure or silently changed.
+
+## Published release and installation checks
+
+The encoder/chat changes merged as `0a280600` and shipped in
+[v0.67.0](https://github.com/planetaryescape/keyloom/releases/tag/v0.67.0), release
+commit `a8b9fe99`. The release candidate passed dispatched CI at exact head
+`45b55978`: 3,523 passed, 248 skipped, zero failed across 382 test files.
+[Publishing workflow 41266685719](https://github.com/planetaryescape/keyloom/actions/runs/41266685719)
+passed, including the native binaries and desktop bundle.
+
+The official installer produced a scratch CLI reporting `0.67.0`. The published
+binary passed the recipe's import/check/propose/apply/generate/export journey and
+a JSON reimport retained the typed sensor pairs. All four CLI entries in
+`SHA256SUMS` matched GitHub's asset digests. The desktop checksum and updater
+manifest also matched this version.
+
+A separate installation inspection on 2026-11-01 found the v0.67.0 app already on
+disk. Its six files matched the checksum-verified final desktop ZIP, and strict
+signature verification and Gatekeeper assessment passed. The archive SHA-256 was
+`1d651e01d446e2d042feeafe47fd13fe1fc8de7065c6deb6e784ea6ba2ba124b`.
+The installed app was not overwritten or restarted. Its existing processes
+predated the final artifact, so activation and a new live app journey were not
+established.
+
+The standalone CLI and final desktop sidecar hashes differed because desktop
+packaging signs the copied executable. The relevant byte comparison is against
+the final desktop archive, not the standalone CLI checksum. Use
+[the desktop verification recipe](../../verify-desktop-install.md) to repeat the
+checks without starting the real app or touching a keyboard. No new flash,
+physical pointer test or embedded-helper extraction test is claimed here.
+
+The five shell blocks in the new desktop verification recipe were later run
+unchanged on 2026-11-01 at 19:47 UTC. The app, bundled CLI and live server startup
+record then reported `0.68.0`; its same-tag desktop archive checksum, installed
+file comparison, signature and Gatekeeper checks passed. This is a separate
+later observation. No app was installed, restarted or exercised through its UI
+by that documentation check.

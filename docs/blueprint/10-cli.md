@@ -345,7 +345,12 @@ Prints the keyboards on the pegboard home wall (D-478): one config per board, at
 
 ## View requests from the terminal (D-469)
 
-`keyloom chat <config> --message 'Open History'` and `keyloom agent start <config> 'Open settings'` do not control an unrelated browser. If the model calls `open_view`, it immediately receives `{"version":1,"status":"unavailable","reason":"unsupported"}` before answering. No pending intent or acknowledgement wait is created. The ordinary saved presentation records the operation as declined; inspect it with `conversations show <conversation>` or `agent show <run>`. CLI commands never advertise browser ownership. Other tools in that turn retain their existing behavior.
+```sh
+keyloom --data-dir <scratch> chat <config> --message 'Open History'
+keyloom --data-dir <scratch> agent start <config> 'Open settings' --request-id <unique-id>
+```
+
+These commands call your configured model but do not control an unrelated browser. `agent start` requires `--request-id`; repeat an ID only with identical input. If the model calls `open_view`, it immediately receives `{"version":1,"status":"unavailable","reason":"unsupported"}` before answering. No pending intent or acknowledgement wait is created. The ordinary saved presentation records the operation as declined; inspect it with `keyloom --data-dir <scratch> conversations show <conversation>` or `keyloom --data-dir <scratch> agent show <run>`. CLI commands never advertise browser ownership. Other tools in that turn retain their existing behavior. To open a view through the initiating browser instead, follow [the app guide](../agent-views.md).
 
 ## Continue a copied setup on its target
 
