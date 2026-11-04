@@ -31,6 +31,14 @@ Because the runner is BK's workstation:
 
 A fork's pull request now gets no CI run; its commits get one once BK pushes them. If the Mac is off or asleep, these jobs wait for it.
 
+### D-484: The desktop release signs through Tauri's own keychain, kept out of BK's home. Replaces D-483's `build-desktop` keychain handling. (2026-11-04)
+
+v0.72.2's `build-desktop`, the first on `keyloom-builder`, shipped no app. It imported the Developer ID certificate into a keychain of its own and added that to BK's search list. His login keychain holds the same identity, so Tauri's `codesign`, which names no keychain, found it twice and refused: `ambiguous (matches … in …/build.keychain-db and … in …/login.keychain-db)`. Hosted runners have an empty login keychain, so this never showed there. The release has its CLI assets, and the release workflow refuses to rebuild a release that already has assets, so the app ships in the next release.
+
+`build-desktop` now passes the certificate to Tauri as `APPLE_CERTIFICATE`/`APPLE_CERTIFICATE_PASSWORD`. Tauri imports it into a keychain of its own, adds it to the existing search list, signs with `codesign --keychain` and deletes the keychain on exit (`tauri-macos-sign` `keychain.rs` @ `tauri-cli-v2.12.1`). `scripts/sign-device-helper.sh` already signs with `--keychain`, and signed the helper with the same identity on the same Mac in that run. Tauri puts that keychain in `$HOME/Library/Keychains` and the decoded `.p12` in `TMPDIR`, so the build step points both at scratch folders in `RUNNER_TEMP`. An `always()` step then deletes any keychain or certificate left there and restores BK's search list, in case Tauri dies before its own cleanup.
+
+- **Options rejected:** a search list holding only the job's keychain during the build, which takes BK's login keychain off his own list for ten minutes; signing with the identity in his login keychain, which a launchd session may not be able to unlock without a prompt.
+
 ## 2026-11-03 follow-up
 
 ### D-481: Desktop updates are installed only after the user chooses to install and restart. (BK: “offer the user a prompt to restart and install”)
