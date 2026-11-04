@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.72.2](https://github.com/planetaryescape/keyloom/compare/v0.72.1...v0.72.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* state the cable cause instead of asking when a half won't restart ([#258](https://github.com/planetaryescape/keyloom/issues/258)) ([0ff2b3e](https://github.com/planetaryescape/keyloom/commit/0ff2b3ecdb6a4d0a419b17d05a4a89e45713320e))
+
 ## [0.72.1](https://github.com/planetaryescape/keyloom/compare/v0.72.0...v0.72.1) (2026-11-04)
 
 
