@@ -226,8 +226,8 @@ jobs:
           bun install --frozen-lockfile
       # Tauri imports the certificate itself (APPLE_CERTIFICATE below) into a keychain of its own and signs with
       # `codesign --keychain`. A keychain made here leaves the identity ambiguous on BK's Mac, whose login keychain
-      # holds the same certificate (v0.72.2's build-desktop). His search list is saved in case Tauri dies before
-      # removing its keychain, and restored at the end.
+      # holds the same certificate (v0.72.2's build-desktop, D-484). His search list is saved in case Tauri dies
+      # before removing its keychain, and restored at the end.
       - name: Save the keychain search list
         run: security list-keychains -d user > "$RUNNER_TEMP/original-keychains.txt"
       - name: Build, sign and notarise when the credentials exist
@@ -238,8 +238,10 @@ jobs:
           if [ -n "$APPLE_CERT_P12_BASE64" ]; then
             export APPLE_SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY_NAME"
             export APPLE_CERTIFICATE="$APPLE_CERT_P12_BASE64" APPLE_CERTIFICATE_PASSWORD="$APPLE_CERT_PASSWORD"
-            # Tauri's keychain goes in a temporary directory; the runner empties RUNNER_TEMP before every job.
-            export TMPDIR="$RUNNER_TEMP"
+            # Tauri creates its keychain in $HOME/Library/Keychains. A scratch HOME keeps the private key out of BK's
+            # own, so an interrupted build can't leave it there. Cargo and rustup have homes of their own (rust-home).
+            export HOME="$RUNNER_TEMP/signing-home"
+            mkdir -p "$HOME/Library/Keychains"
           else
             echo "::warning::No APPLE_CERT_P12_BASE64 secret: the app is built unsigned."
           fi
@@ -283,10 +285,13 @@ jobs:
             printf '%s\n\n> The macOS app in this release is not notarised yet, so macOS will refuse to open a downloaded copy until the notarisation credentials are added (see desktop/tauri/README.md).\n' "$body" > "$RUNNER_TEMP/notes.md"
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
           fi
-      # Runs after a failed or cancelled build too, so BK's search list never keeps a keychain from this job.
-      - name: Restore the keychain search list
+      # Runs after a failed or cancelled build too, so no keychain from this job stays on BK's Mac or his search list.
+      - name: Remove the signing keychain
         if: always()
         run: |
+          for chain in "$RUNNER_TEMP"/signing-home/Library/Keychains/*.keychain-db; do
+            if [ -f "$chain" ]; then security delete-keychain "$chain" || rm -f "$chain"; fi
+          done
           if [ -f "$RUNNER_TEMP/original-keychains.txt" ]; then
             original=()
             while IFS= read -r line; do
