@@ -87,7 +87,17 @@
   transition: transform 0.28s var(--ease-out);
 }
 
-.peg-board:focus-visible {
+.peg-open {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.peg-board:has(.peg-open:focus-visible) {
   outline: 2px solid var(--color-focus);
   outline-offset: 4px;
   border-radius: var(--radius-md);

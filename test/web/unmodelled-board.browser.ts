@@ -20,8 +20,8 @@ try {
         browser("open", url);
         // The app opens on the pegboard home wall (D-478); the checks run in the editor it opens.
         // Clicks land on the transition overlay until the wall's entry animation ends.
-        browser("wait", "--fn", "(()=>{const b=document.querySelector('button.peg-board'); if(!b) return false; const r=b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));})()");
-        browser("click", "button.peg-board");
+        browser("wait", "--fn", "(()=>{const b=document.querySelector('button.peg-open'); if(!b) return false; const r=b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));})()");
+        browser("click", "button.peg-open");
         browser("wait", "--fn", "!document.querySelector('.pegboard') && !!document.querySelector('.stage .keyboard .cap')");
         browser("eval", `document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
         browser("eval", `(async()=>{
