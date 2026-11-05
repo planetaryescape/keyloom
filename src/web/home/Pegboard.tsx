@@ -106,7 +106,7 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
   }, [geometry.keys, board.display]);
   const [colourway] = useColourway(board.id, board.display?.colourways);
   const descriptions = useMemo(() => (keys ?? []).map((_, index) => describeKey(layout, 0, index)), [keys, layout]);
-  const frame = useRef<HTMLButtonElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
   const tiltRef = useRef<HTMLSpanElement>(null);
   const [scale, setScale] = useState(0);
   const [ledges, setLedges] = useState<readonly { left: number; width: number; top: number }[]>([]);
@@ -147,7 +147,8 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
 
   if (keys === null) return <div className="peg-board peg-board-empty"><span className="peg-missing">Can't draw this board</span></div>;
   return (
-    <button ref={frame} type="button" className="peg-board" onClick={handleClick} aria-label={`Open ${boardDisplayName(board.name)}`}>
+    // The drawn keyboard's caps are buttons, so the board can't be one: an open button is laid over it instead.
+    <div ref={frame} className="peg-board">
       <span ref={tiltRef} className={`peg-tilt${flying ? " peg-flying-cradle" : ""}`}>
         <span className="peg-stage" style={{ width: STAGE_W, height: STAGE_H, transform: `translate(-50%, -50%) scale(${scale})` }} inert>
           <Keyboard
@@ -171,7 +172,8 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
       {ledges.map((ledge, index) => (
         <span key={index} className="peg-ledge" style={{ left: ledge.left, width: ledge.width, top: ledge.top }} aria-hidden="true" />
       ))}
-    </button>
+      <button type="button" className="peg-open" onClick={handleClick} aria-label={`Open ${boardDisplayName(board.name)}`} />
+    </div>
   );
 }
 
