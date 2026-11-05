@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.72.4](https://github.com/planetaryescape/keyloom/compare/v0.72.3...v0.72.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* say an unavailable view open is unconfirmed, not that it never opened ([#266](https://github.com/planetaryescape/keyloom/issues/266)) ([264165c](https://github.com/planetaryescape/keyloom/commit/264165c014cc5767b69943ba3cc5586132f328d9))
+* stop nesting the keyboard's cap buttons inside the wall's open button ([#265](https://github.com/planetaryescape/keyloom/issues/265)) ([ca9cecc](https://github.com/planetaryescape/keyloom/commit/ca9cecc68d5c02976fe6390a8591da69994e40ca))
+
 ## [0.72.3](https://github.com/planetaryescape/keyloom/compare/v0.72.2...v0.72.3) (2026-11-04)
 
 
