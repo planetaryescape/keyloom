@@ -70,7 +70,7 @@ New client/new server negotiate per send. Old client/new server returns unavaila
 
 No new database table, status, protocol major, marker kind, generic router or capability registry. No URL/selector/HTML/JS comes from the model. Navigation reports rendering only, not loaded data, recording, Apply, settings saved or a hardware change.
 
-A lost acknowledgement is ambiguous: the client may have rendered before its fetch failed or expired. `unavailable` establishes no confirmed open, not that no screen ever appeared. The tool description still overstates this as "it did not open"; [the documentation-only follow-up](../../../issues/open-view-unavailable-is-not-proof-of-no-render.md) records the source wording left unchanged.
+A lost acknowledgement is ambiguous: the client may have rendered before its fetch failed or expired. `unavailable` establishes no confirmed open, not that no screen ever appeared. The tool description and system prompt said "it did not open" until 2026-11-05; they now say the open was not confirmed. [The issue](../../../issues/open-view-unavailable-is-not-proof-of-no-render.md) records the fix and the browser check for this case.
 
 ## Inline review
 
