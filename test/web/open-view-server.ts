@@ -26,7 +26,8 @@ const detail = await source.get(first.id);
 if (!detail) throw new Error("Missing fixture layout");
 const fake = new FakeEditor({ ...detail, upgrade: detail.upgrade ?? null });
 const provider = new FakeChat(fake, first.id);
-await provider.chooseProvider({ provider: "anthropic", model: "synthetic-open-view" });
+// The fake chat reports only OpenRouter as ready, so choose it or the composer offers setup instead of sending.
+await provider.chooseProvider({ provider: "openrouter", model: "synthetic-open-view" });
 const model: AgentModel = {
   provider: "anthropic", model: "synthetic-open-view", effort: "medium", classifyError: () => null,
   async run(request) {
