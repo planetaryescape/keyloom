@@ -214,7 +214,8 @@ describe.skipIf(!binary)("compiled synthetic serial helper", () => {
   test("real child echoes arbitrary chunks and captures START/STOP without OS device code", async () => {
     if (!binary) throw new Error("explicit synthetic helper required");
     const version = Bun.spawn([binary, "--version"], { env: {}, stdout: "pipe", stderr: "pipe" });
-    const versionWatchdog = setTimeout(() => version.kill("SIGKILL"), 1_000);
+    // A freshly built binary can take over a second to start on a busy self-hosted Mac (D-483); the watchdogs only stop a hung helper.
+    const versionWatchdog = setTimeout(() => version.kill("SIGKILL"), 5_000);
     let info: z.infer<typeof transportIdentitySchema>;
     try {
       info = transportIdentitySchema.extend({ syntheticBackend: z.literal(true) }).parse(JSON.parse(await new Response(version.stdout).text()));
@@ -226,7 +227,7 @@ describe.skipIf(!binary)("compiled synthetic serial helper", () => {
       await version.exited;
     }
     const child = Bun.spawn([binary, "--stdio"], { env: {}, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
-    const watchdog = setTimeout(() => child.kill("SIGKILL"), 4_000);
+    const watchdog = setTimeout(() => child.kill("SIGKILL"), 8_000);
     let client: DeviceTransportClient | undefined;
     try {
       const paired = manifestSchema.parse({ release: pkg.version, protocol: 1, target: info.target, sha256: createHash("sha256").update(await Bun.file(binary).bytes()).digest("hex") });
@@ -246,5 +247,5 @@ describe.skipIf(!binary)("compiled synthetic serial helper", () => {
       if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
       await child.exited;
     }
-  }, 5_000);
+  }, 15_000);
 });
