@@ -97,6 +97,21 @@ The mount root is a parameter (`--volumes-root`, default `/Volumes` on macOS), a
 
 Whether both halves boot correctly from the combined file is spike S8. It's how MoErgo's own build works, but nobody has checked here how each bootloader skips the other half's blocks.
 
+## Bluetooth pairing: one computer per profile
+
+Status update, 2026-11-06: the Keebart recipe sets `CONFIG_BT_SMP_ALLOW_UNAUTH_OVERWRITE=y` so a computer that lost its side of a pairing can pair again over its own entry. That build reached both halves (`bld_01M6RKSP483Y1ZQ7P46P9R4FTQ`, whose `.config` carries the symbol) and the keyboard reconnected over Bluetooth afterwards; no new pairing was tried.
+
+A ZMK keyboard keeps one bonded computer per profile. `ZMK_BLE_PROFILE_COUNT` is `CONFIG_BT_MAX_PAIRED - CONFIG_ZMK_SPLIT_BLE_CENTRAL_PERIPHERALS` (`zmk/app/include/zmk/ble.h`), which is 5 on the Corne: `CONFIG_BT_MAX_PAIRED=6` less the one split peripheral. `&bt BT_SEL n` selects a profile and disconnects the computer using the one that was active. Only keys on the keyboard can do that; nothing a computer sends moves the keyboard to another profile.
+
+Two behaviours in `zmk/app/src/ble.c` (@ the board's pinned `edf5c081`) explain what the computer sees:
+
+- `update_advertising` advertises nothing while the active profile's computer is connected. While one computer is connected, a second cannot see the keyboard, let alone pair with it. The keyboard advertises openly only when the active profile is open, or bonded and not connected.
+- `pairing_allowed_for_current_profile` refuses a pairing request on a profile that already holds a bond, unless `CONFIG_BT_SMP_ALLOW_UNAUTH_OVERWRITE` is set and the request comes from that profile's own address. With ZMK's default of off, a computer that dropped or cleared its side can never pair again: the keyboard rejects each attempt and the computer retries. ZMK covers the flag-on path with `app/tests/ble/profiles/overwrite-enabled-reconnect-without-bond-then-output-to-selection`. The flag lets a computer replace its own stale entry; it does not let one computer take another's profile, because the address has to match.
+
+So pairing a computer is: select an unused profile on the keyboard, then pair on the computer. A profile that cannot be used is cleared with `&bt BT_CLR` (the current profile) or `&bt BT_CLR_ALL` (every profile). keyloom writes both from a native binding and warns before adding one, because clearing forgets a pairing (D-451). A layout with no such key cannot clear a taken profile from the keyboard. Both halves advertise under `CONFIG_ZMK_KEYBOARD_NAME`, so a scan can list the keyboard twice while the halves have lost each other; only the central half runs the HID service and pairs with a computer.
+
+The Glove80 recipe does not set the overwrite flag. It builds from MoErgo's fork pin (D-036), and changing it is a separate board decision.
+
 ## Runtime updates through ZMK Studio are deferred
 
 Status update, 2026-10-15: hands-free flashing for ZMK and the conditions for Studio live writes are in [17](17-keyboard-sync.md) (D-095, D-096).
