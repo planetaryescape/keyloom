@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.72.5](https://github.com/planetaryescape/keyloom/compare/v0.72.4...v0.72.5) (2026-11-06)
+
+
+### Bug Fixes
+
+* let a computer re-pair over its own stale Bluetooth entry ([#268](https://github.com/planetaryescape/keyloom/issues/268)) ([fbaf545](https://github.com/planetaryescape/keyloom/commit/fbaf545563a79166691a27ff8272330f8b5f541b))
+
 ## [0.72.4](https://github.com/planetaryescape/keyloom/compare/v0.72.3...v0.72.4) (2026-11-05)
 
 
