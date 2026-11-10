@@ -11,6 +11,19 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-10 follow-up
+
+### D-486: keyloom starts the Docker engine itself, and says where it can't, instead of stopping at "Docker isn't running". (BK: "there could be a button here that the user can just click to resolve it, or better yet, since this is so integral to the functioning of the app, just start the daemon yourself… Do we really need docker? there's no other way to do it?")
+
+Firmware is still built in Docker. The alternatives were re-examined and are worse: a host toolchain per family means three installs (arm-none-eabi-gcc and a pinned ZSA fork for QMK, west plus the Zephyr SDK and per-board modules for ZMK, a pinned hardware module for the Keebart board), several gigabytes on the person's machine, and version drift that breaks a build keyloom can't reproduce; a hosted build service contradicts local-first and the no-backend rule (D-001). Docker is the one prerequisite that keeps every board's build the same everywhere.
+
+What changes is whose problem a closed engine is. A build no longer stops with a sentence telling the person to open Docker Desktop. `dockerStatus` now names the problem (`not-installed`, `daemon-down`, `slow`), `detectDockerEngine` finds what runs the daemon here, and `startDockerEngine` starts it and waits up to two minutes, reporting progress into the build log. It is on by default: starting an app the person already installed on their own machine is not a privileged act, and `KEYLOOM_DOCKER_AUTOSTART=0` turns it off. `keyloom build`, `keyloom emulate`, workload replay and the review all go through `ensureDocker`; `keyloom doctor --start-docker` starts it for the diagnostic path.
+
+- **Engines:** Docker Desktop and OrbStack through `open -a`, chosen by the docker context the CLI points at; Colima through `colima start`, or `colima restart` when the VM is up and the daemon inside it is wedged (the case BK hit on 2026-11-10: `docker version` refused while `colima status` said running); `systemctl start docker` on Linux, with the `sudo` line in the failure.
+- **The click, for when keyloom can't start it:** `GET /api/system/docker` and `POST /api/system/docker/start` (src/api/system.ts) back a line in Build and flash that says Docker isn't answering, offers to start it now, and, when nothing is installed, links the install instead.
+- **Proof:** `keyloom doctor --start-docker` on BK's Mac found Colima, restarted the wedged VM in 56 s and reported `docker: running, server 28.4.0` with the toolchain behind it. Screenshots of the note and the missing-Docker callout at 1440 and 390 are in [../research/docker-engine-start.md](../research/docker-engine-start.md).
+- **No test starts an engine:** `test/helpers/no-real-docker-start.ts` sets the opt-out for the suite, and the start paths are tested through injected `startEngine`/fake engines.
+
 ## 2026-11-04 follow-up
 
 ### D-482: A verified standalone flash updates the keyboard's recorded version; an unverified write is never reported as fully complete. (BK: “verification should be part of flashing”; “fix the app so that it reports the correct state”)

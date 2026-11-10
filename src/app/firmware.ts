@@ -7,7 +7,6 @@ import type { Board } from "../boards/load.ts";
 import { writeSource } from "../firmware/qmk/write-source.ts";
 import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
-import { dockerStatus } from "../firmware/toolchain/docker.ts";
 import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
@@ -27,6 +26,7 @@ import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor } from "./firmware-drivers.ts";
 import { BuildFailedError, FlashFailedError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
+import { ensureDocker } from "./toolchain.ts";
 
 // These are the shapes of Build and Flash in src/api/http.ts (a superset: the extra fields are for
 // the CLI). app can't import src/api, so test/app/firmware.test.ts checks they stay assignable.
@@ -198,8 +198,9 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
   };
   try {
     say(`keyloom: build ${row.id} of "${view.layout.name}" (${view.revision.id}) for ${view.board.definition.id} ${row.boardRevision}`);
-    // Before the checkout: a missing Docker should not first cost a multi-gigabyte clone.
-    const docker = await dockerStatus();
+    // Before the checkout: a closed Docker Desktop should not cost a multi-gigabyte clone, and should not be
+    // the person's job to fix: keyloom starts the engine it finds and says so in this log (D-486).
+    const docker = await ensureDocker({ onProgress: say, ...(signal === undefined ? {} : { signal }) });
     if (!docker.ok) throw new BuildFailure(docker.reason);
     const driver = driverFor(view.board);
     let source: GeneratedSource;

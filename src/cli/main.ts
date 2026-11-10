@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   requireCommandSupport, type App, type ImportOutcome, type WorkloadDeps, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, layoutSettings, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
-  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
+  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, startDocker, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { registerConfigCommands } from "./commands/config.ts";
@@ -362,8 +362,11 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .command("doctor")
     .description("check the database, device helper, model credential and firmware toolchain")
     .option("--device-helper-only", "check only the installed helper pair, without device discovery or network/toolchain probes")
-    .action(async (options: { deviceHelperOnly?: boolean }) => {
+    .option("--start-docker", "start Docker Desktop (or whatever runs the daemon here) when it isn't running, then check the toolchain")
+    .action(async (options: { deviceHelperOnly?: boolean; startDocker?: boolean }) => {
       const helper = await runDeviceHelperCheck();
+      // Progress goes to stderr, so `--format json` stays one document on stdout.
+      if (options.startDocker && !options.deviceHelperOnly) await startDocker({ onProgress: (line) => io.err(`${line}\n`) });
       const checks = options.deviceHelperOnly ? [helper] : [
         helper,
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),

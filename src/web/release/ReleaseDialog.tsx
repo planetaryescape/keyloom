@@ -5,6 +5,7 @@ import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { LogTail } from "./LogTail.tsx";
 import { elapsedOf, type ReleaseStatus } from "./status.ts";
 import type { Release } from "./useRelease.ts";
+import type { Docker } from "./useDocker.ts";
 import { headline } from "../../layout/history-summary.ts";
 import "./release.css";
 
@@ -49,6 +50,58 @@ function Progress({ label }: { label: string }) {
     </div>
   );
 }
+
+// Firmware is built in Docker (D-486). keyloom starts the engine itself, so this says what it is about to do
+// and offers the click only when it can't: a missing install, or starting it by itself turned off.
+function DockerNote({ docker }: { docker: Docker }) {
+  const readiness = docker.readiness;
+  const engine = readiness !== null && !readiness.ok && readiness.engine !== null ? readiness.engine : "Docker";
+
+  if (docker.starting) {
+    return (
+      <p className="release-docker" role="status">
+        <LoaderCircle size={14} className="spin" aria-hidden="true" />
+        <span>Starting {engine}. A cold start can take half a minute.</span>
+      </p>
+    );
+  }
+  if (docker.problem !== null) {
+    return (
+      <div className="callout callout-error" role="alert">
+        <CircleAlert size={18} aria-hidden="true" />
+        <p>{docker.problem}</p>
+        <button type="button" className="button" onClick={docker.start}>Try again</button>
+        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+      </div>
+    );
+  }
+  if (readiness === null || readiness.ok) return null;
+
+  if (readiness.problem === "not-installed") {
+    return (
+      <div className="callout callout-warning" role="alert">
+        <TriangleAlert size={18} aria-hidden="true" />
+        <p>
+          Firmware is built in Docker, and keyloom can't find it on this computer. Install{" "}
+          <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noreferrer">Docker Desktop</a>, then come back here.
+        </p>
+        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+      </div>
+    );
+  }
+
+  return (
+    <p className="release-docker">
+      <span>
+        Docker isn't answering. {readiness.canStart ? `keyloom starts ${engine} when you build.` : `Start ${engine}, then build.`}
+      </span>
+      <button type="button" className="button" onClick={docker.start}>
+        {readiness.canStart ? "Start it now" : "Start it"}
+      </button>
+    </p>
+  );
+}
+
 
 export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, status, now }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -169,6 +222,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     onChange={release.chooseBoardRevision}
                   />
                 ) : null}
+                <DockerNote docker={release.docker} />
                 <button
                   type="button"
                   className="button button-primary"

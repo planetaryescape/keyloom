@@ -2,7 +2,6 @@
 import { builtinWorkloadSuites, WorkloadSuiteSchema } from "../lab/workload/schema.ts";
 import type { WorkloadTaskResult } from "../lab/workload/evaluate.ts";
 import { ReviewActivitiesSchema, ReviewWorkloadComparisonSchema, workloadVerdictWords, type ReviewActivity, type ReviewWorkload, type ReviewWorkloadComparison } from "../layout/review-workload.ts";
-import { dockerStatus } from "../firmware/toolchain/docker.ts";
 import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 import { findChangeSet, markRejected } from "../persistence/change-sets.ts";
 import { latestReview, ownsReviewRun, REVIEW_AI_STALE_MS, type BoardReviewRow } from "../persistence/reviews.ts";
@@ -13,6 +12,7 @@ import type { ReviewItem } from "../validation/review-item.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
+import { ensureDocker } from "./toolchain.ts";
 import { compareWorkloadToBaseline, evaluateStoredWorkload, validateWorkloadPatch, workloadHash, type WorkloadDeps, type WorkloadReport } from "./workload.ts";
 
 export const REVIEW_WORKLOAD_MAX_PROPOSALS = 2;
@@ -70,7 +70,7 @@ export async function measureReviewBaseline(app: App, row: BoardReviewRow, signa
     requirePlatformSupport("keyloom workload evaluate");
     if (getLayout(app, row.layoutId, row.revisionId).document.firmware === "kanata") throw new UsageError("Kanata workload replay is not available yet.");
     if (!deps.replay) {
-      const docker = await dockerStatus();
+      const docker = await ensureDocker();
       if (!docker.ok) throw new UsageError(`Workload tests need Docker: ${docker.reason}`);
     }
     const report = await evaluateStoredWorkload(app, row.layoutId, { revisionId: row.revisionId, suite: selectedReviewSuite(activities), signal }, deps);

@@ -6,7 +6,6 @@ import { ScriptError, parseScript } from "../firmware/emulate/script.ts";
 import type { EmulationResult, EmulatorEvent } from "../firmware/emulate/types.ts";
 import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
-import { dockerStatus } from "../firmware/toolchain/docker.ts";
 import { LockTimeoutError } from "../firmware/toolchain/lock.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { cacheDir } from "../persistence/paths.ts";
@@ -16,6 +15,7 @@ import { UsageError } from "./errors.ts";
 import { checkoutDirFor, sourceFor } from "./firmware.ts";
 import { EmulateFailedError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
+import { ensureDocker } from "./toolchain.ts";
 
 export type EmulateOptions = {
   /** The key script (10#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses), such as "hold 31 300 then tap 32". */
@@ -69,8 +69,8 @@ export async function emulateEvents(app: App, view: LayoutView, events: readonly
   const logPath = opts.log?.path ?? join(app.dataDir, logRel);
   const log = opts.log ?? new LogSink(logPath);
   try {
-    // Before the checkout: a missing Docker should not first cost a multi-gigabyte download.
-    const docker = await dockerStatus();
+    // Before the checkout: a closed Docker Desktop should not cost a multi-gigabyte download (D-486).
+    const docker = await ensureDocker({ ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }), ...(opts.signal === undefined ? {} : { signal: opts.signal }) });
     if (!docker.ok) throw new BuildFailure(docker.reason);
     const slug = board.id.replace("/", "-");
     const result = await emulator({

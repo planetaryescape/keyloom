@@ -32,6 +32,7 @@ export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKey
 export { type PutInput, type PutOutcome, type PutPreview, type PutProposal, previewPut, putConfig } from "./keyboard-put.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type CredentialOverrides, type DoctorCheck, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
+export { type DockerReadiness, type EnsureDockerResult, type ToolchainOverrides, dockerAutoStart, dockerReadiness, ensureDocker, startDocker } from "./toolchain.ts";
 export {
   type RemapperOverrides, applyToRemapper, confirmExitChord, disableRemapperFor, readRemapper, remapperDoctor, setupRemapper,
 } from "./remapper.ts";

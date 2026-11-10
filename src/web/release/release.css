@@ -222,6 +222,20 @@
   border-radius: var(--radius-md);
 }
 
+/* What keyloom does about Docker before a build (D-486): one line, with the click when it can't start it itself. */
+.release-docker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.release-docker svg {
+  flex: none;
+}
+
 .callout > svg {
   flex: none;
   margin-top: 2px;

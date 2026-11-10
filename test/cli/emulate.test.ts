@@ -149,7 +149,8 @@ describe("keyloom emulate", () => {
     const none = fakeBinDir({ docker: "exit 1" });
     const r = await withPath(none, () => cli(["emulate", "g80", "--keys", "tap 1", "--data-dir", dataDir]));
     expect(r.code).toBe(7);
-    expect(problem(r)).toContain("docker daemon isn't running");
+    // The test preload turns starting Docker off (test/helpers/no-real-docker-start.ts), so the sentence names the daemon.
+    expect(problem(r).toLowerCase()).toContain("docker daemon isn't running");
   });
 
   test("--help shows the key script", async () => {

@@ -19,6 +19,8 @@ import { checkHost, checkToken } from "./guard.ts";
 import type { LayoutSource } from "./layout-source.ts";
 import type { SyncBackend } from "./sync-backend.ts";
 import { handleSyncRoute } from "./sync-routes.ts";
+import { handleSystemRoute } from "./system-routes.ts";
+import type { SystemBackend } from "./system-backend.ts";
 import { loadWebAssets } from "./web-assets.ts";
 import { LayoutDetailSchema, LayoutListResponseSchema } from "../api/http.ts";
 
@@ -41,6 +43,8 @@ export interface ServerOptions {
   review?: ReviewBackend;
   /** The typing lab (rung 22). Without it the /api/lab routes fall through to a 404. */
   lab?: LabBackend;
+  /** The computer's own state (rung 25): whether Docker is up, and starting it. Without it /api/system falls through to a 404. */
+  system?: SystemBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
   boardDev?: () => Promise<BoardDevView>;
   token?: string;
@@ -61,7 +65,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, review, lab, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, review, lab, system, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -103,6 +107,10 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
       if (keyboards !== undefined) {
         const keyboardResponse = await handleKeyboardRoute(request, url.pathname, keyboards, sessionToken);
         if (keyboardResponse !== null) return keyboardResponse;
+      }
+      if (system !== undefined) {
+        const systemResponse = await handleSystemRoute(request, url.pathname, system, sessionToken);
+        if (systemResponse !== null) return systemResponse;
       }
       if (url.pathname === LIST_PATH || url.pathname === BOARD_DEV_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);
