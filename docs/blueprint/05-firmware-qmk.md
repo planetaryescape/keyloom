@@ -82,7 +82,7 @@ docker run --rm --user "$(id -u):$(id -g)" -w /qmk_firmware -v <checkout>:/qmk_f
 
 This is the `docker run` behind QMK's `util/docker_build.sh`, called directly. That script's helper passes `-it`, which needs a terminal. Spike S5 ([../research/spikes/S5.md](../research/spikes/S5.md)) built BK's unchanged Oryx source for both revisions this way, in 101 s and 110 s. The checkout needs five submodules: `lib/chibios`, `lib/chibios-contrib`, `lib/printf`, `lib/lufa` and `modules/zsa`. ZSA's Oryx module fails to compile without LUFA. The image digest, layout macro, keymaps folder and submodule list are in the board definition (`revisions[].build`), as is each revision's bootloader (`revisions[].flash.bootloader`). Before `make`, keyloom runs `test -f Makefile` in the container, because Docker Desktop mounts an empty folder for a path it may not share and `make` then only says "No rule to make target". The output `.bin` is checked for a DFU suffix naming the revision's bootloader and a valid CRC, then copied to `$XDG_DATA_HOME/keyloom/artifacts/<build id>.bin`; the log is kept. Builds in one checkout are serialised with a lock directory beside it.
 
-Failure handling matches [06](06-firmware-zmk.md#build-runs-the-moergo-template-in-docker): Docker checked first, the log tail shown, compiler errors mapped back to a layer and position where the line is in a `LAYOUT(...)` call.
+Failure handling matches [06](06-firmware-zmk.md#build-runs-the-moergo-template-in-docker): Docker checked first, the engine started when it isn't answering (D-486), the log tail shown, compiler errors mapped back to a layer and position where the line is in a `LAYOUT(...)` call.
 
 ## Emulate runs the generated keymap on QMK's own core
 

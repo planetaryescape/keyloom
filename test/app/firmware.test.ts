@@ -141,7 +141,9 @@ describe("startBuild / getBuild / buildAndWait", () => {
       const err = (await buildAndWait(e.app, "synchronized", { boardRevision: "revb" }).catch((x) => x)) as BuildFailedError;
       expect(err.message).toContain("daemon isn't running");
     }, { FAKE_MODE: "nodaemon" });
-    expect(await Bun.file(e.vars.FAKE_DOCKER_LOG).exists()).toBe(false);
+    // The CLI is asked which context points at the daemon (D-487); nothing is built or run in a container.
+    const calls = (await Bun.file(e.vars.FAKE_DOCKER_LOG).exists()) ? await Bun.file(e.vars.FAKE_DOCKER_LOG).text() : "";
+    expect(calls).not.toMatch(/^run /m);
   });
 
   test("a build row whose process died is reported as failed, not running forever", async () => {

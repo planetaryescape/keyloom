@@ -15,6 +15,9 @@ import { appDecisionsBackend } from "./decisions-backend.ts";
 import { appEditorBackend } from "./editor-backend.ts";
 import { appReviewBackend } from "./review-backend.ts";
 import { appSyncBackend } from "./sync-backend.ts";
+import { appSystemBackend } from "./system-backend.ts";
+import { appRemapperSetupBackend } from "./remapper-setup-backend.ts";
+import { realSetupDeps } from "../app/remapper-setup.ts";
 import { createDataVersionWatcher } from "./data-version-watcher.ts";
 import { drainAgentRuns, reconcileAgentRuns } from "../app/agent-runs.ts";
 import { listSetupLayouts } from "../app/index.ts";
@@ -94,7 +97,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   const lab = appLabBackend(app, opts.lab ?? realLabDeps());
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
-    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab, open: opts.open,
+    chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab, system: appSystemBackend(), remapperSetup: appRemapperSetupBackend(realSetupDeps(opts.handsFree?.remapper ?? {})), open: opts.open,
   });
   let drained: Promise<void> | undefined;
   return {

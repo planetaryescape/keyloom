@@ -12,7 +12,7 @@ import { BREW_FORMULA, type DfuTool } from "../firmware/qmk/dfu-flash.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { imageTag } from "../firmware/zmk/image.ts";
 import { type CheckoutSpec, checkoutState } from "../firmware/toolchain/checkout.ts";
-import { LOW_DISK_BYTES, dockerFreeSpace, dockerStatus } from "../firmware/toolchain/docker.ts";
+import { LOW_DISK_BYTES, dockerFreeSpace } from "../firmware/toolchain/docker.ts";
 import { capture, which } from "../firmware/toolchain/run.ts";
 import { MIGRATIONS } from "../persistence/migrations.ts";
 import { databasePath, dataDir as resolveDataDir } from "../persistence/paths.ts";
@@ -24,6 +24,7 @@ import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import { type RemapperOverrides, remapperDoctor } from "./remapper.ts";
 import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.ts";
 import { keyedProviders } from "./chat-model.ts";
+import { dockerReadiness } from "./toolchain.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
 export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean; deviceHelper?: HelperDiagnostic };
@@ -162,8 +163,16 @@ function unavailableOnWindows(name: string): DoctorCheck {
 export async function runToolchainChecks(): Promise<DoctorCheck[]> {
   if (windowsUnavailable()) return [unavailableOnWindows("Docker builds and flashing")];
   const checks: DoctorCheck[] = [];
-  const docker = await dockerStatus();
-  checks.push({ name: "docker", ok: docker.ok, detail: docker.ok ? `running, server ${docker.version}` : docker.reason });
+  const readiness = await dockerReadiness();
+  const docker = readiness.ok
+    ? { ok: true as const, detail: `running, server ${readiness.version}` }
+    : {
+        ok: false,
+        detail: readiness.canStart
+          ? `${readiness.reason}; keyloom starts ${readiness.engine} by itself when a build needs it`
+          : `${readiness.reason}${readiness.autoStart ? "" : " (starting it automatically is turned off: KEYLOOM_DOCKER_AUTOSTART=0)"}`,
+      };
+  checks.push({ name: "docker", ...docker });
 
   const qmkBoards = listBoardDefinitions().filter((b) => b.definition.firmware === "qmk");
   const zmkBoards = listBoardDefinitions().filter((b) => b.definition.firmware === "zmk");

@@ -5,6 +5,7 @@ import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { LogTail } from "./LogTail.tsx";
 import { elapsedOf, type ReleaseStatus } from "./status.ts";
 import type { Release } from "./useRelease.ts";
+import type { Docker } from "./useDocker.ts";
 import { headline } from "../../layout/history-summary.ts";
 import "./release.css";
 
@@ -49,6 +50,78 @@ function Progress({ label }: { label: string }) {
     </div>
   );
 }
+
+// Firmware is built in Docker (D-486). keyloom starts the engine itself, so this says what it is about to do
+// and offers the click only when it can't: a missing install, or starting it by itself turned off.
+function DockerNote({ docker }: { docker: Docker }) {
+  const readiness = docker.readiness;
+  const engine = readiness !== null && !readiness.ok && readiness.engine !== null ? readiness.engine : "Docker";
+
+  if (docker.starting) {
+    return (
+      <p className="release-docker" role="status">
+        <LoaderCircle size={14} className="spin" aria-hidden="true" />
+        <span>Starting {engine}. A cold start can take half a minute.</span>
+      </p>
+    );
+  }
+  if (docker.problem !== null) {
+    return (
+      <div className="callout callout-error" role="alert">
+        <CircleAlert size={18} aria-hidden="true" />
+        <p>{docker.problem}</p>
+        <button type="button" className="button" onClick={docker.start}>Try again</button>
+        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+      </div>
+    );
+  }
+  if (readiness === null || readiness.ok) return null;
+
+  // No Docker at all: the one case a click can't fix here, so it names the command or the page instead (D-487).
+  if (readiness.problem === "not-installed" && readiness.install !== null) {
+    const install = readiness.install;
+    return (
+      <div className="callout callout-warning" role="alert">
+        <TriangleAlert size={18} aria-hidden="true" />
+        <p>
+          Firmware is built in Docker, and there is none on this computer. Install{" "}
+          {install.command === null
+            ? <a href={install.url} target="_blank" rel="noreferrer">{install.engine}</a>
+            : <>{install.engine} with <code>{install.command}</code>{" "}
+                (<a href={install.url} target="_blank" rel="noreferrer">{install.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a>)
+              </>}
+          , then come back here.
+        </p>
+        <p className="callout-note">{install.note}</p>
+        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+      </div>
+    );
+  }
+
+  // An engine keyloom can't start: on another machine, a tool it has never seen, or a CLI that missed the PATH.
+  // Its own sentence says what to do, so this doesn't pretend to know a command.
+  if (readiness.engine === null) {
+    return (
+      <div className="callout callout-warning" role="alert">
+        <TriangleAlert size={18} aria-hidden="true" />
+        <p>{readiness.reason}</p>
+        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+      </div>
+    );
+  }
+
+  return (
+    <p className="release-docker">
+      <span>
+        Docker isn't answering. {readiness.canStart ? `keyloom starts ${engine} when you build.` : `Start ${engine}, then build.`}
+      </span>
+      <button type="button" className="button" onClick={docker.start}>
+        {readiness.canStart ? "Start it now" : "Start it"}
+      </button>
+    </p>
+  );
+}
+
 
 export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, status, now }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -169,6 +242,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     onChange={release.chooseBoardRevision}
                   />
                 ) : null}
+                <DockerNote docker={release.docker} />
                 <button
                   type="button"
                   className="button button-primary"

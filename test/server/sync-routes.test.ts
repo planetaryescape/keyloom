@@ -156,7 +156,8 @@ describe("writes", () => {
     w.world.reading = { state: "other", detail: "USB serial QxKPz/zLQ3Md" };
     const res = await call("/api/sync", { method: "POST", body: JSON.stringify({ layoutId: w.layoutId }) });
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: { code: "usage", message: expect.stringContaining("never replaces that by itself") } });
+    // The code is what the page maps to Build and flash (R1-16); the sentence stays the CLI's.
+    expect(await res.json()).toMatchObject({ error: { code: "foreign_firmware", message: expect.stringContaining("never replaces that by itself") } });
     const missing = await call("/api/sync", { method: "POST", body: JSON.stringify({ layoutId: "lay_nope" }) });
     expect(missing.status).toBe(404);
   });
@@ -191,6 +192,8 @@ describe("writes", () => {
       setAutoSync: async () => [],
       setPaused: async () => [],
       disableRemapping: async () => [],
+      replaceForeignRemapperConfig: async () => [],
+      confirmExitChord: async () => [],
       subscribe: () => () => {},
       newKeyboards: () => [],
       setupBoards: () => [],

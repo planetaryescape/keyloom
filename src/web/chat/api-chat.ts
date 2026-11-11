@@ -12,7 +12,7 @@ import {
   type ConversationDetail,
   type ConversationSummary,
 } from "../../api/http.ts";
-import { ApiError } from "../api.ts";
+import { ApiError, UNREACHABLE } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 import { createObservedSseParser, createSseParser, SseError } from "./sse.ts";
 import { AgentRunSnapshotSchema, AgentRequestCancellationSchema, type AgentRequestCancellation, type AgentRunSnapshot } from "../../api/agent-runs.ts";
@@ -130,7 +130,7 @@ async function stream<Event extends { type: string }>(
     });
   } catch (error) {
     if (signal.aborted) throw error;
-    throw new ApiError(0, "Can't reach keyloom. Is it still running in your terminal?");
+    throw new ApiError(0, UNREACHABLE, { code: "unreachable" });
   }
   if (!response.ok) throw await failure(response);
   if (response.body === null) throw new ApiError(response.status, "keyloom sent no reply.");
@@ -167,7 +167,7 @@ export async function forgetPriority(token: string, id: string): Promise<void> {
   try {
     response = await fetch(`/api/priorities/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-keyloom-token": token } });
   } catch {
-    throw new ApiError(0, "Can't reach keyloom. Is it still running in your terminal?");
+    throw new ApiError(0, UNREACHABLE, { code: "unreachable" });
   }
   if (!response.ok) throw await failure(response);
 }

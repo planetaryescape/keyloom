@@ -13,13 +13,13 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 /** The raw HID interface of the connected ZSA keyboard running a keyloom build, or why there isn't one. */
 export async function findQmkStreamDevice(transport: HidTransport): Promise<RawHidInterface> {
   const zsa = (await transport.list()).filter((i) => i.vendorId === ZSA_VENDOR_ID);
-  if (zsa.length === 0) throw new CaptureError("no ZSA keyboard is connected");
+  if (zsa.length === 0) throw new CaptureError("no ZSA keyboard is connected", { code: "not_connected" });
   // A usable keyloom keyboard wins over another ZSA device whose raw-HID driver failed; the driver hint is only
   // the answer when no usable keyloom keyboard is attached.
   const ours = zsa.filter((i) => !i.driverMissing && markerOf(i.serial) !== undefined);
   if (ours.length === 0 && zsa.some((i) => i.driverMissing)) throw new CaptureError(WINDOWS_HID_DRIVER_HINT);
   if (ours.length === 0) {
-    throw new CaptureError("the connected ZSA keyboard isn't running a keyloom build, so it can't stream its keys. Apply a change and sync once from keyloom, then try again");
+    throw new CaptureError("the connected ZSA keyboard isn't running a keyloom build, so it can't stream its keys. Apply a change and sync once from keyloom, then try again", { code: "needs_sync" });
   }
   if (ours.length > 1) throw new CaptureError("more than one keyboard running keyloom's firmware is connected; unplug the one you don't want to record");
   return ours[0] as RawHidInterface;
@@ -100,7 +100,7 @@ export async function startQmkCapture(transport: HidTransport, target: RawHidInt
     const answered = endedBy === undefined && await Promise.race([started.then(() => true), ended.then(() => false), sleep(hooks.startTimeoutMs ?? 2000).then(() => false)]);
     if (!answered || endedBy !== undefined) {
       const reason = endedBy ? `: ${endedBy}` : "";
-      throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it, then try again`);
+      throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it, then try again`, { code: "needs_sync" });
     }
   } catch (thrown) {
     // An interruption the keyboard reported first (framing, a lost connection) is the real reason; a START write that then

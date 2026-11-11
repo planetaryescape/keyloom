@@ -158,6 +158,20 @@ test("shutdown waits for an in-flight stop to persist its session", async () => 
   }
 });
 
+test("a keyboard whose firmware can't stream yet is refused with needs_sync, which the lab turns into Sync now (R1-19)", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  const { CaptureError } = await import("../../src/firmware/emulate/trace.ts");
+  const deps: LabDeps = {
+    startCapture: async () => { throw new CaptureError("the connected ZSA keyboard isn't running a keyloom build", { code: "needs_sync" }); },
+    replay: () => modelReplay(getLayout(app, layoutId).board.definition),
+  };
+  try {
+    await expect(appLabBackend(app, deps).start(layoutId, {})).rejects.toMatchObject({ status: 400, code: "needs_sync" });
+  } finally {
+    app.db.close();
+  }
+});
+
 test("shutdown waits for a pending start and finishes the capture it acquires", async () => {
   const { app, layoutId } = await commandShiftApp();
   const started = Promise.withResolvers<ReturnType<LabDeps["startCapture"]> extends Promise<infer T> ? T : never>();

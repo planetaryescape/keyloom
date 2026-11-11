@@ -222,6 +222,34 @@
   border-radius: var(--radius-md);
 }
 
+/* What keyloom does about Docker before a build (D-486, D-487): one line, with the click when it can't start it itself. */
+.release-docker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.release-docker svg {
+  flex: none;
+}
+
+/* A second, quieter sentence under the install words, such as the alternative engine. */
+.callout .callout-note {
+  flex: 1 1 100%;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+/* An install command in the callout: one unbroken token, so it never wraps mid-command and reads as something to run. */
+.callout code {
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  white-space: nowrap;
+}
+
 .callout > svg {
   flex: none;
   margin-top: 2px;

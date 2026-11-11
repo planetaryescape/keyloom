@@ -28,17 +28,20 @@ const detailKey = (layout: LayoutSummary) => `${layout.id}@${layout.revisionId}`
 const TONE_WORD = { ok: "On keyboard", pending: "Not on keyboard yet", bad: "Needs attention" } as const;
 
 /** The home page (D-476): a pegboard with the boards opened most recently, newest at top left. Clicking one flies it to the desk. */
-export function Pegboard({ token, layouts, sync, flying, onOpen }: {
+export function Pegboard({ token, layouts, sync, flying, onOpen, onOpenById }: {
   token: string;
   layouts: readonly LayoutSummary[];
   sync: SyncApi;
   /** The layout whose board is in flight to or from the desk; its board carries the transition's name. */
   flying: string | null;
   onOpen: (summary: LayoutSummary, detail: LayoutDetail, triggerElement?: HTMLElement | null) => void;
+  /** Opens a layout whose board couldn't be drawn here; the editor loads it itself and says why if it can't (R1-21). */
+  onOpenById: (summary: LayoutSummary) => void;
 }) {
   const hung = useMemo(() => recentBoards(layouts), [layouts]);
   const [loaded, setLoaded] = useState(0);
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     for (const layout of hung) {
@@ -54,7 +57,11 @@ export function Pegboard({ token, layouts, sync, flying, onOpen }: {
       );
     }
     return () => controller.abort();
-  }, [token, hung]);
+  }, [token, hung, attempt]);
+  const retry = () => {
+    setFailed(new Set());
+    setAttempt((n) => n + 1);
+  };
 
   return (
     <div className="pegboard-room" data-loaded={loaded}>
@@ -67,7 +74,15 @@ export function Pegboard({ token, layouts, sync, flying, onOpen }: {
               <li key={layout.boardId} className="peg-slot" data-flying={flying === layout.id ? "" : undefined}>
                 {detail === undefined ? (
                   <div className="peg-board peg-board-empty" aria-busy={!failed.has(layout.id)}>
-                    {failed.has(layout.id) ? <span className="peg-missing">Can't draw this board</span> : null}
+                    {failed.has(layout.id) ? (
+                      <span className="peg-missing">
+                        Can't draw this board
+                        <span className="peg-missing-actions">
+                          <button type="button" className="button" onClick={retry}>Try again</button>
+                          <button type="button" className="button" onClick={() => onOpenById(layout)}>Open {layout.name}</button>
+                        </span>
+                      </span>
+                    ) : null}
                   </div>
                 ) : (
                   <WallBoard

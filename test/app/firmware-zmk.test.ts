@@ -85,7 +85,7 @@ describe("build", () => {
     const e = await zmkEnv();
     await e.run(async () => {
       const err = (await buildAndWait(e.app, "glove80").catch((x) => x)) as BuildFailedError;
-      expect(err.message).toMatch(/docker daemon isn't running/);
+      expect(err.message).toMatch(/Docker daemon isn't running/);
     }, { FAKE_MODE: "nodaemon" });
   });
 });

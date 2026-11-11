@@ -96,6 +96,7 @@ keyloom
   autosync on|off|pause|resume|status <board>   whether Apply puts the change on the board by itself
   remap <subcommand>                        MacBook kanata setup and management; see remap --help (21)
   doctor [--device-helper-only]            installed helper; normally also Docker, checkouts, keyboards, API key and database
+  doctor --start-docker                    the same, starting Docker Desktop, Colima or the service first when it isn't running
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.
@@ -325,7 +326,7 @@ One server serves a data directory (D-323). `serve --reuse` attaches to a live o
 | 3 | Not found: layout, revision, change set, decision, build or board |
 | 4 | Validation failed: `change check` or `change apply` found errors. The JSON body has them |
 | 5 | Stale base: the head moved since the change set was proposed |
-| 6 | Toolchain unavailable: Docker isn't running, or a pinned checkout is missing |
+| 6 | Toolchain unavailable: Docker isn't running and keyloom couldn't start it, or a pinned checkout is missing |
 | 7 | Build failed |
 | 8 | Flash failed or timed out waiting for the bootloader |
 | 9 | Model API error: auth, rate limit or refusal after fallback |

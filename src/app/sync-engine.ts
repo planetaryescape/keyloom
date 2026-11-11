@@ -29,6 +29,7 @@ import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
+import { confirmExitChord } from "./remapper.ts";
 import { firmwareBusy } from "./firmware.ts";
 import type { SyncDeps } from "./sync-deps.ts";
 import { type KeyboardReading, syncSupported, syncableBoards } from "./sync-keyboard.ts";
@@ -114,6 +115,20 @@ type Running = {
 };
 
 const ABSENT: KeyboardReading = { state: "absent" };
+
+/**
+ * Why a sync was refused, as a code the web app turns into the action that fixes it (R1-16): the message keeps the CLI's own words,
+ * which name commands, and the page never shows those. It is a UsageError, so the CLI's exit code is unchanged.
+ */
+export type SyncRefusalCode =
+  | "keyboard_removed" | "archived" | "not_on_keyboard" | "cant_sync" | "not_connected" | "kanata_not_running" | "kanata_foreign"
+  | "foreign_firmware" | "busy" | "unproven" | "kanata_still_running";
+
+export class SyncRefusal extends UsageError {
+  constructor(readonly code: SyncRefusalCode, message: string) {
+    super(message);
+  }
+}
 
 const isRemapper = (boardId: string): boolean => showBoard(boardId).definition.firmware === "kanata";
 
@@ -656,38 +671,38 @@ export class SyncEngine {
   private async syncLocked(layoutRef: string, put: boolean): Promise<SyncNowResult> {
     const layout = findLayoutRow(this.app.db, layoutRef);
     if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
-    if (keyboardRemoved(this.app.db, layout.boardId)) throw new UsageError("this keyboard was removed from your setup; restore it before syncing");
-    if (layout.archivedAt !== null) throw new UsageError(`${layout.name} is archived; restore it first with \`keyloom config restore ${layout.name}\``);
+    if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", "this keyboard was removed from your setup; restore it before syncing");
+    if (layout.archivedAt !== null) throw new SyncRefusal("archived", `${layout.name} is archived; restore it first with \`keyloom config restore ${layout.name}\``);
     const onKeyboard = getBoardConfig(this.app.db, layout.boardId);
     if (!put && onKeyboard !== layout.id) {
       const current = onKeyboard === undefined ? undefined : findLayoutRow(this.app.db, onKeyboard);
-      throw new UsageError(`${layout.name} isn't the config on your ${showBoard(layout.boardId).definition.name}${current ? ` (${current.name} is)` : ""}; put it on with \`keyloom config use ${layout.name}\``);
+      throw new SyncRefusal("not_on_keyboard", `${layout.name} isn't the config on your ${showBoard(layout.boardId).definition.name}${current ? ` (${current.name} is)` : ""}; put it on with \`keyloom config use ${layout.name}\``);
     }
     const board = showBoard(layout.boardId);
     const name = board.definition.name;
     if (!syncSupported(board)) {
-      throw new UsageError(`keyloom can't tell what a ${name} is running or restart it by itself, so it can't sync it. Use \`keyloom build\` and \`keyloom flash\`.`);
+      throw new SyncRefusal("cant_sync", `keyloom can't tell what a ${name} is running or restart it by itself, so it can't sync it. Use \`keyloom build\` and \`keyloom flash\`.`);
     }
     await this.refresh(true);
-    if (keyboardRemoved(this.app.db, layout.boardId)) throw new UsageError("this keyboard was removed from your setup; restore it before syncing");
+    if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", "this keyboard was removed from your setup; restore it before syncing");
     const reading = this.readingOf(board.definition.id);
     if (reading.state === "absent") {
-      throw new UsageError(board.definition.firmware === "kanata"
-        ? `kanata isn't running for the ${name}, so keyloom can't apply to it. Run \`keyloom doctor\` to see what is missing`
-        : `no ${name} is attached; plug it in and try again`);
+      throw board.definition.firmware === "kanata"
+        ? new SyncRefusal("kanata_not_running", `kanata isn't running for the ${name}, so keyloom can't apply to it. Run \`keyloom doctor\` to see what is missing`)
+        : new SyncRefusal("not_connected", `no ${name} is attached; plug it in and try again`);
     }
     if (reading.state === "other" && board.definition.firmware === "kanata") {
-      throw new UsageError(`kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${layout.name} --overwrite\` to do it deliberately.`);
+      throw new SyncRefusal("kanata_foreign", `kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${layout.name} --overwrite\` to do it deliberately.`);
     }
     if (reading.state === "other") {
-      throw new UsageError(`the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${layout.name}\` and \`keyloom flash --layout ${layout.name}\` to do it deliberately.`);
+      throw new SyncRefusal("foreign_firmware", `the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${layout.name}\` and \`keyloom flash --layout ${layout.name}\` to do it deliberately.`);
     }
 
     const run = this.running;
     if (!run) {
       const other = activeSyncs(this.app.db).find((s) => this.alive(s.pid));
-      if (other) throw new UsageError(`another keyloom sync is running (${other.id}, process ${other.pid}); wait for it or use --wait`);
-      if (firmwareBusy(this.app)) throw new UsageError("a build or flash is in progress; wait for it to finish");
+      if (other) throw new SyncRefusal("busy", `another keyloom sync is running (${other.id}, process ${other.pid}); wait for it or use --wait`);
+      if (firmwareBusy(this.app)) throw new SyncRefusal("busy", "a build or flash is in progress; wait for it to finish");
     }
 
     // Stored before anything starts, so the sync's own checks (and a tick between) see the config it is for.
@@ -729,6 +744,48 @@ export class SyncEngine {
     });
   }
 
+  /**
+   * "Replace it" on a MacBook whose kanata runs a config keyloom didn't write (R1-17): applies the config's head with the overwrite the
+   * CLI's `remap apply --overwrite` uses. A keyloom.kbd keyloom didn't write is kept beside it as keyloom.kbd.before-keyloom; a file
+   * kanata was started with elsewhere is not touched. Only this button does it, never auto-apply (21).
+   */
+  async replaceForeignRemapperConfig(layoutRef: string): Promise<void> {
+    const layout = findLayoutRow(this.app.db, layoutRef);
+    if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
+    if (!isRemapper(layout.boardId)) throw new UsageError(`${showBoard(layout.boardId).definition.name} isn't a software remapper`);
+    if (layout.archivedAt !== null) throw new SyncRefusal("archived", `${layout.name} is archived; restore it first`);
+    const remapper = this.deps.remapper;
+    if (!remapper) throw new UsageError("this copy of keyloom can't reach the remapper");
+    // Waited for outside the queue: a running apply takes its own turns in it to read kanata back.
+    const run = this.running;
+    if (run && run.row.boardId === layout.boardId) await run.done;
+    await this.exclusive(async () => {
+      await this.refresh(true);
+      const reading = this.readingOf(layout.boardId);
+      if (reading.state === "absent") throw new SyncRefusal("kanata_not_running", "kanata isn't running, so there is nothing to replace");
+      const r = await remapper.apply({ layoutId: layout.id, revisionId: layout.headRevisionId, overwriteForeign: true });
+      await this.refresh(true);
+      this.publish();
+      if (!r.ok) throw new UsageError(`couldn't replace kanata's config: ${r.error}`);
+    });
+  }
+
+  /**
+   * The person held Left Control + Space + Escape and saw kanata stop (D-235, R1-18). It is recorded only while kanata is not answering,
+   * so the button can't stand in for the chord itself.
+   */
+  async confirmExitChord(boardId: string): Promise<void> {
+    if (!isRemapper(boardId)) throw new UsageError(`${showBoard(boardId).definition.name} isn't a software remapper`);
+    await this.exclusive(async () => {
+      await this.refresh(true);
+      if (this.readingOf(boardId).state !== "absent") {
+        throw new SyncRefusal("kanata_still_running", "kanata is still running, so the chord didn't stop it yet. Hold Left Control, Space and Escape together until the MacBook keyboard types plainly");
+      }
+      confirmExitChord(this.app, boardId);
+    });
+    this.afterChange();
+  }
+
   private requireSyncable(boardId: string): void {
     const board = showBoard(boardId);
     if (!syncSupported(board)) throw new UsageError(`${board.definition.name} can't be synced by keyloom`);
@@ -746,7 +803,7 @@ export class SyncEngine {
     this.requireSyncable(boardId);
     const bs = getBoardSync(this.app.db, boardId);
     if (on && bs.provenAt === null && isRemapper(boardId)) {
-      throw new UsageError("auto-apply turns on after you have proved kanata's emergency exit once: hold Left Control + Space + Escape, see kanata stop, then run `keyloom remap confirm-exit-chord`");
+      throw new SyncRefusal("unproven", "auto-apply turns on after you have proved kanata's emergency exit once: hold Left Control + Space + Escape, see kanata stop, then run `keyloom remap confirm-exit-chord`");
     }
     if (on && bs.provenAt === null) {
       throw new UsageError(

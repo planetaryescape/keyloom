@@ -160,7 +160,7 @@ describe("keyloom doctor", () => {
     await e.run(async () => {
       const t = await cli(["doctor", "--data-dir", e.dataDir, "--format", "table"]);
       expect(t.code).toBe(1);
-      expect(t.out).toContain("FAIL  docker: the docker daemon isn't running");
+      expect(t.out).toContain("FAIL  docker: The Docker daemon isn't running");
     }, { FAKE_MODE: "nodaemon" });
 
     await e.run(async () => {

@@ -1,0 +1,107 @@
+// Firmware is built in Docker, so "is the daemon up" is part of keyloom working rather than a prerequisite
+// the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
+import {
+  type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
+  dockerInstall, dockerStatus, findDockerEngine, startDockerEngine,
+} from "../firmware/toolchain/docker.ts";
+
+/** What the UI and `doctor` show: whether a build can run now, and what would fix it if not. */
+export type DockerReadiness =
+  | { ok: true; version: string; engine: string; autoStart: boolean }
+  | {
+      ok: false; problem: DockerProblem; reason: string;
+      /** The engine keyloom would start, or null when it found none it knows how to start. */
+      engine: string | null;
+      /** Whether a start from keyloom could help, given the engine it found and the person's setting. */
+      canStart: boolean;
+      autoStart: boolean;
+      /** What to install, when there is no Docker at all; null otherwise. */
+      install: DockerInstall | null;
+    };
+
+/** The parts a test replaces, so no test launches an app or talks to a daemon. */
+export type ToolchainOverrides = {
+  status?: () => Promise<DockerStatus>;
+  detect?: () => Promise<EngineFinding>;
+  startEngine?: (opts: Parameters<typeof startDockerEngine>[0]) => Promise<DockerStartResult>;
+  /** The process's environment, for the opt-out below. */
+  env?: Record<string, string | undefined>;
+  /** What "this computer" is, for the install advice. */
+  platform?: NodeJS.Platform;
+};
+
+/**
+ * Whether keyloom may start the engine without asking. It may, by default: starting an app the person
+ * already installed on their own machine is not a privileged act, and a build that stops at a closed
+ * Docker Desktop is a dead end. `KEYLOOM_DOCKER_AUTOSTART=0` (or `false`, `no`, `off`) turns it off.
+ */
+export function dockerAutoStart(env: Record<string, string | undefined> = process.env): boolean {
+  const value = env.KEYLOOM_DOCKER_AUTOSTART?.trim().toLowerCase();
+  return !(value === "0" || value === "false" || value === "no" || value === "off");
+}
+
+/** The daemon's state, and what would fix it. Cheap enough to ask before a build. */
+export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<DockerReadiness> {
+  const status = over.status ?? (() => dockerStatus());
+  const autoStart = dockerAutoStart(over.env ?? process.env);
+  const now = await status();
+  if (now.ok) return { ok: true, version: now.version, engine: "Docker", autoStart };
+
+  // An install or a missing link needs no engine hunt: there is nothing here to start.
+  const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();
+  const engine = finding?.kind === "engine" ? finding.engine.name : null;
+  const reason = finding !== null && (finding.kind === "elsewhere" || finding.kind === "unknown") ? finding.detail : now.reason;
+  return {
+    ok: false, problem: now.kind, reason, engine,
+    canStart: autoStart && engine !== null,
+    autoStart,
+    install: now.kind === "not-installed" ? dockerInstall(over.platform ?? process.platform) : null,
+  };
+}
+
+/** Starts the engine and waits for it, whatever the person's setting says: what an explicit click or flag asks for. */
+export async function startDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
+  const over = opts.overrides ?? {};
+  const start = over.startEngine ?? startDockerEngine;
+  return start({
+    ...(over.status === undefined ? {} : { status: over.status }),
+    ...(over.detect === undefined ? {} : { detect: over.detect }),
+    ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  });
+}
+
+export type EnsureDockerResult =
+  | { ok: true; started: boolean; engine: string }
+  | { ok: false; reason: string; engine: string | null };
+
+/**
+ * Gets the daemon ready for a build: nothing to do when it is up, otherwise start the engine and wait.
+ * The reason it failed is a sentence the person can act on, so a caller never has to explain Docker.
+ */
+export async function ensureDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<EnsureDockerResult> {
+  const over = opts.overrides ?? {};
+  const status = over.status ?? (() => dockerStatus());
+  const now = await status();
+  if (now.ok) return { ok: true, started: false, engine: "Docker" };
+  // Nothing to start when there is no engine, or its CLI never reached the PATH: that is an install or a link.
+  if (now.kind === "not-installed" || now.kind === "cli-missing") return { ok: false, engine: null, reason: now.reason };
+
+  const detect = over.detect ?? findDockerEngine;
+  if (!dockerAutoStart(over.env ?? process.env)) {
+    const finding = await detect();
+    const reason = finding.kind === "elsewhere" || finding.kind === "unknown"
+      ? `${finding.detail} Starting Docker automatically is off (KEYLOOM_DOCKER_AUTOSTART=0).`
+      : `${now.reason.replace(/\.$/, "")}, and keyloom is set not to start it (KEYLOOM_DOCKER_AUTOSTART=0). Start it, then build again.`;
+    return { ok: false, engine: null, reason };
+  }
+
+  const start = over.startEngine ?? startDockerEngine;
+  const result = await start({
+    status,
+    detect,
+    ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  });
+  return result.ok ? { ok: true, started: true, engine: result.engine } : { ok: false, reason: result.reason, engine: result.engine };
+}

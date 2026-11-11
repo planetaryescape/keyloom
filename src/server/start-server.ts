@@ -19,6 +19,10 @@ import { checkHost, checkToken } from "./guard.ts";
 import type { LayoutSource } from "./layout-source.ts";
 import type { SyncBackend } from "./sync-backend.ts";
 import { handleSyncRoute } from "./sync-routes.ts";
+import { handleSystemRoute } from "./system-routes.ts";
+import type { SystemBackend } from "./system-backend.ts";
+import { type RemapperSetupBackend, handleRemapperSetupRoute } from "./system-remapper-routes.ts";
+import { notFoundPage } from "./not-found-page.ts";
 import { loadWebAssets } from "./web-assets.ts";
 import { LayoutDetailSchema, LayoutListResponseSchema } from "../api/http.ts";
 
@@ -41,6 +45,10 @@ export interface ServerOptions {
   review?: ReviewBackend;
   /** The typing lab (rung 22). Without it the /api/lab routes fall through to a 404. */
   lab?: LabBackend;
+  /** The computer's own state (rung 25): whether Docker is up, and starting it. Without it /api/system falls through to a 404. */
+  system?: SystemBackend;
+  /** Setting up the MacBook remapper and opening System Settings panes (D-492, D-493). Without it those routes fall through to a 404. */
+  remapperSetup?: RemapperSetupBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
   boardDev?: () => Promise<BoardDevView>;
   token?: string;
@@ -61,7 +69,7 @@ const DETAIL_PREFIX = "/api/layouts/";
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, review, lab, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, review, lab, system, remapperSetup, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -104,10 +112,18 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
         const keyboardResponse = await handleKeyboardRoute(request, url.pathname, keyboards, sessionToken);
         if (keyboardResponse !== null) return keyboardResponse;
       }
+      if (system !== undefined) {
+        const systemResponse = await handleSystemRoute(request, url.pathname, system, sessionToken);
+        if (systemResponse !== null) return systemResponse;
+      }
+      if (remapperSetup !== undefined) {
+        const setupResponse = await handleRemapperSetupRoute(request, url, remapperSetup, sessionToken);
+        if (setupResponse !== null) return setupResponse;
+      }
       if (url.pathname === LIST_PATH || url.pathname === BOARD_DEV_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);
       }
-      return page(request, url.pathname);
+      return page(request, url);
     },
   });
 
@@ -147,11 +163,13 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
     });
   }
 
-  async function page(request: Request, pathname: string): Promise<Response> {
+  async function page(request: Request, url: URL): Promise<Response> {
+    // An address the server doesn't know: JSON for the API, and for a page a way back into the app (R1-07).
+    if (url.pathname.startsWith("/api/")) return notFound();
     if (request.method !== "GET") return new Response("not found", { status: 404 });
     return respond(async () => {
-      const asset = (await loadWebAssets()).get(pathname);
-      if (asset === undefined) return new Response("not found", { status: 404 });
+      const asset = (await loadWebAssets()).get(url.pathname);
+      if (asset === undefined) return notFoundPage(url.searchParams.get("t") === sessionToken ? sessionToken : null);
       return new Response(asset.file, { headers: { "content-type": asset.type } });
     });
   }

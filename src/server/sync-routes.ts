@@ -13,7 +13,7 @@ const MAX_BODY_BYTES = 10_000;
 // Bun.serve drops a request that sends nothing for 10 seconds, so a quiet stream needs a comment more often than that.
 export const EVENTS_HEARTBEAT_MS = 5000;
 
-type Kind = "status" | "now" | "auto" | "pause" | "disable" | "events";
+type Kind = "status" | "now" | "auto" | "pause" | "disable" | "replace" | "exit-chord" | "events";
 
 function match(method: string, pathname: string): Kind | "wrong-method" | null {
   switch (pathname) {
@@ -21,6 +21,8 @@ function match(method: string, pathname: string): Kind | "wrong-method" | null {
     case "/api/sync/auto": return method === "POST" ? "auto" : "wrong-method";
     case "/api/sync/pause": return method === "POST" ? "pause" : "wrong-method";
     case "/api/sync/disable-remapping": return method === "POST" ? "disable" : "wrong-method";
+    case "/api/sync/replace-foreign": return method === "POST" ? "replace" : "wrong-method";
+    case "/api/sync/confirm-exit-chord": return method === "POST" ? "exit-chord" : "wrong-method";
     case "/api/events": return method === "GET" ? "events" : "wrong-method";
     default: return null;
   }
@@ -135,6 +137,16 @@ export async function handleSyncRoute(request: Request, pathname: string, backen
       const parsed = DisableRemappingRequestSchema.safeParse(json);
       if (!parsed.success) return bad(parsed.error.issues);
       return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.disableRemapping(parsed.data.boardId) }));
+    }
+    if (found === "replace") {
+      const parsed = SyncNowRequestSchema.safeParse(json);
+      if (!parsed.success) return bad(parsed.error.issues);
+      return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.replaceForeignRemapperConfig(parsed.data.layoutId) }));
+    }
+    if (found === "exit-chord") {
+      const parsed = DisableRemappingRequestSchema.safeParse(json);
+      if (!parsed.success) return bad(parsed.error.issues);
+      return Response.json(SyncStatusResponseSchema.parse({ boards: await backend.confirmExitChord(parsed.data.boardId) }));
     }
     const parsed = PauseRequestSchema.safeParse(json);
     if (!parsed.success) return bad(parsed.error.issues);

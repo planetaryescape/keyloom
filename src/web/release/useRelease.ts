@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Build, Flash } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
 import { fetchBuild, fetchFlash, startBuild, startFlash } from "../api-write.ts";
+import { type Docker, useDocker } from "./useDocker.ts";
 
 const POLL_MS = 1000;
 // A server that has gone quiet for this many polls in a row is treated as gone, not slow.
@@ -22,6 +23,8 @@ export interface Release {
   flashNow: () => void;
   /** Polls again after the server could not be reached. */
   resume: () => void;
+  /** The Docker a build needs: up, starting, or what is missing (D-486). */
+  docker: Docker;
 }
 
 // Starts builds and flashes and follows them once a second until they finish. Nothing here
@@ -34,6 +37,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [resumes, setResumes] = useState(0);
   const [needsBoardRevision, setNeeds] = useState(false);
   const [boardRevision, setBoardRevision] = useState<string | null>(null);
+  const docker = useDocker(token);
 
   const buildRunning = build?.status === "running";
   const flashActive = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
@@ -82,7 +86,7 @@ export function useRelease(token: string, layoutRef: string): Release {
     setResumes((n) => n + 1);
   }, []);
 
-  return { build, flash, starting, error, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, resume };
+  return { build, flash, starting, error, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, resume, docker };
 }
 
 // Calls `fetchNext` every POLL_MS until `isDone`. Returns the cleanup that stops it.

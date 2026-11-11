@@ -3,7 +3,7 @@ export { type App, closeApp, openApp } from "./context.ts";
 export { type CollectionKeyboard, listKeyboardCollection, listSetupLayouts, removeKeyboard, restoreKeyboard } from "./keyboard-collection.ts";
 export { prepareBoardContribution, exportBoardContribution } from "./board-contribution.ts";
 export { drainDeviceConsumers, shutdownDeviceConnections } from "./device-connections.ts";
-export { BusyError, IncompatibleError, LabCaptureError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { BusyError, IncompatibleError, LabCaptureError, LabStartError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
@@ -32,6 +32,7 @@ export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKey
 export { type PutInput, type PutOutcome, type PutPreview, type PutProposal, previewPut, putConfig } from "./keyboard-put.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type CredentialOverrides, type DoctorCheck, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
+export { type DockerReadiness, type EnsureDockerResult, type ToolchainOverrides, dockerAutoStart, dockerReadiness, ensureDocker, startDocker } from "./toolchain.ts";
 export {
   type RemapperOverrides, applyToRemapper, confirmExitChord, disableRemapperFor, readRemapper, remapperDoctor, setupRemapper,
 } from "./remapper.ts";

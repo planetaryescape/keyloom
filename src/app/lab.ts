@@ -30,7 +30,7 @@ import { tappingTermOf } from "../lab/terms.ts";
 
 import type { App } from "./context.ts";
 import { emulateEvents } from "./emulate.ts";
-import { LabCaptureError, linuxDevicePermissionRemedy, NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
+import { LabCaptureError, LabStartError, linuxDevicePermissionRemedy, NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -57,7 +57,7 @@ async function startRealCapture(board: BoardDefinition, hooks: CaptureHooks): Pr
     const serial = await defaultSerialTransport();
     return await startZmkCapture(serial, (await findZmkStreamPort(board, serial)).path, hooks);
   } catch (err) {
-    if (err instanceof CaptureError) throw new UsageError(err.message);
+    if (err instanceof CaptureError) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
     throw err;
   }
 }
@@ -123,6 +123,7 @@ export async function beginRecording(
     if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
       throw new LabCaptureError("restart_required");
     }
+    if (err instanceof CaptureError) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
     throw err;
   }
   return { view, passage, capture, startedAt: Date.now() };

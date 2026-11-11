@@ -1,8 +1,10 @@
-import { CircleAlert, CircleCheck, Hammer, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, TriangleAlert, Unplug, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, ShieldCheck, TriangleAlert, Unplug, Zap } from "lucide-react";
 import type { BoardSync } from "../../api/http.ts";
+import { ConfirmDialog } from "../configs/ConfigDialogs.tsx";
 import { Menu } from "../shell/Menu.tsx";
+import { RemapperSetup } from "./RemapperSetup.tsx";
 import type { SyncApi } from "./useSync.ts";
-import { autoSyncLine, syncLine, type SyncLine, type SyncTone } from "./words.ts";
+import { autoSyncLine, syncLine, type SyncActionId, type SyncLine, type SyncTone } from "./words.ts";
 import "./sync.css";
 
 const ICON = {
@@ -23,15 +25,25 @@ interface PillProps {
   sync: SyncApi;
   /** The layout on screen, which "Sync now" puts on the keyboard. */
   layoutId: string;
+  layoutName: string;
   onOpenRelease: () => void;
+  /** Opens the put-on confirm for a config (D-300), the same one the config menu uses. */
+  onPutOn: (target: { id: string; name: string }) => void;
 }
 
 // One keyboard: a pill with its state, and a menu with the reason, what to do about it, and the auto-sync switch (17).
-function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: PillProps) {
+function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRelease, onPutOn }: PillProps) {
   const Icon = icon(board, line);
   const auto = autoSyncLine(board);
-  // Sync now acts on the layout on screen when this is its board, and on the layout the keyboard is tracked against otherwise.
-  const act = (id: "sync_now" | "flash_keyloom") => (id === "flash_keyloom" ? onOpenRelease() : void sync.syncNow(selected ? layoutId : board.layoutId));
+  // Each action acts on the layout on screen when this is its board, and on the layout the keyboard is tracked against otherwise.
+  const target = selected && layoutId !== board.layoutId ? { id: layoutId, name: layoutName } : { id: board.layoutId, name: board.layoutName };
+  const act = (id: SyncActionId) => {
+    if (id === "flash_keyloom" || id === "open_release") onOpenRelease();
+    else if (id === "put_on") onPutOn(target);
+    else if (id === "replace_foreign") sync.setReplaceAsk(selected ? layoutId : board.layoutId);
+    else void sync.syncNow(selected ? layoutId : board.layoutId);
+  };
+  const remapperDown = board.remapper === true && board.state.kind === "not_connected";
   return (
     <div className="sync-pill-group" data-selected={selected}>
       <Menu
@@ -66,10 +78,11 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
             </div>
             {line.action === null ? null : (
               <button type="button" role="menuitem" className="menu-item sync-primary" onClick={() => { close(); act(line.action!.id); }}>
-                <RefreshCw size={14} aria-hidden="true" />
+                {line.action.id === "open_release" ? <Hammer size={14} aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
                 <span className="menu-item-label">{line.action.label}</span>
               </button>
             )}
+            {remapperDown ? <RemapperSetup sync={sync} boardId={board.boardId} /> : null}
             {board.auto.proven ? (
               <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.setPaused(board.boardId, !board.auto.paused); }}>
                 {board.auto.paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
@@ -88,6 +101,13 @@ function BoardPill({ board, line, selected, sync, layoutId, onOpenRelease }: Pil
               <span className="sync-switch" data-on={auto.on} aria-hidden="true" />
             </button>
             {auto.note === null ? null : <p className="sync-note">{auto.note}</p>}
+            {board.remapper === true && !board.auto.proven ? (
+              // Recorded only while kanata isn't answering, so it stands for the chord having worked (R1-18).
+              <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.confirmExitChord(board.boardId); }}>
+                <ShieldCheck size={14} aria-hidden="true" />
+                <span className="menu-item-label">I held it and kanata stopped</span>
+              </button>
+            ) : null}
             <div className="menu-separator" role="separator" />
             {board.remapper === true ? (
               // Reloads the identity map, so the MacBook types plainly again. Needs no sudo.
@@ -115,8 +135,10 @@ interface Props {
   sync: SyncApi;
   /** The layout on screen and its board. */
   layoutId: string;
+  layoutName: string;
   boardId: string;
   onOpenRelease: () => void;
+  onPutOn: (target: { id: string; name: string }) => void;
 }
 
 /**
@@ -144,7 +166,7 @@ export function boardLight(board: BoardSync | undefined): "ok" | "pending" | "ba
 
 // One quiet line for the keyboard of the layout on screen (23#chrome-recedes). It opens to say why, what to do, and auto-sync.
 // Other connected keyboards show their light on their silhouette in the board switcher.
-export function SyncStatus({ sync, layoutId, boardId, onOpenRelease }: Props) {
+export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease, onPutOn }: Props) {
   const shown = sync.boards.filter((b) => b.boardId === boardId);
   if (shown.length === 0) return null;
   return (
@@ -164,9 +186,32 @@ export function SyncStatus({ sync, layoutId, boardId, onOpenRelease }: Props) {
           selected={board.boardId === boardId}
           sync={sync}
           layoutId={layoutId}
+          layoutName={layoutName}
           onOpenRelease={onOpenRelease}
+          onPutOn={onPutOn}
         />
       ))}
+      {sync.replaceAsk === null ? null : <ReplaceForeignDialog sync={sync} layoutId={sync.replaceAsk} board={shown.find((b) => b.remapper === true)} />}
     </div>
+  );
+}
+
+/**
+ * "Replace it" for kanata running a config keyloom didn't write (R1-17). The words follow `applyKanata`: a keyloom.kbd keyloom didn't
+ * write is copied to keyloom.kbd.before-keyloom first, and a file kanata was started with elsewhere is never touched.
+ */
+function ReplaceForeignDialog({ sync, layoutId, board }: { sync: SyncApi; layoutId: string; board: BoardSync | undefined }) {
+  const name = board === undefined ? "this layout" : board.layoutId === layoutId ? `“${board.layoutName}”` : "this layout";
+  return (
+    <ConfirmDialog
+      title="Replace kanata's config?"
+      lines={[
+        `keyloom loads ${name} into kanata in place of the config it runs now. Your MacBook keyboard types your layout from then on.`,
+        "keyloom keeps a copy: if its own file, keyloom.kbd, was written or edited by someone else, it is saved beside it as keyloom.kbd.before-keyloom. A config file kanata was started with elsewhere stays where it is.",
+      ]}
+      confirmLabel="Replace it"
+      onConfirm={() => sync.replaceForeign(layoutId)}
+      onClose={() => sync.setReplaceAsk(null)}
+    />
   );
 }

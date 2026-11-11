@@ -13,10 +13,13 @@ export function ErrorState({
   title,
   children,
   onRetry,
+  actions,
 }: {
   title: string;
   children: ReactNode;
   onRetry?: () => void;
+  /** The ways forward when trying again can't help, such as Show your other layouts. */
+  actions?: ReactNode;
 }) {
   return (
     <section className="state state-error" role="alert">
@@ -25,6 +28,7 @@ export function ErrorState({
       </span>
       <h2>{title}</h2>
       <p>{children}</p>
+      {actions === undefined ? null : <div className="state-actions">{actions}</div>}
       {onRetry === undefined ? null : (
         <button type="button" className="button" onClick={onRetry}>
           <RefreshCw size={14} aria-hidden="true" />

@@ -27,7 +27,7 @@ export async function findZmkStreamPort(board: BoardDefinition, transport: Seria
     const missingCentral = ports.some((p) => p.driverMissing && matchesHalfIds(p, central) &&
       (central.half.usbProductId !== undefined || parseSerial(p.serial)?.half === central.half.marker));
     if (missingCentral) throw new CaptureError(WINDOWS_COM_DRIVER_HINT);
-    throw new CaptureError(`no ${board.name} running keyloom's firmware is connected over USB (its ${central.step.label} must be). Apply a change and sync once from keyloom, then try again`);
+    throw new CaptureError(`no ${board.name} running keyloom's firmware is connected over USB (its ${central.step.label} must be). Apply a change and sync once from keyloom, then try again`, { code: "needs_sync" });
   }
   if (found.length > 1) throw new CaptureError(`more than one ${board.name} running keyloom's firmware is connected; unplug the one you don't want to record`);
   return { path: (found[0] as { port: { path: string } }).port.path };
@@ -120,7 +120,7 @@ export async function startZmkCapture(transport: SerialTransport, path: string, 
     ]);
     if (!answered || endedBy !== undefined) {
       const reason = endedBy ? `: ${endedBy}` : "";
-      throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it`);
+      throw new CaptureError(`the keyboard didn't start streaming${reason}. Its firmware may predate the typing lab: apply a change and sync from keyloom to update it`, { code: "needs_sync" });
     }
   } catch (thrown) {
     // An interruption the keyboard reported first (framing, a lost connection) is the real reason; a START write that then
