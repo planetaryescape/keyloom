@@ -48,13 +48,23 @@ describe("where keys are", () => {
 });
 
 describe("no suggestions says why and offers the fix (R4-10)", () => {
-  const ai = (status: "unavailable" | "failed", model: string | null) => ({ status, reason: "r", model, startedAt: null });
-  test("no model set up and a refused account both open the setup; only the refused one opens its key", () => {
-    expect(aiMissingWords(ai("unavailable", null))).toEqual({ words: "Suggestions need a model, and none is set up.", action: "set_up", refused: false });
-    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5"))).toMatchObject({ action: "set_up", refused: true });
+  const ai = (status: "unavailable" | "failed", model: string | null, code: string | null = null) => ({ status, reason: "r", model, code });
+  test("no model set up opens the setup only: trying again can't help until one is", () => {
+    expect(aiMissingWords(ai("unavailable", null))).toEqual({ words: "Suggestions need a model, and none is set up.", actions: ["set_up"], refused: false });
+  });
+  test("a refused account opens its key and can run again once it is fixed at the provider (#288 review)", () => {
+    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5", "auth"))).toMatchObject({ actions: ["set_up", "retry"], refused: true });
+    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5", "permission")).actions).toEqual(["set_up", "retry"]);
+    // A review from before the code was kept is still a refusal.
+    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5")).actions).toEqual(["set_up", "retry"]);
+  });
+  test("an account out of credits offers Add credits first, by its code", () => {
+    const view = aiMissingWords(ai("unavailable", "claude-opus-5-5", "no_credits"));
+    expect(view).toMatchObject({ actions: ["credits", "set_up", "retry"], refused: true });
+    expect(view.words).toContain("out of credits");
   });
   test("a look that stopped for another reason tries again", () => {
-    expect(aiMissingWords(ai("failed", "claude-opus-5-5")).action).toBe("retry");
+    expect(aiMissingWords(ai("failed", "claude-opus-5-5")).actions).toEqual(["retry"]);
   });
 });
 

@@ -7,6 +7,8 @@ import { defaultAgentModel } from "../../src/app/chat-model.ts";
 import { writeAgentConfig } from "../../src/app/agent-config.ts";
 import { chooseProvider } from "../../src/app/chat-model.ts";
 import { fakeCodex } from "../helpers/fake-codex.ts";
+import { CodexError, codexErrorFor } from "../../src/agent/codex/errors.ts";
+import type { AgentModel } from "../../src/agent/model.ts";
 import { NO_CODEX } from "../helpers/no-credentials.ts";
 import { findChangeSet } from "../../src/persistence/change-sets.ts";
 import { draft } from "../helpers/ops.ts";
@@ -344,16 +346,41 @@ describe("every proposal a run saves is shown or withdrawn", () => {
 
 describe("why there is no model", () => {
   // R4-10: the account, not the review, failed, so the page offers the model setup, not Try again; the model stays recorded to tell it apart.
-  for (const [status, message] of [[401, "no auth"], [402, "Insufficient credits"], [403, "no access to this model"]] as const) {
-    test(`a ${status} from the provider is unavailable with the provider's words and no terminal flag`, async () => {
+  for (const [status, message, code] of [[401, "no auth", "auth"], [402, "Insufficient credits", "no_credits"], [403, "no access to this model", "permission"]] as const) {
+    test(`a ${status} from the provider is unavailable with the provider's words, its code, and no terminal flag`, async () => {
       const w = await reviewWorld();
       const { review } = createReview(w.app, w.layoutId, "manual");
       const refused = await runReviewAi(w.app, review.id, scriptedModel([{ blocks: [], error: { status, message } }]).deps);
       expect(refused.ai.status).toBe("unavailable");
       expect(refused.ai.model).not.toBeNull();
+      // The page offers Add credits for no_credits by this code, never by the words (#288 review).
+      expect(refused.ai.code).toBe(code);
       expect(refused.ai.reason).not.toContain("--");
     });
   }
+
+  test("a refused look can run again once the account is fixed, and the new look clears the old code (#288 review)", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const refused = await runReviewAi(w.app, review.id, scriptedModel([{ blocks: [], error: { status: 402, message: "Insufficient credits" } }]).deps);
+    expect(refused.ai).toMatchObject({ status: "unavailable", code: "no_credits" });
+    const again = await runReviewAi(w.app, review.id, scriptedModel([submit([]), finished]).deps, { force: true });
+    expect(again.ai).toMatchObject({ status: "done", code: null });
+  });
+
+  test("a signed-out Codex says so without a terminal command or chat words", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const codex: AgentModel = {
+      provider: "codex", model: "gpt-5.5", effort: "medium",
+      run: () => Promise.reject(codexErrorFor("Not logged in")),
+      classifyError: (err) => (err instanceof CodexError ? { kind: err.kind, message: err.message } : null),
+    };
+    const refused = await runReviewAi(w.app, review.id, { model: async () => codex });
+    expect(refused.ai).toMatchObject({ status: "unavailable", code: "missing_key" });
+    expect(refused.ai.reason).not.toContain("codex login");
+    expect(refused.ai.reason).not.toContain("message");
+  });
 
   test("a provider that was chosen but has no key is said so, and is not 'no provider'", async () => {
     const w = await reviewWorld();

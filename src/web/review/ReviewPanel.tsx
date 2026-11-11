@@ -18,6 +18,7 @@ import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
+import { CREDITS_PAGES } from "../chat/setup-words.ts";
 import { ApiError } from "../api.ts";
 import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
@@ -192,6 +193,9 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   };
   const review = r.review;
   const missing = review === null ? null : aiMissingWords(review.ai);
+  // The billing page of the provider the review runs on; Codex sells no credits, so it has none.
+  const activeProvider = provider.status?.active?.provider;
+  const creditsUrl = activeProvider === "anthropic" || activeProvider === "openrouter" ? CREDITS_PAGES[activeProvider] : undefined;
   const loading = !r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running";
   const readFailed = loading && r.problem !== null;
   const now = Date.now();
@@ -378,11 +382,15 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
           <div className="br-ai-missing">
             <p className="br-ai-words">{missing.words}</p>
             <div className="br-actions br-actions-start">
-              {missing.action === "set_up" ? (
+              {missing.actions.includes("credits") && creditsUrl !== undefined ? (
+                <a className="sheet-action" href={creditsUrl} target="_blank" rel="noreferrer">Add credits</a>
+              ) : null}
+              {missing.actions.includes("set_up") ? (
                 <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
-              ) : (
+              ) : null}
+              {missing.actions.includes("retry") ? (
                 <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
-              )}
+              ) : null}
               {review.ai.reason === null ? null : (
                 <button type="button" className="sheet-action" aria-expanded={details} onClick={() => setDetails((v) => !v)}>{details ? "Hide details" : "Details"}</button>
               )}

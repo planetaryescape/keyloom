@@ -462,3 +462,8 @@
 .lab-sheet.br-sheet {
   max-height: 46dvh;
 }
+
+/* Add credits is a link to the provider, drawn like the buttons beside it. */
+.br-ai-missing a.sheet-action {
+  text-decoration: none;
+}

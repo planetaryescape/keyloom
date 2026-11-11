@@ -117,6 +117,11 @@ function unavailableReason(err: ModelError): string {
 
 const ACCOUNT_FAILURES: ReadonlySet<string> = new Set(["auth", "no_credits", "permission", "missing_key"]);
 
+/** Codex's signed-out sentence asks for a terminal command and to "send the message again"; a review is neither a chat nor a terminal. */
+function accountReason(provider: AgentModel["provider"], known: { kind: string; message: string }): string {
+  return provider === "codex" && known.kind === "missing_key" ? "Codex isn't signed in, so it couldn't look at this config. Sign in to Codex again, then run the review again." : known.message;
+}
+
 const usageLine = (u: Usage) => ({ inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens });
 
 /**
@@ -141,7 +146,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   announce("running");
 
   const started = now();
-  const finish = (status: "done" | "unavailable" | "failed", reason: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = []) => {
+  const finish = (status: "done" | "unavailable" | "failed", reason: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = [], code: string | null = null) => {
     const updated = transact(app.db, () => {
       for (const id of rejectedProposals) if (findChangeSet(app.db, id)?.status === "proposed") markRejected(app.db, id, now());
       if (!ownsReviewRun(app.db, row)) return false;
@@ -153,7 +158,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
         }
       }
       const kept = items.map(({ dismissedAt: _, ...r }) => r);
-      finishAi(app.db, row.id, { status, reason, model, items: kept, fixedAgent: status === "done" ? agentGone(app, row, kept) : [] });
+      finishAi(app.db, row.id, { status, reason, model, code, items: kept, fixedAgent: status === "done" ? agentGone(app, row, kept) : [] });
       return true;
     });
     if (updated) announce(status);
@@ -260,10 +265,11 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     const known = model.classifyError(err);
     // A model API failure is something BK can act on, in words. Anything else is a bug: it is logged with its stack and shown plainly.
     if (known === null) console.error("keyloom: board review failed", err);
-    // The account, not the review, failed: like a missing provider it is fixed in the model setup, not by trying again (R4-10). The model
-    // stays recorded, which is how the page tells "this model can't be used" from "none is set up".
+    // The account, not the review, failed: it is fixed in the model setup or at the provider (R4-10). The model stays recorded, which is how
+    // the page tells "this model can't be used" from "none is set up"; the kind is kept as a code, so the page offers Add credits for
+    // no_credits, and Try again for after the account is fixed (#288 review).
     else if (ACCOUNT_FAILURES.has(known.kind)) {
-      finish("unavailable", known.message, model.model, [], proposed);
+      finish("unavailable", accountReason(model.provider, known), model.model, [], proposed, known.kind);
       return toReview(app, findReview(app.db, row.id) as BoardReviewRow);
     }
     finish("failed", known?.message ?? `keyloom hit an error while reviewing: ${err instanceof Error ? err.message : String(err)}`, model.model, [], proposed);

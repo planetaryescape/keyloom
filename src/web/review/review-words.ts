@@ -82,17 +82,22 @@ export function placeWords(positions: readonly number[], rows: Readonly<Record<s
 }
 
 /**
- * Why there are no suggestions, and the one thing to do (R4-10). `unavailable` with no model recorded means none is set up; with a model
- * recorded, the provider refused the account (a key it rejects, no credits, no access), which is fixed in the model setup, not by trying
- * again. Anything else that stopped the look can be tried again.
+ * Why there are no suggestions, and what to do (R4-10). `unavailable` with no model recorded means none is set up, so only the setup helps.
+ * With a model recorded, the provider refused the account (a key it rejects, no credits, no access). That is fixed in the model setup or at
+ * the provider, so it offers the setup, Add credits when the code says the account ran out, and Try again for after it is fixed at the
+ * provider, where keyloom can't see it (#288 review). Anything else that stopped the look can be tried again. By the code, never the text.
  */
-export type AiMissing = { words: string; action: "set_up" | "retry"; refused: boolean };
+export type AiMissingAction = "credits" | "set_up" | "retry";
+export type AiMissing = { words: string; actions: readonly AiMissingAction[]; refused: boolean };
 export function aiMissingWords(ai: BoardReview["ai"]): AiMissing {
-  if (ai.status === "unavailable") {
-    const refused = ai.model !== null;
-    return { words: refused ? "The model provider refused this key or account, so there are no suggestions this time." : "Suggestions need a model, and none is set up.", action: "set_up", refused };
+  if (ai.status === "unavailable" && ai.model === null) return { words: "Suggestions need a model, and none is set up.", actions: ["set_up"], refused: false };
+  if (ai.status === "unavailable" && ai.code === "no_credits") {
+    return { words: "The model account is out of credits, so there are no suggestions this time. Add credits, then try again.", actions: ["credits", "set_up", "retry"], refused: true };
   }
-  return { words: "keyloom's own look didn't finish, so there are no suggestions this time.", action: "retry", refused: false };
+  if (ai.status === "unavailable") {
+    return { words: "The model provider refused this key or account, so there are no suggestions this time. Fix the account or change the key, then try again.", actions: ["set_up", "retry"], refused: true };
+  }
+  return { words: "keyloom's own look didn't finish, so there are no suggestions this time.", actions: ["retry"], refused: false };
 }
 
 /**

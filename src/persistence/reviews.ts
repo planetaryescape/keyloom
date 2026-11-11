@@ -42,7 +42,8 @@ export type BoardReviewRow = {
   trigger: ReviewTrigger;
   checkedAt: number;
   summary: { layers: number; keys: number; combos: number };
-  ai: { status: AiStatus; reason: string | null; model: string | null; startedAt: number | null };
+  /** `code` is the model error kind of a refused look (`no_credits`, `auth`, ...), so the page can offer the button that fixes it. */
+  ai: { status: AiStatus; reason: string | null; model: string | null; startedAt: number | null; code: string | null };
   previousReviewId: string | null;
   /** The previous review's items that this revision no longer produces, as they were. */
   fixed: ReviewItemRow[];
@@ -54,7 +55,7 @@ export type BoardReviewRow = {
 
 type ReviewDb = {
   id: string; layout_id: string; revision_id: string; trigger: ReviewTrigger; checked_at: number; summary: string;
-  ai_status: AiStatus; ai_reason: string | null; ai_model: string | null; ai_started_at: number | null; previous_review_id: string | null; fixed: string;
+  ai_status: AiStatus; ai_reason: string | null; ai_model: string | null; ai_code: string | null; ai_started_at: number | null; previous_review_id: string | null; fixed: string;
   contract_version: number; snapshot_key: string | null; invalidated_reason: string | null; ai_run_id: string | null;
 };
 type ItemDb = {
@@ -72,7 +73,7 @@ const ItemRowSchema = z.object({
 
 const toReview = (r: ReviewDb): BoardReviewRow => ({
   id: r.id, layoutId: r.layout_id, revisionId: r.revision_id, trigger: r.trigger, checkedAt: r.checked_at, summary: SummarySchema.parse(JSON.parse(r.summary)),
-  ai: { status: r.ai_status, reason: r.ai_reason, model: r.ai_model, startedAt: r.ai_started_at },
+  ai: { status: r.ai_status, reason: r.ai_reason, model: r.ai_model, startedAt: r.ai_started_at, code: r.ai_code },
   previousReviewId: r.previous_review_id, fixed: z.array(ItemRowSchema).parse(JSON.parse(r.fixed)),
   contractVersion: r.contract_version, snapshotKey: r.snapshot_key, invalidatedReason: r.invalidated_reason, runId: r.ai_run_id,
 });
@@ -137,7 +138,7 @@ export function insertReview(db: Database, input: InsertReview): { review: Board
 export function claimAi(db: Database, reviewId: string, now: number, staleMs: number, opts: { force?: boolean } = {}): boolean {
   const retry = opts.force ? "'pending', 'unavailable', 'failed', 'done'" : "'pending', 'unavailable', 'failed'";
   return db.query(
-    `UPDATE board_reviews SET ai_status = 'running', ai_reason = NULL, ai_started_at = ?, ai_run_id = ?
+    `UPDATE board_reviews SET ai_status = 'running', ai_reason = NULL, ai_code = NULL, ai_started_at = ?, ai_run_id = ?
      WHERE id = ? AND invalidated_reason IS NULL AND (ai_status IN (${retry}) OR (ai_status = 'running' AND ai_started_at < ?))`,
   ).run(now, newId("run"), reviewId, now - staleMs).changes > 0;
 }
@@ -152,7 +153,7 @@ export function invalidateReview(db: Database, reviewId: string, reason: string)
   db.query(`UPDATE change_sets SET status = 'rejected', decided_at = ? WHERE status = 'proposed' AND id IN
     (SELECT change_set_id FROM review_proposals WHERE review_id = ? UNION SELECT proposal_id FROM review_items WHERE review_id = ? AND source = 'agent')`).run(Date.now(), reviewId, reviewId);
   clearReviewAgentItems(db, reviewId);
-  db.query("UPDATE board_reviews SET ai_status = 'failed', ai_reason = ?, invalidated_reason = ?, ai_run_id = NULL WHERE id = ?").run(reason, reason, reviewId);
+  db.query("UPDATE board_reviews SET ai_status = 'failed', ai_reason = ?, ai_code = NULL, invalidated_reason = ?, ai_run_id = NULL WHERE id = ?").run(reason, reason, reviewId);
 }
 
 export function resetReview(db: Database, row: BoardReviewRow, input: { snapshotKey: string; trigger: ReviewTrigger; checkedAt: number; summary: BoardReviewRow["summary"]; items: ReviewItemRow[] }): BoardReviewRow {
@@ -160,7 +161,7 @@ export function resetReview(db: Database, row: BoardReviewRow, input: { snapshot
   db.query("DELETE FROM review_items WHERE review_id = ?").run(row.id);
   insertItems(db, row.id, input.items, 0);
   db.query(`UPDATE board_reviews SET contract_version = ?, snapshot_key = ?, invalidated_reason = NULL,
-     trigger = ?, checked_at = ?, summary = ?, fixed = '[]', ai_status = 'pending', ai_reason = NULL, ai_model = NULL, ai_started_at = NULL WHERE id = ?`)
+     trigger = ?, checked_at = ?, summary = ?, fixed = '[]', ai_status = 'pending', ai_reason = NULL, ai_code = NULL, ai_model = NULL, ai_started_at = NULL WHERE id = ?`)
     .run(REVIEW_CONTRACT_VERSION, input.snapshotKey, input.trigger, input.checkedAt, JSON.stringify(input.summary), row.id);
   return findReview(db, row.id)!;
 }
@@ -190,7 +191,7 @@ export function reviewBehavior(db: Database, row: BoardReviewRow): Array<Behavio
 /** Ends a run that claimed the review. `items` replace whatever the agent found before; the checks' items stay. */
 export function finishAi(
   db: Database, reviewId: string,
-  outcome: { status: "done" | "unavailable" | "failed"; reason: string | null; model: string | null; items: ReviewItemRow[]; fixedAgent: ReviewItemRow[] },
+  outcome: { status: "done" | "unavailable" | "failed"; reason: string | null; model: string | null; code?: string | null; items: ReviewItemRow[]; fixedAgent: ReviewItemRow[] },
 ): void {
   db.query("DELETE FROM review_items WHERE review_id = ? AND source = 'agent'").run(reviewId);
   // `fixed` holds the checks' finds from when the review was made; the agent's join them now that it has looked.
@@ -198,7 +199,7 @@ export function finishAi(
   db.query("UPDATE board_reviews SET fixed = ? WHERE id = ?").run(JSON.stringify([...kept, ...outcome.fixedAgent]), reviewId);
   const next = (db.query("SELECT COALESCE(MAX(position) + 1, 0) AS n FROM review_items WHERE review_id = ?").get(reviewId) as { n: number }).n;
   insertItems(db, reviewId, outcome.items, next);
-  db.query("UPDATE board_reviews SET ai_status = ?, ai_reason = ?, ai_model = ? WHERE id = ?").run(outcome.status, outcome.reason, outcome.model, reviewId);
+  db.query("UPDATE board_reviews SET ai_status = ?, ai_reason = ?, ai_model = ?, ai_code = ? WHERE id = ?").run(outcome.status, outcome.reason, outcome.model, outcome.code ?? null, reviewId);
 }
 
 /** A forced look replaces old suggestions immediately, before another measurement could be read beside them. */

@@ -500,6 +500,13 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     setView("chat");
     input.current?.focus();
   };
+  // A full or refused conversation sends BK to a new one; the message it couldn't answer goes with him, unless he has typed newer words.
+  const startOverWithLastMessage = () => {
+    if (streaming) return;
+    const lastAsked = transcript.turns.findLast((turn) => turn.kind === "user");
+    newConversation();
+    setDraft((current) => current.trim() !== "" ? current : lastAsked?.kind === "user" ? lastAsked.text : "");
+  };
   // New, Conversations, Decisions and the model, folded into one ⋯ (P3 review): the bar's chrome stays quiet.
   const barMenu =
     variant !== "bar" ? null : (
@@ -716,7 +723,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                     switchTo={readyOthers}
                     onSwitch={switchProvider}
                     onSetUpModel={() => setSetupOpen(usedProvider ?? "anthropic")}
-                    onNewConversation={newConversation}
+                    onNewConversation={startOverWithLastMessage}
                     creditsUrl={usedProvider === "anthropic" || usedProvider === "openrouter" ? CREDITS_PAGES[usedProvider] : undefined}
                     compact={variant === "bar"}
                     motionPaused={motionPaused}

@@ -1,4 +1,5 @@
 import { ArrowRightLeft, KeyRound, MessageSquareText, RefreshCw, Send, TriangleAlert, X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
 import { retryOffer } from "./provider-ready.ts";
@@ -108,9 +109,12 @@ export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: P
 
 /** Choosing a provider was refused or never arrived (R4-18). The conversation and its provider are as they were; Try again asks once more. */
 export function SwitchFailed({ to, message, onRetry, onDismiss }: { to: ProviderId; message: string; onRetry: () => void; onDismiss: () => void }) {
-  // The switch was pressed higher up the conversation, so the answer is brought into view where it is said.
+  // The switch was pressed higher up the conversation, so the answer is brought into view where it is said: once per failure, not on every
+  // render, which would pull the page back each time the conversation above it changed. Each failure brings its own `onRetry`.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => box.current?.scrollIntoView({ block: "nearest" }), [onRetry]);
   return (
-    <div className="chat-problem" role="alert" ref={(element) => element?.scrollIntoView({ block: "nearest" })}>
+    <div className="chat-problem" role="alert" ref={box}>
       <TriangleAlert size={18} aria-hidden="true" />
       <div className="chat-problem-body">
         <strong>keyloom couldn&apos;t switch to {PROVIDER_NAMES[to]}</strong>
