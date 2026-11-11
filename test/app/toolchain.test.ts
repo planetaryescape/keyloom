@@ -56,6 +56,25 @@ describe("readiness", () => {
   });
 });
 
+describe("a daemon that refuses this account (D-497)", () => {
+  const refused = async () => ({ ok: false as const, kind: "no-access" as const, reason: "Docker is running, but your account isn't allowed to use it." });
+
+  test("is never offered a start; Linux gets the docker-group command to copy, a Mac the engine to reopen", async () => {
+    const linux = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "the Docker service", command: ["systemctl", "start", "docker"] } }), env: {}, platform: "linux" });
+    expect(linux).toMatchObject({ ok: false, problem: "no-access", canStart: false, install: null, access: { command: "sudo usermod -aG docker $USER" } });
+    if (!linux.ok) expect(linux.access?.note).toContain("Log out and back in");
+    const mac = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "start"] } }), env: {}, platform: "darwin" });
+    expect(mac).toMatchObject({ ok: false, problem: "no-access", engine: "Colima", canStart: false, access: { command: null, note: "Quit Colima and open it again, then check again." } });
+  });
+
+  test("a build says why and starts nothing", async () => {
+    let starts = 0;
+    const result = await ensureDocker({ overrides: { status: refused, env: {}, startEngine: async () => (starts++, { ok: true, version: "1", engine: "x", waitedMs: 0 }) } });
+    expect(result).toMatchObject({ ok: false, engine: null });
+    expect(starts).toBe(0);
+  });
+});
+
 describe("getting it ready for a build", () => {
   test("nothing is started when the daemon is up", async () => {
     let starts = 0;

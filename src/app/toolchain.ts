@@ -1,7 +1,7 @@
 // Firmware is built in Docker, so "is the daemon up" is part of keyloom working rather than a prerequisite
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
-  type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
+  DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
   dockerInstall, dockerStatus, findDockerEngine, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
 
@@ -17,7 +17,18 @@ export type DockerReadiness =
       autoStart: boolean;
       /** What to install, when there is no Docker at all; null otherwise. */
       install: DockerInstall | null;
+      /** How to get this account access, when the daemon refuses it (`no-access`); null otherwise. */
+      access: DockerAccessFix | null;
     };
+
+/** The way out of `no-access`: on Linux a command to paste (it needs sudo and a new login, so keyloom can't run it), on a Mac a sentence. */
+export type DockerAccessFix = { command: string | null; note: string };
+
+export function dockerAccessFix(platform: NodeJS.Platform, engine: string | null): DockerAccessFix {
+  return platform === "linux"
+    ? { command: DOCKER_GROUP_COMMAND, note: "It adds your account to the docker group. Log out and back in so the change takes effect, then open keyloom again." }
+    : { command: null, note: `Quit ${engine ?? "your Docker app"} and open it again, then check again.` };
+}
 
 /** The parts a test replaces, so no test launches an app or talks to a daemon. */
 export type ToolchainOverrides = {
@@ -53,11 +64,14 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();
   const engine = finding?.kind === "engine" ? finding.engine.name : null;
   const reason = finding !== null && (finding.kind === "elsewhere" || finding.kind === "unknown") ? finding.detail : now.reason;
+  const platform = over.platform ?? process.platform;
   return {
     ok: false, problem: now.kind, reason, engine,
-    canStart: autoStart && engine !== null,
+    // A start can't give this account the socket, so it isn't offered for `no-access`.
+    canStart: autoStart && engine !== null && now.kind !== "no-access",
     autoStart,
-    install: now.kind === "not-installed" ? dockerInstall(over.platform ?? process.platform, ...(over.has === undefined ? [] : [over.has])) : null,
+    install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
+    access: now.kind === "no-access" ? dockerAccessFix(platform, engine) : null,
   };
 }
 
@@ -86,8 +100,8 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   const status = over.status ?? (() => dockerStatus());
   const now = await status();
   if (now.ok) return { ok: true, started: false, engine: "Docker" };
-  // Nothing to start when there is no engine, or its CLI never reached the PATH: that is an install or a link.
-  if (now.kind === "not-installed" || now.kind === "cli-missing") return { ok: false, engine: null, reason: now.reason };
+  // Nothing to start when there is no engine, its CLI never reached the PATH, or it refuses this account: an install, a link or a permission.
+  if (now.kind === "not-installed" || now.kind === "cli-missing" || now.kind === "no-access") return { ok: false, engine: null, reason: now.reason };
 
   const detect = over.detect ?? findDockerEngine;
   if (!dockerAutoStart(over.env ?? process.env)) {

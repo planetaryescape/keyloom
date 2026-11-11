@@ -1,7 +1,7 @@
 // Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
 // it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerContext, type DockerStatus, adoptBundledDockerCli, bundledDockerCli, colimaEngine, dockerInstall, findDockerEngine, startDockerEngine } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerStatus, adoptBundledDockerCli, bundledDockerCli, colimaEngine, dockerInstall, findDockerEngine, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
 import { fakeBinDir } from "../../helpers/fake-bin.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -95,6 +95,16 @@ describe("what keyloom says when it can't start it", () => {
   });
 });
 
+describe("reading a failed docker version", () => {
+  test("permission denied is no-access, with Docker's own fix on Linux; anything else is a daemon that is down", () => {
+    const denied = "permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get \"http://%2Fvar%2Frun%2Fdocker.sock/v1.47/version\": dial unix /var/run/docker.sock: connect: permission denied";
+    expect(versionFailure(denied, "linux")).toMatchObject({ ok: false, kind: "no-access" });
+    expect((versionFailure(denied, "linux") as { reason: string }).reason).toContain("sudo usermod -aG docker $USER");
+    expect(versionFailure(denied, "darwin")).toMatchObject({ ok: false, kind: "no-access" });
+    expect(versionFailure("Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?", "linux")).toMatchObject({ kind: "daemon-down" });
+  });
+});
+
 describe("starting it", () => {
   test("a daemon already up is not started, and nothing waits", async () => {
     const status = scriptedStatus([up()]);
@@ -157,6 +167,49 @@ describe("starting it", () => {
       sleep: async () => {},
     });
     expect(remote).toEqual({ ok: false, engine: null, reason: "Your Docker context \"remote\" points at ssh://builder, which runs on another machine." });
+    expect(launched).toBe(0);
+  });
+
+  test("a slow answer is asked again, not restarted: a busy Colima VM keeps running (D-497)", async () => {
+    const slow: DockerStatus = { ok: false, kind: "slow", reason: "Docker did not answer within 5 s; it may still be starting." };
+    const colima = { kind: "engine" as const, engine: { name: "Colima", command: ["colima", "restart"] } };
+    let launched = 0;
+    const answered = await startDockerEngine({ status: scriptedStatus([slow, slow, up()]).status, detect: async () => colima, start: async () => (launched++, { ok: true }), sleep: async () => {}, pollMs: 1 });
+    expect(answered.ok).toBe(true);
+    expect(launched).toBe(0);
+    // Slow until the deadline: still running, so keyloom leaves it alone and says to check again.
+    const busy = await startDockerEngine({ status: scriptedStatus([slow]).status, detect: async () => colima, start: async () => (launched++, { ok: true }), sleep: (ms) => Bun.sleep(ms), pollMs: 5, timeoutMs: 40 });
+    expect(busy.ok).toBe(false);
+    if (!busy.ok) expect(busy.reason).toContain("left it running");
+    expect(launched).toBe(0);
+    // A daemon that then says it is down (the socket refuses) is the evidence a restart is for.
+    const stuck = await startDockerEngine({ status: scriptedStatus([slow, down, up()]).status, detect: async () => colima, start: async () => (launched++, { ok: true }), sleep: async () => {}, pollMs: 1 });
+    expect(stuck.ok).toBe(true);
+    expect(launched).toBe(1);
+  });
+
+  test("the launch and the wait share one deadline: a long launch gets the window, and Docker is asked once after it", async () => {
+    const budgets: number[] = [];
+    const result = await startDockerEngine({
+      status: scriptedStatus([down, up("29.1.0")]).status,
+      detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "start"] } }),
+      // A cold `colima start` that runs past the whole window and then succeeds.
+      start: async (_engine, budgetMs) => (budgets.push(budgetMs), await Bun.sleep(60), { ok: true }),
+      sleep: async () => {},
+      timeoutMs: 50,
+    });
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0]).toBeGreaterThan(0);
+    expect(budgets[0]).toBeLessThanOrEqual(50);
+    expect(result).toMatchObject({ ok: true, version: "29.1.0", engine: "Colima" });
+  });
+
+  test("a daemon that refuses this account is not started", async () => {
+    let launched = 0;
+    const refused = versionFailure("permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock", "linux");
+    const result = await startDockerEngine({ status: scriptedStatus([refused]).status, detect: async () => ({ kind: "none" }), start: async () => (launched++, { ok: true }), sleep: async () => {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("sudo usermod -aG docker $USER");
     expect(launched).toBe(0);
   });
 

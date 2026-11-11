@@ -19,6 +19,8 @@ export type DockerView =
   | { kind: "installed" }
   /** An engine keyloom can't start (another machine, an unknown socket): its own sentence and Check again. */
   | { kind: "other"; reason: string }
+  /** The daemon runs but refuses this account (D-497): the command to copy where there is one, what to do after, and Check again. */
+  | { kind: "no-access"; command: string | null; note: string }
   | { kind: "down"; engine: string; canStart: boolean };
 
 /** Server sentences are also printed in a terminal, where `code` reads well; on the page the backticks are noise. */
@@ -37,6 +39,7 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
       ? { kind: "install", engine: i.engine, note: i.note, alternatives: i.alternatives }
       : { kind: "download", engine: i.engine, url: i.url, note: i.note, alternatives: i.alternatives };
   }
+  if (readiness.problem === "no-access" && readiness.access !== null) return { kind: "no-access", command: readiness.access.command, note: readiness.access.note };
   if (readiness.engine === null) return { kind: "other", reason: plain(readiness.reason) };
   return { kind: "down", engine: readiness.engine, canStart: readiness.canStart };
 }
@@ -47,6 +50,7 @@ export function buildBlockedReason(view: DockerView): string | null {
     case "install": case "download": case "install-failed": return "Install Docker first.";
     case "installing": return "Waiting for Docker to finish installing.";
     case "starting": return "Waiting for Docker to start.";
+    case "no-access": return "Give keyloom access to Docker first.";
     default: return null;
   }
 }

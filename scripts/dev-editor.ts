@@ -8,6 +8,7 @@
 // KEYLOOM_FAKE_NO_KEYBOARD=0 makes the fake detect a keyboard (the default asks for Rev A or B);
 // KEYLOOM_FAKE_BUILD_MS and KEYLOOM_FAKE_FLASH_STEP_MS change how long they take.
 // KEYLOOM_FAKE_FAIL_BUILD=docker fails the build because Docker is missing, with its code (D-488).
+// KEYLOOM_FAKE_DOCKER=no-access-linux|no-access-mac makes Docker refuse this account (D-497).
 // KEYLOOM_FAKE_FLASH=manual gives the board no flash recipe (D-490); KEYLOOM_FAKE_FLASH=no-zapp leaves Zapp off the computer, and
 // its Install button installs a fake one in about four seconds (D-489).
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
@@ -21,6 +22,7 @@ import { startServer } from "../src/server/start-server.ts";
 import type { InstallState } from "../src/api/tool-install.ts";
 import type { FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
+import { dockerAccessFix } from "../src/app/toolchain.ts";
 
 const port = Number(process.argv[2] ?? 4490);
 const fixture = await devSample();
@@ -56,8 +58,14 @@ const installState = (tool: InstallState["tool"]): InstallState => {
   if (done && tool === "zapp") Object.assign(flashPlan, zappPlan(true));
   return { tool, status: done ? "succeeded" : "running", phase: done ? null : "installing", logTail: [`keyloom: brew install ${tool}`, `==> Pouring ${tool}--1.0.2.arm64_sequoia.bottle.tar.gz`], error: null, errorCode: null };
 };
+const dockerMode = process.env.KEYLOOM_FAKE_DOCKER;
 const system: SystemBackend = {
-  docker: async () => ({ ok: true, version: "29.0.0", engine: "Docker", autoStart: true }),
+  docker: async () => dockerMode === "no-access-linux" || dockerMode === "no-access-mac"
+    ? {
+        ok: false, problem: "no-access", reason: "Docker is running, but your account isn't allowed to use it.", engine: dockerMode === "no-access-mac" ? "Colima" : "the Docker service",
+        canStart: false, autoStart: true, install: null, access: dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? "Colima" : "the Docker service"),
+      }
+    : { ok: true, version: "29.0.0", engine: "Docker", autoStart: true },
   startDocker: async () => ({ ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 }),
   install: async (tool) => {
     if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now() }]]);

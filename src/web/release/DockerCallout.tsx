@@ -1,6 +1,7 @@
 // What keyloom says about the Docker a build needs, with the button that fixes it (D-486 to D-488). Shared by the
 // release dialog and the board review's activity tests, so both offer the same Install or Start.
 import { CircleAlert, CircleCheck, Download, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
+import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { LogTail } from "./LogTail.tsx";
 import type { DockerView } from "./release-words.ts";
 import type { Docker } from "./useDocker.ts";
@@ -129,6 +130,20 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           <TriangleAlert size={18} aria-hidden="true" />
           <div className="callout-body">
             <p>{view.reason}</p>
+            <div className="callout-actions">
+              <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+            </div>
+          </div>
+        </div>
+      );
+    case "no-access":
+      return (
+        <div className="callout callout-warning" role="alert">
+          <TriangleAlert size={18} aria-hidden="true" />
+          <div className="callout-body">
+            <p>Docker is running, but it refuses keyloom, so firmware can't build yet.</p>
+            {view.command === null ? null : <CopyCommand command={view.command} />}
+            <p className="callout-note">{view.note}</p>
             <div className="callout-actions">
               <button type="button" className="button" onClick={docker.refresh}>Check again</button>
             </div>
