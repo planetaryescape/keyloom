@@ -548,8 +548,11 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
         // kanata not running is fixed here, by the setup above.
         problemFor={(error) => {
           if (!(error instanceof ApiError)) return null;
-          if (error.code === "kanata_not_running") setKanataRefused(true);
-          return refusalProblem(error, {}, (action) => (action === "open_status" || onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }));
+          const kanataOff = error.code === "kanata_not_running";
+          if (kanataOff) setKanataRefused(true);
+          const refusal = refusalProblem(error, {}, (action) => (action === "open_status" || onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }));
+          // Only kanata's own refusal is answered by the setup checklist; busy or not_connected keep their detail beside it (#293 review).
+          return refusal !== null && kanataOff ? { ...refusal, extraFixes: true } : refusal;
         }}
         onClose={() => setPutting(false)}
       />

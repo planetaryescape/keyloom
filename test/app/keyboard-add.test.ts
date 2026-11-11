@@ -129,10 +129,13 @@ describe("what the new-keyboard screen is told", () => {
     expect(p.keyCount).toBe(75);
     expect(p.layouts).toEqual([{ name: "LAYOUT_semi_standard", keys: 66 }, { name: "LAYOUT_ortho_5x15", keys: 75 }]);
     expect(p.needs).toEqual(["--home-row", "--layout"]);
+    expect(p.guessedLayout).toBe("LAYOUT_ortho_5x15");
     expect(p.board).not.toBeNull();
     const picked = await previewKeyboard({ candidate: "qmk:atomic", layout: "LAYOUT_semi_standard" }, d());
     expect(picked.keyCount).toBe(66);
     expect(picked.needs).toEqual(["--home-row"]);
+    // The guess is still named after a pick, so the page keeps it marked (#293 review).
+    expect(picked.guessedLayout).toBe("LAYOUT_ortho_5x15");
   });
 
   test("add still asks the CLI for --layout rather than storing keyloom's guess", async () => {

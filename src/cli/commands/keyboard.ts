@@ -150,8 +150,8 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
         const layouts = preview.needs.includes("--layout") ? `\nlayouts to choose from with --layout: ${preview.layouts.map((l) => `${l.name} (${l.keys} keys)`).join(", ")}` : "";
         print(io, format(), {
           // The drawn board is for the screens (D-336); the CLI's JSON stays what it was.
-          json: { added: false, needs: preview.needs, preview: { ...preview, board: undefined, boardProblem: undefined, boardProblemCode: undefined, displayName: undefined } },
-          table: `${preview.candidate.name}: ${preview.keyCount} keys${preview.layout ? ` (layout ${preview.layout})` : ""}, main block rows from the top:\n${rows}${controllers}${layouts}`,
+          json: { added: false, needs: preview.needs, preview: { ...preview, board: undefined, boardProblem: undefined, boardProblemCode: undefined, guessedLayout: undefined, displayName: undefined } },
+          table: `${preview.candidate.name}: ${preview.keyCount} keys${preview.layout ? ` (layout ${preview.layout}${preview.needs.includes("--layout") ? ", keyloom's guess" : ""})` : ""}, main block rows from the top:\n${rows}${controllers}${layouts}`,
         });
         throw new UsageError(`${preview.candidate.name} is not stored yet. Confirm with ${preview.needs.join(" and ")}${preview.needs.includes("--home-row") ? ` (keyloom guesses ${preview.guessedHomeRow})` : ""}`);
       }

@@ -61,6 +61,8 @@ export type KeyboardPreview = {
   layout: string | null;
   /** QMK: every layout macro the keyboard has, when it has more than one, so the person can pick theirs; empty otherwise. */
   layouts: Array<{ name: string; keys: number }>;
+  /** QMK with several layouts and no default: the one keyloom guesses, kept after the person picks another so the page can still mark it. */
+  guessedLayout: string | null;
   /** What is still needed before the board can be written, as the flags that give it. */
   needs: string[];
   /** ZMK: the controllers that provide what the shield requires and whose boot drive keyloom knows. */
@@ -173,6 +175,7 @@ export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddD
   if (input.homeRow === undefined) needs.push("--home-row");
   if (layoutGuessed) needs.push("--layout");
   const layouts = c.entry.kind === "qmk" ? Object.entries(c.entry.qmk.layouts).map(([name, keys]) => ({ name, keys })) : [];
+  const guessedLayout = c.entry.kind === "qmk" && defaultLayout(c.entry.qmk.layouts, c.entry.qmk.aliases) === undefined ? (guessLayout(c.entry.qmk.layouts) ?? null) : null;
   if (c.entry.kind === "zmk" && (c.entry.zmk.requires?.length ?? 0) > 0 && input.controller === undefined) needs.push("--controller");
   const controllers = controllersFor(c);
   const assumed = input.controller === undefined && controllers.length > 0 ? (controllers[0] as { id: string }).id : null;
@@ -200,7 +203,7 @@ export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddD
   }
   return {
     candidate: { id: c.id, name: c.name, firmware: c.firmware }, keyCount: geometry.keys.length,
-    rows: rows.map((r, i) => ({ row: i + 1, keys: r.length })), guessedHomeRow, layout, layouts: layouts.length > 1 ? layouts : [], needs, controllers, board, boardProblem, boardProblemCode,
+    rows: rows.map((r, i) => ({ row: i + 1, keys: r.length })), guessedHomeRow, layout, layouts: layouts.length > 1 ? layouts : [], guessedLayout, needs, controllers, board, boardProblem, boardProblemCode,
     displayName: displayNameFor(c),
   };
 }

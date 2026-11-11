@@ -4,7 +4,7 @@ import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import "../review/review.css";
 import type { PreviewResponse, PutPreviewResponse } from "../../api/keyboards.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
-import type { NewKeyboard } from "./useNewKeyboard.ts";
+import { layoutUnpicked, type NewKeyboard } from "./useNewKeyboard.ts";
 import "./keyboards.css";
 import { isOnePiece } from "../../boards/one-piece.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
@@ -20,6 +20,12 @@ function rowWord(row: number, rows: number): string {
   if (rows === 3) return ["Top row", "Middle row", "Bottom row"][row - 1] ?? `Row ${row}`;
   if (row === rows) return "Bottom row";
   return ROW_WORDS[row - 1] ?? `Row ${row}`;
+}
+
+/** The Review step's way back names every question the Confirm step asked: "Home row", "Home row and layout", "Home row, layout and controller". */
+export function reviewBackLabel(layout: boolean, controller: boolean): string {
+  const asked = ["Home row", ...(layout ? ["layout"] : []), ...(controller ? ["controller"] : [])];
+  return asked.length === 1 ? asked[0] as string : `${asked.slice(0, -1).join(", ")} and ${asked.at(-1) as string}`;
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -102,6 +108,8 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
   const asked = 1 + (layouts.length > 1 ? 1 : 0) + (needsController ? 1 : 0);
   const name = preview?.displayName ?? step.candidate.name;
   const problem = preview === null ? null : deriveProblem(preview.boardProblemCode, name);
+  // The board is drawn on keyloom's guess until the person picks a layout, and a guess is never added (D-525).
+  const layoutPending = preview !== null && layoutUnpicked(step, preview);
   const cantAdd = problem?.blocked === true || (preview === null && deriveProblem(flow.previewProblemCode, name)?.blocked === true);
   let number = 0;
   return (
@@ -121,9 +129,9 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
               // A third of QMK's keyboards have several layouts and no default (R5-06): the person picks theirs, by its key count.
               <div className="nb-step">
                 <h3><span>{++number}</span>Which layout is yours?</h3>
-                <p>QMK lists {layouts.length} layouts for the {step.candidate.name}. Pick the one with your number of keys; the board shows each one as you pick it.{preview.needs.includes("--layout") ? " keyloom's guess is marked." : ""}</p>
-                <ChoiceGroup legend="Layout" legendHidden variant="list" value={step.layout ?? preview.layout}
-                  choices={layouts.map((l) => ({ value: l.name, label: `${l.name} · ${plural(l.keys, "key")}${preview.needs.includes("--layout") && l.name === preview.layout ? " · guess" : ""}` }))}
+                <p>QMK lists {layouts.length} layouts for the {step.candidate.name}. Pick the one with your number of keys; the board shows each one as you pick it.{preview.guessedLayout === null ? "" : " keyloom's guess is marked."}</p>
+                <ChoiceGroup legend="Layout" legendHidden variant="list" value={step.layout ?? (layoutPending ? null : preview.layout)}
+                  choices={layouts.map((l) => ({ value: l.name, label: `${l.name} · ${plural(l.keys, "key")}${l.name === preview.guessedLayout ? " · guess" : ""}` }))}
                   onChange={flow.setLayout} />
               </div>
             ) : null}
@@ -151,8 +159,8 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
         <button type="button" className="sheet-action" onClick={flow.notNow}>Not now</button>
         {/* A keyboard keyloom can't add yet has no next step; the problem above offers the guide and another keyboard (R5-06). */}
         {cantAdd ? null : (
-          <button type="button" className="bar-apply" disabled={preview === null || preview.board === null || (needsController && step.controller === null)} onClick={flow.review}>
-            {needsController && step.controller === null ? "Pick the controller" : "Show me the board"}
+          <button type="button" className="bar-apply" disabled={preview === null || preview.board === null || layoutPending || (needsController && step.controller === null)} onClick={flow.review}>
+            {layoutPending ? "Pick your layout" : needsController && step.controller === null ? "Pick the controller" : "Show me the board"}
           </button>
         )}
       </footer>
@@ -169,7 +177,7 @@ function Review({ flow, preview }: { flow: NewKeyboard; preview: PreviewResponse
   return (
     <section className="nb-panel" aria-label={`How keyloom reads your ${name}`}>
       <header className="nb-panel-head">
-        <button type="button" className="sheet-action nb-back" onClick={flow.backToConfirm}><ArrowLeft size={13} aria-hidden="true" />Home row{controller === null ? "" : " and controller"}</button>
+        <button type="button" className="sheet-action nb-back" onClick={flow.backToConfirm}><ArrowLeft size={13} aria-hidden="true" />{reviewBackLabel((preview?.layouts.length ?? 0) > 1, controller !== null)}</button>
         <h2>How keyloom reads your {name}</h2>
         <p className="nb-lead">Each key shows the finger keyloom expects to press it. If one is wrong, go back and pick another row or keyboard; it's cheaper now than after a flash.</p>
       </header>

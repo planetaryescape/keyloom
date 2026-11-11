@@ -31,7 +31,24 @@ export type NewBoardStep =
 /** A keyboard is the same one across frames by what it says over USB. */
 export const keyboardKey = (k: DetectedKeyboard): string => `${k.device.vendorId}:${k.device.productId}:${k.device.product}:${k.device.serial ?? ""}`;
 
+/** A QMK keyboard with several layouts and no default is drawn on keyloom's guess until the person picks theirs. */
+export const layoutUnpicked = (step: { layout: string | null }, preview: Pick<PreviewResponse, "needs">): boolean =>
+  preview.needs.includes("--layout") && step.layout === null;
+
+/**
+ * "Show me the board": the home row is the one given, or keyloom's guess, which BK has seen marked. A layout keyloom only guessed is never
+ * carried on, so Add can't store it (D-525): `keyboard add` asks for --layout, and the page asks which layout is yours.
+ */
+export function reviewStep(step: NewBoardStep, preview: PreviewResponse | null): Extract<NewBoardStep, { kind: "review" }> | null {
+  if (step.kind !== "confirm" || preview === null || layoutUnpicked(step, preview)) return null;
+  return { kind: "review", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow ?? preview.guessedHomeRow, controller: step.controller, layout: step.layout ?? preview.layout };
+}
+
 const message = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
+
+/** Add refused: a keyboard keyloom can't add yet in words, named as the page names it ("Corne (new)"); the server's sentence names CLI flags (R5-06). */
+export const addProblem = (error: unknown, step: { candidate: ApiCandidate }, preview: Pick<PreviewResponse, "displayName"> | null): string =>
+  deriveProblem(error instanceof ApiError ? error.code : null, preview?.displayName ?? step.candidate.name)?.text ?? message(error);
 
 export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = []) {
   const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
@@ -202,10 +219,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     setController: (id: string) => setStep((s) => (s.kind === "confirm" ? { ...s, controller: id } : s)),
     /** Another QMK layout has other rows, so the home row goes back to keyloom's guess for it. */
     setLayout: (name: string) => setStep((s) => (s.kind === "confirm" ? { ...s, layout: name, homeRow: null } : s)),
-    /** "Show me the board": the home row is the one given, or keyloom's guess, which BK has seen marked. */
     review: () => {
-      if (step.kind !== "confirm" || preview === null) return;
-      setStep({ kind: "review", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow ?? preview.guessedHomeRow, controller: step.controller, layout: step.layout ?? preview.layout });
+      const next = reviewStep(step, preview);
+      if (next !== null) setStep(next);
     },
     backToConfirm: () => {
       if (step.kind !== "review") return;
@@ -224,8 +240,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         });
         setStep({ kind: "put", boardId: out.boardId, boardName: out.displayName, source: null, choices: {}, origin: "new" });
       } catch (e) {
-        // A keyboard keyloom can't add yet is said in words; the server's sentence names CLI flags (R5-06).
-        setProblem(deriveProblem(e instanceof ApiError ? e.code : null, step.candidate.name)?.text ?? message(e));
+        setProblem(addProblem(e, step, preview));
       } finally {
         setBusy(false);
       }

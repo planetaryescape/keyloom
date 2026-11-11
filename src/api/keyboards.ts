@@ -59,6 +59,8 @@ export const PreviewResponseSchema = z.object({
   layout: z.string().nullable(),
   // QMK: every layout macro, when the keyboard has more than one; the page lets the person pick theirs.
   layouts: z.array(z.object({ name: z.string(), keys: z.number().int() })),
+  // QMK with several layouts and no default: keyloom's guess, still named after the person picks another, so the page keeps it marked.
+  guessedLayout: z.string().nullable(),
   needs: z.array(z.string()),
   controllers: z.array(z.object({ id: z.string(), name: z.string() })),
   board: PreviewBoardSchema.nullable(),

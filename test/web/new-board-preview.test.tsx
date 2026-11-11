@@ -2,8 +2,9 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ApiCandidate } from "../../src/api/detected-keyboards.ts";
-import { NewBoardPanel } from "../../src/web/keyboards/NewBoardPanel.tsx";
-import type { NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
+import { NewBoardPanel, reviewBackLabel } from "../../src/web/keyboards/NewBoardPanel.tsx";
+import { addProblem, reviewStep, type NewBoardStep, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
+import { ApiError } from "../../src/web/api.ts";
 import type { PreviewResponse } from "../../src/api/keyboards.ts";
 import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 
@@ -19,7 +20,7 @@ const render = (f: NewKeyboard) => renderToStaticMarkup(<NewBoardPanel flow={f} 
 const preview = (over: Partial<PreviewResponse> = {}): PreviewResponse => ({
   candidate: { id: "zmk:m60", name: "MakerDiary m60", firmware: "zmk" }, keyCount: 61,
   rows: [{ row: 1, keys: 14 }, { row: 2, keys: 14 }, { row: 3, keys: 13 }, { row: 4, keys: 12 }, { row: 5, keys: 8 }],
-  guessedHomeRow: 3, layout: null, layouts: [], needs: ["--home-row"], controllers: [], board: null, boardProblem: null, boardProblemCode: null, displayName: "MakerDiary m60",
+  guessedHomeRow: 3, layout: null, layouts: [], guessedLayout: null, needs: ["--home-row"], controllers: [], board: null, boardProblem: null, boardProblemCode: null, displayName: "MakerDiary m60",
   ...over,
 });
 
@@ -60,10 +61,52 @@ test("a preview refused with no_key_positions offers the guide, not Try again", 
   expect(html).not.toContain("Show me the board");
 });
 
+// Atomic: two layouts and no default, so the preview draws keyloom's guess (the one with most keys) until the person picks theirs.
+const atomicLayouts = [{ name: "LAYOUT_semi_standard", keys: 66 }, { name: "LAYOUT_ortho_5x15", keys: 75 }];
+const board = { keys: [], thumbs: [], hands: { left: [], right: [] }, homeRow: 3, flash: { kind: "manual", manualReason: null, steps: [] } } as unknown as PreviewResponse["board"];
+const atomicGuess = preview({ candidate: { id: "qmk:atomic", name: "Atomic", firmware: "qmk" }, displayName: "Atomic", layout: "LAYOUT_ortho_5x15", needs: ["--home-row", "--layout"],
+  layouts: atomicLayouts, guessedLayout: "LAYOUT_ortho_5x15", board });
+const atomicPicked = { ...atomicGuess, layout: "LAYOUT_semi_standard", keyCount: 66, needs: ["--home-row"] };
+const confirm = (layout: string | null): NewBoardStep => ({ kind: "confirm", keyboard: null, candidate: { id: "qmk:atomic", name: "Atomic", firmware: "qmk" } as ApiCandidate, homeRow: null, controller: null, layout });
+
+// #293 review: the CLI refuses to store a guessed layout, so the page can't either. Review is the only way to Add, and it carries no guess.
+test("a layout that is only keyloom's guess can't be carried to Add: nothing is preselected and the next step asks for the layout", () => {
+  const html = render(flow(null, { step: confirm(null), preview: atomicGuess }));
+  expect(html).toMatch(/<button type="button" class="bar-apply" disabled="">Pick your layout<\/button>/);
+  expect(html).not.toContain("Show me the board");
+  expect(html).not.toMatch(/checked="" value="LAYOUT/);
+  expect(reviewStep(confirm(null), atomicGuess)).toBeNull();
+  // Picked, the layout is the person's, and the guess stays marked.
+  const picked = render(flow(null, { step: confirm("LAYOUT_semi_standard"), preview: atomicPicked }));
+  expect(picked).toMatch(/<button type="button" class="bar-apply">Show me the board<\/button>/);
+  expect(picked).toContain("LAYOUT_ortho_5x15 · 75 keys · guess");
+  expect(picked).toContain("keyloom&#x27;s guess is marked.");
+  expect(picked).toMatch(/checked="" value="LAYOUT_semi_standard"/);
+  expect(reviewStep(confirm("LAYOUT_semi_standard"), atomicPicked)).toMatchObject({ kind: "review", layout: "LAYOUT_semi_standard", homeRow: 3 });
+  // A keyboard with a default layout goes on with it: that is QMK's, not a guess.
+  const withDefault = { ...atomicPicked, layout: "LAYOUT", guessedLayout: null, layouts: [{ name: "LAYOUT", keys: 66 }, { name: "LAYOUT_ortho_5x15", keys: 75 }] };
+  expect(reviewStep(confirm(null), withDefault)).toMatchObject({ kind: "review", layout: "LAYOUT" });
+  expect(render(flow(null, { step: confirm(null), preview: withDefault }))).toMatch(/checked="" value="LAYOUT"/);
+});
+
+test("the Review step's way back names each question that was asked", () => {
+  expect(reviewBackLabel(false, false)).toBe("Home row");
+  expect(reviewBackLabel(true, false)).toBe("Home row and layout");
+  expect(reviewBackLabel(false, true)).toBe("Home row and controller");
+  expect(reviewBackLabel(true, true)).toBe("Home row, layout and controller");
+});
+
+test("a refused add names the keyboard as the page does, and leaves other failures in the server's words", () => {
+  const step = { candidate: { id: "zmk:corne", name: "Corne", firmware: "zmk" } as ApiCandidate };
+  const refused = new ApiError(400, "corne needs --controller", { code: "controller_unknown" });
+  expect(addProblem(refused, step, { displayName: "Corne (new)" })).toContain("a controller for the Corne (new) yet.");
+  expect(addProblem(refused, step, null)).toContain("a controller for the Corne yet.");
+  expect(addProblem(new ApiError(500, "disk full"), step, null)).toBe("disk full");
+});
+
 test("a QMK keyboard with several layouts asks which is yours first, with keyloom's guess marked", () => {
   const html = render(flow(null, {
-    preview: preview({ candidate: { id: "qmk:atomic", name: "Atomic", firmware: "qmk" }, displayName: "Atomic", layout: "LAYOUT_ortho_5x15", needs: ["--home-row", "--layout"],
-      layouts: [{ name: "LAYOUT_semi_standard", keys: 66 }, { name: "LAYOUT_ortho_5x15", keys: 75 }] }),
+    preview: atomicGuess,
   }));
   expect(html).toContain("Two things can&#x27;t be read over USB");
   expect(html).toMatch(/<span>1<\/span>Which layout is yours\?/);
