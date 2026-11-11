@@ -147,8 +147,10 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
       {comboRefusal === null ? null : (
         <div className="layer-dialog-lead" data-tone="warning" role="alert">
           <TriangleAlert size={16} aria-hidden="true" />
-          <span>{comboRefusal.text}</span>
-          <button type="button" className="button layer-ref-open" onClick={() => { onClose(); comboRefusal.action.run(); }}>{comboRefusal.action.label}</button>
+          <div className="layer-combo-wait">
+            <span>{comboRefusal.text}</span>
+            <button type="button" className="button layer-ref-open" onClick={() => { onClose(); comboRefusal.action.run(); }}>{comboRefusal.action.label}</button>
+          </div>
         </div>
       )}
       {outcome === null ? null : (

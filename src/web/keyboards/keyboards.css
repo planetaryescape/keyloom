@@ -83,7 +83,12 @@
   font-size: var(--text-sm);
 }
 
-/* The ways on from a keyboard keyloom can't add yet (R5-06), in the ink of the page rather than the problem's red. */
+/* A keyboard keyloom can't add yet (R5-06) is not the person's mistake: it reads in the page's ink, with its ways on below it. */
+.nb-cant {
+  color: var(--ink-2);
+}
+
+
 .nb-problem .nb-actions {
   display: flex;
   flex-wrap: wrap;

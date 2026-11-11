@@ -68,7 +68,7 @@ export function NewBoardPanel({ flow, sources, onMade }: { flow: NewKeyboard; so
 /** A keyboard keyloom can't add yet (R5-06): why, in words, the contribution guide that says how it learns one, and another keyboard. */
 function CantAdd({ flow, problem }: { flow: NewKeyboard; problem: DeriveProblem }) {
   return (
-    <div className="nb-problem" role="alert">
+    <div className="nb-problem nb-cant" role="alert">
       <p>{problem.text}</p>
       <p className="nb-actions">
         <a className="sheet-action" href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener"><BookOpen size={13} aria-hidden="true" />Open the contribution guide</a>
@@ -109,10 +109,13 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
       <header className="nb-panel-head">
         <button type="button" className="sheet-action nb-back" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Candidates</button>
         <h2>Your {preview?.displayName ?? step.candidate.name}, as {step.candidate.firmware === "zmk" ? "ZMK" : "QMK"} draws it</h2>
-        <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : `${preview.keyCount} keys from the firmware's own layout. ${["One thing", "Two things", "Three things"][asked - 1]} can't be read over USB; tell keyloom once.`}</p>
+        <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : cantAdd ? `${preview.keyCount} keys from the firmware's own layout.` : `${preview.keyCount} keys from the firmware's own layout. ${["One thing", "Two things", "Three things"][asked - 1]} can't be read over USB; tell keyloom once.`}</p>
       </header>
       <div className="nb-panel-body">
-        {preview === null ? <Reading flow={flow} name={name} /> : (
+        {preview === null ? <Reading flow={flow} name={name} /> : cantAdd && problem !== null ? (
+          // Nothing asked here could get this keyboard added, so the questions wait until keyloom can (R5-06).
+          <CantAdd flow={flow} problem={problem} />
+        ) : (
           <>
             {layouts.length > 1 ? (
               // A third of QMK's keyboards have several layouts and no default (R5-06): the person picks theirs, by its key count.
@@ -139,7 +142,7 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
                   choices={preview.controllers.map((c) => ({ value: c.id, label: c.name }))} onChange={flow.setController} />
               </div>
             ) : null}
-            {preview.boardProblem === null ? null : problem?.blocked === true ? <CantAdd flow={flow} problem={problem} /> : <p className="nb-problem" role="alert">{problem?.text ?? preview.boardProblem}</p>}
+            {preview.boardProblem === null ? null : <p className="nb-problem" role="alert">{problem?.text ?? preview.boardProblem}</p>}
           </>
         )}
         {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}

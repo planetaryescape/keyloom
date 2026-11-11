@@ -46,6 +46,9 @@ test("a shield with no controller keyloom knows says so in words, offers the con
   expect(html).toContain("https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md");
   expect(html).toContain("Pick another keyboard");
   expect(html).not.toContain("Show me the board");
+  // Nothing asked would get it added, so the questions wait.
+  expect(html).not.toContain("Where do your fingers rest?");
+  expect(html).not.toContain("tell keyloom once");
 });
 
 test("a preview refused with no_key_positions offers the guide, not Try again", () => {
