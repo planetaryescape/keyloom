@@ -5,13 +5,15 @@ import { BREW_FORMULA } from "../firmware/qmk/dfu-flash.ts";
 import { DOCKER_BREW_FORMULAE, type DockerStartResult, colimaEngine, startDockerEngine } from "../firmware/toolchain/docker.ts";
 import { run, which } from "../firmware/toolchain/run.ts";
 
-export const INSTALLABLE_TOOLS = ["docker", "zapp", "dfu-util", "dfu-programmer", "avrdude"] as const;
+export const INSTALLABLE_TOOLS = ["docker", "zapp", "dfu-util", "dfu-programmer", "avrdude", "codex"] as const;
 export type InstallableTool = (typeof INSTALLABLE_TOOLS)[number];
 
 /** Each tool's Homebrew formulae. zapp and the DFU tools are all in homebrew-core (`brew info zapp`, checked 2026-11-11). */
 export function brewFormulae(tool: InstallableTool): string[] {
   if (tool === "docker") return [...DOCKER_BREW_FORMULAE];
   if (tool === "zapp") return ["zapp"];
+  // The Codex CLI is a Homebrew cask, not a formula (`brew info codex`, checked 2026-11-11), for the chat's Codex sign-in (R3-24).
+  if (tool === "codex") return ["--cask", "codex"];
   return [BREW_FORMULA[tool]];
 }
 
@@ -21,6 +23,7 @@ export const TOOL_PAGES = {
   "dfu-util": "https://dfu-util.sourceforge.net/",
   "dfu-programmer": "https://github.com/dfu-programmer/dfu-programmer",
   avrdude: "https://github.com/avrdudes/avrdude",
+  codex: "https://developers.openai.com/codex/cli",
 } satisfies Record<Exclude<InstallableTool, "docker">, string>;
 
 export type InstallErrorCode = "no_brew" | "brew_failed" | "start_failed";

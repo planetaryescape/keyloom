@@ -44,7 +44,7 @@ export async function handleSystemRoute(request: Request, pathname: string, back
     }
     if (route.action === "installState" || route.action === "cancelInstall") {
       const tool = InstallableToolSchema.safeParse(new URL(request.url).searchParams.get("tool"));
-      if (!tool.success) return errorResponse(400, "schema", "Name the tool: ?tool=docker, zapp, dfu-util, dfu-programmer or avrdude.");
+      if (!tool.success) return errorResponse(400, "schema", "Name the tool: ?tool=docker, zapp, dfu-util, dfu-programmer, avrdude or codex.");
       const state = route.action === "installState" ? await backend.installState(tool.data) : await backend.cancelInstall(tool.data);
       return Response.json(InstallStateSchema.parse(state));
     }
@@ -53,7 +53,7 @@ export async function handleSystemRoute(request: Request, pathname: string, back
     if (type !== "application/json") return errorResponse(415, "content_type", "Send this request as application/json.");
     if (route.action === "install") {
       const body = InstallRequestSchema.safeParse(await request.json().catch(() => null));
-      if (!body.success) return errorResponse(400, "schema", "Name the tool to install: docker, zapp, dfu-util, dfu-programmer or avrdude.");
+      if (!body.success) return errorResponse(400, "schema", "Name the tool to install: docker, zapp, dfu-util, dfu-programmer, avrdude or codex.");
       return Response.json(InstallStateSchema.parse(await backend.install(body.data.tool)));
     }
     const parsed = EmptyBody.safeParse(await request.json().catch(() => null));

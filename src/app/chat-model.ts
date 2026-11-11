@@ -10,6 +10,7 @@ import { DEFAULT_MODELS, PROVIDERS, type ProviderId, isProviderId } from "../age
 import { type AgentConfig, readAgentConfig, writeAgentConfig } from "./agent-config.ts";
 import { type CredentialSource, type StoreKind, credentials } from "./credentials.ts";
 import { codexSignIn, type CodexSignInState } from "./codex-signin.ts";
+import { canInstall } from "./tool-install.ts";
 import { ModelError, UsageError } from "./errors.ts";
 
 type Env = Record<string, string | undefined>;
@@ -105,6 +106,8 @@ export type ProviderStatus = {
     credential: CredentialSource | null;
     /** False only for Codex when its CLI is not on this computer, so signing in can't be offered. */
     installed: boolean;
+    /** True when keyloom can install the missing Codex CLI with Homebrew here, through the install job (R3-24). */
+    canInstall: boolean;
   }>;
 };
 
@@ -131,12 +134,16 @@ export async function providerStatus(dataDir: string, choice: ModelChoice = {}, 
     if (!(err instanceof ModelError)) throw err;
   }
   const lockedBy = choice.provider ? "--provider" : hasEnvProvider(env) ? "KEYLOOM_PROVIDER" : null;
+  const codexMissing = !codex.ready && codex.reason === "not_installed";
+  // The same PATH the Codex check read, so a test's environment decides it too.
+  const brewHere = codexMissing && canInstall({ has: (bin) => Bun.which(bin, { PATH: baseEnv.PATH ?? "" }) !== null });
   return {
     active, lockedBy, keyStore, codexSignIn: codexSignIn().current(),
     providers: PROVIDERS.map((id) => ({
       id, defaultModel: DEFAULT_MODELS[id], ready: ready.has(id), ...SETUP[id],
       credential: id === "codex" ? null : sources[id],
-      installed: id !== "codex" || codex.ready || codex.reason !== "not_installed",
+      installed: id !== "codex" || !codexMissing,
+      canInstall: id === "codex" && brewHere,
     })),
   };
 }

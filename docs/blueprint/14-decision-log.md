@@ -11,6 +11,25 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-11 round 3: accessibility, desktop and web polish
+
+### D-514: The desktop shell says why an update didn't install, shows the server's last lines, and answers a refused Sync now. Refines D-481 and D-507. (Claude, from the round-3 dead-ends review, R3-15 to R3-17)
+
+- **A failed update install says why and stays offered** (R3-15). The download shows its progress in the menu item and the problem window ("Downloading version 0.80.0: 40%", in 5% steps). If it fails, the notification gives the updater's reason. The same version stays offered as **Couldn't install VERSION. Try again**, and the menu adds **Download the latest keyloom** (the releases page) until the next try. Before, the shell checked again at once and lost the reason. In the problem window the state is `InstallFailed`, with **Try installing VERSION again**, **Download the latest keyloom**, **Try again** and **Show log**.
+- **"keyloom keeps stopping" shows the last lines** (R3-16). The shell keeps the last 12 lines the running server wrote, in memory, without blank lines or any line that carries the session token. The window shows them under "What keyloom said", opened. The whole output stays in the log.
+- **A refused menu-bar Sync now is a notification and opens keyloom** (R3-17). The server's refusal sentences name CLI commands, so the notification doesn't repeat them. It says "keyloom didn't sync" and that keyloom is open with what to do, and the shell brings the window forward, where the keyboard's status has the button. A server that didn't answer gets the same, with "try Sync now again".
+- Not exercised in a running app: checked by `cargo test`, `cargo clippy` (with and without `updater`) and the view tests.
+
+### D-513: Every page has one h1 and named controls, and the last web dead ends get a button. Refines D-508. (Claude, from the round-3 dead-ends review, accessibility, R3-07, R3-08, R3-12, R3-23, R3-24, R1-23)
+
+- **Accessibility.** The wall has a visually hidden h1 ("Your keyboards"). Whole-page errors (no token, a refused token, a layout that can't load, board dev) use `ErrorState level={1}`. The chat bar has a hidden h2 ("Ask keyloom"), so its h3s ("Chat needs a model") keep their order. **Ask keyloom** keeps its name on a phone, where its words are hidden. The phone top bar keeps the Home icon. The page links the app icon (`src/web/favicon.png`, a copy of the desktop app's 64 px icon), and `/favicon.ico` serves the same file instead of a 404. Result: the orchestrator's axe sweep went from 22 violations on 22 runs to 0.
+- **A refused environment key in the desktop app** gives the profile line to copy and "quit keyloom and open it again", not a terminal `serve` command (R3-07), because D-443 reads the profile at launch.
+- **A board preview that fails** stops "Reading…", says why and offers **Try again** (R3-08).
+- **Read it from this Mac with no Karabiner settings** (`karabiner_missing`) offers **Start blank**, which makes "MacBook daily" from the board's blank layout and opens it (R3-12).
+- **Install Codex** (R3-24). Replaces D-508's "installing Codex from the app waits". `codex` is an installable tool (`brew install --cask codex`, a cask since 2026). The chat status says `canInstall` for a missing Codex where Homebrew runs. A locked Codex that isn't installed then offers **Install Codex** through the install job, with its log, **Cancel**, and on failure **Try again**, **Get Codex** and **Check again**. Elsewhere it keeps **Get Codex**.
+- **Smaller ways out** (R3-23, R1-23). A failed board.json reload in board dev says so above the last board, with **Try again**. Try again in Manage keyboards repeats the action that failed (remove, restore, the contribution download), not a reload of the list. Layer actions show why they are off on their own line, and **+** shows its reason beside it. The empty combos list takes an `onNew` for **New combo**. The Viewer still has to pass it. "Ask the chat" in Settings' read-only list opens the chat through `openPlace`.
+- **Not done here, in R3-A's files:** the Viewer's `onNew` for combos, keeping Compare open when **Go back** fails, the configs dialog's silent version-list failure, and the lab delete that drops the row on failure.
+
 ## 2026-11-11 round 2: the desktop app, chat setup and copy offer the way out
 
 ### D-508: A provider fixed at startup is the only one the setup offers, and copy that names a place goes there. Refines D-496. (Claude, from the round-2 dead-ends review, R2-04, R2-12, R2-16, R2-17, R1-23 to R1-30)

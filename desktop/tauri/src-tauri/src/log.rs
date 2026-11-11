@@ -36,7 +36,7 @@ pub fn server_output(app: &AppHandle, text: &str) {
     }
 }
 
-fn carries_token(line: &str) -> bool {
+pub fn carries_token(line: &str) -> bool {
     line.contains("?t=") || line.contains("&t=")
 }
 

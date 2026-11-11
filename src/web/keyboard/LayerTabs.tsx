@@ -225,9 +225,11 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
       </div>
       {actions === undefined ? null : (
         <div className="layer-tab-actions">
-          <button type="button" className="icon-button" aria-label="Add a layer" title="Add a transparent layer" disabled={actions.blockedReason !== null} onClick={actions.add}>
+          <button type="button" className="icon-button" aria-label="Add a layer" title="Add a transparent layer" disabled={actions.blockedReason !== null} aria-describedby={actions.blockedReason === null ? undefined : "layer-tab-why"} onClick={actions.add}>
             <Plus size={16} aria-hidden="true" />
           </button>
+          {/* Why adding is off, beside the button rather than in a hover title (R3-23). */}
+          {actions.blockedReason === null ? null : <span id="layer-tab-why" className="layer-tab-why">{actions.blockedReason}</span>}
           {selected === undefined ? null : (
             <span ref={menuButton} className="layer-menu-slot">
             <LayerMenu

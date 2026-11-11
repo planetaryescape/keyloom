@@ -15,7 +15,7 @@
 // KEYLOOM_FAKE_FLASH=manual gives the board no flash recipe (D-490); KEYLOOM_FAKE_FLASH=no-zapp leaves Zapp off the computer, and
 // its Install button installs a fake one in about four seconds (D-489).
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
-// KEYLOOM_FAKE_CHAT=missing_key|busy|drop_midstream makes it fail that way, and
+// KEYLOOM_FAKE_CHAT=missing_key|busy|drop_midstream makes it fail that way (codex_missing: locked to a Codex that isn't installed), and
 // KEYLOOM_FAKE_TOKEN_MS sets the delay between streamed words (default 35). With missing_key, a pasted key containing "bad"
 // is refused and any other is "saved"; KEYLOOM_FAKE_CODEX_SIGNIN_MS holds the pretend Codex sign-in that long (default 1500).
 // Edits live in memory and vanish when the process stops. Ctrl-C stops it.
@@ -53,6 +53,8 @@ const chat = new FakeChat(fake, "moonlander-daily", {
   missingKey: chatMode === "missing_key",
   busy: chatMode === "busy",
   failMidStream: chatMode === "drop_midstream",
+  // Started as if with --provider codex and no Codex CLI; the Install Codex button "installs" it in about four seconds (R3-24).
+  codexLocked: chatMode === "codex_missing" ? { installed: () => installState("codex").status === "succeeded" } : null,
   tokenDelayMs: Number(process.env.KEYLOOM_FAKE_TOKEN_MS ?? 35),
 });
 

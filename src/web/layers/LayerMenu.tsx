@@ -97,10 +97,14 @@ export function LayerMenu(props: LayerMenuProps) {
   };
   const last = layers.length - 1;
   const conditions = conditionsThatTurnOn(layout, layer.id);
+  // A disabled item says why on its own line, not only in a hover title a keyboard or touch user never sees (R3-23).
   const item = (label: string, icon: React.ReactNode, run: () => void, disabled = false, why?: string) => (
-    <button type="button" role="menuitem" className="menu-item" disabled={disabled} title={why} onClick={act(run)}>
+    <button type="button" role="menuitem" className="menu-item" disabled={disabled} onClick={act(run)}>
       {icon}
-      <span className="menu-item-label">{label}</span>
+      <span className="menu-item-label">
+        {label}
+        {disabled && why !== undefined && disabledReason === null ? <span className="menu-item-why">{why}</span> : null}
+      </span>
     </button>
   );
 
@@ -127,7 +131,7 @@ export function LayerMenu(props: LayerMenuProps) {
               {item("Rename", <Pencil size={14} aria-hidden="true" />, onRename, disabledReason !== null)}
               {item("Duplicate", <Copy size={14} aria-hidden="true" />, onDuplicate, disabledReason !== null)}
               {item("Move left", <ArrowLeft size={14} aria-hidden="true" />, () => onMove(index - 1), disabledReason !== null || index <= 1, index <= 1 ? "The base layer stays first" : undefined)}
-              {item("Move right", <ArrowRight size={14} aria-hidden="true" />, () => onMove(index + 1), disabledReason !== null || index === 0 || index === last)}
+              {item("Move right", <ArrowRight size={14} aria-hidden="true" />, () => onMove(index + 1), disabledReason !== null || index === 0 || index === last, index === 0 ? "The base layer stays first" : index === last ? "Already the last layer" : undefined)}
               <button type="button" role="menuitem" className="menu-item" disabled={disabledReason !== null} onClick={() => setView("look")}>
                 <PaintBucket size={14} aria-hidden="true" />
                 <span className="menu-item-label">On-screen label and colour</span>

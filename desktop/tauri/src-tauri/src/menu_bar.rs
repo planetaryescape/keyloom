@@ -161,8 +161,43 @@ pub fn sync_now(app: &AppHandle) {
             .json(&serde_json::json!({ "layoutId": layout_id }))
             .send()
             .await;
-        log::say(&app, &format!("sync now -> {:?}", res.map(|r| r.status())));
+        let outcome = match res {
+            Ok(resp) if resp.status().is_success() => {
+                log::say(&app, &format!("sync now -> {}", resp.status()));
+                return;
+            }
+            Ok(resp) => {
+                let status = resp.status();
+                let code = resp.json::<serde_json::Value>().await.ok().and_then(|body| body["error"]["code"].as_str().map(str::to_string));
+                log::say(&app, &format!("sync now -> {status} {}", code.as_deref().unwrap_or("")));
+                SyncNow::Refused
+            }
+            Err(err) => {
+                log::say(&app, &format!("sync now -> {err}"));
+                SyncNow::Unreachable
+            }
+        };
+        // The page shows the keyboard's state with a button for the way on, so the notice says why in short and opens it (R3-17).
+        let (title, body) = sync_now_notice(outcome);
+        notify(&app, title, body);
+        crate::show_window(&app);
     });
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SyncNow {
+    /// keyloom answered and turned the sync down.
+    Refused,
+    /// keyloom's server didn't answer.
+    Unreachable,
+}
+
+// The server's refusal sentences name terminal commands for the CLI, so the notice doesn't repeat them: the page has the buttons.
+fn sync_now_notice(outcome: SyncNow) -> (&'static str, &'static str) {
+    match outcome {
+        SyncNow::Refused => ("keyloom didn't sync", "keyloom can't sync this keyboard right now. keyloom is open with what to do."),
+        SyncNow::Unreachable => ("keyloom didn't sync", "keyloom's server didn't answer. keyloom is open; try Sync now again when it shows your keyboard."),
+    }
 }
 
 #[cfg(test)]
@@ -180,6 +215,16 @@ data: {"type":"sync","boards":[],"menuBar":{"summary":"2 changes not on your Moo
         assert_eq!(bar.title.as_deref(), Some("Behind"));
         assert_eq!(bar.sync_layout_id.as_deref(), Some("lay_1"));
         assert_eq!(bar.notices[0].title, "On your Glove80");
+    }
+
+    #[test]
+    fn a_refused_or_unanswered_sync_now_says_what_to_do_and_never_a_terminal_command() {
+        for outcome in [SyncNow::Refused, SyncNow::Unreachable] {
+            let (title, body) = sync_now_notice(outcome);
+            assert_eq!(title, "keyloom didn't sync");
+            assert!(body.contains("keyloom is open"), "{body}");
+            assert!(!body.contains('`') && !body.contains("keyloom sync"), "{body}");
+        }
     }
 
     #[test]

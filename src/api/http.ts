@@ -367,6 +367,8 @@ export const ChatProviderStatusSchema = z.object({
     credential: z.object({ source: z.enum(["environment", "keychain", "secret-service"]), last4: z.string().max(4) }).nullable().default(null),
     // False only for Codex when its CLI isn't installed, so signing in isn't offered.
     installed: z.boolean().default(true),
+    // True when keyloom can install this provider's CLI here with Homebrew (Codex only, R3-24), so the setup offers Install Codex.
+    canInstall: z.boolean().default(false),
     // What a conversation on this provider uses when the config names no model.
     defaultModel: z.string().min(1),
     ready: z.boolean(),

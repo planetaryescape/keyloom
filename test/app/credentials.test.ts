@@ -349,6 +349,16 @@ exit 2`,
     await expect(startCodexSignIn(tempDir("keyloom-codex-data-"), {}, { KEYLOOM_CODEX_BIN: NO_CODEX })).rejects.toMatchObject({ code: "codex_missing" });
   });
 
+  test("a missing codex is installable only where keyloom can run Homebrew (R3-24)", async () => {
+    useCredentials(new Credentials(null));
+    const codexOf = async (env: Record<string, string>) => (await providerStatus(tempDir("keyloom-codex-data-"), {}, { KEYLOOM_CODEX_BIN: NO_CODEX, ...env })).providers.find((p) => p.id === "codex");
+    expect(await codexOf({ PATH: fakeBinDir({ brew: "exit 0" }) })).toMatchObject({ installed: false, canInstall: process.platform === "darwin" });
+    expect(await codexOf({ PATH: fakeBinDir({}) })).toMatchObject({ installed: false, canInstall: false });
+    // Another provider never offers an install.
+    const status = await providerStatus(tempDir("keyloom-codex-data-"), {}, { KEYLOOM_CODEX_BIN: NO_CODEX, PATH: fakeBinDir({ brew: "exit 0" }) });
+    expect(status.providers.filter((p) => p.id !== "codex").every((p) => !p.canInstall)).toBe(true);
+  });
+
   test("a login that fails says so", async () => {
     const bin = fakeBinDir({ codex: "exit 1" });
     const signIn = new CodexSignIn();

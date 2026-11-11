@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { BoardChoice } from "../../src/api/http.ts";
-import { acceptsFile, guideFor, importCommand } from "../../src/web/import/export-steps.ts";
+import { acceptsFile, firstFreeName, guideFor, importCommand, offersStartBlank } from "../../src/web/import/export-steps.ts";
 
 const board = (id: string, importers: string[]): BoardChoice => ({ id, name: id, vendor: "v", firmware: "zmk", keyCount: 42, importers });
 
@@ -38,5 +38,18 @@ describe("the import cards", () => {
   test("every importer the boards declare has a guide", async () => {
     const { IMPORTER_IDS } = await import("../../src/boards/schema.ts");
     for (const id of IMPORTER_IDS) expect(guideFor(board("x/y", [id])).tool).not.toBe("your editor");
+  });
+});
+
+test("Read it from this Mac with no Karabiner settings offers Start blank; a settings file it can't read keeps the drop (R3-12)", () => {
+  expect(offersStartBlank("karabiner_missing")).toBe(true);
+  for (const code of ["karabiner_denied", "karabiner_too_large", "karabiner_not_a_file", "karabiner_unavailable", undefined]) expect(offersStartBlank(code)).toBe(false);
+});
+
+describe("Start blank's name", () => {
+  test("is the base name, or the first free numbered one when it is taken", () => {
+    expect(firstFreeName("Glove80 daily", [])).toBe("Glove80 daily");
+    expect(firstFreeName("Glove80 daily", ["Glove80 daily"])).toBe("Glove80 daily 2");
+    expect(firstFreeName("Glove80 daily", ["Glove80 daily", "Glove80 daily 2", "Other"])).toBe("Glove80 daily 3");
   });
 });
