@@ -82,22 +82,22 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
                 <span className="menu-item-label">{line.action.label}</span>
               </button>
             )}
-            {remapperDown ? <RemapperSetup sync={sync} boardId={board.boardId} /> : null}
+            {board.remapper === true ? <RemapperSetup sync={sync} boardId={board.boardId} mode={remapperDown ? "setup" : "attention"} /> : null}
             {board.auto.proven ? (
               <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.setPaused(board.boardId, !board.auto.paused); }}>
                 {board.auto.paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
-                <span className="menu-item-label">{board.auto.paused ? "Resume auto-sync" : "Pause auto-sync"}</span>
+                <span className="menu-item-label">{board.auto.paused ? `Resume ${auto.name.toLowerCase()}` : `Pause ${auto.name.toLowerCase()}`}</span>
               </button>
             ) : null}
             <button
               type="button"
               role="menuitem"
-              aria-label={`Auto-sync ${auto.on ? "is on. Turn it off" : board.auto.paused ? "is paused. Turn it off" : "is off. Turn it on"}`}
+              aria-label={`${auto.name} ${auto.on ? "is on. Turn it off" : board.auto.paused ? "is paused. Turn it off" : "is off. Turn it on"}`}
               className="menu-item"
               disabled={!auto.canTurnOn && !auto.on}
               onClick={() => { close(); void sync.setAuto(board.boardId, !(board.auto.choice ?? board.auto.proven)); }}
             >
-              <span className="menu-item-label">Auto-sync {auto.on ? "is on" : board.auto.paused ? "is paused" : "is off"}</span>
+              <span className="menu-item-label">{auto.name} {auto.on ? "is on" : board.auto.paused ? "is paused" : "is off"}</span>
               <span className="sync-switch" data-on={auto.on} aria-hidden="true" />
             </button>
             {auto.note === null ? null : <p className="sync-note">{auto.note}</p>}
@@ -162,6 +162,13 @@ export function boardLight(board: BoardSync | undefined): "ok" | "pending" | "ba
   if (board === undefined) return null;
   const tone = lightFor(board, syncLine(board, null));
   return tone === "off" ? null : tone;
+}
+
+/** Opens the keyboard's status popover, as pressing its pill does: a toast's "Open keyboard status" (R2-14). */
+export function openKeyboardStatus(): void {
+  const pill = document.querySelector<HTMLButtonElement>(".sync-status .sync-pill");
+  if (pill !== null && pill.getAttribute("aria-expanded") !== "true") pill.click();
+  pill?.focus();
 }
 
 // One quiet line for the keyboard of the layout on screen (23#chrome-recedes). It opens to say why, what to do, and auto-sync.

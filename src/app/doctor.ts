@@ -258,6 +258,7 @@ export async function runRemapperChecks(over: RemapperOverrides = {}): Promise<D
     name: `remapper ${f.name}`, ok: true, ...(f.status === "ok" ? {} : { warn: true }), detail: `${f.detail}${f.fix ? ` (${f.fix})` : ""}`,
   }));
   if (report.rootCommand) checks.push({ name: "remapper root command", ok: true, warn: true, detail: `after \`keyloom remap setup\`, run once as an administrator: ${report.rootCommand}` });
+  if (report.blocked) checks.push({ name: "remapper root command", ok: true, warn: true, detail: report.blocked.reason });
   return checks;
 }
 

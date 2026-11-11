@@ -179,6 +179,12 @@ class Emitter {
   }
 }
 
+/**
+ * A comment's text on one line. Comments carry names people and the agent write; a line break would end the `;;` comment and let the rest
+ * of the name be read as config, such as a top-level `(include <file>)` that kanata, running as root, would read (D-498).
+ */
+const oneLine = (text: string): string => text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ");
+
 export function generateKanataSource(input: KanataGenerateInput): KanataSource {
   const { layout, board } = input;
   if (board.firmware !== "kanata" || layout.firmware !== "kanata") throw new GenerateError(`${board.id} is not a kanata board`);
@@ -248,7 +254,7 @@ export function generateKanataSource(input: KanataGenerateInput): KanataSource {
   const marker = markerName(input.revisionId);
   blocks.push(`(defvirtualkeys\n  ${marker} XX\n)`);
   if (e.aliases.size > 0) {
-    blocks.push(`(defalias\n${[...e.aliases.values()].map((a) => `  ;; ${a.comment}\n  ${a.name} ${a.text}`).join("\n")}\n)`);
+    blocks.push(`(defalias\n${[...e.aliases.values()].map((a) => `  ;; ${oneLine(a.comment)}\n  ${a.name} ${a.text}`).join("\n")}\n)`);
   }
   // kanata keeps one active layer, so "when two are held" has no form (D-388). Said here as well as by the validator's warning, so
   // a person reading the config doesn't look for it.

@@ -2,9 +2,22 @@
 // command the doctor prints; keyloom never holds sudo. Written from keyloom's own template, not copied from kanata's samples.
 export const DAEMON_LABEL = "dev.keyloom.kanata";
 export const DAEMON_PLIST_PATH = `/Library/LaunchDaemons/${DAEMON_LABEL}.plist`;
+/**
+ * The root-owned copy of kanata the daemon runs (D-498). Homebrew's folder is writable by the person's account, so a daemon that ran
+ * kanata from there would run as root whatever a process of theirs put in its place. Setup copies the binary here, and the checklist
+ * says to set up again when the kanata on PATH changes.
+ */
+export const ROOT_KANATA_DIR = "/Library/Application Support/keyloom";
+export const ROOT_KANATA_PATH = `${ROOT_KANATA_DIR}/kanata`;
+/**
+ * Where the daemon writes kanata's output. Setup creates it root:wheel 600 before the daemon starts (D-498): a reload error prints the
+ * start of a file the config `include`s, and kanata reads as root, so a world-readable log would show any process the start of a root-only
+ * file. launchd appends to an existing file and keeps its mode.
+ */
+export const DAEMON_LOG_PATH = "/var/log/keyloom-kanata.log";
 
 export type PlistInput = {
-  /** Absolute path of the kanata binary. */
+  /** Absolute path of the kanata binary the daemon runs: keyloom's root-owned copy (D-498), except in older plists. */
   kanataPath: string;
   /** Absolute path of keyloom.kbd, in BK's home folder. */
   configPath: string;
@@ -45,9 +58,9 @@ ${args.map((a) => `    <string>${xml(a)}</string>`).join("\n")}
     <integer>4096</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>/var/log/keyloom-kanata.log</string>
+  <string>${DAEMON_LOG_PATH}</string>
   <key>StandardErrorPath</key>
-  <string>/var/log/keyloom-kanata.log</string>
+  <string>${DAEMON_LOG_PATH}</string>
 </dict>
 </plist>
 `;
