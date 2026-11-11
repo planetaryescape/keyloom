@@ -1,6 +1,6 @@
 # A cancelled ZMK build left a git lock that failed every later build
 
-Status: fixed in `10397025`, with the orphaned-container check in `a8e38e1c`. The cleanup line was run in the board's build image against the Corne's checkout with a planted `modules/hal/stm32/.git/index.lock`; it removed the lock, logged it and exited 0.
+Status: fixed in `7d548f12`, with the orphaned-container check in `3f990e33`, which stops the build when that check or the removal fails or times out (`bbadce95`, `83f3b5a8`). The cleanup line was run in the board's build image against the Corne's checkout with a planted `modules/hal/stm32/.git/index.lock`; it removed the lock, logged it and exited 0.
 
 Seen 2026-11-11 on the Keebart Corne's checkout (`~/.cache/keyloom/build/keebart-corne-choc-pro-bt`). A build stopped during `west update` (the build queue ended it as idle) left `modules/hal/stm32/.git/index.lock`. The next build failed:
 
