@@ -16,6 +16,10 @@ export function codexErrorFor(message: string): CodexError {
   if (/usage limit|rate limit|too many requests|\b429\b/i.test(text)) {
     return new CodexError("rate_limit", `Codex hit your ChatGPT usage limit: ${text}`);
   }
+  // codex-rs/protocol/src/error.rs words it "ran out of room in the model's context window"; sending it again is refused the same way (R4-11).
+  if (/ran out of room in the model's context window|context window exceeded|context_length_exceeded/i.test(text)) {
+    return new CodexError("context_full", "This conversation is too long for Codex's model to read in one go.");
+  }
   if (/not logged in|log in|login|sign in|unauthori[sz]ed|\b401\b|auth(entication)? (failed|required)|token (expired|invalid)/i.test(text)) {
     return new CodexError("missing_key", `Codex is not signed in (${text}). ${LOGIN_HINT}`);
   }

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { importOryxSource } from "../../src/firmware/qmk/import.ts";
+import type { ChatPresentation } from "../../src/api/http.ts";
 import type { AssistantTurn } from "../../src/web/chat/transcript.ts";
 import { AssistantMessage } from "../../src/web/chat/Turns.tsx";
 import { FIXTURE_DIR, moonlander } from "../helpers/board.ts";
@@ -13,10 +14,10 @@ const failed = (code: string, message: string): AssistantTurn => ({
   kind: "assistant", id: "a1", text: "", activity: null, proposals: [], priorities: [], question: null, phase: "failed", failure: { code, message }, ending: null,
 });
 
-const render = (turn: AssistantTurn, switchTo: { id: string; name: string }[] = []) =>
+const render = (turn: AssistantTurn, switchTo: { id: string; name: string }[] = [], busy = false) =>
   renderToStaticMarkup(
     createElement(AssistantMessage, {
-      turn, layout, board: board.definition, pinnedId: null, switchTo,
+      turn, layout, board: board.definition, pinnedId: null, switchTo, busy, onSetUpModel: () => {}, onNewConversation: () => {},
       onPreview: () => {}, onPin: () => {}, onApply: async () => {}, onRemovePriority: async () => {}, onAskAgain: () => {}, onOpenRelease: () => {}, onRetry: () => {}, onAnswer: () => {}, onSwitch: () => {},
     }),
   );
@@ -46,4 +47,54 @@ describe("a reply that stopped says why, in comp d2's words (P3)", () => {
   test("anything else keeps the plain title", () => {
     expect(render(failed("stream", "The connection dropped."))).toContain("The reply stopped");
   });
+
+  test("a full conversation offers a new one instead of Try again (R4-11)", () => {
+    const html = render(failed("model_context_full", "This conversation is too long for OpenRouter's model to read in one go."), [{ id: "codex", name: "Codex" }]);
+    expect(html).toContain("This conversation is full");
+    expect(html).toContain("Start a new conversation");
+    expect(html).not.toContain("Try again");
+    expect(html).not.toContain("Switch to");
+  });
+
+  test("a server failure names the service and retries", () => {
+    const html = render(failed("model_server", "OpenRouter server error (500)."));
+    expect(html).toContain("The model&#x27;s service had a problem");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("Change the key");
+  });
+
+  test("a run that prepared nothing says nothing about prepared work (#288 review)", () => {
+    const presentation: ChatPresentation = { version: 1, userMessageId: "m", status: "failed", operations: [], messages: [], effectsMayHaveOccurred: false, warning: null, detailsTruncated: false };
+    const html = render({ ...failed("model_server", "OpenRouter server error (500)."), presentation });
+    expect(html).not.toContain("may remain");
+    expect(html).toContain("Try again");
+  });
+
+  test("a run that may have prepared something offers Ask again, not Try again (#288 review)", () => {
+    const presentation: ChatPresentation = { version: 1, userMessageId: "m", status: "failed", operations: [], messages: [], effectsMayHaveOccurred: true, warning: null, detailsTruncated: false };
+    const html = render({ ...failed("model_server", "OpenRouter server error (500)."), presentation });
+    expect(html).toContain("Check them before you ask again.");
+    expect(html).toContain("Ask again");
+    expect(html).not.toContain("Try again");
+  });
+
+  test("while a reply is running, the box's buttons are off (#288 review)", () => {
+    const html = render(failed("model_no_credits", "Out of credits."), [{ id: "codex", name: "Codex" }], true);
+    const buttons = html.match(/<button[^>]*>/g) ?? [];
+    const off = (label: string) => new RegExp(`<button[^>]*disabled=""[^>]*>(?:(?!</button>).)*${label}`).test(html);
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(off("Switch to Codex")).toBe(true);
+    expect(off("Try again")).toBe(true);
+  });
+
+  test("a refused request offers a new conversation beside Try again (#288 review)", () => {
+    const html = render(failed("model_request", "The model refused the request (400)."));
+    expect(html).toContain("Start a new conversation");
+    expect(html).toContain("Try again");
+  });
+
+  test("a refused key opens the setup", () => {
+    expect(render(failed("model_auth", "OpenRouter rejected the API key (401)."))).toContain("Change the key");
+  });
 });
+

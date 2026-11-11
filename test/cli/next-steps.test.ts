@@ -30,6 +30,11 @@ describe("a refused API key", () => {
     expect(classify(new ModelError("auth", shared?.message ?? ""), "unused").message).toContain("`keyloom provider key set <provider>`");
     expect(classify(new ModelError("rate_limit", "busy"), "unused").message).toBe("busy");
   });
+
+  test("the page's out-of-credits and full-conversation sentences name no flag; the terminal adds one (D-517, D-518)", () => {
+    expect(classify(new ModelError("no_credits", "OpenRouter says the account is out of credits."), "unused").message).toContain("--provider");
+    expect(classify(new ModelError("context_full", "This conversation is too long."), "unused").message).toContain("omit --conversation");
+  });
 });
 
 describe("names in suggested commands (#285 review)", () => {

@@ -172,6 +172,8 @@ function presentedTurn(turn: AssistantTurn, presentation: ChatPresentation, mess
     ...turn, userMessageId: presentation.userMessageId, presentation,
     ...(artifacts === undefined ? {} : { artifacts }),
     ...(presentation.accounting === undefined ? {} : { accounting: presentation.accounting }),
+    // A failed run keeps its reason with it (D-517), so a watched or reopened run shows the same way out as a streamed one.
+    failure: presentation.status === "failed" && presentation.failure !== undefined ? presentation.failure : turn.failure,
     text: keepFullAnswer ? turn.text : presentationAnswerText(presentation, messages), activity: null,
     // A terminal observation precedes done/error. Keep the current socket busy until that
     // transport frame arrives, so a second request cannot steal its outcome or question card.
@@ -423,7 +425,8 @@ function fromObservedConversation(detail: ConversationDetail): Transcript {
   // Do not lexically reorder synthetic or legacy-only fixtures. Real IDs give a reliable anchor
   // even when an answer's tool-result user message is intentionally absent from detail.messages.
   if (entries.every((entry) => generatedOrder(entry.order) !== undefined)) entries.sort((a, b) => a.order.localeCompare(b.order));
-  const turns = entries.map((entry) => entry.turn);
+  // A reply that failed before the conversation went on is history: its buttons would act on a later message, so only the last keeps them.
+  const turns = entries.map((entry, index) => entry.turn.kind === "assistant" && index !== entries.length - 1 ? { ...entry.turn, failure: null } : entry.turn);
 
   const lastAssistant = () => turns.findLastIndex((turn) => turn.kind === "assistant");
   const byOwner = (owner: string | undefined) => owner === undefined ? -1 : turns.findIndex((turn) => turn.kind === "assistant" && turn.userMessageId === owner);

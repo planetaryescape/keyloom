@@ -276,6 +276,12 @@ describe("Codex failures", () => {
     expect(err?.message).toContain("codex login");
   });
 
+  test("a conversation too long for Codex is context_full, so the page offers a new one, not Try again (#288 review)", async () => {
+    // The wording of codex-rs/protocol/src/error.rs.
+    const err = await failure([{ fail: "Codex ran out of room in the model's context window. Start a new thread or clear earlier history before retrying." }]);
+    expect(err?.kind).toBe("context_full");
+  });
+
   test("a crash with only stderr is reported with that text", async () => {
     const err = await failure([{ exit: 3, stderr: "stream disconnected before completion" }]);
     expect(err?.kind).toBe("connection");

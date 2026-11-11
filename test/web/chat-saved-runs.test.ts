@@ -28,3 +28,21 @@ test("saved completion is attached to its original owner, not a newer unrelated 
   expect(done.turns.find((turn) => turn.kind === "assistant" && turn.userMessageId === "request")).toMatchObject({ phase: "done" });
   expect(done.turns.find((turn) => turn.kind === "assistant" && turn.userMessageId === "newer")?.kind).toBe("assistant");
 });
+
+// R4-02: the failure box (its reason and buttons) shows for a watched run that failed after acceptance, and again after a reload.
+test("a saved run that failed shows its reason on the reply, and only the last reply keeps it", () => {
+  const failure = { code: "model_no_credits", message: "OpenRouter says the account is out of credits." };
+  const failedPresentation = { ...detail.presentations![0]!, status: "failed" as const, failure, warning: "Work did not finish." };
+  const failedDetail: ConversationDetail = { ...detail, presentations: [failedPresentation] };
+  const watched = transcriptReducer(transcriptReducer(EMPTY, { type: "saved", snapshot, detail }), { type: "saved", snapshot: { ...snapshot, status: "failed", seq: 2, presentation: failedPresentation }, detail: failedDetail });
+  expect(watched.turns.at(-1)).toMatchObject({ phase: "failed", failure });
+  expect(transcriptReducer(EMPTY, { type: "loaded", detail: failedDetail }).turns.at(-1)).toMatchObject({ phase: "failed", failure });
+
+  const later: ConversationDetail = {
+    ...failedDetail,
+    messages: [...failedDetail.messages, { id: "request2", role: "user", text: "Again", toolCalls: [], selection: null, createdAt: 3 }],
+    presentations: [failedPresentation, { ...detail.presentations![0]!, userMessageId: "request2", status: "completed" }],
+  };
+  const reopened = transcriptReducer(EMPTY, { type: "loaded", detail: later });
+  expect(reopened.turns.filter((turn) => turn.kind === "assistant").map((turn) => turn.kind === "assistant" ? turn.failure : undefined)).toEqual([null, null]);
+});

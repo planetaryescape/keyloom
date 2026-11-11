@@ -13,7 +13,9 @@ export function classify(err: unknown, dataDir: string): Classified {
   if (err instanceof CredentialError) return { code: err.code === "key_rejected" ? EXIT.modelApi : err.code === "key_store_failed" ? EXIT.toolchain : EXIT.usage, kind: err.code, message: err.message };
   if (err instanceof ModelError) {
     // The model's own sentence is shared with the page, which has a button for this; the terminal gets the command (R3-11).
-    const next = err.kind === "auth" ? " Save one with `keyloom provider key set <provider>`; `keyloom provider` shows which provider is in use." : "";
+    const next = err.kind === "auth" ? " Save one with `keyloom provider key set <provider>`; `keyloom provider` shows which provider is in use."
+      : err.kind === "no_credits" ? " Or switch provider with --provider."
+      : err.kind === "context_full" ? " Start a new conversation (omit --conversation)." : "";
     return { code: EXIT.modelApi, kind: err.kind === "missing_key" ? "missing_api_key" : "model_api", message: `${err.message}${next}` };
   }
   if (err instanceof SchemaTooNewError) return { code: EXIT.incompatible, kind: "schema_too_new", message: err.message };

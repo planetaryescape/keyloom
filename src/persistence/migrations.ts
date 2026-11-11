@@ -21,6 +21,7 @@ import m0018 from "./migrations/0018_layout_opened.sql" with { type: "text" };
 import m0019 from "./migrations/0019_build_error_code.sql" with { type: "text" };
 import m0020 from "./migrations/0020_flash_error_code.sql" with { type: "text" };
 import m0021 from "./migrations/0021_kanata_seen.sql" with { type: "text" };
+import m0022 from "./migrations/0022_review_ai_code.sql" with { type: "text" };
 
 export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: string }> = [
   { version: 1, name: "0001_layouts_and_revisions", sql: m0001 },
@@ -44,4 +45,5 @@ export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: str
   { version: 19, name: "0019_build_error_code", sql: m0019 },
   { version: 20, name: "0020_flash_error_code", sql: m0020 },
   { version: 21, name: "0021_kanata_seen", sql: m0021 },
+  { version: 22, name: "0022_review_ai_code", sql: m0022 },
 ];

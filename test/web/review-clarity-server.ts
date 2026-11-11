@@ -9,6 +9,7 @@ import { devSample } from "../helpers/dev-sample.ts";
 import { glove80, STYLE_FIXTURE } from "../helpers/zmk.ts";
 import { importZmkSource } from "../../src/firmware/zmk/import.ts";
 import { FakeEditor } from "../helpers/fake-editor-backend.ts";
+import { EditorError } from "../../src/server/editor-backend.ts";
 import { FakeChat } from "../helpers/fake-chat-backend.ts";
 import { retargetLayerHold } from "../../src/layout/behavior-facts.ts";
 
@@ -28,6 +29,12 @@ const profile = sample.document.holdTapProfiles[0];
 if (!profile) throw new Error("Synthetic source has no tap/hold profile");
 profile.options["tapping-term-ms"] = 200;
 const editor = new FakeEditor(sample);
+// KEYLOOM_FAKE_REVIEW_APPLY=stale refuses every Apply as made for an earlier version (R4-07); KEYLOOM_FAKE_REVIEW_AI=refused ends the
+// review's own look with the provider refusing the key (R4-10).
+if (process.env.KEYLOOM_FAKE_REVIEW_APPLY === "stale") {
+  editor.applyChangeSet = async () => { throw new EditorError(409, "stale_base", "This proposal was made for an earlier version of the layout."); };
+}
+const aiRefused = process.env.KEYLOOM_FAKE_REVIEW_AI === "refused";
 const baseLayer = sample.document.layers[0]!;
 const firstBinding = baseLayer.bindings[14]!;
 const secondBinding = baseLayer.bindings[15]!;
@@ -68,7 +75,9 @@ const response = (): ReviewResponse => ({
   layoutId: "glove80-daily", headRevisionId: sample.revision.id, workloadActivities: [], review: {
     id: "review-clarity-synthetic", layoutId: "glove80-daily", revisionId: sample.revision.id,
     trigger: "manual", checkedAt: Date.now(), checks: { status: "done", summary: { layers: sample.document.layers.length, keys: sample.board.keyCount, combos: 0 } },
-    ai: { status: "done", reason: null, model: "synthetic" }, freshness: { current: true, reason: null }, fixed: [],
+    ai: aiRefused
+      ? { status: "unavailable", reason: "OpenRouter rejected the API key (401). If OPENROUTER_API_KEY is set where keyloom started, fix it there; otherwise save a new key.", model: "anthropic/claude-opus-5.5" }
+      : { status: "done", reason: null, model: "synthetic" }, freshness: { current: true, reason: null }, fixed: [],
     items: cards.map((proposal, index) => ({ id: `review-clarity-suggestion-${index}`, source: "agent", kind: "suggestion", severity: "info", code: "synthetic",
       title: proposal.title, body: proposal.explanation, keys: [], layers: [], proposalId: proposal.changeSetId, fixes: [], dismissedAt: null })),
   },
