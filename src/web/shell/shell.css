@@ -1637,7 +1637,7 @@ a.menu-item {
 
 .server-gone-text {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 320px;
 }
 
 .server-gone-text span {
@@ -1645,5 +1645,8 @@ a.menu-item {
 }
 
 .server-gone .command {
+  width: auto;
   flex: none;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
 }
