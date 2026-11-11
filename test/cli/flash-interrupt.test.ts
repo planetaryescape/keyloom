@@ -33,6 +33,7 @@ const r = await untilInterrupted((signal) => flashWithZapp({
   artifactPath: artifact, bootloader: "3297:2003", log: new LogSink(logPath), zapp, signal, pollMs: 20, ${waits}
   bootloaderPresent: ${present},
   onState: (state) => console.log("state " + state),
+  onLine: (line) => console.log("zapp " + line),
 }));
 console.log("result " + r.state + " " + (r.error ?? ""));
 `);
@@ -192,9 +193,8 @@ describe("Ctrl-C during a flash (D-506)", () => {
     const c = await child(() => `echo $$ > "$0.pid"; echo "Firmware loaded: x"; exec sleep 600`, { usb: "slow" });
     const pidFile = () => join(c.bin, "zapp.pid");
     try {
-      await c.out.until("state waiting_for_bootloader");
-      // zapp's line is read before the cancel, so keyloom has seen it start.
-      await Bun.sleep(300);
+      // keyloom has read zapp's line, so the cancel looks at USB before it stops zapp. Before that line it stops zapp at once.
+      await c.out.until("zapp Firmware loaded");
       c.ctrlC();
       // The cancel's USB read takes a second; this lands inside it.
       await Bun.sleep(200);
