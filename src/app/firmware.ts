@@ -341,17 +341,20 @@ async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
   // Read before the first await: the instruction a state change carries must be the one in force when it was announced.
   const board = boardOfFlash(app, row);
   const instruction = instructionFor(row, board);
+  // The control's problem, committed and cancelled change with each state too, so they are read with the instruction they go with.
+  const control = flashControls.get(row.id);
+  const waiting = row.status === "waiting_for_bootloader";
+  const instructionCode = waiting ? (control?.problem ?? null) : null;
+  const cancellable = waiting && control !== undefined && !control.committed && !control.cancelled;
   const logTail = await tailOf(logPath);
   const note = row.status === "succeeded" ? (logTail.map((l) => VERIFIED.exec(l)?.[1]).findLast((n) => n !== undefined) ?? null) : null;
   const verified = note !== null && note.includes(`build ${row.buildId}`);
-  const control = flashControls.get(row.id);
-  const waiting = row.status === "waiting_for_bootloader";
   return {
     id: row.id, buildId: row.buildId, status: row.status, error: row.error, startedAt: row.startedAt, finishedAt: row.finishedAt,
     instruction, note, verified,
     errorCode: row.status === "failed" ? flashErrorCode(row.errorCode) : null,
-    instructionCode: waiting ? (control?.problem ?? null) : null,
-    cancellable: waiting && control !== undefined && !control.committed && !control.cancelled,
+    instructionCode,
+    cancellable,
     checkable: ((row.status === "succeeded" && !verified) || (row.status === "failed" && row.errorCode === "not_confirmed")) && board !== undefined && syncSupported(board),
     logTail, logPath,
   };
