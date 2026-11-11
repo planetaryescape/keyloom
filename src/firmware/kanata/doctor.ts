@@ -172,7 +172,7 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
   // The built-in keyboard, which the device filter names exactly.
   const io = await probe.exec(["ioreg", "-r", "-c", "AppleEmbeddedKeyboard", "-l"]);
   if (io.code === 0 && io.out.includes(rev.deviceName)) add({ code: "keyboard_name", name: "built-in keyboard", status: "ok", detail: `"${rev.deviceName}" is present, which is the name keyloom tells kanata to take` });
-  else if (io.code === 0) add({ code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: `no keyboard named "${rev.deviceName}" was found; run \`kanata --list\` and compare`, fix: "S36 records the name on this model" });
+  else if (io.code === 0) add({ code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: `no keyboard named "${rev.deviceName}" was found; run \`kanata --list\` and compare`, fix: "if kanata --list names the built-in keyboard differently, keyloom doesn't know this Mac model yet; it can't remap it until its board names that keyboard" });
   else add({ code: "keyboard_name", name: "built-in keyboard", status: "unknown", detail: "couldn't read the keyboard list" });
 
   // Karabiner-Elements must leave the built-in keyboard alone, or both would grab it.
@@ -183,7 +183,7 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
     add({
       code: "karabiner_config", name: "Karabiner config", status: ignores ? "ok" : "warn",
       detail: ignores ? "it ignores the built-in keyboard" : "it doesn't ignore the built-in keyboard, so Karabiner-Elements and kanata would both grab it",
-      ...(ignores ? {} : { fix: "run `keyloom import` to get the edit that disables your Karabiner rules for the built-in keyboard" }),
+      ...(ignores ? {} : { fix: `run \`keyloom import --board apple/macbook-ansi ${input.karabinerJson}\` to get the edit that disables your Karabiner rules for the built-in keyboard` }),
     });
   }
 

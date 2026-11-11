@@ -131,7 +131,10 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
         const checked = await withApp((app) => checkFlashAgain(app, id, handsFree === undefined ? {} : { handsFree }));
         print(io, format(), {
           json: { ...flashJson(checked.flash), found: checked.found },
-          table: quiet() ? checked.found : columns([["flash", checked.flash.id], ["build", checked.flash.buildId], ["keyboard", checked.found.replaceAll("_", " ")], ["verified", checked.flash.verified ? "yes" : "no"]]),
+          table: quiet() ? checked.found : columns([
+            ["flash", checked.flash.id], ["build", checked.flash.buildId], ["keyboard", checked.found.replaceAll("_", " ")], ["verified", checked.flash.verified ? "yes" : "no"],
+            ...checkNextStep(checked.found, checked.flash.id, checked.flash.buildId),
+          ]),
           ids: [checked.flash.id],
         });
         return;
@@ -181,4 +184,14 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
         ids: [f.id],
       });
     });
+}
+
+/** What to run after `flash --check` found something other than this build (R3-11); nothing when there is nothing left to do. */
+export function checkNextStep(found: string, flashId: string, buildId: string): Array<[string, string]> {
+  switch (found) {
+    case "other_build": case "bootloader": case "other_firmware": return [["next", `keyloom flash --build ${buildId}`]];
+    case "absent": return [["next", `plug the keyboard in by USB, then keyloom flash --check ${flashId}`]];
+    case "missing_halves": return [["next", `connect every half by USB, then keyloom flash --check ${flashId}`]];
+    default: return [];
+  }
 }

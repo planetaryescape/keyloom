@@ -164,7 +164,7 @@ describe("keyloom doctor", () => {
       const r = json(await cli(["doctor", "--data-dir", e.dataDir]));
       const zapp = r.checks.find((c: { name: string }) => c.name === "zapp");
       expect(zapp).toMatchObject({ ok: true, warn: true });
-      expect(zapp.detail).toContain("brew install zapp");
+      expect(zapp.detail).toContain(process.platform === "darwin" ? "brew install zapp" : "github.com/zsa/zapp/releases");
     }, { PATH: "/usr/bin:/bin" });
 
     await e.run(async () => {

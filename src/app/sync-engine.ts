@@ -682,7 +682,7 @@ export class SyncEngine {
   private async syncLocked(layoutRef: string, put: boolean): Promise<SyncNowResult> {
     const layout = findLayoutRow(this.app.db, layoutRef);
     if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
-    if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", "this keyboard was removed from your setup; restore it before syncing");
+    if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", `this keyboard was removed from your setup; restore it with \`keyloom keyboard restore ${layout.boardId}\` before syncing`);
     if (layout.archivedAt !== null) throw new SyncRefusal("archived", `${layout.name} is archived; restore it first with \`keyloom config restore ${layout.name}\``);
     const onKeyboard = getBoardConfig(this.app.db, layout.boardId);
     if (!put && onKeyboard !== layout.id) {
@@ -695,7 +695,7 @@ export class SyncEngine {
       throw new SyncRefusal("cant_sync", `keyloom can't tell what a ${name} is running or restart it by itself, so it can't sync it. Use \`keyloom build\` and \`keyloom flash\`.`);
     }
     await this.refresh(true);
-    if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", "this keyboard was removed from your setup; restore it before syncing");
+    if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", `this keyboard was removed from your setup; restore it with \`keyloom keyboard restore ${layout.boardId}\` before syncing`);
     const reading = this.readingOf(board.definition.id);
     if (reading.state === "absent") {
       throw board.definition.firmware === "kanata"
@@ -784,7 +784,7 @@ export class SyncEngine {
         id, boardId: layout.boardId, layoutId: layout.id, revisionId: layout.headRevisionId, boardRevision: this.boardRevisionOf(layout.boardId),
         trigger: "manual", logPath: `logs/sync-${id}.log`, appliedAt: layout.updatedAt, owner: this.id, now: this.now(),
       }, this.alive));
-      if (claim === null) throw new SyncRefusal("keyboard_removed", "this keyboard was removed from your setup; restore it before replacing kanata's config");
+      if (claim === null) throw new SyncRefusal("keyboard_removed", `this keyboard was removed from your setup; restore it with \`keyloom keyboard restore ${layout.boardId}\` before replacing kanata's config`);
       if ("busy" in claim) throw new SyncRefusal("busy", `another keyloom sync is running (${claim.busy.id}, process ${claim.busy.pid}); replace it when that finishes`);
       // The replacement is this engine's running sync until its result is recorded, so stop() waits for it before the database closes.
       const run: Running = { row: claim.claimed, abort: new AbortController(), flashAbort: new AbortController(), reason: undefined, done: undefined as never };

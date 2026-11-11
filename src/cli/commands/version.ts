@@ -116,7 +116,7 @@ export function registerVersionCommands(program: Command, ctx: CliContext & { qu
 
   version
     .command("restore")
-    .description("go back to a version as a new revision (the same as `undo --to`), refusing one that breaks a rule the head doesn't; the keyboard changes only when it syncs")
+    .description("go back to a version as a new revision (the page's Go back), refusing one that breaks a rule the head doesn't; the keyboard changes only when it syncs")
     .argument("<config>", "config ID or name")
     .argument("<target>", "a version ID, a version's name or a revision ID")
     .option("--json", "print JSON, whatever the output format")

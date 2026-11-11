@@ -24,6 +24,15 @@ const waitText = (ms: number): string => {
   return `${Math.round(ms / 1000)} seconds`;
 };
 
+/**
+ * How to install Zapp here (R3-25). Homebrew is ZSA's way on a Mac; on Linux its README offers release binaries, and USB access needs
+ * its udev rules (github.com/zsa/zapp README, checked 2026-11-11).
+ */
+export const zappMissing = (platform: NodeJS.Platform = process.platform): string =>
+  platform === "darwin"
+    ? "zapp isn't installed. Install it with `brew install zapp`, then flash again."
+    : "zapp isn't installed. Download it from https://github.com/zsa/zapp/releases, add ZSA's udev rules from that repository so it can reach the keyboard without root, then flash again.";
+
 /** What to press, with how long keyloom will wait for it (the CLI's --wait changes that). */
 export const resetInstruction = (waitMs: number = BOOTLOADER_WAIT_MS): string =>
   `Press the reset button on the Moonlander (the small hole on its back; use a paperclip), or press its Reset key if the layout has one. keyloom waits ${waitText(waitMs)}.`;
@@ -76,7 +85,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
 
   // Never a bare name that spawn might resolve against a different PATH: what is checked is what runs.
   const zapp = input.zapp === undefined ? which("zapp") : existsSync(input.zapp) ? input.zapp : null;
-  if (!zapp) return fail("zapp isn't installed. Install it with `brew install zapp`, then flash again.");
+  if (!zapp) return fail(zappMissing());
 
   const file = Bun.file(input.artifactPath);
   if (!(await file.exists())) return fail(`${input.artifactPath} doesn't exist; build it again.`);
@@ -248,7 +257,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
       return fail(`${abortedFor === "cancelled" ? "Cancelled" : "Stopped"}, and keyloom couldn't read USB to check the keyboard afterwards. If it doesn't type, it is in its bootloader: flash again to put the build on it.`, output);
     }
     if (abortedFor === "cancelled") return fail("Cancelled. Nothing was flashed.", output);
-    return fail("No Moonlander in bootloader mode was found within 2 minutes. Nothing was flashed. Press the reset button and flash again.", output);
+    // The wait the person chose with --wait, not the default (R3-11).
+    return fail(`No Moonlander in bootloader mode was found within ${waitText(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS)}. Nothing was flashed. Press the reset button and flash again.`, output);
   }
   if (abortedFor === "write") {
     return fail(

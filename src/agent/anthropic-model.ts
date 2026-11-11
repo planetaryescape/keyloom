@@ -233,7 +233,8 @@ export function classifyModelError(err: unknown, provider: AnthropicFamily = "an
     const where = provider === "openrouter" ? "Add credits at openrouter.ai/credits" : "Add credits in the Anthropic console (Plans & Billing)";
     return { kind: "no_credits", message: `${name} says the account is out of credits. ${where}, or switch provider with --provider.` };
   }
-  if (err instanceof Anthropic.AuthenticationError) return { kind: "auth", message: `${name} rejected the API key (401). Check ${KEY_NAME[provider]}.` };
+  // Both places a key comes from (R3-11). The page shows this beside its Set up model button, so it names no command; the CLI adds one.
+  if (err instanceof Anthropic.AuthenticationError) return { kind: "auth", message: `${name} rejected the API key (401). If ${KEY_NAME[provider]} is set where keyloom started, fix it there; otherwise save a new key.` };
   if (err instanceof Anthropic.PermissionDeniedError) return { kind: "permission", message: `${name} denied the request (403): ${err.message}` };
   if (err instanceof Anthropic.RateLimitError) return { kind: "rate_limit", message: `${name} rate limit reached (429). Wait a moment and send the message again.` };
   if (err instanceof Anthropic.APIConnectionError) return { kind: "connection", message: `Could not reach the ${name} API: ${err.message}` };
