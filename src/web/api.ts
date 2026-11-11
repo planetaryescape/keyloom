@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { BoardDevViewSchema, type BoardDevView } from "../boards/dev.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import {
+  ApiErrorBodySchema,
   LayoutDetailSchema,
   LayoutListResponseSchema,
   type LayoutDetail,
@@ -51,9 +52,8 @@ async function getJson<T>(
   if (response.status === 401) throw new ApiError(401, TOKEN_REJECTED, { code: "token" });
   if (response.status === 404) throw new ApiError(404, "keyloom has no layout here. It was deleted, or the link is old.", { code: "not_found" });
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: { message?: unknown } } | null;
-    const message = typeof body?.error?.message === "string" ? body.error.message : `keyloom answered ${response.status}.`;
-    throw new ApiError(response.status, message);
+    const body = ApiErrorBodySchema.safeParse(await response.json().catch(() => null));
+    throw new ApiError(response.status, body.success ? body.data.error.message : `keyloom answered ${response.status}.`, body.success ? { code: body.data.error.code } : {});
   }
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) {

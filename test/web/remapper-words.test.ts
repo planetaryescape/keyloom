@@ -14,7 +14,7 @@ describe("setupSteps", () => {
   test("a fresh Mac: install, driver, permissions, then start, each with its own button", () => {
     const steps = setupSteps(status(fresh));
     expect(steps.map((s) => s.key)).toEqual(["kanata", "driver", "permissions", "start"]);
-    expect(steps[0]?.actions).toEqual([{ id: "install_kanata", label: "Install kanata" }]);
+    expect(steps[0]?.actions).toEqual([{ id: { kind: "install_kanata" }, label: "Install kanata" }]);
     expect(steps[1]?.link?.href).toContain("/tag/v6.2.0");
     expect(steps[2]?.actions.map((a) => a.label)).toEqual(["Open Input Monitoring settings", "Open Accessibility settings"]);
     // Starting before kanata is installed can't work, so it isn't offered yet.
@@ -24,7 +24,7 @@ describe("setupSteps", () => {
   test("kanata installed and stopped (the exit chord): Start is the button, and it names the password dialog", () => {
     const steps = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "warn")]));
     const start = steps.find((s) => s.key === "start");
-    expect(start?.actions).toEqual([{ id: "start_kanata", label: "Set up and start kanata" }]);
+    expect(start?.actions).toEqual([{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }]);
     expect(start?.detail).toContain("password");
     expect(steps.filter((s) => s.state === "done").map((s) => s.key)).toEqual(["kanata", "driver"]);
   });

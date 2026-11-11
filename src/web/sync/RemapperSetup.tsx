@@ -6,7 +6,7 @@ import { type SetupActionId, setupFailure, setupSteps } from "./remapper-words.t
 
 type Load = { kind: "loading" } | { kind: "ready"; status: RemapperSetupResponse } | { kind: "error"; message: string };
 
-const actionKey = (id: SetupActionId) => (typeof id === "string" ? id : `pane:${id.pane}`);
+const actionKey = (id: SetupActionId) => (id.kind === "open_settings" ? `pane:${id.pane}` : id.kind);
 
 /**
  * What kanata still needs, read from the doctor, with a button for each step (D-493). Each finished step reads the machine again, so
@@ -41,14 +41,14 @@ export function RemapperSetup({ sync, boardId }: { sync: SyncApi; boardId: strin
     setBusy(actionKey(id));
     setProblem(null);
     try {
-      const r = id === "install_kanata" ? await installKanata() : id === "start_kanata" ? await startKanata(boardId) : await openSettings(id.pane);
+      const r = id.kind === "install_kanata" ? await installKanata() : id.kind === "start_kanata" ? await startKanata(boardId) : await openSettings(id.pane);
       if (!r.ok) setProblem(setupFailure(r.code, r.reason));
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "That didn't work.");
     } finally {
       setBusy(null);
       // Opening a pane changes nothing keyloom can read; everything else is checked again at once.
-      if (typeof id === "string") await check();
+      if (id.kind !== "open_settings") await check();
     }
   };
 

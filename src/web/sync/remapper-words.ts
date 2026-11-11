@@ -3,7 +3,7 @@
 // never shown here.
 import type { RemapperSetupResponse, SettingsPaneName } from "../../api/system-remapper.ts";
 
-export type SetupActionId = "install_kanata" | "start_kanata" | { pane: SettingsPaneName };
+export type SetupActionId = { kind: "install_kanata" } | { kind: "start_kanata" } | { kind: "open_settings"; pane: SettingsPaneName };
 
 export interface SetupStep {
   key: string;
@@ -30,7 +30,7 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     steps.push({
       key: "kanata", state: "todo", title: status.installing ? "Installing kanata…" : "Install kanata",
       detail: status.installing ? "Homebrew is installing it. This can take a few minutes." : "kanata is the remapper keyloom writes your MacBook layout for.",
-      actions: status.canInstall && !status.installing ? [{ id: "install_kanata", label: "Install kanata" }] : [],
+      actions: status.canInstall && !status.installing ? [{ id: { kind: "install_kanata" }, label: "Install kanata" }] : [],
       link: status.canInstall ? null : { href: KANATA_RELEASES, label: "Download kanata" },
     });
   } else if (kanata !== undefined) {
@@ -51,7 +51,7 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     steps.push({
       key: "permissions", state: "todo", title: "Allow kanata in Privacy & Security",
       detail: "Turn kanata on under Input Monitoring and under Accessibility. macOS doesn't let keyloom check this.",
-      actions: mac ? [{ id: { pane: "input_monitoring" }, label: "Open Input Monitoring settings" }, { id: { pane: "accessibility" }, label: "Open Accessibility settings" }] : [],
+      actions: mac ? [{ id: { kind: "open_settings", pane: "input_monitoring" }, label: "Open Input Monitoring settings" }, { id: { kind: "open_settings", pane: "accessibility" }, label: "Open Accessibility settings" }] : [],
       link: null,
     });
   }
@@ -64,7 +64,7 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     steps.push({
       key: "start", state: "todo", title: "Start kanata",
       detail: ready ? "macOS asks for your password to install kanata's background service and start it." : "Install kanata first.",
-      actions: mac && ready ? [{ id: "start_kanata", label: "Set up and start kanata" }] : [],
+      actions: mac && ready ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] : [],
       link: null,
     });
   }

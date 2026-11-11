@@ -176,7 +176,9 @@ export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_for
  * The toast for a sync the server refused, from its code (R1-16). The server's own sentence names CLI commands, so it is never shown;
  * each code says what happened and offers the button that fixes it, where the page has one.
  */
-export function refusalNotice(code: string | undefined, message: string): { message: string; detail?: string; action?: { id: RefusalAction; label: string } } {
+export type RefusalNotice = { message: string; detail?: string; action?: { id: RefusalAction; label: string } };
+
+export function refusalNotice(code: string | undefined, message: string): RefusalNotice {
   switch (code) {
     case "archived": return { message: "This config is archived", detail: "Restore it to put it on the keyboard.", action: { id: "restore", label: "Restore" } };
     case "not_on_keyboard": return { message: "This config isn't the one on the keyboard", detail: "Put it on to make it the config that syncs.", action: { id: "put_on", label: "Put it on…" } };
