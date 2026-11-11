@@ -4,7 +4,7 @@
 import {
   KEYCODES,
 } from "../../src/layout/keycodes.ts";
-import type { ApplyRequest, ApplyResponse, BoardChoice, Build, ImportResponse, LayoutExportDocument, RevisionEntry, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
+import type { ApplyRequest, ApplyResponse, BoardChoice, Build, ImportResponse, LayoutExportDocument, RevisionEntry, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, FlashPlan, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
 import type { Binding, Layout } from "../../src/layout/schema.ts";
 import { buildLayoutExportDocument } from "../../src/layout/export-document.ts";
 import type { ChangeOp, Slot } from "../../src/layout/change.ts";
@@ -21,6 +21,10 @@ export interface FakeOptions {
   failFlash?: boolean;
   /** Answer 400 usage to a build with no boardRevision, as the real backend does with no keyboard connected. */
   needsBoardRevision?: boolean;
+  /** Fail the build because Docker is missing, with its code (D-488), instead of a compiler error. */
+  failBuildDocker?: boolean;
+  /** What a flash of the build will need (D-489, D-490); Zapp installed by default. */
+  flashPlan?: FlashPlan;
 }
 
 type Revision = RevisionInfo & { document: Layout };
@@ -68,7 +72,11 @@ export class FakeEditor implements EditorBackend {
     private readonly base: LayoutDetail,
     options: FakeOptions = {},
   ) {
-    this.options = { buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, ...options };
+    this.options = {
+      buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false,
+      flashPlan: { manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true },
+      ...options,
+    };
     this.history = [{ ...base.revision, document: structuredClone(base.document) }];
   }
 
@@ -233,6 +241,21 @@ export class FakeEditor implements EditorBackend {
     return entry === undefined ? null : this.progressFlash(id, entry.flash.buildId, entry.startedAt);
   }
 
+  /** The reveals asked for, so a test can see one happened without opening Finder. */
+  readonly revealed: string[] = [];
+
+  async buildArtifact(id: string): Promise<{ path: string; filename: string } | null> {
+    const build = await this.getBuild(id);
+    if (build?.status !== "succeeded") return null;
+    // The fake has no real build, so the download is this source file standing in for firmware.
+    return { path: import.meta.path, filename: `keyloom-zsa-moonlander-${id}.bin` };
+  }
+
+  async revealBuild(id: string): Promise<void> {
+    if ((await this.getBuild(id))?.status !== "succeeded") throw new EditorError(404, "not_found", "No such build.");
+    this.revealed.push(id);
+  }
+
   private push(origin: RevisionInfo["origin"], summary: string, document: Layout): Revision {
     const revision: Revision = {
       id: `rev_${++this.counter}`,
@@ -310,7 +333,8 @@ export class FakeEditor implements EditorBackend {
   }
 
   private progressBuild(id: string, revisionId: string, startedAt: number): Build {
-    const { buildMs, failBuild } = this.options;
+    const { buildMs, failBuildDocker } = this.options;
+    const failBuild = this.options.failBuild || failBuildDocker;
     const elapsed = Date.now() - startedAt;
     const endsAt = failBuild ? buildMs * 0.7 : buildMs;
     const done = elapsed >= endsAt;
@@ -324,7 +348,9 @@ export class FakeEditor implements EditorBackend {
       id,
       revisionId,
       status: !done ? "running" : failBuild ? "failed" : "succeeded",
-      error: done && failBuild ? "The compiler stopped with an error. The last lines of the log say where." : null,
+      error: done && failBuild ? (failBuildDocker ? "Docker is not on this computer." : "The compiler stopped with an error. The last lines of the log say where.") : null,
+      errorCode: done && failBuildDocker ? "docker_unavailable" : null,
+      flashPlan: this.options.flashPlan,
       startedAt,
       finishedAt: done ? startedAt + endsAt : null,
       logTail: lines.slice(-12),

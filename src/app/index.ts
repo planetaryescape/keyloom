@@ -45,7 +45,9 @@ export {
   type AutoSyncReport, type BoardSyncView, type RunSyncOptions, type SyncDeps, type SyncEngine, type SyncOptions, type SyncOutcome, type SyncSetup, type SyncState,
   autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, runUseConfig, setAutoSync, syncStatus,
 } from "./sync.ts";
-export { BuildFailedError, EmulateFailedError, FlashFailedError, RebootFailedError, ToolchainUnavailableError } from "./firmware-errors.ts";
+export { BuildFailedError, EmulateFailedError, FlashFailedError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError } from "./firmware-errors.ts";
+export { type BuildArtifact, type RevealDeps, buildArtifact, revealBuildArtifact } from "./firmware-artifact.ts";
+export type { FlashPlan, FlashTool } from "./firmware-flash-plan.ts";
 export { type AgentConfig, CONFIG_FILE, readAgentConfig, writeAgentConfig } from "./agent-config.ts";
 export { type EmulateOptions, type EmulateOutcome, emulateLayout } from "./emulate.ts";
 export {

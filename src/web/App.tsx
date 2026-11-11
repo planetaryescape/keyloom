@@ -361,7 +361,7 @@ function LayoutPage({
   }, [geometry.keys, board.display]);
 
   const boardSync = sync.boards.find((candidate) => candidate.boardId === summary.boardId);
-  const autoSync = boardSync === undefined ? null : { on: boardSync.auto.on, paused: boardSync.auto.paused, onPause: () => void sync.setPaused(boardSync.boardId, true) };
+  const autoSync = boardSync === undefined ? null : { on: boardSync.auto.on, paused: boardSync.auto.paused, onPause: () => void sync.setPaused(boardSync.boardId, true), onResume: () => void sync.setPaused(boardSync.boardId, false) };
   // The shape of the board is kept for the next first load's skeleton.
   useEffect(() => {
     if ("keys" in rotated) rememberShape(summary.boardId, rotated.keys, board.hands.left);

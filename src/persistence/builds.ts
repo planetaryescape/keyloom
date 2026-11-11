@@ -14,6 +14,8 @@ export type BuildRow = {
   artifactPath: string | null;
   logPath: string;
   error: string | null;
+  /** Why it failed as a code the UI acts on, such as "docker_unavailable"; null otherwise. */
+  errorCode: string | null;
   pid: number;
   startedAt: number;
   finishedAt: number | null;
@@ -32,7 +34,7 @@ export type FlashRow = {
 
 type BuildDb = {
   id: string; revision_id: string; layout_id: string; board_revision: string; status: BuildStatus; artifact_path: string | null; log_path: string;
-  error: string | null; pid: number; started_at: number; finished_at: number | null;
+  error: string | null; error_code: string | null; pid: number; started_at: number; finished_at: number | null;
 };
 type FlashDb = {
   id: string; build_id: string; status: FlashStatus; error: string | null; log_path: string; pid: number; started_at: number; finished_at: number | null;
@@ -40,7 +42,7 @@ type FlashDb = {
 
 const toBuild = (r: BuildDb): BuildRow => ({
   id: r.id, revisionId: r.revision_id, layoutId: r.layout_id, boardRevision: r.board_revision, status: r.status, artifactPath: r.artifact_path, logPath: r.log_path,
-  error: r.error, pid: r.pid, startedAt: r.started_at, finishedAt: r.finished_at,
+  error: r.error, errorCode: r.error_code ?? null, pid: r.pid, startedAt: r.started_at, finishedAt: r.finished_at,
 });
 const toFlash = (r: FlashDb): FlashRow => ({
   id: r.id, buildId: r.build_id, status: r.status, error: r.error, logPath: r.log_path, pid: r.pid, startedAt: r.started_at, finishedAt: r.finished_at,
@@ -59,12 +61,12 @@ export function createBuild(
   db.query(
     "INSERT INTO builds (id, revision_id, board_revision, status, artifact_path, log_path, error, pid, started_at, finished_at) VALUES (?, ?, ?, 'running', NULL, ?, NULL, ?, ?, NULL)",
   ).run(input.id, input.revisionId, input.boardRevision, input.logPath, pid, now);
-  return { id: input.id, revisionId: input.revisionId, layoutId: input.layoutId, boardRevision: input.boardRevision, status: "running", artifactPath: null, logPath: input.logPath, error: null, pid, startedAt: now, finishedAt: null };
+  return { id: input.id, revisionId: input.revisionId, layoutId: input.layoutId, boardRevision: input.boardRevision, status: "running", artifactPath: null, logPath: input.logPath, error: null, errorCode: null, pid, startedAt: now, finishedAt: null };
 }
 
-export function finishBuild(db: Database, id: string, result: { error: string } | { artifactPath: string }, now = Date.now()): void {
+export function finishBuild(db: Database, id: string, result: { error: string; errorCode?: string | null } | { artifactPath: string }, now = Date.now()): void {
   if ("error" in result) {
-    db.query("UPDATE builds SET status = 'failed', error = ?, finished_at = ? WHERE id = ? AND status = 'running'").run(result.error, now, id);
+    db.query("UPDATE builds SET status = 'failed', error = ?, error_code = ?, finished_at = ? WHERE id = ? AND status = 'running'").run(result.error, result.errorCode ?? null, now, id);
   } else {
     db.query("UPDATE builds SET status = 'succeeded', artifact_path = ?, finished_at = ? WHERE id = ? AND status = 'running'").run(result.artifactPath, now, id);
   }

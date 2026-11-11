@@ -30,6 +30,10 @@ export interface EditorBackend {
   getBuild(id: string): Promise<Build | null>;
   startFlash(buildId: string): Promise<Flash>;
   getFlash(id: string): Promise<Flash | null>;
+  /** A successful build's firmware file, for a board keyloom can't flash (D-490); null when there is none. */
+  buildArtifact(id: string): Promise<{ path: string; filename: string } | null>;
+  /** Shows a build's firmware file in Finder (D-490). */
+  revealBuild(id: string): Promise<void>;
 }
 
 /** A failure the browser should see as-is: the status and code go into ApiErrorBody. */

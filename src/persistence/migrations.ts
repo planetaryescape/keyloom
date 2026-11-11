@@ -18,6 +18,7 @@ import m0015 from "./migrations/0015_review_workloads.sql" with { type: "text" }
 import m0016 from "./migrations/0016_review_freshness.sql" with { type: "text" };
 import m0017 from "./migrations/0017_keyboard_collection.sql" with { type: "text" };
 import m0018 from "./migrations/0018_layout_opened.sql" with { type: "text" };
+import m0019 from "./migrations/0019_build_error_code.sql" with { type: "text" };
 
 export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: string }> = [
   { version: 1, name: "0001_layouts_and_revisions", sql: m0001 },
@@ -38,4 +39,5 @@ export const MIGRATIONS: ReadonlyArray<{ version: number; name: string; sql: str
   { version: 16, name: "0016_review_freshness", sql: m0016 },
   { version: 17, name: "0017_keyboard_collection", sql: m0017 },
   { version: 18, name: "0018_layout_opened", sql: m0018 },
+  { version: 19, name: "0019_build_error_code", sql: m0019 },
 ];

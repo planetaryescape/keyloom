@@ -1,7 +1,8 @@
 // Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
 // it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerContext, type DockerStatus, colimaEngine, dockerInstall, findDockerEngine, startDockerEngine } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerStatus, adoptBundledDockerCli, bundledDockerCli, colimaEngine, dockerInstall, findDockerEngine, startDockerEngine } from "../../../src/firmware/toolchain/docker.ts";
+import { fakeBinDir } from "../../helpers/fake-bin.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
 const up = (version = "27.4.0"): DockerStatus => ({ ok: true, version });
@@ -171,9 +172,31 @@ describe("starting it", () => {
 
 describe("what to install", () => {
   test("Homebrew where it exists, the download page where it doesn't, and the distribution's engine on Linux", () => {
-    expect(dockerInstall("darwin", (c) => c === "brew")).toMatchObject({ engine: "Docker Desktop", command: "brew install --cask docker", url: "https://www.docker.com/products/docker-desktop/" });
-    expect(dockerInstall("darwin", () => false)).toMatchObject({ engine: "Docker Desktop", command: null });
-    expect(dockerInstall("linux", (c) => c === "apt-get")).toMatchObject({ engine: "Docker Engine", url: "https://docs.docker.com/engine/install/" });
-    expect(dockerInstall("win32", (c) => c === "winget")).toMatchObject({ command: "winget install --id Docker.DockerDesktop -e" });
+    // Colima with Homebrew (D-488): no password and no app, so keyloom can run it; the apps stay one link away.
+    const brew = dockerInstall("darwin", (c) => c === "brew");
+    expect(brew).toMatchObject({ engine: "Colima", command: "brew install colima docker", canInstall: true });
+    expect(brew.alternatives.map((a) => a.name)).toEqual(["Docker Desktop", "OrbStack"]);
+    expect(dockerInstall("darwin", () => false)).toMatchObject({ engine: "Docker Desktop", command: null, canInstall: false, url: "https://www.docker.com/products/docker-desktop/" });
+    expect(dockerInstall("linux", (c) => c === "apt-get")).toMatchObject({ engine: "Docker Engine", url: "https://docs.docker.com/engine/install/", canInstall: false });
+    expect(dockerInstall("win32", (c) => c === "winget")).toMatchObject({ command: "winget install --id Docker.DockerDesktop -e", canInstall: false });
+  });
+
+  test("an engine app's bundled docker command is found and put on the PATH, so no link is needed (R1-11)", () => {
+    const desktop = "/Applications/Docker.app/Contents/Resources/bin/docker";
+    expect(bundledDockerCli("darwin", (app) => app === "Docker.app", (path) => path === desktop)).toBe(desktop);
+    expect(bundledDockerCli("darwin", (app) => app === "Docker.app", () => false)).toBeNull();
+    expect(bundledDockerCli("linux", () => true, () => true)).toBeNull();
+    // Podman Desktop bundles no docker command, so it is never adopted.
+    expect(bundledDockerCli("darwin", (app) => app === "Podman Desktop.app", () => true)).toBeNull();
+
+    const bin = fakeBinDir({ docker: "exit 0" });
+    const before = process.env.PATH;
+    try {
+      expect(adoptBundledDockerCli(() => `${bin}/docker`)).toBe(`${bin}/docker`);
+      expect(process.env.PATH?.startsWith(`${bin}:`)).toBe(true);
+    } finally {
+      process.env.PATH = before;
+    }
+    expect(adoptBundledDockerCli(() => null)).toBeNull();
   });
 });

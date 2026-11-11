@@ -2,6 +2,7 @@
 // so nothing here looks for a daemon.
 import { afterAll, describe, expect, test } from "bun:test";
 import { DockerReadinessResponseSchema, DockerStartResponseSchema } from "../../src/api/system.ts";
+import { InstallStateSchema } from "../../src/api/tool-install.ts";
 import { handleSystemRoute } from "../../src/server/system-routes.ts";
 import type { SystemBackend } from "../../src/server/system-backend.ts";
 
@@ -12,6 +13,8 @@ afterAll(() => servers.forEach((s) => s.stop(true)));
 const backend: SystemBackend = {
   docker: async () => ({ ok: false, problem: "daemon-down", reason: "the docker daemon isn't running", engine: "Docker Desktop", canStart: true, autoStart: true, install: null }),
   startDocker: async () => ({ ok: true, version: "28.0.1", engine: "Docker Desktop", waitedMs: 21_000 }),
+  install: async (tool) => ({ tool, status: "running", phase: "installing", logTail: [], error: null, errorCode: null }),
+  installState: async (tool) => ({ tool, status: "succeeded", phase: null, logTail: ["==> Pouring zapp"], error: null, errorCode: null }),
 };
 
 async function serve() {
@@ -22,6 +25,27 @@ async function serve() {
   const post = (path: string) => call(path, { method: "POST", body: "{}", headers: { "content-type": "application/json" } });
   return { call, post };
 }
+
+describe("the install routes (D-488, D-489)", () => {
+  test("a POST starts an install of a named tool and the GET follows it", async () => {
+    const { call } = await serve();
+    const started = await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "zapp" }), headers: { "content-type": "application/json" } });
+    expect(started.status).toBe(200);
+    expect(InstallStateSchema.parse(await started.json())).toMatchObject({ tool: "zapp", status: "running" });
+    const followed = await call("/api/system/install?tool=zapp");
+    expect(InstallStateSchema.parse(await followed.json())).toMatchObject({ tool: "zapp", status: "succeeded", logTail: ["==> Pouring zapp"] });
+  });
+
+  test("only the tools keyloom knows are installed, and the guard is the same as every route's", async () => {
+    const { call } = await serve();
+    expect((await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "rm -rf" }), headers: { "content-type": "application/json" } })).status).toBe(400);
+    expect((await call("/api/system/install", { method: "POST", body: "{}", headers: { "content-type": "application/json" } })).status).toBe(400);
+    expect((await call("/api/system/install?tool=curl")).status).toBe(400);
+    expect((await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "zapp" }), headers: { "content-type": "text/plain" } })).status).toBe(415);
+    expect((await call("/api/system/install?tool=zapp", {}, null)).status).toBe(401);
+    expect((await call("/api/system/install", { method: "PUT" })).status).toBe(405);
+  });
+});
 
 describe("the Docker routes", () => {
   test("the readiness read says what is wrong and what would fix it", async () => {

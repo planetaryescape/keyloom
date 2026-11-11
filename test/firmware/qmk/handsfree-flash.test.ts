@@ -145,7 +145,8 @@ describe("verifyBuild", () => {
     const k = fakeKeyboard({ usb: () => [dfuBootloader()] });
     const r = await verifyBuild(k.deps, MOONLANDER_REVA, BUILD, say, 100);
     expect((r as { error: string }).error).toContain("didn't come back");
-    expect((r as { error: string }).error).toContain("keyloom doctor");
+    expect((r as { error: string }).error).toContain("plug it in again");
+    expect((r as { error: string }).error).not.toContain("keyloom doctor");
   });
 
   test("Oryx's serial after the flash is a failure too: the old firmware is still there", async () => {

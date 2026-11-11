@@ -1,11 +1,14 @@
-import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, TriangleAlert, X, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, Play, TriangleAlert, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { LogTail } from "./LogTail.tsx";
 import { elapsedOf, type ReleaseStatus } from "./status.ts";
 import type { Release } from "./useRelease.ts";
-import type { Docker } from "./useDocker.ts";
+import { useDockerRecheck } from "./useDocker.ts";
+import { DockerCallout } from "./DockerCallout.tsx";
+import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
+import { buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
 import "./release.css";
 
@@ -18,7 +21,7 @@ interface Props {
   /** True when `head` is not the latest revision, so the dialog says it is flashing an earlier one. */
   earlierRevision?: boolean;
   /** The keyboard's auto-sync, which puts the latest layout back after a flash of an earlier revision unless it is paused. */
-  autoSync?: { on: boolean; paused: boolean; onPause: () => void } | null;
+  autoSync?: { on: boolean; paused: boolean; onPause: () => void; onResume?: () => void } | null;
   boardName: string;
   status: ReleaseStatus;
   now: number;
@@ -51,82 +54,14 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-// Firmware is built in Docker (D-486). keyloom starts the engine itself, so this says what it is about to do
-// and offers the click only when it can't: a missing install, or starting it by itself turned off.
-function DockerNote({ docker }: { docker: Docker }) {
-  const readiness = docker.readiness;
-  const engine = readiness !== null && !readiness.ok && readiness.engine !== null ? readiness.engine : "Docker";
-
-  if (docker.starting) {
-    return (
-      <p className="release-docker" role="status">
-        <LoaderCircle size={14} className="spin" aria-hidden="true" />
-        <span>Starting {engine}. A cold start can take half a minute.</span>
-      </p>
-    );
-  }
-  if (docker.problem !== null) {
-    return (
-      <div className="callout callout-error" role="alert">
-        <CircleAlert size={18} aria-hidden="true" />
-        <p>{docker.problem}</p>
-        <button type="button" className="button" onClick={docker.start}>Try again</button>
-        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
-      </div>
-    );
-  }
-  if (readiness === null || readiness.ok) return null;
-
-  // No Docker at all: the one case a click can't fix here, so it names the command or the page instead (D-487).
-  if (readiness.problem === "not-installed" && readiness.install !== null) {
-    const install = readiness.install;
-    return (
-      <div className="callout callout-warning" role="alert">
-        <TriangleAlert size={18} aria-hidden="true" />
-        <p>
-          Firmware is built in Docker, and there is none on this computer. Install{" "}
-          {install.command === null
-            ? <a href={install.url} target="_blank" rel="noreferrer">{install.engine}</a>
-            : <>{install.engine} with <code>{install.command}</code>{" "}
-                (<a href={install.url} target="_blank" rel="noreferrer">{install.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a>)
-              </>}
-          , then come back here.
-        </p>
-        <p className="callout-note">{install.note}</p>
-        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
-      </div>
-    );
-  }
-
-  // An engine keyloom can't start: on another machine, a tool it has never seen, or a CLI that missed the PATH.
-  // Its own sentence says what to do, so this doesn't pretend to know a command.
-  if (readiness.engine === null) {
-    return (
-      <div className="callout callout-warning" role="alert">
-        <TriangleAlert size={18} aria-hidden="true" />
-        <p>{readiness.reason}</p>
-        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
-      </div>
-    );
-  }
-
-  return (
-    <p className="release-docker">
-      <span>
-        Docker isn't answering. {readiness.canStart ? `keyloom starts ${engine} when you build.` : `Start ${engine}, then build.`}
-      </span>
-      <button type="button" className="button" onClick={docker.start}>
-        {readiness.canStart ? "Start it now" : "Start it"}
-      </button>
-    </p>
-  );
-}
-
-
 export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, status, now }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
-  const { build: lastBuild, flash: lastFlash, starting, error } = release;
+  const { build: lastBuild, flash: lastFlash, starting, error, docker } = release;
+  const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state);
+  const blocked = buildBlockedReason(dockerNow);
+  // While Docker is missing, the dialog asks again by itself, so installing it elsewhere needs no click here (D-488).
+  useDockerRecheck(docker, open && recheckDocker(dockerNow));
 
   useEffect(() => {
     const element = dialog.current;
@@ -141,6 +76,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const earlier = lastBuild !== null && build === null;
   const flashing = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
   const canFlash = build?.status === "succeeded" && !flashing;
+  const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
   const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? flash.verified ? "done" : "warning" : flash.status === "failed" ? "failed" : "active";
@@ -202,7 +138,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
           <div className="callout callout-error" role="alert">
             <CircleAlert size={18} aria-hidden="true" />
             <p>{error}</p>
-            <button type="button" className="button" onClick={release.resume}>Try again</button>
+            <button type="button" className="button" onClick={release.retry}>Try again</button>
           </div>
         )}
 
@@ -218,7 +154,17 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
             </button>
           </div>
         ) : autoSync.paused ? (
-          <p className="muted" role="status">Auto-sync is paused, so the keyboard keeps this revision. Resume it from the sync menu when you want the latest layout back.</p>
+          autoSync.onResume === undefined ? (
+            <p className="muted" role="status">Auto-sync is paused, so the keyboard keeps this revision. Resume it from the sync menu when you want the latest layout back.</p>
+          ) : (
+            <p className="release-docker" role="status">
+              <span>Auto-sync is paused, so the keyboard keeps this revision.</span>
+              <button type="button" className="button" onClick={autoSync.onResume}>
+                <Play size={14} aria-hidden="true" />
+                Resume auto-sync
+              </button>
+            </p>
+          )
         ) : null}
 
         <ol className="release-steps">
@@ -242,16 +188,20 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     onChange={release.chooseBoardRevision}
                   />
                 ) : null}
-                <DockerNote docker={release.docker} />
-                <button
-                  type="button"
-                  className="button button-primary"
-                  disabled={starting !== null || (release.needsBoardRevision && release.boardRevision === null)}
-                  onClick={() => release.buildNow(head.id)}
-                >
-                  {starting === "build" ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Hammer size={14} aria-hidden="true" />}
-                  {starting === "build" ? "Starting" : "Build firmware"}
-                </button>
+                <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} />
+                <div className="step-actions">
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    disabled={starting !== null || blocked !== null || (release.needsBoardRevision && release.boardRevision === null)}
+                    {...(blocked === null ? {} : { "aria-describedby": "build-blocked" })}
+                    onClick={() => release.buildNow(head.id)}
+                  >
+                    {starting === "build" ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Hammer size={14} aria-hidden="true" />}
+                    {starting === "build" ? "Starting" : "Build firmware"}
+                  </button>
+                  {blocked === null ? null : <p id="build-blocked" className="blocked-reason">{blocked}</p>}
+                </div>
               </>
             ) : build.status === "running" ? (
               <>
@@ -269,14 +219,24 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               </>
             ) : (
               <>
-                <div className="callout callout-error" role="alert">
-                  <CircleAlert size={18} aria-hidden="true" />
-                  <p>{build.error ?? "The build failed."}</p>
+                {build.errorCode === "docker_unavailable" ? (
+                  // The build stopped at Docker: the same callout and button as before a build, never the raw sentence.
+                  dockerNow.kind === "none" ? <p className="ok">Docker is ready now. Build again to continue.</p> : <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} />
+                ) : (
+                  <>
+                    <div className="callout callout-error" role="alert">
+                      <CircleAlert size={18} aria-hidden="true" />
+                      <p>{plain(build.error ?? "The build failed.")}</p>
+                    </div>
+                    <LogTail label="Build log, last lines" lines={build.logTail} />
+                  </>
+                )}
+                <div className="step-actions">
+                  <button type="button" className="button" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
+                    Build again
+                  </button>
+                  {blocked === null ? null : <p className="blocked-reason">{blocked}</p>}
                 </div>
-                <LogTail label="Build log, last lines" lines={build.logTail} />
-                <button type="button" className="button" disabled={starting !== null} onClick={() => release.buildNow(head.id)}>
-                  Build again
-                </button>
               </>
             )}
           </Step>
@@ -285,6 +245,10 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
             {flash === null ? (
               !canFlash ? (
                 <p className="muted">Available once the build succeeds.</p>
+              ) : flashPlan?.kind === "manual" ? (
+                <ManualFlash view={flashPlan} boardName={boardName} onDownload={release.download} onReveal={release.reveal} problem={release.fileProblem} />
+              ) : flashPlan?.kind === "needs-tool" ? (
+                <ToolCallout view={flashPlan} boardName={boardName} install={release.toolInstall} onCheck={release.checkBuild} />
               ) : confirming ? (
                 confirmBlock
               ) : (
@@ -334,7 +298,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               <>
                 <div className="callout callout-error" role="alert">
                   <CircleAlert size={18} aria-hidden="true" />
-                  <p>{flash.error ?? "Flashing failed."}</p>
+                  <p>{plain(flash.error ?? "Flashing failed.")}</p>
                 </div>
                 <LogTail label="Flash log, last lines" lines={flash.logTail} />
                 {confirming ? (
