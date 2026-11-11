@@ -28,7 +28,8 @@ test("shutdown waits for an accepted flash still checking its artifact and for i
     const starting = startFlash(e.app, {
       buildId: build.id,
       onState: async (flash) => {
-        if (flash.status === "succeeded") {
+        // Shutdown cancels a flash that still waits for the keyboard (D-506), so this one ends either way; what is tested is the order.
+        if (flash.status === "succeeded" || flash.status === "failed") {
           flashFinished.resolve();
           await allowFlashTaskToFinish.promise;
         }

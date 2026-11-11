@@ -57,9 +57,9 @@ describe("rebootToBootloader", () => {
     expect([...(k.writes[0] as Uint8Array)]).toEqual([...bootloaderPacket()]);
   });
 
-  test("a keyboard that left USB before the next poll counts as restarted: zapp may already be writing", async () => {
+  test("a keyboard that left USB before the next poll counts as restarted, but says its bootloader wasn't seen: it may have been unplugged", async () => {
     const k = fakeKeyboard({ usb: (n) => (n < 1 ? [runningKeyboard(OLD)] : []), hid: [rawHidOf(OLD)] });
-    expect(await rebootToBootloader(k.deps, MOONLANDER_REVA, say)).toEqual({ ok: true });
+    expect(await rebootToBootloader(k.deps, MOONLANDER_REVA, say)).toEqual({ ok: true, leftUsbOnly: true });
   });
 
   test("a write error is not fatal when the keyboard restarted anyway", async () => {
