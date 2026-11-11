@@ -1,6 +1,6 @@
 # 19: Model providers: Codex subscription, OpenRouter key or Anthropic key
 
-Status: built in rung 10, 2026-10-15. Saving a pasted key in the Keychain or Secret Service, and Sign in with Codex from the app, built 2026-11-11 (D-496). A provider fixed by `KEYLOOM_PROVIDER` or `--provider` is the only one the setup offers, and a refusing key store offers the environment variable, 2026-11-11 (D-508). Source baseline: origin/main at `65cc12a` (v0.10.1). Results: S19 and S20 in [15](15-open-questions.md).
+Status: built in rung 10, 2026-10-15. Saving a pasted key in the Keychain or Secret Service, and Sign in with Codex from the app, built 2026-11-11 (D-496). A provider fixed by `KEYLOOM_PROVIDER` or `--provider` is the only one the setup offers, and a refusing key store offers the environment variable, 2026-11-11 (D-508). A used-up Codex plan is its own error with its reset time and another model, 2026-11-11 (D-522). Source baseline: origin/main at `65cc12a` (v0.10.1). Results: S19 and S20 in [15](15-open-questions.md).
 
 BK: "use codex cli for AI I think it allow you to use codex sub with it's agent sdk if I'm not mistaken, we can use that. Also make it possible for me to use an openrouter api key". This came after the Anthropic account behind keyloom's key ran out of credits, which stopped the chat and the live evals.
 
@@ -44,7 +44,7 @@ How the adapter works (D-108):
 - **Prompt.** keyloom's system prompt goes in `developer_instructions`. Codex's own base prompt still applies, so each run carries 24k to 80k input tokens of Codex's own text.
 - **Streaming.** Codex streams whole messages, not tokens. The chat shows each message when it completes, and a tool call when it starts.
 - **Usage.** Tokens are reported, but there is no cost and no rate-limit data. The UI shows tokens only for Codex.
-- **Errors.** Codex's errors are message strings. A usage limit maps to `rate_limit`, a logged-out state to `missing_key`, and a failed spawn to `connection`.
+- **Errors.** Codex's errors are message strings. A usage limit (or a workspace spend cap) maps to `usage_limit`, with the reset time Codex gives (D-522); too many requests at once to `rate_limit`; a logged-out state to `missing_key`; and a failed spawn to `connection`. The chat offers another ready provider, or the setup for one, for `usage_limit`.
 - **History.** The run is `--ephemeral`, so Codex keeps no thread. keyloom replays the stored conversation to it as text each turn (D-124), and synthesises `tool_use` and `tool_result` blocks from the MCP calls, so keyloom's transcript, decisions and evals read the same as with the other providers.
 - **Login.** keyloom runs `codex login status` and says "run `codex login`" when needed. keyloom never handles the ChatGPT credential.
 
