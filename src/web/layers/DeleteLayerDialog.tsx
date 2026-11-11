@@ -14,12 +14,21 @@ interface Props {
   /** A function in words ("Esc", "Hold Nav"), for the list of what would be lost. */
   nameFunction: (fn: string) => string;
   onOpenKey: (slot: Slot) => void;
+  /** Opens a combo's card, where its output or its layers are changed (R4-09). */
+  onOpenCombo: (comboId: string) => void;
   onClose: () => void;
+}
+
+/** The button beside a reference: the place where it is changed, or null for one the page can't open (a tap dance on no key). */
+export function referenceAction(reference: LayerReference): { label: string; open: { slot: Slot } | { comboId: string } } | null {
+  if (reference.comboId !== undefined) return { label: "Open combo", open: { comboId: reference.comboId } };
+  if (reference.slot !== undefined) return { label: reference.tapDance === true ? "Open tap dance" : "Open key", open: { slot: reference.slot } };
+  return null;
 }
 
 // Deleting is the one layer action that can strand keys, so it lists what points at the layer first
 // and asks the validator, which refuses while any of those keys would reach nothing (16#layers, D-090).
-export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onClose }: Props) {
+export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onOpenCombo, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [outcome, setOutcome] = useState<Extract<ChangeOutcome, { ok: false }> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,17 +70,27 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
             </span>
           </p>
           <ul className="layer-refs" aria-label={`What switches to ${layerName}`}>
-            {references.map((reference) => (
-              <li key={reference.text}>
-                {reference.slot === undefined ? (
+            {references.map((reference) => {
+              const action = referenceAction(reference);
+              return (
+                <li key={reference.text} className="layer-ref-row">
                   <span>{reference.text}</span>
-                ) : (
-                  <button type="button" className="layer-ref" onClick={() => reference.slot !== undefined && (onClose(), onOpenKey(reference.slot))}>
-                    {reference.text}
-                  </button>
-                )}
-              </li>
-            ))}
+                  {action === null ? null : (
+                    <button
+                      type="button"
+                      className="button layer-ref-open"
+                      onClick={() => {
+                        onClose();
+                        if ("slot" in action.open) onOpenKey(action.open.slot);
+                        else onOpenCombo(action.open.comboId);
+                      }}
+                    >
+                      {action.label}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </>
       ) : (
@@ -101,8 +120,10 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
         </div>
       )}
       <footer className="layer-dialog-foot">
+        {/* The validator refuses while anything switches here, so the button waits for the list to be empty and says so (R4-09). */}
+        {stuck ? <span id="delete-layer-why" className="layer-dialog-why">Change what switches to {layerName} first.</span> : null}
         <button type="button" className="button" onClick={onClose}>Keep the layer</button>
-        <button type="button" className="button button-danger" disabled={busy} onClick={() => void confirm()}>{dropping.length === 0 ? `Delete ${layerName}` : "Delete and drop them"}</button>
+        <button type="button" className="button button-danger" disabled={busy || stuck} aria-describedby={stuck ? "delete-layer-why" : undefined} onClick={() => void confirm()}>{dropping.length === 0 ? `Delete ${layerName}` : "Delete and drop them"}</button>
       </footer>
     </dialog>
   );

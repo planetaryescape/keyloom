@@ -846,6 +846,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setLayerId(slot.layerId);
             openEditor(slot.position, slot.layerId);
           },
+          openCombo: (id) => openCombo(id),
           notify: (message) => toasts.show({ kind: "info", message }),
           nameFunction: (fn) => functionName(fn, layout),
         };

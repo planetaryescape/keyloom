@@ -155,6 +155,8 @@ describe("deleting a layer", () => {
     layout.layers[0] = { ...layout.layers[0]!, bindings: [{ kind: "holdTap", tap: { code: "A" }, hold: { layerId: "nav" }, profileId: "p" }, key("B"), T, key("D")] };
     const texts = layerReferences(layout, "nav").map((r) => r.text);
     expect(texts).toEqual(["The A key on Base holds Nav", "The combo Go nav toggles Nav", "The combo Quote is set up on Nav"]);
+    // Each combo carries its id, so the delete dialog can open it (R4-09).
+    expect(layerReferences(layout, "nav").map((r) => r.comboId)).toEqual([undefined, "c1", "c2"]);
     expect(validate(tinyBoard, layout, [{ op: "removeLayer", layerId: "nav" }]).ok).toBe(false);
   });
 
@@ -165,6 +167,7 @@ describe("deleting a layer", () => {
     });
     layout.layers[0] = { ...layout.layers[0]!, bindings: [{ kind: "tapDance", tapDanceId: "td" }, key("B"), T, key("D")] };
     expect(layerReferences(layout, "nav").map((r) => r.text)).toEqual(["The A key on Base is the tap dance Twice, which goes to Nav"]);
+    expect(layerReferences(layout, "nav")[0]).toMatchObject({ slot: { layerId: "base", position: 0 }, tapDance: true });
     expect(validate(tinyBoard, layout, [{ op: "removeLayer", layerId: "nav" }]).errors.map((e) => e.code)).toContain("unknown_ref");
   });
 

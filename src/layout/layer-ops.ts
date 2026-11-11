@@ -95,7 +95,8 @@ export function cleanShortLabel(text: string): string | null {
   return label === "" ? null : label;
 }
 
-export type LayerReference = { text: string; slot?: Slot };
+/** `slot` is the key that carries it and `comboId` the combo, so the page can open the place to change it (R4-09). `tapDance` marks a key whose dance does it. */
+export type LayerReference = { text: string; slot?: Slot; comboId?: string; tapDance?: true };
 
 const ACTION_WORD = { momentary: "holds", toggle: "toggles", to: "goes to", oneShot: "switches once to" } as const;
 
@@ -128,7 +129,7 @@ export function layerReferences(layout: Layout, layerId: string): LayerReference
       if (binding.kind === "tapDance") {
         const dance = layout.tapDances.find((candidate) => candidate.id === binding.tapDanceId);
         const hit = [dance?.tap, dance?.hold, dance?.doubleTap, dance?.tapThenHold].find((action) => action?.kind === "layer" && action.layerId === layerId);
-        if (dance !== undefined && hit?.kind === "layer") out.push({ slot, text: `${where(slot)} is the tap dance ${dance.name}, which ${ACTION_WORD[hit.action]} ${target}` });
+        if (dance !== undefined && hit?.kind === "layer") out.push({ slot, tapDance: true, text: `${where(slot)} is the tap dance ${dance.name}, which ${ACTION_WORD[hit.action]} ${target}` });
       }
     }
   }
@@ -139,8 +140,8 @@ export function layerReferences(layout: Layout, layerId: string): LayerReference
   }
   for (const combo of layout.combos) {
     const said = describe(combo.output);
-    if (said !== null) out.push({ text: `The combo ${combo.name} ${said}` });
-    else if (combo.layerIds !== "all" && combo.layerIds.includes(layerId)) out.push({ text: `The combo ${combo.name} is set up on ${target}` });
+    if (said !== null) out.push({ comboId: combo.id, text: `The combo ${combo.name} ${said}` });
+    else if (combo.layerIds !== "all" && combo.layerIds.includes(layerId)) out.push({ comboId: combo.id, text: `The combo ${combo.name} is set up on ${target}` });
   }
   return out;
 }

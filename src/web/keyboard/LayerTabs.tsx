@@ -26,6 +26,7 @@ export interface LayerActions {
   condition: (ops: ChangeOp[], summary: string) => Promise<ChangeOutcome>;
   nameFunction: (fn: string) => string;
   openKey: (slot: Slot) => void;
+  openCombo: (comboId: string) => void;
   notify: (message: string) => void;
 }
 
@@ -260,6 +261,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
           onDelete={(drops) => actions.remove(deleting, drops)}
           nameFunction={actions.nameFunction}
           onOpenKey={actions.openKey}
+          onOpenCombo={actions.openCombo}
           onClose={() => setDeleting(null)}
         />
       )}

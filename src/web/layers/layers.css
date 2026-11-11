@@ -300,19 +300,20 @@
   list-style: none;
 }
 
-.layer-ref {
-  width: 100%;
+.layer-ref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-page);
   color: var(--color-text);
-  text-align: left;
-  cursor: pointer;
 }
 
-.layer-ref:hover {
-  background: var(--color-panel);
+.layer-ref-open {
+  flex: none;
 }
 
 .layer-refused {
@@ -330,8 +331,16 @@
 
 .layer-dialog-foot {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+.layer-dialog-why {
+  flex: 1 1 12rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .button.button-danger {
