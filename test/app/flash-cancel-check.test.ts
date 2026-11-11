@@ -246,6 +246,9 @@ describe("Check the keyboard again", () => {
     // An earlier build of this copy's is still another build, which Flash again puts this one back over.
     const earlier = await checkFlashAgain(s.e.app, s.flashId, { read: reads({ state: "keyloom", keys: ["AAAAAAAAAAAA"], boardRevision: "reva" }).read });
     expect(earlier.found).toBe("other_build");
+    // One half on the later build and one that didn't answer is not "moved on" yet: every half must be read first.
+    const half = await checkFlashAgain(s.e.app, s.flashId, { read: reads({ state: "keyloom", keys: [buildKey(later.id)], boardRevision: "reva", missingHalves: ["right half"] }).read });
+    expect(half.found).toBe("missing_halves");
   });
 
   test("only reads: no build, no flash, no restart and no write to the keyboard", async () => {

@@ -33,7 +33,7 @@ export function AfterApplyNote({ board, onOpenRelease }: { board: { firmware: st
         <strong>{line.lead}</strong> {line.text}
       </p>
       {line.action === null || run === undefined || run === null || Icon === null ? null : (
-        <button type="button" className="button" onClick={run}>
+        <button type="button" className="button" onClick={() => run()}>
           <Icon size={14} aria-hidden="true" />
           {line.action.label}
         </button>

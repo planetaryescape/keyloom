@@ -51,7 +51,10 @@ export async function checkFlashAgain(app: App, flashId: string, deps: FlashChec
   const readings = await (deps.read ?? readKeyboards)(deps.handsFree ?? {});
   const reading = readings.get(boardId) ?? { state: "absent" };
   const found = compare(reading, flash.buildId);
-  if (found === "other_build" && reading.state === "keyloom" && laterBuild(app, reading.keys, build.startedAt)) return { flash, found: "later_build" };
+  if (found === "other_build" && reading.state === "keyloom" && laterBuild(app, reading.keys, build.startedAt)) {
+    // A half that didn't answer may still run this build or an older one, so "nothing to flash" waits until every half is read.
+    return { flash, found: reading.missingHalves !== undefined && reading.missingHalves.length > 0 ? "missing_halves" : "later_build" };
+  }
   if (found !== "this_build") return { flash, found };
 
   const at = (deps.now ?? Date.now)();

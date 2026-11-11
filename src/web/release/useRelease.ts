@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Build, Flash, FlashCheckResponse } from "../../api/http.ts";
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
 import { ApiError } from "../api.ts";
@@ -155,6 +155,11 @@ export function useRelease(token: string, layoutRef: string): Release {
   }, [token, buildId]);
 
   const flashId = flash?.id;
+  // The flash on screen now, so a check that answers after another flash started can't replace it.
+  const currentFlashId = useRef(flashId);
+  useEffect(() => {
+    currentFlashId.current = flashId;
+  }, [flashId]);
   const cancel = useCallback(() => {
     if (flashId === undefined) return;
     setCancelling(true);
@@ -172,15 +177,21 @@ export function useRelease(token: string, layoutRef: string): Release {
   }, [token, flashId]);
 
   const checkKeyboard = useCallback(() => {
-    if (flashId === undefined) return;
+    // A flash that is starting replaces this one, so its check would answer for a flash no longer on screen.
+    if (flashId === undefined || starting !== null) return;
+    const asked = flashId;
     setCheck({ running: true, found: null, problem: null });
-    checkFlash(token, flashId)
+    checkFlash(token, asked)
       .then((result) => {
+        if (currentFlashId.current !== asked) return;
         setFlash(result.flash);
         setCheck({ running: false, found: result.found, problem: null });
       })
-      .catch((e: unknown) => setCheck({ running: false, found: null, problem: e instanceof Error ? e.message : "keyloom couldn't read the keyboard." }));
-  }, [token, flashId]);
+      .catch((e: unknown) => {
+        if (currentFlashId.current !== asked) return;
+        setCheck({ running: false, found: null, problem: e instanceof Error ? e.message : "keyloom couldn't read the keyboard." });
+      });
+  }, [token, flashId, starting]);
 
   const open = useCallback((pane: SettingsPaneName) => {
     setSettingsProblem(null);

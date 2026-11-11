@@ -301,6 +301,21 @@ describe("flashWithZapp never lets a stop cut off a write (D-506)", () => {
     expect(restarted).toBe(false);
   }, SLOW_RUNNER_MS);
 
+  test("a USB read that fails is not taken as no bootloader: a cancel leaves zapp running, and the flash finishes", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 1; echo "Flashing"; exit 0');
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, pollMs: 20,
+      bootloaderPresent: async () => {
+        throw new Error("system_profiler failed");
+      },
+      onLine: (line) => void (line.includes("Firmware loaded") && setTimeout(() => c.abort(), 100)),
+    });
+    expect(r.state).toBe("succeeded");
+    s.log.close();
+    expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("couldn't read USB, so zapp may be writing");
+  }, SLOW_RUNNER_MS);
+
   test("a reset pressed between the USB check and stopping zapp is reported: the keyboard is in its bootloader, not untouched", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
     const c = new AbortController();

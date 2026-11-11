@@ -62,6 +62,8 @@ export type FlashInput = {
 };
 
 const BOOTLOADER_POLL_MS = 250;
+/** How many times a failed USB read is tried before keyloom gives up on knowing whether Zapp writes. */
+const USB_READ_TRIES = 3;
 
 const LOADED = /firmware loaded/i;
 
@@ -109,12 +111,13 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     arm(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS, "write");
     input.onState("writing", "Don't unplug the keyboard. Flashing takes a few seconds.");
   };
-  const present = async (): Promise<boolean> => {
+  // Undefined when USB couldn't be read, which says nothing either way: Zapp may be writing to a keyboard keyloom can't see.
+  const present = async (): Promise<boolean | undefined> => {
     if (!input.bootloaderPresent) return false;
     try {
       return await input.bootloaderPresent();
     } catch {
-      return false;
+      return undefined;
     }
   };
   // A cancel or a timeout stops Zapp only while nothing can have been written. Killing it mid-write leaves the keyboard in its
@@ -123,7 +126,20 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     if (writing || exited) return refused(reason);
     // keyloom has sent the restart command: the bootloader is moments away, and only the result says whether Zapp got it.
     if (entering !== undefined) await entering;
-    if (!writing && loaded && (await present())) startWriting("the keyboard is in its bootloader");
+    if (!writing && loaded) {
+      let seen = await present();
+      for (let i = 1; seen === undefined && i < USB_READ_TRIES && !writing && !exited; i++) {
+        await Bun.sleep(input.pollMs ?? BOOTLOADER_POLL_MS);
+        seen = await present();
+      }
+      if (seen === true) startWriting("the keyboard is in its bootloader");
+      else if (seen === undefined && !writing && !exited) {
+        // Not stopped on a guess. A timeout gives Zapp a write's time instead, and then its message says where the keyboard may be.
+        input.log.line("keyloom: couldn't read USB, so zapp may be writing; not stopping it");
+        if (reason === "bootloader") arm(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS, "write");
+        return;
+      }
+    }
     if (writing || exited) return refused(reason);
     stop(reason);
   };
@@ -137,7 +153,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   const watch = async () => {
     const pollMs = input.pollMs ?? BOOTLOADER_POLL_MS;
     while (!writing && !exited && !controller.signal.aborted) {
-      if (await present()) startWriting("the keyboard is in its bootloader");
+      if ((await present()) === true) startWriting("the keyboard is in its bootloader");
       else await Bun.sleep(pollMs);
     }
   };
@@ -202,7 +218,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   if (abortedFor === "cancelled" || abortedFor === "bootloader") {
     // Zapp was stopped after a USB check that saw no bootloader, but a reset pressed in between puts the keyboard there with
     // nothing to write it, so the result says where the keyboard is rather than "nothing was flashed".
-    if (await present()) {
+    if ((await present()) === true) {
       input.log.line("keyloom: zapp was stopped, but the keyboard is in its bootloader now");
       return fail(`${abortedFor === "cancelled" ? "Cancelled" : "Stopped"} just as the keyboard entered its bootloader. It is still there and won't type until it is flashed: flash again to put the build on it.`, output);
     }

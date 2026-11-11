@@ -111,6 +111,8 @@ type Running = {
   flashAbort: AbortController;
   reason: "paused" | "superseded" | "stopped" | undefined;
   recovering?: true;
+  /** The flasher's latest state says the keyboard is being written or sits in its bootloader, so a stop now is refused (D-506). */
+  committed?: boolean;
   done: Promise<SyncRow>;
 };
 
@@ -615,7 +617,7 @@ export class SyncEngine {
       if (!flashed.ok) {
         const stepNow = findSync(db, row.id)?.step;
         // A stop or pause that came once the keyboard was in its bootloader was refused by the flasher (D-506), so a failure after it is the write's own.
-        const wrote = stepNow === "writing" || stepNow === "verifying";
+        const wrote = stepNow === "writing" || stepNow === "verifying" || run.committed === true;
         if (run.reason !== undefined && !run.recovering && !wrote) return cancelled();
         await this.exclusive(() => this.refresh(true));
         const after = this.readingOf(row.boardId);
@@ -648,6 +650,8 @@ export class SyncEngine {
   private onFlasherState(row: SyncRow, state: FlashState, instruction: string | null, note: FlashNote | undefined): void {
     if (note?.recovering && this.running?.row.id === row.id) this.running.recovering = true;
     if (state === "succeeded" || state === "failed") return;
+    // A half keyloom restarted is committed until the flasher moves on; a later half waiting for a hand is not, so it can be cancelled.
+    if (this.running?.row.id === row.id) this.running.committed = state === "writing" || note?.inBootloader === true;
     // The instruction of a failed hand-off stays on the row (finishSync keeps it for needs_hand), so the header can still show what to do.
     if (note?.needsHand) progressSync(this.app.db, row.id, { step: "needs_hand", instruction });
     else if (note?.verifying) progressSync(this.app.db, row.id, { step: "verifying", instruction: null });

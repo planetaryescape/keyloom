@@ -414,6 +414,9 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const [fitting, setFitting] = useState<FittingRevision>(null);
+  // A lookup that failed is not "none fits": the page says so and offers to look again.
+  const [lookupFailed, setLookupFailed] = useState(false);
+  const [lookups, setLookups] = useState(0);
   // Set when the server refused Go back; the button then reloads the layout or goes, with the reason beside it (D-506).
   const [goBackRefused, setGoBackRefused] = useState<GoBackRefusal | null>(null);
   useEffect(() => {
@@ -423,10 +426,18 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
   useEffect(() => {
     if (!fixable) return;
     const controller = new AbortController();
-    // Not finding one leaves the other ways on; the page never says it looked.
-    fetchFittingRevision(token, summary.id, controller.signal).then(setFitting).catch(() => setFitting(null));
+    // The answer belongs to the head it was asked for: a new head clears the old one's target until its own answer comes.
+    setFitting(null);
+    setLookupFailed(false);
+    fetchFittingRevision(token, summary.id, controller.signal)
+      .then((found) => {
+        if (!controller.signal.aborted) setFitting(found);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLookupFailed(true);
+      });
     return () => controller.abort();
-  }, [token, summary.id, fixable]);
+  }, [token, summary.id, summary.revisionId, fixable, lookups]);
   // Going back keeps this layout on screen; an archived one leaves it, so the reload selects nothing.
   const act = async (run: () => Promise<unknown>, failed: string, stay: boolean) => {
     setBusy(true);
@@ -464,13 +475,20 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
               Reload this layout
             </button>
           ) : null}
-          {onHome === undefined ? null : <button type="button" className={fitting === null ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
+          {lookupFailed ? (
+            <button type="button" className="button button-primary" disabled={busy} onClick={() => setLookups((n) => n + 1)}>
+              Look again
+            </button>
+          ) : null}
+          {onHome === undefined ? null : <button type="button" className={fitting === null && !lookupFailed ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
           <button type="button" className="button" disabled={busy} onClick={() => void archive()}>Archive this config</button>
         </>
       }
     >
       {problem}{" "}
-      {fitting === null
+      {lookupFailed
+        ? "keyloom couldn't look for an earlier revision that matched. Look again, pick another layout, or archive this one; it keeps its history."
+        : fitting === null
         ? "Pick another layout, or archive this one; it keeps its history."
         : <>The last revision that matched is “{headline(fitting.summary)}”. Going back adds a new revision, so this one stays in History.</>}
       {refused === null ? null : <span className="state-refused" role="alert"> {goBackRefused?.text ?? refused}</span>}

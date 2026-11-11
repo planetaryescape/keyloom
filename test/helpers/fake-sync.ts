@@ -44,9 +44,11 @@ export async function waitFor(cond: () => boolean, what: string, ms = 15_000): P
 
 /**
  * `reset_at_stop`: waits for a hand; the stop arrives just as the person presses reset, so the flasher finds the bootloader, refuses
- * the stop as the real one does (D-506), writes, and the write fails.
+ * the stop as the real one does (D-506), writes, and the write fails. `restart_at_stop`: a UF2 half waits for a hand, keyloom's
+ * retry restarts it just as the stop arrives, so the flasher says `inBootloader` and refuses the stop, and then the half's drive
+ * goes away before the copy.
  */
-export type FlashMode = "ok" | "unverified" | "fail" | "unplug" | "needs_hand" | "wrong_marker" | "reset_at_stop";
+export type FlashMode = "ok" | "unverified" | "fail" | "unplug" | "needs_hand" | "wrong_marker" | "reset_at_stop" | "restart_at_stop";
 
 export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean } = {}) {
   const app: App = openApp({ dataDir: tempDir() });
@@ -129,6 +131,14 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
           a.onFlasherState("writing", "Don't unplug the keyboard.", undefined);
           finishFlash(app.db, flashId, { error: "zapp exited with code 1" });
           return { ok: false, flashId, error: "zapp exited with code 1" };
+        }
+        if (world.flashMode === "restart_at_stop") {
+          a.onFlasherState("waiting_for_bootloader", "keyloom couldn't restart the right half by itself. Press its bootloader key.", { needsHand: true });
+          await new Promise<void>((resolve) => a.signal.addEventListener("abort", () => resolve(), { once: true }));
+          a.onFlasherState("waiting_for_bootloader", "keyloom restarted the right half into its bootloader. Writing starts in a moment; don't unplug it.", { inBootloader: true });
+          const error = "Not writing to GLV80RHBOOT: the selected drive is no longer mounted at that path.";
+          finishFlash(app.db, flashId, { error });
+          return { ok: false, flashId, error };
         }
         if (world.flashMode === "needs_hand") {
           a.onFlasherState("waiting_for_bootloader", "keyloom couldn't restart the keyboard by itself (no raw HID). Press the reset button.", { needsHand: true });
