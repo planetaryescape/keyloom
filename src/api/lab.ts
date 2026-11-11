@@ -31,6 +31,8 @@ export const LabSessionSchema = z.object({
   eventCount: z.number().int().nonnegative(),
   analysed: z.boolean(),
   warnings: z.array(z.string()),
+  // Keys went missing while it recorded, so it can't be read (R4-14). Optional for older servers.
+  incomplete: z.boolean().optional(),
 });
 export type LabSession = z.infer<typeof LabSessionSchema>;
 export const LabSessionsResponseSchema = z.object({ sessions: z.array(LabSessionSchema) });
