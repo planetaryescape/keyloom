@@ -44,8 +44,19 @@ export type CaptureHooks = {
   keepaliveMs?: number;
 };
 
+/**
+ * Why a capture couldn't start, for a screen to offer the fix (R1-19): `needs_sync` is a keyboard whose firmware can't stream yet, which
+ * a sync or a build and flash replaces; `not_connected` is no keyboard at all.
+ */
+export type CaptureCode = "needs_sync" | "not_connected";
+
 export class CaptureError extends Error {
   override name = "CaptureError";
+  readonly code: CaptureCode | undefined;
+  constructor(message: string, options: ErrorOptions & { code?: CaptureCode } = {}) {
+    super(message, options);
+    this.code = options.code;
+  }
 }
 
 const WRAP = 2 ** 32;

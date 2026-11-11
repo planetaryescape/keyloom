@@ -1372,8 +1372,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // ⌘K commands (D-315): the typing lab and the config commands, offered above "Ask keyloom" when the text names them.
   // `find` keeps its identity while the configs don't change, so the bar's highlighted row survives a re-render.
   const findCommands = useCallback(
-    (text: string) => matchCommands(text, { configs: configs.live, currentId: summary.id, boardName: boardDisplayName(board.name) }),
-    [configs.live, summary.id, board.name],
+    (text: string) => matchCommands(text, { configs: configs.live, currentId: summary.id, boardName: boardDisplayName(board.name) }).filter((c) => c.kind !== "lab" || board.firmware !== "kanata"),
+    [configs.live, summary.id, board.name, board.firmware],
   );
   const chatCommands = {
     find: findCommands,
@@ -1791,7 +1791,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           library: { open: libraryOpen, onToggle: toggleLibrary },
           inspect: { on: inspect, onToggle: toggleInspect },
           showCombos: { on: showCombos, onToggle: toggleCombos },
-          lab: { open: labOpen, onToggle: () => toggleLab() },
+          // The MacBook keyboard's remapper has no key stream, so the lab isn't offered for it (R1-28).
+          ...(board.firmware === "kanata" ? {} : { lab: { open: labOpen, onToggle: () => toggleLab() } }),
           settings: {
             open: settingsOpen,
             onToggle: () => {
@@ -1954,7 +1955,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
             </div>
           ) : null}
-          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} /> : null}
+          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease() }} /> : null}
           {/* A narrow screen has no column beside the board, so a past session's read-out is a sheet at the stage's foot (D-314). */}
           {labOpen && narrow && lab.phase.kind === "readout" ? (
             <div className="lab-sheet">
