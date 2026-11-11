@@ -37,7 +37,7 @@ import type { FindingRepairDraft } from "../../api/review.ts";
 import { declinedProposalCodes, refusalReasons, type RecoveryContext, type RecoverySource } from "../../validation/proposal-recovery.ts";
 import { owningRequest, proposalContext } from "./recovery-context.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
-import { activeProviderReady } from "./provider-ready.ts";
+import { activeProviderReady, offersPicker } from "./provider-ready.ts";
 import "./chat.css";
 import "./command-bar.css";
 
@@ -633,8 +633,9 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
               if (placedAt.current !== null && Math.abs(el.scrollTop - placedAt.current) >= 2) placedAt.current = null;
             }}
           >
-            {needsModel && chat.problem === null && variant === "bar" && status.providers.some((candidate) => candidate.ready) ? (
-              // In the bar, a provider that is ready is one click away; setting up the chosen one is the fallback (comp d2).
+            {needsModel && chat.problem === null && variant === "bar" && offersPicker(status) ? (
+              // In the bar, a provider that is ready is one click away; setting up the chosen one is the fallback (comp d2). A provider
+              // fixed by --provider or KEYLOOM_PROVIDER can't be switched from here, so then only its setup is offered.
               <div className="bar-needs-model">
                 <p>
                   <b>{PROVIDER_NAMES[status.active?.provider ?? "anthropic"]} isn&apos;t set up.</b> Use one that is ready, or set it up here.
