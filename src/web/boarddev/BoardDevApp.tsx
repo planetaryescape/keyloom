@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { coverage, positionFacts, type BoardDevView } from "../../boards/dev.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
@@ -60,7 +60,7 @@ export function BoardDevApp({ token }: { token: string }) {
   if (error !== null && view === null) {
     return (
       <Shell>
-        <ErrorState title="Can't show this board" onRetry={load}>
+        <ErrorState level={1} title="Can't show this board" onRetry={load}>
           {error}
         </ErrorState>
       </Shell>
@@ -95,6 +95,21 @@ export function BoardDevApp({ token }: { token: string }) {
           Reload board.json
         </button>
       </div>
+      {/* A reload that failed keeps the last board on screen and says so, instead of looking as if nothing changed (R3-23). */}
+      {error === null ? null : (
+        <div className="callout callout-error boarddev-reload-error" role="alert">
+          <TriangleAlert size={18} aria-hidden="true" />
+          <div className="callout-body">
+            <p>keyloom couldn't read board.json again: {error} The board below is the last one that loaded.</p>
+            <div className="callout-actions">
+              <button type="button" className="button" onClick={load}>
+                <RefreshCw size={14} aria-hidden="true" />
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* The board on the room's backdrop, drawn as the editor draws it, case and all (P4): what a contributor sees is what BK will. */}
       <section className="boarddev-stage">

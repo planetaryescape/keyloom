@@ -141,23 +141,25 @@ export function App({ token }: { token: string }) {
   if (listError !== null) {
     return wrap(
       <Shell>
-        <ErrorState title="Can't load your layouts" {...(listError.retryable ? { onRetry: retry } : {})}>
+        <ErrorState level={1} title="Can't load your layouts" {...(listError.retryable ? { onRetry: retry } : {})}>
           {listError.kind === "token" ? <RestartAdvice lead="keyloom restarted, so this page's link no longer works." /> : listError.message}
         </ErrorState>
       </Shell>
     );
   }
   // The imported layout is selected before the list that holds it arrives; the skeleton covers the gap, so the old layout doesn't flash.
-  const imported = (result: ImportResponse) => {
+  // An import opens its review; a blank config started from the import screen (R3-12) has nothing to review yet.
+  const opened = (layoutId: string, review: boolean) => {
     setLayouts(null);
     setView(null);
-    setSelectedId(result.layoutId);
-    setCarry({ id: result.layoutId, layerName: null, chatOpen: false, thread: null, review: true });
+    setSelectedId(layoutId);
+    setCarry({ id: layoutId, layerName: null, chatOpen: false, thread: null, review });
     setImporting(false);
     setAdding(false);
     setOnWall(false);
     setAttempt((count) => count + 1);
   };
+  const imported = (result: ImportResponse) => opened(result.layoutId, true);
   if (layouts === null) {
     return (
       <Shell fill>
@@ -247,7 +249,7 @@ export function App({ token }: { token: string }) {
   if (importing) {
     return wrap(
       <Shell menu={menu}>
-        <ImportScreen token={token} onImported={imported} onBack={() => setImporting(false)} />
+        <ImportScreen token={token} onImported={imported} onStartedBlank={(layoutId) => opened(layoutId, false)} onBack={() => setImporting(false)} />
       </Shell>
     );
   }
@@ -269,6 +271,7 @@ export function App({ token }: { token: string }) {
     return wrap(
       <Shell menu={menu}>
         <ErrorState
+          level={1}
           title={gone ? "This layout is gone" : "Can't show this layout"}
           {...(current.error.retryable ? { onRetry: retry } : {})}
           {...(gone ? { actions: <button type="button" className="button button-primary" onClick={() => { setView(null); setSelectedId(null); setOnWall(true); setAttempt((count) => count + 1); }}>Show your other layouts</button> } : {})}

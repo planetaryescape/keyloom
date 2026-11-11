@@ -1,3 +1,4 @@
+import { openPlace } from "../shell/open-place.ts";
 import { LoaderCircle, Search } from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -185,7 +186,7 @@ export function SettingsPane(props: Props) {
 
 // Everything the layout sets that the page has no control for, so nothing is hidden: the other options it writes, and the
 // code and build files it keeps as written (D-103).
-function OtherSettings({ layout, settings }: { layout: Layout; settings: Layout["settings"] }) {
+export function OtherSettings({ layout, settings }: { layout: Layout; settings: Layout["settings"] }) {
   const kept = layout.passthrough.filter((p) => p.anchor !== "file" || p.file !== "rules.mk");
   const rules = (layout.passthrough.find((p) => p.file === "rules.mk")?.source ?? "")
     .split("\n")
@@ -197,7 +198,10 @@ function OtherSettings({ layout, settings }: { layout: Layout; settings: Layout[
   return (
     <details className="settings-other">
       <summary>Also in this layout, read only</summary>
-      <p className="muted">These are written as they came in. Ask the chat to change one, or leave them.</p>
+      {/* The chat is the only way to change these, so its name opens it, as SettingRow's does (R1-23, D-508). */}
+      <p className="muted">
+        These are written as they came in. <button type="button" className="link-button" onClick={() => openPlace("chat")}>Ask the chat</button> to change one, or leave them.
+      </p>
       {settings.length === 0 ? null : (
         <dl>
           {settings.map((s) => (
