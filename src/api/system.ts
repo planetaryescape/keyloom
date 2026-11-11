@@ -6,7 +6,7 @@ import { z } from "zod";
 //   POST /api/system/docker/start     -> DockerStartResponse   (starts the engine and waits, up to about two minutes; for
 //                                       `cli-missing` it opens the app named in `engine`, whose setup puts its CLI in place)
 //   POST /api/system/docker/restart   -> DockerStartResponse   (quits and reopens the Mac app named in `access.restartApp`, or stops
-//                                       and starts the Colima named in `restartEngine`)
+//                                       and starts the Colima named in `restartEngine`; refused while keyloom is starting Docker)
 // `no-access`: the daemon runs but refuses this account its socket; `access` then says the way out (D-497).
 export const DockerProblemSchema = z.enum(["not-installed", "cli-missing", "daemon-down", "slow", "no-access"]);
 export type DockerProblem = z.infer<typeof DockerProblemSchema>;
