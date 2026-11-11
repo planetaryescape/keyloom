@@ -1,17 +1,18 @@
 // What keyloom says about the Docker a build needs, with the button that fixes it (D-486 to D-488). Shared by the
 // release dialog and the board review's activity tests, so both offer the same Install or Start.
-import { CircleAlert, CircleCheck, Download, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
+import { AppWindow, CircleAlert, CircleCheck, Download, LoaderCircle, Play, RefreshCw, RotateCcw, TriangleAlert } from "lucide-react";
 import { CopyCommand } from "../shell/CopyCommand.tsx";
+import { InstallCancel, InstallStopped } from "./InstallCancel.tsx";
 import { LogTail } from "./LogTail.tsx";
 import type { DockerView } from "./release-words.ts";
 import type { Docker } from "./useDocker.ts";
 import type { Install } from "./useInstall.ts";
 
-function Alternatives({ items }: { items: Array<{ name: string; url: string }> }) {
+function Alternatives({ items, lead = "Prefer an app?" }: { items: Array<{ name: string; url: string }>; lead?: string }) {
   if (items.length === 0) return null;
   return (
     <p className="callout-note">
-      Prefer an app?{" "}
+      {lead}{" "}
       {items.map((item, index) => (
         <span key={item.name}>
           {index > 0 ? " · " : null}
@@ -31,7 +32,7 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
       return (
         <p className="release-docker" role="status">
           <LoaderCircle size={14} className="spin" aria-hidden="true" />
-          <span>Starting {view.engine}. A cold start can take half a minute.</span>
+          <span>{view.verb} {view.engine}. {view.verb === "Opening" ? "Finish its setup if it asks you to." : "A cold start can take half a minute."}</span>
         </p>
       );
     case "start-failed":
@@ -41,7 +42,7 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           <div className="callout-body">
             <p>{view.reason}</p>
             <div className="callout-actions">
-              <button type="button" className="button" onClick={docker.start}>Try again</button>
+              <button type="button" className="button" onClick={view.retry === "restart" ? docker.restart : docker.start}>Try again</button>
               <button type="button" className="button" onClick={docker.refresh}>Check again</button>
             </div>
           </div>
@@ -52,6 +53,7 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
         <div className="callout callout-warning" role="alert">
           <TriangleAlert size={18} aria-hidden="true" />
           <div className="callout-body">
+            <InstallStopped stopped={view.stopped} />
             <p>Firmware is built in Docker, and this computer doesn't have it. keyloom can install {view.engine} for you with Homebrew. It needs no password and takes a few minutes.</p>
             {view.note === "" ? null : <p className="callout-note">{view.note}</p>}
             <div className="callout-actions">
@@ -90,11 +92,14 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           <LoaderCircle size={18} className="spin" aria-hidden="true" />
           <div className="callout-body">
             <p>
-              {view.phase === "starting"
-                ? "Docker is installed. Starting it now. The first start downloads a small virtual machine, so it can take a few minutes."
-                : "Installing Docker with Homebrew. This can take a few minutes. You can keep editing while it runs."}
+              {view.phase === "stopping"
+                ? "Stopping the install."
+                : view.phase === "starting"
+                  ? "Docker is installed. Starting it now. The first start downloads a small virtual machine, so it can take a few minutes."
+                  : "Installing Docker with Homebrew. This can take a few minutes. You can keep editing while it runs."}
             </p>
             <LogTail label="Install log" lines={view.logTail} />
+            <InstallCancel phase={view.phase} onCancel={install.cancel} />
             {problem}
           </div>
         </div>
@@ -111,8 +116,15 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
                 <RefreshCw size={14} aria-hidden="true" />
                 Try again
               </button>
+              {view.alternatives[0] === undefined ? null : (
+                <a className="button" href={view.alternatives[0].url} target="_blank" rel="noreferrer">
+                  <Download size={14} aria-hidden="true" />
+                  Download {view.alternatives[0].name}
+                </a>
+              )}
               <button type="button" className="button" onClick={docker.refresh}>Check again</button>
             </div>
+            <Alternatives items={view.alternatives.slice(1)} lead="Or install" />
             {problem}
           </div>
         </div>
@@ -136,6 +148,22 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           </div>
         </div>
       );
+    case "cli-missing":
+      return (
+        <div className="callout callout-warning" role="alert">
+          <TriangleAlert size={18} aria-hidden="true" />
+          <div className="callout-body">
+            <p>{view.app} is installed, but its docker command isn't set up yet, so firmware can't build. Opening {view.app} sets it up.</p>
+            <div className="callout-actions">
+              <button type="button" className="button button-primary" onClick={docker.start}>
+                <AppWindow size={14} aria-hidden="true" />
+                Open {view.app}
+              </button>
+              <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+            </div>
+          </div>
+        </div>
+      );
     case "no-access":
       return (
         <div className="callout callout-warning" role="alert">
@@ -143,14 +171,41 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           <div className="callout-body">
             <p>Docker is running, but it refuses keyloom, so firmware can't build yet.</p>
             {view.command === null ? null : <CopyCommand command={view.command} />}
-            <p className="callout-note">{view.note}</p>
+            <p className="callout-note">{view.restartApp === null ? view.note : `Restarting ${view.restartApp} gives keyloom access again.`}</p>
             <div className="callout-actions">
+              {view.restartApp === null ? null : (
+                <button type="button" className="button button-primary" onClick={docker.restart}>
+                  <RotateCcw size={14} aria-hidden="true" />
+                  Restart {view.restartApp}
+                </button>
+              )}
               <button type="button" className="button" onClick={docker.refresh}>Check again</button>
             </div>
           </div>
         </div>
       );
     case "down":
+      if (view.afterInstall !== null) {
+        return (
+          <div className="callout callout-warning" role="alert">
+            <TriangleAlert size={18} aria-hidden="true" />
+            <div className="callout-body">
+              <p>
+                {view.afterInstall.cancelled
+                  ? `Docker is installed. You stopped ${view.engine} before it started.`
+                  : `Docker is installed, but ${view.engine} didn't start. ${view.afterInstall.reason}`}
+              </p>
+              <div className="callout-actions">
+                <button type="button" className="button button-primary" onClick={docker.start}>
+                  <Play size={14} aria-hidden="true" />
+                  Start it now
+                </button>
+                <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
       return (
         <p className="release-docker">
           <span>Docker isn't answering. {view.canStart ? `keyloom starts ${view.engine} when you build.` : `Start ${view.engine}, then build.`}</span>

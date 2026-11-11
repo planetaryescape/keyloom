@@ -238,10 +238,13 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
             )}
           </>
         )}
-        <div className="br-workloads">
-          <ActivityChoices value={flow.activities} onChange={flow.setActivities} disabled={flow.busy} />
-          <p className="nb-note">Optional: after you apply the copied keys, test these US-ANSI samples and check suggestions against them. Needs Docker; may download firmware and take several minutes. Nothing is flashed by a test.</p>
-        </div>
+        {/* Only a config being made carries activities, and a kanata board has no firmware to test them on (R1-13). */}
+        {preview === null || preview.after.firmware === "kanata" ? null : (
+          <div className="br-workloads">
+            <ActivityChoices value={flow.activities} onChange={flow.setActivities} disabled={flow.busy} />
+            <p className="nb-note">Optional: after you apply the copied keys, test these US-ANSI samples and check suggestions against them. Needs Docker; may download firmware and take several minutes. Nothing is flashed by a test.</p>
+          </div>
+        )}
         {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
       </div>
       <footer className="nb-panel-foot">
