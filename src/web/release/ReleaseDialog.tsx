@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { RevisionInfo } from "../../api/http.ts";
+import type { Flash, RevisionInfo } from "../../api/http.ts";
+import type { BoardDefinition } from "../../boards/schema.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { LogTail } from "./LogTail.tsx";
 import { elapsedOf, type ReleaseStatus } from "./status.ts";
@@ -10,7 +11,7 @@ import { DockerCallout } from "./DockerCallout.tsx";
 import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
-import { checkOutcome, permissionFix } from "./flash-words.ts";
+import { checkOutcome, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
 import "./release.css";
 
 interface Props {
@@ -24,6 +25,8 @@ interface Props {
   /** The keyboard's auto-sync, which puts the latest layout back after a flash of an earlier revision unless it is paused. */
   autoSync?: { on: boolean; paused: boolean; onPause: () => void; onResume?: () => void } | null;
   boardName: string;
+  /** The board's hardware revisions, for "Which <board> is this?". */
+  boardRevisions: BoardDefinition["revisions"];
   status: ReleaseStatus;
   now: number;
 }
@@ -71,7 +74,7 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, status, now }: Props) {
+export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, boardRevisions, status, now }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
   const { build: lastBuild, flash: lastFlash, starting, error, docker } = release;
@@ -198,10 +201,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     legend={`Which ${boardName} is this?`}
                     variant="cards"
                     value={release.boardRevision}
-                    choices={[
-                      { value: "reva", label: "Rev A", hint: "Bought before mid-December 2025" },
-                      { value: "revb", label: "Rev B", hint: "Bought after mid-December 2025" },
-                    ]}
+                    choices={revisionChoices(boardRevisions)}
                     onChange={release.chooseBoardRevision}
                   />
                 ) : null}
@@ -344,7 +344,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               <>
                 <div className="callout callout-error" role="alert">
                   <CircleAlert size={18} aria-hidden="true" />
-                  <p>{permissionFix(flash.errorCode)?.failed ?? plain(flash.error ?? "Flashing failed.")}</p>
+                  <FailedText code={flash.errorCode} error={flash.error} />
                 </div>
                 <PermissionFix code={flash.errorCode} release={release} />
                 <LogTail label="Flash log, last lines" lines={flash.logTail} />
@@ -363,14 +363,19 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
 }
 
 /** Check the keyboard again (R1-15): a read of what the keyboard runs, never a build or a flash, then what it found. */
+function FailedText({ code, error }: { code: Flash["errorCode"]; error: string | null }) {
+  const text = failedFlashText(code, error);
+  return <p>{text.lead === null ? null : <><strong>{text.lead}</strong>{" "}</>}{plain(text.detail)}</p>;
+}
+
 function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock }: { release: Release; boardName: string; onFlashAgain: () => void; confirming: boolean; confirmBlock: ReactNode }) {
   const { check } = release;
   const outcome = check.found === null || check.found === "this_build" ? null : checkOutcome(check.found, boardName);
   return (
     <>
       {outcome === null ? null : (
-        <div className="callout callout-warning" role="status">
-          <TriangleAlert size={18} aria-hidden="true" />
+        <div className={`callout callout-${outcome.tone}`} role="status">
+          {outcome.tone === "success" ? <CircleCheck size={18} aria-hidden="true" /> : <TriangleAlert size={18} aria-hidden="true" />}
           <p>{outcome.text}</p>
         </div>
       )}
@@ -380,7 +385,8 @@ function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock
           <p>{plain(check.problem)}</p>
         </div>
       )}
-      {outcome?.next === "flash" && confirming ? confirmBlock : (
+      {/* A keyboard that has moved on to a later build has nothing left to check or flash here (D-503). */}
+      {outcome !== null && outcome.next === null ? null : outcome?.next === "flash" && confirming ? confirmBlock : (
         <div className="step-actions">
           <button type="button" className={outcome?.next === "flash" ? "button" : "button button-primary"} disabled={check.running} onClick={release.checkKeyboard}>
             {check.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}

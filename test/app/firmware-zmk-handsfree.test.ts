@@ -3,7 +3,7 @@
 // and the boot drives are fakes; nothing here touches a keyboard.
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { buildAndWait, flashAndWait, getFlash, openApp, startFlash, versionHistory } from "../../src/app/index.ts";
+import { FlashNotCancellableError, buildAndWait, cancelFlash, flashAndWait, getFlash, openApp, startFlash, versionHistory } from "../../src/app/index.ts";
 import { waitForFlash } from "../../src/app/firmware.ts";
 import { buildKey } from "../../src/firmware/zmk/handsfree.ts";
 import { MODULE_FILES } from "../../src/firmware/zmk/module.ts";
@@ -65,6 +65,27 @@ describe("a Glove80 flash", () => {
     // It reads back from the log, so a reload of the web app shows the same.
     expect((await getFlash(e.app, f.id)).note).toBe(f.note);
   });
+
+  test("Cancel is refused once keyloom has restarted a half into its bootloader, and the flash finishes (D-503)", async () => {
+    const e = await zmkEnv();
+    const b = await built(e);
+    // The right half's drive takes a while to mount after its restart: a cancel in that window would strand it in its bootloader.
+    const world = fakeWorld({ root: e.volumes, halves: [half("L"), half("R")], bootDelayMs: 400 });
+    await e.run(async () => {
+      const started = await startFlash(e.app, { buildId: b.id, volumesRoot: e.volumes, handsFree: { zmk: world.deps } });
+      for (const by = Date.now() + 10_000; world.touches.length === 0; ) {
+        if (Date.now() > by) throw new Error("keyloom never restarted a half");
+        await Bun.sleep(5);
+      }
+      const refused = await cancelFlash(e.app, started.id).catch((err: unknown) => err);
+      expect(refused).toBeInstanceOf(FlashNotCancellableError);
+      expect((refused as FlashNotCancellableError).why).toBe("writing");
+      const done = await waitForFlash(e.app, started.id);
+      expect(done.status).toBe("succeeded");
+      expect(world.flashed.map((f) => f.letter)).toEqual(["R", "L"]);
+    });
+    world.stop();
+  }, 30_000);
 
   test("repairs version history for a verified flash made before the app recorded flash versions", async () => {
     const e = await zmkEnv();

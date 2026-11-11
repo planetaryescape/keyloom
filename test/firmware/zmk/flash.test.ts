@@ -355,6 +355,65 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
   });
 
+  test("a stop that comes while keyloom restarts a half is refused: the half is written, and so is the rest (D-503)", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    const c = new AbortController();
+    const notes: unknown[] = [];
+    // A Ctrl-C or a sync's stop lands while the restart is under way; the drive then mounts, as a restarted half's does.
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      onState: (_state, _instruction, note) => notes.push(note),
+      hooks: {
+        enterBootloader: async (step) => {
+          c.abort();
+          mkdirSync(join(s.root, step.volume), { recursive: true });
+          return { ok: true };
+        },
+      },
+    });
+    boot.stop();
+    expect(notes).toContainEqual({ inBootloader: true });
+    expect(r.state).toBe("succeeded");
+    expect(boot.written).toEqual([RIGHT, LEFT]);
+  });
+
+  test("a half that was already in its bootloader is not committed: a stop before its drive appears still stops the flash", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const notes: unknown[] = [];
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      onState: (_state, _instruction, note) => notes.push(note),
+      hooks: { enterBootloader: async () => { c.abort(); return { ok: true, alreadyThere: true }; } },
+    });
+    expect(notes).not.toContainEqual({ inBootloader: true });
+    expect(r.error).toBe("Cancelled. Nothing was flashed.");
+  });
+
+  test("after a committed half, a stop that comes later while the next half waits for a hand still stops the flash", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      onState: (state) => {
+        // The left half is waiting for its key combo: nothing is being written to it.
+        if (state === "waiting_for_bootloader" && boot.written.includes(RIGHT)) setTimeout(() => c.abort(), 30);
+      },
+      hooks: {
+        enterBootloader: async (step) => {
+          if (step.volume === LEFT) return { ok: false, reason: "no serial port" };
+          mkdirSync(join(s.root, step.volume), { recursive: true });
+          return { ok: true };
+        },
+      },
+    });
+    boot.stop();
+    expect(boot.written).toEqual([RIGHT]);
+    expect(r.error).toContain("The halves flashed so far keep the new firmware");
+  });
+
   test("cancelling before the left half says the right is already flashed", async () => {
     const s = await setup();
     const boot = fakeBootloader(s.root);

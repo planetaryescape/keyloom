@@ -170,17 +170,33 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
 
   const verified: string[] = [];
   let allRestarted = true;
+  // Set while a half keyloom restarted is being written; an abort then is refused, and stays refused (D-503).
+  let committing = false;
+  let refused = false;
+  input.signal?.addEventListener("abort", () => {
+    if (committing) refused = true;
+  }, { once: true });
   const attempt = async (i: number, image: Uint8Array, recovery?: { verify: () => Promise<VerifyResult>; instruction?: string }): Promise<VerifyResult> => {
     const step = input.steps[i] as FlashStep;
     const shared = input.steps.some((s) => s !== step && s.volume === step.volume);
     // Cancelling the new build must not cancel restoring the previous one.
-    const signal = recovery ? undefined : input.signal;
+    committing = false;
+    let signal = recovery || refused ? undefined : input.signal;
     const failed = (error: string): VerifyResult => ({ ok: false, error });
     let instruction = recovery?.instruction ?? instructionFor(step, i, input.steps.length, waitMs);
     let restarted = false;
     let byKeyloom = false;
     let retryRestart = false;
     let restartReason: string | undefined;
+    const cancelled = (): string => (i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
+    // A half keyloom restarted sits in its bootloader and won't type until it is written, so from here this half is written whoever
+    // asks to stop, and the app refuses a cancel (D-503). A stop that came during the restart stays refused for the rest of the flash.
+    const commit = () => {
+      committing = true;
+      if (input.signal?.aborted) refused = true;
+      signal = undefined;
+      input.onState("waiting_for_bootloader", `keyloom restarted the ${step.label} into its bootloader. Writing starts in a moment; don't unplug it.`, { inBootloader: true });
+    };
     // A mounted drive can be written while the Mac is locked. Otherwise refuse before any hands-free
     // trigger, which would strand the half in its bootloader without a mountable drive.
     let mount: string | null = await input.findVolume(step.volume);
@@ -205,6 +221,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       restarted = entered.ok;
       byKeyloom = entered.ok && entered.alreadyThere !== true;
+      if (byKeyloom) commit();
     }
     // A label shared by both halves names no half. It is safe after keyloom restarted this target itself, or, outside
     // recovery, when the drive appears after the prompt and the peers are visibly running firmware at write time. A drive
@@ -223,7 +240,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let lockWasReported = false;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
       if (signal?.aborted) {
-        return failed(i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
+        return failed(cancelled());
       }
       mount = await input.findVolume(step.volume);
       if (mount) {
@@ -232,7 +249,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       if (retryRestart && input.hooks?.enterBootloader) {
         if (signal?.aborted) {
-          return failed(i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
+          return failed(cancelled());
         }
         const entered = await input.hooks.enterBootloader(step, i, (text) => {
           instruction = text;
@@ -241,6 +258,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
         if (entered.ok) {
           restarted = true;
           byKeyloom = entered.alreadyThere !== true;
+          if (byKeyloom) commit();
           retryRestart = false;
           mount = await input.findVolume(step.volume);
           if (mount) {

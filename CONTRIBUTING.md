@@ -270,6 +270,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `sensorPositions` | optional | Encoder press positions in firmware sensor order. Alternative encoder footprints may share one press position; keyloom edits those turn bindings together. Requires ZMK `build.sensorBindings` defaults. |
 | `revisions` | all | A list of hardware revisions. One entry when there is only one. |
 | `revisions[].id` | all | A short name, such as `default` or `rev1`. Unique in the board. |
+| `revisions[].label`, `revisions[].hint` | optional | What Build and flash shows when it must ask which revision the keyboard is, such as `Rev A` and `Bought before mid-December 2025`. Only a board with more than one revision needs them. |
 | `revisions[].source` | all | The pinned firmware tree. |
 | `revisions[].source.repo` | all | A `github.com` repo URL. |
 | `revisions[].source.ref` | all | The tag or branch name. Informational. |

@@ -10,6 +10,8 @@ import { afterApply } from "./flash-words.ts";
 export type AfterApplyKeyboard = {
   board: { firmware: string; name: string };
   layoutId: string;
+  /** The revision the page shows now, so the line can tell a sync view that already has this change from one that doesn't yet. */
+  revisionId: string;
   sync: BoardSync | undefined;
   onApplyNow: () => void;
   onPutOn: () => void;
@@ -22,7 +24,7 @@ const ICONS = { apply_now: Play, put_on: Upload, open_release: Hammer } as const
 /** The sentence and its one button. Without a page around it, a board that is built offers Build and flash, as before. */
 export function AfterApplyNote({ board, onOpenRelease }: { board: { firmware: string; name: string }; onOpenRelease: () => void }) {
   const keyboard = useContext(AfterApplyContext);
-  const line = afterApply(keyboard?.board ?? board, keyboard?.sync, keyboard?.layoutId ?? "");
+  const line = afterApply(keyboard?.board ?? board, keyboard?.sync, keyboard?.layoutId ?? "", keyboard?.revisionId);
   const run = line.action === null ? null : line.action.id === "apply_now" ? keyboard?.onApplyNow : line.action.id === "put_on" ? keyboard?.onPutOn : onOpenRelease;
   const Icon = line.action === null ? null : ICONS[line.action.id];
   return (

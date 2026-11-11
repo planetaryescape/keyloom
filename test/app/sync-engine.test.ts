@@ -463,6 +463,18 @@ describe("a flash that needs a hand", () => {
     await e.stop();
     expect(lastSyncOfBoard(w.app.db, BOARD)).toMatchObject({ status: "cancelled" });
   });
+
+  test("a stop the flasher refused because the bootloader had appeared is not recorded as a cancel: the write's own failure is", async () => {
+    const w = await world();
+    w.flashed();
+    w.world.flashMode = "reset_at_stop";
+    const e = w.engine();
+    await e.start();
+    w.apply();
+    await settled(w, e, "needs_hand");
+    await e.stop({ flashGraceMs: 5_000 });
+    expect(lastSyncOfBoard(w.app.db, BOARD)).toMatchObject({ status: "failed", failure: "flash", error: "zapp exited with code 1" });
+  });
 });
 
 describe("Sync now", () => {

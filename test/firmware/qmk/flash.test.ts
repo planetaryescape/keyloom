@@ -175,12 +175,16 @@ describe("flashWithZapp, hands-free", () => {
     expect(s.states.some(([, i]) => i === RESET_INSTRUCTION)).toBe(true);
   });
 
-  test("a keyboard restarted into its bootloader that zapp never writes to is reported as stranded there", async () => {
+  test("a keyboard keyloom restarted is being written: a zapp that never finishes is stopped only by the write timeout, which says where the keyboard is (D-503)", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
-    const r = await s.flash({ bootloaderWaitMs: LOADED_WAIT_MS, enterBootloader: async () => ({ ok: true }) });
-    expect(r.state).toBe("failed");
-    expect(r.error).toContain("restarted the keyboard into its bootloader");
-    expect(r.error).toContain("unplugged and plugged in again");
+    const c = new AbortController();
+    const r = await s.flash({ bootloaderWaitMs: LOADED_WAIT_MS, writeTimeoutMs: LOADED_WAIT_MS * 2, signal: c.signal, enterBootloader: async () => { setTimeout(() => c.abort(), 20); return { ok: true }; } });
+    expect(s.states.map(([st]) => st)).toEqual(["waiting_for_bootloader", "writing", "failed"]);
+    expect(r.error).toContain("Flashing didn't finish");
+    expect(r.error).toContain("left in its bootloader");
+    // The cancel came after the restart, so it was refused and only the write timeout stopped zapp.
+    s.log.close();
+    expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("not stopping zapp: it is writing to the keyboard");
   }, SLOW_RUNNER_MS);
 
   test("a failed restart does not add that warning, because the keyboard was never moved", async () => {

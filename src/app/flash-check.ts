@@ -4,7 +4,7 @@
 // the header and History say the same thing from then on.
 import { appendFileSync } from "node:fs";
 import { buildKey } from "../firmware/zmk/handsfree.ts";
-import { findBuild } from "../persistence/builds.ts";
+import { findBuild, findBuildByKey } from "../persistence/builds.ts";
 import { findLayoutRow } from "../persistence/layouts.ts";
 import { recordVersion } from "../persistence/versions.ts";
 import { showBoard } from "./boards.ts";
@@ -14,8 +14,11 @@ import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import { type FlashView, getFlash } from "./firmware.ts";
 import { type KeyboardReading, readKeyboards, syncSupported } from "./sync-keyboard.ts";
 
-/** What the keyboard reported when it was read again; `this_build` means the flash now counts as verified. */
-export type FlashCheckFound = "this_build" | "other_build" | "missing_halves" | "absent" | "bootloader" | "other_firmware";
+/**
+ * What the keyboard reported when it was read again; `this_build` means the flash now counts as verified. `later_build` is a build this
+ * copy made after this one, which a flash of this build would roll back (D-503); `other_build` is an earlier one or one it doesn't know.
+ */
+export type FlashCheckFound = "this_build" | "later_build" | "other_build" | "missing_halves" | "absent" | "bootloader" | "other_firmware";
 
 export type FlashCheck = { flash: FlashView; found: FlashCheckFound };
 
@@ -48,12 +51,21 @@ export async function checkFlashAgain(app: App, flashId: string, deps: FlashChec
   const readings = await (deps.read ?? readKeyboards)(deps.handsFree ?? {});
   const reading = readings.get(boardId) ?? { state: "absent" };
   const found = compare(reading, flash.buildId);
+  if (found === "other_build" && reading.state === "keyloom" && laterBuild(app, reading.keys, build.startedAt)) return { flash, found: "later_build" };
   if (found !== "this_build") return { flash, found };
 
   const at = (deps.now ?? Date.now)();
   appendFileSync(flash.logPath, `keyloom: Verified: the keyboard runs build ${flash.buildId} (checked again at ${new Date(at).toISOString()}).\n`);
   recordVersion(app.db, { layoutId: build.layoutId, revisionId: build.revisionId, boardId, syncId: null, at });
   return { flash: await getFlash(app, flashId), found };
+}
+
+/** Every half runs a build this copy made after `since`: the keyboard has moved on from this flash. */
+function laterBuild(app: App, keys: string[], since: number): boolean {
+  return keys.length > 0 && keys.every((key) => {
+    const running = findBuildByKey(app.db, key);
+    return running !== undefined && running.startedAt > since;
+  });
 }
 
 function compare(reading: KeyboardReading, buildId: string): FlashCheckFound {

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
+import type { BoardDefinition } from "../../boards/schema.ts";
 import { ReleaseDialog } from "./ReleaseDialog.tsx";
 import { releaseStatus, type ReleaseStatus } from "./status.ts";
 import { useNow } from "./useNow.ts";
@@ -14,11 +15,12 @@ type AutoSync = { on: boolean; paused: boolean; onPause: () => void; onResume?: 
  * Build and flash for one layout: its builds, its flashes, the Docker it needs and the dialog. A board that is never built (the
  * MacBook keyboard, D-501) doesn't mount this, so it never asks for Docker's readiness or offers the dialog.
  */
-export function ReleaseHost({ token, layoutId, head, boardName, autoSync, children }: {
+export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, autoSync, children }: {
   token: string;
   layoutId: string;
   head: Pick<RevisionInfo, "id" | "summary">;
   boardName: string;
+  boardRevisions: BoardDefinition["revisions"];
   autoSync: AutoSync;
   children: (release: ReleaseHandle, dialog: ReactNode) => ReactNode;
 }) {
@@ -45,6 +47,7 @@ export function ReleaseHost({ token, layoutId, head, boardName, autoSync, childr
       earlierRevision={target !== null}
       autoSync={autoSync}
       boardName={boardName}
+      boardRevisions={boardRevisions}
       status={status}
       now={now}
     />

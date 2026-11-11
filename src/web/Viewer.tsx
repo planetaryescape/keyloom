@@ -214,7 +214,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const boardSync = sync.boards.find((b) => b.boardId === summary.boardId);
   // The line a proposal card shows after Apply depends on this keyboard (R2-01): kanata applies it, auto-sync flashes it, or Build and flash does.
   const afterApplyKeyboard: AfterApplyKeyboard = {
-    board: { firmware: board.firmware, name: boardDisplayName(board.name) }, layoutId: summary.id, sync: boardSync,
+    board: { firmware: board.firmware, name: boardDisplayName(board.name) }, layoutId: summary.id, revisionId: revision.id, sync: boardSync,
     onApplyNow: () => void sync.syncNow(summary.id),
     onPutOn: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
   };
@@ -1277,7 +1277,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   // A proposal was applied on the server: show the new layout, on the layer where it changed.
-  async function onProposalApplied(card: ProposalCard, _result: ApplyResponse) {
+  async function onProposalApplied(card: ProposalCard, result: ApplyResponse) {
     setHoveredProposal(null);
     setPinnedProposal(null);
     // The apply lands on the board, not in the bar: the bar closes and the changed caps press (P3 review).
@@ -1291,7 +1291,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
     setUnsynced((current) => [...current, ...changed.filter((slot) => !current.some((c) => c.layerId === slot.layerId && c.position === slot.position))]);
     // The bar has closed, so the toast says what happens next on this keyboard, with its one button (R2-01).
-    const next = afterApply(afterApplyKeyboard.board, boardSync, summary.id);
+    const next = afterApply(afterApplyKeyboard.board, boardSync, summary.id, result.revisionId);
     const run = next.action === null ? null : next.action.id === "apply_now" ? afterApplyKeyboard.onApplyNow : next.action.id === "put_on" ? afterApplyKeyboard.onPutOn : () => onOpenRelease();
     toasts.show({ kind: "success", message: "Applied", detail: `${withStop(card.title)} ${next.toast}`, ...(next.action === null || run === null ? {} : { action: { label: next.action.label, run } }) });
   }

@@ -44,7 +44,7 @@ export type KeyboardIdentity = Required<Pick<KeyboardTarget, "vendorId">> & Pick
 
 const isKeyboard = (d: UsbDevice, t: Pick<KeyboardTarget, "vendorId" | "productId">): boolean => d.vendorId === (t.vendorId ?? hexId(ZSA_VENDOR_ID)) && d.productId === t.productId;
 
-export const inBootloader = (devices: UsbDevice[], t: KeyboardTarget): boolean => {
+export const inBootloader = (devices: UsbDevice[], t: Pick<KeyboardTarget, "bootloader">): boolean => {
   const [vendor, product] = t.bootloader.split(":");
   return devices.some((d) => d.vendorId === `0x${vendor}` && d.productId === `0x${product}`);
 };
@@ -217,11 +217,14 @@ export async function handsFreeHooks(input: {
   artifact: Uint8Array;
   buildId: string;
   log: LogSink;
-}): Promise<Pick<FlashInput, "enterBootloader" | "verify">> {
+}): Promise<Pick<FlashInput, "enterBootloader" | "verify" | "bootloaderPresent">> {
+  // Any Zapp board: its bootloader on USB is when Zapp starts writing, which a cancel must not cut off (D-503).
+  const flash = input.rev.flash;
+  const present: Pick<FlashInput, "bootloaderPresent"> = flash.kind === "zapp" ? { bootloaderPresent: async () => inBootloader(await input.deps.usb(), flash) } : {};
   const target = keyboardTarget(input.board, input.rev);
-  if (!target) return {};
+  if (!target) return present;
   const say = (line: string) => input.log.line(line);
-  const hooks: Pick<FlashInput, "enterBootloader" | "verify"> = {};
+  const hooks: Pick<FlashInput, "enterBootloader" | "verify" | "bootloaderPresent"> = { ...present };
 
   let running: RunningFirmware | undefined;
   try {

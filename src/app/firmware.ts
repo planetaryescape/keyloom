@@ -91,9 +91,11 @@ const flashInstructions = new Map<string, string | null>();
 
 const buildTasks = new Map<string, Promise<void>>();
 const flashTasks = new Map<string, Promise<void>>();
-// What a running flash in this process lets the page do: cancel it until the first write, and name the permission it waits on (D-501).
-// `wrote` never goes back, so a split board whose first half is written can't be cancelled with its second half waiting.
-type FlashControl = { abort: AbortController; wrote: boolean; cancelled: boolean; problem: FlashPermissionCode | null };
+// What a running flash in this process lets the page do: cancel it until the keyboard is in its bootloader, and name the permission it
+// waits on (D-501). `committed` is set when the flasher writes or says keyloom put the keyboard in its bootloader, and never goes back,
+// so a split board whose first half is written can't be cancelled with its second half waiting (D-503). `onCommit` wakes a cancel
+// that is waiting to hear whether the flasher stopped or went on to write.
+type FlashControl = { abort: AbortController; committed: boolean; cancelled: boolean; problem: FlashPermissionCode | null; onCommit: () => void };
 const flashControls = new Map<string, FlashControl>();
 // Shutdown belongs to one App: serve's stop must not refuse flashes for another App in the same process, such as a test run's.
 const pendingFlashStarts = new WeakMap<App, Set<Promise<void>>>();
@@ -343,7 +345,7 @@ async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
     instruction, note, verified,
     errorCode: row.status === "failed" ? flashErrorCode(row.errorCode) : null,
     instructionCode: waiting ? (control?.problem ?? null) : null,
-    cancellable: waiting && control !== undefined && !control.wrote && !control.cancelled,
+    cancellable: waiting && control !== undefined && !control.committed && !control.cancelled,
     checkable: row.status === "succeeded" && !verified && board !== undefined && syncSupported(board),
     logTail, logPath,
   };
@@ -437,7 +439,7 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
 
     const id = newFlashId();
     const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });
-    const control: FlashControl = { abort: new AbortController(), wrote: false, cancelled: false, problem: null };
+    const control: FlashControl = { abort: new AbortController(), committed: false, cancelled: false, problem: null, onCommit: () => undefined };
     flashControls.set(id, control);
     // A longer wait was asked for, so the first instruction says so rather than the default.
     if (opts.bootloaderWaitMs !== undefined && board) flashInstructions.set(id, driverFor(board).waitingInstruction(board, opts.bootloaderWaitMs));
@@ -487,7 +489,10 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
       ...(opts.signal ? { signal: opts.signal } : {}),
       onState: (state: FlashState, instruction: string | null, note?: FlashNote) => {
         opts.onFlasherState?.(state, instruction, note);
-        if (state === "writing") control.wrote = true;
+        if (state === "writing" || note?.inBootloader) {
+          control.committed = true;
+          control.onCommit();
+        }
         control.problem = state === "waiting_for_bootloader" ? (note?.problem ?? null) : null;
         if (state === "waiting_for_bootloader" || state === "writing") {
           flashInstructions.set(row.id, instruction);
@@ -499,7 +504,7 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
     const verified = result.state === "succeeded" && result.output.some((line) => line.startsWith("keyloom: Verified:") && line.includes(`build ${row.buildId}`));
     app.db.transaction(() => {
       // A cancel that stopped the flash before any write is said as one, so the page offers the flash again rather than a failure.
-      const errorCode: FlashErrorCode | null = control.cancelled && !control.wrote ? "cancelled" : (result.errorCode ?? null);
+      const errorCode: FlashErrorCode | null = control.cancelled && !control.committed ? "cancelled" : (result.errorCode ?? null);
       finishFlash(app.db, row.id, result.state === "succeeded" ? null : { error: result.error ?? "the flash failed", errorCode });
       if (verified) {
         const build = findBuild(app.db, row.buildId);
@@ -551,8 +556,9 @@ export async function getFlash(app: App, id: string): Promise<FlashView> {
 const CANCEL_SETTLE_MS = 3000;
 
 /**
- * Stops a flash that is waiting for the bootloader, before anything was written (D-501). Refuses once the flasher has said it is
- * writing, as `stop()` does for a sync (D-497): cutting a write off is how a keyboard is left in its bootloader.
+ * Stops a flash that is waiting for the bootloader, before anything was written (D-501). Refuses once the keyboard is in its bootloader,
+ * as `stop()` does for a sync (D-497, D-503): cutting a write off is how a keyboard is left in its bootloader with half an image. The
+ * flasher has the last word, because Zapp writes without a sign the moment the bootloader appears: it looks at USB before it stops.
  */
 export async function cancelFlash(app: App, id: string): Promise<FlashView> {
   const row = findFlash(app.db, id);
@@ -561,14 +567,17 @@ export async function cancelFlash(app: App, id: string): Promise<FlashView> {
   if (control === undefined || (row.status !== "waiting_for_bootloader" && row.status !== "writing")) {
     throw new FlashNotCancellableError("finished", `flash ${id} isn't waiting for the keyboard any more, so there is nothing to cancel`);
   }
-  if (control.wrote || row.status === "writing") {
-    throw new FlashNotCancellableError("writing", `flash ${id} is already writing to the keyboard; it can't be stopped safely, so it finishes`);
-  }
+  const writing = () => new FlashNotCancellableError("writing", `flash ${id}'s keyboard is in its bootloader and keyloom is writing to it; it can't be stopped safely, so it finishes`);
+  if (control.committed || row.status === "writing") throw writing();
+  const committed = new Promise<void>((resolve) => {
+    control.onCommit = resolve;
+  });
   if (!control.cancelled) {
     control.cancelled = true;
     control.abort.abort();
   }
-  await Promise.race([flashTasks.get(id), Bun.sleep(CANCEL_SETTLE_MS)]);
+  await Promise.race([flashTasks.get(id), committed, Bun.sleep(CANCEL_SETTLE_MS)]);
+  if (control.committed) throw writing();
   return getFlash(app, id);
 }
 

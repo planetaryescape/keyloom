@@ -173,6 +173,7 @@ const qmk: FirmwareDriver = {
       ...hooks,
       ...(keepingVerify ? { verify: keepingVerify } : {}),
       artifactPath: a.artifactPath, bootloader: flash.bootloader, log: a.log, onState: a.onState,
+      ...(a.handsFree?.pollMs === undefined ? {} : { pollMs: a.handsFree.pollMs }),
       ...(a.onLine ? { onLine: a.onLine } : {}), ...(a.bootloaderWaitMs === undefined ? {} : { bootloaderWaitMs: a.bootloaderWaitMs }),
       ...(a.signal ? { signal: a.signal } : {}),
     });

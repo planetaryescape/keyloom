@@ -7,6 +7,8 @@ export type FlashState = "waiting_for_bootloader" | "writing" | "succeeded" | "f
  */
 export type FlashNote = {
   needsHand?: true; verifying?: true; recovering?: true;
+  /** keyloom has put (part of) the keyboard in its bootloader: stopping now strands it there, so a cancel is refused (D-503). */
+  inBootloader?: true;
   /** Why keyloom couldn't restart the keyboard itself, when the person can fix it with a permission (D-501). */
   problem?: FlashPermissionCode;
 };

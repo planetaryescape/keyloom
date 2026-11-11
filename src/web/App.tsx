@@ -21,6 +21,7 @@ import { markOpened, undoChange } from "./api-write.ts";
 import { fetchFittingRevision } from "./release/flash-api.ts";
 import { headline } from "../layout/history-summary.ts";
 import { archiveConfig } from "./configs/api-configs.ts";
+import { type GoBackRefusal, goBackRefusal } from "./shell/mismatch-words.ts";
 import type { FindingRepairDraft } from "../api/review.ts";
 
 // `gone` is a layout that isn't there (404), which no Try again brings back (R1-08); `waiting` is a keyloom that stopped answering,
@@ -382,7 +383,7 @@ function LayoutPage({
   // The MacBook keyboard is applied by kanata, never built or flashed (R2-01): no dialog, no header button, no Docker check.
   if (board.firmware === "kanata") return page(null, null);
   return (
-    <ReleaseHost token={token} layoutId={summary.id} head={detail.revision} boardName={board.name} autoSync={autoSync}>
+    <ReleaseHost token={token} layoutId={summary.id} head={detail.revision} boardName={board.name} boardRevisions={board.revisions} autoSync={autoSync}>
       {page}
     </ReleaseHost>
   );
@@ -413,6 +414,12 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const [fitting, setFitting] = useState<FittingRevision>(null);
+  // Set when the server refused Go back; the button then reloads the layout or goes, with the reason beside it (D-503).
+  const [goBackRefused, setGoBackRefused] = useState<GoBackRefusal | null>(null);
+  useEffect(() => {
+    setGoBackRefused(null);
+    setRefused(null);
+  }, [summary.revisionId]);
   useEffect(() => {
     if (!fixable) return;
     const controller = new AbortController();
@@ -433,18 +440,30 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
       setBusy(false);
     }
   };
-  const goBack = (to: string) => act(() => undoChange(token, summary.id, { revisionId: summary.revisionId, to }), "keyloom couldn't go back to that revision.", true);
+  const goBack = (to: string) =>
+    act(async () => {
+      try {
+        await undoChange(token, summary.id, { revisionId: summary.revisionId, to });
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) setGoBackRefused(goBackRefusal(error.code, error.message));
+        throw error;
+      }
+    }, "keyloom couldn't go back to that revision.", true);
   const archive = () => act(() => archiveConfig(token, summary.id), "keyloom couldn't archive it.", false);
   return (
     <ErrorState
       title="This layout doesn't match its board"
       actions={
         <>
-          {fitting === null ? null : (
+          {fitting === null ? null : goBackRefused === null ? (
             <button type="button" className="button button-primary" disabled={busy} onClick={() => void goBack(fitting.id)}>
               Go back to the last revision that matched
             </button>
-          )}
+          ) : goBackRefused.next === "reload" && onReload !== undefined ? (
+            <button type="button" className="button button-primary" disabled={busy} onClick={() => onReload(summary.id)}>
+              Reload this layout
+            </button>
+          ) : null}
           {onHome === undefined ? null : <button type="button" className={fitting === null ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
           <button type="button" className="button" disabled={busy} onClick={() => void archive()}>Archive this config</button>
         </>
@@ -454,7 +473,7 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
       {fitting === null
         ? "Pick another layout, or archive this one; it keeps its history."
         : <>The last revision that matched is “{headline(fitting.summary)}”. Going back adds a new revision, so this one stays in History.</>}
-      {refused === null ? null : <span className="state-refused" role="alert"> {refused}</span>}
+      {refused === null ? null : <span className="state-refused" role="alert"> {goBackRefused?.text ?? refused}</span>}
     </ErrorState>
   );
 }

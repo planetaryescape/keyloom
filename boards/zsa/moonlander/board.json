@@ -8,6 +8,8 @@
   "revisions": [
     {
       "id": "reva",
+      "label": "Rev A",
+      "hint": "Bought before mid-December 2025",
       "source": {
         "repo": "https://github.com/zsa/qmk_firmware",
         "ref": "firmware25",
@@ -32,6 +34,8 @@
     },
     {
       "id": "revb",
+      "label": "Rev B",
+      "hint": "Bought after mid-December 2025",
       "source": {
         "repo": "https://github.com/zsa/qmk_firmware",
         "ref": "firmware25",

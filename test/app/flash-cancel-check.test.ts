@@ -15,8 +15,9 @@ import { toolchainEnv } from "../helpers/toolchain-env.ts";
 const OLD = "keyloom/AAAAAAAAAAAA";
 const ORYX = "QxKPz/zLQ3Md";
 
-// Like the real zapp, it writes only once the keyboard is in its bootloader (a file here), and the write takes a moment.
-const ZAPP = 'echo "Firmware loaded: STM32 DFU (316 bytes)"; while [ ! -f "$BOOTLOADER_FLAG" ]; do sleep 0.05; done; echo "Flashing"; sleep 1.5; echo ran >> "$ZAPP_CALLS"; exit 0';
+// Like the real zapp, it writes only once the keyboard is in its bootloader (a file here), the write takes a moment, and it prints
+// nothing between "Firmware loaded" and exiting: BK's three real hands-free flashes (2026-10-22) logged exactly that (D-503).
+const ZAPP = 'echo "Firmware loaded: STM32 DFU (316 bytes)"; while [ ! -f "$BOOTLOADER_FLAG" ]; do sleep 0.05; done; sleep 1.5; echo ran >> "$ZAPP_CALLS"; exit 0';
 
 async function until(read: () => Promise<FlashView>, ok: (f: FlashView) => boolean, ms = 10_000): Promise<FlashView> {
   const by = Date.now() + ms;
@@ -73,6 +74,71 @@ describe("Cancel while waiting for the bootloader", () => {
       const refused = await cancelFlash(s.e.app, started.id).catch((err: unknown) => err);
       expect(refused).toBeInstanceOf(FlashNotCancellableError);
       expect((refused as FlashNotCancellableError).why).toBe("writing");
+      const done = await until(() => getFlash(s.e.app, started.id), (f) => f.status === "succeeded" || f.status === "failed", 20_000);
+      expect(done.status).toBe("succeeded");
+      expect(existsSync(s.e.vars.ZAPP_CALLS)).toBe(true);
+    });
+  }, 30_000);
+
+  // The person pressed reset: the bootloader is on USB and Zapp writes at once, saying nothing. The USB fake follows the file the
+  // fake zapp waits for, and shows the new build once zapp has written it.
+  function pressedReset(s: Awaited<ReturnType<typeof built>>, opts: { pollMs?: number } = {}) {
+    let pressed = false;
+    const keyboard = fakeKeyboard({
+      hid: [],
+      ...(opts.pollMs === undefined ? {} : { pollMs: opts.pollMs }),
+      usb: () => (!pressed ? [runningKeyboard(ORYX)] : existsSync(s.e.vars.ZAPP_CALLS) ? [runningKeyboard(`keyloom/${buildKey(s.build.id)}`)] : [dfuBootloader()]),
+    });
+    return { keyboard, press: async () => { pressed = true; await Bun.write(s.flag, ""); } };
+  }
+
+  test("after a manual reset the flash says it is writing as soon as the bootloader appears, and Cancel is refused", async () => {
+    const s = await built();
+    const { keyboard, press } = pressedReset(s);
+    await s.run(async () => {
+      const started = await startFlash(s.e.app, { buildId: s.build.id, handsFree: keyboard.deps });
+      await until(() => getFlash(s.e.app, started.id), (f) => f.instruction?.includes("reset button") === true);
+      await press();
+      const writing = await until(() => getFlash(s.e.app, started.id), (f) => f.status === "writing", 1_000);
+      expect(writing.cancellable).toBe(false);
+      const refused = await cancelFlash(s.e.app, started.id).catch((err: unknown) => err);
+      expect((refused as FlashNotCancellableError).why).toBe("writing");
+      const done = await until(() => getFlash(s.e.app, started.id), (f) => f.status === "succeeded" || f.status === "failed", 20_000);
+      expect(done.status).toBe("succeeded");
+      expect(existsSync(s.e.vars.ZAPP_CALLS)).toBe(true);
+    });
+  }, 30_000);
+
+  test("a Cancel that comes before keyloom has seen the bootloader is still refused once it is there", async () => {
+    const s = await built();
+    // One look at USB when zapp has loaded the file, then none for a minute: only the cancel itself can see the reset.
+    const { keyboard, press } = pressedReset(s, { pollMs: 60_000 });
+    await s.run(async () => {
+      const started = await startFlash(s.e.app, { buildId: s.build.id, handsFree: keyboard.deps });
+      const waiting = await until(() => getFlash(s.e.app, started.id), (f) => f.instruction?.includes("reset button") === true);
+      expect(waiting.cancellable).toBe(true);
+      await Bun.sleep(100);
+      await press();
+      const refused = await cancelFlash(s.e.app, started.id).catch((err: unknown) => err);
+      expect(refused).toBeInstanceOf(FlashNotCancellableError);
+      expect((refused as FlashNotCancellableError).why).toBe("writing");
+      const done = await until(() => getFlash(s.e.app, started.id), (f) => f.status === "succeeded" || f.status === "failed", 20_000);
+      expect(done.status).toBe("succeeded");
+      expect(existsSync(s.e.vars.ZAPP_CALLS)).toBe(true);
+    });
+  }, 30_000);
+
+  test("a sync's stop signal after the bootloader appears doesn't stop zapp, and the flash finishes", async () => {
+    const s = await built();
+    const { keyboard, press } = pressedReset(s, { pollMs: 60_000 });
+    // SyncEngine.stop() and pause reach the flasher through this signal, as a CLI's Ctrl-C does.
+    const stop = new AbortController();
+    await s.run(async () => {
+      const started = await startFlash(s.e.app, { buildId: s.build.id, handsFree: keyboard.deps, signal: stop.signal });
+      await until(() => getFlash(s.e.app, started.id), (f) => f.instruction?.includes("reset button") === true);
+      await Bun.sleep(100);
+      await press();
+      stop.abort();
       const done = await until(() => getFlash(s.e.app, started.id), (f) => f.status === "succeeded" || f.status === "failed", 20_000);
       expect(done.status).toBe("succeeded");
       expect(existsSync(s.e.vars.ZAPP_CALLS)).toBe(true);
@@ -151,6 +217,18 @@ describe("Check the keyboard again", () => {
       expect(checked.found).toBe(found as never);
       expect(checked.flash.verified).toBe(false);
     }
+  });
+
+  test("a keyboard that now runs a later build of this copy's says so, so the page never offers to roll it back", async () => {
+    const s = await unverified();
+    const later = await s.run(() => buildAndWait(s.e.app, "synchronized", { boardRevision: "reva" }));
+    expect(later.id).not.toBe(s.build.id);
+    const checked = await checkFlashAgain(s.e.app, s.flashId, { read: reads({ state: "keyloom", keys: [buildKey(later.id)], boardRevision: "reva" }).read });
+    expect(checked.found).toBe("later_build");
+    expect(checked.flash.verified).toBe(false);
+    // An earlier build of this copy's is still another build, which Flash again puts this one back over.
+    const earlier = await checkFlashAgain(s.e.app, s.flashId, { read: reads({ state: "keyloom", keys: ["AAAAAAAAAAAA"], boardRevision: "reva" }).read });
+    expect(earlier.found).toBe("other_build");
   });
 
   test("only reads: no build, no flash, no restart and no write to the keyboard", async () => {

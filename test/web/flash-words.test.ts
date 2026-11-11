@@ -2,7 +2,7 @@
 // keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { afterApply, checkOutcome, permissionFix } from "../../src/web/release/flash-words.ts";
+import { afterApply, checkOutcome, failedFlashText, permissionFix, revisionChoices } from "../../src/web/release/flash-words.ts";
 
 const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -30,6 +30,30 @@ describe("permissionFix", () => {
   });
 });
 
+describe("failedFlashText", () => {
+  test("a permission failure leads with plain words and keeps the server's sentence, which says how a split board's recovery went", () => {
+    const error = "Copying to the left half failed: EACCES. The left half was not flashed. keyloom put build AAAAAAAAAAAA back on the right half.";
+    expect(failedFlashText("permission_files_and_folders", error)).toEqual({ lead: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.", detail: error });
+  });
+
+  test("any other failure is the server's sentence alone", () => {
+    expect(failedFlashText(null, "zapp exited with code 1")).toEqual({ lead: null, detail: "zapp exited with code 1" });
+    expect(failedFlashText("cancelled", "Cancelled. Nothing was flashed.")).toEqual({ lead: null, detail: "Cancelled. Nothing was flashed." });
+    expect(failedFlashText(null, null)).toEqual({ lead: null, detail: "Flashing failed." });
+  });
+});
+
+describe("revisionChoices", () => {
+  test("the question's answers are the board's own revisions, by label and hint, or by ID when it names none", async () => {
+    const moonlander = (await Bun.file(`${import.meta.dir}/../../boards/zsa/moonlander/board.json`).json()) as { revisions: Array<{ id: string; label?: string; hint?: string }> };
+    expect(revisionChoices(moonlander.revisions)).toEqual([
+      { value: "reva", label: "Rev A", hint: "Bought before mid-December 2025" },
+      { value: "revb", label: "Rev B", hint: "Bought after mid-December 2025" },
+    ]);
+    expect(revisionChoices([{ id: "rev1" }, { id: "rev2", label: "Rev 2" }])).toEqual([{ value: "rev1", label: "rev1" }, { value: "rev2", label: "Rev 2" }]);
+  });
+});
+
 describe("checkOutcome", () => {
   test("this build is a success with nothing more to do", () => {
     expect(checkOutcome("this_build", "Moonlander")).toEqual({ tone: "success", text: "Your Moonlander runs this build. The flash is verified.", next: null });
@@ -39,6 +63,10 @@ describe("checkOutcome", () => {
     expect(checkOutcome("absent", "Moonlander").next).toBe("check");
     expect(checkOutcome("missing_halves", "Glove80").next).toBe("check");
     for (const found of ["other_build", "bootloader", "other_firmware"] as const) expect(checkOutcome(found, "Moonlander").next).toBe("flash");
+  });
+
+  test("a keyboard on a later build is not offered Flash again, which would roll it back", () => {
+    expect(checkOutcome("later_build", "Moonlander")).toEqual({ tone: "success", text: "Your Moonlander now runs a later keyloom build, which replaced this one. There is nothing to flash.", next: null });
   });
 });
 
@@ -82,5 +110,35 @@ describe("afterApply", () => {
     expect(afterApply(GLOVE, synced({}, { paused: true }), "lay_1").action?.id).toBe("open_release");
     expect(afterApply(GLOVE, synced({ state: { kind: "not_keyloom", detail: "USB serial x" } }), "lay_1").action?.id).toBe("open_release");
     expect(afterApply(GLOVE, undefined, "lay_1")).toMatchObject({ text: "It isn't on your keyboard yet, and Undo above the board takes it back.", action: { id: "open_release", label: "Build and flash" } });
+  });
+
+  test("auto-sync is promised only where it will run: an unplugged keyboard waits for USB, and one that needs a hand or failed gets the button", () => {
+    const behind = (why: string, error: string | null = null) => ({ kind: "behind", changes: 1, why, error }) as BoardSync["state"];
+    for (const state of [{ kind: "in_sync" }, behind("waiting"), { kind: "syncing", step: "building", syncId: "syn_1", startedAt: 1, trigger: "auto" }] as BoardSync["state"][]) {
+      expect(afterApply(GLOVE, synced({ state }), "lay_1").text).toStartWith("Auto-sync builds it and puts it on your Glove80 by itself.");
+    }
+    expect(afterApply(GLOVE, synced({ state: { kind: "not_connected", changes: 1 } }), "lay_1")).toEqual({
+      lead: "Applied.", text: "Auto-sync puts it on your Glove80 when you connect it by USB. Undo above the board takes it back.",
+      toast: "Auto-sync puts it on your Glove80 when you connect it by USB.", action: null,
+    });
+    const stuck: BoardSync["state"][] = [
+      { kind: "needs_hand", instruction: "Press the reset button.", reason: "x" }, behind("failed", "zapp exited with code 1"), behind("unknown_build"), behind("changed_since"),
+    ];
+    for (const state of stuck) expect(afterApply(GLOVE, synced({ state }), "lay_1").action).toEqual({ id: "open_release", label: "Build and flash" });
+  });
+
+  test("auto-apply is promised only while kanata can take it: when it isn't running, Apply now is offered", () => {
+    expect(afterApply(MACBOOK, macSync({}, { state: { kind: "not_connected" } }), "lay_1").action?.id).toBe("apply_now");
+    expect(afterApply(MACBOOK, macSync({}, { state: { kind: "behind", changes: 1, why: "failed", error: "reload failed" } }), "lay_1").action?.id).toBe("apply_now");
+  });
+
+  test("once the sync view has this change, the line follows it: applying now, then on the keyboard with no button", () => {
+    const off = (state: BoardSync["state"], head = "rev_2") => afterApply(MACBOOK, macSync({ on: false }, { state, headRevisionId: head }), "lay_1", "rev_2");
+    expect(off({ kind: "behind", changes: 1, why: "auto_off", error: null }).action?.id).toBe("apply_now");
+    expect(off({ kind: "syncing", step: "writing", syncId: "syn_1", startedAt: 1, trigger: "manual" })).toMatchObject({ text: "keyloom is applying it to your MacBook keyboard now. Undo above the board takes it back.", action: null });
+    expect(off({ kind: "in_sync" })).toEqual({ lead: "Applied.", text: "It is on your MacBook keyboard. Undo above the board takes it back.", toast: "It is on your MacBook keyboard.", action: null });
+    // A view from before the Apply (the toast's) is in sync with the old head, which says nothing about this change.
+    expect(off({ kind: "in_sync" }, "rev_1").action?.id).toBe("apply_now");
+    expect(afterApply(GLOVE, synced({ state: { kind: "in_sync" }, headRevisionId: "rev_2" }, { on: false }), "lay_1", "rev_2").action).toBeNull();
   });
 });

@@ -613,8 +613,10 @@ export class SyncEngine {
       });
 
       if (!flashed.ok) {
-        if (run.reason !== undefined && !run.recovering) return cancelled();
         const stepNow = findSync(db, row.id)?.step;
+        // A stop or pause that came once the keyboard was in its bootloader was refused by the flasher (D-503), so a failure after it is the write's own.
+        const wrote = stepNow === "writing" || stepNow === "verifying";
+        if (run.reason !== undefined && !run.recovering && !wrote) return cancelled();
         await this.exclusive(() => this.refresh(true));
         const after = this.readingOf(row.boardId);
         const failure = run.recovering ? "flash" : stepNow === "needs_hand" ? "needs_hand" : after.state === "absent" ? "disconnected" : "flash";
