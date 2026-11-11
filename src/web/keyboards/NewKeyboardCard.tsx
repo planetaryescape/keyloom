@@ -1,6 +1,7 @@
 import { Search, Usb, X } from "lucide-react";
 import type { ApiCandidate } from "../../api/detected-keyboards.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
+import { CONTRIBUTION_GUIDE, searchNote } from "./search-words.ts";
 import "./keyboards.css";
 
 /** "Likely" for a candidate keyloom is sure of, "One of two" when it isn't sure, "Maybe" for a long shot. */
@@ -57,6 +58,9 @@ export function NewKeyboardCard({ flow }: { flow: NewKeyboard }) {
         <Search size={14} aria-hidden="true" />
         <input type="search" value={flow.searchText} placeholder={k.candidates.length === 0 ? "Search QMK's and ZMK's keyboards by name" : "Not on the list? Search by name"} onChange={(e) => void flow.search(e.target.value)} />
       </label>
+      {searchNote(flow.searchText, flow.foundFor, flow.found.length, flow.problem !== null) === "none" ? (
+        <p className="nb-note">QMK and ZMK have no keyboard called “{flow.searchText.trim()}”. Try its maker or another spelling. If it isn&rsquo;t there at all, <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">the contribution guide</a> says how to add it.</p>
+      ) : null}
       {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
       <footer className="nb-foot">
         <span className="nb-note">keyloom only reads it. Nothing is written to the keyboard.</span>

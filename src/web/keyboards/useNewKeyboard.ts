@@ -38,6 +38,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [putPreview, setPutPreview] = useState<PutPreviewResponse | null>(null);
   const [searchText, setSearchText] = useState("");
   const [found, setFound] = useState<ApiCandidate[]>([]);
+  // The text whose answer `found` holds, so an empty answer reads as "none" only once the search for this text came back (R4-12).
+  const [foundFor, setFoundFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   // A board preview that failed stops the "Reading…" and offers Try again, which reads it again (R3-08).
@@ -122,11 +124,15 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     setSearchText(text);
     if (text.trim().length < 2) {
       setFound([]);
+      setFoundFor(null);
       return;
     }
     try {
       const result = await api.searchKeyboards(token, text.trim());
-      if (searchSequence.current === sequence) setFound(result.candidates);
+      if (searchSequence.current === sequence) {
+        setFound(result.candidates);
+        setFoundFor(text.trim());
+      }
     } catch (e) {
       if (searchSequence.current === sequence) setProblem(message(e));
     }
@@ -145,7 +151,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     step, preview, previewProblem, putPreview, busy, problem, waiting,
     /** Reads the board preview again after it failed. */
-    retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, activities, setActivities,
+    retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, foundFor, activities, setActivities,
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
       setDismissed((d) => new Set([...d].filter((x) => x !== keyboardKey(k))));
