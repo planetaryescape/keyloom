@@ -196,7 +196,8 @@ export type Build = z.infer<typeof BuildSchema>;
 
 export const FlashPermissionCodeSchema = z.enum(["permission_files_and_folders", "permission_input_monitoring"]);
 export type FlashPermissionCode = z.infer<typeof FlashPermissionCodeSchema>;
-export const FlashErrorCodeSchema = z.enum(["cancelled", "permission_files_and_folders", "permission_input_monitoring"]);
+// `not_confirmed`: the write finished, but keyloom couldn't confirm the keyboard came back as this build, so it can be checked again.
+export const FlashErrorCodeSchema = z.enum(["cancelled", "not_confirmed", "permission_files_and_folders", "permission_input_monitoring"]);
 export type FlashErrorCode = z.infer<typeof FlashErrorCodeSchema>;
 
 export const FlashSchema = z.object({
@@ -219,7 +220,7 @@ export const FlashSchema = z.object({
   instructionCode: FlashPermissionCodeSchema.nullable().optional(),
   // Cancel is offered only while this is true: waiting for the bootloader, nothing written yet.
   cancellable: z.boolean().optional(),
-  // Check the keyboard again is offered only while this is true: finished, not verified, on a board whose running build keyloom can read.
+  // Check the keyboard again is offered only while this is true: written, not verified, on a board whose running build keyloom can read.
   checkable: z.boolean().optional(),
 });
 export type Flash = z.infer<typeof FlashSchema>;

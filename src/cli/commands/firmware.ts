@@ -123,7 +123,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .option("--board <board>", "with --reboot-only: which board, when more than one is attached")
     .option("--half <half>", "with --reboot-only and a ZMK --board: left or right; sends a restart request without checking a UF2 drive")
     .option("--wait <minutes>", "how long to wait for the keyboard to enter its bootloader, 1 to 60 (default 2); for a flash that needs a key or button pressed")
-    .option("--check <flash>", "read which build the keyboard runs now, for a flash that succeeded but wasn't verified; builds and flashes nothing")
+    .option("--check <flash>", "read which build the keyboard runs now, for a flash that was written but wasn't verified; builds and flashes nothing")
     .action(async (opts: { build?: string; layout?: string; volumesRoot?: string; rebootOnly?: boolean; board?: string; half?: string; wait?: string; check?: string }) => {
       if (opts.check !== undefined) {
         if (opts.build !== undefined || opts.layout !== undefined || opts.rebootOnly) throw new UsageError("--check flashes nothing; leave out --build, --layout and --reboot-only");

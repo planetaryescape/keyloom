@@ -24,7 +24,7 @@ export function releaseStatus(build: Build | null, flash: Flash | null, headRevi
       case "waiting_for_bootloader": return { label: "Press reset", tone: "attention" };
       case "writing": return { label: "Flashing", tone: "busy" };
       case "succeeded": return flash.verified ? { label: "Flashed and verified", tone: "success" } : { label: "Flashed, not verified", tone: "attention" };
-      case "failed": return { label: "Flash failed", tone: "error" };
+      case "failed": return flash.errorCode === "not_confirmed" ? { label: "Flashed, not verified", tone: "attention" } : { label: "Flash failed", tone: "error" };
     }
   }
   switch (build.status) {

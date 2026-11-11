@@ -1,6 +1,6 @@
 // What the release dialog and the proposal card say about a flash and an Apply (D-501), from the server's codes, never its sentences.
 // Pure, so the wording is tested without a browser.
-import type { BoardSync, FlashCheckResponse, FlashPermissionCode } from "../../api/http.ts";
+import type { BoardSync, FlashCheckResponse, FlashErrorCode } from "../../api/http.ts";
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
 
 /**
@@ -9,7 +9,7 @@ import type { SettingsPaneName } from "../../api/system-remapper.ts";
  */
 export type PermissionFix = { pane: SettingsPaneName; button: string; text: string; failed: string };
 
-export function permissionFix(code: FlashPermissionCode | null | undefined): PermissionFix | null {
+export function permissionFix(code: FlashErrorCode | null | undefined): PermissionFix | null {
   switch (code) {
     case "permission_files_and_folders":
       return {
@@ -28,9 +28,12 @@ export function permissionFix(code: FlashPermissionCode | null | undefined): Per
   }
 }
 
-/** A failed flash's message: the permission's plain words when it has one, then the server's sentence, which is never dropped. */
-export function failedFlashText(code: FlashPermissionCode | "cancelled" | null | undefined, error: string | null): { lead: string | null; detail: string } {
-  const lead = code === "cancelled" ? null : (permissionFix(code)?.failed ?? null);
+/**
+ * A failed flash's message: plain words for its code when it has one, then the server's sentence, which is never dropped. A write
+ * that finished but couldn't be confirmed says so first, because the keyboard may well run the new build.
+ */
+export function failedFlashText(code: FlashErrorCode | null | undefined, error: string | null): { lead: string | null; detail: string } {
+  const lead = code === "not_confirmed" ? "keyloom wrote the firmware, but couldn't confirm the keyboard runs it." : (permissionFix(code)?.failed ?? null);
   return { lead, detail: error ?? "Flashing failed." };
 }
 

@@ -206,8 +206,15 @@ describe("flashWithZapp, hands-free", () => {
   test("a keyboard that doesn't come back as the new build makes the flash fail, with the reason", async () => {
     const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
     const r = await s.flash({ verify: async () => ({ ok: false, error: "zapp finished, but the Moonlander didn't come back" }) });
-    expect(r).toMatchObject({ state: "failed", error: "zapp finished, but the Moonlander didn't come back" });
+    expect(r).toMatchObject({ state: "failed", error: "zapp finished, but the Moonlander didn't come back", errorCode: "not_confirmed" });
     expect(s.states.at(-1)?.[0]).toBe("failed");
+  });
+
+  test("only a failed confirmation after a finished write is not_confirmed: a failure before or during the write is not", async () => {
+    const failing = await setup('echo "Firmware loaded: x"; exit 2');
+    expect((await failing.flash({ verify: async () => ({ ok: true, message: "never asked" }) })).errorCode).toBeUndefined();
+    const missing = await setup(undefined);
+    expect((await missing.flash()).errorCode).toBeUndefined();
   });
 
   test("a flash zapp reports as failed is not verified", async () => {

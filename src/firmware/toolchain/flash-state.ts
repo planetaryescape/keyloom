@@ -20,8 +20,11 @@ export type FlashResult = {
   state: "succeeded" | "failed";
   error: string | null;
   output: string[];
-  /** Why it failed, as a code the UI acts on, when the person can fix it (D-501). */
-  errorCode?: FlashPermissionCode;
+  /**
+   * Why it failed, as a code the UI acts on (D-501): a permission the person can grant, or `not_confirmed` when the write finished and
+   * only the check that the keyboard came back as the new build failed, so keyloom can read the keyboard again instead of flashing.
+   */
+  errorCode?: FlashPermissionCode | "not_confirmed";
   /** True when keyloom restarted every part of the keyboard itself and the flash was verified: the proof that auto-sync can reach this board (D-160). */
   handsFree?: boolean;
 };

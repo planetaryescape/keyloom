@@ -271,6 +271,72 @@ describe("Check the keyboard again", () => {
     expect({ builds: count("builds"), flashes: count("flashes"), syncs: count("syncs") }).toEqual(before);
   });
 
+  // A Moonlander whose write finished but whose confirmation failed: the flasher's not_confirmed.
+  async function notConfirmed() {
+    const s = await built();
+    const id = newFlashId();
+    createFlash(s.e.app.db, { id, buildId: s.build.id, logPath: `logs/flash-${id}.log` });
+    await Bun.write(join(s.e.dataDir, `logs/flash-${id}.log`), "keyloom: zapp exited 0\n");
+    finishFlash(s.e.app.db, id, { error: "zapp finished, but the Moonlander didn't come back", errorCode: "not_confirmed" });
+    return { ...s, flashId: id };
+  }
+  const versions = (s: Awaited<ReturnType<typeof built>>) => (s.e.app.db.query("SELECT COUNT(*) AS n FROM versions WHERE revision_id = ?").get(s.build.revisionId) as { n: number }).n;
+
+  test("a write that finished but couldn't be confirmed can be checked, and a keyboard on this build makes it a verified success", async () => {
+    const s = await notConfirmed();
+    expect(await getFlash(s.e.app, s.flashId)).toMatchObject({ status: "failed", errorCode: "not_confirmed", checkable: true });
+    const checked = await checkFlashAgain(s.e.app, s.flashId, { read: reads({ state: "keyloom", keys: [buildKey(s.build.id)], boardRevision: "reva" }).read });
+    expect(checked.found).toBe("this_build");
+    expect(checked.flash).toMatchObject({ status: "succeeded", error: null, errorCode: null, verified: true, checkable: false });
+    expect(versions(s)).toBe(1);
+  });
+
+  test("a write that couldn't be confirmed and a keyboard on another build stays failed and unverified", async () => {
+    const s = await notConfirmed();
+    const checked = await checkFlashAgain(s.e.app, s.flashId, { read: reads({ state: "keyloom", keys: ["AAAAAAAAAAAA"], boardRevision: "reva" }).read });
+    expect(checked.found).toBe("other_build");
+    expect(checked.flash).toMatchObject({ status: "failed", errorCode: "not_confirmed", verified: false, checkable: true });
+    expect(versions(s)).toBe(0);
+  });
+
+  test("a flash that failed before its write finished can't be checked, and the keyboard is never read", async () => {
+    const s = await built();
+    const id = newFlashId();
+    createFlash(s.e.app.db, { id, buildId: s.build.id, logPath: `logs/flash-${id}.log` });
+    finishFlash(s.e.app.db, id, { error: "zapp exited with code 1" });
+    expect((await getFlash(s.e.app, id)).checkable).toBe(false);
+    const r = reads({ state: "keyloom", keys: [buildKey(s.build.id)], boardRevision: "reva" });
+    await expect(checkFlashAgain(s.e.app, id, { read: r.read })).rejects.toThrow("failed before keyloom finished writing it");
+    expect(r.calls).toEqual([]);
+  });
+
+  test("a read that another flash overtook changes neither the flash's log nor History", async () => {
+    const s = await unverified();
+    const logPath = join(s.e.dataDir, `logs/flash-${s.flashId}.log`);
+    const before = await Bun.file(logPath).text();
+    const read = async () => {
+      // Another flash starts, and may finish verified, while keyloom reads the keyboard.
+      const other = newFlashId();
+      createFlash(s.e.app.db, { id: other, buildId: s.build.id, logPath: `logs/flash-${other}.log` });
+      finishFlash(s.e.app.db, other, null);
+      return new Map<string, KeyboardReading>([["zsa/moonlander", { state: "keyloom", keys: [buildKey(s.build.id)], boardRevision: "reva" }]]);
+    };
+    await expect(checkFlashAgain(s.e.app, s.flashId, { read })).rejects.toThrow("may be out of date");
+    expect(await Bun.file(logPath).text()).toBe(before);
+    expect(versions(s)).toBe(0);
+    expect((await getFlash(s.e.app, s.flashId)).verified).toBe(false);
+  });
+
+  test("a check while another flash runs is refused before the keyboard is read", async () => {
+    const s = await unverified();
+    const other = newFlashId();
+    createFlash(s.e.app.db, { id: other, buildId: s.build.id, logPath: `logs/flash-${other}.log` });
+    const r = reads({ state: "keyloom", keys: [buildKey(s.build.id)], boardRevision: "reva" });
+    await expect(checkFlashAgain(s.e.app, s.flashId, { read: r.read })).rejects.toThrow("another flash is under way");
+    expect(r.calls).toEqual([]);
+    expect(versions(s)).toBe(0);
+  });
+
   test("a flash that hasn't finished can't be checked", async () => {
     const s = await built();
     const id = newFlashId();

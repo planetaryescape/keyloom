@@ -261,7 +261,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     if (input.verify) {
       input.onState("writing", "Written. Waiting for the keyboard to restart so keyloom can confirm it.", { verifying: true });
       const verified = await input.verify();
-      if (!verified.ok) return fail(verified.error, output);
+      // Zapp finished the write; only the confirmation failed, so the keyboard can be read again rather than flashed again.
+      if (!verified.ok) return { ...fail(verified.error, output), errorCode: "not_confirmed" };
       input.log.line(`keyloom: ${verified.message}`);
     }
     input.onState("succeeded", null);

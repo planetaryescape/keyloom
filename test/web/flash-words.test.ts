@@ -36,6 +36,11 @@ describe("failedFlashText", () => {
     expect(failedFlashText("permission_files_and_folders", error)).toEqual({ lead: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.", detail: error });
   });
 
+  test("a write that finished but couldn't be confirmed says the firmware was written, then the server's reason", () => {
+    const error = "zapp finished, but the Moonlander didn't come back";
+    expect(failedFlashText("not_confirmed", error)).toEqual({ lead: "keyloom wrote the firmware, but couldn't confirm the keyboard runs it.", detail: error });
+  });
+
   test("any other failure is the server's sentence alone", () => {
     expect(failedFlashText(null, "zapp exited with code 1")).toEqual({ lead: null, detail: "zapp exited with code 1" });
     expect(failedFlashText("cancelled", "Cancelled. Nothing was flashed.")).toEqual({ lead: null, detail: "Cancelled. Nothing was flashed." });

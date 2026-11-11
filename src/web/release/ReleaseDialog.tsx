@@ -99,7 +99,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
-  const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? flash.verified ? "done" : "warning" : flash.status === "failed" ? (flash.errorCode === "cancelled" ? "todo" : "failed") : "active";
+  const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? flash.verified ? "done" : "warning" : flash.status === "failed" ? (flash.errorCode === "cancelled" ? "todo" : flash.errorCode === "not_confirmed" ? "warning" : "failed") : "active";
 
   const confirmBlock = (
     <div className="confirm">
@@ -350,7 +350,10 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                 </div>
                 <PermissionFix code={flash.errorCode} release={release} />
                 <LogTail label="Flash log, last lines" lines={flash.logTail} />
-                {confirming ? (
+                {/* Written but not confirmed: reading the keyboard comes first, and flashing again stays one click away (D-506). */}
+                {flash.checkable === true ? (
+                  <CheckAgain release={release} boardName={boardName} onFlashAgain={() => setConfirming(true)} confirming={confirming} confirmBlock={confirmBlock} flashAlways />
+                ) : confirming ? (
                   confirmBlock
                 ) : (
                   <button type="button" className="button" onClick={() => setConfirming(true)}>Try again</button>
@@ -370,9 +373,11 @@ function FailedText({ code, error }: { code: Flash["errorCode"]; error: string |
   return <p>{text.lead === null ? null : <><strong>{text.lead}</strong>{" "}</>}{plain(text.detail)}</p>;
 }
 
-function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock }: { release: Release; boardName: string; onFlashAgain: () => void; confirming: boolean; confirmBlock: ReactNode }) {
+/** `flashAlways` offers Flash again before any check has answered, for a flash that failed after its write. */
+function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock, flashAlways = false }: { release: Release; boardName: string; onFlashAgain: () => void; confirming: boolean; confirmBlock: ReactNode; flashAlways?: boolean }) {
   const { check } = release;
   const outcome = check.found === null || check.found === "this_build" ? null : checkOutcome(check.found, boardName);
+  const offerFlash = outcome?.next === "flash" || (flashAlways && outcome === null);
   return (
     <>
       {outcome === null ? null : (
@@ -388,14 +393,14 @@ function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock
         </div>
       )}
       {/* A keyboard that has moved on to a later build has nothing left to check or flash here (D-506). */}
-      {outcome !== null && outcome.next === null ? null : outcome?.next === "flash" && confirming ? confirmBlock : (
+      {outcome !== null && outcome.next === null ? null : offerFlash && confirming ? confirmBlock : (
         <div className="step-actions">
           <button type="button" className={outcome?.next === "flash" ? "button" : "button button-primary"} disabled={check.running || release.starting !== null} onClick={release.checkKeyboard}>
             {check.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
             {check.running ? "Checking" : "Check the keyboard again"}
           </button>
-          {outcome?.next === "flash" ? (
-            <button type="button" className="button button-primary" onClick={onFlashAgain}>
+          {offerFlash ? (
+            <button type="button" className={outcome?.next === "flash" ? "button button-primary" : "button"} onClick={onFlashAgain}>
               <Zap size={14} aria-hidden="true" />
               Flash again
             </button>

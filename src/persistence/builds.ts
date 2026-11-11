@@ -109,6 +109,16 @@ export function finishFlash(db: Database, id: string, result: { error: string; e
   else db.query("UPDATE flashes SET status = 'succeeded', finished_at = ? WHERE id = ? AND status IN ('waiting_for_bootloader','writing')").run(now, id);
 }
 
+/** A flash whose write finished but couldn't be confirmed, once the keyboard has been read and runs its build: it succeeded after all. */
+export function confirmFlash(db: Database, id: string): void {
+  db.query("UPDATE flashes SET status = 'succeeded', error = NULL, error_code = NULL WHERE id = ? AND status = 'failed' AND error_code = 'not_confirmed'").run(id);
+}
+
+/** Whether a flash other than `exceptId` started at or after `since`: a keyboard read taken before it may no longer be true. */
+export function flashStartedSince(db: Database, since: number, exceptId: string): boolean {
+  return db.query("SELECT 1 FROM flashes WHERE id != ? AND started_at >= ? LIMIT 1").get(exceptId, since) !== null;
+}
+
 export function findFlash(db: Database, id: string): FlashRow | undefined {
   const row = db.query("SELECT * FROM flashes WHERE id = ?").get(id) as FlashDb | null;
   return row ? toFlash(row) : undefined;

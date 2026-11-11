@@ -72,14 +72,17 @@ export type FlashView = {
   instructionCode: FlashPermissionCode | null;
   /** True while it waits for the bootloader and nothing has been written, in this process: Cancel is safe (D-501). */
   cancellable: boolean;
-  /** True for a finished flash that isn't verified on a board whose running build keyloom can read: Check the keyboard again (D-501). */
+  /**
+   * True for a written flash that isn't verified, on a board whose running build keyloom can read: Check the keyboard again (D-501). That
+   * is a success without a verified line, or a failure whose write finished and only the confirmation failed (`not_confirmed`).
+   */
   checkable: boolean;
   logTail: string[];
   logPath: string;
 };
 
 /** Why a flash failed, as the UI acts on it (D-501). */
-export type FlashErrorCode = FlashPermissionCode | "cancelled";
+export type FlashErrorCode = FlashPermissionCode | "cancelled" | "not_confirmed";
 
 const LOG_TAIL_LINES = 30;
 const WRITING_INSTRUCTION = "Don't unplug the keyboard. Flashing takes a few seconds.";
@@ -349,7 +352,7 @@ async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
     errorCode: row.status === "failed" ? flashErrorCode(row.errorCode) : null,
     instructionCode: waiting ? (control?.problem ?? null) : null,
     cancellable: waiting && control !== undefined && !control.committed && !control.cancelled,
-    checkable: row.status === "succeeded" && !verified && board !== undefined && syncSupported(board),
+    checkable: ((row.status === "succeeded" && !verified) || (row.status === "failed" && row.errorCode === "not_confirmed")) && board !== undefined && syncSupported(board),
     logTail, logPath,
   };
 }
@@ -358,6 +361,7 @@ async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
 function flashErrorCode(code: string | null): FlashErrorCode | null {
   switch (code) {
     case "cancelled":
+    case "not_confirmed":
     case "permission_files_and_folders":
     case "permission_input_monitoring":
       return code;
@@ -613,6 +617,10 @@ export async function flashAndWait(app: App, opts: FlashOptions): Promise<FlashV
   const started = await startFlash(app, opts);
   await flashTasks.get(started.id);
   const done = await getFlash(app, started.id);
-  if (done.status !== "succeeded") throw new FlashFailedError(`flash ${done.id} failed: ${done.error ?? "unknown error"} (log: ${done.logPath})`, done.id, done.logPath);
+  if (done.status !== "succeeded") {
+    // The write finished and only the confirmation failed: reading the keyboard again may verify it without another flash.
+    const next = done.checkable ? `; \`keyloom flash --check ${done.id}\` reads the keyboard again` : "";
+    throw new FlashFailedError(`flash ${done.id} failed: ${done.error ?? "unknown error"} (log: ${done.logPath})${next}`, done.id, done.logPath);
+  }
   return done;
 }

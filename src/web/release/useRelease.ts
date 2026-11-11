@@ -6,8 +6,8 @@ import { fetchBuild, fetchFlash, startBuild, startFlash } from "../api-write.ts"
 import { type Docker, useDocker } from "./useDocker.ts";
 import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
+import { cancelShownFlash } from "./cancel-shown-flash.ts";
 import { cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
-import { cancelNote } from "./flash-words.ts";
 
 const POLL_MS = 1000;
 // A server that has gone quiet for this many polls in a row is treated as gone, not slow.
@@ -125,6 +125,8 @@ export function useRelease(token: string, layoutRef: string): Release {
     setCheck({ running: false, found: null, problem: null });
     setSettingsProblem(null);
     setCancelNote(null);
+    // A cancel of the flash this one replaces may still be out; its answer is dropped, so it can't leave this one looking busy.
+    setCancelling(false);
     startFlash(token, build.id)
       .then(setFlash)
       .catch((e: unknown) => {
@@ -155,25 +157,24 @@ export function useRelease(token: string, layoutRef: string): Release {
   }, [token, buildId]);
 
   const flashId = flash?.id;
-  // The flash on screen now, so a check that answers after another flash started can't replace it.
+  // The flash on screen now, so a check or a cancel that answers after another flash started can't replace it.
   const currentFlashId = useRef(flashId);
   useEffect(() => {
     currentFlashId.current = flashId;
   }, [flashId]);
   const cancel = useCallback(() => {
     if (flashId === undefined) return;
+    const asked = flashId;
     setCancelling(true);
-    cancelFlash(token, flashId)
-      .then((next) => {
-        setFlash(next);
-        setCancelNote(cancelNote({ status: next.status }));
-      })
-      // Refused because the write began, or it already ended: the note says why, the flash as it is now says where it is, and Cancel goes away.
-      .catch((e: unknown) => {
-        setCancelNote(e instanceof ApiError && e.code !== undefined ? cancelNote({ refused: e.code }) : null);
-        return fetchFlash(token, flashId, new AbortController().signal).then(setFlash).catch(() => undefined);
-      })
-      .finally(() => setCancelling(false));
+    void cancelShownFlash(asked, {
+      cancel: (id) => cancelFlash(token, id),
+      read: (id) => fetchFlash(token, id, new AbortController().signal),
+      shown: () => currentFlashId.current,
+      setFlash,
+      setNote: setCancelNote,
+    }).finally(() => {
+      if (currentFlashId.current === asked) setCancelling(false);
+    });
   }, [token, flashId]);
 
   const checkKeyboard = useCallback(() => {
