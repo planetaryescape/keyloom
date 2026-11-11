@@ -140,5 +140,6 @@ export function reviewProblemWords(action: ReviewAction, error: { code: string |
   const refused = action !== "load" && error.status >= 400 && error.status < 500;
   if (refused) return { words: `${what} ${sentence(error.message)}`, button: "Read the review again", next: "reload" };
   // Each of these requests is safe to repeat: a second run replaces the first, and hiding a hidden item hides it.
-  return { words: error.status < 400 ? `${what} The server didn't answer.` : `${what} ${sentence(error.message)}`, button: "Try again", next: "repeat" };
+  // A server fault's own words ("internal error") say nothing to a person; its detail is in the server's log.
+  return { words: `${what} ${error.status < 400 ? "The server didn't answer." : "It hit an unexpected error."}`, button: "Try again", next: "repeat" };
 }

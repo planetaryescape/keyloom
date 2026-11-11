@@ -88,7 +88,7 @@ describe("Apply that changed nothing says so beside Apply (R4-07)", () => {
 describe("reviewProblemWords (R5-10)", () => {
   test("no answer or a server fault repeats the same request", () => {
     expect(reviewProblemWords("run", { code: undefined, status: -1, message: "fetch failed" })).toEqual({ words: "keyloom couldn't start the review. The server didn't answer.", button: "Try again", next: "repeat" });
-    expect(reviewProblemWords("dismiss", { code: "internal", status: 500, message: "internal error" })).toMatchObject({ button: "Try again", next: "repeat" });
+    expect(reviewProblemWords("dismiss", { code: "internal", status: 500, message: "internal error" })).toEqual({ words: "keyloom couldn't hide that. It hit an unexpected error.", button: "Try again", next: "repeat" });
   });
   test("a refusal reads the review again with the server's reason, since repeating it would be refused too", () => {
     expect(reviewProblemWords("restore", { code: "not_found", status: 404, message: "the latest review of x has no item \"y\"" })).toEqual({ words: "keyloom couldn't show that again. the latest review of x has no item \"y\".", button: "Read the review again", next: "reload" });
