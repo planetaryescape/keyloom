@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { chooseProvider } from "./api-chat.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
-import { PROVIDER_NAMES, lockedProvider } from "./setup-words.ts";
+import { PROVIDER_NAMES, lockedProvider, setupProviders } from "./setup-words.ts";
 import type { Pinned } from "./transcript.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
@@ -185,7 +185,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
           <fieldset disabled={saving || locked !== null}>
             <legend>Model for the next conversation</legend>
             {/* A lock leaves one provider that answers, so only it is listed (R2-04); ModelSetup below says why. */}
-            {status.providers.filter((candidate) => locked === null ? candidate.installed || candidate.ready || candidate.id === status.active?.provider : candidate.id === lockedProvider(status)).map((candidate) => (
+            {(locked === null ? status.providers.filter((candidate) => candidate.installed || candidate.ready || candidate.id === status.active?.provider) : setupProviders(status)).map((candidate) => (
               <label key={candidate.id} className="provider-choice" data-ready={candidate.ready}>
                 <input
                   type="radio"

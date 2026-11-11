@@ -8,7 +8,8 @@ export const KARABINER_FILENAME = "karabiner.json";
 /** Where Karabiner-Elements keeps its settings, the path the import card's steps name. */
 export const karabinerConfigPath = (home: string = homedir()): string => join(home, ".config", "karabiner", KARABINER_FILENAME);
 
-// A real karabiner.json is tens of kilobytes; anything far bigger is not one, and isn't worth holding in memory.
+// A real karabiner.json is tens of kilobytes; anything far bigger is not one, and isn't worth holding in memory. The import the page
+// sends it to has its own, larger cap (MAX_IMPORT_BYTES); app/ can't import that from the server (the module table).
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export type KarabinerConfig = { status: "found"; filename: string; content: string } | { status: "missing" } | { status: "too_large" };

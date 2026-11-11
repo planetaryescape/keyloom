@@ -126,10 +126,10 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
       file = await readKarabinerConfig(token);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "keyloom couldn't read Karabiner's settings.");
-      setBusy(false);
       return;
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
     await take([file]);
   }
 

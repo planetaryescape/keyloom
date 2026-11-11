@@ -46,8 +46,13 @@ pub fn show(app: &AppHandle) {
     if !file.exists() {
         say(app, "log opened");
     }
-    if let Err(err) = std::process::Command::new("/usr/bin/open").arg(&file).spawn() {
-        eprintln!("keyloom-desktop: could not open the log: {err}");
+    open_external(app, file.as_os_str());
+}
+
+/// Hands a file or URL to macOS's `open`: a .log opens in Console, a URL in the default browser.
+pub fn open_external(app: &AppHandle, target: &std::ffi::OsStr) {
+    if let Err(err) = std::process::Command::new("/usr/bin/open").arg(target).spawn() {
+        say(app, &format!("could not open {}: {err}", target.to_string_lossy()));
     }
 }
 

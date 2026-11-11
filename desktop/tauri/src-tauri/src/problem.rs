@@ -3,7 +3,6 @@
 // The page (ui/problem.html) has no IPC. Its buttons are keyloom-desktop://<action> links, caught here before they load.
 use crate::{log, sidecar::Failure, AppState};
 use serde::Serialize;
-use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const LABEL: &str = "problem";
@@ -35,12 +34,12 @@ impl Stop {
         matches!(self, Stop::Failed(Failure::Incompatible { replace: None, .. }))
     }
 
-    /// The menu-bar line.
-    pub fn summary(&self) -> String {
+    /// The window's heading, and the menu-bar line.
+    pub fn title(&self) -> &'static str {
         match self {
-            Stop::Failed(Failure::Incompatible { .. }) => "Another keyloom is running".into(),
-            Stop::Failed(_) => "keyloom couldn't start".into(),
-            Stop::KeepsStopping { .. } => "keyloom keeps stopping".into(),
+            Stop::Failed(Failure::Incompatible { .. }) => "Another keyloom is running",
+            Stop::Failed(_) => "keyloom couldn't start",
+            Stop::KeepsStopping { .. } => "keyloom keeps stopping",
         }
     }
 }
@@ -55,10 +54,12 @@ impl std::fmt::Display for Stop {
 }
 
 /// What the updater knows, for the newer-server case. `Off` in a build without the updater.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 #[cfg_attr(not(feature = "updater"), allow(dead_code))]
 pub enum Updates {
+    #[cfg_attr(not(feature = "updater"), default)]
     Off,
+    #[cfg_attr(feature = "updater", default)]
     Checking,
     Available(String),
     UpToDate,
@@ -119,10 +120,10 @@ fn tail(output: &str) -> Option<String> {
 pub fn view(stop: &Stop, updates: &Updates) -> View {
     let try_again = || action(TRY_AGAIN, "Try again");
     let show_log = || action(SHOW_LOG, "Show log");
-    let couldnt = "keyloom couldn't start".to_string();
+    let couldnt = stop.title().to_string();
     match stop {
         Stop::Failed(Failure::Incompatible { words, replace: Some(label) }) => View {
-            title: "Another keyloom is running".into(),
+            title: stop.title().into(),
             body: words.clone(),
             note: Some("Replacing it waits for any keyboard write to finish, then serves your keyboards from this app.".into()),
             detail: None,
@@ -141,7 +142,7 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
                 ),
                 Updates::Failed => ("keyloom couldn't check for an update.".to_string(), vec![action(CHECK_UPDATES, "Check for updates"), download(), try_again(), show_log()]),
             };
-            View { title: "Another keyloom is running".into(), body: words.clone(), note: Some(note), detail: None, busy: false, actions: actions(list) }
+            View { title: stop.title().into(), body: words.clone(), note: Some(note), detail: None, busy: false, actions: actions(list) }
         }
         Stop::Failed(Failure::TimedOut) => View {
             title: couldnt,
@@ -179,7 +180,7 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
             actions: actions(vec![try_again(), action(DOWNLOAD, "Download the latest keyloom"), show_log()]),
         },
         Stop::KeepsStopping { times } => View {
-            title: "keyloom keeps stopping".into(),
+            title: stop.title().into(),
             body: format!("keyloom's server stopped {times} times in {RESTART_WINDOW_WORDS}, so the app stopped starting it again."),
             note: Some("The log shows what it said before it stopped.".into()),
             detail: None,
@@ -235,16 +236,13 @@ fn present(app: &AppHandle, view: &View) {
     });
 }
 
-/// Shows why there is no server, and keeps it so an updater change can redraw it.
+/// Shows why there is no server, and keeps it so an updater change can redraw it. While it is kept, Try again and replace may run.
 pub fn open(app: &AppHandle, stop: Stop) {
-    let state = app.state::<AppState>();
-    let updates = state.updates.lock().unwrap().clone();
-    present(app, &view(&stop, &updates));
-    *state.problem.lock().unwrap() = Some(stop);
+    *app.state::<AppState>().problem.lock().unwrap() = Some(stop);
+    refresh(app);
 }
 
-/// Redraws the window after the updater learned something, if it is showing a problem.
-#[cfg_attr(not(feature = "updater"), allow(dead_code))]
+/// Draws the kept problem; the updater calls it when it learns something.
 pub fn refresh(app: &AppHandle) {
     let state = app.state::<AppState>();
     let Some(stop) = state.problem.lock().unwrap().clone() else { return };
@@ -263,28 +261,28 @@ pub fn close(app: &AppHandle) {
     });
 }
 
-pub fn showing(app: &AppHandle) -> bool {
-    app.get_webview_window(LABEL).is_some()
+/// Brings a window forward; false when there is no window with that label.
+pub fn bring_forward(app: &AppHandle, label: &str) -> bool {
+    let Some(w) = app.get_webview_window(label) else { return false };
+    let _ = w.show();
+    let _ = w.unminimize();
+    let _ = w.set_focus();
+    true
 }
 
-pub fn show_existing(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window(LABEL) {
-        let _ = w.show();
-        let _ = w.unminimize();
-        let _ = w.set_focus();
-    }
+pub fn bring_forward_problem(app: &AppHandle) -> bool {
+    bring_forward(app, LABEL)
 }
 
-/// A button in the window, or the matching menu-bar item. Try again and replace run once per problem: `awaiting` is set while the
-/// supervisor waits for one, so a double click can't queue a second start.
+/// A button in the window, or the matching menu-bar item (same ids). Try again and replace run once per problem: the first takes the
+/// kept problem, so a double click can't queue a second start.
 pub fn act(app: &AppHandle, id: &str) {
     let state = app.state::<AppState>();
     match id {
         TRY_AGAIN | REPLACE => {
-            if !state.awaiting.swap(false, Ordering::AcqRel) {
+            if state.problem.lock().unwrap().take().is_none() {
                 return;
             }
-            *state.problem.lock().unwrap() = None;
             present(app, &starting());
             if id == REPLACE {
                 state.replace.notify_one();
@@ -293,11 +291,7 @@ pub fn act(app: &AppHandle, id: &str) {
             }
         }
         SHOW_LOG => log::show(app),
-        DOWNLOAD => {
-            if let Err(err) = std::process::Command::new("/usr/bin/open").arg(RELEASES).spawn() {
-                log::say(app, &format!("could not open the releases page: {err}"));
-            }
-        }
+        DOWNLOAD => log::open_external(app, std::ffi::OsStr::new(RELEASES)),
         #[cfg(feature = "updater")]
         CHECK_UPDATES => crate::updates::check_now(app),
         #[cfg(feature = "updater")]

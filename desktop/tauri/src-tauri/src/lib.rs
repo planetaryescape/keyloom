@@ -11,6 +11,7 @@ mod sidecar;
 mod updates;
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use restarts::Restarts;
 use std::sync::Mutex;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem},
@@ -28,19 +29,18 @@ pub struct Server {
     pub owned: bool,
 }
 
+#[derive(Default)]
 pub struct AppState {
     pub server: Mutex<Option<Server>>,
     pub sidecar: Mutex<Option<sidecar::Running>>,
     pub sync_layout: Mutex<Option<String>>,
-    /// Set while the supervisor waits for Try again or replace, so one click starts one attempt.
-    pub awaiting: AtomicBool,
     pub retry: tokio::sync::Notify,
     /// Signalled when the person picks the item that replaces an incompatible server (offered only when the CLI offers it).
     pub replace: tokio::sync::Notify,
-    /// Why there is no server, while the problem window shows it.
+    /// Why there is no server, while the supervisor waits for Try again or replace; the first click takes it (problem::act).
     pub problem: Mutex<Option<problem::Stop>>,
     pub updates: Mutex<problem::Updates>,
-    /// Set when the app is quitting, so the watcher doesn't start the server it is stopping.
+    /// Set when the app is quitting, so the supervisor doesn't start the server it is stopping.
     pub quitting: AtomicBool,
     #[cfg(feature = "updater")]
     pub install_update: tokio::sync::Notify,
@@ -50,38 +50,10 @@ pub struct AppState {
     pub update_offered: AtomicBool,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            server: Mutex::default(),
-            sidecar: Mutex::default(),
-            sync_layout: Mutex::default(),
-            awaiting: AtomicBool::default(),
-            retry: tokio::sync::Notify::new(),
-            replace: tokio::sync::Notify::new(),
-            problem: Mutex::default(),
-            updates: Mutex::new(if cfg!(feature = "updater") { problem::Updates::Checking } else { problem::Updates::Off }),
-            quitting: AtomicBool::default(),
-            #[cfg(feature = "updater")]
-            install_update: tokio::sync::Notify::new(),
-            #[cfg(feature = "updater")]
-            check_updates: tokio::sync::Notify::new(),
-            #[cfg(feature = "updater")]
-            update_offered: AtomicBool::default(),
-        }
-    }
-}
-
 // Open keyloom, the Dock icon and a second launch bring forward the page, or the problem window while there is no page to show.
 fn show_window(app: &AppHandle) {
-    if problem::showing(app) {
-        problem::show_existing(app);
-        return;
-    }
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.unminimize();
-        let _ = w.set_focus();
+    if !problem::bring_forward_problem(app) {
+        problem::bring_forward(app, "main");
     }
 }
 
@@ -122,8 +94,9 @@ fn hide_main(app: &AppHandle) {
     });
 }
 
-/// Starts the server, shows it, and watches it. When there is none to show, opens the problem window and waits for the person to
-/// pick Try again (or the CLI's replace offer) in it or in the menu bar, then starts again.
+/// Starts the server, shows it, and watches it. A server that goes away is started again the same way, with a back-off and a cap
+/// (restarts.rs). When there is none to show, opens the problem window and waits for the person to pick Try again (or the CLI's
+/// replace offer) in it or in the menu bar, then starts again.
 async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
     // macOS shows a notification only after the user has allowed it; this asks on first launch.
     if let Err(err) = app.notification().request_permission() {
@@ -131,6 +104,7 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
     }
     let state = app.state::<AppState>();
     let mut mode = sidecar::Mode::Reuse;
+    let mut restarts = Restarts::default();
     loop {
         let stop = match sidecar::start(&app, mode).await {
             Ok(server) => {
@@ -138,20 +112,34 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
                 *state.server.lock().unwrap() = Some(server);
                 problem::close(&app);
                 present_main(&app, &url);
-                menu_bar::watch(&app, &tray, &items).await
+                menu_bar::watch(&app, &tray, &items).await;
+                // Quitting stops the server on purpose; starting it again would undo that.
+                if state.quitting.load(Ordering::Acquire) {
+                    return;
+                }
+                match restarts.next(std::time::Instant::now()) {
+                    Some(delay) => {
+                        log::say(&app, &format!("keyloom's server is gone; starting it again in {} s", delay.as_secs()));
+                        let _ = items.summary.set_text("keyloom stopped. Starting it again…");
+                        tokio::time::sleep(delay).await;
+                        mode = sidecar::Mode::Reuse;
+                        continue;
+                    }
+                    None => problem::Stop::KeepsStopping { times: restarts.stops() },
+                }
             }
             Err(failure) => problem::Stop::Failed(failure),
         };
         log::say(&app, &stop.to_string());
         hide_main(&app);
-        let _ = items.summary.set_text(stop.summary());
+        let _ = items.summary.set_text(stop.title());
         let _ = items.sync_now.set_enabled(false);
         // The menu-bar way back, beside the window's: the window can be closed, the menu bar stays.
         let mut added = Vec::new();
         if let Some(label) = stop.replace_label() {
-            added.extend(MenuItem::with_id(&app, "replace", label, true, None::<&str>).ok());
+            added.extend(MenuItem::with_id(&app, problem::REPLACE, label, true, None::<&str>).ok());
         }
-        added.extend(MenuItem::with_id(&app, "try_again", "Try starting keyloom again", true, None::<&str>).ok());
+        added.extend(MenuItem::with_id(&app, problem::TRY_AGAIN, "Try starting keyloom again", true, None::<&str>).ok());
         for item in &added {
             let _ = items.menu.insert(item, 1);
         }
@@ -163,7 +151,6 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
             }
         }
         problem::open(&app, stop);
-        state.awaiting.store(true, Ordering::Release);
         mode = tokio::select! {
             _ = state.retry.notified() => sidecar::Mode::Reuse,
             _ = state.replace.notified() => sidecar::Mode::Replace,
@@ -172,6 +159,8 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
             let _ = items.menu.remove(item);
         }
         let _ = items.summary.set_text("Starting");
+        // The person chose to try again, so earlier stops no longer count toward the cap.
+        restarts = Restarts::default();
     }
 }
 
@@ -229,8 +218,7 @@ pub fn run() {
                     move |app, event| match event.id().as_ref() {
                         "open" => show_window(app),
                         "sync_now" => menu_bar::sync_now(app),
-                        "replace" => problem::act(app, problem::REPLACE),
-                        "try_again" => problem::act(app, problem::TRY_AGAIN),
+                        id @ (problem::REPLACE | problem::TRY_AGAIN) => problem::act(app, id),
                         #[cfg(feature = "updater")]
                         "update" => updates::menu_item(app),
                         "login" => {
