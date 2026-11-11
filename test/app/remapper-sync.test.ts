@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { UsageError, applyOps, applyToRemapper } from "../../src/app/index.ts";
 import { findLayoutRow } from "../../src/persistence/layouts.ts";
 import { SyncRefusal } from "../../src/app/sync-engine.ts";
-import { getBoardSync } from "../../src/persistence/syncs.ts";
+import { claimSync, getBoardSync, newSyncId } from "../../src/persistence/syncs.ts";
 import { lastSyncOfBoard } from "../../src/persistence/syncs.ts";
 import { macbook, at } from "../helpers/macbook.ts";
 import { MAC, remapperWorld } from "../helpers/remapper-world.ts";
@@ -122,6 +122,37 @@ describe("the MacBook's sync state", () => {
     expect(readFileSync(world.paths.kbd, "utf8")).toContain(`keyloom-${findLayoutRow(world.app.db, world.layoutId)!.headRevisionId}`);
     expect(world.fake.running()).toBe(world.paths.kbd);
     expect(kind(e)).toEqual({ kind: "in_sync" });
+    // It ran as a claimed sync, so another process saw the keyboard busy while it wrote.
+    expect(lastSyncOfBoard(world.app.db, MAC)).toMatchObject({ trigger: "manual", status: "succeeded" });
+  });
+
+  test("Replace it after remapping was switched off is a stale confirm: refused, and remapping stays off", async () => {
+    const world = make();
+    const e = world.engine();
+    await e.start();
+    // The confirm opened over a foreign config; then something loaded safe.kbd before the person pressed Replace it.
+    await e.disableRemapping(MAC);
+    const before = readFileSync(world.paths.kbd, "utf8");
+    await expect(e.replaceForeignRemapperConfig(world.layoutId)).rejects.toMatchObject({ code: "kanata_not_foreign" });
+    expect(world.fake.running()).toBe(world.paths.safe);
+    expect(readFileSync(world.paths.kbd, "utf8")).toBe(before);
+  });
+
+  test("Replace it while another keyloom process holds the sync claim is busy and writes nothing", async () => {
+    const world = make();
+    const foreign = "(defsrc a)\n(deflayer base a)\n";
+    writeFileSync(world.paths.kbd, foreign);
+    const { reloadFile } = await import("../../src/firmware/kanata/client.ts");
+    await reloadFile({ port: world.fake.port }, world.paths.kbd);
+    const OTHER = 999_999;
+    const e = world.engine({ alive: (pid) => pid === OTHER || pid === process.pid });
+    await e.start();
+    claimSync(world.app.db, {
+      id: newSyncId(), boardId: MAC, layoutId: world.layoutId, revisionId: findLayoutRow(world.app.db, world.layoutId)!.headRevisionId, boardRevision: "",
+      trigger: "auto", logPath: "logs/other.log", appliedAt: 0, owner: "other", pid: OTHER,
+    }, () => true);
+    await expect(e.replaceForeignRemapperConfig(world.layoutId)).rejects.toMatchObject({ code: "busy" });
+    expect(readFileSync(world.paths.kbd, "utf8")).toBe(foreign);
   });
 
   test("Replace it with kanata stopped says so and writes nothing", async () => {
@@ -171,6 +202,22 @@ describe("auto-apply", () => {
     await e.confirmExitChord(MAC);
     expect(getBoardSync(world.app.db, MAC).provenAt).not.toBeNull();
     expect(e.views().find((v) => v.boardId === MAC)?.auto.proven).toBe(true);
+  });
+
+  test("a port that neither answers nor refuses records no proof, and says to check again (D-497)", async () => {
+    const world = make();
+    const e = world.engine();
+    await e.start();
+    world.fake.stop();
+    // Something holds kanata's port open and never answers: kanata may still be running behind it.
+    const silent = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
+    world.over.endpoint.port = silent.port;
+    try {
+      await expect(e.confirmExitChord(MAC)).rejects.toMatchObject({ code: "kanata_unreadable" });
+      expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
+    } finally {
+      silent.stop(true);
+    }
   });
 
   test("once proved, an edit is applied by itself after the quiet time", async () => {

@@ -199,6 +199,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: () => onOpenRelease(),
     replace_foreign: () => sync.setReplaceAsk(summary.id),
+    // The exit chord is kanata's, and the MacBook is the one board that runs it.
+    check_exit_chord: () => {
+      const remapper = sync.boards.find((b) => b.remapper === true);
+      if (remapper !== undefined) void sync.confirmExitChord(remapper.boardId);
+    },
   });
   // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
   // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.

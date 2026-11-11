@@ -95,8 +95,17 @@ describe("apply on a kanata board", () => {
     const r = await applyKanata({ ...deps, endpoint: { port: fake!.port } }, source("rev_ONE"), "rev_ONE");
     expect(r).toMatchObject({ ok: false, step: "not_connected", written: true });
     expect(existsSync(paths.kbd)).toBe(true);
-    expect((await readRunningKanata({ port: fake!.port })).state).toBe("absent");
+    expect(await readRunningKanata({ port: fake!.port })).toMatchObject({ state: "absent", refused: true });
   });
+
+  test("a port that accepts and never answers is absent but not refused: kanata may still be behind it (D-497)", async () => {
+    const silent = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
+    try {
+      expect(await readRunningKanata({ port: silent.port })).toMatchObject({ state: "absent", refused: false });
+    } finally {
+      silent.stop(true);
+    }
+  }, 10_000);
 
   test("a keyloom.kbd keyloom didn't write is left alone unless asked", async () => {
     const { paths, deps } = setup();

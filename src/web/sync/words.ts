@@ -170,7 +170,7 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): { k
   return null;
 }
 
-export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign";
+export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord";
 
 /**
  * The toast for a sync the server refused, from its code (R1-16). The server's own sentence names CLI commands, so it is never shown;
@@ -188,7 +188,9 @@ export function refusalNotice(code: string | undefined, message: string): Refusa
     case "kanata_not_running": return { message: "kanata isn't running", detail: "The keyboard's status at the top of the page lists what is missing, with a button for each." };
     case "not_connected": return { message: "The keyboard isn't connected", detail: "Plug it in and keyloom checks it." };
     case "busy": return { message: "keyloom is already building or flashing", detail: "Sync again when it finishes." };
-    case "kanata_still_running": return { message: "kanata is still running", detail: "Hold Left Control, Space and Escape together until your MacBook keyboard types plainly, then press the button again." };
+    case "kanata_still_running": return { message: "kanata is still running", detail: "Hold Left Control, Space and Escape together until your MacBook keyboard types plainly, then check again.", action: { id: "check_exit_chord", label: "Check again" } };
+    case "kanata_unreadable": return { message: "keyloom couldn't tell whether kanata stopped", detail: "kanata's port didn't answer, so nothing was recorded. Check again in a moment.", action: { id: "check_exit_chord", label: "Check again" } };
+    case "kanata_not_foreign": return { message: "kanata's config changed, so nothing was replaced", detail: "The keyboard's status at the top of the page shows what kanata runs now." };
     default: return { message: "keyloom couldn't do that", detail: message };
   }
 }

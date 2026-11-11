@@ -28,7 +28,10 @@ export interface SyncApi {
   setPaused: (boardId: string, paused: boolean) => Promise<void>;
   /** "Disable remapping" on a software-remapper board: the identity map, no sudo. */
   disableRemapping: (boardId: string) => Promise<void>;
-  /** "Replace it" on a kanata config keyloom didn't write; keyloom keeps a copy (R1-17). Rejects, so its confirm can say why. */
+  /**
+   * "Replace it" on a kanata config keyloom didn't write; keyloom keeps a copy (R1-17). Rejects, so its confirm can say why, unless the
+   * confirm went stale (kanata no longer runs that config): then it resolves, the confirm closes, and `error` carries the code for the toast.
+   */
   replaceForeign: (layoutId: string) => Promise<void>;
   /** The person held kanata's exit chord and saw it stop (R1-18). */
   confirmExitChord: (boardId: string) => Promise<void>;
@@ -45,6 +48,7 @@ export interface SyncApi {
 }
 
 const RETRY_MIN_MS = 1000;
+const STALE_REPLACE: ReadonlySet<string> = new Set(["kanata_not_foreign", "kanata_not_running", "keyboard_removed"]);
 const RETRY_MAX_MS = 10_000;
 
 // Follows /api/events with fetch, because EventSource can't send the session token. A stream that ends is reopened with a growing
@@ -131,8 +135,16 @@ export function useSync(token: string): SyncApi {
       openSettings: (pane) => request("POST", "/api/system/open-settings", token, SetupActionResponseSchema, undefined, { pane }),
     },
     replaceForeign: async (layoutId) => {
-      const next = (await request("POST", "/api/sync/replace-foreign", token, SyncStatusResponseSchema, undefined, { layoutId })).boards;
-      if (!liveRef.current) setBoards(next);
+      setError(null);
+      try {
+        const next = (await request("POST", "/api/sync/replace-foreign", token, SyncStatusResponseSchema, undefined, { layoutId })).boards;
+        if (!liveRef.current) setBoards(next);
+      } catch (e) {
+        // The confirm is stale when kanata no longer runs that config: pressing Replace it again can't succeed, so the confirm closes
+        // and the toast says what changed. Anything else stays in the confirm, where Replace it can be tried again.
+        if (e instanceof ApiError && e.code !== undefined && STALE_REPLACE.has(e.code)) setError({ message: e.message, code: e.code });
+        else throw e;
+      }
     },
     confirmExitChord: (boardId) => act(async () => (await request("POST", "/api/sync/confirm-exit-chord", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
     setPaused: (boardId, paused) => act(async () => (await request("POST", "/api/sync/pause", token, SyncStatusResponseSchema, undefined, { boardId, paused })).boards),

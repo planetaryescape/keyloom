@@ -129,7 +129,8 @@ export async function disableRemapping(deps: ApplyDeps, safeText: string): Promi
 
 /** What a running kanata is doing, for the sync state. Never throws: no kanata and an unreadable kanata look the same. */
 export type RunningKanata =
-  | { state: "absent"; why: string }
+  /** `refused`: the port refused the connection, so kanata is known to be stopped; false when it only couldn't be read (a timeout). */
+  | { state: "absent"; why: string; refused: boolean }
   | { state: "off" }
   | { state: "keyloom"; revisionId: string; layerNames: string[] }
   | { state: "other"; detail: string };
@@ -140,7 +141,7 @@ export async function readRunningKanata(endpoint: KanataEndpoint): Promise<Runni
   try {
     [keys, names] = await Promise.all([fakeKeyNames(endpoint), layerNames(endpoint)]);
   } catch (err) {
-    return { state: "absent", why: (err as Error).message };
+    return { state: "absent", why: (err as Error).message, refused: err instanceof KanataConnectionError && err.refused };
   }
   if (keys.includes(markerName(SAFE_REVISION))) return { state: "off" };
   const rev = keys.map((k) => new RegExp(`^keyloom-(rev_\\w+|${SETUP_REVISION})$`).exec(k)?.[1]).find((r) => r !== undefined);
