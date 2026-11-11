@@ -64,6 +64,8 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
     buildGate: undefined as Gate | undefined,
     flashGate: undefined as Gate | undefined,
     buildError: undefined as string | undefined,
+    /** The failed build's code, as the real build records it (D-501), such as "docker_unavailable". */
+    buildErrorCode: undefined as string | undefined,
     flashMode: "ok" as FlashMode,
     /** Called on each read of the keyboards, for tests that change the world between a decision and its launch. */
     onRead: undefined as ((n: number) => void) | undefined,
@@ -107,7 +109,7 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
           return { ok: false, buildId: id, error: "the build was stopped" };
         }
         if (world.buildError) {
-          finishBuild(app.db, id, { error: world.buildError });
+          finishBuild(app.db, id, { error: world.buildError, errorCode: world.buildErrorCode ?? null });
           return { ok: false, buildId: id, error: world.buildError };
         }
         finishBuild(app.db, id, { artifactPath: `artifacts/${id}.bin` });

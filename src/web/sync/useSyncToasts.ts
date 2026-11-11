@@ -25,6 +25,10 @@ export function refusalProblem(error: { code?: string | undefined; message: stri
 
 // Says when a change reaches a keyboard, and when it doesn't. The first state after the page opens says nothing: it isn't news.
 export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, handlers: RefusalHandlers = {}): void {
+  // Read at the moment the button is pressed, so the toast acts on the page as it is then.
+  // The keyboard's status popover is on every page that shows these toasts, so its button needs no handler from the page.
+  const latest = useRef<RefusalHandlers>({});
+  latest.current = { open_status: openKeyboardStatus, ...handlers };
   const before = useRef<ReadonlyMap<string, BoardSync> | null>(null);
   useEffect(() => {
     if (!sync.live) return;
@@ -32,16 +36,15 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
     if (before.current !== null) {
       for (const board of sync.boards) {
         const notice = syncNotice(before.current.get(board.boardId), board);
-        if (notice !== null) show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }) });
+        if (notice === null) continue;
+        const id = notice.action?.id;
+        const action = notice.action !== undefined && id !== undefined && latest.current[id] !== undefined ? { action: { label: notice.action.label, run: () => latest.current[id]?.() } } : {};
+        show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...action });
       }
     }
     before.current = now;
   }, [sync.boards, sync.live, show]);
 
-  // Read at the moment the button is pressed, so the toast acts on the page as it is then.
-  // The keyboard's status popover is on every page that shows these toasts, so its button needs no handler from the page.
-  const latest = useRef<RefusalHandlers>({});
-  latest.current = { open_status: openKeyboardStatus, ...handlers };
   useEffect(() => {
     if (sync.error === null) return;
     const notice = refusalNotice(sync.error.code, sync.error.message);

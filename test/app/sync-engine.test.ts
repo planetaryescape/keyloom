@@ -173,6 +173,18 @@ describe("failures leave the keyboard alone and say why", () => {
     expect(before).toBeTruthy();
   });
 
+  test("a build that failed because Docker wasn't ready carries its code to the page (R3-05)", async () => {
+    const w = await world();
+    w.flashed();
+    w.world.buildError = "Docker isn't running, and keyloom couldn't start it.";
+    w.world.buildErrorCode = "docker_unavailable";
+    const e = w.engine();
+    await e.start();
+    w.apply();
+    await waitFor(() => w.stateOf(e)?.kind === "behind" && (w.stateOf(e) as { error: string | null }).error !== null, "the failure");
+    expect(e.views()[0]?.last).toMatchObject({ failure: "build", errorCode: "docker_unavailable" });
+  });
+
   test("a flash that fails is behind with the error and is not repeated by itself", async () => {
     const w = await world();
     w.flashed();

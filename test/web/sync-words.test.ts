@@ -138,6 +138,25 @@ describe("syncNotice", () => {
     });
   });
 
+  // R3-05: Docker's own sentence (which can name a terminal fix) stays in the build log; the toast, the line and the menu bar say this.
+  test("an auto-sync build that failed because Docker wasn't ready offers Build and flash", () => {
+    const raw = "Colima is running, but this account can't use its Docker socket. Quit your Docker app and open it again.";
+    const docker = { ...run("failed"), failure: "build", error: raw, errorCode: "docker_unavailable" };
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: raw }, docker);
+    const notice = syncNotice(at(syncing), failed);
+    expect(notice).toEqual({
+      kind: "error", message: "Docker isn't ready", detail: "keyloom couldn't build the change for your Glove80. Build and flash shows what Docker needs.",
+      action: { id: "open_release", label: "Build and flash…" },
+    });
+    const line = syncLine(failed, "lay_1");
+    expect(line.detail).toStartWith("Docker isn't ready");
+    expect(line.action).toEqual({ id: "open_release", label: "Build and flash…" });
+    expect(JSON.stringify([notice, line])).not.toContain("Quit your Docker app");
+    // Any other build failure keeps its own words: they are the compiler's, and the log has the rest.
+    const other = { ...run("failed"), failure: "build", error: "compile error in keymap.c", errorCode: null };
+    expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "compile error in keymap.c" }, other))?.detail).toBe("compile error in keymap.c");
+  });
+
   test("a failed latest sync cannot produce a success toast from a stale in-sync reading", () => {
     const failed = { ...run("failed"), error: "the left half is absent" };
     expect(syncNotice(at(syncing), at({ kind: "in_sync" }, failed))).toMatchObject({ kind: "error", detail: failed.error });

@@ -634,6 +634,8 @@ export const SyncRunSchema = z.object({
   revisionId: z.string().min(1),
   failure: z.string().nullable(),
   error: z.string().nullable(),
+  /** A failed build's code, such as "docker_unavailable" (R3-05). Absent on older senders. */
+  errorCode: z.string().nullable().optional(),
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),
   timings: z.object({

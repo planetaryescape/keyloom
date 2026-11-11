@@ -39,6 +39,13 @@ const STEP_WORDS = {
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? `1 ${one}` : `${n} ${many}`);
 
+/**
+ * The last sync's build failed because Docker wasn't ready (R3-05). Docker's own sentence is for the build log: it can name an engine's
+ * terminal fix, which the Build and flash dialog turns into a button, so the line and the toast say this instead.
+ */
+const dockerNotReady = (board: BoardSync): boolean => board.last?.failure === "build" && board.last.errorCode === "docker_unavailable";
+const DOCKER_DETAIL = "Docker isn't ready, so keyloom couldn't build the change. Build and flash shows what Docker needs, with a button to fix it.";
+
 /** `selectedLayoutId` is the layout on screen: a keyboard that runs another layout of the same board says so. */
 export function syncLine(board: BoardSync, selectedLayoutId: string | null): SyncLine {
   const name = board.boardName;
@@ -64,7 +71,8 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
     case "behind": {
       const label = s.changes === null || s.changes === 0 ? `Changes not on your ${name}` : `${plural(s.changes, "change", "changes")} not on your ${name}`;
       const detail =
-        s.why === "failed" ? (s.error ?? "The last sync failed.")
+        s.why === "failed" && dockerNotReady(board) ? DOCKER_DETAIL
+        : s.why === "failed" ? (s.error ?? "The last sync failed.")
         : s.why === "waiting" ? (s.error ? `${s.error} Trying again.` : "Syncing in a moment.")
         : s.why === "paused" ? "Auto-sync is paused."
         : s.why === "auto_off" ? "Auto-sync is off for this keyboard."
@@ -159,8 +167,10 @@ export function autoSyncLine(board: BoardSync): AutoSyncLine {
 
 const seconds = (ms: number | null): string | null => (ms === null ? null : `${Math.max(1, Math.round(ms / 1000))} s`);
 
-/** The toast for a board whose state just changed, or null when nothing needs saying. */
-export function syncNotice(before: BoardSync | undefined, after: BoardSync): { kind: "success" | "error"; message: string; detail?: string } | null {
+/** The toast for a board whose state just changed, or null when nothing needs saying. `action` is the toast's button. */
+export type SyncNotice = { kind: "success" | "error"; message: string; detail?: string; action?: { id: RefusalAction; label: string } };
+
+export function syncNotice(before: BoardSync | undefined, after: BoardSync): SyncNotice | null {
   if (before === undefined) return null;
   if (before.state.kind === after.state.kind && !(before.state.kind === "needs_hand" && after.state.kind === "needs_hand" && before.state.instruction !== after.state.instruction)) return null;
   const was = before.state.kind;
@@ -174,6 +184,7 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): { k
     return { kind: "success", message: `On your ${after.boardName}`, ...(took ? { detail: `${took} from your change.` } : {}) };
   }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
+    if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: { id: "open_release", label: "Build and flash…" } };
     return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: now.error ?? "The sync failed." };
   }
   if (now.kind === "needs_hand") return { kind: "error", message: `Your ${after.boardName} needs a hand`, detail: now.instruction };

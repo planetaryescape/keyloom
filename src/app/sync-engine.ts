@@ -52,6 +52,8 @@ export type SyncRunView = {
   revisionId: string;
   failure: SyncRow["failure"];
   error: string | null;
+  /** Why a failed build failed, as its code (D-501), such as "docker_unavailable"; the page maps it to the fix instead of showing `error`. */
+  errorCode: string | null;
   startedAt: number;
   finishedAt: number | null;
   timings: SyncTimings;
@@ -451,6 +453,7 @@ export class SyncEngine {
   private runView(s: SyncRow): SyncRunView {
     return {
       id: s.id, trigger: s.trigger, status: s.status, step: s.step, revisionId: s.revisionId, failure: s.failure, error: s.error,
+      errorCode: s.failure === "build" && s.buildId !== null ? (findBuild(this.app.db, s.buildId)?.errorCode ?? null) : null,
       startedAt: s.startedAt, finishedAt: s.finishedAt, timings: this.timingsOf(s),
     };
   }
