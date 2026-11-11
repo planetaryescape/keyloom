@@ -340,8 +340,8 @@ export type StartDockerOptions = {
   timeoutMs?: number;
   /** How often to ask the daemon again while it starts. */
   pollMs?: number;
-  /** Runs the start command within `budgetMs`, what is left of the deadline; the real one does. A test passes a fake. */
-  start?: (engine: DockerEngine, budgetMs: number) => Promise<{ ok: boolean; detail?: string }>;
+  /** Runs the start command within `budgetMs`, what is left of the deadline, and stops it on `signal`; the real one does. A test passes a fake. */
+  start?: (engine: DockerEngine, budgetMs: number, signal?: AbortSignal) => Promise<{ ok: boolean; detail?: string }>;
   /** Asks the daemon; the real one does. */
   status?: () => Promise<DockerStatus>;
   /** Finds the engine; the real one does. */
@@ -400,7 +400,8 @@ export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<
   opts.onProgress?.(`keyloom: Docker isn't answering, so ${action} ${engine.name} (a cold start can take half a minute)`);
   // With only seconds left, a launch would be killed at once and could leave the engine half started.
   if (deadline - Date.now() < Math.min(MIN_LAUNCH_MS, timeoutMs / 4)) return { ok: false, engine: engine.name, reason: `Docker didn't answer in time, so keyloom didn't start ${engine.name}. Check again in a minute.` };
-  const launched = await start(engine, deadline - Date.now());
+  const launched = await start(engine, deadline - Date.now(), opts.signal);
+  if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped starting ${engine.name}.` };
   if (!launched.ok) {
     return { ok: false, engine: engine.name, reason: `keyloom couldn't start ${engine.name}${launched.detail ? `: ${launched.detail}` : ""}${engine.hint ? `. ${engine.hint}` : ""}` };
   }
@@ -421,11 +422,15 @@ export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<
   return { ok: false, engine: engine.name, reason: `${engine.name} did not answer within ${Math.round(timeoutMs / 1000)} s. Open it, wait for it to say it is running, then build again.` };
 }
 
-/** Runs an engine's start command and waits for it, up to what is left of the start's deadline; `open -a` returns once the app has launched. */
-async function runStart(engine: DockerEngine, budgetMs: number): Promise<{ ok: boolean; detail?: string }> {
+/**
+ * Runs an engine's start command and waits for it, up to what is left of the start's deadline; `open -a` returns once the app has launched.
+ * A cancelled build stops it too, and a launch stopped that way failed, whatever it exited with.
+ */
+export async function runStart(engine: DockerEngine, budgetMs: number, signal?: AbortSignal): Promise<{ ok: boolean; detail?: string }> {
   const [command, ...args] = engine.command;
   if (command === undefined || which(command) === null) return { ok: false, detail: `${engine.command[0]} is not on PATH` };
-  const r = await capture([command, ...args], { timeoutMs: budgetMs });
+  const r = await capture([command, ...args], { timeoutMs: budgetMs, ...(signal === undefined ? {} : { signal }) });
+  if (r.aborted) return { ok: false, detail: "it was stopped" };
   if (r.exitCode === 0) return { ok: true };
   const said = (r.stderr || r.stdout).trim().split("\n").at(-1);
   return { ok: false, detail: said || (r.timedOut ? "it did not start in time" : `it exited with code ${r.exitCode}`) };

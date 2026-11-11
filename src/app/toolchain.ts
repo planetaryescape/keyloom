@@ -21,13 +21,31 @@ export type DockerReadiness =
       access: DockerAccessFix | null;
     };
 
-/** The way out of `no-access`: on Linux a command to paste (it needs sudo and a new login, so keyloom can't run it), on a Mac a sentence. */
+/**
+ * The way out of `no-access`: a command to paste where the fix needs sudo (keyloom can't answer its password prompt), otherwise a
+ * sentence. Linux joins the docker group and needs a new login. Colima creates its socket readable by its owner only, so a socket
+ * this account can't open belongs to another one, usually root after `sudo colima start`: that copy is stopped, the files given back
+ * and Colima started as the person. The Mac apps run as the person, so reopening one gives the socket back.
+ */
 export type DockerAccessFix = { command: string | null; note: string };
 
-export function dockerAccessFix(platform: NodeJS.Platform, engine: string | null): DockerAccessFix {
-  return platform === "linux"
-    ? { command: DOCKER_GROUP_COMMAND, note: "It adds your account to the docker group. Log out and back in so the change takes effect, then open keyloom again." }
-    : { command: null, note: `Quit ${engine ?? "your Docker app"} and open it again, then check again.` };
+export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine | null): DockerAccessFix {
+  if (platform === "linux") {
+    return {
+      command: DOCKER_GROUP_COMMAND,
+      note: "It adds your account to the docker group, which Docker warns grants root-level access to this computer. Log out and back in so the change takes effect, then open keyloom again.",
+    };
+  }
+  if (engine?.command[0] === "colima") {
+    const at = engine.command.indexOf("--profile");
+    const profile = at < 0 ? "" : ` ${engine.command.slice(at, at + 2).join(" ")}`;
+    return {
+      // `env HOME` so sudo stops the copy that runs from this account's ~/.colima, whatever sudo does with HOME.
+      command: `sudo env HOME="$HOME" colima stop${profile}; sudo chown -R "$USER" ~/.colima && colima start${profile}`,
+      note: "Colima's files belong to another account, usually because Colima was started with sudo. This stops that copy, gives the files back to you and starts Colima as you. Then check again.",
+    };
+  }
+  return { command: null, note: `Quit ${engine?.name ?? "your Docker app"} and open it again, then check again.` };
 }
 
 /** The parts a test replaces, so no test launches an app or talks to a daemon. */
@@ -62,7 +80,8 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
 
   // An install or a missing link needs no engine hunt: there is nothing here to start.
   const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();
-  const engine = finding?.kind === "engine" ? finding.engine.name : null;
+  const found = finding?.kind === "engine" ? finding.engine : null;
+  const engine = found?.name ?? null;
   const reason = finding !== null && (finding.kind === "elsewhere" || finding.kind === "unknown") ? finding.detail : now.reason;
   const platform = over.platform ?? process.platform;
   return {
@@ -71,7 +90,7 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     canStart: autoStart && engine !== null && now.kind !== "no-access",
     autoStart,
     install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
-    access: now.kind === "no-access" ? dockerAccessFix(platform, engine) : null,
+    access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
   };
 }
 

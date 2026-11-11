@@ -1,7 +1,7 @@
 // Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
 // it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerContext, type DockerStatus, adoptBundledDockerCli, bundledDockerCli, colimaEngine, dockerInstall, findDockerEngine, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerStatus, adoptBundledDockerCli, bundledDockerCli, colimaEngine, dockerInstall, findDockerEngine, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
 import { fakeBinDir } from "../../helpers/fake-bin.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -205,6 +205,37 @@ describe("starting it", () => {
     expect(budgets[0]).toBeGreaterThan(0);
     expect(budgets[0]).toBeLessThanOrEqual(50);
     expect(result).toMatchObject({ ok: true, version: "29.1.0", engine: "Colima" });
+  });
+
+  test("a cancelled build stops the launch command, and the start fails instead of waiting for Docker", async () => {
+    const stop = new AbortController();
+    const signals: (AbortSignal | undefined)[] = [];
+    const result = await startDockerEngine({
+      status: scriptedStatus([down, up()]).status,
+      detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "start"] } }),
+      // The launch is cancelled while it runs, and reports success anyway: the cancel still wins.
+      start: async (_engine, _budget, signal) => (signals.push(signal), stop.abort(), { ok: true }),
+      sleep: async () => {},
+      signal: stop.signal,
+    });
+    expect(signals).toEqual([stop.signal]);
+    expect(result).toEqual({ ok: false, engine: "Colima", reason: "Stopped starting Colima." });
+  });
+
+  test("the real launch is killed when the signal fires, and counts as failed", async () => {
+    const bin = fakeBinDir({ "keyloom-fake-engine": "exec sleep 30" });
+    const before = process.env.PATH;
+    process.env.PATH = `${bin}:${before}`;
+    try {
+      const stop = new AbortController();
+      setTimeout(() => stop.abort(), 50);
+      const started = Date.now();
+      const r = await runStart({ name: "Fake", command: ["keyloom-fake-engine"] }, 20_000, stop.signal);
+      expect(r).toEqual({ ok: false, detail: "it was stopped" });
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      process.env.PATH = before;
+    }
   });
 
   test("a daemon that refuses this account is not started", async () => {

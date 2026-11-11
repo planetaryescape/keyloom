@@ -1,7 +1,7 @@
 // What a person sees when the Docker a build needs isn't up (D-486, D-487): readiness names the engine and
 // whether keyloom may start it, says where a remote one lives, and offers an install when there is none.
 import { describe, expect, test } from "bun:test";
-import { dockerAutoStart, dockerReadiness, ensureDocker } from "../../src/app/toolchain.ts";
+import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker } from "../../src/app/toolchain.ts";
 import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -63,8 +63,21 @@ describe("a daemon that refuses this account (D-497)", () => {
     const linux = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "the Docker service", command: ["systemctl", "start", "docker"] } }), env: {}, platform: "linux" });
     expect(linux).toMatchObject({ ok: false, problem: "no-access", canStart: false, install: null, access: { command: "sudo usermod -aG docker $USER" } });
     if (!linux.ok) expect(linux.access?.note).toContain("Log out and back in");
-    const mac = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "start"] } }), env: {}, platform: "darwin" });
-    expect(mac).toMatchObject({ ok: false, problem: "no-access", engine: "Colima", canStart: false, access: { command: null, note: "Quit Colima and open it again, then check again." } });
+    // The command is a privilege grant, so the note says what it grants before the person pastes it.
+    if (!linux.ok) expect(linux.access?.note).toContain("root-level access");
+    const mac = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } }), env: {}, platform: "darwin" });
+    expect(mac).toMatchObject({ ok: false, problem: "no-access", engine: "Docker Desktop", canStart: false, access: { command: null, note: "Quit Docker Desktop and open it again, then check again." } });
+  });
+
+  test("Colima, which has no app to reopen, gets the commands that give its socket back, for its own profile", async () => {
+    const colima = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "restart"] } }), env: {}, platform: "darwin" });
+    expect(colima).toMatchObject({
+      ok: false, problem: "no-access", engine: "Colima", canStart: false,
+      access: { command: 'sudo env HOME="$HOME" colima stop; sudo chown -R "$USER" ~/.colima && colima start' },
+    });
+    if (!colima.ok) expect(colima.access?.note).not.toContain("Quit");
+    const work = dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start", "--profile", "work"] });
+    expect(work.command).toBe('sudo env HOME="$HOME" colima stop --profile work; sudo chown -R "$USER" ~/.colima && colima start --profile work');
   });
 
   test("a build says why and starts nothing", async () => {

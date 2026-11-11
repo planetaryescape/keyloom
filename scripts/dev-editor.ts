@@ -64,7 +64,7 @@ const system: SystemBackend = {
   docker: async () => dockerMode === "no-access-linux" || dockerMode === "no-access-mac"
     ? {
         ok: false, problem: "no-access", reason: "Docker is running, but your account isn't allowed to use it.", engine: dockerMode === "no-access-mac" ? "Colima" : "the Docker service",
-        canStart: false, autoStart: true, install: null, access: dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? "Colima" : "the Docker service"),
+        canStart: false, autoStart: true, install: null, access: dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? { name: "Colima", command: ["colima", "start"] } : { name: "the Docker service", command: ["systemctl", "start", "docker"] }),
       }
     : { ok: true, version: "29.0.0", engine: "Docker", autoStart: true },
   startDocker: async () => ({ ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 }),
