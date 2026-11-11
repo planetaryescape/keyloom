@@ -1,6 +1,6 @@
 # 26: keyloom as a desktop app
 
-Status: built through 2026-11-03 (rung 24 plus D-481); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
+Status: built through 2026-11-11 (rung 24, D-481, and D-504's problem window, restarts and log); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 
@@ -52,5 +52,6 @@ D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D
 - **Fonts are bundled (D-326)** into the web bundle, for the app and for a browser tab alike.
 - **Signing.** Tauri signs the shell and the sidecar with hardened runtime and `Entitlements.plist` (the three bun entitlements, applied to both binaries). The CI job is in `release.yml`, steps and secrets in `desktop/tauri/README.md`.
 - **Install.** A Homebrew cask is prepared at `packaging/homebrew/keyloom.rb` for `planetaryescape/homebrew-tap`. The updater is compiled in only with a key (D-328).
-- **Updates (D-481).** When a signed update is available, the app notifies the user and offers a version-specific install-and-restart action in the menu bar. It downloads only after the user chooses; a successful install requests restart through the normal exit path, and a failed install leaves the action available to retry.
+- **No dead end when the server is missing (D-504).** A server that can't start, or stops more than three times in ten minutes, opens a problem window with **Try again** and **Show log** (and the CLI's replace offer, or the app update when a newer keyloom is in the way); the menu bar adds **Try starting keyloom again**. A server the shell started is started again after it exits, after 1 s, 5 s and 15 s. The shell's log is `~/Library/Logs/dev.planetaryescape.keyloom/keyloom.log`. Not exercised in a running app yet: checked by `cargo test`, `cargo clippy` and rendering the page.
+- **Updates (D-481).** When a signed update is available, the app notifies the user and offers a version-specific install-and-restart action in the menu bar. It downloads only after the user chooses; a successful install requests restart through the normal exit path, and a failed install checks again at once, which offers the action again. After an empty or failed check the item reads **Check for updates** and stays enabled (D-504).
 - **Measured on BK's Mac (Apple Silicon):** 70 MB `.app` (72,088 KB on disk), server listening 0.6 s after launch.

@@ -1,6 +1,6 @@
 # 19: Model providers: Codex subscription, OpenRouter key or Anthropic key
 
-Status: built in rung 10, 2026-10-15. Saving a pasted key in the Keychain or Secret Service, and Sign in with Codex from the app, built 2026-11-11 (D-496). Source baseline: origin/main at `65cc12a` (v0.10.1). Results: S19 and S20 in [15](15-open-questions.md).
+Status: built in rung 10, 2026-10-15. Saving a pasted key in the Keychain or Secret Service, and Sign in with Codex from the app, built 2026-11-11 (D-496). A provider fixed by `KEYLOOM_PROVIDER` or `--provider` is the only one the setup offers, and a refusing key store offers the environment variable, 2026-11-11 (D-505). Source baseline: origin/main at `65cc12a` (v0.10.1). Results: S19 and S20 in [15](15-open-questions.md).
 
 BK: "use codex cli for AI I think it allow you to use codex sub with it's agent sdk if I'm not mistaken, we can use that. Also make it possible for me to use an openrouter api key". This came after the Anthropic account behind keyloom's key ran out of credits, which stopped the chat and the live evals.
 

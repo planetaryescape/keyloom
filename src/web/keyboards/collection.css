@@ -51,6 +51,8 @@
 .onboarding-halves { display: none; }
 .onboarding-panel .nb-panel { position: relative; width: 100%; height: auto; }
 .onboarding-contribution a { color: var(--ink); }
+/* "Manage keyboards" in the sentence reads at the sentence's size (R1-30). */
+.onboarding-contribution .link-button { color: var(--ink); font-size: inherit; }
 @media (max-width: 900px) {
   .onboarding-workbench[data-panel] { grid-template-columns: minmax(0, 1fr); }
   .keyboard-welcome { padding: var(--space-3); }
