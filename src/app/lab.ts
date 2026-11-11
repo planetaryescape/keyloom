@@ -8,6 +8,7 @@ import type { CaptureHooks, CapturedTrace, KeyCapture } from "../firmware/emulat
 import { findQmkStreamDevice, startQmkCapture } from "../firmware/qmk/typing-capture.ts";
 import { defaultHidTransport } from "../firmware/toolchain/hid-default.ts";
 import { DeviceTransportError } from "../firmware/toolchain/device-helper/transport-client.ts";
+import { HelperCleanupUnconfirmedError } from "../firmware/toolchain/device-helper/setup-failure.ts";
 import { defaultSerialTransport } from "../firmware/toolchain/serial-default.ts";
 import { findZmkStreamPort, startZmkCapture } from "../firmware/zmk/typing-capture.ts";
 import { CaptureError, incompleteRecording } from "../firmware/emulate/trace.ts";
@@ -117,9 +118,11 @@ export async function beginRecording(
     if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
       throw accessRefused(err.detail.code, view.board.definition.firmware);
     }
+    // A dead helper is replaced on the next try (R4-03), so this one is worth repeating; an old one that may still hold the keyboard isn't.
     if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
-      throw new LabCaptureError("restart_required");
+      throw new LabCaptureError("connection_lost");
     }
+    if (err instanceof HelperCleanupUnconfirmedError) throw new LabCaptureError("restart_required");
     if (err instanceof CaptureError) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
     throw err;
   }

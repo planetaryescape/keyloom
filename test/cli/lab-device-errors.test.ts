@@ -35,8 +35,8 @@ test("CLI keeps the JSON error parseable and announces before capture", async ()
       expect(JSON.parse(err.trim())).toEqual({
         schema_version: 1,
         error: {
-          code: "restart_required",
-          message: "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.",
+          code: "connection_lost",
+          message: "The keyboard connection stopped responding. Try again, and keyloom opens a new one.",
         },
       });
       expect(events.indexOf("stdout")).toBeLessThan(events.indexOf("capture"));
@@ -55,12 +55,12 @@ test("CLI keeps the JSON error parseable and announces before capture", async ()
       },
     });
     expect(tableErr).toContain("keyloom is recording this keyboard's key presses");
-    expect(tableErr).toContain("The keyboard connection has stopped responding.");
+    expect(tableErr).toContain("The keyboard connection stopped responding.");
     expect(existsSync(join(app.dataDir, "logs"))).toBe(false);
   } finally { app.db.close(); }
 });
 
-for (const code of ["busy", "permission_denied", "restart_required"] as const) {
+for (const code of ["busy", "permission_denied", "connection_lost", "restart_required"] as const) {
   test(`CLI treats ${code} as an actionable refusal, not an unexpected bug`, () => {
     const data = tempDir();
     const error = new LabCaptureError(code);

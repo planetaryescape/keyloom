@@ -83,7 +83,7 @@ test("denied keyboard access returns the platform remedy without retrying", asyn
 });
 
 for (const code of ["helper_exited", "protocol_error", "timeout"] as const) {
-  test(`${code} requires restarting the long-lived keyloom process without retrying or exposing details`, async () => {
+  test(`${code} asks for another try, which gets a new helper (R4-03), without retrying by itself or exposing details`, async () => {
     const error = new DeviceTransportError({ code, effect: "possible", retry: "never" });
     const log = spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -91,8 +91,8 @@ for (const code of ["helper_exited", "protocol_error", "timeout"] as const) {
       expect(result.response.status).toBe(409);
       expect(await result.response.json()).toEqual({
         error: {
-          code: "restart_required",
-          message: "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.",
+          code: "connection_lost",
+          message: "The keyboard connection stopped responding. Try again, and keyloom opens a new one.",
         },
       });
       expect(result.opens()).toBe(1);

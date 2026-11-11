@@ -110,3 +110,44 @@ test("both adapters share one owner and failed cleanup stays latched for both", 
   await expect(owner.transport()).rejects.toThrow("start a new command");
   expect(connects).toBe(1); expect(closes).toBe(1);
 });
+
+test("a helper that died after setup is replaced on the next transport(), once its termination is observed (R4-03)", async () => {
+  let dead = false, connects = 0, closes = 0;
+  const owner = new CandidateHidOwner(async () => {
+    connects++;
+    const mine = connects;
+    return { transport, shutdown: async () => { closes++; }, dead: () => mine === 1 && dead };
+  });
+  await owner.transport();
+  dead = true;
+  // Two callers at once share one replacement: never two children for one device.
+  await Promise.all([owner.transport(), owner.transport()]);
+  expect(connects).toBe(2);
+  expect(closes).toBe(1);
+  await owner.transport();
+  expect(connects).toBe(2);
+  await owner.shutdown();
+  expect(closes).toBe(2);
+});
+
+test("a dead helper whose termination can't be confirmed is never replaced, and the owner says restart (R4-03)", async () => {
+  let connects = 0;
+  const owner = new CandidateHidOwner(async () => {
+    connects++;
+    return { transport, shutdown: async () => { throw new Error("kill not observed"); }, dead: () => true };
+  });
+  await owner.transport();
+  await expect(owner.transport()).rejects.toBeInstanceOf(HelperCleanupUnconfirmedError);
+  await expect(owner.transport()).rejects.toBeInstanceOf(HelperCleanupUnconfirmedError);
+  await expect(owner.shutdown()).rejects.toBeInstanceOf(HelperCleanupUnconfirmedError);
+  expect(connects).toBe(1);
+});
+
+test("a dead helper isn't replaced after shutdown began", async () => {
+  let connects = 0;
+  const owner = new CandidateHidOwner(async () => { connects++; return { transport, shutdown: async () => {}, dead: () => true }; });
+  await owner.transport();
+  await owner.shutdown();
+  await expect(owner.transport()).rejects.toThrow("start a new command");
+  expect(connects).toBe(1);
+});

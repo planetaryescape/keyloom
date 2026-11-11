@@ -142,3 +142,29 @@ test("shutdown rejects when helper exit cannot be observed", async () => {
   const client = await DeviceTransportClient.connect("/synthetic", manifest, () => child);
   await expect(client.shutdown()).rejects.toThrow();
 }, 5_000);
+
+test("a helper that exits after setup is dead, and its owner starts one new child after observing the exit (R4-03)", async () => {
+  const { CandidateDeviceOwner } = await import("../../../src/firmware/toolchain/device-helper/owner.ts");
+  const { ownClient } = await import("../../../src/firmware/toolchain/device-helper/setup.ts");
+  const fake = fixture("valid");
+  const owner = new CandidateDeviceOwner<DeviceTransportClient>(async () => {
+    const client = await fake.connect();
+    return ownClient(client, () => client);
+  });
+  try {
+    const first = await owner.transport();
+    expect(first.deadCode).toBeUndefined();
+    fake.children[0]!.kill("SIGKILL");
+    await fake.children[0]!.exited;
+    // The exit is noticed by the client's own watch on the child.
+    for (let i = 0; i < 50 && first.deadCode === undefined; i++) await Bun.sleep(10);
+    expect(first.deadCode).toBe("helper_exited");
+    const second = await owner.transport();
+    expect(second).not.toBe(first);
+    expect(fake.launches()).toBe(2);
+    await expect(second.request("ping", {}, z.object({}), 500)).resolves.toEqual({});
+  } finally {
+    await owner.shutdown();
+    for (const child of fake.children) child.kill("SIGKILL");
+  }
+});

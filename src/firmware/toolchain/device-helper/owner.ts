@@ -7,14 +7,26 @@ import { helperHidTransport, packagedHidTransport } from "./hid.ts";
 import { packagedTransport } from "./setup.ts";
 import { NATIVE_CAPABILITIES } from "./transport-protocol.ts";
 
-type Owned<T> = { transport: T; shutdown(): Promise<void> };
-/** One explicitly selected parent lifetime. Failed setup and cleanup never create a replacement child. */
+/** `dead` says the child's channel died (exited, broke the protocol, stopped answering), so it will never serve again. */
+type Owned<T> = { transport: T; shutdown(): Promise<void>; dead?(): boolean };
+/**
+ * One explicitly selected parent lifetime. Failed setup and cleanup never create a replacement child. A child whose channel died after
+ * setup is replaced on the next `transport()`, but only once its termination is observed (R4-03): nothing is replayed, sessions on the
+ * dead child stay failed, and a termination that can't be confirmed latches like failed cleanup, so two children never own the device.
+ */
 export class CandidateDeviceOwner<T = HidTransport> {
   private owned: Promise<Owned<T>> | undefined;
   private closing: Promise<void> | undefined;
   constructor(private readonly connect: () => Promise<Owned<T>>, private readonly stoppedError: () => Error = () => new HidError("the keyboard connection has shut down; start a new command")) {}
   async transport(): Promise<T> {
     if (this.closing) throw this.stoppedError();
+    const current = this.owned;
+    if (current !== undefined) {
+      // A setup failure stays latched: only a child that set up and then died is replaced.
+      const settled = await current.catch(() => undefined);
+      if (settled?.dead?.() === true && this.owned === current && !this.closing) this.owned = this.replace(settled);
+      if (this.closing) throw this.stoppedError();
+    }
     this.owned ??= Promise.resolve().then(this.connect);
     try {
       return (await this.owned).transport;
@@ -22,6 +34,15 @@ export class CandidateDeviceOwner<T = HidTransport> {
       if (error instanceof HelperSetupFailure) throw error.original;
       throw error;
     }
+  }
+  private async replace(dead: Owned<T>): Promise<Owned<T>> {
+    try {
+      await dead.shutdown();
+    } catch {
+      // The dead child may still hold the device. Latched: shutdown() and every later transport() report it, and nothing starts.
+      throw new HelperCleanupUnconfirmedError();
+    }
+    return this.connect();
   }
   shutdown(): Promise<void> {
     this.closing ??= (async () => {
