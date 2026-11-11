@@ -18,22 +18,26 @@ export type BusyRetryOptions = {
 
 /**
  * Runs `request` until it answers anything but `busy`. Past the time limit the last refusal is thrown with the code `busy_timed_out`, so
- * the page stops promising a sync. An aborted signal (the page went away, or another Sync now replaced this one) resolves undefined.
+ * the page stops promising a sync; the limit is checked before every retry, so a tab the browser suspended past it never syncs late. An
+ * aborted signal (the page went away, or another Sync now replaced this one) resolves undefined, and an answer that arrives after the
+ * abort is dropped. `request` gets the signal, so an aborted one stops the request itself.
  */
-export async function retryWhileBusy<T>(request: () => Promise<T>, opts: BusyRetryOptions): Promise<T | undefined> {
+export async function retryWhileBusy<T>(request: (signal: AbortSignal) => Promise<T>, opts: BusyRetryOptions): Promise<T | undefined> {
   const now = opts.now ?? Date.now;
   const wait = opts.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const until = now() + (opts.forMs ?? BUSY_RETRY_FOR_MS);
-  let told = false;
+  let last: ApiError | undefined;
   for (;;) {
     if (opts.signal.aborted) return undefined;
+    if (last !== undefined && now() >= until) throw new ApiError(last.status, last.message, { code: "busy_timed_out" });
     try {
-      return await request();
+      const answer = await request(opts.signal);
+      return opts.signal.aborted ? undefined : answer;
     } catch (error) {
+      if (opts.signal.aborted) return undefined;
       if (!(error instanceof ApiError) || error.code !== "busy") throw error;
-      if (now() >= until) throw new ApiError(error.status, error.message, { code: "busy_timed_out" });
-      if (!told) opts.onBusy(error);
-      told = true;
+      if (last === undefined) opts.onBusy(error);
+      last = error;
     }
     await wait(opts.everyMs ?? BUSY_RETRY_EVERY_MS);
   }

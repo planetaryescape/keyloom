@@ -125,6 +125,8 @@ describe("setupSteps", () => {
     const rules = (findings: Parameters<typeof status>[0]) => setupSteps(status(findings)).find((s) => s.key === "karabiner");
     expect(rules([...fresh, f("karabiner_config", "warn"), f("karabiner_elements", "warn")])?.actions).toEqual([{ id: { kind: "open_settings", pane: "karabiner_elements" }, label: "Open Karabiner-Elements" }]);
     expect(rules([...fresh, f("karabiner_config", "warn")])?.actions).toEqual([]);
+    // The conflict matters while kanata runs, so the running view keeps the step and its button.
+    expect(attentionSteps(status([...running, f("karabiner_config", "warn"), f("karabiner_elements", "warn")])).find((s) => s.key === "karabiner")?.actions).toHaveLength(1);
   });
 
   test("no step shows a command to paste", () => {

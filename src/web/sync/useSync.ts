@@ -25,6 +25,8 @@ export interface SyncApi {
   /** Why the last action failed, until the next one starts. `code` is the server's (R1-16), which the toast turns into an action. */
   error: { message: string; code: string | undefined } | null;
   syncNow: (layoutId: string) => Promise<void>;
+  /** Stops a Sync now that waits for a running build or flash (R3-18). The layout page calls it when it closes, since this hook outlives it. */
+  stopWaiting: () => void;
   setAuto: (boardId: string, enabled: boolean) => Promise<void>;
   setPaused: (boardId: string, paused: boolean) => Promise<void>;
   /** "Disable remapping" on a software-remapper board: the identity map, no sudo. */
@@ -127,11 +129,15 @@ export function useSync(token: string): SyncApi {
     waiting.current = controller;
     setError(null);
     try {
-      const answer = await retryWhileBusy(() => request("POST", "/api/sync", token, SyncNowResponseSchema, undefined, { layoutId }), {
+      const answer = await retryWhileBusy((signal) => request("POST", "/api/sync", token, SyncNowResponseSchema, signal, { layoutId }), {
         signal: controller.signal,
         onBusy: (e) => setError({ message: e.message, code: "busy_waiting" }),
       });
-      if (answer !== undefined && !liveRef.current) setBoards(answer.boards);
+      if (answer !== undefined) {
+        // The wait is over, so "keyloom syncs this when that finishes" no longer holds, whether or not the stream is live.
+        setError((e) => (e?.code === "busy_waiting" ? null : e));
+        if (!liveRef.current) setBoards(answer.boards);
+      }
     } catch (e) {
       if (!controller.signal.aborted) setError(asSyncError(e));
     } finally {
@@ -151,6 +157,7 @@ export function useSync(token: string): SyncApi {
   return {
     boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, tokenRejected, error, replaceAsk, setReplaceAsk,
     syncNow,
+    stopWaiting: () => waiting.current?.abort(),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),
     disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
     remapperSetup: {

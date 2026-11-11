@@ -35,7 +35,7 @@ describe("refusalProblem", () => {
 
   test("a refusal whose fix this page lacks opens the config whose page has it, and says which button is there", () => {
     let opened = 0;
-    const problem = refusalProblem(refused("kanata_not_running"), {}, { name: "Travel", open: () => void opened++ });
+    const problem = refusalProblem(refused("kanata_not_running"), {}, () => ({ name: "Travel", open: () => void opened++ }));
     expect(problem).toMatchObject({
       message: "kanata isn't running",
       detail: "The keyboard's status lists what is missing, with a button for each. Travel's page has Open keyboard status.",
@@ -43,10 +43,18 @@ describe("refusalProblem", () => {
     });
     problem?.action?.run();
     expect(opened).toBe(1);
-    expect(refusalProblem(refused("foreign_firmware"), {}, { name: "Travel", open: () => {} })?.detail).toEndWith("Travel's page has Build and flash.");
+    expect(refusalProblem(refused("foreign_firmware"), {}, () => ({ name: "Travel", open: () => {} }))?.detail).toEndWith("Travel's page has Build and flash.");
     // A handler on this page wins, and a refusal with no fix anywhere gets no button.
-    expect(refusalProblem(refused("foreign_firmware"), { open_release: () => {} }, { name: "Travel", open: () => {} })?.action?.label).toBe("Build and flash…");
-    expect(refusalProblem(refused("not_connected"), {}, { name: "Travel", open: () => {} })?.action).toBeUndefined();
+    expect(refusalProblem(refused("foreign_firmware"), { open_release: () => {} }, () => ({ name: "Travel", open: () => {} }))?.action?.label).toBe("Build and flash…");
+    expect(refusalProblem(refused("not_connected"), {}, () => ({ name: "Travel", open: () => {} }))?.action).toBeUndefined();
+  });
+
+  test("the page with the fix is chosen per fix: a fix no other page has keeps the words and no button", () => {
+    const onlyBuild = (action: string) => (action === "open_release" ? { name: "Travel", open: () => {} } : undefined);
+    expect(refusalProblem(refused("foreign_firmware"), {}, onlyBuild)?.action?.label).toBe("Open Travel");
+    const status = refusalProblem(refused("kanata_not_running"), {}, onlyBuild);
+    expect(status?.action).toBeUndefined();
+    expect(status?.detail).not.toContain("Travel");
   });
 
   test("a failure that isn't a refusal is left to the caller", () => {

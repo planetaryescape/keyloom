@@ -88,7 +88,7 @@ import { keyForChar } from "./panel/slots.ts";
 import { Caption } from "./shell/Caption.tsx";
 import { boardDisplayName, boardEntries } from "./shell/Header.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
-import { boardLight, openKeyboardStatus, SyncStatus } from "./sync/SyncStatus.tsx";
+import { boardLight, openKeyboardStatus, ReplaceForeignHost, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
 import { AfterApplyContext, type AfterApplyKeyboard, afterApplyRun } from "./release/AfterApply.tsx";
 import { afterApply } from "./release/flash-words.ts";
@@ -142,7 +142,7 @@ interface ViewerProps {
 }
 
 /** What a board or config switch carries to the next layout (D-317). */
-export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean; review?: boolean; conversationId?: string; continueCopy?: boolean };
+export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean; review?: boolean; conversationId?: string; continueCopy?: boolean; /** Open the keyboard's status popover. */ status?: boolean };
 
 // `resume` is a draft kept from an earlier visit to this key (D-317); the card opens on it.
 type Editing = { layerId: string; position: number; focus: boolean; resume?: Draft };
@@ -199,8 +199,25 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const toasts = useToasts();
   // A refused sync's toast offers the fix (R1-16); each handler is the same one the page's own control uses.
+  // The status popover hangs off the sync pill. A config that isn't on the keyboard shows EditingStatus in its place (D-315), so there it
+  // opens on the keyboard's config, which opens the popover when it arrives.
+  const openStatus = () => {
+    if (editingOther && keyboardConfig !== null) switchLayout(keyboardConfig.id, { status: true });
+    else openKeyboardStatus();
+  };
+  useEffect(() => {
+    if (chrome.arrival?.status !== true) return;
+    const frame = requestAnimationFrame(openKeyboardStatus);
+    return () => cancelAnimationFrame(frame);
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A Sync now waiting for a build or flash belongs to this page: the sync hook outlives it, so leaving stops the wait.
+  const stopWaiting = useRef(sync.stopWaiting);
+  stopWaiting.current = sync.stopWaiting;
+  useEffect(() => () => stopWaiting.current(), []);
   const refusalHandlers: RefusalHandlers = {
-    open_status: openKeyboardStatus,
+    open_status: openStatus,
     restore: () => void restoreArchived(summary.id),
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: () => onOpenRelease(),
@@ -234,10 +251,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // A toast about another keyboard opens that keyboard's page, where its fix is, not this layout's Build and flash.
   useSyncToasts(sync, toasts.show, refusalHandlers, { boardId: summary.boardId, openBoard });
   // A refused put-on says why in its dialog, with the same fix as the toast (R3-01). Restore and Replace it act on the config being put on.
-  const putOnProblem = (target: { id: string }) => (error: unknown) =>
-    error instanceof ApiError
-      ? refusalProblem(error, { ...refusalHandlers, restore: () => void restoreArchived(target.id), replace_foreign: () => sync.setReplaceAsk(target.id) })
-      : null;
+  // Build and flash here builds this layout, so a put-on of another config opens that config, whose Build and flash builds it.
+  const putOnProblem = (target: { id: string; name: string }) => (error: unknown) => {
+    if (!(error instanceof ApiError)) return null;
+    const handlers: RefusalHandlers = { ...refusalHandlers, restore: () => void restoreArchived(target.id), replace_foreign: () => sync.setReplaceAsk(target.id) };
+    if (target.id === summary.id) return refusalProblem(error, handlers);
+    delete handlers.open_release;
+    return refusalProblem(error, handlers, (action) => (action === "open_release" ? { name: target.name, open: () => switchLayout(target.id) } : undefined));
+  };
   // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
   // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.
   const [unsynced, setUnsynced] = useState<{ layerId: string; position: number }[]>([]);
@@ -247,7 +268,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     board: { firmware: board.firmware, name: boardDisplayName(board.name) }, layoutId: summary.id, revisionId: revision.id, sync: boardSync,
     onApplyNow: () => void sync.syncNow(summary.id),
     onPutOn: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
-    onOpenStatus: openKeyboardStatus,
+    onOpenStatus: openStatus,
     onReplaceForeign: () => sync.setReplaceAsk(summary.id),
   };
   const synced = boardSync !== undefined && boardSync.layoutId === summary.id && boardSync.state.kind === "in_sync";
@@ -1392,20 +1413,20 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
    * Opens another board or config, carrying the layer by name and the chat (D-317). A conversation belongs to one layout, so the thread
    * travels as what was on screen: this layout's turns, after any it had carried in itself, so a run of switches keeps the whole thread.
    */
+  function switchLayout(id: string, extra: Partial<Arrival> = {}) {
+    const handoff = turnsNow.current.flatMap((turn) => turn.kind === "assistant" && turn.presentation?.handoff?.layoutId === id ? [turn.presentation.handoff] : []).at(-1);
+    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry(), ...(handoff === undefined ? {} : { conversationId: handoff.conversationId }), ...extra };
+    if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
+    else chrome.onSelect(id);
+    // A config made since the page loaded isn't in the page's list yet, and selecting an unknown one leaves the page on its skeleton.
+    if (!chrome.layouts.some((candidate) => candidate.id === id)) chrome.onReload?.(id);
+  }
+
   // A board opens on the config its keyboard runs (D-315), else its first.
   function openBoard(boardId: string) {
     const running = sync.boards.find((candidate) => candidate.boardId === boardId)?.layoutId;
     const target = chrome.layouts.find((candidate) => candidate.id === running) ?? chrome.layouts.find((candidate) => candidate.boardId === boardId);
     if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
-  }
-
-  function switchLayout(id: string) {
-    const handoff = turnsNow.current.flatMap((turn) => turn.kind === "assistant" && turn.presentation?.handoff?.layoutId === id ? [turn.presentation.handoff] : []).at(-1);
-    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry(), ...(handoff === undefined ? {} : { conversationId: handoff.conversationId }) };
-    if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
-    else chrome.onSelect(id);
-    // A config made since the page loaded isn't in the page's list yet, and selecting an unknown one leaves the page on its skeleton.
-    if (!chrome.layouts.some((candidate) => candidate.id === id)) chrome.onReload?.(id);
   }
 
   /** The thread as it stands, with the config it was about, so the next page can show it and its config cards can go back. */
@@ -1848,7 +1869,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         )}
         sync={
           editingOther && keyboardConfig !== null ? (
-            <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
+            <>
+              <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
+              {/* SyncStatus isn't here to host Replace it, which a refused put-on of this config asks for. */}
+              <ReplaceForeignHost sync={sync} boardId={summary.boardId} />
+            </>
           ) : (
             <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
           )

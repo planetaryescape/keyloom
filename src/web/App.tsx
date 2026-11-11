@@ -525,9 +525,11 @@ function MismatchState({ token, summary, kanata, problem, fixable, onHome, onRel
           await useConfig(token, other.id);
           configs.reload();
         }}
-        // This page has none of the refusals' fixes (no keyboard status, no Build and flash), so their button opens the config being put
-        // on, whose page has each one.
-        problemFor={(error) => (error instanceof ApiError ? refusalProblem(error, {}, onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }) : null)}
+        // This page has none of the refusals' fixes, so their button opens the config being put on, whose page has Build and flash and
+        // Replace it. Not keyboard status: a config that isn't on the keyboard opens that on the keyboard's config, which is this page.
+        problemFor={(error) => (error instanceof ApiError
+          ? refusalProblem(error, {}, (action) => (action === "open_status" || onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }))
+          : null)}
         onClose={() => setPutting(false)}
       />
     ) : null}

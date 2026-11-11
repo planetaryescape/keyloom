@@ -181,7 +181,8 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     // The button only where the app is there to open: the doctor's karabiner_elements finding is its installed copy (R3-21).
     const installed = find("karabiner_elements") !== undefined;
     steps.push(step({
-      key: "karabiner", state: "note", title: "Karabiner-Elements also takes this keyboard", detail: "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it.",
+      // While kanata runs is when both remappers grab the keyboard, so the running view keeps this step (whileRunning).
+      key: "karabiner", state: "note", title: "Karabiner-Elements also takes this keyboard", whileRunning: true, detail: "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it.",
       actions: mac && installed ? [{ id: { kind: "open_settings", pane: "karabiner_elements" }, label: "Open Karabiner-Elements" }] : [],
     }));
   }

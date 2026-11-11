@@ -200,9 +200,15 @@ export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease,
           onPutOn={onPutOn}
         />
       ))}
-      {sync.replaceAsk === null ? null : <ReplaceForeignDialog sync={sync} layoutId={sync.replaceAsk} board={shown.find((b) => b.remapper === true)} />}
+      <ReplaceForeignHost sync={sync} boardId={boardId} />
     </div>
   );
+}
+
+/** The Replace it confirm while one is asked for. A page showing EditingStatus in place of the pill mounts it too, for a refused put-on. */
+export function ReplaceForeignHost({ sync, boardId }: { sync: SyncApi; boardId: string }) {
+  if (sync.replaceAsk === null) return null;
+  return <ReplaceForeignDialog sync={sync} layoutId={sync.replaceAsk} board={sync.boards.find((b) => b.boardId === boardId && b.remapper === true)} />;
 }
 
 /**

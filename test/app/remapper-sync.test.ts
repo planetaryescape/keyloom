@@ -5,6 +5,8 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { UsageError, applyOps, applyToRemapper } from "../../src/app/index.ts";
 import { findLayoutRow } from "../../src/persistence/layouts.ts";
+import { getBoardConfig } from "../../src/persistence/configs.ts";
+import { newConfig } from "../../src/app/configs.ts";
 import { SyncRefusal } from "../../src/app/sync-engine.ts";
 import { activeSyncs, claimSync, getBoardSync, newSyncId } from "../../src/persistence/syncs.ts";
 import { lastSyncOfBoard } from "../../src/persistence/syncs.ts";
@@ -125,6 +127,20 @@ describe("the MacBook's sync state", () => {
     expect(kind(e)).toEqual({ kind: "in_sync" });
     // It ran as a claimed sync, so another process saw the keyboard busy while it wrote.
     expect(lastSyncOfBoard(world.app.db, MAC)).toMatchObject({ trigger: "manual", status: "succeeded" });
+  });
+
+  test("Replace it from a refused put-on makes the config put on the board's config", async () => {
+    const world = make();
+    const other = newConfig(world.app, { name: "Travel", from: "config", config: world.layoutId }).id;
+    writeFileSync(world.paths.kbd, "(defsrc a)\n(deflayer base a)\n");
+    const { reloadFile } = await import("../../src/firmware/kanata/client.ts");
+    await reloadFile({ port: world.fake.port }, world.paths.kbd);
+    const e = world.engine();
+    await e.start();
+    expect(getBoardConfig(world.app.db, MAC)).not.toBe(other);
+    await e.replaceForeignRemapperConfig(other);
+    expect(getBoardConfig(world.app.db, MAC)).toBe(other);
+    expect(e.views().find((v) => v.boardId === MAC)).toMatchObject({ layoutId: other, state: { kind: "in_sync" } });
   });
 
   test("Replace it after remapping was switched off is a stale confirm: refused, and remapping stays off", async () => {

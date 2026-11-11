@@ -16,22 +16,23 @@ const buttonFor = (action: { id: RefusalAction; label: string } | undefined, han
  * A refused request (its server code) as words and the button that fixes it, for a dialog that shows it in place of a toast (R3-01).
  * Null for a failure that isn't a refusal, which the caller says in its own words.
  */
-export function refusalProblem(error: { code?: string | undefined }, handlers: RefusalHandlers, elsewhere?: Elsewhere): ConfirmProblem | null {
+export function refusalProblem(error: { code?: string | undefined }, handlers: RefusalHandlers, elsewhere?: (action: RefusalAction) => Elsewhere | undefined): ConfirmProblem | null {
   const notice = knownRefusal(error.code);
   if (notice === null) return null;
   const action = buttonFor(notice.action, () => handlers);
-  // A fix this page doesn't have is on the config's own page, so the button goes there instead of leaving the dialog without one.
-  if (action === undefined && notice.action !== undefined && elsewhere !== undefined) {
+  // A fix this page doesn't have is on another config's page, so the button goes there instead of leaving the dialog without one.
+  const there = action === undefined && notice.action !== undefined ? elsewhere?.(notice.action.id) : undefined;
+  if (there !== undefined && notice.action !== undefined) {
     return {
       message: notice.message,
-      detail: `${notice.detail ?? ""} ${elsewhere.name}'s page has ${notice.action.label.replace(/…$/, "")}.`.trim(),
-      action: { label: `Open ${elsewhere.name}`, run: elsewhere.open },
+      detail: `${notice.detail ?? ""} ${there.name}'s page has ${notice.action.label.replace(/…$/, "")}.`.trim(),
+      action: { label: `Open ${there.name}`, run: there.open },
     };
   }
   return { message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) };
 }
 
-/** The page that has a refusal's fix when this one doesn't: the config being put on, by name. */
+/** The page that has a refusal's fix when this one doesn't: a config, by name. */
 export type Elsewhere = { name: string; open: () => void };
 
 /** The board on screen, and how to open another board's page, which a toast about that board offers. */

@@ -36,6 +36,23 @@ describe("retryWhileBusy", () => {
     expect(calls).toBe(1);
   });
 
+  test("a tab suspended past the time limit doesn't sync late: the limit is checked before each retry", async () => {
+    let clock = 0;
+    let calls = 0;
+    // One wait that lasts an hour, as a suspended tab's timer would.
+    const run = retryWhileBusy(async () => (calls++, Promise.reject(busy())), { signal: new AbortController().signal, onBusy: () => {}, now: () => clock, wait: async () => void (clock += 3_600_000), forMs: 5000 });
+    await expect(run).rejects.toMatchObject({ code: "busy_timed_out" });
+    expect(calls).toBe(1);
+  });
+
+  test("the request gets the signal, and an answer that arrives after an abort is dropped", async () => {
+    const controller = new AbortController();
+    let seen: AbortSignal | undefined;
+    const answer = await retryWhileBusy(async (signal) => { seen = signal; controller.abort(); return "late"; }, { signal: controller.signal, onBusy: () => {}, wait: async () => {} });
+    expect(seen).toBe(controller.signal);
+    expect(answer).toBeUndefined();
+  });
+
   test("the words never name CLI commands, and only the waiting Sync now promises a sync", () => {
     expect(refusalNotice("busy_waiting", busy().message).detail).toBe("keyloom syncs this when that finishes.");
     expect(refusalNotice("busy", busy().message).detail).toBe("Try again when it finishes.");
