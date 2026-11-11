@@ -86,6 +86,6 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
         </section>;
       })}
     </div>
-    <footer className="collection-foot"><div><a href={GUIDE} target="_blank" rel="noopener">Model and contribute a keyboard</a><p>Use <code>/add-keyboard</code> in a clone. Photos refine the case; firmware defines the keys.</p></div><button className="bar-apply" type="button" onClick={onAdd}><Plus size={14} aria-hidden="true" />Add keyboard</button></footer>
+    <footer className="collection-foot"><div><a href={GUIDE} target="_blank" rel="noopener">Share a keyboard with keyloom</a><p>Prepare contribution, beside a keyboard above, downloads it as a folder to send. The guide says what happens next.</p></div><button className="bar-apply" type="button" onClick={onAdd}><Plus size={14} aria-hidden="true" />Add keyboard</button></footer>
   </dialog>;
 }

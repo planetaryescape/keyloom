@@ -236,7 +236,8 @@ function KeyboardListArtifactView({ list }: { list: Extract<AgentArtifact, { kin
 const ENDINGS: Record<string, string> = {
   refused: "The model declined to answer that. Rephrase it and try again.",
   truncated: "The reply was cut off. Ask keyloom to continue.",
-  context_full: "This conversation has grown too long for the model to continue. Start a new one.",
+  // The button under it starts the new conversation (R1-23).
+  context_full: "This conversation has grown too long for the model to continue.",
   iteration_limit: "keyloom stopped after too many steps. Ask again, or narrow what you want.",
 };
 
@@ -288,9 +289,11 @@ interface Props {
   revised?: ReadonlySet<string>;
   /** Draws a reference the reply named (D-468): a chip that goes to it, or the words it stands for. */
   reference?: DrawReference;
+  /** Starts a new conversation, for a reply that ended because this one is full. */
+  onNewConversation?: () => void;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference, onNewConversation }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -324,6 +327,9 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
       {refusalRecovery === undefined ? null : <div className="proposal-problem"><div><p>The proposed change was refused by validation. No replacement proposal was recorded for this reply.</p>{refusalRecovery.reasons.map((reason) => <p key={reason}>{reason}</p>)}<button type="button" className="bar-link" onClick={refusalRecovery.onPlan}>Plan a revised proposal</button></div></div>}
       {turn.phase === "stopped" ? <p className="msg-note">Stopped. Configs or proposals prepared before Stop may remain.</p> : null}
       {ending === undefined || turn.phase !== "done" ? null : <p className="msg-note">{ending}</p>}
+      {turn.ending === "context_full" && turn.phase === "done" && onNewConversation !== undefined ? (
+        <button type="button" className="bar-link" disabled={busy} onClick={onNewConversation}>Start a new conversation</button>
+      ) : null}
       {compact
         ? groupProposals(turn.proposals).map((group) => {
             const shown = group.find((proposal) => proposal.changeSetId === pinnedId) ?? group.find((proposal) => proposal.status === "applied") ?? group[0];
