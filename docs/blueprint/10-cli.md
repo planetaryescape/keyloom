@@ -82,6 +82,7 @@ keyloom
   flash ... --wait <minutes>                how long to wait for a bootloader key press (1 to 60, default 2)
   flash --reboot-only [--board B]          only restart the attached keyboard into its bootloader (keyloom firmware only)
   flash --reboot-only --board B --half H  ZMK: ask one half (left|right) to restart; the bootloader is not verified
+  flash --check <flash>                    read which build the keyboard runs now, for a flash that wasn't verified; flashes nothing (D-501)
   sync <layout> [--wait]                   build the head, flash it hands-free and check the keyboard came back running it
   sync status                              each board's state, and the config on its keyboard
   config list [--board B] [--archived]     a board's configs, marking the one on the keyboard
