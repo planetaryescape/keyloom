@@ -88,9 +88,9 @@ import { keyForChar } from "./panel/slots.ts";
 import { Caption } from "./shell/Caption.tsx";
 import { boardDisplayName, boardEntries } from "./shell/Header.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
-import { boardLight, SyncStatus } from "./sync/SyncStatus.tsx";
+import { boardLight, openKeyboardStatus, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
-import { AfterApplyContext, type AfterApplyKeyboard } from "./release/AfterApply.tsx";
+import { AfterApplyContext, type AfterApplyKeyboard, afterApplyRun } from "./release/AfterApply.tsx";
 import { afterApply } from "./release/flash-words.ts";
 import { reachWords } from "./light/reach-words.ts";
 import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
@@ -235,6 +235,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     board: { firmware: board.firmware, name: boardDisplayName(board.name) }, layoutId: summary.id, revisionId: revision.id, sync: boardSync,
     onApplyNow: () => void sync.syncNow(summary.id),
     onPutOn: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
+    onOpenStatus: openKeyboardStatus,
+    onReplaceForeign: () => sync.setReplaceAsk(summary.id),
   };
   const synced = boardSync !== undefined && boardSync.layoutId === summary.id && boardSync.state.kind === "in_sync";
   useEffect(() => {
@@ -1310,7 +1312,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setUnsynced((current) => [...current, ...changed.filter((slot) => !current.some((c) => c.layerId === slot.layerId && c.position === slot.position))]);
     // The bar has closed, so the toast says what happens next on this keyboard, with its one button (R2-01).
     const next = afterApply(afterApplyKeyboard.board, boardSync, summary.id, result.revisionId);
-    const run = next.action === null ? null : next.action.id === "apply_now" ? afterApplyKeyboard.onApplyNow : next.action.id === "put_on" ? afterApplyKeyboard.onPutOn : () => onOpenRelease();
+    const run = afterApplyRun(next.action, afterApplyKeyboard, () => onOpenRelease());
     toasts.show({ kind: "success", message: "Applied", detail: `${withStop(card.title)} ${next.toast}`, ...(next.action === null || run === null ? {} : { action: { label: next.action.label, run } }) });
   }
 
