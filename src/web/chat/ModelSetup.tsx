@@ -4,6 +4,7 @@ import type { ChatProviderStatus } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
 import { cancelCodexSignIn, forgetProviderKey, saveProviderKey, startCodexSignIn } from "./api-setup.ts";
 import { inDesktopApp } from "../shell/server-gone.ts";
+import { CodexInstall } from "./CodexInstall.tsx";
 import { KEY_PAGES, type KeyProvider, PROVIDER_NAMES, failureReloads, lockWords, setupProviders, setupView, storeFallback } from "./setup-words.ts";
 import "./setup.css";
 
@@ -121,7 +122,7 @@ function StoreFallback({ id }: { id: KeyProvider }) {
 function ProviderSetup({ token, provider, status, onChanged, onReload, replacing }: {
   token: string; provider: Provider; status: ChatProviderStatus; onChanged: (status: ChatProviderStatus) => void; onReload: () => void; replacing: boolean;
 }) {
-  const view = setupView(provider, status, replacing);
+  const view = setupView(provider, status, replacing, inDesktopApp());
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [replace, setReplace] = useState(replacing);
@@ -203,21 +204,7 @@ function ProviderSetup({ token, provider, status, onChanged, onReload, replacing
       </>
     );
   } else if (view.kind === "codex-install") {
-    body = (
-      <>
-        <p className="muted">{view.text}</p>
-        <div className="setup-actions">
-          <a className="button button-primary" href={view.page} target="_blank" rel="noreferrer">
-            <ExternalLink size={14} aria-hidden="true" />
-            Get Codex
-          </a>
-          <button type="button" className="button" onClick={onReload}>
-            <RefreshCw size={14} aria-hidden="true" />
-            Check again
-          </button>
-        </div>
-      </>
-    );
+    body = <CodexInstall token={token} text={view.text} page={view.page} canInstall={view.canInstall} onReload={onReload} />;
   } else if (view.kind === "codex-sign-in") {
     body = (
       <>

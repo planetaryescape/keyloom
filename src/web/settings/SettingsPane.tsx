@@ -1,3 +1,4 @@
+import { openPlace } from "../shell/open-place.ts";
 import { LoaderCircle, Search } from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -163,7 +164,7 @@ export function SettingsPane(props: Props) {
           <LightingSection board={board} layout={layout} draft={lighting} onChange={onLighting} currentLayerId={props.currentLayerId} onShowLayer={props.onShowLayer} />
         ) : null}
         {shown.length === 0 && !showLighting && !showColourway && others.length === 0 ? <p className="muted settings-empty">Nothing matches &ldquo;{filter}&rdquo;.</p> : null}
-        <OtherSettings layout={layout} settings={others} />
+        <OtherSettings passthrough={layout.passthrough} settings={others} />
       </div>
       {/* Apply appears only once something changed, and says the change in words (23#shared-patterns). */}
       {ops === null ? null : (
@@ -185,9 +186,9 @@ export function SettingsPane(props: Props) {
 
 // Everything the layout sets that the page has no control for, so nothing is hidden: the other options it writes, and the
 // code and build files it keeps as written (D-103).
-function OtherSettings({ layout, settings }: { layout: Layout; settings: Layout["settings"] }) {
-  const kept = layout.passthrough.filter((p) => p.anchor !== "file" || p.file !== "rules.mk");
-  const rules = (layout.passthrough.find((p) => p.file === "rules.mk")?.source ?? "")
+export function OtherSettings({ passthrough, settings }: { passthrough: Layout["passthrough"]; settings: Layout["settings"] }) {
+  const kept = passthrough.filter((p) => p.anchor !== "file" || p.file !== "rules.mk");
+  const rules = (passthrough.find((p) => p.file === "rules.mk")?.source ?? "")
     .split("\n")
     .flatMap((line) => {
       const m = /^\s*([A-Z0-9_]+)\s*[:?]?=\s*(.*?)\s*$/.exec(line);
@@ -197,7 +198,10 @@ function OtherSettings({ layout, settings }: { layout: Layout; settings: Layout[
   return (
     <details className="settings-other">
       <summary>Also in this layout, read only</summary>
-      <p className="muted">These are written as they came in. Ask the chat to change one, or leave them.</p>
+      {/* The chat is the only way to change these, so its name opens it, as SettingRow's does (R1-23, D-508). */}
+      <p className="muted">
+        These are written as they came in. <button type="button" className="link-button" onClick={() => openPlace("chat")}>Ask the chat</button> to change one, or leave them.
+      </p>
       {settings.length === 0 ? null : (
         <dl>
           {settings.map((s) => (

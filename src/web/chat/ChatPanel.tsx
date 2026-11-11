@@ -542,6 +542,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         // The model surfaces only from the menu or when it fails (P3 review); its picker opens above the bar.
         <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
       ) : null}
+      {/* The bar hides the panel's head, so its states' h3s keep a parent heading for a screen reader. */}
+      {variant === "bar" ? <h2 className="sr-only">Ask keyloom</h2> : null}
       <header className="chat-head" hidden={variant === "bar"}>
         <h2>Chat</h2>
         <button

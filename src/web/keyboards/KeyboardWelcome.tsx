@@ -44,7 +44,7 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
     const timer = window.setTimeout(() => void search(query), 200);
     return () => window.clearTimeout(timer);
   }, [query, firmwareSearch, search, collection]);
-  if (importing) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onBack={() => setImporting(false)} />;
+  if (importing) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onStartedBlank={onMade} onBack={() => setImporting(false)} />;
   const targetId = flow.step.kind === "put" ? flow.step.boardId : null;
   const known = choices.find((board) => board.id === targetId);
   const drawn = flow.preview?.board ?? (known?.keys && known.hands && known.fingers && known.rows ? {

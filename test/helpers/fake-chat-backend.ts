@@ -23,6 +23,8 @@ export interface FakeChatOptions {
   failMidStream?: boolean;
   /** Answer 409 busy before the stream opens. */
   busy?: boolean;
+  /** keyloom started with --provider codex, and the Codex CLI is installed only once `installed()` says so (R3-24). */
+  codexLocked?: { installed: () => boolean } | null;
 }
 
 // Nothing is asked first: every reply acts on the obvious default and says what it assumed, in one line (D-380).
@@ -89,7 +91,7 @@ export class FakeChat implements ChatBackend {
     private readonly layoutId = "moonlander-daily",
     options: FakeChatOptions = {},
   ) {
-    this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, ...options };
+    this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, codexLocked: null, ...options };
   }
 
   // Keys "saved" here (last four only) and a pretend `codex login`, so the setup surface can be driven without a Keychain (D-496).
@@ -110,10 +112,16 @@ export class FakeChat implements ChatBackend {
       return id === "openrouter" && !this.options.missingKey ? { source: "environment" as const, last4: "9f3a" } : null;
     };
     const providers: ChatProviderStatus["providers"] = [
-      { id: "anthropic", label: "Anthropic API key", defaultModel: "claude-opus-5-5", ready: this.ready("anthropic"), setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve", credential: credential("anthropic"), installed: true },
-      { id: "openrouter", label: "OpenRouter API key", defaultModel: "anthropic/claude-opus-5.5", ready: this.ready("openrouter"), setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve", credential: credential("openrouter"), installed: true },
-      { id: "codex", label: "Codex (ChatGPT login)", defaultModel: "gpt-6.1-sol", ready: this.ready("codex"), setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login", credential: null, installed: true },
+      { id: "anthropic", label: "Anthropic API key", defaultModel: "claude-opus-5-5", ready: this.ready("anthropic"), setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve", credential: credential("anthropic"), installed: true, canInstall: false },
+      { id: "openrouter", label: "OpenRouter API key", defaultModel: "anthropic/claude-opus-5.5", ready: this.ready("openrouter"), setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve", credential: credential("openrouter"), installed: true, canInstall: false },
+      { id: "codex", label: "Codex (ChatGPT login)", defaultModel: "gpt-6.1-sol", ready: this.ready("codex"), setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login", credential: null, installed: true, canInstall: false },
     ];
+    const locked = this.options.codexLocked;
+    if (locked !== null) {
+      const installed = locked.installed();
+      providers[2] = { ...providers[2]!, installed, canInstall: !installed };
+      return { active: { provider: "codex", model: "gpt-6.1-sol", effort: "medium" }, lockedBy: "--provider", keyStore: "keychain", codexSignIn: this.signIn, providers };
+    }
     const anyReady = providers.some((p) => p.ready);
     // With nothing ready there is no active provider; once one is set up, the first ready one answers unless one was chosen.
     const active = !anyReady ? null : this.ready(this.chosen.provider) ? this.chosen : { provider: providers.find((p) => p.ready)!.id, model: providers.find((p) => p.ready)!.defaultModel };

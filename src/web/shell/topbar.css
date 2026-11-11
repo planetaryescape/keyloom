@@ -312,11 +312,19 @@
     display: none;
   }
 
-  .topbar-word,
+  .topbar-word:not(.topbar-home-btn),
+  .topbar-home-btn span,
   .topbar-ask-text,
   .topbar-ask kbd,
   .topbar-release {
     display: none;
+  }
+
+  /* The way back to the wall stays on a phone, as its icon. */
+  .topbar-home-btn {
+    width: 34px;
+    height: 34px;
+    justify-content: center;
   }
 
   .topbar-ask {

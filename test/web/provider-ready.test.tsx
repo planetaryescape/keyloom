@@ -7,7 +7,7 @@ import { MissingKey } from "../../src/web/chat/ChatStates.tsx";
 import { offersPicker, retryOffer } from "../../src/web/chat/provider-ready.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
-const base = { label: "x", defaultModel: "m", setup: "s", command: "c", installed: true, credential: null, ready: false } as const;
+const base = { label: "x", defaultModel: "m", setup: "s", command: "c", installed: true, canInstall: false, credential: null, ready: false } as const;
 function status(ready: Provider["id"][], active: Provider["id"] | null, lockedBy: ChatProviderStatus["lockedBy"] = null): ChatProviderStatus {
   return {
     active: active === null ? null : { provider: active, model: "m", effort: "medium" },

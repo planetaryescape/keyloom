@@ -14,8 +14,11 @@ export function ErrorState({
   children,
   onRetry,
   actions,
+  level = 2,
 }: {
   title: string;
+  /** 1 when the error is the whole page (no token), so the page still has its one h1. */
+  level?: 1 | 2;
   children: ReactNode;
   onRetry?: () => void;
   /** The ways forward when trying again can't help, such as Show your other layouts. */
@@ -26,7 +29,7 @@ export function ErrorState({
       <span className="state-icon" aria-hidden="true">
         <TriangleAlert size={22} />
       </span>
-      <h2>{title}</h2>
+      {level === 1 ? <h1>{title}</h1> : <h2>{title}</h2>}
       <p>{children}</p>
       {actions === undefined ? null : <div className="state-actions">{actions}</div>}
       {onRetry === undefined ? null : (

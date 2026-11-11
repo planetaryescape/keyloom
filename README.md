@@ -173,6 +173,7 @@ Network traffic happens only in these cases:
 ## Learn more
 
 - [docs/blueprint](docs/blueprint/README.md) is the design: the architecture, the layout model, the agent, each board and firmware, and the decisions behind them.
+- [Pair a ZMK keyboard with another computer](docs/pair-bluetooth.md) covers Bluetooth profiles, pairing and the Unpair key.
 - [CONTRIBUTING.md](CONTRIBUTING.md) explains how to add a keyboard. In Claude Code, the `/add-keyboard` skill in `.claude/skills/add-keyboard/SKILL.md` walks you through it.
 
 ## License

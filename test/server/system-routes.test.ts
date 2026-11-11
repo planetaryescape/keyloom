@@ -45,6 +45,8 @@ describe("the install routes (D-488, D-489)", () => {
     expect((await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "rm -rf" }), headers: { "content-type": "application/json" } })).status).toBe(400);
     expect((await call("/api/system/install", { method: "POST", body: "{}", headers: { "content-type": "application/json" } })).status).toBe(400);
     expect((await call("/api/system/install?tool=curl")).status).toBe(400);
+    // The chat's Install Codex goes through the same job (R3-24).
+    expect(InstallStateSchema.parse(await (await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "codex" }), headers: { "content-type": "application/json" } })).json())).toMatchObject({ tool: "codex", status: "running" });
     expect((await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "zapp" }), headers: { "content-type": "text/plain" } })).status).toBe(415);
     expect((await call("/api/system/install?tool=zapp", {}, null)).status).toBe(401);
     expect((await call("/api/system/install", { method: "PUT" })).status).toBe(405);

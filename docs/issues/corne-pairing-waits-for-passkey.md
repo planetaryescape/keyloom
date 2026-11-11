@@ -1,6 +1,6 @@
 # The Corne waited for a typed passkey on every new pairing
 
-Status: fixed in `234c5380` (PR #275), released in v0.73.0. Flashed 2026-11-11 as `bld_01M757322H9F4K1B4SPSW6QRF1`; both halves verified (`fl_01M7582CDWT9M1GNYBJH0YG0S1`), and that build's left and right `.config` have `# CONFIG_ZMK_BLE_PASSKEY_ENTRY is not set`. BK confirmed the pairing on hardware the same day: on profile BT4 (`&bt BT_SEL 4`) another computer paired with no code, and typing reached it. The flash itself stranded the right half; see [uf2-open-failure-taken-as-written](uf2-open-failure-taken-as-written.md).
+Status: fixed in `234c5380` (PR #275), released in v0.73.0. Flashed 2026-11-11 as `bld_01M757322H9F4K1B4SPSW6QRF1`; both halves verified (`fl_01M7582CDWT9M1GNYBJH0YG0S1`), and that build's left and right `.config` have `# CONFIG_ZMK_BLE_PASSKEY_ENTRY is not set`. BK confirmed the pairing on hardware the same day: on profile 4 (`&bt BT_SEL 4`, which keyloom labels BT 5) another computer paired with no code, and typing reached it. The flash itself stranded the right half; see [uf2-open-failure-taken-as-written](uf2-open-failure-taken-as-written.md).
 
 Reported 2026-11-11: "when i try to connect it spins and spins and then just stops spinning". The Corne Choc Pro BT was on an unused profile, the first computer had stopped receiving keys, and the second computer listed the keyboard under nearby devices.
 
@@ -29,4 +29,4 @@ On BK's Corne the digits sit on a layer, so the code is hard to type at all.
 
 ## Verified on hardware
 
-2026-11-11, on `bld_01M757322H9F4K1B4SPSW6QRF1`: BK selected the unused profile BT4 on the keyboard and paired another computer from its Bluetooth settings. No code was asked for, and typing reached that computer.
+2026-11-11, on `bld_01M757322H9F4K1B4SPSW6QRF1`: BK selected the unused profile 4 (`&bt BT_SEL 4`, labelled BT 5) on the keyboard and paired another computer from its Bluetooth settings. No code was asked for, and typing reached that computer.

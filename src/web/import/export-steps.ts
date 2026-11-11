@@ -64,3 +64,16 @@ export function acceptsFile(guide: ExportGuide, filename: string): boolean {
   const name = filename.toLowerCase();
   return guide.extensions.some((extension) => name.endsWith(extension));
 }
+
+/**
+ * Whether a failed "Read it from this Mac" offers Start blank (R3-12): only when this Mac has no Karabiner settings at all, so there is
+ * nothing to bring in and a blank config is the way on. A refused or odd file keeps the drop, since the settings exist.
+ */
+export const offersStartBlank = (code: string | undefined): boolean => code === "karabiner_missing";
+
+/** `base`, or `base 2`, `base 3`… : the first that no existing config uses. */
+export function firstFreeName(base: string, taken: readonly string[]): string {
+  const used = new Set(taken);
+  if (!used.has(base)) return base;
+  for (let n = 2; ; n++) if (!used.has(`${base} ${n}`)) return `${base} ${n}`;
+}

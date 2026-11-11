@@ -26,11 +26,19 @@ export async function loadWebAssets(): Promise<WebAssets> {
 async function build(): Promise<WebAssets> {
   // A compiled binary embeds the bundle and lists its files. Under `bun run` and `bun test`
   // the list is absent, so the bundle is built in memory from the entry point.
-  if (index.files !== undefined) return fromEmbeddedFiles(index.files);
-  return fromInMemoryBuild(index.index);
+  if (index.files !== undefined) return withFaviconIco(fromEmbeddedFiles(index.files));
+  return withFaviconIco(await fromInMemoryBuild(index.index));
 }
 
-function fromEmbeddedFiles(files: NonNullable<typeof index.files>): WebAssets {
+// index.html links the icon under its bundled, hashed name. Pages that aren't the app (the 404 page, a browser that asks before it
+// reads the HTML) still ask for /favicon.ico, so that path answers with the same icon instead of a 404.
+export function withFaviconIco(assets: Map<string, WebAsset>): Map<string, WebAsset> {
+  const icon = [...assets].find(([path]) => /^\/favicon(-[\w]+)?\.png$/.test(path));
+  if (icon !== undefined && !assets.has("/favicon.ico")) assets.set("/favicon.ico", icon[1]);
+  return assets;
+}
+
+function fromEmbeddedFiles(files: NonNullable<typeof index.files>): Map<string, WebAsset> {
   const assets = new Map<string, WebAsset>();
   for (const file of files) {
     const key = file.loader === "html" ? "/" : `/${basename(file.path)}`;
@@ -40,7 +48,7 @@ function fromEmbeddedFiles(files: NonNullable<typeof index.files>): WebAssets {
   return assets;
 }
 
-async function fromInMemoryBuild(entry: string): Promise<WebAssets> {
+async function fromInMemoryBuild(entry: string): Promise<Map<string, WebAsset>> {
   const result = await Bun.build({ entrypoints: [entry], target: "browser", minify: true });
   if (!result.success) {
     throw new Error(`web bundle failed:\n${result.logs.map(String).join("\n")}`);

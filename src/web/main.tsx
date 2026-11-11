@@ -23,7 +23,7 @@ createRoot(root).render(
     <div className="app">
       <Header />
       <main className="app-main">
-        <ErrorState title="This page needs keyloom's link">
+        <ErrorState level={1} title="This page needs keyloom's link">
           <RestartAdvice lead="This address has no token, so keyloom won't answer it." />
         </ErrorState>
       </main>

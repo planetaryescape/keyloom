@@ -107,3 +107,8 @@
   font-family: var(--font-code);
   font-size: var(--text-sm);
 }
+
+/* A failed reload, above the board that is still the last one read. */
+.boarddev-reload-error {
+  margin: 0 0 var(--space-4);
+}
