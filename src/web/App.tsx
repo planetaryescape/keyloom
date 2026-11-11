@@ -20,6 +20,7 @@ import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
 import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
 import { Pegboard } from "./home/Pegboard.tsx";
 import { markOpened } from "./api-write.ts";
+import { archiveConfig } from "./configs/api-configs.ts";
 import type { FindingRepairDraft } from "../api/review.ts";
 
 // `gone` is a layout that isn't there (404), which no Try again brings back (R1-08); `waiting` is a keyloom that stopped answering,
@@ -238,7 +239,7 @@ export function App({ token }: { token: string }) {
   if (onWall) {
     return wrap(
       <Shell fill>
-        <Pegboard token={token} layouts={layouts} sync={sync} flying={flyingId} onOpen={openBoardFromWall} />
+        <Pegboard token={token} layouts={layouts} sync={sync} flying={flyingId} onOpen={openBoardFromWall} onOpenById={(target) => { setView(null); setSelectedId(target.id); setOnWall(false); }} />
       </Shell>
     );
   }
@@ -370,7 +371,7 @@ function LayoutPage({
   return (
     <Shell menu={menu} bare={failure === null && "keys" in rotated} fill>
       {failure !== null || !("keys" in rotated) ? (
-        <ErrorState title="This layout doesn't match its board">{failure}</ErrorState>
+        <MismatchState token={token} summary={summary} problem={failure ?? "keyloom couldn't place this layout's keys on its board."} onHome={onHome} onReload={menu.onReload} />
       ) : (
         <Viewer
           detail={detail}
@@ -405,13 +406,47 @@ function LayoutPage({
 // up with the keys would put labels on the wrong keys without any visible sign.
 function findProblem({ document: layout, board, geometry }: LayoutDetail): string | null {
   if (board.keyCount !== geometry.keys.length) {
-    return `${board.name} declares ${board.keyCount} keys, but its geometry has ${geometry.keys.length}. Regenerate the board's geometry.`;
+    return `${board.name} declares ${board.keyCount} keys, but its drawing has ${geometry.keys.length}, so keyloom can't place the keys.`;
   }
   const mismatch = layout.layers.find((layer) => layer.bindings.length !== geometry.keys.length);
   if (mismatch !== undefined) {
     return `Layer "${mismatch.name}" has ${mismatch.bindings.length} bindings, but ${board.name} has ${geometry.keys.length} keys.`;
   }
   return null;
+}
+
+/**
+ * A layout keyloom can't draw on its board (R1-20). Trying again can't change that, so it offers the ways on: another layout, from the
+ * wall or the board switcher in the header, or archiving this one, which keeps its history.
+ */
+function MismatchState({ token, summary, problem, onHome, onReload }: { token: string; summary: LayoutSummary; problem: string; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
+  const [busy, setBusy] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+  const archive = async () => {
+    setBusy(true);
+    setRefused(null);
+    try {
+      await archiveConfig(token, summary.id);
+      onReload?.();
+    } catch (error) {
+      setRefused(error instanceof Error ? error.message : "keyloom couldn't archive it.");
+      setBusy(false);
+    }
+  };
+  return (
+    <ErrorState
+      title="This layout doesn't match its board"
+      actions={
+        <>
+          {onHome === undefined ? null : <button type="button" className="button button-primary" onClick={onHome}>Show your other layouts</button>}
+          <button type="button" className="button" disabled={busy} onClick={() => void archive()}>Archive this config</button>
+        </>
+      }
+    >
+      {problem} Pick another layout, or archive this one; it keeps its history.
+      {refused === null ? null : <span className="state-refused" role="alert"> {refused}</span>}
+    </ErrorState>
+  );
 }
 
 export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void; onReload?: (selectId?: string) => void; boardChoices?: readonly BoardChoice[]; onManageKeyboards?: () => void; onAddKeyboard?: () => void };

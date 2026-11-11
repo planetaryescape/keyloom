@@ -2096,6 +2096,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   layerId={layer.id}
                   layerName={layerNameOf}
                   onBack={() => setComparing(null)}
+                  onRetry={() => void compareWith(comparing.milestone)}
                   onClose={() => setHistoryOpen(false)}
                   onShowLayer={(id) => setLayerId(id)}
                   onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then(() => setComparing(null))}

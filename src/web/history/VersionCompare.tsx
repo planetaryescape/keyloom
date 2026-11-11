@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Copy, Keyboard, LoaderCircle, Undo2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Keyboard, LoaderCircle, RefreshCw, Undo2, X } from "lucide-react";
 import type { CompareResponse } from "../../api/configs.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { keyWords } from "./compare-words.ts";
@@ -44,7 +44,7 @@ export function otherChanges(diff: Diff, layerName: (id: string) => string = (id
 
 // One version against now (v3, D-315): the keys that would change if BK went back are marked on the board in the proposal's amber,
 // each with what it was; here they are listed per layer, then everything else, then the three ways to use the version.
-export function VersionCompare({ comparing, layout, boardName, layerId, layerName, onBack, onClose, onShowLayer, onGoBack, onPutOn, onNewConfig, blockedReason }: {
+export function VersionCompare({ comparing, layout, boardName, layerId, layerName, onBack, onClose, onShowLayer, onGoBack, onPutOn, onNewConfig, onRetry, blockedReason }: {
   comparing: Comparing;
   /** The layout now, for saying what each key does now. */
   layout: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough">;
@@ -59,6 +59,8 @@ export function VersionCompare({ comparing, layout, boardName, layerId, layerNam
   onGoBack: () => void;
   onPutOn: () => void;
   onNewConfig: () => void;
+  /** Compares again after a failed read (R1-21). */
+  onRetry: () => void;
   blockedReason: string | null;
 }) {
   const v = comparing.milestone.version;
@@ -77,7 +79,10 @@ export function VersionCompare({ comparing, layout, boardName, layerId, layerNam
         {comparing.status === "loading" ? (
           <p className="sheet-empty" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Comparing…</p>
         ) : comparing.status === "error" ? (
-          <p className="sheet-empty" role="alert">{comparing.message}</p>
+          <div className="sheet-empty" role="alert">
+            <p>{comparing.message}</p>
+            <button type="button" className="button" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+          </div>
         ) : comparing.compare.diff.same ? (
           <p className="sheet-empty">Nothing differs from now.</p>
         ) : (
