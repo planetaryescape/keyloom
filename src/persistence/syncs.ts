@@ -176,15 +176,17 @@ export type BoardSyncRow = {
   paused: boolean;
   provenAt: number | null;
   provenBuildId: string | null;
+  /** When keyloom last saw kanata running a config it wrote; null for other boards and until it has (D-509). */
+  kanataSeenAt: number | null;
 };
 
-type BoardSyncDb = { board_id: string; auto_sync: number | null; paused: number; proven_at: number | null; proven_build_id: string | null };
+type BoardSyncDb = { board_id: string; auto_sync: number | null; paused: number; proven_at: number | null; proven_build_id: string | null; kanata_seen_at: number | null };
 
 export function getBoardSync(db: Database, boardId: string): BoardSyncRow {
   const r = db.query("SELECT * FROM board_sync WHERE board_id = ?").get(boardId) as BoardSyncDb | null;
   return r
-    ? { boardId, autoSync: r.auto_sync === null ? null : r.auto_sync === 1, paused: r.paused === 1, provenAt: r.proven_at, provenBuildId: r.proven_build_id }
-    : { boardId, autoSync: null, paused: false, provenAt: null, provenBuildId: null };
+    ? { boardId, autoSync: r.auto_sync === null ? null : r.auto_sync === 1, paused: r.paused === 1, provenAt: r.proven_at, provenBuildId: r.proven_build_id, kanataSeenAt: r.kanata_seen_at }
+    : { boardId, autoSync: null, paused: false, provenAt: null, provenBuildId: null, kanataSeenAt: null };
 }
 
 const ensureBoard = (db: Database, boardId: string): void => {
@@ -205,6 +207,12 @@ export function setPaused(db: Database, boardId: string, paused: boolean): void 
 export function recordHandsFreeProof(db: Database, boardId: string, buildId: string, now = Date.now()): void {
   ensureBoard(db, boardId);
   db.query("UPDATE board_sync SET proven_at = COALESCE(proven_at, ?), proven_build_id = ? WHERE board_id = ?").run(now, buildId, boardId);
+}
+
+/** keyloom saw kanata running a config keyloom wrote on this board (D-509): the exit-chord proof counts only for a while after this. */
+export function recordKanataSeen(db: Database, boardId: string, now = Date.now()): void {
+  ensureBoard(db, boardId);
+  db.query("UPDATE board_sync SET kanata_seen_at = ? WHERE board_id = ?").run(now, boardId);
 }
 
 // --- reads a sync needs from the revision history --------------------------------------------

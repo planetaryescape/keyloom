@@ -137,19 +137,23 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
 
 /**
  * What auto-sync does, for the popover's switch. `name` is what the switch is called: a remapper applies a config, it doesn't sync
- * firmware, so the MacBook's switch and the words that point at it say "Auto-apply" (R2-11).
+ * firmware, so the MacBook's switch and the words that point at it say "Auto-apply" (R2-11). `exitChord` says whether the popover offers
+ * "I held it and kanata stopped": only once keyloom has seen kanata run its config recently (D-509), and the note says why it isn't there.
  */
-export type AutoSyncLine = { name: "Auto-sync" | "Auto-apply"; on: boolean; canTurnOn: boolean; note: string | null };
+export type AutoSyncLine = { name: "Auto-sync" | "Auto-apply"; on: boolean; canTurnOn: boolean; note: string | null; exitChord: boolean };
 
 export function autoSyncLine(board: BoardSync): AutoSyncLine {
   const a = board.auto;
+  const exitChord = board.remapper === true && !a.proven && a.exitChordReady === true;
   return {
     name: board.remapper === true ? "Auto-apply" : "Auto-sync",
     on: a.on,
     canTurnOn: a.proven,
-    note: a.proven ? null : board.remapper === true
-      ? "Turns on after you prove kanata's emergency exit once: hold Left Control + Space + Escape until your MacBook keyboard types plainly, then press the button below."
-      : "Turns on after keyloom flashes this keyboard by itself once and sees it come back.",
+    note: a.proven ? null : board.remapper !== true ? "Turns on after keyloom flashes this keyboard by itself once and sees it come back."
+      : exitChord ? "Turns on after you prove kanata's emergency exit once: hold Left Control + Space + Escape until your MacBook keyboard types plainly, then press the button below."
+      : board.state.kind === "not_keyloom" ? "Turns on after you prove kanata's emergency exit once. That step appears when kanata runs a config keyloom wrote, so replace the one it runs first."
+      : "Turns on after you prove kanata's emergency exit once. That step appears when keyloom sees kanata running, so a kanata that never started can't count. Start kanata first.",
+    exitChord,
   };
 }
 
@@ -196,6 +200,7 @@ export function refusalNotice(code: string | undefined, message: string): Refusa
     case "not_connected": return { message: "The keyboard isn't connected", detail: "Plug it in and keyloom checks it." };
     case "busy": return { message: "keyloom is already building or flashing", detail: "Sync again when it finishes." };
     case "kanata_still_running": return { message: "kanata is still running", detail: "Hold Left Control, Space and Escape together until your MacBook keyboard types plainly, then check again.", action: { id: "check_exit_chord", label: "Check again" } };
+    case "kanata_not_seen": return { message: "keyloom hasn't seen kanata running lately", detail: "A kanata that stopped long ago, or never started, doesn't show the chord worked. Start kanata, then hold Left Control, Space and Escape and press the button again.", action: { id: "open_status", label: "Open keyboard status" } };
     case "kanata_unreadable": return { message: "keyloom couldn't tell whether kanata stopped", detail: "kanata's port didn't answer, so nothing was recorded. Check again in a moment.", action: { id: "check_exit_chord", label: "Check again" } };
     case "kanata_not_foreign": return { message: "kanata's config changed, so nothing was replaced", detail: "The keyboard's status shows what kanata runs now.", action: { id: "open_status", label: "Open keyboard status" } };
     case "keyboard_removed": return { message: "This keyboard was removed from your setup", detail: "Restore it to sync it again. Its configs and history were kept.", action: { id: "restore_keyboard", label: "Restore" } };

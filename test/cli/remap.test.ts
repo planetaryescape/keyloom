@@ -161,6 +161,17 @@ describe("keyloom remap", () => {
     expect((await cli(world, ["autosync", "on", MAC])).code).toBe(0);
   });
 
+  test("confirm-exit-chord records nothing for a kanata keyloom never saw running (R3-00, D-509)", async () => {
+    const world = (w = remapperWorld());
+    // Never started: the port refuses as it would after the chord, but nothing shows the chord stopped it.
+    world.fake.stop();
+    const r = await cli(world, ["remap", "confirm-exit-chord"]);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toContain("hasn't seen it run keyloom's config");
+    expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
+    expect((await cli(world, ["autosync", "on", MAC])).code).not.toBe(0);
+  });
+
   test("disable with kanata not running fails with the way out", async () => {
     const world = (w = remapperWorld());
     world.fake.stop();

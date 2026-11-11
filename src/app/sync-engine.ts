@@ -20,7 +20,7 @@ import { latestVerifiedVersionOnBoard } from "../persistence/versions.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
   type BoardSyncRow, type SyncFailure, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
-  progressSync, revisionLine, setAutoSyncChoice, setPaused as storePaused,
+  progressSync, recordKanataSeen, revisionLine, setAutoSyncChoice, setPaused as storePaused,
 } from "../persistence/syncs.ts";
 import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { SETUP_REVISION } from "../firmware/kanata/generate.ts";
@@ -29,7 +29,7 @@ import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
-import { confirmExitChord } from "./remapper.ts";
+import { confirmExitChord, kanataSeenRecently } from "./remapper.ts";
 import { firmwareBusy } from "./firmware.ts";
 import type { SyncDeps } from "./sync-deps.ts";
 import { type KeyboardReading, syncSupported, syncableBoards } from "./sync-keyboard.ts";
@@ -68,6 +68,11 @@ export type SyncAutoView = {
   provenAt: number | null;
   /** When auto-sync will start a sync if nothing changes, while the board is behind and waiting. */
   dueAt: number | null;
+  /**
+   * A remapper only: keyloom saw kanata running its config within the exit-chord window, so a stop now can prove the chord (D-509).
+   * False for every other board, and once proven.
+   */
+  exitChordReady: boolean;
 };
 
 export type BoardSyncView = {
@@ -124,7 +129,7 @@ const ABSENT: KeyboardReading = { state: "absent" };
  */
 export type SyncRefusalCode =
   | "keyboard_removed" | "archived" | "not_on_keyboard" | "cant_sync" | "not_connected" | "kanata_not_running" | "kanata_foreign"
-  | "foreign_firmware" | "busy" | "unproven" | "kanata_still_running" | "kanata_unreadable" | "kanata_not_foreign";
+  | "foreign_firmware" | "busy" | "unproven" | "kanata_still_running" | "kanata_unreadable" | "kanata_not_foreign" | "kanata_not_seen";
 
 export class SyncRefusal extends UsageError {
   constructor(readonly code: SyncRefusalCode, message: string) {
@@ -288,11 +293,24 @@ export class SyncEngine {
         this.detected = [];
       }
       this.readAt = this.now();
+      this.noteKanataSeen();
     })();
     this.reading = read.finally(() => {
       this.reading = null;
     });
     await this.reading;
+  }
+
+  /**
+   * Records when kanata was last seen running a config keyloom wrote (keyloom.kbd, or safe.kbd with remapping off), for the exit-chord
+   * proof (D-509). Only while the board is unproven: after that nothing reads it, and the database isn't written every poll.
+   */
+  private noteKanataSeen(): void {
+    for (const [boardId, reading] of this.readings) {
+      if (reading.state !== "keyloom" && reading.state !== "remapping_off") continue;
+      if (!isRemapper(boardId) || getBoardSync(this.app.db, boardId).provenAt !== null) continue;
+      recordKanataSeen(this.app.db, boardId, this.readAt);
+    }
   }
 
   private readingOf(boardId: string): KeyboardReading {
@@ -453,6 +471,7 @@ export class SyncEngine {
       auto: {
         on: b.facts.auto.on && !b.facts.auto.paused, choice: bs.autoSync, paused: bs.paused, proven: bs.provenAt !== null, provenAt: bs.provenAt,
         dueAt: state.kind === "behind" && state.why === "waiting" ? b.layout.updatedAt + this.quietMs : null,
+        exitChordReady: isRemapper(b.boardId) && bs.provenAt === null && kanataSeenRecently(bs.kanataSeenAt, this.now()),
       },
       last: last ? this.runView(last) : null,
     };
@@ -821,7 +840,8 @@ export class SyncEngine {
   /**
    * The person held Left Control + Space + Escape and saw kanata stop (D-235, R1-18). It is recorded only when kanata's port refuses the
    * connection, so the button can't stand in for the chord itself. A read that timed out or failed proves nothing (D-497): kanata may
-   * still be running behind it, so that is refused too, with its own code.
+   * still be running behind it, so that is refused too, with its own code. A refused port proves nothing either unless keyloom saw kanata
+   * running its config shortly before (D-509): a kanata that never started refuses the same way.
    */
   async confirmExitChord(boardId: string): Promise<void> {
     if (!isRemapper(boardId)) throw new UsageError(`${showBoard(boardId).definition.name} isn't a software remapper`);
@@ -837,7 +857,9 @@ export class SyncEngine {
       if (probe === "unreadable") {
         throw new SyncRefusal("kanata_unreadable", "keyloom couldn't tell whether kanata stopped: its port didn't answer either way. Nothing was recorded; check again in a moment");
       }
-      confirmExitChord(this.app, boardId);
+      if (confirmExitChord(this.app, boardId, this.now()) === "not_seen") {
+        throw new SyncRefusal("kanata_not_seen", "keyloom hasn't seen kanata running your config in the last 10 minutes, so a stopped kanata doesn't show the chord worked. Start kanata, wait until keyloom shows it running, then hold Left Control + Space + Escape");
+      }
     });
     this.afterChange();
   }
@@ -859,7 +881,7 @@ export class SyncEngine {
     this.requireSyncable(boardId);
     const bs = getBoardSync(this.app.db, boardId);
     if (on && bs.provenAt === null && isRemapper(boardId)) {
-      throw new SyncRefusal("unproven", "auto-apply turns on after you have proved kanata's emergency exit once: hold Left Control + Space + Escape, see kanata stop, then run `keyloom remap confirm-exit-chord`");
+      throw new SyncRefusal("unproven", "auto-apply turns on after you have proved kanata's emergency exit once: while kanata runs, run `keyloom remap confirm-exit-chord`, hold Left Control + Space + Escape until kanata stops, then run it again");
     }
     if (on && bs.provenAt === null) {
       throw new UsageError(

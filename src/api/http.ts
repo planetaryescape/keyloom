@@ -596,10 +596,11 @@ export type OutcomeAnswer = z.infer<typeof OutcomeAnswerSchema>;
 //   POST /api/sync/disable-remapping DisableRemappingRequest -> SyncStatusResponse (400 usage when the board is not a software remapper or kanata is not running)
 //   POST /api/sync/replace-foreign  SyncNowRequest -> SyncStatusResponse  (MacBook: replaces a kanata config keyloom didn't write, keeping a copy; R1-17)
 //   POST /api/sync/confirm-exit-chord DisableRemappingRequest -> SyncStatusResponse (400 kanata_still_running while kanata answers,
-//                                    kanata_unreadable when its port neither answers nor refuses; R1-18, D-497)
+//                                    kanata_unreadable when its port neither answers nor refuses; R1-18, D-497; kanata_not_seen
+//                                    when keyloom hasn't seen kanata run its config in the last 10 minutes, D-509)
 // A refused sync answers 400 with a code the page maps to an action (R1-16): archived, not_on_keyboard, cant_sync, not_connected,
 // kanata_not_running, kanata_foreign, foreign_firmware, busy, unproven, keyboard_removed, kanata_still_running, kanata_unreadable,
-// kanata_not_foreign; "usage" otherwise.
+// kanata_not_foreign, kanata_not_seen; "usage" otherwise.
 //   GET  /api/events                     -> text/event-stream of SyncEvent; the first frame is the current state
 // A state is the same word the CLI prints: in_sync, syncing, behind, needs_hand, not_connected, not_keyloom.
 export const SyncStateSchema = z.discriminatedUnion("kind", [
@@ -660,6 +661,8 @@ export const BoardSyncSchema = z.object({
     proven: z.boolean(),
     provenAt: z.number().nullable(),
     dueAt: z.number().nullable(),
+    /** A remapper only: keyloom saw kanata running its config recently, so the exit-chord button can prove the chord (D-509). */
+    exitChordReady: z.boolean().optional(),
   }),
   last: SyncRunSchema.nullable(),
 });

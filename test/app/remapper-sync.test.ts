@@ -268,6 +268,41 @@ describe("auto-apply", () => {
     expect(getBoardSync(world.app.db, MAC).provenAt).not.toBeNull();
   });
 
+  test("a kanata keyloom never saw running proves nothing, and the button waits for it (R3-00, D-509)", async () => {
+    const world = make();
+    // A fresh setup: kanata never started, so its port refuses exactly as it would after the chord.
+    world.fake.stop();
+    const e = world.engine();
+    await e.start();
+    expect(e.views().find((v) => v.boardId === MAC)?.auto.exitChordReady).toBe(false);
+    await expect(e.confirmExitChord(MAC)).rejects.toMatchObject({ code: "kanata_not_seen" });
+    expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
+  });
+
+  test("a stop counts only within ten minutes of keyloom seeing kanata run its config (D-509)", async () => {
+    const world = make();
+    let clock = 1_000_000;
+    const e = world.engine({ now: () => clock });
+    await e.start();
+    // Seen running keyloom's setup file: the button is offered.
+    expect(getBoardSync(world.app.db, MAC).kanataSeenAt).toBe(clock);
+    expect(e.views().find((v) => v.boardId === MAC)?.auto.exitChordReady).toBe(true);
+    world.fake.stop();
+    clock += 10 * 60_000 + 1;
+    await e.tick();
+    expect(e.views().find((v) => v.boardId === MAC)?.auto.exitChordReady).toBe(false);
+    await expect(e.confirmExitChord(MAC)).rejects.toMatchObject({ code: "kanata_not_seen" });
+    expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
+  });
+
+  test("once proven, a running kanata is no longer written down every poll", async () => {
+    const world = make({ proven: true });
+    const e = world.engine();
+    await e.start();
+    expect(getBoardSync(world.app.db, MAC).kanataSeenAt).toBeNull();
+    expect(e.views().find((v) => v.boardId === MAC)?.auto.exitChordReady).toBe(false);
+  });
+
   test("a port that neither answers nor refuses records no proof, and says to check again (D-497)", async () => {
     const world = make();
     const e = world.engine();

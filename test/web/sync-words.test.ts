@@ -97,7 +97,26 @@ describe("autoSyncLine", () => {
     const unproven = board({ kind: "in_sync" }, { auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null } });
     expect(autoSyncLine(unproven)).toMatchObject({ on: false, canTurnOn: false });
     expect(autoSyncLine(unproven).note).toContain("by itself once");
-    expect(autoSyncLine(board({ kind: "in_sync" }))).toEqual({ name: "Auto-sync", on: true, canTurnOn: true, note: null });
+    expect(autoSyncLine(board({ kind: "in_sync" }))).toEqual({ name: "Auto-sync", on: true, canTurnOn: true, note: null, exitChord: false });
+  });
+
+  // D-509: "I held it and kanata stopped" appears only after keyloom saw kanata run its config, and the note says why it isn't there.
+  test("the exit-chord button waits until keyloom has seen kanata running, and says why", () => {
+    const mac = (state: BoardSync["state"], exitChordReady: boolean | undefined) =>
+      autoSyncLine(board(state, { remapper: true, boardName: "MacBook keyboard", auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null, ...(exitChordReady === undefined ? {} : { exitChordReady }) } }));
+    const ready = mac({ kind: "not_connected", changes: null }, true);
+    expect(ready).toMatchObject({ name: "Auto-apply", exitChord: true });
+    expect(ready.note).toContain("press the button below");
+    const fresh = mac({ kind: "not_connected", changes: null }, false);
+    expect(fresh.exitChord).toBe(false);
+    expect(fresh.note).toContain("Start kanata first");
+    expect(fresh.note).not.toContain("button below");
+    // An older server that doesn't send the field never shows the button.
+    expect(mac({ kind: "not_connected", changes: null }, undefined).exitChord).toBe(false);
+    const foreign = mac({ kind: "not_keyloom", detail: "kanata runs /tmp/x.kbd" }, false);
+    expect(foreign.note).toContain("replace the one it runs first");
+    // Once proven there is nothing to prove.
+    expect(autoSyncLine(board({ kind: "in_sync" }, { remapper: true, auto: { on: true, choice: null, paused: false, proven: true, provenAt: 1, dueAt: null, exitChordReady: false } })).exitChord).toBe(false);
   });
 });
 
@@ -197,6 +216,8 @@ describe("refusalNotice", () => {
     // An exit-chord check that couldn't read kanata, or found it running, offers the check again rather than a dead end (D-497).
     expect(refusalNotice("kanata_unreadable", cli)).toMatchObject({ message: "keyloom couldn't tell whether kanata stopped", action: { id: "check_exit_chord", label: "Check again" } });
     expect(refusalNotice("kanata_still_running", cli).action).toEqual({ id: "check_exit_chord", label: "Check again" });
+    expect(refusalNotice("kanata_not_seen", cli)).toMatchObject({ message: "keyloom hasn't seen kanata running lately", action: { id: "open_status", label: "Open keyboard status" } });
+    expect(refusalNotice("kanata_not_seen", cli).detail).not.toContain("keyloom remap");
     // A stale Replace it has nothing to retry; kanata's state is in the keyboard's status, and the toast opens it (R2-14).
     expect(refusalNotice("kanata_not_foreign", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });
     expect(refusalNotice("kanata_not_running", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });

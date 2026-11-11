@@ -101,8 +101,9 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
               <span className="sync-switch" data-on={auto.on} aria-hidden="true" />
             </button>
             {auto.note === null ? null : <p className="sync-note">{auto.note}</p>}
-            {board.remapper === true && !board.auto.proven ? (
-              // Recorded only while kanata isn't answering, so it stands for the chord having worked (R1-18).
+            {auto.exitChord ? (
+              // Offered only after keyloom saw kanata run its config, and recorded only while kanata isn't answering, so it stands for the
+              // chord having worked (R1-18, D-509). The note above says why it isn't there otherwise.
               <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.confirmExitChord(board.boardId); }}>
                 <ShieldCheck size={14} aria-hidden="true" />
                 <span className="menu-item-label">I held it and kanata stopped</span>
