@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { BoardChoice, ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
-import { ApiError, fetchLayout, fetchLayouts } from "./api.ts";
+import { ApiError, TOKEN_REJECTED, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
 import { Header } from "./shell/Header.tsx";
 import { fetchBoards } from "./import/api-import.ts";
@@ -9,6 +9,7 @@ import { ImportScreen } from "./import/ImportScreen.tsx";
 import { BoardSkeleton } from "./shell/BoardSkeleton.tsx";
 import { rememberShape } from "./shell/shape.ts";
 import { ErrorState } from "./shell/States.tsx";
+import { RestartAdvice, ServerGoneBanner, useServerGone } from "./shell/ServerGone.tsx";
 import { ReleaseDialog } from "./release/ReleaseDialog.tsx";
 import { releaseStatus, type ReleaseStatus } from "./release/status.ts";
 import { useNow } from "./release/useNow.ts";
@@ -21,7 +22,9 @@ import { Pegboard } from "./home/Pegboard.tsx";
 import { markOpened } from "./api-write.ts";
 import type { FindingRepairDraft } from "../api/review.ts";
 
-type Failure = { message: string; retryable: boolean };
+// `gone` is a layout that isn't there (404), which no Try again brings back (R1-08); `waiting` is a keyloom that stopped answering,
+// which the page reads again by itself when it is back (D-494).
+type Failure = { message: string; retryable: boolean; kind?: "gone" | "waiting" | "token" };
 type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
 
 // Runs a state change that replaces the page as a crossfade where the browser has view transitions; elsewhere, and with reduced
@@ -64,6 +67,9 @@ export function App({ token }: { token: string }) {
   const [attempt, setAttempt] = useState(0);
   // Where each keyboard stands against its layout's head; the server's engine does the work and this follows it (17).
   const sync = useSync(token);
+  // Said once for the whole page while keyloom is gone; when it is back, everything on screen is read again (D-494).
+  const gone = useServerGone(sync.live, () => setAttempt((count) => count + 1));
+  const banner = gone ? <ServerGoneBanner tokenRejected={sync.tokenRejected} /> : null;
   // Every board keyloom knows, for the silhouettes in the board switcher. Without it the switcher shows a plain keyboard icon.
   const [boardChoices, setBoardChoices] = useState<BoardChoice[]>([]);
   useEffect(() => {
@@ -126,7 +132,7 @@ export function App({ token }: { token: string }) {
     onManageKeyboards: () => { setManageRemoved(false); setManaging(true); },
     onAddKeyboard: () => { setManaging(false); setImporting(false); setAdding(true); },
   };
-  const wrap = (page: ReactNode) => <>{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
+  const wrap = (page: ReactNode) => <>{banner}{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
     active={layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null} onChanged={reload} initiallyRemoved={manageRemoved}
     onClose={() => setManaging(false)} onAdd={controls.onAddKeyboard} /> : null}</>;
 
@@ -134,7 +140,7 @@ export function App({ token }: { token: string }) {
     return wrap(
       <Shell>
         <ErrorState title="Can't load your layouts" {...(listError.retryable ? { onRetry: retry } : {})}>
-          {listError.message}
+          {listError.kind === "token" ? <RestartAdvice lead="keyloom restarted, so this page's link no longer works." /> : listError.message}
         </ErrorState>
       </Shell>
     );
@@ -257,10 +263,15 @@ export function App({ token }: { token: string }) {
     );
   }
   if ("error" in current) {
+    const gone = current.error.kind === "gone";
     return wrap(
       <Shell menu={menu}>
-        <ErrorState title="Can't show this layout" {...(current.error.retryable ? { onRetry: retry } : {})}>
-          {current.error.message}
+        <ErrorState
+          title={gone ? "This layout is gone" : "Can't show this layout"}
+          {...(current.error.retryable ? { onRetry: retry } : {})}
+          {...(gone ? { actions: <button type="button" className="button button-primary" onClick={() => { setView(null); setSelectedId(null); setOnWall(true); setAttempt((count) => count + 1); }}>Show your other layouts</button> } : {})}
+        >
+          {current.error.kind === "token" ? <RestartAdvice lead="keyloom restarted, so this page's link no longer works." /> : current.error.message}
         </ErrorState>
       </Shell>
     );
@@ -428,12 +439,10 @@ function Shell({
 
 // A rejected token won't be accepted on a retry; the person has to open keyloom's link again.
 function describe(error: unknown): Failure {
-  if (error instanceof ApiError && error.status === 401) {
-    return {
-      message: "The keyloom server rejected this page's token. Open the link printed by keyloom again.",
-      retryable: false,
-    };
-  }
+  if (error instanceof ApiError && error.status === 401) return { message: TOKEN_REJECTED, retryable: false, kind: "token" };
+  if (error instanceof ApiError && error.code === "not_found") return { message: error.message, retryable: false, kind: "gone" };
+  // Try again can work once keyloom is back; the banner's own reconnect also reads it again by itself.
+  if (error instanceof ApiError && error.code === "unreachable") return { message: error.message, retryable: true, kind: "waiting" };
   if (error instanceof Error) return { message: error.message, retryable: true };
   return { message: "Something went wrong loading the layout.", retryable: true };
 }

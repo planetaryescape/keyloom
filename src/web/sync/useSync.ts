@@ -19,6 +19,8 @@ export interface SyncApi {
   lastLayoutUpdated: LayoutUpdatedEvent | null;
   /** False until the first state arrives, and while the stream is being reopened. */
   live: boolean;
+  /** The server answered the stream with 401: it restarted with another token, and this page can't reconnect (D-494). */
+  tokenRejected: boolean;
   /** Why the last action failed, until the next one starts. `code` is the server's (R1-16), which the toast turns into an action. */
   error: { message: string; code: string | undefined } | null;
   syncNow: (layoutId: string) => Promise<void>;
@@ -54,6 +56,7 @@ export function useSync(token: string): SyncApi {
   const [lastReview, setLastReview] = useState<ReviewEvent | null>(null);
   const [lastLayoutUpdated, setLastLayoutUpdated] = useState<LayoutUpdatedEvent | null>(null);
   const [live, setLive] = useState(false);
+  const [tokenRejected, setTokenRejected] = useState(false);
   const [error, setError] = useState<SyncApi["error"]>(null);
   const [replaceAsk, setReplaceAsk] = useState<string | null>(null);
 
@@ -65,7 +68,12 @@ export function useSync(token: string): SyncApi {
       try {
         const response = await fetch("/api/events", { headers: { "x-keyloom-token": token }, signal: controller.signal });
         // Without the sync side (a server started without it) there is nothing to follow, and asking again will not change that.
-        if (response.status === 404 || response.status === 401 || response.body === null) return;
+        if (response.status === 401) {
+          setLive(false);
+          setTokenRejected(true);
+          return;
+        }
+        if (response.status === 404 || response.body === null) return;
         if (!response.ok) throw new Error(String(response.status));
         const decoder = new TextDecoder();
         const parser = createEventParser((next, keyboards, setup) => {
@@ -112,7 +120,7 @@ export function useSync(token: string): SyncApi {
   }, []);
 
   return {
-    boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, error, replaceAsk, setReplaceAsk,
+    boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, tokenRejected, error, replaceAsk, setReplaceAsk,
     syncNow: (layoutId) => act(async () => (await request("POST", "/api/sync", token, SyncNowResponseSchema, undefined, { layoutId })).boards),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),
     disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),

@@ -3,7 +3,7 @@ import {
   DecisionCardSchema, DecisionListResponseSchema, OutcomeQuestionsResponseSchema,
   type DecisionCard, type DecisionPatch, type OutcomeAnswer, type OutcomeQuestionsResponse,
 } from "../../api/http.ts";
-import { ApiError } from "../api.ts";
+import { ApiError, UNREACHABLE } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 
 export async function fetchDecisions(token: string, ref: string, signal: AbortSignal): Promise<DecisionCard[]> {
@@ -20,7 +20,7 @@ export async function retireDecision(token: string, id: string): Promise<void> {
   try {
     response = await fetch(`/api/decisions/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-keyloom-token": token } });
   } catch {
-    throw new ApiError(0, "Can't reach keyloom. Is it still running in your terminal?");
+    throw new ApiError(0, UNREACHABLE, { code: "unreachable" });
   }
   if (!response.ok) throw await failure(response);
 }
