@@ -88,6 +88,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   let writing = false;
   let abortedFor: "bootloader" | "write" | "cancelled" | undefined;
   let entering: Promise<void> | undefined;
+  // A state listener that throws inside the restart's callback: kept, so the restart never rejects unhandled, and thrown once Zapp is done.
+  let enteringFailure: unknown;
   let rebooted = false;
   let exited = false;
   // Held while keyloom restarts the keyboard and while Zapp writes, so a Ctrl-C or a shutdown waits for the write (D-506).
@@ -204,7 +206,9 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
                   input.log.line(`keyloom: couldn't restart the keyboard itself: ${err instanceof Error ? err.message : String(err)}`);
                   input.onState("waiting_for_bootloader", resetInstruction(input.bootloaderWaitMs), { needsHand: true });
                 },
-              ).finally(restarting);
+              ).finally(restarting).catch((err: unknown) => {
+                enteringFailure ??= err;
+              });
             }
             if (input.bootloaderPresent) void watch();
           }
@@ -218,10 +222,14 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     exited = true;
     clearTimeout(timer);
     input.signal?.removeEventListener("abort", cancel);
-    // A rejected run must not leave the guard held, or serve would ignore Ctrl-C for good.
-    await entering;
-    releaseWrite?.();
+    // A rejected run or restart must not leave the guard held, or serve would ignore Ctrl-C for good.
+    try {
+      await entering;
+    } finally {
+      releaseWrite?.();
+    }
   }
+  if (enteringFailure !== undefined) throw enteringFailure;
   // A keyboard keyloom restarted counts as being written (D-506), so only the write timeout below can leave it in its bootloader.
   if (abortedFor === "cancelled" || abortedFor === "bootloader") {
     // Zapp was stopped after a USB check that saw no bootloader, but a reset pressed in between puts the keyboard there with

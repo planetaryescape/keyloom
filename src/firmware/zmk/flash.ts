@@ -233,7 +233,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       const head = i === 0 ? "Cancelled. Nothing was flashed" : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old";
       const mounted = await input.findVolume(step.volume).catch(() => null);
       if (mounted) return `${head}, but ${shared ? `${step.volume} is mounted, so a half is` : `the ${step.label} is`} in its bootloader now and won't type until it is flashed: flash again to put the build on it.`;
-      if (touchedReason !== undefined) return `${head}, but keyloom had already restarted the ${step.label} (${touchedReason.replace(/\.$/, "")}). If it doesn't type, it is in its bootloader: flash again to put the build on it.`;
+      if (touchedReason !== undefined) return `${head}, but keyloom had already sent a restart to the ${step.label} (${touchedReason.replace(/\.$/, "")}). If it doesn't type, it is in its bootloader: flash again to put the build on it.`;
       return i === 0 ? `${head}.` : `${head}; flash again to finish.`;
     };
     // From the moment the hook says it is restarting the half until it returns, a stop would strand the half in its bootloader

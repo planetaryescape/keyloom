@@ -347,6 +347,18 @@ describe("flashWithZapp never lets a stop cut off a write (D-506)", () => {
     expect(keyboardWriteInProgress()).toBe(false);
   });
 
+  test("the write guard is released when the hands-free restart's own writing step throws", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 0.2; exit 0');
+    const thrown = await s.flash({
+      enterBootloader: async () => ({ ok: true }),
+      onState: (state) => {
+        if (state === "writing") throw new Error("the state listener broke");
+      },
+    }).catch((err: unknown) => err);
+    expect(thrown).toBeInstanceOf(Error);
+    expect(keyboardWriteInProgress()).toBe(false);
+  });
+
   test("after a stop, a USB read that fails says keyloom couldn't check, not that nothing was flashed", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
     const c = new AbortController();

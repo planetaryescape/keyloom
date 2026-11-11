@@ -592,7 +592,7 @@ describe("a stop never cuts off a half's write (D-506)", () => {
     });
     expect(r.state).toBe("failed");
     expect(r.error).not.toBe("Cancelled. Nothing was flashed.");
-    expect(r.error).toContain("keyloom had already restarted the right half");
+    expect(r.error).toContain("keyloom had already sent a restart to the right half");
     expect(r.error).toContain(`${RIGHT} didn't appear within 15 seconds`);
     expect(r.error).toContain("flash again");
   });
