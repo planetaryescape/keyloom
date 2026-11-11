@@ -9,7 +9,10 @@ export type OpenRequestedView = (view: AgentView, signal: AbortSignal) => Promis
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
 import { cancelSavedRequest, cancelSavedRun, fetchConversation, fetchConversations, forgetPriority, latestSavedRun, observeSavedRun, startSavedChat, streamObservedChat } from "./api-chat.ts";
-import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action } from "./transcript.ts";
+import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn } from "./transcript.ts";
+
+/** Why a reply stopped, as the failure box reads it (failure-words.ts). */
+type TurnFailure = NonNullable<AssistantTurn["failure"]>;
 
 /** A refusal before the reply started, or a history/provider request problem. */
 export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other"; message: string };
@@ -32,7 +35,7 @@ function classify(error: unknown): Problem {
 }
 
 /** A Try again the server refused keeps the server's code, so a signed-out provider offers the model setup, not only Try again (R5-05). */
-export function refusedRetryFailure(error: ApiError): { code: string; message: string } {
+export function refusedRetryFailure(error: ApiError): TurnFailure {
   return { code: error.code ?? "retry", message: classify(error).message };
 }
 
@@ -40,7 +43,7 @@ export function refusedRetryFailure(error: ApiError): { code: string; message: s
  * A request that failed without a refusal. Once the reply started it keeps the server's code. Before that, keyloom may have the message
  * already, so it is `unconfirmed`, which offers Open history and Ask again (R5-07).
  */
-export function lostFailure(error: unknown, started: boolean): { code: string; message: string } {
+export function lostFailure(error: unknown, started: boolean): TurnFailure {
   const message = error instanceof Error ? error.message : "The reply stopped.";
   if (started) return { code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message };
   return { code: "unconfirmed", message: `${message} keyloom may already be answering it. Open history to see whether it did before you ask again.` };

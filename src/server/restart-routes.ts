@@ -13,7 +13,7 @@ export interface RestartBackend {
   restart(): void;
 }
 
-const EmptyBody = z.object({}).strict();
+const EmptyBody = z.strictObject({});
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
