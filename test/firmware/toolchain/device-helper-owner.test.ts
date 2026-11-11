@@ -151,3 +151,12 @@ test("a dead helper isn't replaced after shutdown began", async () => {
   await expect(owner.transport()).rejects.toThrow("start a new command");
   expect(connects).toBe(1);
 });
+
+test("an error from a failed setup is marked as latched, so the lab doesn't offer a try that gets the same error (#290 review)", async () => {
+  const { isLatchedSetupFailure } = await import("../../../src/firmware/toolchain/device-helper/setup-failure.ts");
+  const original = new Error("synthetic handshake timeout");
+  const owner = new CandidateHidOwner(async () => { throw new HelperSetupFailure(original, "terminated"); });
+  await expect(owner.transport()).rejects.toBe(original);
+  expect(isLatchedSetupFailure(original)).toBe(true);
+  expect(isLatchedSetupFailure(new Error("another"))).toBe(false);
+});

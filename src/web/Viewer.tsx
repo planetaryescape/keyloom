@@ -846,7 +846,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setLayerId(slot.layerId);
             openEditor(slot.position, slot.layerId);
           },
-          openCombo: (id) => openCombo(id),
+          openCombo: (id) => {
+            // A combo being made or changed would be replaced without asking (#290 review): it is finished or closed first.
+            const open = comboDraft === null ? undefined : layout.combos.find((combo) => combo.id === comboDraft.id);
+            if (comboDraft !== null && comboDraft.id !== id && (open === undefined || JSON.stringify(draftFromCombo(open)) !== JSON.stringify(comboDraft))) {
+              toasts.show({ kind: "info", message: "Apply or close the combo you are editing first" });
+              return;
+            }
+            openCombo(id);
+          },
           notify: (message) => toasts.show({ kind: "info", message }),
           nameFunction: (fn) => functionName(fn, layout),
         };

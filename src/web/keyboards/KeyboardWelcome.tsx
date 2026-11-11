@@ -98,6 +98,8 @@ function FirmwareResults({ query, flow }: { query: string; flow: ReturnType<type
       {note === "too_short" ? <p>Type at least two letters in the search above.</p>
         : note === "searching" ? <p role="status">Searching QMK and ZMK…</p>
         : note === "none" ? <p>QMK and ZMK have no keyboard called “{query.trim()}”. Try its maker or another spelling. If it isn&rsquo;t there at all, <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">the contribution guide</a> says how to add it.</p>
+        // Results for an earlier text, or kept from before a failed search, don't answer this one (#290 review).
+        : flow.problem !== null || flow.foundFor !== query.trim() ? null
         : flow.found.map((candidate) => <button key={candidate.id} type="button" onClick={() => flow.chooseCandidate(candidate)}>{candidate.displayName}<small>{candidate.detail}</small></button>)}
     </div>
   );

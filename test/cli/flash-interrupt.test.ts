@@ -71,6 +71,7 @@ afterEach(() => {
 
 /** SIGKILLs a process group, or the process alone when it doesn't lead one. Gone already is fine. */
 function killGroup(pid: number): void {
+  if (!Number.isSafeInteger(pid) || pid <= 1) return;
   try {
     process.kill(-pid, "SIGKILL");
   } catch {
@@ -98,6 +99,8 @@ async function child(zappBody: (flag: string) => string, opts: { usb?: "unreadab
   cleanups.push(() => {
     if (!existsSync(zappPid)) return;
     const pid = Number(readFileSync(zappPid, "utf8").trim());
+    // A file read while the shell was still writing it is empty, and Number("") is 0: process group 0 is this test runner's (#290 review).
+    if (!Number.isSafeInteger(pid) || pid <= 1) return;
     // A recorded pid that is alive again under another command was reused after the fake ended: that process isn't this test's.
     const command = alive(pid) ? Bun.spawnSync(["ps", "-o", "command=", "-p", String(pid)]).stdout.toString() : "";
     if (command === "" || command.includes("sleep") || command.includes(bin)) killGroup(pid);

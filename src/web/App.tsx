@@ -420,14 +420,15 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
  */
 function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome, onReload }: { token: string; sync: SyncApi; summary: LayoutSummary; kanata: boolean; problem: string; fixable: boolean; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
   const [busy, setBusy] = useState(false);
-  // A put-on to a MacBook whose kanata isn't running is refused (R4 residual 1). The dialog shows kanata's setup instead of the confirm
-  // until the sync engine sees kanata answer, whether the sync line said so first or the put-on was refused first.
+  // A put-on to a MacBook whose kanata isn't running is refused (R4 residual 1). While the sync engine reads kanata as not running, the
+  // dialog shows kanata's setup in place of the confirm. A refusal the page hadn't seen coming shows the setup too, but keeps the confirm:
+  // kanata may have started again before the page heard it stopped, and the confirm then works (#290 review).
   const kanataDown = kanata && sync.boards.find((b) => b.boardId === summary.boardId)?.state.kind === "not_connected";
   const [kanataRefused, setKanataRefused] = useState(false);
   useEffect(() => {
     if (!kanataDown) setKanataRefused(false);
   }, [kanataDown]);
-  const needsKanata = kanataDown || kanataRefused;
+  const showSetup = kanataDown || kanataRefused;
   // The config on its keyboard can't be archived (R3-06): the page hides Archive, says why, and offers to put another config on first.
   // A list that failed to load is empty, which keeps Archive; the server refuses it with its reason if it is on the keyboard after all.
   const configs = useConfigs(token, summary.boardId, `${summary.id}:${summary.revisionId}`);
@@ -534,11 +535,11 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
           await useConfig(token, other.id);
           configs.reload();
         }}
-        blocked={needsKanata}
-        extra={needsKanata ? (
+        blocked={kanataDown}
+        extra={showSetup ? (
           <div className="config-problem" role="status">
             <p>kanata isn't running, so keyloom can't load {other.name} yet.</p>
-            <p className="config-problem-detail">Finish these steps. Put it on comes back when keyloom sees kanata running.</p>
+            <p className="config-problem-detail">{kanataDown ? "Finish these steps. Put it on comes back when keyloom sees kanata running." : "Finish these steps, then put it on again."}</p>
             <RemapperSetup sync={sync} boardId={summary.boardId} mode="setup" />
           </div>
         ) : null}

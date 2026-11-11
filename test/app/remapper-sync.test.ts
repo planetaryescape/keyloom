@@ -189,6 +189,21 @@ describe("the MacBook's sync state", () => {
     expect(kind(e)).toEqual({ kind: "in_sync" });
   });
 
+  test("Disable remapping after a foreign_file failure makes Replace it stale, so it can't turn remapping back on (#290 review)", async () => {
+    const world = make();
+    const e = world.engine();
+    await e.start();
+    writeFileSync(world.paths.kbd, "(defsrc a)\n(deflayer base a)\n");
+    const r = await e.syncNow(world.layoutId);
+    if (r.kind !== "started") throw new Error("sync did not start");
+    await r.done;
+    expect(e.views().find((v) => v.boardId === MAC)?.last?.errorCode).toBe("foreign_file");
+    await e.disableRemapping(MAC);
+    expect(e.views().find((v) => v.boardId === MAC)?.last?.errorCode).toBeNull();
+    await expect(e.replaceForeignRemapperConfig(world.layoutId)).rejects.toMatchObject({ code: "kanata_not_foreign" });
+    expect(world.fake.running()).toBe(world.paths.safe);
+  });
+
   test("Replace it while another keyloom process holds the sync claim is busy and writes nothing", async () => {
     const world = make();
     const foreign = "(defsrc a)\n(deflayer base a)\n";

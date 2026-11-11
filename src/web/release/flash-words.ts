@@ -118,7 +118,8 @@ export function afterApply(board: { firmware: string; name: string }, sync: Boar
   const autoRuns = auto && (state?.kind === "in_sync" || state?.kind === "syncing" || (state?.kind === "behind" && state.why === "waiting"));
   if (kanata) {
     // keyloom.kbd on disk isn't keyloom's (R4 residual 2): auto-apply and Apply now would both be refused again until it is replaced.
-    if (sync?.last?.status === "failed" && sync.last.failure === "foreign_file") {
+    // Replace it needs kanata running, so a stopped kanata gets its setup below first (#290 review).
+    if (sync?.last?.status === "failed" && sync.last.errorCode === "foreign_file" && state?.kind !== "not_connected") {
       return { lead: "Applied to your layout.", text: `keyloom's config file was changed by someone else, so this isn't on your ${name} yet. ${UNDO}`, toast: "keyloom's config file was changed by someone else.", action: { id: "replace_foreign", label: "Replace it…" } };
     }
     if (autoRuns) return { lead: "Applied.", text: `Auto-apply puts it on your ${name} in a moment. ${UNDO}`, toast: `Auto-apply puts it on your ${name}.`, action: null };

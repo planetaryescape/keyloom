@@ -116,7 +116,8 @@ function behindAction(board: BoardSync, why: Extract<BoardSync["state"], { kind:
  * keyloom's last apply was refused because the keyloom.kbd on disk isn't keyloom's (R4 residual 2). Apply now would be refused the same
  * way, so the line offers Replace it, which keeps a copy of the file. kanata may still run keyloom's config, or remapping may be off.
  */
-const foreignFile = (board: BoardSync): boolean => board.last?.status === "failed" && board.last.failure === "foreign_file";
+// The engine sends the code only while Replace it can still run: not after remapping was turned off since the failure.
+const foreignFile = (board: BoardSync): boolean => board.last?.status === "failed" && board.last.errorCode === "foreign_file";
 const FOREIGN_FILE_DETAIL = "Someone else wrote or edited keyloom.kbd, keyloom's config file, so keyloom left it alone. Replace it to put this layout on, and keyloom keeps a copy of that file.";
 const REPLACE_FOREIGN = { id: "replace_foreign", label: "Replace it…" } as const;
 

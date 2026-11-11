@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiCandidate, DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { PreviewResponse, PutPreviewResponse, PutResponse } from "../../api/keyboards.ts";
 import type { ReviewActivity } from "../../api/review.ts";
-import { ApiError, fetchLayouts } from "../api.ts";
+import { ApiError } from "../api.ts";
 import { firstFreeName } from "../import/export-steps.ts";
-import { createConfig } from "../configs/api-configs.ts";
+import { createConfig, fetchAllConfigs } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
 
 // The new-keyboard flow (22, D-336): a keyboard keyloom has no board for is plugged in, BK confirms which it is, says where the home row
@@ -231,7 +231,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setBusy(true);
       setProblem(null);
       try {
-        const taken = opts.free === true ? (await fetchLayouts(token, new AbortController().signal)).map((layout) => layout.name) : [];
+        // Every config's name, archived ones and removed keyboards' included: they still hold their names (#290 review).
+        const taken = opts.free === true ? (await fetchAllConfigs(token)).map((config) => config.name) : [];
         const config = await createConfig(token, { from: "blank", name: firstFreeName(name.trim(), taken), board: step.boardId });
         return config.id;
       } catch (e) {

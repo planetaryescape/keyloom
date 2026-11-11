@@ -103,6 +103,15 @@ for (const code of ["helper_exited", "protocol_error", "timeout"] as const) {
   });
 }
 
+test("a timeout from a helper setup that stays failed asks for a restart, not a try that gets the same error (#290 review)", async () => {
+  const { markLatchedSetup } = await import("../../src/firmware/toolchain/device-helper/setup-failure.ts");
+  const error = new DeviceTransportError({ code: "timeout", effect: "possible", retry: "never" });
+  markLatchedSetup(error);
+  const result = await startFailure(error);
+  expect(result.response.status).toBe(409);
+  expect(((await result.response.json()) as { error: { code: string } }).error.code).toBe("restart_required");
+});
+
 test("an unclassified capture error remains an internal error and is not exposed", async () => {
   const log = spyOn(console, "error").mockImplementation(() => {});
   try {

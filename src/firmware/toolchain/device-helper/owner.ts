@@ -1,5 +1,5 @@
 import { HidError, type HidTransport } from "../hid.ts";
-import { HelperCleanupUnconfirmedError, HelperSetupFailure } from "./setup-failure.ts";
+import { HelperCleanupUnconfirmedError, HelperSetupFailure, markLatchedSetup } from "./setup-failure.ts";
 import { SerialError, type SerialTransport } from "../serial.ts";
 import { helperSerialTransport, packagedSerialTransport } from "./serial.ts";
 import { deviceBackend } from "./selection.ts";
@@ -31,7 +31,10 @@ export class CandidateDeviceOwner<T = HidTransport> {
     try {
       return (await this.owned).transport;
     } catch (error) {
-      if (error instanceof HelperSetupFailure) throw error.original;
+      if (error instanceof HelperSetupFailure) {
+        markLatchedSetup(error.original);
+        throw error.original;
+      }
       throw error;
     }
   }

@@ -181,6 +181,11 @@ export class SyncEngine {
   private readonly sameDocument = new Map<string, boolean>();
   /** A failed build's code, by build: it never changes, and the views are built every tick. */
   private readonly buildCodes = new Map<string, string | null>();
+  /**
+   * The board's latest sync when this engine last turned remapping off. A `foreign_file` failure that is that sync no longer stands
+   * for the person's choice: replacing then would turn remapping back on (#290 review). Kept in memory, so a restart forgets it.
+   */
+  private readonly remappingOffAfter = new Map<string, string | null>();
 
   constructor(private readonly app: App, private readonly deps: SyncDeps, opts: SyncOptions = {}) {
     this.quietMs = opts.quietMs ?? 3000;
@@ -463,9 +468,14 @@ export class SyncEngine {
   private runView(s: SyncRow): SyncRunView {
     return {
       id: s.id, trigger: s.trigger, status: s.status, step: s.step, revisionId: s.revisionId, failure: s.failure, error: s.error,
-      errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId) : null,
+      errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId) : this.replaceable(s) ? "foreign_file" : null,
       startedAt: s.startedAt, finishedAt: s.finishedAt, timings: this.timingsOf(s),
     };
+  }
+
+  /** A remapper apply refused because keyloom.kbd isn't keyloom's, and remapping wasn't turned off after it: Replace it answers it. */
+  private replaceable(s: SyncRow): boolean {
+    return s.status === "failed" && s.failure === "foreign_file" && this.remappingOffAfter.get(s.boardId) !== s.id;
   }
 
   private buildCodeOf(buildId: string): string | null {
@@ -793,6 +803,7 @@ export class SyncEngine {
       if (run && run.row.boardId === boardId) await run.done;
       const r = await remapper.disable(boardId);
       if (!r.ok) throw new UsageError(`couldn't disable remapping: ${r.error}. If kanata is stuck, hold Left Control + Space + Escape to stop it`);
+      this.remappingOffAfter.set(boardId, lastSyncOfBoard(this.app.db, boardId)?.id ?? null);
       await this.refresh(true);
       this.publish();
     });
@@ -819,10 +830,11 @@ export class SyncEngine {
       if (reading.state === "absent") throw new SyncRefusal("kanata_not_running", "kanata isn't running, so there is nothing to replace");
       // The confirm was asked about a foreign config: kanata running one, or keyloom's last apply refused because keyloom.kbd on disk
       // isn't keyloom's while kanata still runs keyloom's loaded config (foreign_file). Anything else now (remapping switched off by
-      // hand, keyloom's own file) means it is stale, and applying would undo what changed since, such as turning remapping back on.
+      // hand after that failure, keyloom's own file) means it is stale, and applying would undo what changed since, such as turning
+      // remapping back on.
       // applyKanata looks at the file itself, so a file that became keyloom's again is applied over without a copy.
       const last = lastSyncOfBoard(this.app.db, layout.boardId);
-      const foreignFile = last?.status === "failed" && last.failure === "foreign_file" && (reading.state === "keyloom" || reading.state === "remapping_off");
+      const foreignFile = last !== undefined && this.replaceable(last) && (reading.state === "keyloom" || reading.state === "remapping_off");
       if (reading.state !== "other" && !foreignFile) throw new SyncRefusal("kanata_not_foreign", "kanata no longer runs a config keyloom didn't write, so nothing was replaced");
       // Claimed like any sync, so no sync here or in another keyloom starts until this write is done: a sync whose reload failed would
       // otherwise restore its own file over this one. A sync that started after the wait above is busy, not waited for in the queue.

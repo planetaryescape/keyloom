@@ -218,7 +218,7 @@ describe("a software remapper (the MacBook's keyboard)", () => {
 
   test("a keyloom.kbd someone else changed offers Replace it, not Apply now or Turn remapping on, which it would refuse (R4 residual 2)", () => {
     const cli = "/Users/x/.config/keyloom/kanata/keyloom.kbd wasn't written by keyloom (it has been edited by hand), so keyloom left it alone.";
-    const last = { id: "syn_1", trigger: "manual" as const, status: "failed" as const, step: "done", revisionId: "rev_1", failure: "foreign_file", error: cli, startedAt: 1, finishedAt: 2, timings: { waitMs: null, buildMs: null, flashMs: null, totalMs: null } };
+    const last = { id: "syn_1", trigger: "manual" as const, status: "failed" as const, step: "done", revisionId: "rev_1", failure: "foreign_file", errorCode: "foreign_file", error: cli, startedAt: 1, finishedAt: 2, timings: { waitMs: null, buildMs: null, flashMs: null, totalMs: null } };
     const failed = syncLine(mac({ kind: "behind", changes: 1, why: "failed", error: cli }, { last }), "lay_1");
     expect(failed).toMatchObject({ tone: "error", action: { id: "replace_foreign", label: "Replace it…" }, more: cli });
     expect(failed.detail).toContain("keeps a copy");
@@ -228,7 +228,7 @@ describe("a software remapper (the MacBook's keyboard)", () => {
     const notice = syncNotice(mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "manual" }), mac({ kind: "behind", changes: null, why: "remapping_off", error: null }, { last }));
     expect(notice).toMatchObject({ kind: "error", action: { id: "replace_foreign", label: "Replace it…" } });
     // Any other failed apply keeps Apply now.
-    const other = syncLine(mac({ kind: "behind", changes: 1, why: "failed", error: "kanata --check refused" }, { last: { ...last, failure: "build" } }), "lay_1");
+    const other = syncLine(mac({ kind: "behind", changes: 1, why: "failed", error: "kanata --check refused" }, { last: { ...last, failure: "build", errorCode: null } }), "lay_1");
     expect(other.action).toEqual({ id: "sync_now", label: "Apply now" });
   });
 
