@@ -279,6 +279,64 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(s.lines.some((l) => l.includes(`${RIGHT} has unmounted, so the write is taken as done`))).toBe(true);
   });
 
+  test("a drive that goes away when the open fails got nothing, so keyloom waits for it to mount again and writes it then", async () => {
+    // BK's Corne right half, 2026-11-11: EINTR on the open, the boot drive unmounted, and the half stayed in its bootloader.
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    for (const label of [RIGHT, LEFT]) mkdirSync(join(s.root, label), { recursive: true });
+    let opens = 0;
+    const r = await s.flash({
+      writeImage: async (path, bytes) => {
+        opens += 1;
+        if (opens === 1) {
+          rmSync(dirname(path), { recursive: true });
+          mount(s.root, RIGHT, 100);
+          throw Object.assign(new Error(`EINTR: interrupted system call, open '${path}'`), { code: "EINTR", syscall: "open" });
+        }
+        await Bun.write(path, bytes);
+      },
+      remountWaitMs: 1000,
+    });
+    boot.stop();
+    expect(r).toMatchObject({ state: "succeeded", error: null });
+    expect(boot.written).toEqual([RIGHT, LEFT]);
+    expect(s.lines.some((l) => l.includes(`${RIGHT} went away before the file was opened (EINTR), so nothing was written`))).toBe(true);
+    expect(s.lines.some((l) => l.includes("taken as done"))).toBe(false);
+  });
+
+  test("a drive that goes away when the open fails and never comes back fails the flash instead of calling it written", async () => {
+    const s = await setup();
+    for (const label of [RIGHT, LEFT]) mkdirSync(join(s.root, label), { recursive: true });
+    const r = await s.flash({
+      writeImage: async (path) => {
+        rmSync(dirname(path), { recursive: true });
+        throw Object.assign(new Error(`EINTR: interrupted system call, open '${path}'`), { code: "EINTR", syscall: "open" });
+      },
+      remountWaitMs: 200,
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("so nothing was written. The right half was not flashed");
+    expect(s.lines.some((l) => l.includes("taken as done"))).toBe(false);
+  });
+
+  test("an interrupted open on a drive that is still mounted is tried again", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    mount(s.root, RIGHT, 20);
+    mount(s.root, LEFT, 300);
+    let opens = 0;
+    const r = await s.flash({
+      writeImage: async (path, bytes) => {
+        opens += 1;
+        if (opens === 1) throw Object.assign(new Error(`EINTR: interrupted system call, open '${path}'`), { code: "EINTR", syscall: "open" });
+        await Bun.write(path, bytes);
+      },
+    });
+    boot.stop();
+    expect(r).toMatchObject({ state: "succeeded", error: null });
+    expect(s.lines.some((l) => l.includes(`opening the file on ${RIGHT} was interrupted; trying again`))).toBe(true);
+  });
+
   test("a device-gone write error while the drive is still listed waits for it to unmount, then counts as written", async () => {
     const s = await setup();
     // BK's Glove80 left half, 2026-10-16: the bootloader rebooted on the last block, the write failed with ENXIO, and macOS still
