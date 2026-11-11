@@ -189,7 +189,16 @@ export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_for
  */
 export type RefusalNotice = { message: string; detail?: string; action?: { id: RefusalAction; label: string } };
 
-export function refusalNotice(code: string | undefined, message: string): RefusalNotice {
+/**
+ * The refusal behind a failed request, when its code is one `refusalNotice` has words for (R3-01): a put-on or a put-version refused by
+ * the sync engine gets the same message and button as the toast. Any other failure is null, and the caller shows its own message.
+ */
+export const refusalOf = (error: { code?: string | undefined; message: string }): RefusalNotice | null => knownRefusal(error.code);
+
+export const refusalNotice = (code: string | undefined, message: string): RefusalNotice =>
+  knownRefusal(code) ?? { message: "keyloom couldn't do that", detail: message };
+
+function knownRefusal(code: string | undefined): RefusalNotice | null {
   switch (code) {
     case "archived": return { message: "This config is archived", detail: "Restore it to put it on the keyboard.", action: { id: "restore", label: "Restore" } };
     case "not_on_keyboard": return { message: "This config isn't the one on the keyboard", detail: "Put it on to make it the config that syncs.", action: { id: "put_on", label: "Put it on…" } };
@@ -204,6 +213,6 @@ export function refusalNotice(code: string | undefined, message: string): Refusa
     case "kanata_unreadable": return { message: "keyloom couldn't tell whether kanata stopped", detail: "kanata's port didn't answer, so nothing was recorded. Check again in a moment.", action: { id: "check_exit_chord", label: "Check again" } };
     case "kanata_not_foreign": return { message: "kanata's config changed, so nothing was replaced", detail: "The keyboard's status shows what kanata runs now.", action: { id: "open_status", label: "Open keyboard status" } };
     case "keyboard_removed": return { message: "This keyboard was removed from your setup", detail: "Restore it to sync it again. Its configs and history were kept.", action: { id: "restore_keyboard", label: "Restore" } };
-    default: return { message: "keyloom couldn't do that", detail: message };
+    default: return null;
   }
 }

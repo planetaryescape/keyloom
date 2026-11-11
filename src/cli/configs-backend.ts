@@ -4,7 +4,7 @@ import {
   NotFoundError, StaleBaseError, UsageError, ValidationFailedError, archiveConfig, compareRevision, deleteConfig, listConfigs, nameVersion, newBlankConfig, newConfig, newConfigFromUpload, openProposalsOutsideChat, renameConfig, restoreConfig,
   restoreVersion, versionHistory, ValidationResultSchema, type App, type GeometryOptions,
 } from "../app/index.ts";
-import type { SyncEngine } from "../app/sync-engine.ts";
+import { SyncRefusal, type SyncEngine } from "../app/sync-engine.ts";
 import { ConfigsError, type ConfigsBackend } from "../server/configs-backend.ts";
 
 /** Turns the app's typed errors into the status and code the browser acts on; anything else stays a 500. */
@@ -13,6 +13,8 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     return await fn();
   } catch (err) {
     if (err instanceof NotFoundError) throw new ConfigsError(404, "not_found", err.message);
+    // Before UsageError, which it extends: a refused put-on keeps its code, which the page turns into the action that fixes it (R3-01).
+    if (err instanceof SyncRefusal) throw new ConfigsError(400, err.code, err.message);
     if (err instanceof UsageError) throw new ConfigsError(400, "usage", err.message);
     if (err instanceof StaleBaseError) throw new ConfigsError(409, "stale_base", err.message);
     if (err instanceof ValidationFailedError) throw new ConfigsError(422, "validation", err.message, ValidationResultSchema.parse(err.details));

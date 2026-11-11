@@ -260,6 +260,16 @@
   font-size: var(--text-sm);
 }
 
+.config-problem p {
+  margin: 0;
+}
+
+/* What to do about it reads as advice, not as more of the error. */
+.config-problem .config-problem-detail {
+  margin-top: var(--space-1);
+  color: var(--ink-2);
+}
+
 /* Deleting for good is the one red action; the shared .button-danger reads tokens the light theme no longer defines. */
 .bar-apply.config-danger {
   background: var(--bad);

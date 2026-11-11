@@ -43,19 +43,24 @@ function ConfigDialog({ title, label, onClose, children, foot, onSubmit }: {
   );
 }
 
+/** A failure the dialog can say in words with the button that fixes it, such as a refused put-on (R3-01). */
+export type ConfirmProblem = { message: string; detail?: string; action?: { label: string; run: () => void } };
+
 /**
  * A yes-or-no with consequences in words: putting a config on the keyboard, and putting a version on it (D-315). The work happens in
- * `onConfirm`; the dialog stays open with the reason if it fails.
+ * `onConfirm`; the dialog stays open with the reason if it fails. `problemFor` turns a failure into words and a way on; the button
+ * closes the dialog and does it. Without one, or when it returns null, the error's own message is shown.
  */
-export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose }: {
+export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, problemFor }: {
   title: string;
   lines: readonly string[];
   confirmLabel: string;
   onConfirm: () => Promise<void>;
   onClose: () => void;
+  problemFor?: (error: unknown) => ConfirmProblem | null;
 }) {
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<ConfirmProblem | null>(null);
   const go = async () => {
     setBusy(true);
     setProblem(null);
@@ -63,10 +68,11 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose }
       await onConfirm();
       onClose();
     } catch (error) {
-      setProblem(message(error));
+      setProblem(problemFor?.(error) ?? { message: message(error) });
       setBusy(false);
     }
   };
+  const action = problem?.action;
   return (
     <ConfigDialog
       title={title}
@@ -76,15 +82,25 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose }
       foot={
         <>
           <button type="button" className="sheet-action" onClick={onClose}>Not now</button>
-          <button type="submit" className="bar-apply" disabled={busy} data-autofocus>
-            {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
-            {confirmLabel}
-          </button>
+          {action === undefined ? (
+            <button type="submit" className="bar-apply" disabled={busy} data-autofocus>
+              {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
+              {confirmLabel}
+            </button>
+          ) : (
+            // A refusal with a fix: the fix replaces the confirm, which would be refused the same way again.
+            <button type="button" className="bar-apply" onClick={() => { onClose(); action.run(); }}>{action.label}</button>
+          )}
         </>
       }
     >
       {lines.map((line) => <p key={line} className="config-dialog-lead">{line}</p>)}
-      {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
+      {problem === null ? null : (
+        <div className="config-problem" role="alert">
+          <p>{problem.message}</p>
+          {problem.detail === undefined ? null : <p className="config-problem-detail">{problem.detail}</p>}
+        </div>
+      )}
     </ConfigDialog>
   );
 }

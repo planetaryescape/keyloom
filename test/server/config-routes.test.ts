@@ -131,7 +131,13 @@ describe("configs", () => {
     w.world.reading = { state: "absent" };
     const refused = await post(`/api/configs/${w.layoutId}/use`);
     expect(refused.status).toBe(400);
+    // The engine's refusal code survives the configs backend, so the dialog can offer its fix instead of the CLI sentence (R3-01).
+    expect((await refused.json()).error).toMatchObject({ code: "not_connected" });
     expect(getBoardConfig(w.app.db, BOARD)).toBe(colemak.id);
+
+    w.world.reading = { state: "other", detail: "USB serial ZSA-1234" };
+    const foreign = await post(`/api/configs/${w.layoutId}/use`);
+    expect((await foreign.json()).error).toMatchObject({ code: "foreign_firmware" });
   });
 });
 

@@ -101,7 +101,7 @@ import { readStored, writeStored } from "./shell/storage.ts";
 import { Toasts, useToasts } from "./shell/Toasts.tsx";
 import { NARROW, PHONE, useMediaQuery } from "./shell/useMediaQuery.ts";
 import type { SyncApi } from "./sync/useSync.ts";
-import { useSyncToasts } from "./sync/useSyncToasts.ts";
+import { type RefusalHandlers, refusalProblem, useSyncToasts } from "./sync/useSyncToasts.ts";
 import { keyIn, keyOn } from "../validation/words.ts";
 
 interface ViewerProps {
@@ -199,7 +199,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const toasts = useToasts();
   // A refused sync's toast offers the fix (R1-16); each handler is the same one the page's own control uses.
-  useSyncToasts(sync, toasts.show, {
+  const refusalHandlers: RefusalHandlers = {
     restore: () => void restoreArchived(summary.id),
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: () => onOpenRelease(),
@@ -219,7 +219,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         (error: unknown) => toasts.show({ kind: "error", message: "keyloom couldn't restore the keyboard", detail: error instanceof Error ? error.message : "Try again from Your keyboards." }),
       );
     },
-  });
+  };
+  useSyncToasts(sync, toasts.show, refusalHandlers);
+  // A refused put-on says why in its dialog, with the same fix as the toast (R3-01). Restore and Replace it act on the config being put on.
+  const putOnProblem = (target: { id: string }) => (error: unknown) =>
+    error instanceof ApiError
+      ? refusalProblem(error, { ...refusalHandlers, restore: () => void restoreArchived(target.id), replace_foreign: () => sync.setReplaceAsk(target.id) })
+      : null;
   // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
   // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.
   const [unsynced, setUnsynced] = useState<{ layerId: string; position: number }[]>([]);
@@ -2334,6 +2340,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ]}
           confirmLabel="Put it on"
           onConfirm={() => putOn(configDialog.target)}
+          problemFor={putOnProblem(configDialog.target)}
           onClose={() => setConfigDialog(null)}
         />
       ) : configDialog?.kind === "put-version" ? (
@@ -2349,6 +2356,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ]}
           confirmLabel="Put it on"
           onConfirm={() => putVersionOn(configDialog.milestone)}
+          problemFor={putOnProblem(summary)}
           onClose={() => setConfigDialog(null)}
         />
       ) : null}
