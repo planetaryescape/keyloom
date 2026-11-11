@@ -7,7 +7,7 @@ import { latestSuccessfulBuildOfRevision } from "../persistence/builds.ts";
 import type { App } from "./context.ts";
 import { type FlashOptions, startBuild, startFlash, waitForBuild, waitForFlash } from "./firmware.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
-import { applyToRemapper, disableRemapperFor, readRemapper } from "./remapper.ts";
+import { applyToRemapper, disableRemapperFor, probeRemapper } from "./remapper.ts";
 import { type KeyboardReading, readKeyboards } from "./sync-keyboard.ts";
 import { type DetectedKeyboard, detectKeyboards } from "./keyboard-detect.ts";
 import type { UsbDevice } from "../firmware/toolchain/usb.ts";
@@ -73,14 +73,7 @@ export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
           return { ok: false, error: message(err) };
         }
       },
-      async probe(boardId) {
-        try {
-          const running = await readRemapper(boardId, opts.handsFree?.remapper ?? {});
-          return running.state !== "absent" ? "running" : running.refused ? "stopped" : "unreadable";
-        } catch {
-          return "unreadable";
-        }
-      },
+      probe: (boardId) => probeRemapper(boardId, opts.handsFree?.remapper ?? {}),
     },
 
     async build(a) {

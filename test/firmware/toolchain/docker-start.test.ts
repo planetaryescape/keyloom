@@ -102,6 +102,9 @@ describe("reading a failed docker version", () => {
     expect((versionFailure(denied, "linux") as { reason: string }).reason).toContain("sudo usermod -aG docker $USER");
     expect(versionFailure(denied, "darwin")).toMatchObject({ ok: false, kind: "no-access" });
     expect(versionFailure("Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?", "linux")).toMatchObject({ kind: "daemon-down" });
+    // An unreadable ~/.docker/config.json says "permission denied" too, but the daemon behind it is simply down and keyloom starts it.
+    const configWarning = "WARNING: Error loading config file: open /home/me/.docker/config.json: permission denied\nCannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?";
+    expect(versionFailure(configWarning, "linux")).toMatchObject({ kind: "daemon-down" });
   });
 });
 
@@ -180,7 +183,7 @@ describe("starting it", () => {
     // Slow until the deadline: still running, so keyloom leaves it alone and says to check again.
     const busy = await startDockerEngine({ status: scriptedStatus([slow]).status, detect: async () => colima, start: async () => (launched++, { ok: true }), sleep: (ms) => Bun.sleep(ms), pollMs: 5, timeoutMs: 40 });
     expect(busy.ok).toBe(false);
-    if (!busy.ok) expect(busy.reason).toContain("left it running");
+    if (!busy.ok) expect(busy.reason).toContain("didn't restart it");
     expect(launched).toBe(0);
     // A daemon that then says it is down (the socket refuses) is the evidence a restart is for.
     const stuck = await startDockerEngine({ status: scriptedStatus([slow, down, up()]).status, detect: async () => colima, start: async () => (launched++, { ok: true }), sleep: async () => {}, pollMs: 1 });

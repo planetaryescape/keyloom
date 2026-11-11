@@ -37,7 +37,9 @@ export async function dockerStatus(timeoutMs = 15_000): Promise<DockerStatus> {
  * open alike. "permission denied" is the CLI's own wording for the second (docs.docker.com/engine/install/linux-postinstall).
  */
 export function versionFailure(output: string, platform: NodeJS.Platform = process.platform): DockerStatus {
-  if (!/permission denied/i.test(output)) return { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
+  // Only the socket's own error counts: the CLI also says "permission denied" when ~/.docker/config.json is unreadable (a root-owned file
+  // after `sudo docker login`), and a stopped daemon behind that warning still needs starting.
+  if (!/(permission denied while trying to connect to the docker|connect: permission denied)/i.test(output)) return { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
   return {
     ok: false, kind: "no-access",
     reason: platform === "linux"
@@ -361,6 +363,8 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
  * Gets the daemon up: returns at once when it already is, otherwise starts the engine it finds and waits
  * for it. Never hangs longer than `timeoutMs`, and never leaves the person without the reason.
  */
+const MIN_LAUNCH_MS = 5_000;
+
 export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<DockerStartResult> {
   const status = opts.status ?? (() => dockerStatus(5_000));
   const detect = opts.detect ?? (() => findDockerEngine());
@@ -381,7 +385,7 @@ export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<
   }
   if (first.ok) return { ok: true, version: first.version, engine: "the Docker daemon", waitedMs: Date.now() - startedAt };
   if (first.kind === "slow") {
-    return { ok: false, engine: null, reason: `Docker is running but didn't answer within ${Math.round(timeoutMs / 1000)} s. It may be busy, so keyloom left it running. Check again in a minute.` };
+    return { ok: false, engine: null, reason: `Docker didn't answer within ${Math.round(timeoutMs / 1000)} s. It may be busy, so keyloom didn't restart it. Check again in a minute.` };
   }
   // No engine at all, one whose CLI never reached the PATH, or one that refuses this account: an install, a link or a permission, not a start.
   if (first.kind === "not-installed" || first.kind === "cli-missing" || first.kind === "no-access") return { ok: false, engine: null, reason: first.reason };
@@ -394,7 +398,9 @@ export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<
   const engine = found.engine;
   const action = engine.command.includes("restart") ? "restarting" : engine.command.some((part) => part === "start" || part === "-a") ? "starting" : "waking";
   opts.onProgress?.(`keyloom: Docker isn't answering, so ${action} ${engine.name} (a cold start can take half a minute)`);
-  const launched = await start(engine, Math.max(1, deadline - Date.now()));
+  // With only seconds left, a launch would be killed at once and could leave the engine half started.
+  if (deadline - Date.now() < Math.min(MIN_LAUNCH_MS, timeoutMs / 4)) return { ok: false, engine: engine.name, reason: `Docker didn't answer in time, so keyloom didn't start ${engine.name}. Check again in a minute.` };
+  const launched = await start(engine, deadline - Date.now());
   if (!launched.ok) {
     return { ok: false, engine: engine.name, reason: `keyloom couldn't start ${engine.name}${launched.detail ? `: ${launched.detail}` : ""}${engine.hint ? `. ${engine.hint}` : ""}` };
   }

@@ -2,7 +2,7 @@
 // parts around it: the setup keyloom can do without root, the setup doctor, the emergency switch and the exit-chord proof.
 import type { HandsFreeOverrides } from "../../app/index.ts";
 import {
-  applyToRemapper, confirmExitChord, disableRemapperFor, remapperDoctor, setupRemapper, UsageError,
+  applyToRemapper, confirmExitChord, disableRemapperFor, probeRemapper, remapperDoctor, setupRemapper, UsageError,
 } from "../../app/index.ts";
 import type { Command } from "commander";
 import type { CliContext } from "./context.ts";
@@ -79,6 +79,10 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
     .description("record that you held Left Control + Space + Escape and saw kanata stop; auto-apply can turn on after this")
     .option("--board <board>", "board ID", DEFAULT_BOARD)
     .action(async (opts: { board: string }) => {
+      // The same check as the app's button (D-497): only a refused port shows the chord stopped kanata.
+      const probe = await probeRemapper(opts.board, over);
+      if (probe === "running") throw new UsageError("kanata is still running, so the chord didn't stop it yet. Hold Left Control + Space + Escape until the MacBook keyboard types plainly, then run this again");
+      if (probe === "unreadable") throw new UsageError("keyloom couldn't tell whether kanata stopped: its port didn't answer either way. Nothing was recorded; run this again in a moment");
       await withApp((app) => confirmExitChord(app, opts.board));
       print(io, format(), { json: { ok: true }, table: "recorded. `keyloom autosync on apple/macbook-ansi` can turn auto-apply on." });
     });

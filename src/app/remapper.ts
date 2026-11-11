@@ -73,6 +73,19 @@ export async function applyToRemapper(app: App, layoutRef: string, revisionId: s
 export const readRemapper = (boardId: string, over: RemapperOverrides = {}): Promise<RunningKanata> => readRunningKanata(remapperEnv(boardId, over).deps.endpoint);
 
 /** "Disable remapping": the identity map, no sudo (D-235). The safe file comes from the layout's own board, so it names the right keys. */
+/**
+ * Whether kanata answers on its port: only a refused connection shows it has stopped. A timeout or another failure proves nothing,
+ * so it is "unreadable" (D-497). The app's exit-chord button and `keyloom remap confirm-exit-chord` both ask this first.
+ */
+export async function probeRemapper(boardId: string, over: RemapperOverrides = {}): Promise<"running" | "stopped" | "unreadable"> {
+  try {
+    const running = await readRemapper(boardId, over);
+    return running.state !== "absent" ? "running" : running.refused ? "stopped" : "unreadable";
+  } catch {
+    return "unreadable";
+  }
+}
+
 export async function disableRemapperFor(boardId: string, over: RemapperOverrides = {}): Promise<DisableResult> {
   const env = remapperEnv(boardId, over);
   const source = generateKanataSource({ layout: identityLayout(env.board.definition), board: env.board.definition, layoutId: "none", revisionId: "safe" });
