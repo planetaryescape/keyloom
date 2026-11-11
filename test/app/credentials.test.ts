@@ -102,6 +102,14 @@ describe("a key-store command that never finishes", () => {
     });
   });
 
+  test("a silent exit other than 1 fails Forget", async () => {
+    const bin = fakeBinDir({ "secret-tool": "exit 2" });
+    await withPath(bin, async () => {
+      const error = await secretServiceStore(secretCommandRunner(5_000)).remove("anthropic").catch((e: unknown) => e);
+      expect(String(error)).toContain("could not remove");
+    });
+  });
+
   test("a silent exit 1 from a clear that finished is still nothing to clear", async () => {
     const bin = fakeBinDir({ "secret-tool": "exit 1" });
     await withPath(bin, async () => {

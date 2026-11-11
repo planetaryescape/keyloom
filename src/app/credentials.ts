@@ -89,7 +89,8 @@ export function secretServiceStore(run: SecretRunner = runSecretCommand): KeySto
   const attrs = (provider: KeyProvider) => ["service", SERVICE, "account", provider];
   // secret-tool exits 1 both for "not found" and for a failure. Only a failure prints a reason on stderr (libsecret
   // tool/secret-tool.c, secret_tool_action_lookup and _clear), so stderr is what tells them apart.
-  const failed = (out: { code: number; stderr?: string }) => out.code !== 0 && Boolean(out.stderr?.trim());
+  // Any other code, said or silent, is a failure too.
+  const failed = (out: { code: number; stderr?: string }) => out.code !== 0 && (out.code !== 1 || Boolean(out.stderr?.trim()));
   const read = async (provider: KeyProvider): Promise<string | null> => {
     const out = await run("secret-tool", ["lookup", ...attrs(provider)]);
     if (failed(out)) throw new KeyStoreError(`the Secret Service could not be read (secret-tool exited ${out.code})`);
