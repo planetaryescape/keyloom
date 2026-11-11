@@ -1,7 +1,7 @@
 // The system routes (src/api/system.ts, D-486): the Docker a build needs, and starting it. Over a fake backend,
 // so nothing here looks for a daemon.
 import { afterAll, describe, expect, test } from "bun:test";
-import { DockerReadinessResponseSchema, DockerStartResponseSchema } from "../../src/api/system.ts";
+import { DockerReadinessResponseSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../../src/api/system.ts";
 import { InstallStateSchema } from "../../src/api/tool-install.ts";
 import { handleSystemRoute } from "../../src/server/system-routes.ts";
 import type { SystemBackend } from "../../src/server/system-backend.ts";
@@ -73,5 +73,39 @@ describe("the Docker routes", () => {
   test("anything else falls through, so a server without these routes answers as it always did", async () => {
     const { call } = await serve();
     expect((await call("/api/system/other")).status).toBe(404);
+  });
+});
+
+// R1-24: the MacBook's import card reads Karabiner's settings from their fixed place instead of asking for a hidden file.
+describe("the Karabiner settings read", () => {
+  async function serveWith(karabinerConfig: SystemBackend["karabinerConfig"]) {
+    const server = Bun.serve({
+      port: 0,
+      fetch: async (r) => (await handleSystemRoute(r, new URL(r.url).pathname, { ...backend, ...(karabinerConfig === undefined ? {} : { karabinerConfig }) }, TOKEN)) ?? new Response("no", { status: 404 }),
+    });
+    servers.push(server);
+    return (token: string | null = TOKEN) => fetch(`http://127.0.0.1:${server.port}/api/system/karabiner-config`, { headers: token ? { "x-keyloom-token": token } : {} });
+  }
+
+  test("a found file comes back with its name and text", async () => {
+    const get = await serveWith(async () => ({ status: "found", filename: "karabiner.json", content: "{\"profiles\":[]}" }));
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(KarabinerConfigResponseSchema.parse(await response.json())).toEqual({ filename: "karabiner.json", content: "{\"profiles\":[]}" });
+  });
+
+  test("each way it can't be read has its own code", async () => {
+    const code = async (response: Response) => ((await response.json()) as { error: { code: string } }).error.code;
+    const missing = await (await serveWith(async () => ({ status: "missing" })))();
+    expect([missing.status, await code(missing)]).toEqual([404, "karabiner_missing"]);
+    const large = await (await serveWith(async () => ({ status: "too_large" })))();
+    expect([large.status, await code(large)]).toEqual([413, "karabiner_too_large"]);
+    const unavailable = await (await serveWith(undefined))();
+    expect([unavailable.status, await code(unavailable)]).toEqual([404, "karabiner_unavailable"]);
+  });
+
+  test("it needs the session token like every route", async () => {
+    const get = await serveWith(async () => ({ status: "missing" }));
+    expect((await get(null)).status).toBe(401);
   });
 });

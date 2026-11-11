@@ -1,6 +1,7 @@
 // What the server needs from the computer it runs on (src/api/system.ts lists the routes). The adapter that
 // fills this in is src/cli/system-backend.ts, so the server itself never looks for Docker.
 import type { DockerReadinessResponse, DockerStartResponse } from "../api/system.ts";
+import type { KarabinerConfig } from "../app/karabiner-config.ts";
 import type { InstallState, InstallableTool } from "../api/tool-install.ts";
 
 export interface SystemBackend {
@@ -12,4 +13,6 @@ export interface SystemBackend {
   install: (tool: InstallableTool) => Promise<InstallState>;
   /** Where an install of the tool has got to. */
   installState: (tool: InstallableTool) => Promise<InstallState>;
+  /** Karabiner-Elements' config from its fixed place, for the MacBook's import card. Absent where the server can't read it. */
+  karabinerConfig?: () => Promise<KarabinerConfig>;
 }

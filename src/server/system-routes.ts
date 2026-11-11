@@ -1,7 +1,7 @@
 // The system routes (src/api/system.ts lists them). startServer calls `handleSystemRoute` for every /api request
 // after its Host check, and serves the Response when one comes back.
 import { z } from "zod";
-import { DockerReadinessResponseSchema, DockerStartResponseSchema } from "../api/system.ts";
+import { DockerReadinessResponseSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../api/system.ts";
 import type { ApiErrorBody } from "../api/http.ts";
 import { InstallRequestSchema, InstallStateSchema, InstallableToolSchema } from "../api/tool-install.ts";
 import { checkToken } from "./guard.ts";
@@ -11,12 +11,13 @@ const EmptyBody = z.object({}).strict();
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "docker" | "startDocker" | "install" | "installState";
+type Action = "docker" | "startDocker" | "install" | "installState" | "karabinerConfig";
 const ROUTES: ReadonlyArray<{ method: "GET" | "POST"; path: string; action: Action }> = [
   { method: "GET", path: "/api/system/docker", action: "docker" },
   { method: "POST", path: "/api/system/docker/start", action: "startDocker" },
   { method: "POST", path: "/api/system/install", action: "install" },
   { method: "GET", path: "/api/system/install", action: "installState" },
+  { method: "GET", path: "/api/system/karabiner-config", action: "karabinerConfig" },
 ];
 
 /** Null when the request is not a system route, so startServer carries on with its own. */
@@ -30,6 +31,13 @@ export async function handleSystemRoute(request: Request, pathname: string, back
 
   try {
     if (route.action === "docker") return Response.json(DockerReadinessResponseSchema.parse(await backend.docker()));
+    if (route.action === "karabinerConfig") {
+      if (backend.karabinerConfig === undefined) return errorResponse(404, "karabiner_unavailable", "keyloom can't read Karabiner's settings here. Drop a copy of karabiner.json instead.");
+      const read = await backend.karabinerConfig();
+      if (read.status === "missing") return errorResponse(404, "karabiner_missing", "Karabiner-Elements has no settings file on this Mac, so there is nothing to bring in. Its rules start when you set it up.");
+      if (read.status === "too_large") return errorResponse(413, "karabiner_too_large", "karabiner.json on this Mac is too large to be Karabiner's settings.");
+      return Response.json(KarabinerConfigResponseSchema.parse({ filename: read.filename, content: read.content }));
+    }
     if (route.action === "installState") {
       const tool = InstallableToolSchema.safeParse(new URL(request.url).searchParams.get("tool"));
       if (!tool.success) return errorResponse(400, "schema", "Name the tool: ?tool=docker, zapp, dfu-util, dfu-programmer or avrdude.");

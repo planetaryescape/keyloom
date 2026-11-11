@@ -1,4 +1,5 @@
 import { BoardListResponseSchema, ImportResponseSchema, type BoardChoice, type ImportResponse } from "../../api/http.ts";
+import { KarabinerConfigResponseSchema } from "../../api/system.ts";
 import { ApiError, UNREACHABLE } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 import type { ReviewActivity } from "../../api/review.ts";
@@ -23,6 +24,15 @@ export async function uploadLayout(token: string, boardId: string, file: File, a
   }
   if (!response.ok) throw await failure(response);
   const parsed = ImportResponseSchema.safeParse(await response.json());
-  if (!parsed.success) throw new ApiError(response.status, "keyloom imported the file but sent an answer this page can't read. Reload to see it.");
+  // The layout is saved: the card offers Reload by this code (R2-17), and takes no second drop, which would import it again.
+  if (!parsed.success) throw new ApiError(response.status, "keyloom imported the file but sent an answer this page can't read. Reload the page to see it.", { code: IMPORTED_UNREADABLE });
   return parsed.data;
+}
+
+export const IMPORTED_UNREADABLE = "imported_unreadable";
+
+/** Karabiner's settings from their fixed place on this Mac, as a file the import takes like a dropped one (R1-24). */
+export async function readKarabinerConfig(token: string): Promise<File> {
+  const read = await request("GET", "/api/system/karabiner-config", token, KarabinerConfigResponseSchema);
+  return new File([read.content], read.filename, { type: "application/json" });
 }
