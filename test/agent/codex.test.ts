@@ -278,7 +278,10 @@ describe("Codex failures", () => {
     expect(today.kind).toBe("usage_limit");
     expect(today.message).toBe("Your ChatGPT plan has used up its Codex allowance until 3:45 PM.");
     expect(codexErrorFor("You’ve hit your usage limit. Try again at Nov 12th, 2026 9:05 AM.").message).toBe("Your ChatGPT plan has used up its Codex allowance until Nov 12th, 2026 9:05 AM.");
-    expect(codexErrorFor("You hit your spend cap set in your workspace. Increase your spend cap to continue.").kind).toBe("usage_limit");
+    const cap = codexErrorFor("You hit your spend cap set in your workspace. Increase your spend cap to continue.");
+    expect(cap.kind).toBe("usage_limit");
+    // An admin's cap is not the plan's allowance and may not reset by itself.
+    expect(cap.message).toBe("Your ChatGPT workspace has reached the Codex spend cap its admin set. It stays reached until an admin raises it.");
     expect(codexResetTime("You’ve hit your usage limit. Try again later.")).toBeNull();
   });
 

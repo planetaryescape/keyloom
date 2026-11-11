@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { failureView, preparedWords } from "../../src/web/chat/failure-words.ts";
-import { lostFailure, refusedRetryFailure } from "../../src/web/chat/useChat.ts";
+import { lostFailure, refusedBeforeStart, refusedRetryFailure } from "../../src/web/chat/useChat.ts";
 import { ApiError } from "../../src/web/api.ts";
 
 // D-517: every code a failed reply can carry has a way out, and none repeats a request that cannot succeed.
@@ -71,7 +71,7 @@ describe("a stopped reply is honest about what it prepared", () => {
 describe("round 5: a used-up plan, a refused retry and an unconfirmed message (R5-04, R5-05, R5-07)", () => {
   test("a used-up plan offers another provider, or its setup, and Try again for after the reset", () => {
     const view = failureView({ code: "model_usage_limit", message: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM." });
-    expect(view.title).toBe("Your plan's usage limit is reached");
+    expect(view.title).toBe("Your Codex usage limit is reached");
     expect(view.message).toContain("until 3:45 PM");
     expect(view.actions).toEqual(["switch", "set_up_other", "retry"]);
     expect(view.setUpLabel).toBe("Set up another model");
@@ -95,5 +95,20 @@ describe("round 5: a used-up plan, a refused retry and an unconfirmed message (R
     // Once the reply was seen starting, the failure keeps the server's code.
     expect(lostFailure(new ApiError(502, "x", { code: "model_connection" }), true)).toEqual({ code: "model_connection", message: "x" });
     expect(lostFailure(new Error("cut"), true)).toEqual({ code: "stream", message: "cut" });
+  });
+
+  test("a 5xx with the server's own code before the reply started is a refusal, not an unconfirmed message", () => {
+    // The server sends `start` once it has stored the message, so these stored nothing: the message goes back to the composer.
+    expect(refusedBeforeStart(new ApiError(503, "This keyloom can't save keys.", { code: "key_store_unavailable" }), false)).toBe(true);
+    expect(refusedBeforeStart(new ApiError(502, "keyloom couldn't save the key.", { code: "key_store_failed" }), false)).toBe(true);
+    expect(refusedBeforeStart(new ApiError(503, "Codex is not signed in.", { code: "missing_api_key" }), false)).toBe(true);
+    expect(refusedBeforeStart(new ApiError(409, "busy", { code: "busy" }), false)).toBe(true);
+    // An internal error or a lost connection may come after the message was kept.
+    expect(refusedBeforeStart(new ApiError(500, "internal error", { code: "internal" }), false)).toBe(false);
+    expect(refusedBeforeStart(new ApiError(502, "keyloom sent no reply."), false)).toBe(false);
+    expect(refusedBeforeStart(new ApiError(0, "keyloom stopped answering.", { code: "unreachable" }), false)).toBe(false);
+    expect(refusedBeforeStart(new Error("cut"), false)).toBe(false);
+    // Once the reply started, nothing is a refusal.
+    expect(refusedBeforeStart(new ApiError(400, "bad", { code: "usage" }), true)).toBe(false);
   });
 });

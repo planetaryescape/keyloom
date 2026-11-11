@@ -34,8 +34,8 @@ const VIEWS: Readonly<Record<string, Omit<FailureView, "message"> & { message?: 
   // The server's sentence for this one can name a terminal command (`codex login`); the button does that job here.
   missing_api_key: { title: "The model isn't set up", message: "keyloom can't use this conversation's model account any more. Set it up again, then try again.", actions: ACCOUNT, setUpLabel: "Set up the model" },
   model_rate_limit: { title: "The model is busy", actions: ["retry"], setUpLabel: "" },
-  // A plan's allowance stays used up until it resets, so another provider is the way on now; Try again is for after the reset (R5-04).
-  model_usage_limit: { title: "Your plan's usage limit is reached", actions: ["switch", "set_up_other", "retry"], setUpLabel: "Set up another model" },
+  // A plan's allowance or a workspace's spend cap stays reached for now, so another provider is the way on; Try again is for after (R5-04).
+  model_usage_limit: { title: "Your Codex usage limit is reached", actions: ["switch", "set_up_other", "retry"], setUpLabel: "Set up another model" },
   model_overloaded: { title: "The model is busy", actions: ["retry"], setUpLabel: "" },
   model_connection: { title: "Can't reach the model", actions: ["retry"], setUpLabel: "" },
   model_server: { title: "The model's service had a problem", actions: ["retry"], setUpLabel: "" },

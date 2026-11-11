@@ -27,7 +27,11 @@ export function codexErrorFor(message: string): CodexError {
   const text = message.trim() || "Codex failed without saying why";
   // A used-up plan allowance stays used up until it resets, so Try again alone is no way out: the page offers another provider (R5-04).
   // Codex's own sentence names upgrade pages and settings for a terminal, so these words are keyloom's, with the reset time when given.
-  if (/usage limit|spend cap/i.test(text)) {
+  // A workspace admin sets the spend cap, so it may never reset by itself; only the admin raises it.
+  if (/spend cap/i.test(text)) {
+    return new CodexError("usage_limit", "Your ChatGPT workspace has reached the Codex spend cap its admin set. It stays reached until an admin raises it.");
+  }
+  if (/usage limit/i.test(text)) {
     const resets = codexResetTime(text);
     return new CodexError("usage_limit", `Your ChatGPT plan has used up its Codex allowance${resets === null ? ", and Codex didn't say when it resets." : ` until ${resets}.`}`);
   }

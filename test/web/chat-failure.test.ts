@@ -47,7 +47,7 @@ describe("a reply that stopped says why, in comp d2's words (P3)", () => {
   test("a used-up plan switches to a ready provider, or sets one up when none is ready (R5-04)", () => {
     const message = "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.";
     const ready = render(failed("model_usage_limit", message), [{ id: "anthropic", name: "Anthropic" }]);
-    expect(ready).toContain("Your plan&#x27;s usage limit is reached");
+    expect(ready).toContain("Your Codex usage limit is reached");
     expect(ready).toContain("until 3:45 PM");
     expect(ready).toContain("Switch to Anthropic");
     expect(ready).not.toContain("Set up another model");

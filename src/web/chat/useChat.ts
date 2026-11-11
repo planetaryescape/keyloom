@@ -49,6 +49,17 @@ export function lostFailure(error: unknown, started: boolean): TurnFailure {
   return { code: "unconfirmed", message: `${message} keyloom may already be answering it. Open history to see whether it did before you ask again.` };
 }
 
+/**
+ * True when the server turned the message down before keeping it. Any 4xx, and a 5xx with the server's own code: the server sends `start`
+ * as soon as it has stored the message, so a typed failure before that (`key_store_unavailable`, `model_overloaded`) stored nothing.
+ * An `internal` 500 or a lost connection may come after the message was kept, so those stay unconfirmed.
+ */
+export function refusedBeforeStart(error: unknown, started: boolean): error is ApiError {
+  if (started || !(error instanceof ApiError)) return false;
+  if (error.status >= 400 && error.status < 500) return true;
+  return error.status >= 500 && error.code !== undefined && error.code !== "internal";
+}
+
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === "AbortError";
 
 /**
@@ -192,7 +203,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         if (controller.current !== mine) return; // replaced by a new conversation; nothing to report
         // Only an explicit HTTP refusal proves execution never started. Lost observation is not
         // permission to restore/resend a request that the server may already have accepted.
-        const refused = !started && error instanceof ApiError && ((error.status >= 400 && error.status < 500) || error.code === "missing_api_key");
+        const refused = refusedBeforeStart(error, started);
         if (refused) localStorage.removeItem(storageKey);
         if (refused && begin.type === "retry") {
           // The user turn before it is already on screen and stored, so a refused retry fails in place.
