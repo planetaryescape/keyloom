@@ -74,7 +74,7 @@ export function ManualFlash({ view, boardName, onDownload, onReveal, problem }: 
   return (
     <>
       <p>keyloom can't put firmware on the {boardName} by itself. Save the file, then follow the board's steps:</p>
-      <p className="instruction-title">{view.instructions}</p>
+      <p><strong>{view.instructions}</strong></p>
       <div className="step-actions">
         <button type="button" className="button button-primary" onClick={onDownload}>
           <Download size={14} aria-hidden="true" />

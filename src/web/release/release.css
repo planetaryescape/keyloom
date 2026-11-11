@@ -296,6 +296,15 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+/* Inside the stacked body the callout's row rules don't apply: a paragraph is its own height, not a 200px column. */
+.callout .callout-body > p {
+  flex: none;
+}
+.callout-body a:not(.button) {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .callout-actions {
   display: flex;
   flex-wrap: wrap;
@@ -310,7 +319,7 @@
 }
 /* Something keyloom is doing now, such as an install: calm, not a warning. */
 .callout-info {
-  border-color: var(--color-accent);
+  border-color: var(--color-border-strong);
   background: var(--color-accent-bg);
 }
 .callout-info > svg {

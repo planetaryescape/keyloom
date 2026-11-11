@@ -113,7 +113,8 @@ export function dockerInstall(platform: NodeJS.Platform = process.platform, has:
           alternatives: [{ name: "Docker Desktop", url: DOCKER_DESKTOP_URL }, { name: "OrbStack", url: ORBSTACK_URL }],
         }
       : {
-          engine: "Docker Desktop", command: null, url: DOCKER_DESKTOP_URL, canInstall: false, note: "OrbStack works too, and is lighter.",
+          // OrbStack is named once, as a link: the note would repeat it.
+          engine: "Docker Desktop", command: null, url: DOCKER_DESKTOP_URL, canInstall: false, note: "",
           alternatives: [{ name: "OrbStack", url: ORBSTACK_URL }],
         };
   }

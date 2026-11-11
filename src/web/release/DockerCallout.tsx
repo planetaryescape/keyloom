@@ -52,7 +52,7 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           <TriangleAlert size={18} aria-hidden="true" />
           <div className="callout-body">
             <p>Firmware is built in Docker, and this computer doesn't have it. keyloom can install {view.engine} for you with Homebrew. It needs no password and takes a few minutes.</p>
-            <p className="callout-note">{view.note}</p>
+            {view.note === "" ? null : <p className="callout-note">{view.note}</p>}
             <div className="callout-actions">
               <button type="button" className="button button-primary" onClick={install.start}>
                 <Download size={14} aria-hidden="true" />
@@ -71,7 +71,7 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           <TriangleAlert size={18} aria-hidden="true" />
           <div className="callout-body">
             <p>Firmware is built in Docker, and this computer doesn't have it. Install {view.engine}. keyloom notices it by itself once it is running.</p>
-            <p className="callout-note">{view.note}</p>
+            {view.note === "" ? null : <p className="callout-note">{view.note}</p>}
             <div className="callout-actions">
               <a className="button button-primary" href={view.url} target="_blank" rel="noreferrer">
                 <Download size={14} aria-hidden="true" />
