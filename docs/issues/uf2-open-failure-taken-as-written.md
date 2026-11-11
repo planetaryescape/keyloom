@@ -1,6 +1,6 @@
 # A copy that failed on open was taken as written, and the stranded half could not be flashed again
 
-Status: fixed in `2a0f2db9`, with review fixes in the commit that follows `0dccd61b` on PR #276 (D-498). Tests cover a drive that comes back, one that does not, an interrupted open on a drive that stays, and an open shared drive with the other half running. Not yet seen on hardware with the fix.
+Status: fixed in `2a0f2db9`, with review fixes in `a8e38e1c` (D-498). Tests cover a drive that comes back, one that does not, an interrupted open on a drive that stays, and an open shared drive with the other half running. Not yet seen on hardware with the fix.
 
 Reported 2026-11-11 while flashing the passkey fix to the Keebart Corne (`syn_01M757322D3P4KPQ2EX1VX4P0B`, flash `fl_01M757CB3GQ4MDPX6PNTATECJY`, build `bld_01M757322H9F4K1B4SPSW6QRF1`).
 
