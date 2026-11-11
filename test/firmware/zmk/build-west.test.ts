@@ -17,8 +17,8 @@ import { uf2Image } from "../../helpers/zmk.ts";
 
 const FAKE_DOCKER_WEST = `
 case "$1" in
-  rm) echo "$@" >> "$FAKE_DOCKER_LOG"; exit 0;;
-  ps) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_ORPHANS" ] && echo "$FAKE_ORPHANS"; exit 0;;
+  rm) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_RM_FAIL" ] && exit 1; exit 0;;
+  ps) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_PS_FAIL" ] && { echo "error during connect" >&2; exit 1; }; [ -n "$FAKE_ORPHANS" ] && echo "$FAKE_ORPHANS"; exit 0;;
 esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
@@ -139,6 +139,15 @@ describe("buildZmkWest (fake docker)", () => {
     expect(s.lines.some((l) => l.includes("removing a build container an earlier keyloom left running in this checkout"))).toBe(true);
   });
 
+  test("the build stops before west runs when keyloom can't check for, or remove, an earlier container", async () => {
+    const unread = await setup();
+    await expect(unread.build("ok", { FAKE_PS_FAIL: "1" })).rejects.toThrow("couldn't check for a build container an earlier keyloom left");
+    expect(await Bun.file(unread.dockerLog).text()).not.toContain(" --name keyloom-test ");
+    const stuck = await setup();
+    await expect(stuck.build("ok", { FAKE_ORPHANS: "0123abcd", FAKE_RM_FAIL: "1" })).rejects.toThrow("couldn't remove the build container an earlier keyloom left");
+    expect(await Bun.file(stuck.dockerLog).text()).not.toContain(" --name keyloom-test ");
+  });
+
   test("hashes west.yml and the config files inside the container before west runs, and waits out a stale view", async () => {
     const s = await setup();
     await s.build("ok", { FAKE_STALE_CALLS: "2" });
@@ -190,7 +199,8 @@ describe("buildZmkWest (fake docker)", () => {
   test("a work folder Docker can't see is reported with how to fix it", async () => {
     const s = await setup();
     // The fake probe fails when config/west.yml isn't visible; it is written before the probe, so hide it by mode.
-    const bin = fakeBinDir({ docker: `case "$1" in rm) exit 0;; esac\nexit 1` });
+    // An engine that can't see the folder still answers `ps`.
+    const bin = fakeBinDir({ docker: `case "$1" in rm|ps) exit 0;; esac\nexit 1` });
     await expect(
       withPath(bin, () =>
         buildZmkWest({

@@ -84,11 +84,18 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       ];
       // `--rm` is the docker client's job, so a keyloom killed mid-build can leave its container running in this checkout.
       // This build holds the checkout's lock, so such a container is orphaned; stop it before the script clears git's locks.
+      // Without that answer the locks could belong to a live git, so the build stops rather than guess.
       const orphans = await capture(["docker", "ps", "-aq", "--filter", `label=${CHECKOUT_LABEL}=${input.checkoutDir}`], { timeoutMs: 60_000 });
-      const ids = orphans.exitCode === 0 ? orphans.stdout.split("\n").map((id) => id.trim()).filter((id) => /^[0-9a-f]+$/.test(id)) : [];
+      if (orphans.exitCode !== 0) {
+        throw new BuildFailure(`keyloom couldn't check for a build container an earlier keyloom left in ${input.checkoutDir}${orphans.timedOut ? " (docker ps timed out)" : `: ${orphans.stderr.trim() || `docker ps exited ${orphans.exitCode ?? orphans.signalCode}`}`}. Nothing was built.`);
+      }
+      const ids = orphans.stdout.split("\n").map((id) => id.trim()).filter((id) => /^[0-9a-f]+$/.test(id));
       if (ids.length > 0) {
         say(`keyloom: removing ${ids.length === 1 ? "a build container" : `${ids.length} build containers`} an earlier keyloom left running in this checkout`);
-        await run({ cmd: ["docker", "rm", "-f", ...ids], log: input.log, timeoutMs: 60_000 });
+        const removed = await run({ cmd: ["docker", "rm", "-f", ...ids], log: input.log, timeoutMs: 60_000 });
+        if (removed.exitCode !== 0) {
+          throw new BuildFailure(`keyloom couldn't remove the build container an earlier keyloom left in ${input.checkoutDir} (${ids.join(", ")})${removed.timedOut ? ": docker rm timed out" : ""}. Nothing was built. Restarting Docker stops it; then build again.`);
+        }
       }
 
       // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
