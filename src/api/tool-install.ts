@@ -6,7 +6,7 @@ import { z } from "zod";
 //   GET  /api/system/install?tool=<tool> -> InstallState
 //   DELETE /api/system/install?tool=<tool> -> InstallState  (stops a running install: `phase` is "stopping" until it has, then
 //                                          `status` is "cancelled"; an install that isn't running comes back as it is)
-export const InstallableToolSchema = z.enum(["docker", "zapp", "dfu-util", "dfu-programmer", "avrdude"]);
+export const InstallableToolSchema = z.enum(["docker", "zapp", "dfu-util", "dfu-programmer", "avrdude", "codex"]);
 export type InstallableTool = z.infer<typeof InstallableToolSchema>;
 
 export const InstallRequestSchema = z.object({ tool: InstallableToolSchema }).strict();

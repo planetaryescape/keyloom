@@ -4,7 +4,7 @@ import type { ChatProviderStatus } from "../../src/api/http.ts";
 import { CODEX_INSTALL_PAGE, failureReloads, lockWords, setupLead, setupProviders, setupView, storeFallback } from "../../src/web/chat/setup-words.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
-const base = { label: "x", defaultModel: "m", setup: "s", installed: true, credential: null, ready: false } as const;
+const base = { label: "x", defaultModel: "m", setup: "s", installed: true, canInstall: false, credential: null, ready: false } as const;
 const anthropic: Provider = { ...base, id: "anthropic", command: "ANTHROPIC_API_KEY=<your key> keyloom serve" };
 const codex: Provider = { ...base, id: "codex", command: "codex login" };
 const idle = { keyStore: "keychain" as const, codexSignIn: { state: "idle" as const }, lockedBy: null, active: null };
@@ -19,6 +19,19 @@ describe("the setup for a key provider", () => {
     expect(setupView({ ...anthropic, ready: true, credential: { source: "environment", last4: "1234" } }, idle)).toEqual({
       kind: "ready", text: "Ready. Using ANTHROPIC_API_KEY from your environment, ending 1234.", forget: false,
     });
+  });
+
+  test("a refused environment key: a new variable; in the desktop app, the profile line and reopening, never a serve command (R3-07)", () => {
+    const fromEnv = { ...anthropic, ready: true, credential: { source: "environment" as const, last4: "1234" } };
+    expect(setupView(fromEnv, idle, true)).toMatchObject({ kind: "env-only", command: "ANTHROPIC_API_KEY=<your key> keyloom serve" });
+    const desktop = setupView(fromEnv, idle, true, true);
+    expect(desktop).toEqual({
+      kind: "env-only",
+      text: "Anthropic didn't accept ANTHROPIC_API_KEY from your environment, ending 1234. Put this line in your shell profile (such as ~/.zshrc), replacing any ANTHROPIC_API_KEY line there, then quit keyloom and open it again.",
+      command: "export ANTHROPIC_API_KEY=<your key>",
+      keyPage: "https://console.anthropic.com/settings/keys",
+    });
+    expect(setupView(anthropic, { ...idle, keyStore: null }, false, true)).toMatchObject({ kind: "env-only", command: "export ANTHROPIC_API_KEY=<your key>" });
   });
 
   test("no key store on this computer: the environment variable, to copy", () => {
@@ -90,8 +103,17 @@ describe("a provider fixed by KEYLOOM_PROVIDER or --provider", () => {
 
   test("Codex locked but not installed links to its install page instead of hiding", () => {
     const missing = { ...codex, installed: false };
-    expect(setupView(missing, lockedTo("codex"))).toMatchObject({ kind: "codex-install", page: CODEX_INSTALL_PAGE });
+    expect(setupView(missing, lockedTo("codex"))).toMatchObject({ kind: "codex-install", page: CODEX_INSTALL_PAGE, canInstall: false });
     expect(setupView(missing, lockedTo("anthropic"))).toEqual({ kind: "hidden" });
+  });
+
+  test("Codex locked, not installed, and Homebrew here: Install Codex through the install job (R3-24)", () => {
+    const installable = { ...codex, installed: false, canInstall: true };
+    expect(setupView(installable, lockedTo("codex"))).toEqual({
+      kind: "codex-install", text: "The Codex CLI isn't installed on this computer. keyloom can install it with Homebrew.", page: CODEX_INSTALL_PAGE, canInstall: true,
+    });
+    // Not locked to Codex, another provider answers, so nothing is offered for it.
+    expect(setupView(installable, lockedTo("anthropic"))).toEqual({ kind: "hidden" });
   });
 
   test("the lead never offers a Codex sign-in that isn't there", () => {

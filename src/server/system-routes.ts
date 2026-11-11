@@ -44,7 +44,7 @@ export async function handleSystemRoute(request: Request, pathname: string, back
     }
     if (route.action === "installState" || route.action === "cancelInstall") {
       const tool = InstallableToolSchema.safeParse(new URL(request.url).searchParams.get("tool"));
-      if (!tool.success) return errorResponse(400, "schema", "Name the tool: ?tool=docker, zapp, dfu-util, dfu-programmer or avrdude.");
+      if (!tool.success) return errorResponse(400, "schema", "Name the tool: ?tool=docker, zapp, dfu-util, dfu-programmer, avrdude or codex.");
       const state = route.action === "installState" ? await backend.installState(tool.data) : await backend.cancelInstall(tool.data);
       return Response.json(InstallStateSchema.parse(state));
     }

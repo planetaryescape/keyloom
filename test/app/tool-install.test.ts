@@ -49,6 +49,13 @@ describe("installTool", () => {
     expect(calls).toEqual([["brew", "install", "zapp"]]);
   });
 
+  test("Codex is its Homebrew cask, with nothing started after (R3-24)", async () => {
+    expect(brewFormulae("codex")).toEqual(["--cask", "codex"]);
+    const { runner, calls } = recorder();
+    expect(await installTool("codex", () => undefined, { ...mac, runner })).toEqual({ ok: true });
+    expect(calls).toEqual([["brew", "install", "--cask", "codex"]]);
+  });
+
   test("no Homebrew, or not a Mac: nothing runs, and the code says why", async () => {
     const { runner, calls } = recorder();
     expect(await installTool("zapp", () => undefined, { platform: "darwin", has: () => false, runner })).toMatchObject({ ok: false, code: "no_brew" });
