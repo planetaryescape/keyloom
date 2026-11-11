@@ -5,15 +5,18 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { type KanataEndpoint, hello } from "./client.ts";
 import { type KanataBoardRevision } from "./board-config.ts";
-import { findKanata, kanataVersion } from "./binary.ts";
-import { DAEMON_LABEL, DAEMON_PLIST_PATH } from "./plist.ts";
+import { fileSha256, findKanata, kanataVersion } from "./binary.ts";
+import { DAEMON_LABEL, DAEMON_PLIST_PATH, ROOT_KANATA_PATH } from "./plist.ts";
 import type { RemapperPaths } from "./paths.ts";
 import { readHeader } from "./header.ts";
 
 /** What a finding is about, so a screen can offer the one action that fixes it without reading the sentence (D-493). */
 export type FindingCode =
   | "kanata_missing" | "kanata_version" | "driver_missing" | "driver_mismatch" | "karabiner_elements" | "keyboard_name" | "karabiner_config"
-  | "permissions" | "daemon_missing" | "port_closed" | "kbd_file";
+  | "permissions" | "daemon_missing" | "port_closed" | "kbd_file"
+  // The daemon runs keyloom's root-owned copy of kanata (D-498): `kanata_updated` compares it with the kanata on PATH, and
+  // `daemon_outdated` is a daemon set up before the copy existed, which still runs kanata from a folder the person can change.
+  | "kanata_updated" | "daemon_outdated";
 
 export type Finding = {
   code: FindingCode;
@@ -31,6 +34,8 @@ export type DoctorProbe = {
   exists(path: string): boolean;
   readText(path: string): Promise<string | undefined>;
   hello(endpoint: KanataEndpoint): Promise<{ version: string; protocol: number | null }>;
+  /** A file's SHA-256, to compare kanata with the daemon's copy. Without it the doctor doesn't compare them. */
+  fileHash?(path: string): Promise<string | undefined>;
 };
 
 export function realProbe(): DoctorProbe {
@@ -49,6 +54,7 @@ export function realProbe(): DoctorProbe {
     exists: existsSync,
     readText: (p) => readFile(p, "utf8").catch(() => undefined),
     hello: (e) => hello(e),
+    fileHash: fileSha256,
   };
 }
 
@@ -79,7 +85,11 @@ export type DoctorInput = {
   port?: number;
 };
 
-export type DoctorReport = { findings: Finding[]; rootCommand: string | null };
+/**
+ * `needsRoot`: the daemon has to be (re)installed, which takes the root command `keyloom remap setup` prints. `kanata` is the binary on
+ * PATH and the version it reports, for a screen that offers an update.
+ */
+export type DoctorReport = { findings: Finding[]; needsRoot: boolean; kanata: { bin: string; version: string | undefined } | null };
 
 const DRIVER_PKG = "org.pqrs.Karabiner-DriverKit-VirtualHIDDevice";
 const KE_PLIST = "/Applications/Karabiner-Elements.app/Contents/Info.plist";
@@ -147,15 +157,32 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
   add({
     code: "permissions", name: "Input Monitoring and Accessibility", status: "unknown",
     detail: "macOS doesn't let keyloom read these grants",
-    fix: "System Settings > Privacy & Security: allow the kanata binary under both. `kanata --macos-request-permissions` asks macOS to list it",
+    fix: `System Settings > Privacy & Security: allow the kanata the daemon runs, ${ROOT_KANATA_PATH}, under both`,
   });
 
   // The daemon and its port.
   const plistInstalled = probe.exists(DAEMON_PLIST_PATH);
   if (!plistInstalled) {
     needsRoot = true;
-    add({ code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: `${DAEMON_PLIST_PATH} isn't installed`, fix: "run `keyloom remap setup`, then the root command below" });
+    add({ code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: `${DAEMON_PLIST_PATH} isn't installed`, fix: "run `keyloom remap setup`, then the root command it prints" });
   } else add({ code: "daemon_missing", name: "LaunchDaemon", status: "ok", detail: `${DAEMON_LABEL} is installed` });
+
+  // The daemon runs keyloom's root-owned copy of kanata (D-498). A kanata upgraded since setup isn't what the daemon runs.
+  if (plistInstalled && bin) {
+    const setUpAgain = "run `keyloom remap setup`, then the root command it prints";
+    if (!probe.exists(ROOT_KANATA_PATH)) {
+      needsRoot = true;
+      add({ code: "daemon_outdated", name: "kanata's root copy", status: "warn", detail: `the LaunchDaemon was set up before keyloom kept its own copy of kanata at ${ROOT_KANATA_PATH}, so it runs a kanata your account can replace`, fix: setUpAgain });
+    } else if (probe.fileHash) {
+      const [onPath, copy] = await Promise.all([probe.fileHash(bin), probe.fileHash(ROOT_KANATA_PATH)]);
+      if (onPath === undefined || copy === undefined) add({ code: "kanata_updated", name: "kanata's root copy", status: "unknown", detail: `couldn't compare ${bin} with ${ROOT_KANATA_PATH}` });
+      else if (onPath === copy) add({ code: "kanata_updated", name: "kanata's root copy", status: "ok", detail: `${ROOT_KANATA_PATH} is the same kanata as ${bin}` });
+      else {
+        needsRoot = true;
+        add({ code: "kanata_updated", name: "kanata's root copy", status: "warn", detail: `kanata at ${bin} changed since setup; the LaunchDaemon still runs the copy at ${ROOT_KANATA_PATH}`, fix: setUpAgain });
+      }
+    }
+  }
 
   let port: Awaited<ReturnType<DoctorProbe["hello"]>> | undefined;
   try {
@@ -172,12 +199,7 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
     add({ code: "kbd_file", name: "keyloom.kbd", status: h?.intact ? "ok" : "warn", detail: h ? (h.intact ? `written by keyloom for ${h.layoutId} at ${h.revisionId}` : "written by keyloom, then edited by hand") : "not written by keyloom" });
   }
 
-  return { findings, rootCommand: needsRoot ? rootInstallCommand(paths.plist) : null };
-}
-
-/** The one command BK runs to install and start the daemon. keyloom never runs it (D-231). */
-export function rootInstallCommand(plistSource: string): string {
-  return `sudo sh -c 'cp "${plistSource}" ${DAEMON_PLIST_PATH} && chown root:wheel ${DAEMON_PLIST_PATH} && chmod 644 ${DAEMON_PLIST_PATH} && launchctl bootstrap system ${DAEMON_PLIST_PATH}'`;
+  return { findings, needsRoot, kanata: bin ? { bin, version } : null };
 }
 
 /** The command that stops the daemon for good, for the rollback section of the runbook and for "Disable remapping" when kanata hangs. */

@@ -8,6 +8,9 @@ import type { Io } from "../../src/cli/output.ts";
 import type { DoctorProbe } from "../../src/firmware/kanata/doctor.ts";
 import { getBoardSync } from "../../src/persistence/syncs.ts";
 import { MAC, remapperWorld } from "../helpers/remapper-world.ts";
+import { fileSha256 } from "../../src/firmware/kanata/binary.ts";
+import { writeFakeKanataBinary } from "../helpers/fake-kanata.ts";
+import { tempDir } from "../helpers/tmp.ts";
 
 // The real kanata folder, as it is before these tests run. BK's own install may live there, so the check is that nothing changed, not
 // that it is empty: every path with its size and mtime, compared at the end.
@@ -62,7 +65,12 @@ describe("keyloom remap", () => {
     const r = await cli(world, ["remap", "setup", "--format", "json"]);
     expect(r.code).toBe(0);
     const out = JSON.parse(r.out);
-    expect(out.root_command).toMatch(/^sudo sh -c 'cp ".*dev\.keyloom\.kanata\.plist" \/Library\/LaunchDaemons\//);
+    // The same script the app runs (D-498): kanata copied to its root-owned place, checked by hash, then the plist carried encoded.
+    expect(out.root_command).toStartWith("sudo sh -c 'mkdir -p '\\''/Library/Application Support/keyloom'\\''");
+    expect(out.root_command).toContain(`= ${await fileSha256(world.kanataBin)} ]`);
+    expect(out.root_command).toContain("launchctl bootstrap system");
+    expect(out.root_command).not.toContain(world.home);
+    expect(out.blocked).toBeNull();
     expect(out.plist_path.startsWith(world.home)).toBe(true);
     const plist = readFileSync(out.plist_path, "utf8");
     expect(plist).toContain("127.0.0.1:5829");
@@ -71,6 +79,17 @@ describe("keyloom remap", () => {
     expect(plist).toMatch(/<key>SuccessfulExit<\/key>\s*<false\/>/);
     expect(plist).toMatch(/<key>SoftResourceLimits<\/key>\s*<dict>\s*<key>NumberOfFiles<\/key>\s*<integer>4096<\/integer>/);
     expect(plist).not.toMatch(/cmd|danger-enable/);
+    expect(plist).toContain("<string>/Library/Application Support/keyloom/kanata</string>");
+  });
+
+  test("setup with a kanata that can run programs prints no root command, and says why", async () => {
+    const world = (w = remapperWorld());
+    const withCmd = writeFakeKanataBinary(tempDir(), "cmd");
+    let out = "";
+    const io: Io = { out: (t) => void (out += t), err: () => {}, isTTY: false };
+    const code = await runCli(["remap", "setup", "--format", "json", "--data-dir", world.app.dataDir], io, {}, { remapper: { ...world.over, kanataBin: () => withCmd } }, world.deps);
+    expect(code).toBe(0);
+    expect(JSON.parse(out)).toMatchObject({ root_command: null, blocked: { code: "kanata_allows_cmd" } });
   });
 
   test("the doctor on a machine with nothing installed says what is missing and prints the root command", async () => {

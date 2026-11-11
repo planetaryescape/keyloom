@@ -2,7 +2,9 @@ import { z } from "zod";
 
 // Setting up the MacBook remapper from the app (D-493), and opening System Settings at a named pane (D-492).
 //   GET  /api/system/remapper?board=<boardId>       -> RemapperSetupResponse   (the doctor's findings, each with a code)
-//   POST /api/system/remapper/install-kanata  {}    -> SetupActionResponse     (`brew install kanata`; waits for it)
+//   POST   /api/system/remapper/install-kanata  InstallKanata -> SetupActionResponse  (starts `brew install` or `brew upgrade kanata`;
+//                                                                                     the status read follows it; a second press joins it)
+//   POST   /api/system/remapper/install-kanata/cancel  {}     -> SetupActionResponse  (cancels it; `not_running` when none runs)
 //   POST /api/system/remapper/start  StartKanata    -> SetupActionResponse     (installs and starts the daemon through macOS's password dialog)
 //   POST /api/system/open-settings   OpenSettings   -> SetupActionResponse     (400 schema for a pane not on the list; macOS only)
 
@@ -15,9 +17,13 @@ export type OpenSettingsRequest = z.infer<typeof OpenSettingsRequestSchema>;
 
 export const StartKanataRequestSchema = z.object({ boardId: z.string().min(1) }).strict();
 
+/** `upgrade` is Update kanata, for a kanata older than the one keyloom writes for (R2-10). */
+export const InstallKanataRequestSchema = z.object({ action: z.enum(["install", "upgrade"]).optional() }).strict();
+export type InstallKanataRequest = z.infer<typeof InstallKanataRequestSchema>;
+
 export const SetupFindingCodeSchema = z.enum([
   "kanata_missing", "kanata_version", "driver_missing", "driver_mismatch", "karabiner_elements", "keyboard_name", "karabiner_config",
-  "permissions", "daemon_missing", "port_closed", "kbd_file",
+  "permissions", "daemon_missing", "port_closed", "kbd_file", "kanata_updated", "daemon_outdated",
 ]);
 export type SetupFindingCode = z.infer<typeof SetupFindingCodeSchema>;
 
@@ -29,10 +35,29 @@ export const SetupFindingSchema = z.object({
 });
 export type SetupFinding = z.infer<typeof SetupFindingSchema>;
 
+/**
+ * The install or update started from the app (R2-06). This is its own small job, like R2-A's install-job API for Docker and Zapp
+ * (src/app/tool-install.ts); the two can merge later. A finished job keeps its last state until the next one starts.
+ */
+export const KanataInstallSchema = z.object({
+  state: z.enum(["idle", "running", "succeeded", "failed", "cancelled"]),
+  action: z.enum(["install", "upgrade"]).nullable(),
+  /** The last lines Homebrew printed, oldest first. */
+  log: z.array(z.string()),
+  failure: z.object({ code: z.string().min(1), reason: z.string().min(1) }).nullable(),
+});
+export type KanataInstall = z.infer<typeof KanataInstallSchema>;
+
 export const RemapperSetupResponseSchema = z.object({
   platform: z.enum(["darwin", "other"]),
+  /** Homebrew is here, so Install kanata and Update kanata can run. */
   canInstall: z.boolean(),
-  installing: z.boolean(),
+  install: KanataInstallSchema,
+  /**
+   * The kanata on PATH and the version keyloom writes for. `update` says how to get that version: `brew` runs Update kanata (a Homebrew
+   * kanata older than it), `link` is kanata's release page, and null means nothing to update.
+   */
+  kanata: z.object({ version: z.string().nullable(), wanted: z.string(), update: z.enum(["brew", "link"]).nullable() }),
   driverVersion: z.string().nullable(),
   findings: z.array(SetupFindingSchema),
 });

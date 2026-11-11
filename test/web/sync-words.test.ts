@@ -97,7 +97,7 @@ describe("autoSyncLine", () => {
     const unproven = board({ kind: "in_sync" }, { auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null } });
     expect(autoSyncLine(unproven)).toMatchObject({ on: false, canTurnOn: false });
     expect(autoSyncLine(unproven).note).toContain("by itself once");
-    expect(autoSyncLine(board({ kind: "in_sync" }))).toEqual({ on: true, canTurnOn: true, note: null });
+    expect(autoSyncLine(board({ kind: "in_sync" }))).toEqual({ name: "Auto-sync", on: true, canTurnOn: true, note: null });
   });
 });
 
@@ -171,6 +171,14 @@ describe("a software remapper (the MacBook's keyboard)", () => {
     expect(syncLine(mac({ kind: "behind", changes: 1, why: "unproven", error: null }), "lay_1").detail).not.toContain("keyloom remap");
   });
 
+  test("the switch the unproven line points at is called what the line says (R2-11)", () => {
+    const unproven = mac({ kind: "behind", changes: 1, why: "unproven", error: null }, { auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null } });
+    const auto = autoSyncLine(unproven);
+    expect(auto.name).toBe("Auto-apply");
+    // SyncStatus labels the switch `${name} is off`; the line names that label.
+    expect(syncLine(unproven, "lay_1").detail).toContain(`“${auto.name} is off”`);
+  });
+
   test("a sync under a second says so in milliseconds", () => {
     const last = { id: "syn_1", trigger: "auto" as const, status: "succeeded" as const, step: "done", revisionId: "rev_1", failure: null, error: null, startedAt: 1, finishedAt: 2, timings: { waitMs: 3000, buildMs: null, flashMs: 120, totalMs: 340 } };
     const notice = syncNotice(mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "auto" }), mac({ kind: "in_sync" }, { last }));
@@ -189,9 +197,11 @@ describe("refusalNotice", () => {
     // An exit-chord check that couldn't read kanata, or found it running, offers the check again rather than a dead end (D-497).
     expect(refusalNotice("kanata_unreadable", cli)).toMatchObject({ message: "keyloom couldn't tell whether kanata stopped", action: { id: "check_exit_chord", label: "Check again" } });
     expect(refusalNotice("kanata_still_running", cli).action).toEqual({ id: "check_exit_chord", label: "Check again" });
-    // A stale Replace it has nothing to retry: no button.
-    expect(refusalNotice("kanata_not_foreign", cli).action).toBeUndefined();
-    for (const code of ["archived", "not_on_keyboard", "cant_sync", "foreign_firmware", "kanata_foreign", "kanata_not_running", "not_connected", "busy", "kanata_still_running", "kanata_unreadable", "kanata_not_foreign"]) {
+    // A stale Replace it has nothing to retry; kanata's state is in the keyboard's status, and the toast opens it (R2-14).
+    expect(refusalNotice("kanata_not_foreign", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });
+    expect(refusalNotice("kanata_not_running", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });
+    expect(refusalNotice("keyboard_removed", cli)).toMatchObject({ message: "This keyboard was removed from your setup", action: { id: "restore_keyboard", label: "Restore" } });
+    for (const code of ["archived", "not_on_keyboard", "cant_sync", "foreign_firmware", "kanata_foreign", "kanata_not_running", "not_connected", "busy", "kanata_still_running", "kanata_unreadable", "kanata_not_foreign", "keyboard_removed"]) {
       const n = refusalNotice(code, cli);
       expect(`${n.message} ${n.detail ?? ""}`).not.toContain("keyloom config");
       expect(`${n.message} ${n.detail ?? ""}`).not.toContain("`");

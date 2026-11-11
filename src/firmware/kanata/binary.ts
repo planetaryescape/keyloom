@@ -33,3 +33,38 @@ export async function kanataCheck(bin: string, path: string): Promise<{ ok: bool
   const output = `${out}${err}`.replace(/\u001b\[[0-9;]*m/g, "").trim();
   return { ok: code === 0 && output.includes("config file is valid"), output };
 }
+
+/** The SHA-256 of a file, as lowercase hex, or undefined when it can't be read. */
+export async function fileSha256(path: string): Promise<string | undefined> {
+  try {
+    const hasher = new Bun.CryptoHasher("sha256");
+    hasher.update(await Bun.file(path).arrayBuffer());
+    return hasher.digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A config that asks for kanata's `cmd` action, which runs a program. It is the shape of kanata's own `parse_cmd` test
+ * (parser/src/cfg/tests.rs @ v1.12.0). A kanata built without the `cmd` feature refuses it with "cmd is not enabled for this kanata
+ * executable" (parser/src/cfg/cmd.rs); one built with it accepts it. Homebrew builds kanata with its default features, which leave `cmd`
+ * out (Formula/k/kanata.rb: `cargo install *std_cargo_args`; Cargo.toml `default = ["tcp_server", "win_sendinput_send_scancodes", "zippychord"]`).
+ */
+export const CMD_PROBE_CONFIG = `(defcfg danger-enable-cmd yes)
+(defsrc a)
+(deflayer base a)
+(defalias run (cmd true))
+`;
+
+export type CmdCheck = "refuses" | "allows" | "unknown";
+
+/**
+ * Whether a kanata binary refuses to run programs from its config (D-498). The daemon runs kanata as root and reads keyloom.kbd from the
+ * person's home folder, so a kanata with `cmd` would turn a swapped config into root. `check` is `kanataCheck` on the probe's file.
+ */
+export function cmdCheckResult(r: { ok: boolean; output: string }): CmdCheck {
+  if (r.ok) return "allows";
+  // kanata reports errors through miette, which wraps long lines; the phrase is matched across any line break.
+  return r.output.replace(/\s+/g, " ").includes("cmd is not enabled") ? "refuses" : "unknown";
+}

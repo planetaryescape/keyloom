@@ -118,7 +118,7 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
         : s.why === "waiting" ? (s.error ? `${s.error} Trying again.` : "Applying in a moment.")
         : s.why === "paused" ? "Auto-apply is paused."
         : s.why === "auto_off" ? "Auto-apply is off for this keyboard."
-        : s.why === "unproven" ? "Auto-apply turns on after you prove kanata's emergency exit once. The steps are under Auto-apply below."
+        : s.why === "unproven" ? "Auto-apply turns on after you prove kanata's emergency exit once. The steps are under “Auto-apply is off” below."
         : "Something else was loaded since this change.";
       return { label, short: s.why === "remapping_off" ? "Off" : "Behind", detail, tone: s.why === "failed" ? "error" : "neutral", action: { id: "sync_now", label: s.why === "remapping_off" ? "Turn remapping on" : "Apply now" } };
     }
@@ -135,10 +135,14 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
   }
 }
 
-/** What auto-sync does, for the popover's switch. */
-export function autoSyncLine(board: BoardSync): { on: boolean; canTurnOn: boolean; note: string | null } {
+/**
+ * What auto-sync does, for the popover's switch. `name` is what the switch is called: a remapper applies a config, it doesn't sync
+ * firmware, so the MacBook's switch and the words that point at it say "Auto-apply" (R2-11).
+ */
+export function autoSyncLine(board: BoardSync): { name: "Auto-sync" | "Auto-apply"; on: boolean; canTurnOn: boolean; note: string | null } {
   const a = board.auto;
   return {
+    name: board.remapper === true ? "Auto-apply" : "Auto-sync",
     on: a.on,
     canTurnOn: a.proven,
     note: a.proven ? null : board.remapper === true
@@ -170,7 +174,8 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): { k
   return null;
 }
 
-export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord";
+/** `open_status` opens the keyboard's status popover, where kanata's checklist is; `restore_keyboard` puts a removed keyboard back. */
+export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord" | "open_status" | "restore_keyboard";
 
 /**
  * The toast for a sync the server refused, from its code (R1-16). The server's own sentence names CLI commands, so it is never shown;
@@ -185,12 +190,13 @@ export function refusalNotice(code: string | undefined, message: string): Refusa
     case "cant_sync": return { message: "keyloom can't sync this keyboard by itself", detail: "Build and flash puts this layout on it.", action: { id: "open_release", label: "Build and flash…" } };
     case "foreign_firmware": return { message: "The keyboard runs firmware keyloom didn't build", detail: "keyloom never replaces it by itself. Build and flash replaces it after you confirm.", action: { id: "open_release", label: "Build and flash…" } };
     case "kanata_foreign": return { message: "kanata runs a config keyloom didn't write", detail: "keyloom never replaces it by itself.", action: { id: "replace_foreign", label: "Replace it…" } };
-    case "kanata_not_running": return { message: "kanata isn't running", detail: "The keyboard's status at the top of the page lists what is missing, with a button for each." };
+    case "kanata_not_running": return { message: "kanata isn't running", detail: "The keyboard's status lists what is missing, with a button for each.", action: { id: "open_status", label: "Open keyboard status" } };
     case "not_connected": return { message: "The keyboard isn't connected", detail: "Plug it in and keyloom checks it." };
     case "busy": return { message: "keyloom is already building or flashing", detail: "Sync again when it finishes." };
     case "kanata_still_running": return { message: "kanata is still running", detail: "Hold Left Control, Space and Escape together until your MacBook keyboard types plainly, then check again.", action: { id: "check_exit_chord", label: "Check again" } };
     case "kanata_unreadable": return { message: "keyloom couldn't tell whether kanata stopped", detail: "kanata's port didn't answer, so nothing was recorded. Check again in a moment.", action: { id: "check_exit_chord", label: "Check again" } };
-    case "kanata_not_foreign": return { message: "kanata's config changed, so nothing was replaced", detail: "The keyboard's status at the top of the page shows what kanata runs now." };
+    case "kanata_not_foreign": return { message: "kanata's config changed, so nothing was replaced", detail: "The keyboard's status shows what kanata runs now.", action: { id: "open_status", label: "Open keyboard status" } };
+    case "keyboard_removed": return { message: "This keyboard was removed from your setup", detail: "Restore it to sync it again. Its configs and history were kept.", action: { id: "restore_keyboard", label: "Restore" } };
     default: return { message: "keyloom couldn't do that", detail: message };
   }
 }

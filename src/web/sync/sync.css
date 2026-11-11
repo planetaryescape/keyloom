@@ -255,3 +255,19 @@
 .sync-setup-recheck {
   align-self: flex-start;
 }
+
+/* Homebrew's last lines while it installs or updates kanata (R2-06): a few lines, wrapped, never wider than the popover. */
+.sync-setup-log {
+  max-height: 7.5em;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--ink-2);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
