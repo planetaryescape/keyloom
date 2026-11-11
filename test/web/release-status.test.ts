@@ -12,6 +12,11 @@ const flash = (verified: boolean) => ({
 });
 
 describe("release status", () => {
+  test("a build the person stopped reads as before it started, and a failed one still says it failed (R3-10)", () => {
+    expect(releaseStatus({ ...build, status: "failed", error: "Build stopped.", errorCode: "cancelled" }, null, build.revisionId, 4)).toEqual({ label: "Build and flash", tone: "idle" });
+    expect(releaseStatus({ ...build, status: "failed", error: "x", errorCode: null }, null, build.revisionId, 4)).toEqual({ label: "Build failed", tone: "error" });
+  });
+
   test("distinguishes a verified flash from a write that could not be verified", () => {
     expect(releaseStatus(build, flash(true), build.revisionId, 4)).toEqual({ label: "Flashed and verified", tone: "success" });
     expect(releaseStatus(build, flash(false), build.revisionId, 4)).toEqual({ label: "Flashed, not verified", tone: "attention" });

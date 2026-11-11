@@ -42,9 +42,15 @@ export function failedFlashText(code: FlashErrorCode | null | undefined, error: 
  * refused because the write began (`flash_writing`), or accepted while the flash still waits, because keyloom looks at the keyboard
  * before it stops the flash tool. Null when the flash as it is now says enough.
  */
-export function cancelNote(answer: { refused: string } | { status: string }): string | null {
+export function cancelNote(answer: { refused: string | undefined } | { status: string }): string | null {
   if ("refused" in answer) {
-    return answer.refused === "flash_writing" ? "The keyboard was already in its bootloader, so keyloom couldn't stop the flash safely. It finishes by itself in a few seconds." : null;
+    if (answer.refused === "flash_writing") return "The keyboard was already in its bootloader, so keyloom couldn't stop the flash safely. It finishes by itself in a few seconds.";
+    // `flash_finished` needs no words: the flash as it is now shows how it ended. Anything else never reached keyloom, or failed there,
+    // so the flash may still be waiting and Cancel stays on screen (R3-20).
+    if (answer.refused === "flash_finished") return null;
+    return answer.refused === "unreachable"
+      ? "keyloom didn't answer, so the flash may still be waiting. Check that keyloom is running, then cancel again."
+      : "keyloom couldn't stop the flash. Cancel again.";
   }
   return answer.status === "waiting_for_bootloader" ? "Stopping the flash. If the keyboard has just entered its bootloader, keyloom writes it first." : null;
 }
@@ -118,4 +124,14 @@ export function afterApply(board: { firmware: string; name: string }, sync: Boar
     return { lead: "Applied.", text: `Auto-sync puts it on your ${name} when you connect it by USB. ${UNDO}`, toast: `Auto-sync puts it on your ${name} when you connect it by USB.`, action: null };
   }
   return { lead: "Applied to your layout.", text: "It isn't on your keyboard yet, and Undo above the board takes it back.", toast: "It isn't on your keyboard yet.", action: { id: "open_release", label: "Build and flash" } };
+}
+
+/**
+ * Why Cancel didn't stop a build, by the error's code (R3-10, R3-20). The build may still be running, so Cancel stays on screen.
+ * `build_finished` never reaches here: the build is read again instead.
+ */
+export function buildCancelProblem(code: string | undefined): string {
+  return code === "unreachable"
+    ? "keyloom didn't answer, so the build may still be running. Check that keyloom is running, then cancel again."
+    : "keyloom couldn't stop the build. Cancel again, or wait for it to finish.";
 }

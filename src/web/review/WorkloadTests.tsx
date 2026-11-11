@@ -20,11 +20,12 @@ function TestsNeedDocker({ token, busy, onRetry }: { token: string; busy: boolea
 
 /** Split from its hooks so a test can render each state. A readiness request that failed keeps asking and offers Check again. */
 export function TestsNeedDockerView({ docker, install, busy, onRetry }: { docker: Docker; install: Install; busy: boolean; onRetry: () => void }) {
-  const view = dockerView(docker.readiness, docker.starting, docker.problem, install.state);
+  const view = dockerView(docker.readiness, docker.starting, docker.problem, install.state, docker.lastAction);
   useDockerRecheck(docker, recheckDocker(view) || docker.unanswered);
   const ready = docker.readiness?.ok === true;
   return <div className="br-test-results">
-    <p>{ready ? "Docker is ready now." : "Activity tests run in Docker, and Docker isn't ready on this computer."}</p>
+    {/* Docker installed from here says it is running in its own callout, so this line would only repeat it (R3-14). */}
+    {view.kind === "installed" ? null : <p>{ready ? "Docker is ready now." : "Activity tests run in Docker, and Docker isn't ready on this computer."}</p>}
     {docker.unanswered ? <div className="callout callout-warning" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
       <div className="callout-body">
@@ -32,7 +33,7 @@ export function TestsNeedDockerView({ docker, install, busy, onRetry }: { docker
         <div className="callout-actions"><button type="button" className="button" onClick={docker.refresh}>Check again</button></div>
       </div>
     </div> : null}
-    <DockerCallout view={view} docker={docker} install={install} />
+    <DockerCallout view={view} docker={docker} install={install} readyNext="Test again to see the results." />
     {ready ? <div className="br-actions br-actions-start"><button type="button" className="sheet-action" disabled={busy} onClick={onRetry}>Test again</button></div> : null}
   </div>;
 }

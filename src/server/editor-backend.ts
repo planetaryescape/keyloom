@@ -36,6 +36,8 @@ export interface EditorBackend {
   revealBuild(id: string): Promise<void>;
   /** Stops a flash still waiting for the bootloader, before any write (D-501). Optional: a backend without it answers 404. */
   cancelFlash?(id: string): Promise<Flash>;
+  /** Stops a running build and answers once it has stopped (R3-10). A build never flashes. Optional: a backend without it answers 404. */
+  cancelBuild?(id: string): Promise<Build>;
   /** Reads what the keyboard runs now, for a flash keyloom couldn't confirm. Never builds or flashes (D-501). */
   checkFlash?(id: string): Promise<FlashCheckResponse>;
   /** The newest earlier revision whose layers fit the board, for a layout the editor can't draw (D-502). */

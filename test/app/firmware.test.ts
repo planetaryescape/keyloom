@@ -60,6 +60,31 @@ describe("generateFirmware", () => {
   });
 });
 
+describe("FlashToolMissingError (R3-25)", () => {
+  test("names Homebrew on a Mac, and the tool's own page with Zapp's udev rules on Linux", () => {
+    expect(new FlashToolMissingError("zapp", "darwin").message).toBe("zapp isn't installed. Install it with `brew install zapp`, then flash again.");
+    expect(new FlashToolMissingError("zapp", "linux").message).toBe("zapp isn't installed. Install it from https://github.com/zsa/zapp, with ZSA's udev rules so it can reach the keyboard without root, then flash again.");
+    expect(new FlashToolMissingError("dfu-util", "linux").message).not.toContain("brew");
+  });
+});
+
+describe("a layout that no longer fits its board (R3-11)", () => {
+  test("keyloom build points at version list and version restore; a build that fits says nothing of them", async () => {
+    const e = await toolchainEnv();
+    const row = e.app.db.query("SELECT id, document FROM revisions").get() as { id: string; document: string };
+    const doc = JSON.parse(row.document);
+    doc.layers[0].bindings.pop();
+    e.app.db.query("UPDATE revisions SET document = ? WHERE id = ?").run(JSON.stringify(doc), row.id);
+    await e.run(async () => {
+      const err = (await buildAndWait(e.app, "synchronized", { boardRevision: "revb" }).catch((x) => x)) as BuildFailedError;
+      expect(err).toBeInstanceOf(BuildFailedError);
+      expect(err.message).toContain("`keyloom version list synchronized`");
+      expect(err.message).toContain("`keyloom version restore synchronized <version>`");
+    });
+    e.closeApp();
+  });
+});
+
 describe("startBuild / getBuild / buildAndWait", () => {
   test("startBuild returns a running build at once; polling shows it succeed with the artifact under the data dir", async () => {
     const e = await toolchainEnv();
@@ -253,7 +278,7 @@ describe("startFlash / flashAndWait (fake zapp)", () => {
       const err = await startFlash(e.app, { buildId: b.id }).catch((x) => x);
       expect(err).toBeInstanceOf(FlashToolMissingError);
       expect(err.tool).toBe("zapp");
-      expect(err.message).toContain("brew install zapp");
+      expect(err.message).toContain(process.platform === "darwin" ? "brew install zapp" : "github.com/zsa/zapp");
     }, { PATH: `${noZapp}:/usr/bin:/bin` });
     expect(e.app.db.query("SELECT COUNT(*) AS n FROM flashes").get()).toEqual({ n: 0 });
     await e.run(async () => {

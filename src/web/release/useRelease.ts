@@ -7,11 +7,13 @@ import { type Docker, useDocker } from "./useDocker.ts";
 import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelShownFlash } from "./cancel-shown-flash.ts";
-import { cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
+import { cancelBuild, cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
+import { buildCancelProblem } from "./flash-words.ts";
 
 const POLL_MS = 1000;
-// A server that has gone quiet for this many polls in a row is treated as gone, not slow.
+// A server that has gone quiet for this many polls in a row is said to be gone; polling goes on, and the line clears when it answers (R2-13).
 const MAX_MISSES = 3;
+const POLL_LOST = "keyloom stopped answering. Check that it is still running, then try again.";
 
 export interface Release {
   build: Build | null;
@@ -41,6 +43,11 @@ export interface Release {
   checkBuild: () => void;
   /** Why a download or reveal failed. */
   fileProblem: string | null;
+  /** Stops the running build (R3-10). A build never flashes, so nothing reaches the keyboard. */
+  cancelBuild: () => void;
+  stoppingBuild: boolean;
+  /** Why Cancel didn't stop the build, such as keyloom not answering; the build may still be running. */
+  buildCancelProblem: string | null;
   /** Stops a flash that is still waiting for the bootloader (D-501); the server refuses once it writes. */
   cancelFlash: () => void;
   cancelling: boolean;
@@ -73,21 +80,30 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [cancelNoteText, setCancelNote] = useState<string | null>(null);
   const [check, setCheck] = useState<Release["check"]>({ running: false, found: null, problem: null });
   const [settingsProblem, setSettingsProblem] = useState<string | null>(null);
+  const [stoppingBuild, setStoppingBuild] = useState(false);
+  const [buildCancelProblemText, setBuildCancelProblem] = useState<string | null>(null);
   const docker = useDocker(token);
   const dockerInstall = useInstall(token, "docker", docker.refresh);
 
   const buildRunning = build?.status === "running";
   const flashActive = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
 
+  const lost = useCallback(() => {
+    setLast({ kind: "poll" });
+    setError(POLL_LOST);
+  }, []);
+  // Only the poll's own line clears: a build or flash that couldn't start keeps its error.
+  const found = useCallback(() => setError((now) => (now === POLL_LOST ? null : now)), []);
+
   useEffect(() => {
     if (build === null || !buildRunning) return;
-    return poll((signal) => fetchBuild(token, build.id, signal), setBuild, (next) => next.status !== "running", (message) => { setLast({ kind: "poll" }); setError(message); });
-  }, [token, build?.id, buildRunning, resumes]);
+    return poll((signal) => fetchBuild(token, build.id, signal), setBuild, (next) => next.status !== "running", lost, found);
+  }, [token, build?.id, buildRunning, resumes, lost, found]);
 
   useEffect(() => {
     if (flash === null || !flashActive) return;
-    return poll((signal) => fetchFlash(token, flash.id, signal), setFlash, (next) => next.status === "succeeded" || next.status === "failed", (message) => { setLast({ kind: "poll" }); setError(message); });
-  }, [token, flash?.id, flashActive, resumes]);
+    return poll((signal) => fetchFlash(token, flash.id, signal), setFlash, (next) => next.status === "succeeded" || next.status === "failed", lost, found);
+  }, [token, flash?.id, flashActive, resumes, lost, found]);
 
   // Re-reads the build, whose flash plan says whether the flash tool is here now.
   const buildId = build?.id;
@@ -156,6 +172,22 @@ export function useRelease(token: string, layoutRef: string): Release {
     revealArtifact(token, buildId).catch((e: unknown) => setFileProblem(e instanceof Error ? e.message : "Finder couldn't show the file."));
   }, [token, buildId]);
 
+  const stopBuild = useCallback(() => {
+    if (buildId === undefined || !buildRunning) return;
+    const asked = buildId;
+    setStoppingBuild(true);
+    setBuildCancelProblem(null);
+    cancelBuild(token, asked)
+      .then(setBuild)
+      .catch((e: unknown) => {
+        const code = e instanceof ApiError ? e.code : undefined;
+        // It ended before the cancel arrived: the build as it is now says where it got to.
+        if (code === "build_finished") refreshBuild();
+        else setBuildCancelProblem(buildCancelProblem(code));
+      })
+      .finally(() => setStoppingBuild(false));
+  }, [token, buildId, buildRunning, refreshBuild]);
+
   const flashId = flash?.id;
   // The flash on screen now, so a check or a cancel that answers after another flash started can't replace it.
   const currentFlashId = useRef(flashId);
@@ -206,41 +238,44 @@ export function useRelease(token: string, layoutRef: string): Release {
   return {
     build, flash, starting, error, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, retry, docker,
     dockerInstall, toolInstall, download, reveal, checkBuild: refreshBuild, fileProblem,
+    cancelBuild: stopBuild, stoppingBuild, buildCancelProblem: buildRunning ? buildCancelProblemText : null,
     cancelFlash: cancel, cancelling, cancelNote: flashActive ? cancelNoteText : null, checkKeyboard, check, openSettings: open, settingsProblem,
   };
 }
 
-// Calls `fetchNext` every POLL_MS until `isDone`. Returns the cleanup that stops it.
-function poll<T>(
+// Calls `fetchNext` every POLL_MS until `isDone`. After MAX_MISSES misses in a row it calls `lost` once and keeps asking, and `found`
+// when an answer comes back, so the page's line clears by itself once keyloom answers again (R2-13). Returns the cleanup that stops it.
+export function poll<T>(
   fetchNext: (signal: AbortSignal) => Promise<T>,
   publish: (value: T) => void,
   isDone: (value: T) => boolean,
-  fail: (message: string) => void,
+  lost: () => void,
+  found: () => void,
+  everyMs = POLL_MS,
 ): () => void {
   const controller = new AbortController();
-  let timer: number | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let misses = 0;
   const schedule = () => {
-    timer = window.setTimeout(async () => {
+    timer = setTimeout(async () => {
       try {
         const next = await fetchNext(controller.signal);
+        if (controller.signal.aborted) return;
+        if (misses >= MAX_MISSES) found();
         misses = 0;
         publish(next);
         if (isDone(next)) return;
       } catch {
         if (controller.signal.aborted) return;
         misses += 1;
-        if (misses >= MAX_MISSES) {
-          fail("keyloom stopped answering. Check that it is still running, then try again.");
-          return;
-        }
+        if (misses === MAX_MISSES) lost();
       }
       schedule();
-    }, POLL_MS);
+    }, everyMs);
   };
   schedule();
   return () => {
     controller.abort();
-    window.clearTimeout(timer);
+    clearTimeout(timer);
   };
 }

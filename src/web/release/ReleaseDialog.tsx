@@ -78,7 +78,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
   const { build: lastBuild, flash: lastFlash, starting, error, docker } = release;
-  const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state);
+  const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state, docker.lastAction);
   const blocked = buildBlockedReason(dockerNow);
   // While Docker is missing, the dialog asks again by itself, so installing it elsewhere needs no click here (D-488).
   useDockerRecheck(docker, open && recheckDocker(dockerNow));
@@ -90,10 +90,13 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
     if (!open && element.open) element.close();
   }, [open]);
 
-  // A build of an older revision says nothing about the one on screen, so it is not shown as a result.
-  const build = lastBuild !== null && lastBuild.revisionId === head.id ? lastBuild : null;
+  // A build of an older revision says nothing about the one on screen, so it is not shown as a result. A build the person stopped is
+  // the Build firmware step again, with a line that says so (R3-10).
+  const shownBuild = lastBuild !== null && lastBuild.revisionId === head.id ? lastBuild : null;
+  const buildStopped = shownBuild?.status === "failed" && shownBuild.errorCode === "cancelled";
+  const build = buildStopped ? null : shownBuild;
   const flash = build !== null && lastFlash !== null && lastFlash.buildId === build.id ? lastFlash : null;
-  const earlier = lastBuild !== null && build === null;
+  const earlier = lastBuild !== null && shownBuild === null;
   const flashing = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
   const canFlash = build?.status === "succeeded" && !flashing;
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
@@ -191,6 +194,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
           <Step number={1} title="Build the firmware" state={buildState} {...(build === null ? {} : { aside: elapsedOf(build, now) })}>
             {build === null ? (
               <>
+                {buildStopped ? <p className="muted" role="status">Build stopped.</p> : null}
                 <p>
                   {earlier
                     ? "The last build was of an earlier version of this layout. Build again to include the latest change."
@@ -225,6 +229,14 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                 <p>Building. This runs in Docker and can take a while the first time.</p>
                 <Progress label="Building firmware" />
                 <LogTail label="Build log" lines={build.logTail} />
+                {/* A build never flashes, so stopping it can't reach the keyboard (R3-10). */}
+                <div className="step-actions">
+                  <button type="button" className="button" disabled={release.stoppingBuild} onClick={release.cancelBuild}>
+                    {release.stoppingBuild ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <X size={14} aria-hidden="true" />}
+                    {release.stoppingBuild ? "Stopping" : "Cancel build"}
+                  </button>
+                  {release.buildCancelProblem === null ? null : <p className="blocked-reason" role="alert">{release.buildCancelProblem}</p>}
+                </div>
               </>
             ) : build.status === "succeeded" ? (
               <>
@@ -238,7 +250,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               <>
                 {build.errorCode === "docker_unavailable" ? (
                   // The build stopped at Docker: the same callout and button as before a build, never the raw sentence.
-                  dockerNow.kind === "none" ? <p className="ok">Docker is ready now. Build again to continue.</p> : <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} />
+                  dockerNow.kind === "none" ? <p className="ok">Docker is ready now. Build again to continue.</p> : <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} buildFailed />
                 ) : (
                   <>
                     <div className="callout callout-error" role="alert">

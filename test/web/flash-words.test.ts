@@ -2,7 +2,7 @@
 // keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { afterApply, checkOutcome, failedFlashText, permissionFix, revisionChoices, cancelNote } from "../../src/web/release/flash-words.ts";
+import { afterApply, buildCancelProblem, checkOutcome, failedFlashText, permissionFix, revisionChoices, cancelNote } from "../../src/web/release/flash-words.ts";
 
 const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -145,6 +145,15 @@ describe("afterApply", () => {
     // A view from before the Apply (the toast's) is in sync with the old head, which says nothing about this change.
     expect(off({ kind: "in_sync" }, "rev_1").action?.id).toBe("apply_now");
     expect(afterApply(GLOVE, synced({ state: { kind: "in_sync" }, headRevisionId: "rev_2" }, { on: false }), "lay_1", "rev_2").action).toBeNull();
+  });
+});
+
+describe("a Cancel that didn't reach keyloom says so (R3-20)", () => {
+  test("a flash's Cancel and a build's Cancel each name the failure and the way on", () => {
+    expect(cancelNote({ refused: "unreachable" })).toBe("keyloom didn't answer, so the flash may still be waiting. Check that keyloom is running, then cancel again.");
+    expect(cancelNote({ refused: undefined })).toBe("keyloom couldn't stop the flash. Cancel again.");
+    expect(buildCancelProblem("unreachable")).toContain("the build may still be running");
+    expect(buildCancelProblem("internal")).toContain("Cancel again");
   });
 });
 

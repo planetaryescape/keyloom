@@ -1,7 +1,7 @@
 // The server's write interface over the app's use cases (rung 2). The server stays ignorant of
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
-  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, BoardRevisionNeededError, FlashNotCancellableError, FlashToolMissingError, NotFoundError, cancelFlash, checkFlashAgain, lastFittingRevision, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
+  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, BoardRevisionNeededError, BuildNotCancellableError, FlashNotCancellableError, FlashToolMissingError, NotFoundError, cancelBuild, cancelFlash, checkFlashAgain, lastFittingRevision, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
   ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
   markOpened,
 } from "../app/index.ts";
@@ -36,6 +36,7 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     // Only this code asks which board revision to build for (R2-01); any other usage error is a sentence the page shows.
     if (err instanceof BoardRevisionNeededError) throw new EditorError(400, "board_revision_needed", err.message);
     if (err instanceof FlashNotCancellableError) throw new EditorError(409, err.why === "writing" ? "flash_writing" : "flash_finished", err.message);
+    if (err instanceof BuildNotCancellableError) throw new EditorError(409, "build_finished", err.message);
     if (err instanceof UsageError) throw new EditorError(400, "usage", err.message);
     throw err;
   }
@@ -97,6 +98,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     buildArtifact: async (id) => orNull(async () => buildArtifact(app, id)),
     revealBuild: (id) => translate(() => revealBuildArtifact(app, id, reveal)),
     cancelFlash: (id) => translate(async () => toFlash(await cancelFlash(app, id))),
+    cancelBuild: (id) => translate(async () => toBuild(await cancelBuild(app, id))),
     checkFlash: (id) => translate(async () => {
       const checked = await checkFlashAgain(app, id, flash.handsFree === undefined ? {} : { handsFree: flash.handsFree });
       return { flash: toFlash(checked.flash), found: checked.found };

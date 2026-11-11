@@ -1,6 +1,6 @@
 # 10: CLI
 
-Status: CLI built, including layout export, layout settings, board geometry, provider selection, review-finding controls and deterministic workload evaluation/comparison (D-470). The [audit closeout](../research/blueprint-audit-closeout.md) records earlier verification, and [workload evidence](../research/workload-evaluator.md) covers the new evaluator. Use the installed version's `--help` to check availability.
+Status: CLI built, including layout export, layout settings, board geometry, provider selection, review-finding controls and deterministic workload evaluation/comparison (D-470). The [audit closeout](../research/blueprint-audit-closeout.md) records earlier verification, and [workload evidence](../research/workload-evaluator.md) covers the new evaluator. Use the installed version's `--help` to check availability. Round 3 (D-512): failures name the command that gets past them, and `doctor --restart-docker` also restarts a Colima that won't start (D-511).
 
 The CLI is the canonical surface (D-030, taken from spotuify). Everything the web app can do, a `keyloom` subcommand can do, and both call the same core modules ([01](01-architecture.md)). The CLI is how coding agents check their own work while building keyloom, and how BK or an agent scripts it. A feature that exists only in the web app is incomplete.
 

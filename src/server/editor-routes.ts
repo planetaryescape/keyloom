@@ -62,6 +62,7 @@ const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["flashes/:/cancel", { method: "POST", run: (b, id, r) => cancelFlash(b, id, r) }],
   ["flashes/:/check", { method: "POST", run: (b, id, r) => checkFlash(b, id, r) }],
   ["layouts/:/fitting-revision", { method: "GET", run: (b, ref) => fittingRevision(b, ref) }],
+  ["builds/:/cancel", { method: "POST", run: (b, id, r) => cancelBuild(b, id, r) }],
 ];
 
 /** True for paths only the editor serves, so a server without a backend can answer 404 for them. */
@@ -280,4 +281,12 @@ async function checkFlash(backend: EditorBackend, flashId: string, request: Requ
 async function fittingRevision(backend: EditorBackend, ref: string): Promise<Response> {
   if (backend.fittingRevision === undefined) return unsupported();
   return Response.json(FittingRevisionResponseSchema.parse({ revision: await backend.fittingRevision(ref) }));
+}
+
+// Answers once the build has stopped, so the page's next state is the Build firmware step, not a build still running (R3-10).
+async function cancelBuild(backend: EditorBackend, buildId: string, request: Request): Promise<Response> {
+  const body = await readBody(request, EmptyBody);
+  if (body instanceof Response) return body;
+  if (backend.cancelBuild === undefined) return unsupported();
+  return Response.json(BuildSchema.parse(await backend.cancelBuild(buildId)));
 }
