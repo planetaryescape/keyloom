@@ -298,11 +298,21 @@ pub fn restart(app: &AppHandle) {
                 let (title, body) = restart_refused_notice(code.as_deref());
                 notify(&app, title, body);
             }
-            // The server stops right after it answers, so a lost answer is not a failure: the supervisor sees the exit either way.
-            Err(err) => log::say(&app, &format!("restart -> {err}")),
+            // The server stops right after it answers, so a lost answer may still be a restart, or one already under way (its listener
+            // closes first); the supervisor sees the exit either way. The notice says so rather than claiming either outcome.
+            Err(err) => {
+                log::say(&app, &format!("restart -> {err}"));
+                let (title, body) = RESTART_UNCONFIRMED_NOTICE;
+                notify(&app, title, body);
+            }
         }
     });
 }
+
+const RESTART_UNCONFIRMED_NOTICE: (&str, &str) = (
+    "keyloom didn't confirm the restart",
+    "It may already be restarting, and it finishes any keyboard write first. If keyloom doesn't come back, choose Quit keyloom, then open it again.",
+);
 
 fn restart_refused_notice(code: Option<&str>) -> (&'static str, &'static str) {
     match code {
@@ -414,6 +424,10 @@ data: {"type":"sync","boards":[],"menuBar":{"summary":"2 changes not on your Moo
         assert!(body.contains("Ctrl-C"), "{body}");
         let (_, body) = restart_refused_notice(None);
         assert!(body.contains("Quit keyloom and open it again"), "{body}");
+        // A lost answer claims neither a restart nor a failure, and still gives the way out.
+        let (title, body) = RESTART_UNCONFIRMED_NOTICE;
+        assert!(title.contains("didn't confirm"), "{title}");
+        assert!(body.contains("may already be restarting") && body.contains("Quit keyloom"), "{body}");
     }
 
     #[test]

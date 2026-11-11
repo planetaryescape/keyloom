@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../api.ts";
 import { fetchRestartInfo, restartKeyloom } from "./api-restart.ts";
 import { CopyCommand } from "./CopyCommand.tsx";
-import { RESTARTING_WORDS, RESTART_LABEL, TERMINAL_WORDS, type RestartState, afterRestart } from "./restart-words.ts";
+import { RESTARTING_WORDS, RESTART_LABEL, RESTART_SLOW_AFTER_MS, SLOW_RESTART_WORDS, TERMINAL_WORDS, type RestartState, afterRestart, afterWaiting } from "./restart-words.ts";
 
 /**
  * Restart keyloom, for a problem only a restart clears (R5-15). In the desktop app it asks the server to stop, and the app starts it again
@@ -26,9 +26,26 @@ export function RestartKeyloom({ token, primary = false }: { token: string; prim
     return () => controller.abort();
   }, [token, reads]);
 
+  // A restart that never comes back would otherwise say "comes back by itself" for ever. After the wait, a server that still answers on this
+  // link never restarted, so the button comes back; one that doesn't gets the words for what to do.
+  useEffect(() => {
+    if (state.kind !== "restarting") return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetchRestartInfo(token, controller.signal).then(() => setState(afterWaiting(true)), () => {
+        if (!controller.signal.aborted) setState(afterWaiting(false));
+      });
+    }, RESTART_SLOW_AFTER_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.kind, token]);
+
   const restart = () => {
     setState({ kind: "restarting" });
     restartKeyloom(token).then(() => setState(afterRestart(null, command.current)), (error: unknown) => {
+      // Not an ApiError only when an OK answer's body couldn't be read, which afterRestart counts as a restart.
       setState(afterRestart(error instanceof ApiError ? { status: error.status, code: error.code, message: error.message } : { message: error instanceof Error ? error.message : "" }, command.current));
     });
   };
@@ -55,6 +72,8 @@ export function RestartKeyloom({ token, primary = false }: { token: string; prim
       );
     case "restarting":
       return <span className="restart-keyloom" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" />{RESTARTING_WORDS}</span>;
+    case "slow":
+      return <span className="restart-keyloom" role="status">{SLOW_RESTART_WORDS}</span>;
     case "failed":
       return (
         <span className="restart-keyloom" role="alert">
