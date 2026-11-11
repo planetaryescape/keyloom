@@ -95,8 +95,10 @@ export function cleanShortLabel(text: string): string | null {
   return label === "" ? null : label;
 }
 
-/** `slot` is the key that carries it and `comboId` the combo, so the page can open the place to change it (R4-09). `tapDance` marks a key whose dance does it. */
-/** Where a reference is changed: a key (`slot`), a combo (`comboId`), or, for a tap dance nothing uses, the dance to remove (`tapDanceId`). */
+/**
+ * `slot` is the key that carries it and `comboId` the combo, so the page can open the place to change it (R4-09). `tapDance` marks a key
+ * whose dance does it. `tapDanceId` is a dance nothing uses, which the page offers to remove (#290 review).
+ */
 export type LayerReference = { text: string; slot?: Slot; comboId?: string; tapDance?: true; tapDanceId?: string };
 
 const ACTION_WORD = { momentary: "holds", toggle: "toggles", to: "goes to", oneShot: "switches once to" } as const;
